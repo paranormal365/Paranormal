@@ -1,0 +1,495 @@
+2026-07-15 14:14:59.840 [WRN] Microsoft.AspNetCore.DataProtection.Repositories.EphemeralXmlRepository Using an in-memory repository. Keys will not be persisted to storage.
+2026-07-15 14:14:59.850 [WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Neither user profile nor HKLM registry available. Using an ephemeral key repository. Protected data will be unavailable when application exits.
+2026-07-15 14:15:00.167 [WRN] Microsoft.EntityFrameworkCore.Model.Validation No store type was specified for the decimal property 'Latitude' on entity type 'OrganizationAddress'. This will cause values to be silently truncated if they do not fit in the default precision and scale. Explicitly specify the SQL server column type that can accommodate all the values in 'OnModelCreating' using 'HasColumnType', specify precision and scale using 'HasPrecision', or configure a value converter using 'HasConversion'.
+2026-07-15 14:15:00.167 [WRN] Microsoft.EntityFrameworkCore.Model.Validation No store type was specified for the decimal property 'Longitude' on entity type 'OrganizationAddress'. This will cause values to be silently truncated if they do not fit in the default precision and scale. Explicitly specify the SQL server column type that can accommodate all the values in 'OnModelCreating' using 'HasColumnType', specify precision and scale using 'HasPrecision', or configure a value converter using 'HasConversion'.
+2026-07-15 14:15:00.167 [WRN] Microsoft.EntityFrameworkCore.Model.Validation No store type was specified for the decimal property 'Latitude' on entity type 'UserAddress'. This will cause values to be silently truncated if they do not fit in the default precision and scale. Explicitly specify the SQL server column type that can accommodate all the values in 'OnModelCreating' using 'HasColumnType', specify precision and scale using 'HasPrecision', or configure a value converter using 'HasConversion'.
+2026-07-15 14:15:00.167 [WRN] Microsoft.EntityFrameworkCore.Model.Validation No store type was specified for the decimal property 'Longitude' on entity type 'UserAddress'. This will cause values to be silently truncated if they do not fit in the default precision and scale. Explicitly specify the SQL server column type that can accommodate all the values in 'OnModelCreating' using 'HasColumnType', specify precision and scale using 'HasPrecision', or configure a value converter using 'HasConversion'.
+2026-07-15 14:15:00.325 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[@normalizedName='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(1) [a].[Id], [a].[ConcurrencyStamp], [a].[Name], [a].[NormalizedName]
+FROM [AspNetRoles] AS [a]
+WHERE [a].[NormalizedName] = @normalizedName
+2026-07-15 14:15:00.351 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (3ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:15:00.385 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@normalizedRoleName='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[ConcurrencyStamp], [a].[Name], [a].[NormalizedName]
+FROM [AspNetRoles] AS [a]
+WHERE [a].[NormalizedName] = @normalizedRoleName
+2026-07-15 14:15:00.402 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (3ms) [Parameters=[@p='?' (DbType = Guid), @p1='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(1) [a].[UserId], [a].[RoleId]
+FROM [AspNetUserRoles] AS [a]
+WHERE [a].[UserId] = @p AND [a].[RoleId] = @p1
+2026-07-15 14:15:00.426 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:15:00.427 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:15:00.428 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:15:00.429 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:15:00.430 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:15:00.437 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@orgUrlName='?' (Size = 4000)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(1) [o].[Id], [o].[CreatedByAppUserId], [o].[DateCreated], [o].[DateUpdated], [o].[Name], [o].[UpdatedByAppUserId], [o].[UrlName]
+FROM [Organizations] AS [o]
+WHERE [o].[UrlName] = @orgUrlName
+2026-07-15 14:15:00.454 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@orgId='?' (DbType = Guid), @userId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM [OrganizationUserMemberships] AS [o]
+        WHERE [o].[OrganizationId] = @orgId AND [o].[AppUserId] = @userId) THEN CAST(1 AS bit)
+    ELSE CAST(0 AS bit)
+END
+2026-07-15 14:15:00.456 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@orgId='?' (DbType = Guid), @userId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM [OrganizationUserMemberships] AS [o]
+        WHERE [o].[OrganizationId] = @orgId AND [o].[AppUserId] = @userId) THEN CAST(1 AS bit)
+    ELSE CAST(0 AS bit)
+END
+2026-07-15 14:15:00.457 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@orgId='?' (DbType = Guid), @userId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM [OrganizationUserMemberships] AS [o]
+        WHERE [o].[OrganizationId] = @orgId AND [o].[AppUserId] = @userId) THEN CAST(1 AS bit)
+    ELSE CAST(0 AS bit)
+END
+2026-07-15 14:15:00.458 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (0ms) [Parameters=[@orgId='?' (DbType = Guid), @userId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM [OrganizationUserMemberships] AS [o]
+        WHERE [o].[OrganizationId] = @orgId AND [o].[AppUserId] = @userId) THEN CAST(1 AS bit)
+    ELSE CAST(0 AS bit)
+END
+2026-07-15 14:15:00.470 [WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager No XML encryptor configured. Key {b19978af-f58d-4d07-b730-85ce1cc0453e} may be persisted to storage in unencrypted form.
+2026-07-15 14:15:00.491 [WRN] Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware The WebRootPath was not found: /Users/ben/Source/Ben/Ben.Data.WebApi/wwwroot. Static files may be unavailable.
+2026-07-15 14:15:00.494 [INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5252
+2026-07-15 14:15:00.495 [INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down.
+2026-07-15 14:15:00.495 [INF] Microsoft.Hosting.Lifetime Hosting environment: Development
+2026-07-15 14:15:00.495 [INF] Microsoft.Hosting.Lifetime Content root path: /Users/ben/Source/Ben/Ben.Data.WebApi
+2026-07-15 14:15:28.447 [INF] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler Identity.Bearer was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:15:28.448 [INF] Microsoft.Extensions.DependencyInjection.IdentityServiceCollectionExtensions+CompositeIdentityHandler Identity.BearerAndApplication was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:15:28.449 [INF] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler Identity.Bearer was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:15:28.777 [DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler Successfully validated the token.
+2026-07-15 14:15:28.778 [DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Entra was successfully authenticated.
+2026-07-15 14:15:28.779 [DBG] Microsoft.AspNetCore.Authorization.DefaultAuthorizationService Authorization was successful.
+2026-07-15 14:15:28.795 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (3ms) [Parameters=[@loginProvider='?' (Size = 450), @providerKey='?' (Size = 450)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[LoginProvider], [a].[ProviderKey], [a].[ProviderDisplayName], [a].[UserId]
+FROM [AspNetUserLogins] AS [a]
+WHERE [a].[LoginProvider] = @loginProvider AND [a].[ProviderKey] = @providerKey
+2026-07-15 14:15:28.798 [ERR] Program Unhandled exception at /api/me — Source: WebApi
+System.FormatException: Guid should contain 32 digits with 4 dashes (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).
+   at System.Guid.GuidResult.SetFailure(ParseFailure failureKind)
+   at System.Guid.TryParseExactN[TChar](ReadOnlySpan`1 guidString, GuidResult& result)
+   at System.Guid.TryParseGuid[TChar](ReadOnlySpan`1 guidString, GuidResult& result)
+   at System.Guid..ctor(String g)
+   at System.ComponentModel.GuidConverter.ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, Object value)
+   at Microsoft.AspNetCore.Identity.UserStoreBase`5.ConvertIdFromString(String id)
+   at Microsoft.AspNetCore.Identity.EntityFrameworkCore.UserStore`10.FindByIdAsync(String userId, CancellationToken cancellationToken)
+   at Ben.Data.WebApi.Controllers.MeController.Get() in /Users/ben/Source/Ben/Ben.Data.WebApi/Controllers/MeController.cs:line 49
+   at lambda_method747(Closure, Object)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ActionMethodExecutor.AwaitableObjectResultExecutor.Execute(ActionContext actionContext, IActionResultTypeMapper mapper, ObjectMethodExecutor executor, Object controller, Object[] arguments)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeActionMethodAsync>g__Awaited|12_0(ControllerActionInvoker invoker, ValueTask`1 actionResultValueTask)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeNextActionFilterAsync>g__Awaited|10_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Rethrow(ActionExecutedContextSealed context)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State& next, Scope& scope, Object& state, Boolean& isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeInnerFilterAsync>g__Awaited|13_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeFilterPipelineAsync>g__Awaited|20_0(ResourceInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+   at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.Authentication.AuthenticationMiddleware.Invoke(HttpContext context)
+   at Swashbuckle.AspNetCore.SwaggerUI.SwaggerUIMiddleware.Invoke(HttpContext httpContext)
+   at Swashbuckle.AspNetCore.Swagger.SwaggerMiddleware.Invoke(HttpContext httpContext, ISwaggerProvider swaggerProvider)
+   at Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddlewareImpl.<Invoke>g__Awaited|10_0(ExceptionHandlerMiddlewareImpl middleware, HttpContext context, Task task)
+2026-07-15 14:15:28.801 [ERR] Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware An unhandled exception has occurred while executing the request.
+System.FormatException: Guid should contain 32 digits with 4 dashes (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).
+   at System.Guid.GuidResult.SetFailure(ParseFailure failureKind)
+   at System.Guid.TryParseExactN[TChar](ReadOnlySpan`1 guidString, GuidResult& result)
+   at System.Guid.TryParseGuid[TChar](ReadOnlySpan`1 guidString, GuidResult& result)
+   at System.Guid..ctor(String g)
+   at System.ComponentModel.GuidConverter.ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, Object value)
+   at Microsoft.AspNetCore.Identity.UserStoreBase`5.ConvertIdFromString(String id)
+   at Microsoft.AspNetCore.Identity.EntityFrameworkCore.UserStore`10.FindByIdAsync(String userId, CancellationToken cancellationToken)
+   at Ben.Data.WebApi.Controllers.MeController.Get() in /Users/ben/Source/Ben/Ben.Data.WebApi/Controllers/MeController.cs:line 49
+   at lambda_method747(Closure, Object)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ActionMethodExecutor.AwaitableObjectResultExecutor.Execute(ActionContext actionContext, IActionResultTypeMapper mapper, ObjectMethodExecutor executor, Object controller, Object[] arguments)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeActionMethodAsync>g__Awaited|12_0(ControllerActionInvoker invoker, ValueTask`1 actionResultValueTask)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeNextActionFilterAsync>g__Awaited|10_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Rethrow(ActionExecutedContextSealed context)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State& next, Scope& scope, Object& state, Boolean& isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeInnerFilterAsync>g__Awaited|13_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeFilterPipelineAsync>g__Awaited|20_0(ResourceInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+   at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.Authentication.AuthenticationMiddleware.Invoke(HttpContext context)
+   at Swashbuckle.AspNetCore.SwaggerUI.SwaggerUIMiddleware.Invoke(HttpContext httpContext)
+   at Swashbuckle.AspNetCore.Swagger.SwaggerMiddleware.Invoke(HttpContext httpContext, ISwaggerProvider swaggerProvider)
+   at Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddlewareImpl.<Invoke>g__Awaited|10_0(ExceptionHandlerMiddlewareImpl middleware, HttpContext context, Task task)
+2026-07-15 14:16:50.664 [INF] Microsoft.Hosting.Lifetime Application is shutting down...
+2026-07-15 14:16:54.274 [WRN] Microsoft.AspNetCore.DataProtection.Repositories.EphemeralXmlRepository Using an in-memory repository. Keys will not be persisted to storage.
+2026-07-15 14:16:54.282 [WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Neither user profile nor HKLM registry available. Using an ephemeral key repository. Protected data will be unavailable when application exits.
+2026-07-15 14:16:54.582 [WRN] Microsoft.EntityFrameworkCore.Model.Validation No store type was specified for the decimal property 'Latitude' on entity type 'OrganizationAddress'. This will cause values to be silently truncated if they do not fit in the default precision and scale. Explicitly specify the SQL server column type that can accommodate all the values in 'OnModelCreating' using 'HasColumnType', specify precision and scale using 'HasPrecision', or configure a value converter using 'HasConversion'.
+2026-07-15 14:16:54.582 [WRN] Microsoft.EntityFrameworkCore.Model.Validation No store type was specified for the decimal property 'Longitude' on entity type 'OrganizationAddress'. This will cause values to be silently truncated if they do not fit in the default precision and scale. Explicitly specify the SQL server column type that can accommodate all the values in 'OnModelCreating' using 'HasColumnType', specify precision and scale using 'HasPrecision', or configure a value converter using 'HasConversion'.
+2026-07-15 14:16:54.582 [WRN] Microsoft.EntityFrameworkCore.Model.Validation No store type was specified for the decimal property 'Latitude' on entity type 'UserAddress'. This will cause values to be silently truncated if they do not fit in the default precision and scale. Explicitly specify the SQL server column type that can accommodate all the values in 'OnModelCreating' using 'HasColumnType', specify precision and scale using 'HasPrecision', or configure a value converter using 'HasConversion'.
+2026-07-15 14:16:54.582 [WRN] Microsoft.EntityFrameworkCore.Model.Validation No store type was specified for the decimal property 'Longitude' on entity type 'UserAddress'. This will cause values to be silently truncated if they do not fit in the default precision and scale. Explicitly specify the SQL server column type that can accommodate all the values in 'OnModelCreating' using 'HasColumnType', specify precision and scale using 'HasPrecision', or configure a value converter using 'HasConversion'.
+2026-07-15 14:16:54.731 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[@normalizedName='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(1) [a].[Id], [a].[ConcurrencyStamp], [a].[Name], [a].[NormalizedName]
+FROM [AspNetRoles] AS [a]
+WHERE [a].[NormalizedName] = @normalizedName
+2026-07-15 14:16:54.757 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (4ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:16:54.791 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (3ms) [Parameters=[@normalizedRoleName='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[ConcurrencyStamp], [a].[Name], [a].[NormalizedName]
+FROM [AspNetRoles] AS [a]
+WHERE [a].[NormalizedName] = @normalizedRoleName
+2026-07-15 14:16:54.807 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (3ms) [Parameters=[@p='?' (DbType = Guid), @p1='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(1) [a].[UserId], [a].[RoleId]
+FROM [AspNetUserRoles] AS [a]
+WHERE [a].[UserId] = @p AND [a].[RoleId] = @p1
+2026-07-15 14:16:54.830 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (3ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:16:54.832 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:16:54.833 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:16:54.835 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:16:54.837 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:16:54.844 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@orgUrlName='?' (Size = 4000)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(1) [o].[Id], [o].[CreatedByAppUserId], [o].[DateCreated], [o].[DateUpdated], [o].[Name], [o].[UpdatedByAppUserId], [o].[UrlName]
+FROM [Organizations] AS [o]
+WHERE [o].[UrlName] = @orgUrlName
+2026-07-15 14:16:54.857 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@orgId='?' (DbType = Guid), @userId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM [OrganizationUserMemberships] AS [o]
+        WHERE [o].[OrganizationId] = @orgId AND [o].[AppUserId] = @userId) THEN CAST(1 AS bit)
+    ELSE CAST(0 AS bit)
+END
+2026-07-15 14:16:54.859 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@orgId='?' (DbType = Guid), @userId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM [OrganizationUserMemberships] AS [o]
+        WHERE [o].[OrganizationId] = @orgId AND [o].[AppUserId] = @userId) THEN CAST(1 AS bit)
+    ELSE CAST(0 AS bit)
+END
+2026-07-15 14:16:54.860 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@orgId='?' (DbType = Guid), @userId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM [OrganizationUserMemberships] AS [o]
+        WHERE [o].[OrganizationId] = @orgId AND [o].[AppUserId] = @userId) THEN CAST(1 AS bit)
+    ELSE CAST(0 AS bit)
+END
+2026-07-15 14:16:54.861 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@orgId='?' (DbType = Guid), @userId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM [OrganizationUserMemberships] AS [o]
+        WHERE [o].[OrganizationId] = @orgId AND [o].[AppUserId] = @userId) THEN CAST(1 AS bit)
+    ELSE CAST(0 AS bit)
+END
+2026-07-15 14:16:54.874 [WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager No XML encryptor configured. Key {323d7445-ecad-45a9-bd6d-2afd117a9ca7} may be persisted to storage in unencrypted form.
+2026-07-15 14:16:54.890 [WRN] Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware The WebRootPath was not found: /Users/ben/Source/Ben/Ben.Data.WebApi/wwwroot. Static files may be unavailable.
+2026-07-15 14:16:54.894 [INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5252
+2026-07-15 14:16:54.894 [INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down.
+2026-07-15 14:16:54.894 [INF] Microsoft.Hosting.Lifetime Hosting environment: Development
+2026-07-15 14:16:54.894 [INF] Microsoft.Hosting.Lifetime Content root path: /Users/ben/Source/Ben/Ben.Data.WebApi
+2026-07-15 14:17:27.016 [WRN] Microsoft.AspNetCore.DataProtection.Repositories.EphemeralXmlRepository Using an in-memory repository. Keys will not be persisted to storage.
+2026-07-15 14:17:27.023 [WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager Neither user profile nor HKLM registry available. Using an ephemeral key repository. Protected data will be unavailable when application exits.
+2026-07-15 14:17:27.307 [WRN] Microsoft.EntityFrameworkCore.Model.Validation No store type was specified for the decimal property 'Latitude' on entity type 'OrganizationAddress'. This will cause values to be silently truncated if they do not fit in the default precision and scale. Explicitly specify the SQL server column type that can accommodate all the values in 'OnModelCreating' using 'HasColumnType', specify precision and scale using 'HasPrecision', or configure a value converter using 'HasConversion'.
+2026-07-15 14:17:27.308 [WRN] Microsoft.EntityFrameworkCore.Model.Validation No store type was specified for the decimal property 'Longitude' on entity type 'OrganizationAddress'. This will cause values to be silently truncated if they do not fit in the default precision and scale. Explicitly specify the SQL server column type that can accommodate all the values in 'OnModelCreating' using 'HasColumnType', specify precision and scale using 'HasPrecision', or configure a value converter using 'HasConversion'.
+2026-07-15 14:17:27.308 [WRN] Microsoft.EntityFrameworkCore.Model.Validation No store type was specified for the decimal property 'Latitude' on entity type 'UserAddress'. This will cause values to be silently truncated if they do not fit in the default precision and scale. Explicitly specify the SQL server column type that can accommodate all the values in 'OnModelCreating' using 'HasColumnType', specify precision and scale using 'HasPrecision', or configure a value converter using 'HasConversion'.
+2026-07-15 14:17:27.308 [WRN] Microsoft.EntityFrameworkCore.Model.Validation No store type was specified for the decimal property 'Longitude' on entity type 'UserAddress'. This will cause values to be silently truncated if they do not fit in the default precision and scale. Explicitly specify the SQL server column type that can accommodate all the values in 'OnModelCreating' using 'HasColumnType', specify precision and scale using 'HasPrecision', or configure a value converter using 'HasConversion'.
+2026-07-15 14:17:27.448 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (11ms) [Parameters=[@normalizedName='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(1) [a].[Id], [a].[ConcurrencyStamp], [a].[Name], [a].[NormalizedName]
+FROM [AspNetRoles] AS [a]
+WHERE [a].[NormalizedName] = @normalizedName
+2026-07-15 14:17:27.473 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (3ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:17:27.506 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (3ms) [Parameters=[@normalizedRoleName='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[ConcurrencyStamp], [a].[Name], [a].[NormalizedName]
+FROM [AspNetRoles] AS [a]
+WHERE [a].[NormalizedName] = @normalizedRoleName
+2026-07-15 14:17:27.522 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (3ms) [Parameters=[@p='?' (DbType = Guid), @p1='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(1) [a].[UserId], [a].[RoleId]
+FROM [AspNetUserRoles] AS [a]
+WHERE [a].[UserId] = @p AND [a].[RoleId] = @p1
+2026-07-15 14:17:27.545 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (4ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:17:27.547 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:17:27.548 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:17:27.549 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:17:27.551 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:17:27.557 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@orgUrlName='?' (Size = 4000)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(1) [o].[Id], [o].[CreatedByAppUserId], [o].[DateCreated], [o].[DateUpdated], [o].[Name], [o].[UpdatedByAppUserId], [o].[UrlName]
+FROM [Organizations] AS [o]
+WHERE [o].[UrlName] = @orgUrlName
+2026-07-15 14:17:27.571 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@orgId='?' (DbType = Guid), @userId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM [OrganizationUserMemberships] AS [o]
+        WHERE [o].[OrganizationId] = @orgId AND [o].[AppUserId] = @userId) THEN CAST(1 AS bit)
+    ELSE CAST(0 AS bit)
+END
+2026-07-15 14:17:27.573 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@orgId='?' (DbType = Guid), @userId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM [OrganizationUserMemberships] AS [o]
+        WHERE [o].[OrganizationId] = @orgId AND [o].[AppUserId] = @userId) THEN CAST(1 AS bit)
+    ELSE CAST(0 AS bit)
+END
+2026-07-15 14:17:27.574 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@orgId='?' (DbType = Guid), @userId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM [OrganizationUserMemberships] AS [o]
+        WHERE [o].[OrganizationId] = @orgId AND [o].[AppUserId] = @userId) THEN CAST(1 AS bit)
+    ELSE CAST(0 AS bit)
+END
+2026-07-15 14:17:27.576 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@orgId='?' (DbType = Guid), @userId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM [OrganizationUserMemberships] AS [o]
+        WHERE [o].[OrganizationId] = @orgId AND [o].[AppUserId] = @userId) THEN CAST(1 AS bit)
+    ELSE CAST(0 AS bit)
+END
+2026-07-15 14:17:27.587 [WRN] Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager No XML encryptor configured. Key {b67ad860-0885-445a-952b-833c0c260f1f} may be persisted to storage in unencrypted form.
+2026-07-15 14:17:27.603 [WRN] Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware The WebRootPath was not found: /Users/ben/Source/Ben/Ben.Data.WebApi/wwwroot. Static files may be unavailable.
+2026-07-15 14:17:27.606 [INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5252
+2026-07-15 14:17:27.607 [INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down.
+2026-07-15 14:17:27.607 [INF] Microsoft.Hosting.Lifetime Hosting environment: Development
+2026-07-15 14:17:27.607 [INF] Microsoft.Hosting.Lifetime Content root path: /Users/ben/Source/Ben/Ben.Data.WebApi
+2026-07-15 14:17:27.998 [DBG] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler AuthenticationScheme: Identity.Bearer was not authenticated.
+2026-07-15 14:17:28.000 [DBG] Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationHandler AuthenticationScheme: Identity.Application was not authenticated.
+2026-07-15 14:17:50.388 [INF] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler Identity.Bearer was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:17:50.388 [INF] Microsoft.Extensions.DependencyInjection.IdentityServiceCollectionExtensions+CompositeIdentityHandler Identity.BearerAndApplication was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:17:50.389 [INF] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler Identity.Bearer was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:17:50.703 [DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler Successfully validated the token.
+2026-07-15 14:17:50.704 [DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Entra was successfully authenticated.
+2026-07-15 14:17:50.705 [DBG] Microsoft.AspNetCore.Authorization.DefaultAuthorizationService Authorization was successful.
+2026-07-15 14:17:50.716 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@loginProvider='?' (Size = 450), @providerKey='?' (Size = 450)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[LoginProvider], [a].[ProviderKey], [a].[ProviderDisplayName], [a].[UserId]
+FROM [AspNetUserLogins] AS [a]
+WHERE [a].[LoginProvider] = @loginProvider AND [a].[ProviderKey] = @providerKey
+2026-07-15 14:18:06.163 [DBG] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler AuthenticationScheme: Identity.Bearer was not authenticated.
+2026-07-15 14:18:06.164 [DBG] Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationHandler AuthenticationScheme: Identity.Application was not authenticated.
+2026-07-15 14:18:06.179 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (3ms) [Parameters=[@normalizedUserName='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(1) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedUserName] = @normalizedUserName
+2026-07-15 14:18:06.231 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (3ms) [Parameters=[@user_Id='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT [a].[Id], [a].[ClaimType], [a].[ClaimValue], [a].[UserId]
+FROM [AspNetUserClaims] AS [a]
+WHERE [a].[UserId] = @user_Id
+2026-07-15 14:18:06.240 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (3ms) [Parameters=[@userId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT [a0].[Name]
+FROM [AspNetUserRoles] AS [a]
+INNER JOIN [AspNetRoles] AS [a0] ON [a].[RoleId] = [a0].[Id]
+WHERE [a].[UserId] = @userId
+2026-07-15 14:18:06.242 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@normalizedName='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(1) [a].[Id], [a].[ConcurrencyStamp], [a].[Name], [a].[NormalizedName]
+FROM [AspNetRoles] AS [a]
+WHERE [a].[NormalizedName] = @normalizedName
+2026-07-15 14:18:06.245 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@role_Id='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT [a].[ClaimType], [a].[ClaimValue]
+FROM [AspNetRoleClaims] AS [a]
+WHERE [a].[RoleId] = @role_Id
+2026-07-15 14:18:06.246 [INF] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler AuthenticationScheme: Identity.Bearer signed in.
+2026-07-15 14:18:06.252 [DBG] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler AuthenticationScheme: Identity.Bearer was successfully authenticated.
+2026-07-15 14:18:06.253 [DBG] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler AuthenticationScheme: Identity.Bearer was successfully authenticated.
+2026-07-15 14:18:06.253 [INF] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler Failed to validate the token.
+Microsoft.IdentityModel.Tokens.SecurityTokenMalformedException: IDX14100: JWT is not well formed, there are no dots (.).
+The token needs to be in JWS or JWE Compact Serialization Format. (JWS): 'EncodedHeader.EncodedPayload.EncodedSignature'. (JWE): 'EncodedProtectedHeader.EncodedEncryptedKey.EncodedInitializationVector.EncodedCiphertext.EncodedAuthenticationTag'.
+   at Microsoft.IdentityModel.JsonWebTokens.JsonWebToken.ReadToken(ReadOnlyMemory`1 encodedTokenMemory)
+   at Microsoft.IdentityModel.JsonWebTokens.JsonWebToken..ctor(String jwtEncodedString, TryReadJwtClaim tryReadJwtClaim)
+   at Microsoft.IdentityModel.JsonWebTokens.JsonWebTokenHandler.ReadToken(String token, TokenValidationParameters validationParameters)
+2026-07-15 14:18:06.254 [INF] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler Entra was not authenticated. Failure message: IDX14100: JWT is not well formed, there are no dots (.).
+The token needs to be in JWS or JWE Compact Serialization Format. (JWS): 'EncodedHeader.EncodedPayload.EncodedSignature'. (JWE): 'EncodedProtectedHeader.EncodedEncryptedKey.EncodedInitializationVector.EncodedCiphertext.EncodedAuthenticationTag'.
+2026-07-15 14:18:06.254 [DBG] Microsoft.AspNetCore.Authorization.DefaultAuthorizationService Authorization was successful.
+2026-07-15 14:18:06.259 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@p='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(1) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[Id] = @p
+2026-07-15 14:18:06.261 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@normalizedRoleName='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[ConcurrencyStamp], [a].[Name], [a].[NormalizedName]
+FROM [AspNetRoles] AS [a]
+WHERE [a].[NormalizedName] = @normalizedRoleName
+2026-07-15 14:18:06.263 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@p='?' (DbType = Guid), @p1='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(1) [a].[UserId], [a].[RoleId]
+FROM [AspNetUserRoles] AS [a]
+WHERE [a].[UserId] = @p AND [a].[RoleId] = @p1
+2026-07-15 14:18:06.266 [DBG] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler AuthenticationScheme: Identity.Bearer was successfully authenticated.
+2026-07-15 14:18:06.267 [DBG] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler AuthenticationScheme: Identity.Bearer was successfully authenticated.
+2026-07-15 14:18:06.267 [INF] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler Failed to validate the token.
+Microsoft.IdentityModel.Tokens.SecurityTokenMalformedException: IDX14100: JWT is not well formed, there are no dots (.).
+The token needs to be in JWS or JWE Compact Serialization Format. (JWS): 'EncodedHeader.EncodedPayload.EncodedSignature'. (JWE): 'EncodedProtectedHeader.EncodedEncryptedKey.EncodedInitializationVector.EncodedCiphertext.EncodedAuthenticationTag'.
+   at Microsoft.IdentityModel.JsonWebTokens.JsonWebToken.ReadToken(ReadOnlyMemory`1 encodedTokenMemory)
+   at Microsoft.IdentityModel.JsonWebTokens.JsonWebToken..ctor(String jwtEncodedString, TryReadJwtClaim tryReadJwtClaim)
+   at Microsoft.IdentityModel.JsonWebTokens.JsonWebTokenHandler.ReadToken(String token, TokenValidationParameters validationParameters)
+2026-07-15 14:18:06.267 [INF] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler Entra was not authenticated. Failure message: IDX14100: JWT is not well formed, there are no dots (.).
+The token needs to be in JWS or JWE Compact Serialization Format. (JWS): 'EncodedHeader.EncodedPayload.EncodedSignature'. (JWE): 'EncodedProtectedHeader.EncodedEncryptedKey.EncodedInitializationVector.EncodedCiphertext.EncodedAuthenticationTag'.
+2026-07-15 14:18:06.267 [DBG] Microsoft.AspNetCore.Authorization.DefaultAuthorizationService Authorization was successful.
+2026-07-15 14:18:06.268 [DBG] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler AuthenticationScheme: Identity.Bearer was successfully authenticated.
+2026-07-15 14:18:06.268 [DBG] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler AuthenticationScheme: Identity.Bearer was successfully authenticated.
+2026-07-15 14:18:06.268 [INF] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler Failed to validate the token.
+Microsoft.IdentityModel.Tokens.SecurityTokenMalformedException: IDX14100: JWT is not well formed, there are no dots (.).
+The token needs to be in JWS or JWE Compact Serialization Format. (JWS): 'EncodedHeader.EncodedPayload.EncodedSignature'. (JWE): 'EncodedProtectedHeader.EncodedEncryptedKey.EncodedInitializationVector.EncodedCiphertext.EncodedAuthenticationTag'.
+   at Microsoft.IdentityModel.JsonWebTokens.JsonWebToken.ReadToken(ReadOnlyMemory`1 encodedTokenMemory)
+   at Microsoft.IdentityModel.JsonWebTokens.JsonWebToken..ctor(String jwtEncodedString, TryReadJwtClaim tryReadJwtClaim)
+   at Microsoft.IdentityModel.JsonWebTokens.JsonWebTokenHandler.ReadToken(String token, TokenValidationParameters validationParameters)
+2026-07-15 14:18:06.268 [INF] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler Entra was not authenticated. Failure message: IDX14100: JWT is not well formed, there are no dots (.).
+The token needs to be in JWS or JWE Compact Serialization Format. (JWS): 'EncodedHeader.EncodedPayload.EncodedSignature'. (JWE): 'EncodedProtectedHeader.EncodedEncryptedKey.EncodedInitializationVector.EncodedCiphertext.EncodedAuthenticationTag'.
+2026-07-15 14:18:06.268 [DBG] Microsoft.AspNetCore.Authorization.DefaultAuthorizationService Authorization was successful.
+2026-07-15 14:18:06.277 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@p='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(1) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[Id] = @p
+2026-07-15 14:18:06.279 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@loginProvider='?' (Size = 450), @providerKey='?' (Size = 450)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[LoginProvider], [a].[ProviderKey], [a].[ProviderDisplayName], [a].[UserId]
+FROM [AspNetUserLogins] AS [a]
+WHERE [a].[LoginProvider] = @loginProvider AND [a].[ProviderKey] = @providerKey
+2026-07-15 14:18:06.280 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@loginProvider='?' (Size = 450), @providerKey='?' (Size = 450)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[LoginProvider], [a].[ProviderKey], [a].[ProviderDisplayName], [a].[UserId]
+FROM [AspNetUserLogins] AS [a]
+WHERE [a].[LoginProvider] = @loginProvider AND [a].[ProviderKey] = @providerKey
+2026-07-15 14:18:06.288 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@normalizedUserName='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(1) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedUserName] = @normalizedUserName
+2026-07-15 14:18:06.290 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@normalizedEmail='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[NormalizedEmail] = @normalizedEmail
+2026-07-15 14:18:06.303 [WRN] LuckyPennySoftware.AutoMapper.License You do not have a valid license key for the Lucky Penny software AutoMapper. This is allowed for development and testing scenarios. If you are running in production you are required to have a licensed version. Please visit https://luckypennysoftware.com to obtain a valid license.
+2026-07-15 14:18:06.308 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@reviewerAppUserId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT [u].[Id]
+FROM [UploadFiles] AS [u]
+WHERE [u].[AppUserId] = @reviewerAppUserId
+2026-07-15 14:18:06.337 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT [u].[Id], [u].[CreatedByAppUserId], [u].[DateCreated], [u].[DateReviewed], [u].[DateUpdated], [u].[OrganizationId], [u].[PermissionType], [u].[RequestNotes], [u].[RequestStatus], [u].[RequestedByAppUserId], [u].[ReviewNotes], [u].[ReviewedByAppUserId], [u].[UpdatedByAppUserId], [u].[UploadFileId]
+FROM [UploadFilePermissionRequests] AS [u]
+WHERE 0 = 1
+ORDER BY [u].[DateCreated] DESC
+2026-07-15 14:18:06.339 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (22ms) [Parameters=[@p17='?' (DbType = Guid), @p0='?' (DbType = Int32), @p1='?' (Size = 4000), @p18='?' (Size = 4000), @p2='?' (DbType = DateTime2), @p3='?' (DbType = DateTime2), @p4='?' (Size = 4000), @p5='?' (Size = 256), @p6='?' (DbType = Boolean), @p7='?' (DbType = Boolean), @p8='?' (DbType = DateTimeOffset), @p9='?' (Size = 256), @p10='?' (Size = 256), @p11='?' (Size = 4000), @p12='?' (Size = 4000), @p13='?' (DbType = Boolean), @p14='?' (Size = 4000), @p15='?' (DbType = Boolean), @p16='?' (Size = 256), @p19='?' (Size = 450), @p20='?' (Size = 450), @p21='?' (Size = 4000), @p22='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SET NOCOUNT ON;
+UPDATE [AppUsers] SET [AccessFailedCount] = @p0, [ConcurrencyStamp] = @p1, [DateCreated] = @p2, [DateUpdated] = @p3, [DisplayName] = @p4, [Email] = @p5, [EmailConfirmed] = @p6, [LockoutEnabled] = @p7, [LockoutEnd] = @p8, [NormalizedEmail] = @p9, [NormalizedUserName] = @p10, [PasswordHash] = @p11, [PhoneNumber] = @p12, [PhoneNumberConfirmed] = @p13, [SecurityStamp] = @p14, [TwoFactorEnabled] = @p15, [UserName] = @p16
+OUTPUT 1
+WHERE [Id] = @p17 AND [ConcurrencyStamp] = @p18;
+INSERT INTO [AspNetUserLogins] ([LoginProvider], [ProviderKey], [ProviderDisplayName], [UserId])
+VALUES (@p19, @p20, @p21, @p22);
+2026-07-15 14:18:19.226 [INF] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler Identity.Bearer was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:18:19.226 [INF] Microsoft.Extensions.DependencyInjection.IdentityServiceCollectionExtensions+CompositeIdentityHandler Identity.BearerAndApplication was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:18:19.226 [INF] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler Identity.Bearer was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:18:19.228 [DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler Successfully validated the token.
+2026-07-15 14:18:19.228 [DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Entra was successfully authenticated.
+2026-07-15 14:18:19.228 [DBG] Microsoft.AspNetCore.Authorization.DefaultAuthorizationService Authorization was successful.
+2026-07-15 14:18:19.231 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@loginProvider='?' (Size = 450), @providerKey='?' (Size = 450)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[LoginProvider], [a].[ProviderKey], [a].[ProviderDisplayName], [a].[UserId]
+FROM [AspNetUserLogins] AS [a]
+WHERE [a].[LoginProvider] = @loginProvider AND [a].[ProviderKey] = @providerKey
+2026-07-15 14:18:19.246 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (6ms) [Parameters=[@userId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[AccessFailedCount], [a].[ConcurrencyStamp], [a].[DateCreated], [a].[DateUpdated], [a].[DisplayName], [a].[Email], [a].[EmailConfirmed], [a].[LockoutEnabled], [a].[LockoutEnd], [a].[NormalizedEmail], [a].[NormalizedUserName], [a].[PasswordHash], [a].[PhoneNumber], [a].[PhoneNumberConfirmed], [a].[SecurityStamp], [a].[TwoFactorEnabled], [a].[UserName]
+FROM [AppUsers] AS [a]
+WHERE [a].[Id] = @userId
+2026-07-15 14:18:19.250 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@normalizedRoleName='?' (Size = 256)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(2) [a].[Id], [a].[ConcurrencyStamp], [a].[Name], [a].[NormalizedName]
+FROM [AspNetRoles] AS [a]
+WHERE [a].[NormalizedName] = @normalizedRoleName
+2026-07-15 14:18:19.252 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@p='?' (DbType = Guid), @p1='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT TOP(1) [a].[UserId], [a].[RoleId]
+FROM [AspNetUserRoles] AS [a]
+WHERE [a].[UserId] = @p AND [a].[RoleId] = @p1
+2026-07-15 14:18:19.254 [INF] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler Identity.Bearer was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:18:19.254 [INF] Microsoft.Extensions.DependencyInjection.IdentityServiceCollectionExtensions+CompositeIdentityHandler Identity.BearerAndApplication was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:18:19.254 [INF] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler Identity.Bearer was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:18:19.254 [DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler Successfully validated the token.
+2026-07-15 14:18:19.254 [DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Entra was successfully authenticated.
+2026-07-15 14:18:19.254 [INF] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler Identity.Bearer was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:18:19.254 [INF] Microsoft.Extensions.DependencyInjection.IdentityServiceCollectionExtensions+CompositeIdentityHandler Identity.BearerAndApplication was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:18:19.254 [DBG] Microsoft.AspNetCore.Authorization.DefaultAuthorizationService Authorization was successful.
+2026-07-15 14:18:19.255 [INF] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler Identity.Bearer was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:18:19.255 [INF] Microsoft.Extensions.DependencyInjection.IdentityServiceCollectionExtensions+CompositeIdentityHandler Identity.BearerAndApplication was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:18:19.255 [INF] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler Identity.Bearer was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:18:19.255 [DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler Successfully validated the token.
+2026-07-15 14:18:19.256 [DBG] Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler AuthenticationScheme: Entra was successfully authenticated.
+2026-07-15 14:18:19.256 [DBG] Microsoft.AspNetCore.Authorization.DefaultAuthorizationService Authorization was successful.
+2026-07-15 14:18:19.258 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (2ms) [Parameters=[@reviewerAppUserId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT [u].[Id]
+FROM [UploadFiles] AS [u]
+WHERE [u].[AppUserId] = @reviewerAppUserId
+2026-07-15 14:18:19.258 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[@reviewerAppUserId='?' (DbType = Guid)], CommandType='"Text"', CommandTimeout='30']
+SELECT [u].[Id]
+FROM [UploadFiles] AS [u]
+WHERE [u].[AppUserId] = @reviewerAppUserId
+2026-07-15 14:18:19.260 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT [u].[Id], [u].[CreatedByAppUserId], [u].[DateCreated], [u].[DateReviewed], [u].[DateUpdated], [u].[OrganizationId], [u].[PermissionType], [u].[RequestNotes], [u].[RequestStatus], [u].[RequestedByAppUserId], [u].[ReviewNotes], [u].[ReviewedByAppUserId], [u].[UpdatedByAppUserId], [u].[UploadFileId]
+FROM [UploadFilePermissionRequests] AS [u]
+WHERE 0 = 1
+ORDER BY [u].[DateCreated] DESC
+2026-07-15 14:18:19.260 [INF] Microsoft.EntityFrameworkCore.Database.Command Executed DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+SELECT [u].[Id], [u].[CreatedByAppUserId], [u].[DateCreated], [u].[DateReviewed], [u].[DateUpdated], [u].[OrganizationId], [u].[PermissionType], [u].[RequestNotes], [u].[RequestStatus], [u].[RequestedByAppUserId], [u].[ReviewNotes], [u].[ReviewedByAppUserId], [u].[UpdatedByAppUserId], [u].[UploadFileId]
+FROM [UploadFilePermissionRequests] AS [u]
+WHERE 0 = 1
+ORDER BY [u].[DateCreated] DESC
+2026-07-15 14:24:32.100 [INF] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler Identity.Bearer was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:24:32.101 [INF] Microsoft.Extensions.DependencyInjection.IdentityServiceCollectionExtensions+CompositeIdentityHandler Identity.BearerAndApplication was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:24:36.727 [INF] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler Identity.Bearer was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:24:36.727 [INF] Microsoft.Extensions.DependencyInjection.IdentityServiceCollectionExtensions+CompositeIdentityHandler Identity.BearerAndApplication was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:24:36.727 [DBG] Microsoft.AspNetCore.Authorization.AuthorizationMiddleware Policy authentication schemes  did not succeed
+2026-07-15 14:24:36.728 [INF] Microsoft.AspNetCore.Authorization.DefaultAuthorizationService Authorization failed. These requirements were not met:
+RolesAuthorizationRequirement:User.IsInRole must be true for one of the following roles: (SuperAdmin)
+2026-07-15 14:24:36.729 [INF] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler AuthenticationScheme: Identity.Bearer was challenged.
+2026-07-15 14:24:50.613 [INF] Microsoft.AspNetCore.Authentication.BearerToken.BearerTokenHandler Identity.Bearer was not authenticated. Failure message: Unprotected token failed
+2026-07-15 14:24:50.614 [INF] Microsoft.Extensions.DependencyInjection.IdentityServiceCollectionExtensions+CompositeIdentityHandler Identity.BearerAndApplication was not authenticated. Failure message: Unprotected token failed

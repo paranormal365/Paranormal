@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ben.Service.RepositoryService — Repository Managers — Ben Project Analysis</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+  :root { --bs-body-bg: #0d1117; }
+  body  { background-color: var(--bs-body-bg); color: #c9d1d9; }
+  .navbar { background-color: #161b22 !important; border-bottom: 1px solid #30363d; }
+  .navbar-brand { color: #58a6ff !important; font-size: 1.15rem; }
+  .breadcrumb-item a, .breadcrumb-item.active { color: #8b949e; font-size: .9rem; }
+  /* sidebar */
+  #sidebar { position: sticky; top: 1rem; max-height: calc(100vh - 5rem); overflow-y: auto; }
+  #sidebar .nav-link { color: #8b949e; font-size: .875rem; padding: .2rem .75rem; border-left: 2px solid transparent; }
+  #sidebar .nav-link:hover, #sidebar .nav-link.active { color: #58a6ff; border-left-color: #58a6ff; }
+  /* content */
+  .page-header { border-bottom: 2px solid #30363d; padding-bottom: .75rem; margin-bottom: 1.5rem; }
+  .page-header h1 { color: #e6edf3; font-size: 1.75rem; }
+  .section-card { background-color: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; }
+  .section-card h2 { color: #e6edf3; font-size: 1.2rem; padding-bottom: .5rem; border-bottom: 1px solid #30363d; margin-bottom: 1rem; }
+  .section-card h3 { color: #c9d1d9; font-size: 1.05rem; margin-top: 1.2rem; }
+  .section-card h4 { color: #8b949e; font-size: .95rem; margin-top: 1rem; }
+  /* tables */
+  .table { --bs-table-bg: transparent; --bs-table-striped-bg: rgba(255,255,255,.025); color: #c9d1d9; }
+  .table thead th { color: #58a6ff; border-bottom: 2px solid #30363d; white-space: nowrap; }
+  .table td, .table th { border-color: #21262d; vertical-align: top; }
+  .table-responsive { border: 1px solid #30363d; border-radius: 6px; }
+  /* code */
+  pre { background: #010409 !important; border: 1px solid #30363d; border-radius: 6px; padding: 1rem; overflow-x: auto; }
+  code { color: #e3b341; font-size: .85em; }
+  pre code { color: #c9d1d9; }
+  /* inline code in tables */
+  td code, th code { background: rgba(110,118,129,.2); padding: .1em .35em; border-radius: 3px; }
+  /* blockquote / note boxes */
+  blockquote { background: rgba(121,192,255,.05); border-left: 3px solid #1f6feb; padding: .75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+  blockquote p { margin: 0; color: #a5d6ff; }
+  /* badges */
+  .badge-project { font-size: .8em; font-weight: 500; vertical-align: middle; }
+  /* source link */
+  a.src-link { color: #6e7681; font-size: .8em; font-style: italic; }
+  a.src-link:hover { color: #58a6ff; }
+  /* toc */
+  #toc a { color: #8b949e; font-size: .875rem; text-decoration: none; display: block; padding: .15rem .5rem; border-radius: 4px; }
+  #toc a:hover { background: rgba(255,255,255,.05); color: #58a6ff; }
+  /* back to top */
+  #back-top { position: fixed; bottom: 1.5rem; right: 1.5rem; opacity: .7; }
+  #back-top:hover { opacity: 1; }
+</style>
+</head>
+<body>
+<!-- ── Navbar ──────────────────────────────────────────────────────────────── -->
+<nav class="navbar navbar-expand-xl sticky-top">
+  <div class="container-xxl">
+    <a class="navbar-brand" href="../index.html">🔷 Ben Analysis</a>
+    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMain" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navMain">
+      <ul class="navbar-nav flex-wrap gap-0">
+        
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-info" href="#" role="button"
+               data-bs-toggle="dropdown">Data.Common</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Data.Common/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Interfaces.html">Interfaces</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Helpers.html">Helpers</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Enums.html">Enums</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Constants.html">Constants</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Services.html">Services</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-primary" href="#" role="button"
+               data-bs-toggle="dropdown">Data.Source</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Data.Source/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Context.html">Context</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Core.html">Entities Core</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-User.html">Entities User</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Org.html">Entities Org</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Upload.html">Entities Upload</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Audit.html">Entities Audit</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-success" href="#" role="button"
+               data-bs-toggle="dropdown">Data.WebApi</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Data.WebApi/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Base.html">Controllers Base</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Security.html">Controllers Security</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Admin.html">Controllers Admin</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Entities.html">Controllers Entities</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-warning" href="#" role="button"
+               data-bs-toggle="dropdown">Service.Mappings</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.Mappings/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Mappings/Profiles.html">Profiles</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-warning" href="#" role="button"
+               data-bs-toggle="dropdown">Service.Models</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.Models/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Models/Records-Admin.html">Records Admin</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Models/Records-Entities.html">Records Entities</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle active text-danger" href="#" role="button"
+               data-bs-toggle="dropdown">Service.RepositoryService</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Interfaces-Generic.html">Interfaces Generic</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Interfaces-Entity.html">Interfaces Entity</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/RepositoryManager.html">Repository Managers</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Services.html">Services</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-secondary" href="#" role="button"
+               data-bs-toggle="dropdown">Service.RepositoryService Tests</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.RepositoryService.Tests/Summary.html">📋 Summary</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-danger" href="#" role="button"
+               data-bs-toggle="dropdown">Service.Security</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.Security/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Interfaces.html">Interfaces</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Services.html">Services</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Enums.html">Enums</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Models.html">Models</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Attributes.html">Attributes</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Extensions.html">Extensions</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Middleware.html">Middleware</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-info" href="#" role="button"
+               data-bs-toggle="dropdown">Web.Library</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Web.Library/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Library/Services.html">Services</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Library/Components.html">Components</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-secondary" href="#" role="button"
+               data-bs-toggle="dropdown">Web Tests</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Web.Tests/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Tests/Controllers.html">Controllers</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Tests/Services.html">Services</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-success" href="#" role="button"
+               data-bs-toggle="dropdown">Web.WebApp</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Web.WebApp/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.WebApp/Services-Interfaces.html">Services Interfaces</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.WebApp/Services-Implementations.html">Services Implementations</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.WebApp/Components-Pages.html">Components Pages</a></li>
+            </ul>
+          </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<div class="container-xxl py-4">
+  <nav aria-label="breadcrumb" class="mb-3"><ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="../index.html" class="text-decoration-none text-secondary">Home</a></li>
+    <li class="breadcrumb-item"><a href="Summary.html" class="text-decoration-none text-danger">Ben.Service.RepositoryService</a></li>
+    <li class="breadcrumb-item active">Repository Managers</li>
+  </ol></nav>
+  <div class="row">
+  <div id="sidebar" class="col-lg-2 d-none d-lg-block"><div class="ps-2 pt-2">
+    <div class="text-muted small fw-semibold mb-2 text-uppercase" style="font-size:.7rem">On this page</div>
+    <nav id="toc">
+<a href="#repositorymanager"><code>RepositoryManager</code></a>
+<a href="#appuserrepositorymanager"><code>AppUserRepositoryManager</code></a>
+<a href="#organizationrepositorymanager"><code>OrganizationRepositoryManager</code></a>
+    </nav>
+  </div></div>
+  <div class="col-lg-10">
+    <div class="page-header"><h1>Ben.Service.RepositoryService — Repository Manager Implementations</h1></div>
+
+    <div class="section-card" id="repositorymanager">
+      <h2><code>RepositoryManager</code></h2>
+      <p><strong>Implements:</strong> <code>IRepositoryManager</code> &nbsp;·&nbsp; <strong>Registered as:</strong> Scoped</p>
+      <p>The concrete unit-of-work implementation. Lazily initialises sub-managers on first access using <code>??=</code>. Shares a single <code>IDbContextFactory&lt;BenDataContext&gt;</code>.</p>
+      <div class="table-responsive"><table class="table table-sm table-striped">
+        <thead><tr><th>Property</th><th>Interface</th><th>Lazy?</th></tr></thead>
+        <tbody>
+          <tr><td><code>Organization</code></td><td><code>IOrganizationRepositoryManager</code></td><td>Yes — creates <code>OrganizationRepositoryManager</code> on first access</td></tr>
+          <tr><td><code>AppUser</code></td><td><code>IAppUserRepositoryManager</code></td><td>Yes — creates <code>AppUserRepositoryManager</code> on first access</td></tr>
+        </tbody>
+      </table></div>
+      <blockquote><p><code>SaveChangesAsync</code> currently throws <code>NotImplementedException</code>. Repositories create their own scoped contexts via <code>IDbContextFactory</code>.</p></blockquote>
+    </div>
+
+    <div class="section-card" id="appuserrepositorymanager">
+      <h2><code>AppUserRepositoryManager</code></h2>
+      <p><strong>Implements:</strong> <code>IAppUserRepositoryManager</code></p>
+      <p>Aggregates all AppUser-domain repository instances. Each property is lazily initialised on first access.</p>
+      <div class="table-responsive"><table class="table table-sm table-striped">
+        <thead><tr><th>Property</th><th>Repository</th><th>Entity</th></tr></thead>
+        <tbody>
+          <tr><td><code>AppUserRepository</code></td><td><code>AppUserRepository</code></td><td><code>AppUser</code></td></tr>
+          <tr><td><code>AddressRepository</code></td><td><code>UserAddressRepository</code></td><td><code>UserAddress</code></td></tr>
+          <tr><td><code>AddressTypeRepository</code></td><td><code>UserAddressTypeRepository</code></td><td><code>UserAddressType</code></td></tr>
+          <tr><td><code>EmailRepository</code></td><td><code>UserEmailRepository</code></td><td><code>UserEmail</code></td></tr>
+          <tr><td><code>EmailTypeRepository</code></td><td><code>UserEmailTypeRepository</code></td><td><code>UserEmailType</code></td></tr>
+          <tr><td><code>LinkRepository</code></td><td><code>UserLinkRepository</code></td><td><code>UserLink</code></td></tr>
+          <tr><td><code>LinkTypeRepository</code></td><td><code>UserLinkTypeRepository</code></td><td><code>UserLinkType</code></td></tr>
+          <tr><td><code>MessageRepository</code></td><td><code>UserMessageRepository</code></td><td><code>UserMessage</code></td></tr>
+          <tr><td><code>MessageToRepository</code></td><td><code>UserMessageToRepository</code></td><td><code>UserMessageTo</code></td></tr>
+          <tr><td><code>MessageTypeRepository</code></td><td><code>UserMessageTypeRepository</code></td><td><code>UserMessageType</code></td></tr>
+          <tr><td><code>NoteRepository</code></td><td><code>UserNoteRepository</code></td><td><code>UserNote</code></td></tr>
+          <tr><td><code>NoteTypeRepository</code></td><td><code>UserNoteTypeRepository</code></td><td><code>UserNoteType</code></td></tr>
+          <tr><td><code>PhoneRepository</code></td><td><code>UserPhoneRepository</code></td><td><code>UserPhone</code></td></tr>
+          <tr><td><code>PhoneTypeRepository</code></td><td><code>UserPhoneTypeRepository</code></td><td><code>UserPhoneType</code></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="section-card" id="organizationrepositorymanager">
+      <h2><code>OrganizationRepositoryManager</code></h2>
+      <p><strong>Implements:</strong> <code>IOrganizationRepositoryManager</code></p>
+      <p>Aggregates all Organisation-domain repository instances. Same lazy-initialisation pattern.</p>
+      <div class="table-responsive"><table class="table table-sm table-striped">
+        <thead><tr><th>Property</th><th>Repository</th><th>Entity</th></tr></thead>
+        <tbody>
+          <tr><td><code>OrganizationRepository</code></td><td><code>OrganizationRepository</code></td><td><code>Organization</code></td></tr>
+          <tr><td><code>AddressRepository</code></td><td><code>OrganizationAddressRepository</code></td><td><code>OrganizationAddress</code></td></tr>
+          <tr><td><code>AddressTypeRepository</code></td><td><code>OrganizationAddressTypeRepository</code></td><td><code>OrganizationAddressType</code></td></tr>
+          <tr><td><code>EmailRepository</code></td><td><code>OrganizationEmailRepository</code></td><td><code>OrganizationEmail</code></td></tr>
+          <tr><td><code>EmailTypeRepository</code></td><td><code>OrganizationEmailTypeRepository</code></td><td><code>OrganizationEmailType</code></td></tr>
+          <tr><td><code>LinkRepository</code></td><td><code>OrganizationLinkRepository</code></td><td><code>OrganizationLink</code></td></tr>
+          <tr><td><code>LinkTypeRepository</code></td><td><code>OrganizationLinkTypeRepository</code></td><td><code>OrganizationLinkType</code></td></tr>
+          <tr><td><code>NoteRepository</code></td><td><code>OrganizationNoteRepository</code></td><td><code>OrganizationNote</code></td></tr>
+          <tr><td><code>NoteTypeRepository</code></td><td><code>OrganizationNoteTypeRepository</code></td><td><code>OrganizationNoteType</code></td></tr>
+          <tr><td><code>PageRepository</code></td><td><code>OrganizationPageRepository</code></td><td><code>OrganizationPage</code></td></tr>
+          <tr><td><code>PhoneRepository</code></td><td><code>OrganizationPhoneRepository</code></td><td><code>OrganizationPhone</code></td></tr>
+          <tr><td><code>PhoneTypeRepository</code></td><td><code>OrganizationPhoneTypeRepository</code></td><td><code>OrganizationPhoneType</code></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div></div>
+</div>
+<a id="back-top" href="#" class="btn btn-sm btn-outline-secondary rounded-pill">↑ Top</a>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body></html>

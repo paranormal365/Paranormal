@@ -1,0 +1,53 @@
+
+# ============================================================
+# .NET build outputs
+# ============================================================
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ============================================================
+# IDE / editor
+# ============================================================
+.vs/
+.idea/
+*.DotSettings.user
+
+# ============================================================
+# VS Code runtime files (logs, pids — not settings/tasks)
+# ============================================================
+.vscode/webapi.log
+.vscode/.webapi.pid
+
+# ============================================================
+# NuGet
+# ============================================================
+.nuget/
+*.nupkg
+packages/
+
+# ============================================================
+# OS
+# ============================================================
+.DS_Store
+Thumbs.db
+
+# ============================================================
+# Secrets / sensitive config
+# ============================================================
+
+# Telerik license (proprietary, local-only)
+telerik-license.txt
+
+# Development appsettings — contain secrets (connection strings, client secrets, passwords, seed data)
+**/appsettings.Development.json
+**/appsettings.*.json
+!**/appsettings.json
+
+# .NET user secrets
+**/secrets.json
+.env
+.env.*

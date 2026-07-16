@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ben.Data.Common — Helpers — Ben Project Analysis</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+  :root { --bs-body-bg: #0d1117; }
+  body  { background-color: var(--bs-body-bg); color: #c9d1d9; }
+  .navbar { background-color: #161b22 !important; border-bottom: 1px solid #30363d; }
+  .navbar-brand { color: #58a6ff !important; font-size: 1.15rem; }
+  .breadcrumb-item a, .breadcrumb-item.active { color: #8b949e; font-size: .9rem; }
+  /* sidebar */
+  #sidebar { position: sticky; top: 1rem; max-height: calc(100vh - 5rem); overflow-y: auto; }
+  #sidebar .nav-link { color: #8b949e; font-size: .875rem; padding: .2rem .75rem; border-left: 2px solid transparent; }
+  #sidebar .nav-link:hover, #sidebar .nav-link.active { color: #58a6ff; border-left-color: #58a6ff; }
+  /* content */
+  .page-header { border-bottom: 2px solid #30363d; padding-bottom: .75rem; margin-bottom: 1.5rem; }
+  .page-header h1 { color: #e6edf3; font-size: 1.75rem; }
+  .section-card { background-color: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; }
+  .section-card h2 { color: #e6edf3; font-size: 1.2rem; padding-bottom: .5rem; border-bottom: 1px solid #30363d; margin-bottom: 1rem; }
+  .section-card h3 { color: #c9d1d9; font-size: 1.05rem; margin-top: 1.2rem; }
+  .section-card h4 { color: #8b949e; font-size: .95rem; margin-top: 1rem; }
+  /* tables */
+  .table { --bs-table-bg: transparent; --bs-table-striped-bg: rgba(255,255,255,.025); color: #c9d1d9; }
+  .table thead th { color: #58a6ff; border-bottom: 2px solid #30363d; white-space: nowrap; }
+  .table td, .table th { border-color: #21262d; vertical-align: top; }
+  .table-responsive { border: 1px solid #30363d; border-radius: 6px; }
+  /* code */
+  pre { background: #010409 !important; border: 1px solid #30363d; border-radius: 6px; padding: 1rem; overflow-x: auto; }
+  code { color: #e3b341; font-size: .85em; }
+  pre code { color: #c9d1d9; }
+  /* inline code in tables */
+  td code, th code { background: rgba(110,118,129,.2); padding: .1em .35em; border-radius: 3px; }
+  /* blockquote / note boxes */
+  blockquote { background: rgba(121,192,255,.05); border-left: 3px solid #1f6feb; padding: .75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+  blockquote p { margin: 0; color: #a5d6ff; }
+  /* badges */
+  .badge-project { font-size: .8em; font-weight: 500; vertical-align: middle; }
+  /* source link */
+  a.src-link { color: #6e7681; font-size: .8em; font-style: italic; }
+  a.src-link:hover { color: #58a6ff; }
+  /* toc */
+  #toc a { color: #8b949e; font-size: .875rem; text-decoration: none; display: block; padding: .15rem .5rem; border-radius: 4px; }
+  #toc a:hover { background: rgba(255,255,255,.05); color: #58a6ff; }
+  /* back to top */
+  #back-top { position: fixed; bottom: 1.5rem; right: 1.5rem; opacity: .7; }
+  #back-top:hover { opacity: 1; }
+</style>
+</head>
+<body>
+<!-- ── Navbar ──────────────────────────────────────────────────────────────── -->
+<nav class="navbar navbar-expand-xl sticky-top">
+  <div class="container-xxl">
+    <a class="navbar-brand" href="../index.html">🔷 Ben Analysis</a>
+    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMain" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navMain">
+      <ul class="navbar-nav flex-wrap gap-0">
+        
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle active text-info" href="#" role="button"
+               data-bs-toggle="dropdown">Data.Common</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Data.Common/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Interfaces.html">Interfaces</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Helpers.html">Helpers</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Enums.html">Enums</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Constants.html">Constants</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Services.html">Services</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-primary" href="#" role="button"
+               data-bs-toggle="dropdown">Data.Source</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Data.Source/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Context.html">Context</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Core.html">Entities Core</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-User.html">Entities User</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Org.html">Entities Org</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Upload.html">Entities Upload</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Audit.html">Entities Audit</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-success" href="#" role="button"
+               data-bs-toggle="dropdown">Data.WebApi</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Data.WebApi/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Base.html">Controllers Base</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Security.html">Controllers Security</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Admin.html">Controllers Admin</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Entities.html">Controllers Entities</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-warning" href="#" role="button"
+               data-bs-toggle="dropdown">Service.Mappings</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.Mappings/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Mappings/Profiles.html">Profiles</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-warning" href="#" role="button"
+               data-bs-toggle="dropdown">Service.Models</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.Models/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Models/Records-Admin.html">Records Admin</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Models/Records-Entities.html">Records Entities</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-danger" href="#" role="button"
+               data-bs-toggle="dropdown">Service.RepositoryService</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Interfaces-Generic.html">Interfaces Generic</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Interfaces-Entity.html">Interfaces Entity</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/RepositoryManager.html">Repository Managers</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Services.html">Services</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-secondary" href="#" role="button"
+               data-bs-toggle="dropdown">Service.RepositoryService Tests</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.RepositoryService.Tests/Summary.html">📋 Summary</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-danger" href="#" role="button"
+               data-bs-toggle="dropdown">Service.Security</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.Security/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Interfaces.html">Interfaces</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Services.html">Services</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Enums.html">Enums</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Models.html">Models</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Attributes.html">Attributes</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Extensions.html">Extensions</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Middleware.html">Middleware</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-info" href="#" role="button"
+               data-bs-toggle="dropdown">Web.Library</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Web.Library/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Library/Services.html">Services</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Library/Components.html">Components</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-secondary" href="#" role="button"
+               data-bs-toggle="dropdown">Web Tests</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Web.Tests/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Tests/Controllers.html">Controllers</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Tests/Services.html">Services</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-success" href="#" role="button"
+               data-bs-toggle="dropdown">Web.WebApp</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Web.WebApp/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.WebApp/Services-Interfaces.html">Services Interfaces</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.WebApp/Services-Implementations.html">Services Implementations</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.WebApp/Components-Pages.html">Components Pages</a></li>
+            </ul>
+          </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<div class="container-xxl py-4">
+  <!-- breadcrumb -->
+  <nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="../index.html" class="text-decoration-none text-secondary">Home</a></li>
+      <li class="breadcrumb-item"><a href="Ben.Data.Common/Summary.html" class="text-decoration-none text-info">Ben.Data.Common</a></li>
+      <li class="breadcrumb-item active">Helpers</li>
+    </ol>
+  </nav>
+
+  <div class="row">
+
+      <div id="sidebar" class="col-lg-2 d-none d-lg-block">
+        <div class="ps-2 pt-2">
+          <div class="text-muted small fw-semibold mb-2 text-uppercase" style="font-size:.7rem;letter-spacing:.08em">On this page</div>
+          <nav id="toc"><a href="#auditchangetracker">`AuditChangeTracker`</a>
+<a href="#summary">&nbsp;&nbsp;&nbsp;Summary</a>
+<a href="#methods">&nbsp;&nbsp;&nbsp;Methods</a>
+<a href="#nested-type-propertychange">&nbsp;&nbsp;&nbsp;Nested type: `PropertyChange`</a>
+<a href="#fileextensionpatternmatcher">`FileExtensionPatternMatcher`</a>
+<a href="#summary">&nbsp;&nbsp;&nbsp;Summary</a>
+<a href="#methods">&nbsp;&nbsp;&nbsp;Methods</a>
+<a href="#predicatehelper">`PredicateHelper`</a>
+<a href="#summary">&nbsp;&nbsp;&nbsp;Summary</a>
+<a href="#methods">&nbsp;&nbsp;&nbsp;Methods</a>
+<a href="#datetimehelper-class-name-datetimeservice">`DateTimeHelper` (class name: `DateTimeService`)</a>
+<a href="#summary">&nbsp;&nbsp;&nbsp;Summary</a>
+<a href="#methods">&nbsp;&nbsp;&nbsp;Methods</a>
+<a href="#colorhelper">`ColorHelper`</a>
+<a href="#summary">&nbsp;&nbsp;&nbsp;Summary</a>
+<a href="#constants">&nbsp;&nbsp;&nbsp;Constants</a>
+<a href="#key-properties">&nbsp;&nbsp;&nbsp;Key Properties</a>
+<a href="#key-methods">&nbsp;&nbsp;&nbsp;Key Methods</a></nav>
+        </div>
+      </div>
+    <div class="col-lg-9">
+      <div class="section-card"><h1>Ben.Data.Common — Helpers</h1>
+</div>
+<div class="section-card"><h2><code>AuditChangeTracker</code></h2>
+<p><strong>Namespace:</strong> <code>Ben.Data.Common.Helpers</code><br />
+<strong>File:</strong> <a href="../../../Ben.Data.Common/Helpers/AuditChangeTracker.cs" class="src-link" target="_blank"><code>Ben.Data.Common/Helpers/AuditChangeTracker.cs</code></a><br />
+<strong>Type:</strong> Static class</p>
+<h3>Summary</h3>
+<p>Produces property snapshots and before/after diffs for the audit logging system.<br />
+Used by <a href="../../Ben.Service.RepositoryService/Services.md#auditlogservice"><code>AuditLogService</code></a> to build the <code>ChangesJson</code> column on <code>AuditLog</code> rows.</p>
+<p>Only <strong>scalar properties</strong> are tracked — primitives, <code>string</code>, <code>Guid</code>, <code>DateTime</code>, <code>DateTimeOffset</code>, <code>decimal</code>, and enums. Navigation properties and collections are silently excluded.</p>
+<h3>Methods</h3>
+<h4><code>ToPropertySnapshot(object entity)</code></h4>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Detail</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Returns</strong></td>
+<td><code>IReadOnlyDictionary&lt;string, string?&gt;</code></td>
+</tr>
+<tr>
+<td><strong>Throws</strong></td>
+<td><code>ArgumentNullException</code> when <code>entity</code> is null</td>
+</tr>
+</tbody>
+</table></div>
+<p>Iterates all public readable scalar properties and returns a name→value dictionary.<br />
+Used for <strong>Create</strong> and <strong>Delete</strong> audit entries — captures a complete snapshot of what was created or what existed before deletion.</p>
+<p><strong>Parameters:</strong></p>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>entity</code></td>
+<td><code>object</code></td>
+<td>Any object whose scalar properties should be captured.</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h4><code>GetChanges(object before, object after)</code></h4>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Detail</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Returns</strong></td>
+<td><code>IReadOnlyList&lt;PropertyChange&gt;</code></td>
+</tr>
+<tr>
+<td><strong>Throws</strong></td>
+<td><code>ArgumentNullException</code> when either argument is null</td>
+</tr>
+<tr>
+<td><strong>Throws</strong></td>
+<td><code>ArgumentException</code> when <code>before</code> and <code>after</code> are different types</td>
+</tr>
+</tbody>
+</table></div>
+<p>Compares scalar properties of two objects of the same type and returns only the properties whose values differ.<br />
+Used for <strong>Update</strong> audit entries — the resulting list is serialised to JSON and stored in <code>AuditLog.ChangesJson</code>.</p>
+<p><strong>Parameters:</strong></p>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>before</code></td>
+<td><code>object</code></td>
+<td>Entity state loaded from the database before the update.</td>
+</tr>
+<tr>
+<td><code>after</code></td>
+<td><code>object</code></td>
+<td>Entity state after the update was applied.</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Returns:</strong> List of <a href="#propertychange"><code>PropertyChange</code></a> records — one per changed property.</p>
+<p><strong>Remarks:</strong><br />
+- If no properties changed, returns an empty list (the audit row is still written with an empty JSON array).<br />
+- <code>DateTime</code> values are formatted as <code>"yyyy-MM-dd HH:mm:ss"</code> for consistent display.</p>
+<hr />
+<h3>Nested type: <code>PropertyChange</code></h3>
+<pre><code class="language-csharp">public record PropertyChange(string Property, string? Before, string? After);
+</code></pre>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Property</code></td>
+<td><code>string</code></td>
+<td>Name of the changed property.</td>
+</tr>
+<tr>
+<td><code>Before</code></td>
+<td><code>string?</code></td>
+<td>String representation of the value before the update, or <code>null</code>.</td>
+</tr>
+<tr>
+<td><code>After</code></td>
+<td><code>string?</code></td>
+<td>String representation of the value after the update, or <code>null</code>.</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+</div>
+<div class="section-card"><h2><code>FileExtensionPatternMatcher</code></h2>
+<p><strong>Namespace:</strong> <code>Ben.Data.Common.Helpers</code><br />
+<strong>File:</strong> <a href="../../../Ben.Data.Common/Helpers/FileExtensionPatternMatcher.cs" class="src-link" target="_blank"><code>Ben.Data.Common/Helpers/FileExtensionPatternMatcher.cs</code></a><br />
+<strong>Type:</strong> Static class</p>
+<h3>Summary</h3>
+<p>Matches file extensions against patterns stored on <code>UploadFileTypeExtension</code> rows.<br />
+Supports two pattern forms:</p>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Form</th>
+<th>Example</th>
+<th>Matches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Exact</td>
+<td><code>.txt</code></td>
+<td>Only <code>.txt</code> (case-insensitive)</td>
+</tr>
+<tr>
+<td>Suffix wildcard</td>
+<td><code>.tx*</code></td>
+<td>Any extension starting with <code>.tx</code> (<code>.txa</code>, <code>.txb</code>, <code>.txzzz</code>)</td>
+</tr>
+</tbody>
+</table></div>
+<p>The <code>*</code> wildcard is only supported as the <strong>final character</strong>; interior wildcards are treated as literals.<br />
+Comparison is always <strong>case-insensitive</strong>.</p>
+<h3>Methods</h3>
+<h4><code>Matches(string pattern, string fileExtension)</code></h4>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Detail</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Returns</strong></td>
+<td><code>bool</code></td>
+</tr>
+<tr>
+<td><strong>Returns <code>false</code></strong></td>
+<td>When either argument is null/whitespace</td>
+</tr>
+</tbody>
+</table></div>
+<p>Tests whether a single pattern matches a single file extension.<br />
+Leading dots are normalised automatically — <code>.txt</code> and <code>txt</code> are both accepted.</p>
+<p><strong>Parameters:</strong></p>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pattern</code></td>
+<td><code>string</code></td>
+<td>An extension pattern from <code>UploadFileTypeExtension.Pattern</code>.</td>
+</tr>
+<tr>
+<td><code>fileExtension</code></td>
+<td><code>string</code></td>
+<td>The actual file extension to test (from <code>Path.GetExtension(fileName)</code>).</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h4><code>IsAllowedByPatterns(IEnumerable&lt;string&gt; patterns, string fileExtension)</code></h4>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Detail</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Returns</strong></td>
+<td><code>bool</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Returns <code>true</code> if <strong>any</strong> pattern in the collection matches the file extension (logical OR across all patterns).</p>
+<p><strong>Runtime usage at upload time:</strong></p>
+<pre><code class="language-csharp">bool ok = type.AllowAllExtensions
+       || FileExtensionPatternMatcher.IsAllowedByPatterns(
+              type.AllowedExtensions.Select(e =&gt; e.Pattern),
+              Path.GetExtension(fileName));
+</code></pre>
+<p><strong>Parameters:</strong></p>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>patterns</code></td>
+<td><code>IEnumerable&lt;string&gt;</code></td>
+<td>Patterns from all <code>UploadFileTypeExtension</code> rows for the file type.</td>
+</tr>
+<tr>
+<td><code>fileExtension</code></td>
+<td><code>string</code></td>
+<td>The actual file extension to validate.</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+</div>
+<div class="section-card"><h2><code>PredicateHelper</code></h2>
+<p><strong>Namespace:</strong> <code>Ben.Data.Common.Helpers</code><br />
+<strong>File:</strong> <a href="../../../Ben.Data.Common/Helpers/PredicateHelper.cs" class="src-link" target="_blank"><code>Ben.Data.Common/Helpers/PredicateHelper.cs</code></a><br />
+<strong>Type:</strong> Static class (extension methods)</p>
+<h3>Summary</h3>
+<p>Composable LINQ expression predicate builder for dynamic EF Core query filters.<br />
+Allows incremental construction of <code>Expression&lt;Func&lt;T, bool&gt;&gt;</code> predicates that EF Core can translate to SQL.</p>
+<p><strong>Key design note:</strong> The <code>Or</code> and <code>And</code> combinators re-use a single parameter instance across both branches using an internal reflection-based <code>Replace</code> helper. This is necessary because independently created lambda expressions have distinct <code>ParameterExpression</code> objects, which would cause EF Core translation to fail.</p>
+<h3>Methods</h3>
+<h4><code>Get&lt;T&gt;()</code></h4>
+<p>Returns <code>null</code> — a typed null predicate suitable as a starting point.</p>
+<h4><code>Get&lt;T&gt;(Expression&lt;Func&lt;T, bool&gt;&gt; predicate)</code></h4>
+<p>Identity overload — returns the supplied predicate unchanged.</p>
+<h4><code>Or&lt;T&gt;(expr, or)</code> <em>(extension on <code>Expression&lt;Func&lt;T,bool&gt;&gt;</code>)</em></h4>
+<p>Combines two predicates with logical OR. Returns <code>or</code> directly when <code>expr</code> is <code>null</code>.</p>
+<h4><code>And&lt;T&gt;(expr, and)</code> <em>(extension on <code>Expression&lt;Func&lt;T,bool&gt;&gt;</code>)</em></h4>
+<p>Combines two predicates with logical AND. Returns <code>and</code> directly when <code>expr</code> is <code>null</code>.</p>
+<p><strong>Example:</strong></p>
+<pre><code class="language-csharp">Expression&lt;Func&lt;AppUser, bool&gt;&gt;? filter = null;
+if (!string.IsNullOrEmpty(email))
+    filter = filter.Or(u =&gt; u.Email == email);
+if (!string.IsNullOrEmpty(name))
+    filter = filter.Or(u =&gt; u.DisplayName == name);
+</code></pre>
+<hr />
+</div>
+<div class="section-card"><h2><code>DateTimeHelper</code> (class name: <code>DateTimeService</code>)</h2>
+<p><strong>Namespace:</strong> <code>Ben.Data.Common.Helpers</code><br />
+<strong>File:</strong> <a href="../../../Ben.Data.Common/Helpers/DateTimeHelper.cs" class="src-link" target="_blank"><code>Ben.Data.Common/Helpers/DateTimeHelper.cs</code></a><br />
+<strong>Type:</strong> Static class (named <code>DateTimeService</code>)</p>
+<h3>Summary</h3>
+<p>Static utility methods for formatting <code>DateTime</code> values and performing date comparisons. Stateless — no DI required.</p>
+<h3>Methods</h3>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Method</th>
+<th>Returns</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ToDateString(DateTime?)</code></td>
+<td><code>string</code></td>
+<td>Formats as <code>MM/dd/yyyy</code>, or empty string if null.</td>
+</tr>
+<tr>
+<td><code>ToDateStringYearFirst(DateTime?)</code></td>
+<td><code>string</code></td>
+<td>Formats as <code>yyyy-MM-dd</code> (ISO 8601 date), or empty string if null.</td>
+</tr>
+<tr>
+<td><code>ToDateStringWithTime(DateTime?)</code></td>
+<td><code>string</code></td>
+<td>Formats as <code>MM/dd/yyyy HH:mm:ss</code>, or empty string if null.</td>
+</tr>
+<tr>
+<td><code>ToDateStringWithTimeYearFirst(DateTime?)</code></td>
+<td><code>string</code></td>
+<td>Formats as <code>yyyy-MM-dd HH:mm:ss</code>, or empty string if null.</td>
+</tr>
+<tr>
+<td><code>DateIsLessThanNow(DateTime?, bool)</code></td>
+<td><code>bool</code></td>
+<td><code>true</code> if date is before today. <code>defaultIfNull</code> applied when value is null (default <code>false</code>).</td>
+</tr>
+<tr>
+<td><code>DateIsLessThanOrEqualToToday(DateTime?, bool)</code></td>
+<td><code>bool</code></td>
+<td><code>true</code> if date is today or earlier.</td>
+</tr>
+<tr>
+<td><code>DateIsLaterThanNow(DateTime?, bool)</code></td>
+<td><code>bool</code></td>
+<td><code>true</code> if date is after today. <code>defaultIfNull</code> defaults to <code>true</code>.</td>
+</tr>
+<tr>
+<td><code>DateIsEqual(DateTime?, DateTime?, bool)</code></td>
+<td><code>bool</code></td>
+<td>Day-level equality. Returns <code>defaultIfBothNull</code> (default <code>true</code>) when both are null; <code>false</code> when exactly one is null.</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+</div>
+<div class="section-card"><h2><code>ColorHelper</code></h2>
+<p><strong>Namespace:</strong> <code>Ben.Data.Common.Helpers</code><br />
+<strong>File:</strong> <a href="../../../Ben.Data.Common/Helpers/ColorHelper.cs" class="src-link" target="_blank"><code>Ben.Data.Common/Helpers/ColorHelper.cs</code></a><br />
+<strong>Type:</strong> Class</p>
+<h3>Summary</h3>
+<p>Utility class for converting between hex color strings, <code>System.Drawing.Color</code> objects, and RGBA components.<br />
+Also provides a contrast helper (<code>GetContrastColor</code>) that determines whether black or white text provides better readability against a given background.</p>
+<h3>Constants</h3>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Name</th>
+<th>Value</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LIGHT</code></td>
+<td><code>"#ffffff"</code></td>
+<td>Default light color (white).</td>
+</tr>
+<tr>
+<td><code>DARK</code></td>
+<td><code>"#4f4f4f"</code></td>
+<td>Default dark color (dark grey).</td>
+</tr>
+<tr>
+<td><code>BRIGHTNESS_LEVEL</code></td>
+<td><code>130</code></td>
+<td>Threshold used by contrast detection.</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Key Properties</h3>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>HexColor</code></td>
+<td><code>string</code></td>
+<td>The hex string representation of the current color.</td>
+</tr>
+<tr>
+<td><code>ColorObj</code></td>
+<td><code>Color</code></td>
+<td>The <code>System.Drawing.Color</code> object for the current color.</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Key Methods</h3>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Method</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GetRgba()</code></td>
+<td>Returns the color as an RGBA CSS string (e.g. <code>"rgba(255,255,255,1)"</code>).</td>
+</tr>
+<tr>
+<td><code>GetContrastColor()</code></td>
+<td>Returns <code>LIGHT</code> or <code>DARK</code> depending on which provides better contrast.</td>
+</tr>
+<tr>
+<td><code>GetBrightness()</code></td>
+<td>Computes perceived brightness using the standard luminance formula.</td>
+</tr>
+</tbody>
+</table></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- back to top -->
+<a id="back-top" href="#" class="btn btn-sm btn-outline-secondary rounded-pill">↑ Top</a>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

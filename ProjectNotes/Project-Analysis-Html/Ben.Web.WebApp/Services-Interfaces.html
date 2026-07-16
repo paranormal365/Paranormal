@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ben.Web.WebApp — Service Interfaces — Ben Project Analysis</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+  :root { --bs-body-bg: #0d1117; }
+  body  { background-color: var(--bs-body-bg); color: #c9d1d9; }
+  .navbar { background-color: #161b22 !important; border-bottom: 1px solid #30363d; }
+  .navbar-brand { color: #58a6ff !important; font-size: 1.15rem; }
+  .breadcrumb-item a, .breadcrumb-item.active { color: #8b949e; font-size: .9rem; }
+  /* sidebar */
+  #sidebar { position: sticky; top: 1rem; max-height: calc(100vh - 5rem); overflow-y: auto; }
+  #sidebar .nav-link { color: #8b949e; font-size: .875rem; padding: .2rem .75rem; border-left: 2px solid transparent; }
+  #sidebar .nav-link:hover, #sidebar .nav-link.active { color: #58a6ff; border-left-color: #58a6ff; }
+  /* content */
+  .page-header { border-bottom: 2px solid #30363d; padding-bottom: .75rem; margin-bottom: 1.5rem; }
+  .page-header h1 { color: #e6edf3; font-size: 1.75rem; }
+  .section-card { background-color: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; }
+  .section-card h2 { color: #e6edf3; font-size: 1.2rem; padding-bottom: .5rem; border-bottom: 1px solid #30363d; margin-bottom: 1rem; }
+  .section-card h3 { color: #c9d1d9; font-size: 1.05rem; margin-top: 1.2rem; }
+  .section-card h4 { color: #8b949e; font-size: .95rem; margin-top: 1rem; }
+  /* tables */
+  .table { --bs-table-bg: transparent; --bs-table-striped-bg: rgba(255,255,255,.025); color: #c9d1d9; }
+  .table thead th { color: #58a6ff; border-bottom: 2px solid #30363d; white-space: nowrap; }
+  .table td, .table th { border-color: #21262d; vertical-align: top; }
+  .table-responsive { border: 1px solid #30363d; border-radius: 6px; }
+  /* code */
+  pre { background: #010409 !important; border: 1px solid #30363d; border-radius: 6px; padding: 1rem; overflow-x: auto; }
+  code { color: #e3b341; font-size: .85em; }
+  pre code { color: #c9d1d9; }
+  /* inline code in tables */
+  td code, th code { background: rgba(110,118,129,.2); padding: .1em .35em; border-radius: 3px; }
+  /* blockquote / note boxes */
+  blockquote { background: rgba(121,192,255,.05); border-left: 3px solid #1f6feb; padding: .75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+  blockquote p { margin: 0; color: #a5d6ff; }
+  /* badges */
+  .badge-project { font-size: .8em; font-weight: 500; vertical-align: middle; }
+  /* source link */
+  a.src-link { color: #6e7681; font-size: .8em; font-style: italic; }
+  a.src-link:hover { color: #58a6ff; }
+  /* toc */
+  #toc a { color: #8b949e; font-size: .875rem; text-decoration: none; display: block; padding: .15rem .5rem; border-radius: 4px; }
+  #toc a:hover { background: rgba(255,255,255,.05); color: #58a6ff; }
+  /* back to top */
+  #back-top { position: fixed; bottom: 1.5rem; right: 1.5rem; opacity: .7; }
+  #back-top:hover { opacity: 1; }
+</style>
+</head>
+<body>
+<!-- ── Navbar ──────────────────────────────────────────────────────────────── -->
+<nav class="navbar navbar-expand-xl sticky-top">
+  <div class="container-xxl">
+    <a class="navbar-brand" href="../index.html">🔷 Ben Analysis</a>
+    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMain" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navMain">
+      <ul class="navbar-nav flex-wrap gap-0">
+        
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-info" href="#" role="button"
+               data-bs-toggle="dropdown">Data.Common</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Data.Common/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Interfaces.html">Interfaces</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Helpers.html">Helpers</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Enums.html">Enums</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Constants.html">Constants</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Services.html">Services</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-primary" href="#" role="button"
+               data-bs-toggle="dropdown">Data.Source</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Data.Source/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Context.html">Context</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Core.html">Entities Core</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-User.html">Entities User</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Org.html">Entities Org</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Upload.html">Entities Upload</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Audit.html">Entities Audit</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-success" href="#" role="button"
+               data-bs-toggle="dropdown">Data.WebApi</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Data.WebApi/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Base.html">Controllers Base</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Security.html">Controllers Security</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Admin.html">Controllers Admin</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Entities.html">Controllers Entities</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-warning" href="#" role="button"
+               data-bs-toggle="dropdown">Service.Mappings</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.Mappings/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Mappings/Profiles.html">Profiles</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-warning" href="#" role="button"
+               data-bs-toggle="dropdown">Service.Models</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.Models/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Models/Records-Admin.html">Records Admin</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Models/Records-Entities.html">Records Entities</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-danger" href="#" role="button"
+               data-bs-toggle="dropdown">Service.RepositoryService</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Interfaces-Generic.html">Interfaces Generic</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Interfaces-Entity.html">Interfaces Entity</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/RepositoryManager.html">Repository Managers</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Services.html">Services</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-secondary" href="#" role="button"
+               data-bs-toggle="dropdown">Service.RepositoryService Tests</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.RepositoryService.Tests/Summary.html">📋 Summary</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-danger" href="#" role="button"
+               data-bs-toggle="dropdown">Service.Security</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.Security/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Interfaces.html">Interfaces</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Services.html">Services</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Enums.html">Enums</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Models.html">Models</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Attributes.html">Attributes</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Extensions.html">Extensions</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Middleware.html">Middleware</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-info" href="#" role="button"
+               data-bs-toggle="dropdown">Web.Library</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Web.Library/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Library/Services.html">Services</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Library/Components.html">Components</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-secondary" href="#" role="button"
+               data-bs-toggle="dropdown">Web Tests</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Web.Tests/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Tests/Controllers.html">Controllers</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Tests/Services.html">Services</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle active text-success" href="#" role="button"
+               data-bs-toggle="dropdown">Web.WebApp</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Web.WebApp/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.WebApp/Services-Interfaces.html">Services Interfaces</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.WebApp/Services-Implementations.html">Services Implementations</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.WebApp/Components-Pages.html">Components Pages</a></li>
+            </ul>
+          </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<div class="container-xxl py-4">
+  <!-- breadcrumb -->
+  <nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="../index.html" class="text-decoration-none text-secondary">Home</a></li>
+      <li class="breadcrumb-item"><a href="Ben.Web.WebApp/Summary.html" class="text-decoration-none text-success">Ben.Web.WebApp</a></li>
+      <li class="breadcrumb-item active">Services-Interfaces</li>
+    </ol>
+  </nav>
+
+  <div class="row">
+
+      <div id="sidebar" class="col-lg-2 d-none d-lg-block">
+        <div class="ps-2 pt-2">
+          <div class="text-muted small fw-semibold mb-2 text-uppercase" style="font-size:.7rem;letter-spacing:.08em">On this page</div>
+          <nav id="toc"><a href="#iwebapitokenstore">`IWebApiTokenStore`</a>
+<a href="#summary">&nbsp;&nbsp;&nbsp;Summary</a>
+<a href="#properties">&nbsp;&nbsp;&nbsp;Properties</a>
+<a href="#events-methods">&nbsp;&nbsp;&nbsp;Events & Methods</a>
+<a href="#iwebapiauthservice">`IWebApiAuthService`</a>
+<a href="#summary">&nbsp;&nbsp;&nbsp;Summary</a>
+<a href="#methods">&nbsp;&nbsp;&nbsp;Methods</a>
+<a href="#iwebapiclient">`IWebApiClient`</a>
+<a href="#summary">&nbsp;&nbsp;&nbsp;Summary</a>
+<a href="#generic-methods">&nbsp;&nbsp;&nbsp;Generic Methods</a>
+<a href="#typed-methods-selected">&nbsp;&nbsp;&nbsp;Typed Methods (selected)</a>
+<a href="#iwebapiidentityclient">`IWebApiIdentityClient`</a>
+<a href="#summary">&nbsp;&nbsp;&nbsp;Summary</a></nav>
+        </div>
+      </div>
+    <div class="col-lg-9">
+      <div class="section-card"><h1>Ben.Web.WebApp — Service Interfaces</h1>
+<hr />
+</div>
+<div class="section-card"><h2><code>IWebApiTokenStore</code></h2>
+<p><strong>Namespace:</strong> <code>Ben.Web.WebApp.Services.WebApi</code><br />
+<strong>File:</strong> <a href="../../../Ben.Web.WebApp/Services/WebApi/IWebApiTokenStore.cs" class="src-link" target="_blank"><code>Ben.Web.WebApp/Services/WebApi/IWebApiTokenStore.cs</code></a><br />
+<strong>Implemented by:</strong> <a href="Services-Implementations.md#webapitokenstore"><code>WebApiTokenStore</code></a><br />
+<strong>Also implements:</strong> <a href="../Ben.Web.Library/Services.md#ibenaccountstate"><code>IBenUserState</code></a> (registered separately in DI)</p>
+<h3>Summary</h3>
+<p>The central in-memory token and auth state store for the current Blazor Server circuit.<br />
+All services that need the current access token, user info, or auth state read from this interface.</p>
+<h3>Properties</h3>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AccessToken</code></td>
+<td><code>string?</code></td>
+<td>Current bearer token for API calls.</td>
+</tr>
+<tr>
+<td><code>RefreshToken</code></td>
+<td><code>string?</code></td>
+<td>Token used to obtain a new access token without re-login.</td>
+</tr>
+<tr>
+<td><code>AccessTokenExpiresAtUtc</code></td>
+<td><code>DateTimeOffset?</code></td>
+<td>When the access token expires.</td>
+</tr>
+<tr>
+<td><code>UserEmail</code></td>
+<td><code>string?</code></td>
+<td>Authenticated user's email.</td>
+</tr>
+<tr>
+<td><code>UserDisplayName</code></td>
+<td><code>string?</code></td>
+<td>Authenticated user's display name.</td>
+</tr>
+<tr>
+<td><code>UserId</code></td>
+<td><code>Guid?</code></td>
+<td>Authenticated user's PK.</td>
+</tr>
+<tr>
+<td><code>IsSuperAdmin</code></td>
+<td><code>bool</code></td>
+<td>Whether the user holds the SuperAdmin role.</td>
+</tr>
+<tr>
+<td><code>IsAuthenticated</code></td>
+<td><code>bool</code></td>
+<td>Computed: <code>true</code> when <code>AccessToken</code> is non-empty.</td>
+</tr>
+<tr>
+<td><code>IsImpersonating</code></td>
+<td><code>bool</code></td>
+<td><code>true</code> when a SuperAdmin is acting as another user.</td>
+</tr>
+<tr>
+<td><code>OriginalAccessToken</code></td>
+<td><code>string?</code></td>
+<td>SuperAdmin's saved token during impersonation.</td>
+</tr>
+<tr>
+<td><code>OriginalRefreshToken</code></td>
+<td><code>string?</code></td>
+<td>SuperAdmin's saved refresh token.</td>
+</tr>
+<tr>
+<td><code>OriginalUserId</code></td>
+<td><code>Guid?</code></td>
+<td>SuperAdmin's saved user ID.</td>
+</tr>
+<tr>
+<td><code>OriginalUserEmail</code></td>
+<td><code>string?</code></td>
+<td>SuperAdmin's saved email.</td>
+</tr>
+<tr>
+<td><code>IsEntraSession</code></td>
+<td><code>bool</code></td>
+<td><code>true</code> for Entra OIDC sessions — auth state is NOT persisted to <code>ProtectedLocalStorage</code>.</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Events &amp; Methods</h3>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Member</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>StateChanged</code> event</td>
+<td><code>Action?</code> — fires after any auth state change. <code>MainLayout</code> subscribes to persist state and re-render.</td>
+</tr>
+<tr>
+<td><code>NotifyStateChanged()</code></td>
+<td>Call this after setting state fields to trigger <code>StateChanged</code> subscribers.</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+</div>
+<div class="section-card"><h2><code>IWebApiAuthService</code></h2>
+<p><strong>Namespace:</strong> <code>Ben.Web.WebApp.Services.WebApi</code><br />
+<strong>File:</strong> <a href="../../../Ben.Web.WebApp/Services/WebApi/IWebApiAuthService.cs" class="src-link" target="_blank"><code>Ben.Web.WebApp/Services/WebApi/IWebApiAuthService.cs</code></a></p>
+<h3>Summary</h3>
+<p>High-level authentication operations: login, logout, token refresh, and impersonation lifecycle.</p>
+<h3>Methods</h3>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Method</th>
+<th>Returns</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LoginAsync(email, password, token)</code></td>
+<td><code>bool</code></td>
+<td>POST <code>/login</code> → stores token → GET <code>/api/me</code> → sets <code>IsSuperAdmin</code>/<code>UserId</code> → fires <code>StateChanged</code>.</td>
+</tr>
+<tr>
+<td><code>RefreshIfNeededAsync(token)</code></td>
+<td><code>bool</code></td>
+<td>POST <code>/refresh</code> if the access token is expired or close to expiry.</td>
+</tr>
+<tr>
+<td><code>Logout()</code></td>
+<td><code>void</code></td>
+<td>Clears all token state and fires <code>StateChanged</code>.</td>
+</tr>
+<tr>
+<td><code>ImpersonateAsync(targetUserId, targetUserEmail, token)</code></td>
+<td><code>bool</code></td>
+<td>Saves original tokens, POST <code>/api/admin/impersonate/{id}</code>, applies new token, fires <code>StateChanged</code>.</td>
+</tr>
+<tr>
+<td><code>StopImpersonating()</code></td>
+<td><code>void</code></td>
+<td>Restores original tokens, fires <code>StateChanged</code>.</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+</div>
+<div class="section-card"><h2><code>IWebApiClient</code></h2>
+<p><strong>Namespace:</strong> <code>Ben.Web.WebApp.Services.WebApi</code><br />
+<strong>File:</strong> <a href="../../../Ben.Web.WebApp/Services/WebApi/IWebApiClient.cs" class="src-link" target="_blank"><code>Ben.Web.WebApp/Services/WebApi/IWebApiClient.cs</code></a></p>
+<h3>Summary</h3>
+<p>Typed HTTP client for all authenticated API calls.<br />
+All requests automatically include the bearer token via <code>WebApiBearerTokenHandler</code>.</p>
+<h3>Generic Methods</h3>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Method</th>
+<th>Returns</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GetAsync&lt;TResponse&gt;(url, token)</code></td>
+<td><code>TResponse?</code></td>
+<td>GET request, deserialises response.</td>
+</tr>
+<tr>
+<td><code>PostAsync&lt;TRequest, TResponse&gt;(url, payload, token)</code></td>
+<td><code>TResponse?</code></td>
+<td>POST request with JSON body.</td>
+</tr>
+<tr>
+<td><code>PutAsync&lt;TRequest, TResponse&gt;(url, payload, token)</code></td>
+<td><code>TResponse?</code></td>
+<td>PUT request with JSON body.</td>
+</tr>
+<tr>
+<td><code>DeleteAsync(url, token)</code></td>
+<td><code>bool</code></td>
+<td>DELETE request.</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Typed Methods (selected)</h3>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GetUsersAsync</code></td>
+<td><code>GET /api/users</code></td>
+<td>All users.</td>
+</tr>
+<tr>
+<td><code>GetMyOrganizationsAsync</code></td>
+<td><code>GET /api/security/organizations/mine</code></td>
+<td>Caller's organisations.</td>
+</tr>
+<tr>
+<td><code>SearchUsersAsync</code></td>
+<td><code>GET /api/security/organizations/users/search</code></td>
+<td>Scoped user search.</td>
+</tr>
+<tr>
+<td><code>RegisterOrganizationAsync</code></td>
+<td><code>POST /api/security/organizations/register</code></td>
+<td>Create org.</td>
+</tr>
+<tr>
+<td><code>GetUploadFileTypesAsync</code></td>
+<td><code>GET /api/upload-file-types</code></td>
+<td>Available file type categories.</td>
+</tr>
+<tr>
+<td><code>GetUploadFilesAsync</code></td>
+<td><code>GET /api/upload-files</code></td>
+<td>User's uploaded files.</td>
+</tr>
+<tr>
+<td><code>UploadFileAsync</code></td>
+<td><code>POST /api/upload-files</code> (multipart)</td>
+<td>Upload binary.</td>
+</tr>
+<tr>
+<td><code>DownloadFileAsync</code></td>
+<td><code>GET /api/upload-files/{id}/download</code></td>
+<td>Returns <code>(byte[], ContentType, FileName)</code>.</td>
+</tr>
+<tr>
+<td><code>ImpersonateAsync</code></td>
+<td><code>POST /api/admin/impersonate/{id}</code></td>
+<td>Get impersonation token.</td>
+</tr>
+<tr>
+<td><code>EntraRegisterAsync</code></td>
+<td><code>POST /api/auth/entra/register</code></td>
+<td>Create local account linked to Entra OID.</td>
+</tr>
+<tr>
+<td><code>EntraLinkAsync</code></td>
+<td><code>POST /api/auth/entra/link</code></td>
+<td>Link Entra OID to existing local account.</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+</div>
+<div class="section-card"><h2><code>IWebApiIdentityClient</code></h2>
+<p><strong>Namespace:</strong> <code>Ben.Web.WebApp.Services.WebApi</code><br />
+<strong>File:</strong> <a href="../../../Ben.Web.WebApp/Services/WebApi/IWebApiIdentityClient.cs" class="src-link" target="_blank"><code>Ben.Web.WebApp/Services/WebApi/IWebApiIdentityClient.cs</code></a></p>
+<h3>Summary</h3>
+<p>Anonymous HTTP client for endpoints that don't require an existing access token.<br />
+Separate from <code>IWebApiClient</code> to avoid the <code>WebApiBearerTokenHandler</code> dependency cycle.</p>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Method</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LoginAsync(email, password)</code></td>
+<td>POST <code>/login</code> → returns <code>WebApiTokenResponse</code>.</td>
+</tr>
+<tr>
+<td><code>RefreshAsync(refreshToken)</code></td>
+<td>POST <code>/refresh</code> → returns new <code>WebApiTokenResponse</code>.</td>
+</tr>
+</tbody>
+</table></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- back to top -->
+<a id="back-top" href="#" class="btn btn-sm btn-outline-secondary rounded-pill">↑ Top</a>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,322 @@
+@page "/admin/users/{UserId:guid}"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>SuperAdmin — User Detail</PageTitle>
+
+@if (_detail is null)
+{
+    <TelerikLoaderContainer Visible="true" Text="Loading user…" />
+}
+else
+{
+    <div class="container-fluid px-3">
+
+        @* ── Header ────────────────────────────────────────────────────────── *@
+        <div class="row mb-3 align-items-center">
+            <div class="col">
+                <TelerikButton Icon="@SvgIcon.ArrowLeft"
+                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               OnClick="@(() => NavManager.NavigateTo("/admin/users"))">
+                    Back to Users
+                </TelerikButton>
+                <h3 class="d-inline-block ms-3 mb-0">
+                    @(_detail.User.DisplayName ?? _detail.User.Email)
+                </h3>
+            </div>
+            <div class="col-auto">
+                <TelerikButton Icon="@SvgIcon.User"
+                               ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
+                               OnClick="ImpersonateUser">
+                    Impersonate
+                </TelerikButton>
+            </div>
+        </div>
+
+        @if (_errorMessage is not null)
+        {
+            <div class="alert alert-danger mb-3">@_errorMessage</div>
+        }
+        @if (_successMessage is not null)
+        {
+            <div class="alert alert-success mb-3">@_successMessage</div>
+        }
+
+        @* ── Tabs ──────────────────────────────────────────────────────────── *@
+        <TelerikTabStrip>
+
+            @* Profile tab *@
+            <TabStripTab Title="Profile">
+                <div class="row g-3 mt-1" style="max-width:760px">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Display Name</label>
+                        <TelerikTextBox @bind-Value="@_edit.DisplayName" Width="100%" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Username</label>
+                        <TelerikTextBox @bind-Value="@_edit.UserName" Width="100%" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Email</label>
+                        <TelerikTextBox @bind-Value="@_edit.Email" Width="100%" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Phone</label>
+                        <TelerikTextBox @bind-Value="@_edit.PhoneNumber" Width="100%" />
+                    </div>
+
+                    @* Flags *@
+                    <div class="col-12 d-flex flex-wrap gap-4 mt-1">
+                        <label class="d-flex align-items-center gap-2">
+                            <TelerikCheckBox @bind-Value="@_edit.IsEmailConfirmed" />
+                            Email Confirmed
+                        </label>
+                        <label class="d-flex align-items-center gap-2">
+                            <TelerikCheckBox @bind-Value="@_edit.IsTwoFactorEnabled" />
+                            2FA Enabled
+                        </label>
+                        <label class="d-flex align-items-center gap-2">
+                            <TelerikCheckBox @bind-Value="@_edit.IsLockoutEnabled" />
+                            Lockout Enabled
+                        </label>
+                    </div>
+
+                    @* Audit fields — visible to SuperAdmin only *@
+                    <div class="col-12 mt-2">
+                        <p class="text-secondary small mb-1">Audit Fields (SuperAdmin only)</p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Date Created</label>
+                        <TelerikDateTimePicker @bind-Value="@_edit.DateCreated"
+                                              Format="yyyy-MM-dd HH:mm"
+                                              Width="100%" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Date Updated</label>
+                        <TelerikDateTimePicker @bind-Value="@_edit.DateUpdated"
+                                              Format="yyyy-MM-dd HH:mm"
+                                              Width="100%" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Lockout End</label>
+                        <TelerikDateTimePicker @bind-Value="@_edit.LockoutEnd"
+                                              Format="yyyy-MM-dd HH:mm"
+                                              Width="100%" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Access Failed Count</label>
+                        <p class="form-control-plaintext">@_detail.User.AccessFailedCount</p>
+                    </div>
+
+                    <div class="col-12 mt-2">
+                        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                       OnClick="SaveProfile"
+                                       Enabled="@(!_isSaving)">
+                            @(_isSaving ? "Saving…" : "Save Profile")
+                        </TelerikButton>
+                    </div>
+                </div>
+            </TabStripTab>
+
+            @* Addresses *@
+            <TabStripTab Title=@($"Addresses ({_detail.Addresses.Count})")>
+                <TelerikGrid Data="@_detail.Addresses" TItem="UserAddressAdminRecord"
+                             Pageable="true" PageSize="10" Class="mt-2">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(UserAddressAdminRecord.StreetAddress1)" Title="Street" />
+                        <GridColumn Field="@nameof(UserAddressAdminRecord.City)" Title="City" Width="120px" />
+                        <GridColumn Field="@nameof(UserAddressAdminRecord.State)" Title="State" Width="80px" />
+                        <GridColumn Field="@nameof(UserAddressAdminRecord.ZipCode)" Title="Zip" Width="90px" />
+                        <GridColumn Field="@nameof(UserAddressAdminRecord.IsPublic)" Title="Public" Width="70px" />
+                        <GridColumn Field="@nameof(UserAddressAdminRecord.DateCreated)" Title="Created"
+                                    DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                    </GridColumns>
+                </TelerikGrid>
+            </TabStripTab>
+
+            @* Emails *@
+            <TabStripTab Title=@($"Emails ({_detail.Emails.Count})")>
+                <TelerikGrid Data="@_detail.Emails" TItem="UserEmailAdminRecord"
+                             Pageable="true" PageSize="10" Class="mt-2">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(UserEmailAdminRecord.EmailAddress)" Title="Email" />
+                        <GridColumn Field="@nameof(UserEmailAdminRecord.IsPublic)" Title="Public" Width="70px" />
+                        <GridColumn Field="@nameof(UserEmailAdminRecord.DateCreated)" Title="Created"
+                                    DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                    </GridColumns>
+                </TelerikGrid>
+            </TabStripTab>
+
+            @* Phones *@
+            <TabStripTab Title=@($"Phones ({_detail.Phones.Count})")>
+                <TelerikGrid Data="@_detail.Phones" TItem="UserPhoneAdminRecord"
+                             Pageable="true" PageSize="10" Class="mt-2">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(UserPhoneAdminRecord.PhoneNumber)" Title="Number" />
+                        <GridColumn Field="@nameof(UserPhoneAdminRecord.IsPublic)" Title="Public" Width="70px" />
+                        <GridColumn Field="@nameof(UserPhoneAdminRecord.DateCreated)" Title="Created"
+                                    DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                    </GridColumns>
+                </TelerikGrid>
+            </TabStripTab>
+
+            @* Links *@
+            <TabStripTab Title=@($"Links ({_detail.Links.Count})")>
+                <TelerikGrid Data="@_detail.Links" TItem="UserLinkAdminRecord"
+                             Pageable="true" PageSize="10" Class="mt-2">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(UserLinkAdminRecord.LinkUrl)" Title="URL" />
+                        <GridColumn Field="@nameof(UserLinkAdminRecord.IsPublic)" Title="Public" Width="70px" />
+                        <GridColumn Field="@nameof(UserLinkAdminRecord.DateCreated)" Title="Created"
+                                    DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                    </GridColumns>
+                </TelerikGrid>
+            </TabStripTab>
+
+            @* Notes *@
+            <TabStripTab Title=@($"Notes ({_detail.Notes.Count})")>
+                <TelerikGrid Data="@_detail.Notes" TItem="UserNoteAdminRecord"
+                             Pageable="true" PageSize="10" Class="mt-2">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(UserNoteAdminRecord.NoteBody)" Title="Content" />
+                        <GridColumn Field="@nameof(UserNoteAdminRecord.NoteSubject)" Title="Subject" Width="120px" />
+                        <GridColumn Field="@nameof(UserNoteAdminRecord.DateCreated)" Title="Created"
+                                    DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                    </GridColumns>
+                </TelerikGrid>
+            </TabStripTab>
+
+            @* Org Memberships *@
+            <TabStripTab Title=@($"Memberships ({_detail.Memberships.Count})")>
+                <TelerikGrid Data="@_detail.Memberships" TItem="OrganizationUserMembershipAdminRecord"
+                             Pageable="true" PageSize="10" Class="mt-2">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.OrganizationId)" Title="Org ID" />
+                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.Role)" Title="Role" Width="120px" />
+                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.IsActive)" Title="Active" Width="70px" />
+                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.DateCreated)" Title="Joined"
+                                    DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                    </GridColumns>
+                </TelerikGrid>
+            </TabStripTab>
+
+            @* Upload Files *@
+            <TabStripTab Title=@($"Files ({_detail.UploadFiles.Count})")>
+                <TelerikGrid Data="@_detail.UploadFiles" TItem="UploadFileAdminRecord"
+                             Pageable="true" PageSize="10" Class="mt-2">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(UploadFileAdminRecord.FileName)" Title="File Name" />
+                        <GridColumn Field="@nameof(UploadFileAdminRecord.ContentType)" Title="Type" Width="140px" />
+                        <GridColumn Field="@nameof(UploadFileAdminRecord.FileSize)" Title="Size" Width="90px" />
+                        <GridColumn Field="@nameof(UploadFileAdminRecord.IsPublic)" Title="Public" Width="70px" />
+                        <GridColumn Field="@nameof(UploadFileAdminRecord.DateCreated)" Title="Uploaded"
+                                    DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                    </GridColumns>
+                </TelerikGrid>
+            </TabStripTab>
+
+        </TelerikTabStrip>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid UserId { get; set; }
+
+    private AppUserDetailAdminRecord? _detail;
+    private EditModel _edit = new();
+    private bool _isSaving;
+    private string? _errorMessage;
+    private string? _successMessage;
+
+    protected override void OnInitialized()
+    {
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
+            NavManager.NavigateTo("/");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _detail = await AdminClient.GetUserDetailAsync(UserId);
+            if (_detail is null)
+            {
+                NavManager.NavigateTo("/admin/users");
+                return;
+            }
+            _edit = EditModel.From(_detail.User);
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveProfile()
+    {
+        if (_detail is null) return;
+        _isSaving = true;
+        _errorMessage = null;
+        _successMessage = null;
+
+        var updated = await AdminClient.UpdateUserProfileAsync(UserId, new AdminUpdateUserProfileRequest(
+            _edit.DisplayName,
+            _edit.UserName,
+            _edit.Email,
+            _edit.PhoneNumber,
+            _edit.IsEmailConfirmed,
+            _edit.IsTwoFactorEnabled,
+            _edit.IsLockoutEnabled,
+            _edit.LockoutEnd,
+            _edit.DateCreated,
+            _edit.DateUpdated));
+
+        if (updated is not null)
+        {
+            _detail = _detail with { User = updated };
+            _successMessage = "Profile saved.";
+        }
+        else
+        {
+            _errorMessage = "Save failed. Check WebApi logs.";
+        }
+        _isSaving = false;
+    }
+
+    private async Task ImpersonateUser()
+    {
+        if (_detail is null) return;
+        var ok = await AdminClient.ImpersonateUserAsync(UserId, _detail.User.Email ?? string.Empty);
+        if (ok)
+            NavManager.NavigateTo("/");
+        else
+            _errorMessage = "Impersonation failed.";
+    }
+
+    private sealed class EditModel
+    {
+        public string? DisplayName { get; set; }
+        public string? UserName { get; set; }
+        public string? Email { get; set; }
+        public string? PhoneNumber { get; set; }
+        public bool IsEmailConfirmed { get; set; }
+        public bool IsTwoFactorEnabled { get; set; }
+        public bool IsLockoutEnabled { get; set; }
+        public DateTimeOffset? LockoutEnd { get; set; }
+        public DateTime DateCreated { get; set; }
+        public DateTime? DateUpdated { get; set; }
+
+        public static EditModel From(AppUserAdminRecord u) => new()
+        {
+            DisplayName       = u.DisplayName,
+            UserName          = u.UserName,
+            Email             = u.Email,
+            PhoneNumber       = u.PhoneNumber,
+            IsEmailConfirmed  = u.IsEmailConfirmed,
+            IsTwoFactorEnabled = u.IsTwoFactorEnabled,
+            IsLockoutEnabled  = u.IsLockoutEnabled,
+            LockoutEnd        = u.LockoutEnd,
+            DateCreated       = u.DateCreated,
+            DateUpdated       = u.DateUpdated
+        };
+    }
+}

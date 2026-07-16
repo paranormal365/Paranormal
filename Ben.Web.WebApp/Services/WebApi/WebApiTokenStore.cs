@@ -1,0 +1,30 @@
+using Ben.Web.Library.Services;
+
+namespace Ben.Web.WebApp.Services.WebApi;
+
+public sealed class WebApiTokenStore : IWebApiTokenStore, IBenUserState
+{
+    public string? AccessToken { get; set; }
+    public string? RefreshToken { get; set; }
+    public DateTimeOffset? AccessTokenExpiresAtUtc { get; set; }
+    public string? UserEmail { get; set; }
+    public string? UserDisplayName { get; set; }
+    public Guid? UserId { get; set; }
+    public bool IsSuperAdmin { get; set; }
+
+    // Impersonation
+    public bool IsImpersonating { get; set; }
+    public string? OriginalAccessToken { get; set; }
+    public string? OriginalRefreshToken { get; set; }
+    public Guid? OriginalUserId { get; set; }
+    public string? OriginalUserEmail { get; set; }
+
+    public bool IsEntraSession { get; set; }
+
+    // IBenUserState (computed)
+    bool IBenUserState.IsAuthenticated => !string.IsNullOrWhiteSpace(AccessToken);
+
+    // State change notification
+    public event Action? StateChanged;
+    public void NotifyStateChanged() => StateChanged?.Invoke();
+}

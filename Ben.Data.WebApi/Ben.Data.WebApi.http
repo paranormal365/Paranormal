@@ -1,0 +1,6 @@
+@Ben.Data.WebApi_HostAddress = http://localhost:5275
+
+GET {{Ben.Data.WebApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

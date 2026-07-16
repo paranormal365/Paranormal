@@ -1,0 +1,43 @@
+@inject NavigationManager NavManager
+
+@if (IsOpen)
+{
+    <div class="admin-panel-backdrop" @onclick="Close"></div>
+}
+
+<div class="admin-panel @(IsOpen ? "admin-panel--open" : "")">
+    <div class="admin-panel-header">
+        <span class="admin-panel-title">Administration</span>
+        <TelerikButton Icon="@SvgIcon.X"
+                       FillMode="@ThemeConstants.Button.FillMode.Clear"
+                       Size="@ThemeConstants.Button.Size.Small"
+                       Title="Close"
+                       OnClick="Close" />
+    </div>
+
+    <nav class="admin-panel-nav">
+
+        <div class="admin-panel-section-label">Users</div>
+        <a class="admin-panel-link" href="/admin/users" @onclick="Close" @onclick:preventDefault="false">
+            <TelerikSvgIcon Icon="@SvgIcon.User" />
+            <span>Manage Users</span>
+        </a>
+
+        <div class="admin-panel-section-label">Content</div>
+        <a class="admin-panel-link" href="/admin/file-types" @onclick="Close" @onclick:preventDefault="false">
+            <TelerikSvgIcon Icon="@SvgIcon.FileConfig" />
+            <span>File Types</span>
+        </a>
+
+    </nav>
+</div>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    private async Task Close()
+    {
+        await IsOpenChanged.InvokeAsync(false);
+    }
+}

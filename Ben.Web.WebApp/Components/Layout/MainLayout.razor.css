@@ -1,0 +1,10 @@
+.impersonation-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: color-mix(in srgb, var(--kendo-color-warning, #ffc107) 20%, transparent);
+    border-bottom: 2px solid var(--kendo-color-warning, #ffc107);
+    font-size: 0.875rem;
+    flex-wrap: wrap;
+}

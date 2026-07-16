@@ -1,0 +1,55 @@
+﻿
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link id="theme-link" rel="stylesheet" href="./theme/ben-light/dist/css/ben-light.css" />
+    <script>
+        // Runs synchronously in <head> to avoid flash of wrong theme
+        (function () {
+            var saved = localStorage.getItem('ben-theme');
+            var theme = (saved === 'light' || saved === 'dark')
+                ? saved
+                : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            var link = document.getElementById('theme-link');
+            if (link) link.href = './theme/ben-' + theme + '/dist/css/ben-' + theme + '.css';
+            document.documentElement.setAttribute('data-bs-theme', theme);
+        })();
+    </script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous" defer></script>
+    <script src="_content/Telerik.UI.for.Blazor/js/telerik-blazor.js" defer></script>
+    <script src="./js/themeSwitcher.js"></script>
+    <link rel="stylesheet" href="@Assets["Ben.Web.WebApp.styles.css"]" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <HeadOutlet @rendermode="@InteractiveServer" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+</head>
+
+<body class="k-body">
+    <!-- Serializes the EntraTokenHolder (HTTP scope) into the page HTML so
+         the Interactive Server circuit can restore it via PersistentComponentState. -->
+    <EntraTokenPersister />
+    <Routes @rendermode="@InteractiveServer" />
+    <script src="_framework/blazor.web.js" autostart="false"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            Blazor.start();
+        });
+
+        function downloadFileFromBase64(base64, contentType, fileName) {
+            const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+            const blob = new Blob([bytes], { type: contentType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = fileName; a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+
+</html>

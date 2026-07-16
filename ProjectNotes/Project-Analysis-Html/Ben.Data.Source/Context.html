@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ben.Data.Source — Context — Ben Project Analysis</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+  :root { --bs-body-bg: #0d1117; }
+  body  { background-color: var(--bs-body-bg); color: #c9d1d9; }
+  .navbar { background-color: #161b22 !important; border-bottom: 1px solid #30363d; }
+  .navbar-brand { color: #58a6ff !important; font-size: 1.15rem; }
+  .breadcrumb-item a, .breadcrumb-item.active { color: #8b949e; font-size: .9rem; }
+  /* sidebar */
+  #sidebar { position: sticky; top: 1rem; max-height: calc(100vh - 5rem); overflow-y: auto; }
+  #sidebar .nav-link { color: #8b949e; font-size: .875rem; padding: .2rem .75rem; border-left: 2px solid transparent; }
+  #sidebar .nav-link:hover, #sidebar .nav-link.active { color: #58a6ff; border-left-color: #58a6ff; }
+  /* content */
+  .page-header { border-bottom: 2px solid #30363d; padding-bottom: .75rem; margin-bottom: 1.5rem; }
+  .page-header h1 { color: #e6edf3; font-size: 1.75rem; }
+  .section-card { background-color: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; }
+  .section-card h2 { color: #e6edf3; font-size: 1.2rem; padding-bottom: .5rem; border-bottom: 1px solid #30363d; margin-bottom: 1rem; }
+  .section-card h3 { color: #c9d1d9; font-size: 1.05rem; margin-top: 1.2rem; }
+  .section-card h4 { color: #8b949e; font-size: .95rem; margin-top: 1rem; }
+  /* tables */
+  .table { --bs-table-bg: transparent; --bs-table-striped-bg: rgba(255,255,255,.025); color: #c9d1d9; }
+  .table thead th { color: #58a6ff; border-bottom: 2px solid #30363d; white-space: nowrap; }
+  .table td, .table th { border-color: #21262d; vertical-align: top; }
+  .table-responsive { border: 1px solid #30363d; border-radius: 6px; }
+  /* code */
+  pre { background: #010409 !important; border: 1px solid #30363d; border-radius: 6px; padding: 1rem; overflow-x: auto; }
+  code { color: #e3b341; font-size: .85em; }
+  pre code { color: #c9d1d9; }
+  /* inline code in tables */
+  td code, th code { background: rgba(110,118,129,.2); padding: .1em .35em; border-radius: 3px; }
+  /* blockquote / note boxes */
+  blockquote { background: rgba(121,192,255,.05); border-left: 3px solid #1f6feb; padding: .75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+  blockquote p { margin: 0; color: #a5d6ff; }
+  /* badges */
+  .badge-project { font-size: .8em; font-weight: 500; vertical-align: middle; }
+  /* source link */
+  a.src-link { color: #6e7681; font-size: .8em; font-style: italic; }
+  a.src-link:hover { color: #58a6ff; }
+  /* toc */
+  #toc a { color: #8b949e; font-size: .875rem; text-decoration: none; display: block; padding: .15rem .5rem; border-radius: 4px; }
+  #toc a:hover { background: rgba(255,255,255,.05); color: #58a6ff; }
+  /* back to top */
+  #back-top { position: fixed; bottom: 1.5rem; right: 1.5rem; opacity: .7; }
+  #back-top:hover { opacity: 1; }
+</style>
+</head>
+<body>
+<!-- ── Navbar ──────────────────────────────────────────────────────────────── -->
+<nav class="navbar navbar-expand-xl sticky-top">
+  <div class="container-xxl">
+    <a class="navbar-brand" href="../index.html">🔷 Ben Analysis</a>
+    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMain" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navMain">
+      <ul class="navbar-nav flex-wrap gap-0">
+        
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-info" href="#" role="button"
+               data-bs-toggle="dropdown">Data.Common</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Data.Common/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Interfaces.html">Interfaces</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Helpers.html">Helpers</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Enums.html">Enums</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Constants.html">Constants</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Services.html">Services</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle active text-primary" href="#" role="button"
+               data-bs-toggle="dropdown">Data.Source</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Data.Source/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Context.html">Context</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Core.html">Entities Core</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-User.html">Entities User</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Org.html">Entities Org</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Upload.html">Entities Upload</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Audit.html">Entities Audit</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-success" href="#" role="button"
+               data-bs-toggle="dropdown">Data.WebApi</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Data.WebApi/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Base.html">Controllers Base</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Security.html">Controllers Security</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Admin.html">Controllers Admin</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Entities.html">Controllers Entities</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-warning" href="#" role="button"
+               data-bs-toggle="dropdown">Service.Mappings</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.Mappings/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Mappings/Profiles.html">Profiles</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-warning" href="#" role="button"
+               data-bs-toggle="dropdown">Service.Models</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.Models/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Models/Records-Admin.html">Records Admin</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Models/Records-Entities.html">Records Entities</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-danger" href="#" role="button"
+               data-bs-toggle="dropdown">Service.RepositoryService</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Interfaces-Generic.html">Interfaces Generic</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Interfaces-Entity.html">Interfaces Entity</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/RepositoryManager.html">Repository Managers</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Services.html">Services</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-secondary" href="#" role="button"
+               data-bs-toggle="dropdown">Service.RepositoryService Tests</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.RepositoryService.Tests/Summary.html">📋 Summary</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-danger" href="#" role="button"
+               data-bs-toggle="dropdown">Service.Security</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.Security/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Interfaces.html">Interfaces</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Services.html">Services</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Enums.html">Enums</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Models.html">Models</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Attributes.html">Attributes</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Extensions.html">Extensions</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Middleware.html">Middleware</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-info" href="#" role="button"
+               data-bs-toggle="dropdown">Web.Library</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Web.Library/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Library/Services.html">Services</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Library/Components.html">Components</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-secondary" href="#" role="button"
+               data-bs-toggle="dropdown">Web Tests</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Web.Tests/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Tests/Controllers.html">Controllers</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Tests/Services.html">Services</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-success" href="#" role="button"
+               data-bs-toggle="dropdown">Web.WebApp</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Web.WebApp/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.WebApp/Services-Interfaces.html">Services Interfaces</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.WebApp/Services-Implementations.html">Services Implementations</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.WebApp/Components-Pages.html">Components Pages</a></li>
+            </ul>
+          </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<div class="container-xxl py-4">
+  <!-- breadcrumb -->
+  <nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="../index.html" class="text-decoration-none text-secondary">Home</a></li>
+      <li class="breadcrumb-item"><a href="Ben.Data.Source/Summary.html" class="text-decoration-none text-primary">Ben.Data.Source</a></li>
+      <li class="breadcrumb-item active">Context</li>
+    </ol>
+  </nav>
+
+  <div class="row">
+
+      <div id="sidebar" class="col-lg-2 d-none d-lg-block">
+        <div class="ps-2 pt-2">
+          <div class="text-muted small fw-semibold mb-2 text-uppercase" style="font-size:.7rem;letter-spacing:.08em">On this page</div>
+          <nav id="toc"><a href="#bendatacontext">`BenDataContext`</a>
+<a href="#summary">&nbsp;&nbsp;&nbsp;Summary</a>
+<a href="#dbsets-entity-tables">&nbsp;&nbsp;&nbsp;DbSets (entity tables)</a>
+<a href="#model-configuration-conventions-onmodelcreating">&nbsp;&nbsp;&nbsp;Model Configuration Conventions (OnModelCreating)</a>
+<a href="#bendatacontextdesigntimefactory">&nbsp;&nbsp;&nbsp;`BenDataContextDesignTimeFactory`</a>
+<a href="#migration-history">&nbsp;&nbsp;&nbsp;Migration History</a></nav>
+        </div>
+      </div>
+    <div class="col-lg-9">
+      <div class="section-card"><h1>Ben.Data.Source — Context</h1>
+</div>
+<div class="section-card"><h2><code>BenDataContext</code></h2>
+<p><strong>Namespace:</strong> <code>Ben.Data.Source.Context</code><br />
+<strong>Files:</strong> <a href="../../../Ben.Data.Source/Context/BenDataContext.cs" class="src-link" target="_blank"><code>BenDataContext.cs</code></a> (user stub) · <a href="../../../Ben.Data.Source/Context/BenDataContext.Generated.cs" class="src-link" target="_blank"><code>BenDataContext.Generated.cs</code></a> (generated)<br />
+<strong>Inherits:</strong> <code>IdentityDbContext&lt;AppUser, IdentityRole&lt;Guid&gt;, Guid&gt;</code>  </p>
+<h3>Summary</h3>
+<p>The application's primary EF Core database context.<br />
+Registered as a <strong>pooled factory</strong> (<code>IDbContextFactory&lt;BenDataContext&gt;</code>) in all consuming projects so that each request/operation creates a short-lived, independent context.</p>
+<h3>DbSets (entity tables)</h3>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Property</th>
+<th>Entity</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AppUsers</code></td>
+<td><code>AppUser</code></td>
+<td>Mapped to <code>"AppUsers"</code> table (overrides Identity default).</td>
+</tr>
+<tr>
+<td><code>UserAddressTypes</code></td>
+<td><code>UserAddressType</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>UserEmailTypes</code></td>
+<td><code>UserEmailType</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>UserPhoneTypes</code></td>
+<td><code>UserPhoneType</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>UserLinkTypes</code></td>
+<td><code>UserLinkType</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>UserMessageTypes</code></td>
+<td><code>UserMessageType</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>UserNoteTypes</code></td>
+<td><code>UserNoteType</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>UserAddresses</code></td>
+<td><code>UserAddress</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>UserEmails</code></td>
+<td><code>UserEmail</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>UserPhones</code></td>
+<td><code>UserPhone</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>UserLinks</code></td>
+<td><code>UserLink</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>UserMessages</code></td>
+<td><code>UserMessage</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>UserMessageTos</code></td>
+<td><code>UserMessageTo</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>UserNotes</code></td>
+<td><code>UserNote</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>Organizations</code></td>
+<td><code>Organization</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>OrganizationAddresses</code></td>
+<td><code>OrganizationAddress</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>OrganizationEmails</code></td>
+<td><code>OrganizationEmail</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>OrganizationPhones</code></td>
+<td><code>OrganizationPhone</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>OrganizationLinks</code></td>
+<td><code>OrganizationLink</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>OrganizationNotes</code></td>
+<td><code>OrganizationNote</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>OrganizationAddressTypes</code></td>
+<td><code>OrganizationAddressType</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>OrganizationEmailTypes</code></td>
+<td><code>OrganizationEmailType</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>OrganizationLinkTypes</code></td>
+<td><code>OrganizationLinkType</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>OrganizationPhoneTypes</code></td>
+<td><code>OrganizationPhoneType</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>OrganizationNoteTypes</code></td>
+<td><code>OrganizationNoteType</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>OrganizationPages</code></td>
+<td><code>OrganizationPage</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>OrganizationUserMemberships</code></td>
+<td><code>OrganizationUserMembership</code></td>
+<td>Unique index on <code>(OrganizationId, AppUserId)</code>.</td>
+</tr>
+<tr>
+<td><code>OrganizationAccessGrants</code></td>
+<td><code>OrganizationAccessGrant</code></td>
+<td>Unique index on <code>(OrganizationId, AppUserId, TableName, ActionName)</code>.</td>
+</tr>
+<tr>
+<td><code>UploadFileTypes</code></td>
+<td><code>UploadFileType</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>UploadFileTypeExtensions</code></td>
+<td><code>UploadFileTypeExtension</code></td>
+<td>Unique index on <code>(UploadFileTypeId, Pattern)</code>.</td>
+</tr>
+<tr>
+<td><code>UploadFiles</code></td>
+<td><code>UploadFile</code></td>
+<td><code>FileData</code> column is <code>varbinary(max)</code>.</td>
+</tr>
+<tr>
+<td><code>UploadFileOrganizationShares</code></td>
+<td><code>UploadFileOrganizationShare</code></td>
+<td>Unique index on <code>(UploadFileId, OrganizationId)</code>.</td>
+</tr>
+<tr>
+<td><code>UploadFilePermissionRequests</code></td>
+<td><code>UploadFilePermissionRequest</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>AuditLogs</code></td>
+<td><code>AuditLog</code></td>
+<td>Indexes on <code>(EntityType, EntityId)</code>, <code>UserId</code>, <code>OccurredAt</code>. No FK to AppUser.</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Identity tables</strong> (from <code>IdentityDbContext</code> base): <code>AspNetUsers</code>, <code>AspNetRoles</code>, <code>AspNetUserRoles</code>, <code>AspNetUserClaims</code>, <code>AspNetUserLogins</code>, <code>AspNetUserTokens</code>.</p>
+<h3>Model Configuration Conventions (OnModelCreating)</h3>
+<ul>
+<li><strong>Audit FKs</strong> (<code>CreatedByAppUserId</code>, <code>UpdatedByAppUserId</code>) use <code>DeleteBehavior.NoAction</code> — deleting a user does not cascade to their created/updated records.</li>
+<li><strong>Ownership FKs</strong> (e.g. <code>OrganizationUserMembership → Organization</code>) use the EF Core default cascade (<code>Cascade</code>).</li>
+<li><strong><code>UploadFile.FileData</code></strong> is stored as <code>varbinary(max)</code> via explicit column-type configuration.</li>
+</ul>
+<h3><code>BenDataContextDesignTimeFactory</code></h3>
+<p><strong>File:</strong> <a href="../../../Ben.Data.Source/BenDataContextDesignTimeFactory.cs" class="src-link" target="_blank"><code>Ben.Data.Source/BenDataContextDesignTimeFactory.cs</code></a></p>
+<p>Creates a <code>BenDataContext</code> during EF Core design-time operations (<code>dotnet ef migrations add</code>).<br />
+Reads the connection string from environment or falls back to the development SA connection string.<br />
+Required because <code>Ben.Data.Source</code> does not have its own <code>Program.cs</code> — <code>Ben.Data.WebApi</code> is used as the <code>--startup-project</code>.</p>
+<h3>Migration History</h3>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Migration</th>
+<th>Date</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>InitialCreate</code></td>
+<td>2026-07-09</td>
+<td>26 entity tables</td>
+</tr>
+<tr>
+<td><code>AddIdentitySchema</code></td>
+<td>2026-07-09</td>
+<td>Identity columns on AppUsers + 6 AspNet* tables</td>
+</tr>
+<tr>
+<td><code>AddGeocodingMetadataToAddresses</code></td>
+<td>2026-07-11</td>
+<td>Lat/lng columns on address tables</td>
+</tr>
+<tr>
+<td><code>AddOrganizationSecurityModel</code></td>
+<td>2026-07-11</td>
+<td><code>OrganizationUserMemberships</code> + <code>OrganizationAccessGrants</code> tables</td>
+</tr>
+<tr>
+<td><code>AddUploadFileEntities</code></td>
+<td>2026-07-13</td>
+<td><code>UploadFileTypes</code>, <code>UploadFiles</code> tables</td>
+</tr>
+<tr>
+<td><code>AddUploadFileSharing</code></td>
+<td>2026-07-13</td>
+<td><code>UploadFileOrganizationShares</code>, <code>UploadFilePermissionRequests</code> tables</td>
+</tr>
+<tr>
+<td><code>AddUploadFileTypeExtensions</code></td>
+<td>2026-07-14</td>
+<td><code>AllowAllExtensions</code> column + <code>UploadFileTypeExtensions</code> table</td>
+</tr>
+<tr>
+<td><code>ReplaceIsOrganizationAdminWithRole</code></td>
+<td>2026-07-14</td>
+<td>Drops <code>IsOrganizationAdmin</code> bool; adds <code>Role</code> int (with data migration SQL)</td>
+</tr>
+<tr>
+<td><code>AddAuditLogs</code></td>
+<td>2026-07-14</td>
+<td><code>AuditLogs</code> table with indexes</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Migration command:</strong></p>
+<pre><code class="language-bash">dotnet ef migrations add &lt;Name&gt; \
+  --project Ben.Data.Source \
+  --startup-project Ben.Data.WebApi \
+  --output-dir Migrations
+</code></pre></div>
+    </div>
+  </div>
+</div>
+
+<!-- back to top -->
+<a id="back-top" href="#" class="btn btn-sm btn-outline-secondary rounded-pill">↑ Top</a>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

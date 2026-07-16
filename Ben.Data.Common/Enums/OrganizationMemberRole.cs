@@ -1,0 +1,41 @@
+namespace Ben.Data.Common.Enums;
+
+/// <summary>
+/// Defines the hierarchical roles a user can hold within an organisation.
+/// Stored as an <c>int</c> column on <c>OrganizationUserMembership</c>.
+/// </summary>
+/// <remarks>
+/// Integer values are intentionally ordered from highest privilege (1) to
+/// lowest (5), which allows simple range comparisons:
+/// <code>membership.Role &lt;= OrganizationMemberRole.Administrator</code>
+/// <para>
+/// Both <see cref="Owner"/> and <see cref="Administrator"/> are treated as
+/// "org admins" in access-control checks throughout
+/// <c>Ben.Service.RepositoryService.Services.OrganizationSecurityService</c>.
+/// </para>
+/// <para>
+/// This enum is defined in <c>Ben.Data.Common</c> rather than
+/// <c>Ben.Service.Security</c> because the <c>OrganizationUserMembership</c>
+/// entity in the data layer must reference it, and that layer cannot take a
+/// dependency on the security project (which already depends on the data layer).
+/// The security project imports it with a using alias:
+/// <c>using OrganizationMemberRole = Ben.Data.Common.Enums.OrganizationMemberRole;</c>
+/// </para>
+/// </remarks>
+public enum OrganizationMemberRole
+{
+    /// <summary>Full ownership of the organisation; exactly one owner exists per organisation and is set at registration time.</summary>
+    Owner = 1,
+
+    /// <summary>Administrative rights equivalent to the owner for day-to-day management tasks.</summary>
+    Administrator = 2,
+
+    /// <summary>Can manage organisation content but does not have administrative access to membership or security settings.</summary>
+    Manager = 3,
+
+    /// <summary>Standard membership with read and limited interaction rights as defined by <c>OrganizationAccessGrant</c> rows.</summary>
+    Member = 4,
+
+    /// <summary>Read-only access to organisation content; cannot create, update, or delete records.</summary>
+    Viewer = 5
+}

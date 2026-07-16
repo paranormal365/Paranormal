@@ -1,0 +1,23 @@
+<Solution>
+  <Folder Name="/Api Layers/">
+    <Project Path="Ben.Data.WebApi/Ben.Data.WebApi.csproj" />
+  </Folder>
+  <Folder Name="/Data Layers/">
+    <Project Path="Ben.Data.Common/Ben.Data.Common.csproj" />
+    <Project Path="Ben.Data.Source/Ben.Data.Source.csproj" Id="6fef42b6-8206-410a-b099-d3bb81ee60a3" />
+  </Folder>
+  <Folder Name="/Service Layers/">
+    <Project Path="Ben.Service.Mappings/Ben.Service.Mappings.csproj" />
+    <Project Path="Ben.Service.Models/Ben.Service.Models.csproj" Id="c3afddbd-5ff0-4e8c-b017-9ef0a0c96f7e" />
+    <Project Path="Ben.Service.RepositoryService/Ben.Service.RepositoryService.csproj" Id="474ad301-93ce-4b4b-9d18-8fa044b8b20e" />
+    <Project Path="Ben.Service.Security/Ben.Service.Security.csproj" />
+  </Folder>
+  <Folder Name="/Testing Projects/">
+    <Project Path="Ben.Service.RepositoryService.Tests/Ben.Service.RepositoryService.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Web Layer/">
+    <Project Path="Ben.Web.Library/Ben.Web.Library.csproj" />
+    <Project Path="Ben.Web.WebApp/Ben.Web.WebApp.csproj" Id="8b8326c5-3f81-470c-aead-743cd856c613" />
+  </Folder>
+  <Project Path="Ben.Web.Tests/Ben.Web.Tests.csproj" />
+</Solution>

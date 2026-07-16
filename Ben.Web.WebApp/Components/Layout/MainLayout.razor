@@ -1,0 +1,419 @@
+﻿@inherits LayoutComponentBase
+
+@implements IDisposable
+
+@inject NavigationManager NavManager
+@inject IWebApiClient WebApiClient
+@inject IWebApiTokenStore TokenStore
+@inject IWebApiAuthService AuthService
+@inject ProtectedLocalStorage LocalStorage
+@inject EntraTokenHolder EntraTokenHolder
+@inject PersistentComponentState AppState
+
+<TelerikRootComponent>
+
+    <TelerikAppBar ThemeColor="@ThemeConstants.AppBar.ThemeColor.Base"
+                   Class="appbar-top">
+        <AppBarSection>
+            <TelerikButton Icon="@SvgIcon.Menu"
+                           FillMode="@ThemeConstants.Button.FillMode.Clear"
+                           OnClick="@( () => DrawerExpanded = !DrawerExpanded )" />
+        </AppBarSection>
+        
+        <AppBarSection>
+            <div id="app-title">
+                <svg width="18" height="19" viewBox="0 0 18 19" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.2477 14.5932C17.2477 14.7922 17.1047 15.0366 16.926 15.1344L12.4541 17.6552V7.92806L3.83203 3.06798L8.30392 0.547161C8.47908 0.445909 8.76863 0.445909 8.94736 0.547161L17.2477 5.22918V14.5932ZM10.5381 9.0139L4.63275 5.67957C4.45759 5.58181 4.16805 5.58181 3.98931 5.67957L0 7.93155L6.22705 11.4439V18.4687L10.2164 16.2167C10.3915 16.1155 10.5381 15.8711 10.5381 15.6721V9.0104V9.0139ZM0 14.9563L4.30746 17.3864V12.5228L0 14.9563Z" fill="#96CA4F" />
+                </svg>
+                <NavLink href="/"><strong>Progress</strong><sup>&reg;</sup> Telerik<sup>&reg;</sup> UI for Blazor</NavLink>
+            </div>
+        </AppBarSection>
+        <AppBarSpacer />
+        <AppBarSection>
+            @if (TokenStore.IsAuthenticated)
+            {
+                <span class="me-2 text-secondary small">@TokenStore.UserEmail</span>
+                <TelerikButton Icon="@SvgIcon.Logout"
+                               FillMode="@ThemeConstants.Button.FillMode.Clear"
+                               Title="Sign out"
+                               OnClick="HandleLogout">Sign Out</TelerikButton>
+            }
+            else
+            {
+                <TelerikButton Icon="@SvgIcon.Login"
+                               FillMode="@ThemeConstants.Button.FillMode.Clear"
+                               OnClick="@(() => NavManager.NavigateTo("/login"))">Sign In</TelerikButton>
+            }
+        </AppBarSection>
+        @if (TokenStore.IsSuperAdmin && !TokenStore.IsImpersonating)
+        {
+            <AppBarSection>
+                <TelerikButton Icon="@SvgIcon.Gear"
+                               FillMode="@(_adminPanelOpen ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Clear)"
+                               ThemeColor="@(_adminPanelOpen ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                               Title="Administration"
+                               OnClick="@(() => _adminPanelOpen = !_adminPanelOpen)">Administration</TelerikButton>
+            </AppBarSection>
+        }
+        <AppBarSection>
+            <ThemeChanger />
+        </AppBarSection>
+    </TelerikAppBar>
+
+    <TelerikDrawer Data="@DrawerData"
+                   Expanded="@DrawerExpanded"
+                   ExpandedChanged="@DrawerExpandedChanged"
+                   @bind-SelectedItem="@DrawerSelectedItem"
+                   Mode="@DrawerMode.Push"
+                   MiniMode="true"
+                   Class="mainlayout-drawer">
+        <DrawerContent>
+            @if (TokenStore.IsImpersonating)
+            {
+                <div class="impersonation-banner">
+                    <TelerikSvgIcon Icon="@SvgIcon.User" />
+                    <span>Viewing as <strong>@TokenStore.UserEmail</strong></span>
+                    <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
+                                   Size="@ThemeConstants.Button.Size.Small"
+                                   Icon="@SvgIcon.ArrowRotateCcw"
+                                   OnClick="ReturnToSuperAdmin">Return to SuperAdmin</TelerikButton>
+                </div>
+            }
+            <div class="container">
+                <div class="row">
+                    <div class="col">
+                        <h2 class="ps-4 text-secondary">User Count: <span class="text-info">@personCount</span></h2>
+                    </div>
+                </div>
+            </div>
+            <main>
+                @Body
+            </main>
+        </DrawerContent>
+    </TelerikDrawer>
+
+    <TelerikAppBar ThemeColor="@ThemeConstants.AppBar.ThemeColor.Base"
+                   Class="appbar-bottom">
+        <AppBarSpacer />
+        <AppBarSection>
+            <div id="copyright">Copyright &copy; @DateTime.Today.Year Progress Software. All rights reserved.</div>
+        </AppBarSection>
+        <AppBarSpacer />
+    </TelerikAppBar>
+
+    <TelerikMediaQuery Media="(min-width: 641px)" OnChange="@OnMediaQueryChange" />
+
+    @if (TokenStore.IsSuperAdmin && !TokenStore.IsImpersonating)
+    {
+        <AdminSidePanel @bind-IsOpen="_adminPanelOpen" />
+    }
+
+</TelerikRootComponent>
+
+<div id="blazor-error-ui">
+    An unhandled error has occurred.
+    <a href="" class="reload">Reload</a>
+    <a class="dismiss">🗙</a>
+</div>
+
+@code {
+    private CancellationTokenSource _cancellationTokenSource = new();
+    private bool _adminPanelOpen = false;
+    int? personCount = null;
+    private int _pendingRequestCount;
+
+    private const string AuthStateKey = "ben-auth-state";
+
+    private IEnumerable<NavItem> DrawerData
+    {
+        get
+        {
+            var items = new List<NavItem>
+            {
+                new NavItem("Home", SvgIcon.Home, "/"),
+                new NavItem("Counter", SvgIcon.CustomFormat, "/counter"),
+                new NavItem("Weather", SvgIcon.Globe, "/weather"),
+                new NavItem("Org Security", SvgIcon.Lock, "/organization-security"),
+                new NavItem(_pendingRequestCount > 0 ? $"Files ({_pendingRequestCount})" : "Files", SvgIcon.FileAdd, "/upload-files"),
+                new NavItem("About", SvgIcon.InfoCircle, "/about")
+            };
+            // Admin nav items are in the AdminSidePanel (top bar toggle), not the left drawer.
+            if (!TokenStore.IsAuthenticated)
+                items.Add(new NavItem("Login", SvgIcon.Login, "/login"));
+            return items;
+        }
+    }
+
+
+
+    private bool DrawerExpanded { get; set; } = true;
+
+    private NavItem? DrawerSelectedItem { get; set; }
+
+    private bool LargeScreen { get; set; } = true;
+
+    private void OnMediaQueryChange(bool mediaQueryMatched)
+    {
+        LargeScreen = DrawerExpanded = mediaQueryMatched;
+    }
+
+    private void DrawerExpandedChanged(bool newExpanded)
+    {
+        if (!LargeScreen && !newExpanded)
+        {
+            DrawerExpanded = newExpanded;
+        }
+    }
+
+    private void SelectDrawerItem()
+    {
+        var url = NavManager.Uri.Replace(NavManager.BaseUri, "/").ToLowerInvariant();
+
+        DrawerSelectedItem = DrawerData.FirstOrDefault(x => x.Url.ToLowerInvariant() == url);
+    }
+
+    private void NavManagerLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        var url = args.Location.Replace(NavManager.BaseUri, "/").ToLowerInvariant();
+
+        DrawerSelectedItem = DrawerData.FirstOrDefault(x => x.Url.ToLowerInvariant() == url);
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    protected override void OnInitialized()
+    {
+        SelectDrawerItem();
+        TokenStore.StateChanged += HandleTokenStateChanged;
+        NavManager.LocationChanged += NavManagerLocationChanged;
+
+        // Restore the Entra token persisted from the SSR HTTP scope into this circuit scope.
+        // EntraTokenPersister (App.razor) wrote this during the static pre-render.
+        if (AppState.TryTakeFromJson<SerializedEntraToken>("EntraToken", out var token) && token is not null)
+        {
+            EntraTokenHolder.AccessToken         = token.AccessToken;
+            EntraTokenHolder.Email               = token.Email;
+            EntraTokenHolder.EntraOid            = token.EntraOid;
+            EntraTokenHolder.IsEntraAuthenticated = token.IsEntraAuthenticated;
+        }
+
+        base.OnInitialized();
+    }
+
+    private void HandleTokenStateChanged()
+    {
+        // Persist new auth state and re-render on any token store change.
+        InvokeAsync(async () =>
+        {
+            await PersistAuthStateAsync();
+            if (TokenStore.IsAuthenticated && TokenStore.UserId.HasValue)
+                await RefreshPendingRequestCountAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task RefreshPendingRequestCountAsync()
+    {
+        if (!TokenStore.IsAuthenticated || !TokenStore.UserId.HasValue) return;
+        try
+        {
+            var pending = await WebApiClient.GetPendingPermissionRequestsForReviewerAsync(TokenStore.UserId.Value, _cancellationTokenSource.Token);
+            _pendingRequestCount = pending.Count;
+        }
+        catch { _pendingRequestCount = 0; }
+    }
+
+    private void HandleLogout()
+    {
+        AuthService.Logout();
+        NavManager.NavigateTo("/login");
+    }
+
+    private void ReturnToSuperAdmin()
+    {
+        AuthService.StopImpersonating();
+        NavManager.NavigateTo("/admin/users");
+        InvokeAsync(StateHasChanged);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await RestoreAuthStateAsync(); // restore from ProtectedLocalStorage
+
+            // If still not authenticated, check for an active Entra/OIDC session
+            if (!TokenStore.IsAuthenticated)
+                await TryBridgeEntraAuthAsync();
+
+            if (TokenStore.IsAuthenticated)
+            {
+                try
+                {
+                    var users = await WebApiClient.GetUsersAsync(_cancellationTokenSource.Token);
+                    personCount = users.Count;
+                }
+                catch { /* not authenticated or API unavailable */ }
+
+                await RefreshPendingRequestCountAsync();
+            }
+
+            await InvokeAsync(StateHasChanged);
+        }
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    /// <summary>
+    /// If the user authenticated via Microsoft Entra OIDC (cookie present),
+    /// store their Entra access token in WebApiTokenStore and call /api/me
+    /// to resolve identity — same as the local-login flow.
+    /// </summary>
+    private async Task TryBridgeEntraAuthAsync()
+    {
+        if (!EntraTokenHolder.IsEntraAuthenticated
+            || string.IsNullOrWhiteSpace(EntraTokenHolder.AccessToken))
+            return;
+
+        // If user already has a resolved local account (local login or prior Entra link),
+        // don't override their session.
+        if (TokenStore.UserId.HasValue)
+            return;
+
+        try
+        {
+            TokenStore.AccessToken    = EntraTokenHolder.AccessToken;
+            TokenStore.UserEmail      = EntraTokenHolder.Email;
+            TokenStore.IsEntraSession = true;
+
+            var me = await WebApiClient.GetAsync<EntraMeResult>("/api/me");
+
+            // Re-check: user may have logged in locally while we were awaiting.
+            if (TokenStore.UserId.HasValue)
+                return;
+
+            if (me is not null)
+            {
+                if (me.UserId == Guid.Empty)
+                {
+                    // No linked local account — clear partial state and redirect to link page.
+                    TokenStore.AccessToken    = null;
+                    TokenStore.UserEmail      = null;
+                    TokenStore.IsEntraSession = false;
+                    NavManager.NavigateTo("/entra/complete-profile");
+                    return;
+                }
+
+                TokenStore.UserId       = me.UserId;
+                TokenStore.IsSuperAdmin = me.IsSuperAdmin;
+                // Use the local account email (consistent regardless of which Entra identity was used)
+                if (!string.IsNullOrEmpty(me.Email))
+                    TokenStore.UserEmail = me.Email;
+            }
+            else
+            {
+                // API call failed — clear partial state so user can log in normally.
+                TokenStore.AccessToken    = null;
+                TokenStore.UserEmail      = null;
+                TokenStore.IsEntraSession = false;
+                return;
+            }
+
+            TokenStore.NotifyStateChanged();
+        }
+        catch { /* non-fatal — Entra token may be invalid or WebApi unreachable */ }
+    }
+
+    private sealed record EntraMeResult(Guid UserId, string Email, bool IsSuperAdmin);
+
+    // ── Auth persistence ──────────────────────────────────────────────────────
+
+    private async Task PersistAuthStateAsync()
+    {
+        // Entra sessions are maintained by the OIDC cookie, not localStorage.
+        // Persisting an Entra access token would cause stale-token issues after expiry.
+        if (TokenStore.IsEntraSession) return;
+
+        try
+        {
+            if (TokenStore.IsAuthenticated)
+            {
+                await LocalStorage.SetAsync(AuthStateKey, new PersistedAuthState(
+                    TokenStore.AccessToken,
+                    TokenStore.RefreshToken,
+                    TokenStore.AccessTokenExpiresAtUtc?.ToUnixTimeMilliseconds(),
+                    TokenStore.UserEmail,
+                    TokenStore.UserId?.ToString(),
+                    TokenStore.IsSuperAdmin
+                ));
+            }
+            else
+            {
+                await LocalStorage.DeleteAsync(AuthStateKey);
+            }
+        }
+        catch { /* JS interop can fail if circuit is disconnecting */ }
+    }
+
+    private async Task RestoreAuthStateAsync()
+    {
+        try
+        {
+            var result = await LocalStorage.GetAsync<PersistedAuthState>(AuthStateKey);
+            if (result.Success && result.Value is { AccessToken: not null } state)
+            {
+                TokenStore.AccessToken = state.AccessToken;
+                TokenStore.RefreshToken = state.RefreshToken;
+                TokenStore.AccessTokenExpiresAtUtc = state.ExpiresAtMs.HasValue
+                    ? DateTimeOffset.FromUnixTimeMilliseconds(state.ExpiresAtMs.Value)
+                    : null;
+                TokenStore.UserEmail = state.UserEmail;
+                TokenStore.UserId = Guid.TryParse(state.UserId, out var id) ? id : null;
+                TokenStore.IsSuperAdmin = state.IsSuperAdmin;
+                // NotifyStateChanged would re-persist immediately — skip it here
+                // and just call StateHasChanged directly.
+                StateHasChanged();
+            }
+        }
+        catch { /* localStorage might be unavailable or tampered */ }
+    }
+
+    public void Dispose()
+    {
+        TokenStore.StateChanged -= HandleTokenStateChanged;
+
+        if (NavManager != null)
+            NavManager.LocationChanged -= NavManagerLocationChanged;
+
+        if (_cancellationTokenSource != null)
+        {
+            _cancellationTokenSource.Cancel();
+            _cancellationTokenSource.Dispose();
+        }
+    }
+
+    // ── Persisted auth state ──────────────────────────────────────────────────
+
+    private sealed record PersistedAuthState(
+        string? AccessToken,
+        string? RefreshToken,
+        long? ExpiresAtMs,
+        string? UserEmail,
+        string? UserId,
+        bool IsSuperAdmin
+    );
+
+    public class NavItem
+    {
+        public string Text { get; set; }
+        public object? Icon { get; set; }
+        public string Url { get; set; } = string.Empty;
+
+        public NavItem(string text, object? icon, string url)
+        {
+            Text = text;
+            Icon = icon;
+            Url = url;
+        }
+    }
+}

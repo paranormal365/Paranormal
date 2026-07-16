@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ben.Service.Mappings — Profiles — Ben Project Analysis</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+  :root { --bs-body-bg: #0d1117; }
+  body  { background-color: var(--bs-body-bg); color: #c9d1d9; }
+  .navbar { background-color: #161b22 !important; border-bottom: 1px solid #30363d; }
+  .navbar-brand { color: #58a6ff !important; font-size: 1.15rem; }
+  .breadcrumb-item a, .breadcrumb-item.active { color: #8b949e; font-size: .9rem; }
+  /* sidebar */
+  #sidebar { position: sticky; top: 1rem; max-height: calc(100vh - 5rem); overflow-y: auto; }
+  #sidebar .nav-link { color: #8b949e; font-size: .875rem; padding: .2rem .75rem; border-left: 2px solid transparent; }
+  #sidebar .nav-link:hover, #sidebar .nav-link.active { color: #58a6ff; border-left-color: #58a6ff; }
+  /* content */
+  .page-header { border-bottom: 2px solid #30363d; padding-bottom: .75rem; margin-bottom: 1.5rem; }
+  .page-header h1 { color: #e6edf3; font-size: 1.75rem; }
+  .section-card { background-color: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; }
+  .section-card h2 { color: #e6edf3; font-size: 1.2rem; padding-bottom: .5rem; border-bottom: 1px solid #30363d; margin-bottom: 1rem; }
+  .section-card h3 { color: #c9d1d9; font-size: 1.05rem; margin-top: 1.2rem; }
+  .section-card h4 { color: #8b949e; font-size: .95rem; margin-top: 1rem; }
+  /* tables */
+  .table { --bs-table-bg: transparent; --bs-table-striped-bg: rgba(255,255,255,.025); color: #c9d1d9; }
+  .table thead th { color: #58a6ff; border-bottom: 2px solid #30363d; white-space: nowrap; }
+  .table td, .table th { border-color: #21262d; vertical-align: top; }
+  .table-responsive { border: 1px solid #30363d; border-radius: 6px; }
+  /* code */
+  pre { background: #010409 !important; border: 1px solid #30363d; border-radius: 6px; padding: 1rem; overflow-x: auto; }
+  code { color: #e3b341; font-size: .85em; }
+  pre code { color: #c9d1d9; }
+  /* inline code in tables */
+  td code, th code { background: rgba(110,118,129,.2); padding: .1em .35em; border-radius: 3px; }
+  /* blockquote / note boxes */
+  blockquote { background: rgba(121,192,255,.05); border-left: 3px solid #1f6feb; padding: .75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+  blockquote p { margin: 0; color: #a5d6ff; }
+  /* badges */
+  .badge-project { font-size: .8em; font-weight: 500; vertical-align: middle; }
+  /* source link */
+  a.src-link { color: #6e7681; font-size: .8em; font-style: italic; }
+  a.src-link:hover { color: #58a6ff; }
+  /* toc */
+  #toc a { color: #8b949e; font-size: .875rem; text-decoration: none; display: block; padding: .15rem .5rem; border-radius: 4px; }
+  #toc a:hover { background: rgba(255,255,255,.05); color: #58a6ff; }
+  /* back to top */
+  #back-top { position: fixed; bottom: 1.5rem; right: 1.5rem; opacity: .7; }
+  #back-top:hover { opacity: 1; }
+</style>
+</head>
+<body>
+<!-- ── Navbar ──────────────────────────────────────────────────────────────── -->
+<nav class="navbar navbar-expand-xl sticky-top">
+  <div class="container-xxl">
+    <a class="navbar-brand" href="../index.html">🔷 Ben Analysis</a>
+    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMain" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navMain">
+      <ul class="navbar-nav flex-wrap gap-0">
+        
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-info" href="#" role="button"
+               data-bs-toggle="dropdown">Data.Common</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Data.Common/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Interfaces.html">Interfaces</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Helpers.html">Helpers</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Enums.html">Enums</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Constants.html">Constants</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Common/Services.html">Services</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-primary" href="#" role="button"
+               data-bs-toggle="dropdown">Data.Source</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Data.Source/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Context.html">Context</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Core.html">Entities Core</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-User.html">Entities User</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Org.html">Entities Org</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Upload.html">Entities Upload</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.Source/Entities-Audit.html">Entities Audit</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-success" href="#" role="button"
+               data-bs-toggle="dropdown">Data.WebApi</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Data.WebApi/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Base.html">Controllers Base</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Security.html">Controllers Security</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Admin.html">Controllers Admin</a></li>
+<li><a class="dropdown-item" href="../Ben.Data.WebApi/Controllers-Entities.html">Controllers Entities</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle active text-warning" href="#" role="button"
+               data-bs-toggle="dropdown">Service.Mappings</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.Mappings/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Mappings/Profiles.html">Profiles</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-warning" href="#" role="button"
+               data-bs-toggle="dropdown">Service.Models</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.Models/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Models/Records-Admin.html">Records Admin</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Models/Records-Entities.html">Records Entities</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-danger" href="#" role="button"
+               data-bs-toggle="dropdown">Service.RepositoryService</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Interfaces-Generic.html">Interfaces Generic</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Interfaces-Entity.html">Interfaces Entity</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/RepositoryManager.html">Repository Managers</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.RepositoryService/Services.html">Services</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-secondary" href="#" role="button"
+               data-bs-toggle="dropdown">Service.RepositoryService Tests</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.RepositoryService.Tests/Summary.html">📋 Summary</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-danger" href="#" role="button"
+               data-bs-toggle="dropdown">Service.Security</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Service.Security/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Interfaces.html">Interfaces</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Services.html">Services</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Enums.html">Enums</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Models.html">Models</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Attributes.html">Attributes</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Extensions.html">Extensions</a></li>
+<li><a class="dropdown-item" href="../Ben.Service.Security/Middleware.html">Middleware</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-info" href="#" role="button"
+               data-bs-toggle="dropdown">Web.Library</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Web.Library/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Library/Services.html">Services</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Library/Components.html">Components</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-secondary" href="#" role="button"
+               data-bs-toggle="dropdown">Web Tests</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Web.Tests/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Tests/Controllers.html">Controllers</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.Tests/Services.html">Services</a></li>
+            </ul>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle  text-success" href="#" role="button"
+               data-bs-toggle="dropdown">Web.WebApp</a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="../Ben.Web.WebApp/Summary.html">📋 Summary</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.WebApp/Services-Interfaces.html">Services Interfaces</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.WebApp/Services-Implementations.html">Services Implementations</a></li>
+<li><a class="dropdown-item" href="../Ben.Web.WebApp/Components-Pages.html">Components Pages</a></li>
+            </ul>
+          </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<div class="container-xxl py-4">
+  <!-- breadcrumb -->
+  <nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="../index.html" class="text-decoration-none text-secondary">Home</a></li>
+      <li class="breadcrumb-item"><a href="Ben.Service.Mappings/Summary.html" class="text-decoration-none text-warning">Ben.Service.Mappings</a></li>
+      <li class="breadcrumb-item active">Profiles</li>
+    </ol>
+  </nav>
+
+  <div class="row">
+
+      <div id="sidebar" class="col-lg-2 d-none d-lg-block">
+        <div class="ps-2 pt-2">
+          <div class="text-muted small fw-semibold mb-2 text-uppercase" style="font-size:.7rem;letter-spacing:.08em">On this page</div>
+          <nav id="toc"><a href="#profile-inventory">Profile Inventory</a>
+<a href="#root-level">&nbsp;&nbsp;&nbsp;Root-level</a>
+<a href="#admin-folder">&nbsp;&nbsp;&nbsp;`Admin/` folder</a>
+<a href="#entities-folder">&nbsp;&nbsp;&nbsp;`Entities/` folder</a>
+<a href="#identity-folder">&nbsp;&nbsp;&nbsp;`Identity/` folder</a></nav>
+        </div>
+      </div>
+    <div class="col-lg-9">
+      <div class="section-card"><h1>Ben.Service.Mappings — Profiles</h1>
+<p>All profiles extend <code>AutoMapper.Profile</code> and are in the <code>Ben.Service.Mappings</code> namespace.</p>
+</div>
+<div class="section-card"><h2>Profile Inventory</h2>
+<h3>Root-level</h3>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Profile Class</th>
+<th>Mapping</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AppUserProfile</code></td>
+<td><code>AppUser</code> → <code>AppUserRecord</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>Admin/</code> folder</h3>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Profile Class</th>
+<th>Source Entity</th>
+<th>Target Admin Record</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AppUserAdminProfile</code></td>
+<td><code>AppUser</code></td>
+<td><code>AppUserAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>AppRoleAdminProfile</code></td>
+<td><code>IdentityRole&lt;Guid&gt;</code></td>
+<td><code>AppRoleAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>AppRoleClaimAdminProfile</code></td>
+<td><code>IdentityRoleClaim&lt;Guid&gt;</code></td>
+<td><code>AppRoleClaimAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>AppUserClaimAdminProfile</code></td>
+<td><code>IdentityUserClaim&lt;Guid&gt;</code></td>
+<td><code>AppUserClaimAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>AppUserLoginAdminProfile</code></td>
+<td><code>IdentityUserLogin&lt;Guid&gt;</code></td>
+<td><code>AppUserLoginAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>AppUserRoleAdminProfile</code></td>
+<td><code>IdentityUserRole&lt;Guid&gt;</code></td>
+<td><code>AppUserRoleAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>AppUserTokenAdminProfile</code></td>
+<td><code>IdentityUserToken&lt;Guid&gt;</code></td>
+<td><code>AppUserTokenAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationAdminProfile</code></td>
+<td><code>Organization</code></td>
+<td><code>OrganizationAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationAccessGrantAdminProfile</code></td>
+<td><code>OrganizationAccessGrant</code></td>
+<td><code>OrganizationAccessGrantAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationAddressAdminProfile</code></td>
+<td><code>OrganizationAddress</code></td>
+<td><code>OrganizationAddressAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationAddressTypeAdminProfile</code></td>
+<td><code>OrganizationAddressType</code></td>
+<td><code>OrganizationAddressTypeAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationEmailAdminProfile</code></td>
+<td><code>OrganizationEmail</code></td>
+<td><code>OrganizationEmailAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationEmailTypeAdminProfile</code></td>
+<td><code>OrganizationEmailType</code></td>
+<td><code>OrganizationEmailTypeAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationLinkAdminProfile</code></td>
+<td><code>OrganizationLink</code></td>
+<td><code>OrganizationLinkAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationLinkTypeAdminProfile</code></td>
+<td><code>OrganizationLinkType</code></td>
+<td><code>OrganizationLinkTypeAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationNoteAdminProfile</code></td>
+<td><code>OrganizationNote</code></td>
+<td><code>OrganizationNoteAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationNoteTypeAdminProfile</code></td>
+<td><code>OrganizationNoteType</code></td>
+<td><code>OrganizationNoteTypeAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationPageAdminProfile</code></td>
+<td><code>OrganizationPage</code></td>
+<td><code>OrganizationPageAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationPhoneAdminProfile</code></td>
+<td><code>OrganizationPhone</code></td>
+<td><code>OrganizationPhoneAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationPhoneTypeAdminProfile</code></td>
+<td><code>OrganizationPhoneType</code></td>
+<td><code>OrganizationPhoneTypeAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationUserMembershipAdminProfile</code></td>
+<td><code>OrganizationUserMembership</code></td>
+<td><code>OrganizationUserMembershipAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UploadFileAdminProfile</code></td>
+<td><code>UploadFile</code></td>
+<td><code>UploadFileAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UploadFileOrganizationShareAdminProfile</code></td>
+<td><code>UploadFileOrganizationShare</code></td>
+<td><code>UploadFileOrganizationShareAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UploadFilePermissionRequestAdminProfile</code></td>
+<td><code>UploadFilePermissionRequest</code></td>
+<td><code>UploadFilePermissionRequestAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UploadFileTypeAdminProfile</code></td>
+<td><code>UploadFileType</code></td>
+<td><code>UploadFileTypeAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UserAddressAdminProfile</code></td>
+<td><code>UserAddress</code></td>
+<td><code>UserAddressAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UserAddressTypeAdminProfile</code></td>
+<td><code>UserAddressType</code></td>
+<td><code>UserAddressTypeAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UserEmailAdminProfile</code></td>
+<td><code>UserEmail</code></td>
+<td><code>UserEmailAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UserEmailTypeAdminProfile</code></td>
+<td><code>UserEmailType</code></td>
+<td><code>UserEmailTypeAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UserLinkAdminProfile</code></td>
+<td><code>UserLink</code></td>
+<td><code>UserLinkAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UserLinkTypeAdminProfile</code></td>
+<td><code>UserLinkType</code></td>
+<td><code>UserLinkTypeAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UserMessageAdminProfile</code></td>
+<td><code>UserMessage</code></td>
+<td><code>UserMessageAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UserMessageToAdminProfile</code></td>
+<td><code>UserMessageTo</code></td>
+<td><code>UserMessageToAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UserMessageTypeAdminProfile</code></td>
+<td><code>UserMessageType</code></td>
+<td><code>UserMessageTypeAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UserNoteAdminProfile</code></td>
+<td><code>UserNote</code></td>
+<td><code>UserNoteAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UserNoteTypeAdminProfile</code></td>
+<td><code>UserNoteType</code></td>
+<td><code>UserNoteTypeAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UserPhoneAdminProfile</code></td>
+<td><code>UserPhone</code></td>
+<td><code>UserPhoneAdminRecord</code></td>
+</tr>
+<tr>
+<td><code>UserPhoneTypeAdminProfile</code></td>
+<td><code>UserPhoneType</code></td>
+<td><code>UserPhoneTypeAdminRecord</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>Entities/</code> folder</h3>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Profile Class</th>
+<th>Source Entity</th>
+<th>Target Record</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>OrganizationAccessGrantProfile</code></td>
+<td><code>OrganizationAccessGrant</code></td>
+<td><code>OrganizationAccessGrantRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationAddressProfile</code></td>
+<td><code>OrganizationAddress</code></td>
+<td><code>OrganizationAddressRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationAddressTypeProfile</code></td>
+<td><code>OrganizationAddressType</code></td>
+<td><code>OrganizationAddressTypeRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationEmailProfile</code></td>
+<td><code>OrganizationEmail</code></td>
+<td><code>OrganizationEmailRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationEmailTypeProfile</code></td>
+<td><code>OrganizationEmailType</code></td>
+<td><code>OrganizationEmailTypeRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationLinkProfile</code></td>
+<td><code>OrganizationLink</code></td>
+<td><code>OrganizationLinkRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationLinkTypeProfile</code></td>
+<td><code>OrganizationLinkType</code></td>
+<td><code>OrganizationLinkTypeRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationNoteProfile</code></td>
+<td><code>OrganizationNote</code></td>
+<td><code>OrganizationNoteRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationNoteTypeProfile</code></td>
+<td><code>OrganizationNoteType</code></td>
+<td><code>OrganizationNoteTypeRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationPageProfile</code></td>
+<td><code>OrganizationPage</code></td>
+<td><code>OrganizationPageRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationPhoneProfile</code></td>
+<td><code>OrganizationPhone</code></td>
+<td><code>OrganizationPhoneRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationPhoneTypeProfile</code></td>
+<td><code>OrganizationPhoneType</code></td>
+<td><code>OrganizationPhoneTypeRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationProfile</code></td>
+<td><code>Organization</code></td>
+<td><code>OrganizationRecord</code></td>
+</tr>
+<tr>
+<td><code>OrganizationUserMembershipProfile</code></td>
+<td><code>OrganizationUserMembership</code></td>
+<td><code>OrganizationUserMembershipRecord</code></td>
+</tr>
+<tr>
+<td><code>UploadFileOrganizationShareProfile</code></td>
+<td><code>UploadFileOrganizationShare</code></td>
+<td><code>UploadFileOrganizationShareRecord</code></td>
+</tr>
+<tr>
+<td><code>UploadFilePermissionRequestProfile</code></td>
+<td><code>UploadFilePermissionRequest</code></td>
+<td><code>UploadFilePermissionRequestRecord</code></td>
+</tr>
+<tr>
+<td><code>UploadFileProfile</code></td>
+<td><code>UploadFile</code></td>
+<td><code>UploadFileRecord</code></td>
+</tr>
+<tr>
+<td><code>UploadFileTypeExtensionProfile</code></td>
+<td><code>UploadFileTypeExtension</code></td>
+<td><code>UploadFileTypeExtensionRecord</code></td>
+</tr>
+<tr>
+<td><code>UploadFileTypeProfile</code></td>
+<td><code>UploadFileType</code></td>
+<td><code>UploadFileTypeRecord</code></td>
+</tr>
+<tr>
+<td><code>UserAddressProfile</code></td>
+<td><code>UserAddress</code></td>
+<td><code>UserAddressRecord</code></td>
+</tr>
+<tr>
+<td><code>UserAddressTypeProfile</code></td>
+<td><code>UserAddressType</code></td>
+<td><code>UserAddressTypeRecord</code></td>
+</tr>
+<tr>
+<td><code>UserEmailProfile</code></td>
+<td><code>UserEmail</code></td>
+<td><code>UserEmailRecord</code></td>
+</tr>
+<tr>
+<td><code>UserEmailTypeProfile</code></td>
+<td><code>UserEmailType</code></td>
+<td><code>UserEmailTypeRecord</code></td>
+</tr>
+<tr>
+<td><code>UserLinkProfile</code></td>
+<td><code>UserLink</code></td>
+<td><code>UserLinkRecord</code></td>
+</tr>
+<tr>
+<td><code>UserLinkTypeProfile</code></td>
+<td><code>UserLinkType</code></td>
+<td><code>UserLinkTypeRecord</code></td>
+</tr>
+<tr>
+<td><code>UserMessageProfile</code></td>
+<td><code>UserMessage</code></td>
+<td><code>UserMessageRecord</code></td>
+</tr>
+<tr>
+<td><code>UserMessageToProfile</code></td>
+<td><code>UserMessageTo</code></td>
+<td><code>UserMessageToRecord</code></td>
+</tr>
+<tr>
+<td><code>UserMessageTypeProfile</code></td>
+<td><code>UserMessageType</code></td>
+<td><code>UserMessageTypeRecord</code></td>
+</tr>
+<tr>
+<td><code>UserNoteProfile</code></td>
+<td><code>UserNote</code></td>
+<td><code>UserNoteRecord</code></td>
+</tr>
+<tr>
+<td><code>UserNoteTypeProfile</code></td>
+<td><code>UserNoteType</code></td>
+<td><code>UserNoteTypeRecord</code></td>
+</tr>
+<tr>
+<td><code>UserPhoneProfile</code></td>
+<td><code>UserPhone</code></td>
+<td><code>UserPhoneRecord</code></td>
+</tr>
+<tr>
+<td><code>UserPhoneTypeProfile</code></td>
+<td><code>UserPhoneType</code></td>
+<td><code>UserPhoneTypeRecord</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>Identity/</code> folder</h3>
+<div class="table-responsive"><table class="table table-bordered table-striped table-hover table-sm">
+<thead class="table-dark">
+<tr>
+<th>Profile Class</th>
+<th>Source</th>
+<th>Target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><em>(see Admin profiles above — Identity types are mapped there)</em></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- back to top -->
+<a id="back-top" href="#" class="btn btn-sm btn-outline-secondary rounded-pill">↑ Top</a>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
