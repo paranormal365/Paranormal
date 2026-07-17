@@ -27,6 +27,12 @@
             <span>Site Roles</span>
         </a>
 
+        <div class="admin-panel-section-label">Organizations</div>
+        <a class="admin-panel-link" href="/organizations" @onclick="Close" @onclick:preventDefault="false">
+            <TelerikSvgIcon Icon="@SvgIcon.Globe" />
+            <span>Manage Organizations</span>
+        </a>
+
         <div class="admin-panel-section-label">Content</div>
         <a class="admin-panel-link" href="/admin/file-types" @onclick="Close" @onclick:preventDefault="false">
             <TelerikSvgIcon Icon="@SvgIcon.FileConfig" />

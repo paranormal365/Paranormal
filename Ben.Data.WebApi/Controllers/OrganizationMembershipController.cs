@@ -99,8 +99,8 @@ public class OrganizationMembershipController : ControllerBase
     /// <exception cref="UnauthorizedAccessException">Thrown when the user ID claim is absent or not a valid <see cref="Guid"/>.</exception>
     private Guid GetCurrentUserId()
     {
-        var value = User.FindFirstValue(ClaimTypes.NameIdentifier)
-                    ?? User.FindFirstValue("sub");
+        var value = User.FindFirstValue(Ben.Data.WebApi.Services.EntraClaimsTransformation.AppUserIdClaimType)
+                    ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         if (!Guid.TryParse(value, out var appUserId))
         {

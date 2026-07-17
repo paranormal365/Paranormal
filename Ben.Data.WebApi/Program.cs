@@ -72,6 +72,7 @@ builder.Services.AddScoped<Ben.Service.Security.Services.IOrganizationSecuritySe
 builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService, Ben.Service.RepositoryService.Services.OrganizationSecurityService>();
 builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService, Ben.Service.RepositoryService.Services.AuditLogService>();
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);
+builder.Services.AddTransient<Microsoft.AspNetCore.Authentication.IClaimsTransformation, Ben.Data.WebApi.Services.EntraClaimsTransformation>();
 
 builder.Services.AddIdentityApiEndpoints<AppUser>(options =>
        {

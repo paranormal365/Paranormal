@@ -19,6 +19,26 @@ namespace Ben.Web.Library.Services;
 /// </remarks>
 public interface IBenAdminClient
 {
+    // ── Organizations ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns organizations visible to the current user, each with CanEdit and CanDelete flags.
+    /// SuperAdmins see all organizations; others see only orgs they are active members of.
+    /// </summary>
+    Task<IReadOnlyList<OrganizationListItemResponse>> GetOrganizationsAsync(CancellationToken token = default);
+
+    /// <summary>Returns a single organization for pre-filling the edit form. Returns null if not found or forbidden.</summary>
+    Task<OrganizationAdminRecord?> GetOrganizationAsync(Guid id, CancellationToken token = default);
+
+    /// <summary>Creates a new organization (SuperAdmin only).</summary>
+    Task<OrganizationAdminRecord?> CreateOrganizationAsync(AdminCreateOrganizationRequest request, CancellationToken token = default);
+
+    /// <summary>Updates an organization's Name and UrlName. Requires Update access or SuperAdmin.</summary>
+    Task<OrganizationAdminRecord?> UpdateOrganizationAsync(Guid id, AdminUpdateOrganizationRequest request, CancellationToken token = default);
+
+    /// <summary>Deletes an organization. Requires Delete access or SuperAdmin.</summary>
+    Task<bool> DeleteOrganizationAsync(Guid id, CancellationToken token = default);
+
     // ── Roles ─────────────────────────────────────────────────────────────────
 
     /// <summary>Returns all site-level roles with the number of users currently assigned to each.</summary>
@@ -159,6 +179,21 @@ public sealed record AdminCreateFileTypeExtensionRequest(
     /// <summary>Pattern string, e.g. <c>.txt</c> (exact) or <c>.doc*</c> (wildcard suffix). See <c>FileExtensionPatternMatcher</c>.</summary>
     string Pattern,
     Guid CreatedByAppUserId);
+
+/// <summary>Organization list row returned by <c>GET /api/organizations</c>.</summary>
+public sealed record OrganizationListItemResponse(
+    Guid Id,
+    string Name,
+    string UrlName,
+    DateTime DateCreated,
+    bool CanEdit,
+    bool CanDelete);
+
+/// <summary>Request body for creating a new organization (SuperAdmin only).</summary>
+public sealed record AdminCreateOrganizationRequest(string Name, string UrlName);
+
+/// <summary>Request body for updating an organization's Name and UrlName.</summary>
+public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName);
 
 /// <summary>Role record paired with its current user count.</summary>
 public sealed record AdminRoleWithCountResponse(AppRoleAdminRecord Role, int UserCount);

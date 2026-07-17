@@ -20,6 +20,26 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         _auth = auth;
     }
 
+    // ── Organizations ─────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<OrganizationListItemResponse>> GetOrganizationsAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrganizationListItemResponse>>("/api/organizations", token);
+        return result ?? [];
+    }
+
+    public Task<OrganizationAdminRecord?> GetOrganizationAsync(Guid id, CancellationToken token = default)
+        => _api.GetAsync<OrganizationAdminRecord>($"/api/organizations/{id}", token);
+
+    public Task<OrganizationAdminRecord?> CreateOrganizationAsync(AdminCreateOrganizationRequest request, CancellationToken token = default)
+        => _api.PostAsync<AdminCreateOrganizationRequest, OrganizationAdminRecord>("/api/organizations", request, token);
+
+    public Task<OrganizationAdminRecord?> UpdateOrganizationAsync(Guid id, AdminUpdateOrganizationRequest request, CancellationToken token = default)
+        => _api.PutAsync<AdminUpdateOrganizationRequest, OrganizationAdminRecord>($"/api/organizations/{id}", request, token);
+
+    public Task<bool> DeleteOrganizationAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{id}", token);
+
     // ── Roles ─────────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<AdminRoleWithCountResponse>> GetRolesAsync(CancellationToken token = default)

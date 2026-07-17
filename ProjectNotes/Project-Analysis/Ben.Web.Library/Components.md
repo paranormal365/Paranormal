@@ -32,6 +32,8 @@ Visible only when `IBenUserState.IsSuperAdmin && !IBenUserState.IsImpersonating`
 | Section | Link | Route |
 |---|---|---|
 | Users | Manage Users | `/admin/users` |
+| Users | Site Roles | `/admin/roles` |
+| Organizations | Manage Organizations | `/organizations` |
 | Content | File Types | `/admin/file-types` |
 
 ---

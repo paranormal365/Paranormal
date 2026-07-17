@@ -7,10 +7,11 @@
 All controllers in `Ben.Data.WebApi/Controllers/Entities/` require `[Authorize]` (any authenticated user).  
 Each extends [`EntityReadControllerBase<TEntity, TRecord>`](Controllers-Base.md#entityreadcontrollerbase) providing GET (all + by ID) only.
 
-| Controller | Route | Entity | Record |
-|---|---|---|---|
-| `AppUserController` | `api/users` | `AppUser` | `AppUserRecord` |
-| `OrganizationController` | `api/organizations` | `Organization` | `OrganizationRecord` |
+| Controller | Route | Entity | Record | Notes |
+|---|---|---|---|---|
+| `AppUserController` | `api/users` | `AppUser` | `AppUserRecord` | |
+| `OrganizationController` | `api/organizations` | `Organization` | `OrganizationListItemResponse` | Extended — see below |
+| `OrganizationAddressController` | `api/organization-addresses` | `OrganizationAddress` | `OrganizationAddressRecord` | |
 | `OrganizationAddressController` | `api/organization-addresses` | `OrganizationAddress` | `OrganizationAddressRecord` |
 | `OrganizationAddressTypeController` | `api/organization-address-types` | `OrganizationAddressType` | `OrganizationAddressTypeRecord` |
 | `OrganizationEmailController` | `api/organization-emails` | `OrganizationEmail` | `OrganizationEmailRecord` |
@@ -35,6 +36,20 @@ Each extends [`EntityReadControllerBase<TEntity, TRecord>`](Controllers-Base.md#
 | `UserNoteTypeController` | `api/user-note-types` | `UserNoteType` | `UserNoteTypeRecord` |
 | `UserPhoneController` | `api/user-phones` | `UserPhone` | `UserPhoneRecord` |
 | `UserPhoneTypeController` | `api/user-phone-types` | `UserPhoneType` | `UserPhoneTypeRecord` |
+
+### `OrganizationController` — `api/organizations` (extended)
+
+Base `GetAll`/`GetById` suppressed via `[NonAction]`. Adds full permission-aware CRUD:
+
+| Endpoint | Auth | Description |
+|---|---|---|
+| `GET /api/organizations` | Any auth | Returns `OrganizationListItemResponse[]` — each row includes `CanEdit` and `CanDelete` flags. SuperAdmins see all; others see their member orgs. |
+| `GET /api/organizations/{id}` | Any auth + Read permission | Returns `OrganizationAdminRecord` for edit form pre-fill. |
+| `POST /api/organizations` | SuperAdmin (DB role check) | Creates a new org. Uses `UserManager.IsInRoleAsync` so Entra tokens work. |
+| `PUT /api/organizations/{id}` | Update permission or SuperAdmin | Updates Name and UrlName. |
+| `DELETE /api/organizations/{id}` | Delete permission or SuperAdmin | Deletes the org. |
+
+All user ID resolution uses `GetCurrentUserId()` which checks the `app_user_id` claim (set by `EntraClaimsTransformation`) before falling back to `ClaimTypes.NameIdentifier`.
 
 ### Specialised Entity Controllers
 

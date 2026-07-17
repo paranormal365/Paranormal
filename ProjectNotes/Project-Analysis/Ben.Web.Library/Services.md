@@ -32,6 +32,24 @@ Library components depend on this interface rather than the full `IWebApiTokenSt
 Defines all SuperAdmin HTTP operations available to library Blazor components.  
 `BenAdminClientAdapter` delegates each call to the typed `IWebApiClient` HTTP client in the host project.
 
+### Organization Methods
+
+| Method | Returns | Description |
+|---|---|---|
+| `GetOrganizationsAsync(token)` | `IReadOnlyList<OrganizationListItemResponse>` | Orgs visible to current user with per-org `CanEdit`/`CanDelete` flags. |
+| `GetOrganizationAsync(id, token)` | `OrganizationAdminRecord?` | Single org for edit form pre-fill. |
+| `CreateOrganizationAsync(request, token)` | `OrganizationAdminRecord?` | Creates org (SuperAdmin only). |
+| `UpdateOrganizationAsync(id, request, token)` | `OrganizationAdminRecord?` | Updates Name and UrlName. |
+| `DeleteOrganizationAsync(id, token)` | `bool` | Deletes org. |
+
+### Role Methods
+
+| Method | Returns | Description |
+|---|---|---|
+| `GetRolesAsync(token)` | `IReadOnlyList<AdminRoleWithCountResponse>` | All site roles with user counts. |
+| `CreateRoleAsync(roleName, token)` | `AppRoleAdminRecord?` | Creates a new role. |
+| `DeleteRoleAsync(roleId, token)` | `bool` | Deletes role (server refuses if users assigned). |
+
 ### User Methods
 
 | Method | Returns | Description |
@@ -68,6 +86,12 @@ Defines all SuperAdmin HTTP operations available to library Blazor components.
 
 | Type | Description |
 |---|---|
+| `AdminCreateOrganizationRequest(Name, UrlName)` | Create org payload. |
+| `AdminUpdateOrganizationRequest(Name, UrlName)` | Update org payload. |
+| `OrganizationListItemResponse(Id, Name, UrlName, DateCreated, CanEdit, CanDelete)` | Org list row with permission flags. |
+| `AdminRoleWithCountResponse(Role, UserCount)` | Role + user count. |
+| `AdminCreateUserRequest` | New user payload: Email, Password, DisplayName, UserName, IsEmailConfirmed, IsSuperAdmin. |
+| `AdminCreateRoleRequest` | New role payload. |
 | `AdminFileTypeWithExtensionsResponse(FileType, Extensions)` | Combined file type + patterns response. |
 | `AdminCreateFileTypeRequest` | Create payload including display metadata and `AllowAllExtensions` flag. |
 | `AdminUpdateFileTypeRequest` | Update payload. |

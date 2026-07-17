@@ -1,0 +1,157 @@
+@page "/organizations/create"
+@page "/organizations/{OrgId:guid}/edit"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>@(IsEditMode ? "Edit Organization" : "New Organization")</PageTitle>
+
+<div class="container-fluid px-3" style="max-width:640px">
+
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <TelerikButton Icon="@SvgIcon.ArrowLeft"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           OnClick="@(() => NavManager.NavigateTo("/organizations"))">
+                Back to Organizations
+            </TelerikButton>
+            <h3 class="d-inline-block ms-3 mb-0">@(IsEditMode ? "Edit Organization" : "New Organization")</h3>
+        </div>
+    </div>
+
+    @if (_errorMessage is not null)
+    {
+        <div class="alert alert-danger mb-3">@_errorMessage</div>
+    }
+
+    @if (_loading)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading…" />
+    }
+    else
+    {
+        <div class="row g-3">
+
+            <div class="col-12">
+                <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+                <TelerikTextBox @bind-Value="@_form.Name" Width="100%" Placeholder="My Organization" />
+            </div>
+
+            <div class="col-12">
+                <label class="form-label fw-semibold">URL Name <span class="text-danger">*</span></label>
+                <TelerikTextBox @bind-Value="@_form.UrlName" Width="100%" Placeholder="my-organization" />
+                <div class="form-text">URL-safe slug (e.g. <code>my-org</code>). Must be unique. Use lowercase letters, numbers, and hyphens only.</div>
+            </div>
+
+            <div class="col-12 mt-2 d-flex gap-2">
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                               Icon="@SvgIcon.Save"
+                               OnClick="Save"
+                               Enabled="@(!_isSaving)">
+                    @(_isSaving ? "Saving…" : "Save")
+                </TelerikButton>
+                <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                               OnClick="@(() => NavManager.NavigateTo("/organizations"))">
+                    Cancel
+                </TelerikButton>
+            </div>
+
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? OrgId { get; set; }
+
+    private bool IsEditMode => OrgId.HasValue;
+
+    private FormModel _form   = new();
+    private bool      _loading;
+    private bool      _isSaving;
+    private string?   _errorMessage;
+
+    protected override void OnInitialized()
+    {
+        if (!UserState.IsAuthenticated)
+        {
+            NavManager.NavigateTo("/login");
+            return;
+        }
+
+        // Create mode is SuperAdmin-only
+        if (!IsEditMode && (!UserState.IsSuperAdmin || UserState.IsImpersonating))
+            NavManager.NavigateTo("/organizations");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !IsEditMode) return;
+
+        _loading = true;
+        StateHasChanged();
+
+        var org = await AdminClient.GetOrganizationAsync(OrgId!.Value);
+        _loading = false;
+
+        if (org is null)
+        {
+            // Not found or not permitted — return to list
+            NavManager.NavigateTo("/organizations");
+            return;
+        }
+
+        _form = new FormModel { Name = org.Name ?? string.Empty, UrlName = org.UrlName ?? string.Empty };
+        StateHasChanged();
+    }
+
+    private async Task Save()
+    {
+        _errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_form.Name))
+        {
+            _errorMessage = "Name is required.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_form.UrlName))
+        {
+            _errorMessage = "URL Name is required.";
+            return;
+        }
+
+        _isSaving = true;
+
+        if (IsEditMode)
+        {
+            var updated = await AdminClient.UpdateOrganizationAsync(
+                OrgId!.Value,
+                new AdminUpdateOrganizationRequest(_form.Name.Trim(), _form.UrlName.Trim().ToLowerInvariant()));
+
+            _isSaving = false;
+
+            if (updated is not null)
+                NavManager.NavigateTo("/organizations");
+            else
+                _errorMessage = "Save failed. You may not have permission to edit this organization.";
+        }
+        else
+        {
+            var created = await AdminClient.CreateOrganizationAsync(
+                new AdminCreateOrganizationRequest(_form.Name.Trim(), _form.UrlName.Trim().ToLowerInvariant()));
+
+            _isSaving = false;
+
+            if (created is not null)
+                NavManager.NavigateTo("/organizations");
+            else
+                _errorMessage = "Create failed. The URL name may already be in use.";
+        }
+    }
+
+    private sealed class FormModel
+    {
+        public string Name    { get; set; } = string.Empty;
+        public string UrlName { get; set; } = string.Empty;
+    }
+}

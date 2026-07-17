@@ -23,6 +23,34 @@ public sealed class AdminOrganizationController
 The base class provides GET (all + by ID), POST, PUT, DELETE.  
 All mutations are **automatically audit-logged** by the base class.
 
+### Specialised Admin Controllers
+
+#### `AdminAppUserController` — `api/admin/app-users`
+
+Extends the base. Additional endpoints:
+
+| Endpoint | Description |
+|---|---|
+| `POST /api/admin/app-users` | Create user via `UserManager.CreateAsync`. Sets `IsSuperAdmin` role flag. |
+| `PUT /api/admin/app-users/{id}/profile` | Update profile fields including audit timestamps. |
+| `GET /api/admin/app-users/{id}/detail` | Full user aggregate (profile + 8 related lists). |
+
+#### `AdminRoleController` — `api/admin/roles`
+
+Standalone controller (does not extend base). Uses `RoleManager<IdentityRole<Guid>>`.
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/admin/roles` | All roles with user counts (`AdminRoleWithCountResponse[]`). |
+| `POST /api/admin/roles` | Create a role. |
+| `DELETE /api/admin/roles/{id}` | Delete role. Returns `409 Conflict` if users assigned. |
+
+#### `AdminOrganizationController` — `api/admin/organizations`
+
+Extends base. Base `Create(Organization)` suppressed with `[NonAction]`. The preferred create endpoint is `POST /api/organizations` (Entra-compatible).
+
+---
+
 ## Controller Inventory
 
 | Controller | Route | Entity | Record |
