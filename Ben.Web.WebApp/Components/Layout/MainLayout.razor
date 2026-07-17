@@ -17,7 +17,7 @@
         <AppBarSection>
             <TelerikButton Icon="@SvgIcon.Menu"
                            FillMode="@ThemeConstants.Button.FillMode.Clear"
-                           OnClick="@( () => DrawerExpanded = !DrawerExpanded )" />
+                           OnClick="@(() => _drawer?.ToggleDrawer())" />
         </AppBarSection>
         
         <AppBarSection>
@@ -60,38 +60,9 @@
         </AppBarSection>
     </TelerikAppBar>
 
-    <TelerikDrawer Data="@DrawerData"
-                   Expanded="@DrawerExpanded"
-                   ExpandedChanged="@DrawerExpandedChanged"
-                   @bind-SelectedItem="@DrawerSelectedItem"
-                   Mode="@DrawerMode.Push"
-                   MiniMode="true"
-                   Class="mainlayout-drawer">
-        <DrawerContent>
-            @if (TokenStore.IsImpersonating)
-            {
-                <div class="impersonation-banner">
-                    <TelerikSvgIcon Icon="@SvgIcon.User" />
-                    <span>Viewing as <strong>@TokenStore.UserEmail</strong></span>
-                    <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
-                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
-                                   Size="@ThemeConstants.Button.Size.Small"
-                                   Icon="@SvgIcon.ArrowRotateCcw"
-                                   OnClick="ReturnToSuperAdmin">Return to SuperAdmin</TelerikButton>
-                </div>
-            }
-            <div class="container">
-                <div class="row">
-                    <div class="col">
-                        <h2 class="ps-4 text-secondary">User Count: <span class="text-info">@personCount</span></h2>
-                    </div>
-                </div>
-            </div>
-            <main>
-                @Body
-            </main>
-        </DrawerContent>
-    </TelerikDrawer>
+    <MainNavigationDrawer @ref="_drawer" PersonCount="@personCount">
+        @Body
+    </MainNavigationDrawer>
 
     <TelerikAppBar ThemeColor="@ThemeConstants.AppBar.ThemeColor.Base"
                    Class="appbar-bottom">
@@ -101,8 +72,6 @@
         </AppBarSection>
         <AppBarSpacer />
     </TelerikAppBar>
-
-    <TelerikMediaQuery Media="(min-width: 641px)" OnChange="@OnMediaQueryChange" />
 
     @if (TokenStore.IsSuperAdmin && !TokenStore.IsImpersonating)
     {
@@ -120,73 +89,15 @@
 @code {
     private CancellationTokenSource _cancellationTokenSource = new();
     private bool _adminPanelOpen = false;
+    private MainNavigationDrawer? _drawer;
     int? personCount = null;
     private int _pendingRequestCount;
 
     private const string AuthStateKey = "ben-auth-state";
 
-    private IEnumerable<NavItem> DrawerData
-    {
-        get
-        {
-            var items = new List<NavItem>
-            {
-                new NavItem("Home", SvgIcon.Home, "/"),
-                new NavItem("Counter", SvgIcon.CustomFormat, "/counter"),
-                new NavItem("Weather", SvgIcon.Globe, "/weather"),
-                new NavItem("Org Security", SvgIcon.Lock, "/organization-security"),
-                new NavItem(_pendingRequestCount > 0 ? $"Files ({_pendingRequestCount})" : "Files", SvgIcon.FileAdd, "/upload-files"),
-                new NavItem("About", SvgIcon.InfoCircle, "/about")
-            };
-            // Admin nav items are in the AdminSidePanel (top bar toggle), not the left drawer.
-            if (!TokenStore.IsAuthenticated)
-                items.Add(new NavItem("Login", SvgIcon.Login, "/login"));
-            return items;
-        }
-    }
-
-
-
-    private bool DrawerExpanded { get; set; } = true;
-
-    private NavItem? DrawerSelectedItem { get; set; }
-
-    private bool LargeScreen { get; set; } = true;
-
-    private void OnMediaQueryChange(bool mediaQueryMatched)
-    {
-        LargeScreen = DrawerExpanded = mediaQueryMatched;
-    }
-
-    private void DrawerExpandedChanged(bool newExpanded)
-    {
-        if (!LargeScreen && !newExpanded)
-        {
-            DrawerExpanded = newExpanded;
-        }
-    }
-
-    private void SelectDrawerItem()
-    {
-        var url = NavManager.Uri.Replace(NavManager.BaseUri, "/").ToLowerInvariant();
-
-        DrawerSelectedItem = DrawerData.FirstOrDefault(x => x.Url.ToLowerInvariant() == url);
-    }
-
-    private void NavManagerLocationChanged(object? sender, LocationChangedEventArgs args)
-    {
-        var url = args.Location.Replace(NavManager.BaseUri, "/").ToLowerInvariant();
-
-        DrawerSelectedItem = DrawerData.FirstOrDefault(x => x.Url.ToLowerInvariant() == url);
-
-        InvokeAsync(StateHasChanged);
-    }
-
     protected override void OnInitialized()
     {
-        SelectDrawerItem();
         TokenStore.StateChanged += HandleTokenStateChanged;
-        NavManager.LocationChanged += NavManagerLocationChanged;
 
         // Restore the Entra token persisted from the SSR HTTP scope into this circuit scope.
         // EntraTokenPersister (App.razor) wrote this during the static pre-render.
@@ -228,13 +139,6 @@
     {
         AuthService.Logout();
         NavManager.NavigateTo("/login");
-    }
-
-    private void ReturnToSuperAdmin()
-    {
-        AuthService.StopImpersonating();
-        NavManager.NavigateTo("/admin/users");
-        InvokeAsync(StateHasChanged);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -382,9 +286,6 @@
     {
         TokenStore.StateChanged -= HandleTokenStateChanged;
 
-        if (NavManager != null)
-            NavManager.LocationChanged -= NavManagerLocationChanged;
-
         if (_cancellationTokenSource != null)
         {
             _cancellationTokenSource.Cancel();
@@ -403,17 +304,4 @@
         bool IsSuperAdmin
     );
 
-    public class NavItem
-    {
-        public string Text { get; set; }
-        public object? Icon { get; set; }
-        public string Url { get; set; } = string.Empty;
-
-        public NavItem(string text, object? icon, string url)
-        {
-            Text = text;
-            Icon = icon;
-            Url = url;
-        }
-    }
 }
