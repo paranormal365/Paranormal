@@ -12,7 +12,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Telerik.UI.for.Blazor" Version="14.0.0" />
+        <PackageReference Include="Telerik.UI.for.Blazor" Version="14.1.0" />
     </ItemGroup>
 
     <ItemGroup>

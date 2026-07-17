@@ -93,15 +93,15 @@
                         DisplayFormat="{0:yyyy-MM-dd}" />
             <GridCommandColumn Width="220px">
                 <GridCommandButton Command="Download" Icon="@SvgIcon.Download"
-                                   OnClick="@((GridCommandEventArgs e) => DownloadFile((UploadFileRecord)e.Item))">
+                                   OnClick="@((GridCommandEventArgs e) => DownloadFile((UploadFileRecord)e.Items.First()))">
                     Download
                 </GridCommandButton>
                 <GridCommandButton Command="Share" Icon="@SvgIcon.Share"
-                                   OnClick="@((GridCommandEventArgs e) => OpenShareDialog((UploadFileRecord)e.Item))">
+                                   OnClick="@((GridCommandEventArgs e) => OpenShareDialog((UploadFileRecord)e.Items.First()))">
                     Share
                 </GridCommandButton>
                 <GridCommandButton Command="Delete" Icon="@SvgIcon.Trash"
-                                   OnClick="@((GridCommandEventArgs e) => DeleteFile((UploadFileRecord)e.Item))">
+                                   OnClick="@((GridCommandEventArgs e) => DeleteFile((UploadFileRecord)e.Items.First()))">
                 </GridCommandButton>
             </GridCommandColumn>
         </GridColumns>

@@ -19,6 +19,17 @@ namespace Ben.Web.Library.Services;
 /// </remarks>
 public interface IBenAdminClient
 {
+    // ── Roles ─────────────────────────────────────────────────────────────────
+
+    /// <summary>Returns all site-level roles with the number of users currently assigned to each.</summary>
+    Task<IReadOnlyList<AdminRoleWithCountResponse>> GetRolesAsync(CancellationToken token = default);
+
+    /// <summary>Creates a new site-level role.</summary>
+    Task<AppRoleAdminRecord?> CreateRoleAsync(string roleName, CancellationToken token = default);
+
+    /// <summary>Deletes a role. Will fail if any users are still assigned to it.</summary>
+    Task<bool> DeleteRoleAsync(Guid roleId, CancellationToken token = default);
+
     // ── Users ─────────────────────────────────────────────────────────────────
 
     /// <summary>Returns a lightweight list of all application users.</summary>
@@ -30,6 +41,12 @@ public interface IBenAdminClient
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
     /// <returns>The detail record, or <c>null</c> if the user was not found.</returns>
     Task<AppUserDetailAdminRecord?> GetUserDetailAsync(Guid userId, CancellationToken token = default);
+
+    /// <summary>Creates a new application user with an initial password.</summary>
+    /// <param name="request">The new user fields including email, password, display name and role flags.</param>
+    /// <param name="token">Propagates cancellation from the Blazor component.</param>
+    /// <returns>The created <see cref="AppUserAdminRecord"/>, or <c>null</c> if creation failed.</returns>
+    Task<AppUserAdminRecord?> CreateUserAsync(AdminCreateUserRequest request, CancellationToken token = default);
 
     /// <summary>Updates editable profile fields for a user including audit timestamps.</summary>
     /// <param name="userId">The <see cref="Guid"/> primary key of the user to update.</param>
@@ -142,6 +159,21 @@ public sealed record AdminCreateFileTypeExtensionRequest(
     /// <summary>Pattern string, e.g. <c>.txt</c> (exact) or <c>.doc*</c> (wildcard suffix). See <c>FileExtensionPatternMatcher</c>.</summary>
     string Pattern,
     Guid CreatedByAppUserId);
+
+/// <summary>Role record paired with its current user count.</summary>
+public sealed record AdminRoleWithCountResponse(AppRoleAdminRecord Role, int UserCount);
+
+/// <summary>
+/// Request body for creating a new application user.
+/// Mirrors the <c>AdminCreateUserRequest</c> DTO in <c>Ben.Data.WebApi</c>.
+/// </summary>
+public sealed record AdminCreateUserRequest(
+    string Email,
+    string Password,
+    string? DisplayName,
+    string? UserName,
+    bool IsEmailConfirmed,
+    bool IsSuperAdmin);
 
 /// <summary>
 /// Request body for updating a user's editable profile fields.

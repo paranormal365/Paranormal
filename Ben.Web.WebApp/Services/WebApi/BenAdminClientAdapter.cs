@@ -20,11 +20,30 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         _auth = auth;
     }
 
+    // ── Roles ─────────────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<AdminRoleWithCountResponse>> GetRolesAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<AdminRoleWithCountResponse>>("/api/admin/roles", token);
+        return result ?? [];
+    }
+
+    public Task<AppRoleAdminRecord?> CreateRoleAsync(string roleName, CancellationToken token = default)
+        => _api.PostAsync<object, AppRoleAdminRecord>("/api/admin/roles", new { Name = roleName }, token);
+
+    public Task<bool> DeleteRoleAsync(Guid roleId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/admin/roles/{roleId}", token);
+
+    // ── Users ─────────────────────────────────────────────────────────────────
+
     public async Task<IReadOnlyList<AppUserRecord>> GetAllUsersAsync(CancellationToken token = default)
         => await _api.GetUsersAsync(token);
 
     public Task<AppUserDetailAdminRecord?> GetUserDetailAsync(Guid userId, CancellationToken token = default)
         => _api.GetAsync<AppUserDetailAdminRecord>($"/api/admin/app-users/{userId}/detail", token);
+
+    public Task<AppUserAdminRecord?> CreateUserAsync(AdminCreateUserRequest request, CancellationToken token = default)
+        => _api.PostAsync<AdminCreateUserRequest, AppUserAdminRecord>("/api/admin/app-users", request, token);
 
     public Task<AppUserAdminRecord?> UpdateUserProfileAsync(Guid userId, AdminUpdateUserProfileRequest request, CancellationToken token = default)
         => _api.PutAsync<AdminUpdateUserProfileRequest, AppUserAdminRecord>($"/api/admin/app-users/{userId}/profile", request, token);

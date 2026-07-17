@@ -67,17 +67,17 @@
                 <GridCommandColumn Width="220px">
                     <GridCommandButton Command="Edit"
                                        Icon="@SvgIcon.Pencil"
-                                       OnClick="@((GridCommandEventArgs e) => OpenEdit((AdminFileTypeWithExtensionsResponse)e.Item))">
+                                       OnClick="@((GridCommandEventArgs e) => OpenEdit((AdminFileTypeWithExtensionsResponse)e.Items.First()))">
                         Edit
                     </GridCommandButton>
                     <GridCommandButton Command="Extensions"
                                        Icon="@SvgIcon.FileWrench"
-                                       OnClick="@((GridCommandEventArgs e) => OpenExtensions((AdminFileTypeWithExtensionsResponse)e.Item))">\n                        Extensions
+                                       OnClick="@((GridCommandEventArgs e) => OpenExtensions((AdminFileTypeWithExtensionsResponse)e.Items.First()))">\n                        Extensions
                     </GridCommandButton>
                     <GridCommandButton Command="Delete"
                                        Icon="@SvgIcon.Trash"
                                        ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                       OnClick="@((GridCommandEventArgs e) => ConfirmDelete((AdminFileTypeWithExtensionsResponse)e.Item))">
+                                       OnClick="@((GridCommandEventArgs e) => ConfirmDelete((AdminFileTypeWithExtensionsResponse)e.Items.First()))">
                         Delete
                     </GridCommandButton>
                 </GridCommandColumn>
