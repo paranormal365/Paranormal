@@ -27,13 +27,13 @@ Identifies the type of CRUD operation recorded in an `AuditLog` entry.
 **Used by:** [`IOrganizationSecurityService`](../../Ben.Service.Security/Interfaces.md), [`OrganizationSecurityService`](../../Ben.Service.RepositoryService/Services.md#organizationsecurityservice)
 
 ### Summary
-Defines the hierarchical roles a user can hold within an organisation.  
+Defines the hierarchical roles a user can hold within an organization.  
 Integer values are ordered from **highest privilege (1) to lowest (5)**, allowing range checks:  
 `membership.Role <= OrganizationMemberRole.Administrator` → user has elevated access.
 
 | Value | Int | Description |
 |---|---|---|
-| `Owner` | 1 | Full ownership. One owner per organisation, set at registration. |
+| `Owner` | 1 | Full ownership. One owner per organization, set at registration. |
 | `Administrator` | 2 | Administrative rights for day-to-day management. |
 | `Manager` | 3 | Can manage content; no access to membership/security settings. |
 | `Member` | 4 | Standard membership; permissions governed by `OrganizationAccessGrant` rows. |
@@ -157,7 +157,7 @@ Types of access that can be requested for a shared file. Combinable via bitwise 
 |---|---|---|
 | `None` | 0 | No permissions. |
 | `Use` | 1 | Embed or reference in content. |
-| `Share` | 2 | Re-share with others or a different organisation. |
+| `Share` | 2 | Re-share with others or a different organization. |
 | `Display` | 4 | Display the file publicly. |
 
 ---
@@ -168,13 +168,13 @@ Types of access that can be requested for a shared file. Combinable via bitwise 
 **Stored on:** `UploadFileOrganizationShare.Visibility`
 
 ### Summary
-Controls who can see a file when it is shared with an organisation.
+Controls who can see a file when it is shared with an organization.
 
 | Value | Int | Description |
 |---|---|---|
-| `OrgAdminsOnly` | 0 | Visible only to organisation Owners and Administrators. |
-| `OrgMembers` | 1 | Visible to all active organisation members. |
-| `Public` | 2 | Visible to anyone with access to the organisation's content. |
+| `OrgAdminsOnly` | 0 | Visible only to organization Owners and Administrators. |
+| `OrgMembers` | 1 | Visible to all active organization members. |
+| `Public` | 2 | Visible to anyone with access to the organization's content. |
 
 ---
 

@@ -10,8 +10,8 @@
 **Applied to:** `Class` or `Method`
 
 ### Summary
-Custom MVC authorization filter that enforces organisation-level permission checks.  
-Decorates controller classes or action methods to require a user to hold a specific action grant for a specific table within the organisation identified by a named route/query parameter.
+Custom MVC authorization filter that enforces organization-level permission checks.  
+Decorates controller classes or action methods to require a user to hold a specific action grant for a specific table within the organization identified by a named route/query parameter.
 
 ### Constructor
 
@@ -21,7 +21,7 @@ Decorates controller classes or action methods to require a user to hold a speci
 
 | Parameter | Type | Description |
 |---|---|---|
-| `organizationIdParameter` | `string` | The route data key or query string key that holds the organisation `Guid`. Typically `"organizationId"`. |
+| `organizationIdParameter` | `string` | The route data key or query string key that holds the organization `Guid`. Typically `"organizationId"`. |
 | `table` | [`OrganizationSecurityTable`](Enums.md#organizationsecuritytable) | The domain table the action targets. |
 | `action` | `OrganizationSecurityAction` | The single CRUD flag being checked. |
 
@@ -32,7 +32,7 @@ Request arrives with Bearer token
   ↓
 Extract userId from NameIdentifier claim
   ↓ (missing/invalid → 401)
-Extract organisationId from route data or query string
+Extract organizationId from route data or query string
   ↓ (missing/invalid → 400)
 Resolve IOrganizationSecurityService from DI
   ↓

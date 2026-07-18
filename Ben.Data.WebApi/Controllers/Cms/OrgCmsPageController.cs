@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.WebApi.Controllers.Cms;
 
-/// <summary>CRUD for organisation CMS pages including hierarchy management.</summary>
+/// <summary>CRUD for organization CMS pages including hierarchy management.</summary>
 [Route("api/organizations/{orgId:guid}/pages")]
 public sealed class OrgCmsPageController : OrgCmsControllerBase
 {
@@ -106,7 +106,7 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
 
         var urlName = request.UrlName.Trim().ToLowerInvariant();
         if (await db.OrganizationPages.AnyAsync(p => p.OrganizationId == orgId && p.UrlName == urlName, ct))
-            return BadRequest($"UrlName '{urlName}' is already in use for this organisation.");
+            return BadRequest($"UrlName '{urlName}' is already in use for this organization.");
 
         var page = new OrganizationPage
         {
@@ -155,7 +155,7 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
         var urlName = request.UrlName.Trim().ToLowerInvariant();
         if (page.UrlName != urlName && await db.OrganizationPages.AnyAsync(
                 p => p.OrganizationId == orgId && p.UrlName == urlName, ct))
-            return BadRequest($"UrlName '{urlName}' is already in use for this organisation.");
+            return BadRequest($"UrlName '{urlName}' is already in use for this organization.");
 
         // Prevent a page from becoming its own ancestor
         if (request.ParentPageId == pageId)

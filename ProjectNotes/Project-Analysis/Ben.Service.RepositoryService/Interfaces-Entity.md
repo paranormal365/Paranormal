@@ -26,7 +26,7 @@ Each interface extends [`IRepositoryBase<T>`](Interfaces-Generic.md#irepositoryt
 
 ---
 
-## Organisation Repositories
+## Organization Repositories
 
 | Interface | Entity | Accessed via |
 |---|---|---|

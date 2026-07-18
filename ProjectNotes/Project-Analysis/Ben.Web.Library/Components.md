@@ -107,7 +107,7 @@ Fetches `AppUserDetailAdminRecord` from `IBenAdminClient.GetUserDetailAsync`.
 
 ---
 
-## Organisation Components (`Organization/` folder)
+## Organization Components (`Organization/` folder)
 
 ### `OrganizationList.razor`
 
@@ -115,7 +115,7 @@ Fetches `AppUserDetailAdminRecord` from `IBenAdminClient.GetUserDetailAsync`.
 **File:** [`Ben.Web.Library/Organization/OrganizationList.razor`](../../../Ben.Web.Library/Organization/OrganizationList.razor)
 
 #### Summary
-Displays all organisations visible to the current user with per-row permission flags.
+Displays all organizations visible to the current user with per-row permission flags.
 
 #### Features
 - `TelerikGrid` with Name, URL Slug, Created date columns.
@@ -132,7 +132,7 @@ Displays all organisations visible to the current user with per-row permission f
 **File:** [`Ben.Web.Library/Organization/OrganizationCreateEdit.razor`](../../../Ben.Web.Library/Organization/OrganizationCreateEdit.razor)
 
 #### Summary
-Form for creating or editing an organisation's Name and UrlName.
+Form for creating or editing an organization's Name and UrlName.
 
 ---
 
@@ -144,7 +144,7 @@ Form for creating or editing an organisation's Name and UrlName.
 **File:** [`Ben.Web.Library/Organization/Cms/OrgCmsEditor.razor`](../../../Ben.Web.Library/Organization/Cms/OrgCmsEditor.razor)
 
 #### Summary
-Main CMS hub page for an organisation. Entry point from the "CMS" button in `OrganizationList`.
+Main CMS hub page for an organization. Entry point from the "CMS" button in `OrganizationList`.
 
 #### Dependencies
 - `IBenAdminClient` — CMS page and logo methods
@@ -202,7 +202,7 @@ Three Bootstrap cards stacked vertically:
 
 | Parameter | Type | Description |
 |---|---|---|
-| `OrgId` | `Guid` | Route — organisation. |
+| `OrgId` | `Guid` | Route — organization. |
 | `PageId` | `Guid` | Route — page to edit. |
 
 ---

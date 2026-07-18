@@ -10,7 +10,7 @@ using System.Security.Claims;
 namespace Ben.Data.WebApi.Controllers.Cms;
 
 /// <summary>
-/// Shared base for CMS controllers that operate within an organisation scope.
+/// Shared base for CMS controllers that operate within an organization scope.
 /// Provides <see cref="GetCurrentUserId"/> and <see cref="IsCmsAuthorizedAsync"/>.
 /// </summary>
 [ApiController]
@@ -40,7 +40,7 @@ public abstract class OrgCmsControllerBase : ControllerBase
 
     /// <summary>
     /// Returns true when the current user is a site-level SuperAdmin OR passes the
-    /// organisation-level security check for the given table/action.
+    /// organization-level security check for the given table/action.
     /// </summary>
     protected async Task<bool> IsCmsAuthorizedAsync(
         Guid userId,

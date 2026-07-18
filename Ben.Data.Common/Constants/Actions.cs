@@ -61,7 +61,7 @@ public static class Actions
             public const string ModifyRolePermissions = "MODIFY_ROLE_PERMISSIONS";
         }
 
-        /// <summary>Organisation ownership assignment actions.</summary>
+        /// <summary>Organization ownership assignment actions.</summary>
         public static class Organization
         {
             public const string AssignOrganizationOwnership = "ASSIGN_PRIMARY_OWNERSHIP";

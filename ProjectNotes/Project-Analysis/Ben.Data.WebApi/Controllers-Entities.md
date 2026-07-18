@@ -63,7 +63,7 @@ Read-only list of active/public file types for upload selection dialogs.
 
 #### `UploadFileShareController` — `api/upload-files/{fileId}/shares`
 
-Manage organisation shares: list, add share, update visibility, remove.
+Manage organization shares: list, add share, update visibility, remove.
 
 #### `UploadFilePermissionRequestController` — `api/upload-files/{fileId}/permission-requests`
 
@@ -159,11 +159,11 @@ Full group CRUD plus member sub-resource:
 
 **File:** [`Ben.Data.WebApi/SeedData/OrganizationSeeder.cs`](../../../Ben.Data.WebApi/SeedData/OrganizationSeeder.cs)  
 **When called:** After `SuperAdminSeeder`, at startup.  
-**Idempotent:** Yes — skips existing users and organisations.
+**Idempotent:** Yes — skips existing users and organizations.
 
 **What it creates:**
 1. Seed users defined in `SeedData:SeedOrganization:Users`.
-2. The seed organisation (`SeedData:SeedOrganization:OrgName`).
+2. The seed organization (`SeedData:SeedOrganization:OrgName`).
 3. Owner membership for the SuperAdmin account (`Role = Owner`).
 4. Memberships for each seed user (`IsOrgAdmin: true` → `Administrator`, `false` → `Member`).
 

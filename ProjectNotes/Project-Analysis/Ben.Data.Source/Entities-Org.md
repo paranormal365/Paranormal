@@ -1,4 +1,4 @@
-# Ben.Data.Source — Organisation Sub-Entities
+# Ben.Data.Source — Organization Sub-Entities
 
 All entities implement [`IAuditableEntity`](../Ben.Data.Common/Interfaces.md#iauditableentity) and follow the two-file pattern.
 
@@ -6,11 +6,11 @@ All entities implement [`IAuditableEntity`](../Ben.Data.Common/Interfaces.md#iau
 
 | Entity | Table | Purpose |
 |---|---|---|
-| `OrganizationAddressType` | `OrganizationAddressTypes` | Category for an organisation address. |
-| `OrganizationEmailType` | `OrganizationEmailTypes` | Category for an organisation email. |
-| `OrganizationPhoneType` | `OrganizationPhoneTypes` | Category for an organisation phone. |
-| `OrganizationLinkType` | `OrganizationLinkTypes` | Category for an organisation web link. |
-| `OrganizationNoteType` | `OrganizationNoteTypes` | Category for organisation notes. |
+| `OrganizationAddressType` | `OrganizationAddressTypes` | Category for an organization address. |
+| `OrganizationEmailType` | `OrganizationEmailTypes` | Category for an organization email. |
+| `OrganizationPhoneType` | `OrganizationPhoneTypes` | Category for an organization phone. |
+| `OrganizationLinkType` | `OrganizationLinkTypes` | Category for an organization web link. |
+| `OrganizationNoteType` | `OrganizationNoteTypes` | Category for organization notes. |
 
 All share the same shape as User type entities (Id, Name, audit columns).
 
@@ -84,7 +84,7 @@ All share the same shape as User type entities (Id, Name, audit columns).
 ### `OrganizationPage`
 
 **Table:** `OrganizationPages`  
-An organisation-owned CMS page in a recursive hierarchy.
+An organization-owned CMS page in a recursive hierarchy.
 
 | Property | Type | Description |
 |---|---|---|

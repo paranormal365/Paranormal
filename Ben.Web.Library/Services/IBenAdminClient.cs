@@ -155,7 +155,7 @@ public interface IBenAdminClient
     Task<bool> ReorderCmsSectionsAsync(Guid orgId, Guid pageId, IList<Guid> orderedIds, CancellationToken token = default);
     Task<bool> DeleteCmsSectionAsync(Guid orgId, Guid pageId, Guid sectionId, CancellationToken token = default);
 
-    // ── Organisation Logos ────────────────────────────────────────────────────
+    // ── Organization Logos ────────────────────────────────────────────────────
 
     Task<IReadOnlyList<OrganizationLogoRecord>> GetOrgLogosAsync(Guid orgId, CancellationToken token = default);
     Task<OrganizationLogoRecord?> CreateOrgLogoAsync(Guid orgId, CmsCreateLogoRequest request, CancellationToken token = default);
@@ -164,7 +164,7 @@ public interface IBenAdminClient
 
     // ── CMS File Library ──────────────────────────────────────────────────────
 
-    /// <summary>Returns upload files shared with the given organisation (for logo/gallery selection).</summary>
+    /// <summary>Returns upload files shared with the given organization (for logo/gallery selection).</summary>
     Task<IReadOnlyList<UploadFileRecord>> GetOrgSharedFilesAsync(Guid orgId, CancellationToken token = default);
 
     /// <summary>Downloads raw file bytes + content-type for in-browser thumbnail rendering.</summary>

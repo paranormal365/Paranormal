@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.WebApi.Controllers.Cms;
 
-/// <summary>Manage logos associated with an organisation.</summary>
+/// <summary>Manage logos associated with an organization.</summary>
 [Route("api/organizations/{orgId:guid}/logos")]
 public sealed class OrganizationLogoController : OrgCmsControllerBase
 {

@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.WebApi.Controllers.Cms;
 
-/// <summary>CRUD and reorder for sections within an organisation CMS page.</summary>
+/// <summary>CRUD and reorder for sections within an organization CMS page.</summary>
 [Route("api/organizations/{orgId:guid}/pages/{pageId:guid}/sections")]
 public sealed class CmsSectionController : OrgCmsControllerBase
 {

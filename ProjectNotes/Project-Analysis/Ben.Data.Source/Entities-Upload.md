@@ -73,7 +73,7 @@ Patterns are stored lowercase and support exact match (`.txt`) or suffix wildcar
 **Table:** `UploadFiles`
 
 ### Summary
-Stores the actual file binary alongside metadata. Files can be shared with organisations and have permission requests submitted against them.
+Stores the actual file binary alongside metadata. Files can be shared with organizations and have permission requests submitted against them.
 
 ### Properties
 
@@ -103,7 +103,7 @@ Stores the actual file binary alongside metadata. Files can be shared with organ
 **Unique index:** `(UploadFileId, OrganizationId)`
 
 ### Summary
-Records a file being shared with an organisation, controlling who within that organisation can see it.
+Records a file being shared with an organization, controlling who within that organization can see it.
 
 ### Properties
 

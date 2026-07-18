@@ -101,7 +101,7 @@ Defines all SuperAdmin HTTP operations available to library Blazor components.
 | `ReorderCmsSectionsAsync(orgId, pageId, orderedIds, token)` | `bool` | Sets `SortOrder` per the ordered list. Uses `PutVoidAsync`. |
 | `DeleteCmsSectionAsync(orgId, pageId, sectionId, token)` | `bool` | Removes a section. |
 
-### Organisation Logo Methods *(added 2026-07-18)*
+### Organization Logo Methods *(added 2026-07-18)*
 
 | Method | Returns | Description |
 |---|---|---|

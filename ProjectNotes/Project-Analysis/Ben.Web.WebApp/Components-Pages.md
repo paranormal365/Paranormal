@@ -21,12 +21,12 @@ Login form that calls `IWebApiAuthService.LoginAsync`.
 **Route:** `/organization-security`  
 **File:** [`Ben.Web.WebApp/Components/Pages/OrganizationSecurity.razor`](../../../Ben.Web.WebApp/Components/Pages/OrganizationSecurity.razor)
 
-Developer/test page for exercising organisation security features.
+Developer/test page for exercising organization security features.
 
 **Sections:**
-- Register organisation (calls `RegisterOrganizationAsync`)
+- Register organization (calls `RegisterOrganizationAsync`)
 - Check my access (calls `CheckMyOrganizationAccessAsync` with table + action selectors)
-- Load organisation users (calls `GetOrganizationUsersAsync`)
+- Load organization users (calls `GetOrganizationUsersAsync`)
 - User search (calls `SearchUsersAsync`, populates target-user dropdown)
 - Update membership (role dropdown → calls `UpsertOrganizationMembershipAsync`)
 - Set access grant (table/action/allowed → calls `SetOrganizationGrantAsync`)
@@ -47,7 +47,7 @@ File management page.
 - Download file (`GetAsync` stream → browser download)
 - Update file metadata (description, public flag)
 - Delete file
-- Share file with organisation
+- Share file with organization
 - Submit permission request
 
 ---
@@ -118,7 +118,7 @@ The application shell. All pages render inside this layout.
 
 **Navigation drawer** (left side):
 - Home, Counter, Weather (placeholder pages)
-- Organisation Security page
+- Organization Security page
 
 ---
 

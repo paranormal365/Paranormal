@@ -137,7 +137,7 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteCmsSectionAsync(Guid orgId, Guid pageId, Guid sectionId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/pages/{pageId}/sections/{sectionId}", token);
 
-    // ── Organisation Logos ────────────────────────────────────────────────────
+    // ── Organization Logos ────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<OrganizationLogoRecord>> GetOrgLogosAsync(Guid orgId, CancellationToken token = default)
     {

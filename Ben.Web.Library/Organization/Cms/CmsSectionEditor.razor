@@ -41,7 +41,7 @@ else if (SectionType == CmsSectionType.ImageBanner)
 else if (SectionType == CmsSectionType.ContactInfo)
 {
     <div class="row g-2 mt-1">
-        <p class="col-12 mb-1 fw-semibold">Show organisation contact info:</p>
+        <p class="col-12 mb-1 fw-semibold">Show organization contact info:</p>
         <div class="col-6 d-flex align-items-center gap-2">
             <TelerikCheckBox Value="@_contactShowAddresses"
                              ValueChanged="@((bool v) => { _contactShowAddresses = v; PushContactJson(); })"

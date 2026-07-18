@@ -44,8 +44,8 @@ Add your secrets to `appsettings.Development.json` (see [WebApp-WebApi Integrati
 
 ## 📋 Daily Logs
 
-### [2026-07-18](./ProjectNotes/DailyLogs/2026-07-18.md) — Organisation CMS, Tests, Telerik API Fixes
-**Summary:** Designed and built the full Organisation CMS feature — data model (5 new entities + migration), API layer (5 controllers), Blazor UI (`OrgCmsEditor`, `OrgCmsPageEdit`, `CmsSectionEditor`, `CmsFileThumbnail`), logo thumbnail gallery with file upload, and 66 new tests. Fixed Telerik 14.x `TelerikTabStrip`/`TelerikWindow` API changes. 348 tests, 0 errors.
+### [2026-07-18](./ProjectNotes/DailyLogs/2026-07-18.md) — Organization CMS, Tests, Telerik API Fixes
+**Summary:** Designed and built the full Organization CMS feature — data model (5 new entities + migration), API layer (5 controllers), Blazor UI (`OrgCmsEditor`, `OrgCmsPageEdit`, `CmsSectionEditor`, `CmsFileThumbnail`), logo thumbnail gallery with file upload, and 66 new tests. Fixed Telerik 14.x `TelerikTabStrip`/`TelerikWindow` API changes. 348 tests, 0 errors.
 
 **Key Accomplishments:**
 - CMS data model: ✅ `OrganizationLogo`, `CmsSection`, `OrgMemberGroup`, `OrgMemberGroupMembership`, `CmsPagePermission` + migration `20260718122428_AddCmsEntities`

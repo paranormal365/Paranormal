@@ -5,9 +5,9 @@
 
 ## Purpose
 
-Provides the **organisation-level security enforcement layer** — the middleware attribute, permission-checking service, and the security-layer `OrganizationSecurityTable` enum.
+Provides the **organization-level security enforcement layer** — the middleware attribute, permission-checking service, and the security-layer `OrganizationSecurityTable` enum.
 
-This project is the **policy enforcement point**: it determines whether an incoming request has sufficient permissions for a given entity operation within an organisation.
+This project is the **policy enforcement point**: it determines whether an incoming request has sufficient permissions for a given entity operation within an organization.
 
 > `OrganizationSecurityAction` was previously defined here as a `[Flags]` enum. It has been consolidated into `Ben.Data.Common.Enums` and is imported via a `global using` alias.
 

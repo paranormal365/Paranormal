@@ -84,7 +84,7 @@ All requests automatically include the bearer token via `WebApiBearerTokenHandle
 | Method | Endpoint | Description |
 |---|---|---|
 | `GetUsersAsync` | `GET /api/users` | All users. |
-| `GetMyOrganizationsAsync` | `GET /api/security/organizations/mine` | Caller's organisations. |
+| `GetMyOrganizationsAsync` | `GET /api/security/organizations/mine` | Caller's organizations. |
 | `SearchUsersAsync` | `GET /api/security/organizations/users/search` | Scoped user search. |
 | `RegisterOrganizationAsync` | `POST /api/security/organizations/register` | Create org. |
 | `GetUploadFileTypesAsync` | `GET /api/upload-file-types` | Available file type categories. |

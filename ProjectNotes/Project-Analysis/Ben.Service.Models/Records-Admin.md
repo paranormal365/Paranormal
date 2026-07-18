@@ -45,7 +45,7 @@ Allows a single API call to populate the full user detail page in the SuperAdmin
 | `Links` | `IReadOnlyList<UserLinkAdminRecord>` | All user web links |
 | `Notes` | `IReadOnlyList<UserNoteAdminRecord>` | All user notes |
 | `Messages` | `IReadOnlyList<UserMessageAdminRecord>` | Messages sent by the user |
-| `Memberships` | `IReadOnlyList<OrganizationUserMembershipAdminRecord>` | Organisation memberships |
+| `Memberships` | `IReadOnlyList<OrganizationUserMembershipAdminRecord>` | Organization memberships |
 | `UploadFiles` | `IReadOnlyList<UploadFileAdminRecord>` | Files uploaded by the user |
 
 ---
@@ -55,9 +55,9 @@ Allows a single API call to populate the full user detail page in the SuperAdmin
 | Property | Type | Description |
 |---|---|---|
 | `Id` | `Guid` | Membership PK |
-| `OrganizationId` | `Guid` | FK → Organisation |
+| `OrganizationId` | `Guid` | FK → Organization |
 | `AppUserId` | `Guid` | FK → AppUser |
-| `Role` | [`OrganizationMemberRole`](../Ben.Data.Common/Enums.md#organizationmemberrole) | User's role in the organisation |
+| `Role` | [`OrganizationMemberRole`](../Ben.Data.Common/Enums.md#organizationmemberrole) | User's role in the organization |
 | `IsActive` | `bool` | Active membership flag |
 | `DateCreated` | `DateTime` | |
 | `DateUpdated` | `DateTime?` | |

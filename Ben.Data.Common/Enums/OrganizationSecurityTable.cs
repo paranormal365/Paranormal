@@ -2,12 +2,12 @@ namespace Ben.Data.Common.Enums;
 
 /// <summary>
 /// Identifies a logical database table for which per-user access grants can be
-/// configured within an organisation via <c>OrganizationAccessGrant</c>.
+/// configured within an organization via <c>OrganizationAccessGrant</c>.
 /// </summary>
 /// <remarks>
 /// Each value corresponds to a table in the BenDb database.  When an active
 /// <c>OrganizationAccessGrant</c> row exists for a user/table/<see cref="OrganizationSecurityAction"/>
-/// combination, that operation is permitted for the user within that organisation.
+/// combination, that operation is permitted for the user within that organization.
 /// <para>
 /// A parallel enum exists at <c>Ben.Service.Security.Enums.OrganizationSecurityTable</c>
 /// with different integer values; a cast mapping is applied inside

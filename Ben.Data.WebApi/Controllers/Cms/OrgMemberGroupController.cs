@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.WebApi.Controllers.Cms;
 
-/// <summary>CRUD for organisation member groups used in CMS page permission grants.</summary>
+/// <summary>CRUD for organization member groups used in CMS page permission grants.</summary>
 [Route("api/organizations/{orgId:guid}/groups")]
 public sealed class OrgMemberGroupController : OrgCmsControllerBase
 {
@@ -151,7 +151,7 @@ public sealed class OrgMemberGroupController : OrgCmsControllerBase
         // Verify the membership belongs to this org
         if (!await db.OrganizationUserMemberships.AnyAsync(
                 m => m.Id == request.OrganizationUserMembershipId && m.OrganizationId == orgId, ct))
-            return BadRequest("OrganizationUserMembership not found in this organisation.");
+            return BadRequest("OrganizationUserMembership not found in this organization.");
 
         // Prevent duplicate
         if (await db.OrgMemberGroupMemberships.AnyAsync(
