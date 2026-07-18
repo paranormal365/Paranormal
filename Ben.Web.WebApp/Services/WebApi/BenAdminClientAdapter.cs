@@ -154,6 +154,146 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/logos/{logoId}", token);
 
+    // ── User sub-entity type lists ────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<UserAddressTypeRecord>> GetUserAddressTypesAsync(CancellationToken token = default)
+        => (await _api.GetAsync<List<UserAddressTypeRecord>>("/api/user-address-types", token)) ?? [];
+    public async Task<IReadOnlyList<UserEmailTypeRecord>> GetUserEmailTypesAsync(CancellationToken token = default)
+        => (await _api.GetAsync<List<UserEmailTypeRecord>>("/api/user-email-types", token)) ?? [];
+    public async Task<IReadOnlyList<UserPhoneTypeRecord>> GetUserPhoneTypesAsync(CancellationToken token = default)
+        => (await _api.GetAsync<List<UserPhoneTypeRecord>>("/api/user-phone-types", token)) ?? [];
+    public async Task<IReadOnlyList<UserLinkTypeRecord>> GetUserLinkTypesAsync(CancellationToken token = default)
+        => (await _api.GetAsync<List<UserLinkTypeRecord>>("/api/user-link-types", token)) ?? [];
+    public async Task<IReadOnlyList<UserNoteTypeRecord>> GetUserNoteTypesAsync(CancellationToken token = default)
+        => (await _api.GetAsync<List<UserNoteTypeRecord>>("/api/user-note-types", token)) ?? [];
+
+    // ── User sub-entity type creation ─────────────────────────────────────────
+
+    public async Task<bool> CreateUserAddressTypeAsync(string name, CancellationToken token = default)
+        => (await _api.PostAsync<object, object>("/api/admin/user-address-types", new { Name = name, DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.Empty }, token)) is not null;
+    public async Task<bool> CreateUserEmailTypeAsync(string name, CancellationToken token = default)
+        => (await _api.PostAsync<object, object>("/api/admin/user-email-types", new { Name = name, DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.Empty }, token)) is not null;
+    public async Task<bool> CreateUserPhoneTypeAsync(string name, CancellationToken token = default)
+        => (await _api.PostAsync<object, object>("/api/admin/user-phone-types", new { Name = name, DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.Empty }, token)) is not null;
+    public async Task<bool> CreateUserLinkTypeAsync(string name, CancellationToken token = default)
+        => (await _api.PostAsync<object, object>("/api/admin/user-link-types", new { Name = name, DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.Empty }, token)) is not null;
+    public async Task<bool> CreateUserNoteTypeAsync(string name, CancellationToken token = default)
+        => (await _api.PostAsync<object, object>("/api/admin/user-note-types", new { Name = name, DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.Empty }, token)) is not null;
+
+    // ── User Addresses CRUD ───────────────────────────────────────────────────
+
+    public async Task<bool> CreateUserAddressAsync(Guid userId, Guid actorId, UserAddressUpsertRequest req, CancellationToken token = default)
+        => (await _api.PostAsync<object, object>("/api/admin/user-addresses", new {
+            AppUserId = userId, UserAddressTypeId = req.UserAddressTypeId,
+            StreetAddress1 = req.StreetAddress1, StreetAddress2 = req.StreetAddress2,
+            City = req.City, State = req.State, ZipCode = req.ZipCode, Country = req.Country,
+            IsPublic = req.IsPublic, SortOrder = req.SortOrder,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = actorId
+        }, token)) is not null;
+
+    public async Task<bool> UpdateUserAddressAsync(Guid id, Guid userId, Guid actorId, UserAddressUpsertRequest req, CancellationToken token = default)
+        => (await _api.PutAsync<object, object>($"/api/admin/user-addresses/{id}", new {
+            Id = id, AppUserId = userId, UserAddressTypeId = req.UserAddressTypeId,
+            StreetAddress1 = req.StreetAddress1, StreetAddress2 = req.StreetAddress2,
+            City = req.City, State = req.State, ZipCode = req.ZipCode, Country = req.Country,
+            IsPublic = req.IsPublic, SortOrder = req.SortOrder,
+            DateCreated = DateTime.UtcNow, UpdatedByAppUserId = actorId
+        }, token)) is not null;
+
+    public Task<bool> DeleteUserAddressAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/admin/user-addresses/{id}", token);
+
+    // ── User Emails CRUD ──────────────────────────────────────────────────────
+
+    public async Task<bool> CreateUserEmailAsync(Guid userId, Guid actorId, UserEmailUpsertRequest req, CancellationToken token = default)
+        => (await _api.PostAsync<object, object>("/api/admin/user-emails", new {
+            AppUserId = userId, UserEmailTypeId = req.UserEmailTypeId,
+            EmailAddress = req.EmailAddress, IsPrimary = req.IsPrimary, IsPublic = req.IsPublic,
+            IsHidden = false, IsValidated = false, ValidationToken = string.Empty, SortOrder = req.SortOrder,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = actorId
+        }, token)) is not null;
+
+    public async Task<bool> UpdateUserEmailAsync(Guid id, Guid userId, Guid actorId, UserEmailUpsertRequest req, CancellationToken token = default)
+        => (await _api.PutAsync<object, object>($"/api/admin/user-emails/{id}", new {
+            Id = id, AppUserId = userId, UserEmailTypeId = req.UserEmailTypeId,
+            EmailAddress = req.EmailAddress, IsPrimary = req.IsPrimary, IsPublic = req.IsPublic,
+            IsHidden = false, IsValidated = false, ValidationToken = string.Empty, SortOrder = req.SortOrder,
+            DateCreated = DateTime.UtcNow, UpdatedByAppUserId = actorId
+        }, token)) is not null;
+
+    public Task<bool> DeleteUserEmailAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/admin/user-emails/{id}", token);
+
+    // ── User Phones CRUD ──────────────────────────────────────────────────────
+
+    public async Task<bool> CreateUserPhoneAsync(Guid userId, Guid actorId, UserPhoneUpsertRequest req, CancellationToken token = default)
+        => (await _api.PostAsync<object, object>("/api/admin/user-phones", new {
+            AppUserId = userId, UserPhoneTypeId = req.UserPhoneTypeId,
+            PhoneNumber = req.PhoneNumber, PhoneCountry = req.PhoneCountry,
+            IsPrimary = req.IsPrimary, IsCellular = req.IsCellular, IsPublic = req.IsPublic,
+            IsValidated = false, ValidationToken = string.Empty,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = actorId
+        }, token)) is not null;
+
+    public async Task<bool> UpdateUserPhoneAsync(Guid id, Guid userId, Guid actorId, UserPhoneUpsertRequest req, CancellationToken token = default)
+        => (await _api.PutAsync<object, object>($"/api/admin/user-phones/{id}", new {
+            Id = id, AppUserId = userId, UserPhoneTypeId = req.UserPhoneTypeId,
+            PhoneNumber = req.PhoneNumber, PhoneCountry = req.PhoneCountry,
+            IsPrimary = req.IsPrimary, IsCellular = req.IsCellular, IsPublic = req.IsPublic,
+            IsValidated = false, ValidationToken = string.Empty,
+            DateCreated = DateTime.UtcNow, UpdatedByAppUserId = actorId
+        }, token)) is not null;
+
+    public Task<bool> DeleteUserPhoneAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/admin/user-phones/{id}", token);
+
+    // ── User Links CRUD ───────────────────────────────────────────────────────
+
+    public async Task<bool> CreateUserLinkAsync(Guid userId, Guid actorId, UserLinkUpsertRequest req, CancellationToken token = default)
+        => (await _api.PostAsync<object, object>("/api/admin/user-links", new {
+            AppUserId = userId, UserLinkTypeId = req.UserLinkTypeId,
+            LinkUrl = req.LinkUrl, DisplayText = req.DisplayText,
+            IsPublic = req.IsPublic, IsActive = req.IsActive,
+            IsVerifiedApproved = false,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = actorId
+        }, token)) is not null;
+
+    public async Task<bool> UpdateUserLinkAsync(Guid id, Guid userId, Guid actorId, UserLinkUpsertRequest req, CancellationToken token = default)
+        => (await _api.PutAsync<object, object>($"/api/admin/user-links/{id}", new {
+            Id = id, AppUserId = userId, UserLinkTypeId = req.UserLinkTypeId,
+            LinkUrl = req.LinkUrl, DisplayText = req.DisplayText,
+            IsPublic = req.IsPublic, IsActive = req.IsActive,
+            IsVerifiedApproved = false,
+            DateCreated = DateTime.UtcNow, UpdatedByAppUserId = actorId
+        }, token)) is not null;
+
+    public Task<bool> DeleteUserLinkAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/admin/user-links/{id}", token);
+
+    // ── User Notes CRUD ───────────────────────────────────────────────────────
+
+    public async Task<bool> CreateUserNoteAsync(Guid userId, Guid actorId, UserNoteUpsertRequest req, CancellationToken token = default)
+        => (await _api.PostAsync<object, object>("/api/admin/user-notes", new {
+            CreatedByAppUserId = actorId, UserNoteTypeId = req.UserNoteTypeId,
+            NoteSubject = req.NoteSubject, NoteBody = req.NoteBody, IsPublic = req.IsPublic,
+            DateCreated = DateTime.UtcNow
+        }, token)) is not null;
+
+    public async Task<bool> UpdateUserNoteAsync(Guid id, Guid userId, Guid actorId, UserNoteUpsertRequest req, CancellationToken token = default)
+        => (await _api.PutAsync<object, object>($"/api/admin/user-notes/{id}", new {
+            Id = id, CreatedByAppUserId = userId, UserNoteTypeId = req.UserNoteTypeId,
+            NoteSubject = req.NoteSubject, NoteBody = req.NoteBody, IsPublic = req.IsPublic,
+            DateCreated = DateTime.UtcNow, UpdatedByAppUserId = actorId
+        }, token)) is not null;
+
+    public Task<bool> DeleteUserNoteAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/admin/user-notes/{id}", token);
+
+    // ── File admin delete ─────────────────────────────────────────────────────
+
+    public Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/admin/upload-files/{id}", token);
+
     // ── CMS File Library ──────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<UploadFileRecord>> GetOrgSharedFilesAsync(Guid orgId, CancellationToken token = default)

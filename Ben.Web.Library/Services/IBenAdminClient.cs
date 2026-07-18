@@ -162,6 +162,45 @@ public interface IBenAdminClient
     Task<OrganizationLogoRecord?> UpdateOrgLogoAsync(Guid orgId, Guid logoId, CmsUpdateLogoRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default);
 
+    // ── User sub-entity type lists (for dropdowns) ────────────────────────────
+
+    Task<IReadOnlyList<UserAddressTypeRecord>> GetUserAddressTypesAsync(CancellationToken token = default);
+    Task<IReadOnlyList<UserEmailTypeRecord>> GetUserEmailTypesAsync(CancellationToken token = default);
+    Task<IReadOnlyList<UserPhoneTypeRecord>> GetUserPhoneTypesAsync(CancellationToken token = default);
+    Task<IReadOnlyList<UserLinkTypeRecord>> GetUserLinkTypesAsync(CancellationToken token = default);
+    Task<IReadOnlyList<UserNoteTypeRecord>> GetUserNoteTypesAsync(CancellationToken token = default);
+
+    // Type management (SuperAdmin creates new types)
+    Task<bool> CreateUserAddressTypeAsync(string name, CancellationToken token = default);
+    Task<bool> CreateUserEmailTypeAsync(string name, CancellationToken token = default);
+    Task<bool> CreateUserPhoneTypeAsync(string name, CancellationToken token = default);
+    Task<bool> CreateUserLinkTypeAsync(string name, CancellationToken token = default);
+    Task<bool> CreateUserNoteTypeAsync(string name, CancellationToken token = default);
+
+    // ── User sub-entity CRUD (SuperAdmin) ─────────────────────────────────────
+
+    Task<bool> CreateUserAddressAsync(Guid userId, Guid actorId, UserAddressUpsertRequest req, CancellationToken token = default);
+    Task<bool> UpdateUserAddressAsync(Guid id, Guid userId, Guid actorId, UserAddressUpsertRequest req, CancellationToken token = default);
+    Task<bool> DeleteUserAddressAsync(Guid id, CancellationToken token = default);
+
+    Task<bool> CreateUserEmailAsync(Guid userId, Guid actorId, UserEmailUpsertRequest req, CancellationToken token = default);
+    Task<bool> UpdateUserEmailAsync(Guid id, Guid userId, Guid actorId, UserEmailUpsertRequest req, CancellationToken token = default);
+    Task<bool> DeleteUserEmailAsync(Guid id, CancellationToken token = default);
+
+    Task<bool> CreateUserPhoneAsync(Guid userId, Guid actorId, UserPhoneUpsertRequest req, CancellationToken token = default);
+    Task<bool> UpdateUserPhoneAsync(Guid id, Guid userId, Guid actorId, UserPhoneUpsertRequest req, CancellationToken token = default);
+    Task<bool> DeleteUserPhoneAsync(Guid id, CancellationToken token = default);
+
+    Task<bool> CreateUserLinkAsync(Guid userId, Guid actorId, UserLinkUpsertRequest req, CancellationToken token = default);
+    Task<bool> UpdateUserLinkAsync(Guid id, Guid userId, Guid actorId, UserLinkUpsertRequest req, CancellationToken token = default);
+    Task<bool> DeleteUserLinkAsync(Guid id, CancellationToken token = default);
+
+    Task<bool> CreateUserNoteAsync(Guid userId, Guid actorId, UserNoteUpsertRequest req, CancellationToken token = default);
+    Task<bool> UpdateUserNoteAsync(Guid id, Guid userId, Guid actorId, UserNoteUpsertRequest req, CancellationToken token = default);
+    Task<bool> DeleteUserNoteAsync(Guid id, CancellationToken token = default);
+
+    Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default);
+
     // ── CMS File Library ──────────────────────────────────────────────────────
 
     /// <summary>Returns upload files shared with the given organization (for logo/gallery selection).</summary>
@@ -303,3 +342,44 @@ public sealed record CmsCreateSectionRequest(CmsSectionType SectionType, string?
 public sealed record CmsUpdateSectionRequest(string? Title, string ContentJson, bool IsActive);
 public sealed record CmsCreateLogoRequest(Guid UploadFileId, string? AltText, bool IsActive, int SortOrder);
 public sealed record CmsUpdateLogoRequest(string? AltText, bool IsActive, int SortOrder);
+
+// ── User sub-entity request records ──────────────────────────────────────────
+
+public sealed record UserAddressUpsertRequest(
+    Guid UserAddressTypeId,
+    string StreetAddress1,
+    string? StreetAddress2,
+    string City,
+    string State,
+    string ZipCode,
+    string Country,
+    bool IsPublic,
+    int SortOrder = 0);
+
+public sealed record UserEmailUpsertRequest(
+    Guid UserEmailTypeId,
+    string EmailAddress,
+    bool IsPrimary,
+    bool IsPublic,
+    int SortOrder = 0);
+
+public sealed record UserPhoneUpsertRequest(
+    Guid UserPhoneTypeId,
+    string PhoneNumber,
+    string? PhoneCountry,
+    bool IsPrimary,
+    bool IsCellular,
+    bool IsPublic);
+
+public sealed record UserLinkUpsertRequest(
+    Guid UserLinkTypeId,
+    string LinkUrl,
+    string? DisplayText,
+    bool IsPublic,
+    bool IsActive);
+
+public sealed record UserNoteUpsertRequest(
+    Guid UserNoteTypeId,
+    string NoteSubject,
+    string NoteBody,
+    bool IsPublic);
