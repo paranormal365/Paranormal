@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Ben.Data.WebApi.Controllers.Entities;
 
 [ApiController]
-[Authorize(Roles = RoleNames.SuperAdmin)]
+[Authorize(Policy = RoleNames.SuperAdmin)]
 [Route("api/admin/upload-file-type-extensions")]
 public sealed class AdminUploadFileTypeExtensionController : ControllerBase
 {

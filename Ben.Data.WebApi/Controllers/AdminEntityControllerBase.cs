@@ -10,7 +10,7 @@ using System.Security.Claims;
 namespace Ben.Data.WebApi.Controllers;
 
 [ApiController]
-[Authorize(Roles = RoleNames.SuperAdmin)]
+[Authorize(Policy = RoleNames.SuperAdmin)]
 public abstract class AdminEntityControllerBase<TEntity, TRecord> : ControllerBase
     where TEntity : class
 {
