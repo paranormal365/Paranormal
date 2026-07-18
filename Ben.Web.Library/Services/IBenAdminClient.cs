@@ -215,6 +215,16 @@ public interface IBenAdminClient
     /// <summary>Uploads an image file and returns its record. Used to add a logo from device.</summary>
     Task<UploadFileRecord?> UploadImageAsync(Guid fileTypeId, Guid userId, string fileName, string contentType, byte[] data, CancellationToken token = default);
 
+    /// <summary>
+    /// Uploads any file (audio, document, image, etc.) for a specific user.
+    /// Use when the caller controls the description and public-visibility flag.
+    /// </summary>
+    Task<UploadFileRecord?> UploadUserFileAsync(
+        Guid fileTypeId, Guid userId,
+        string fileName, string contentType, byte[] data,
+        string? description = null, bool isPublic = false,
+        CancellationToken token = default);
+
     // ── Audio Config ─────────────────────────────────────────────────────
 
     /// <summary>

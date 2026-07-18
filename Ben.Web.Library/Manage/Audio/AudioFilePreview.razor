@@ -1,0 +1,246 @@
+@*
+  AudioFilePreview.razor
+  ──────────────────────
+  Compact waveform player used in the Files tab of AdminUserDetail.
+
+  • Fetches audio bytes on first render and shows an 80 px WaveSurfer waveform.
+  • Shows a ▶ overlay when paused; clicking anywhere on the waveform toggles play/pause.
+  • Right-clicking shows a TelerikContextMenu: Play, Pause, Rewind, Open Full View.
+  • "Open Full View" opens a TelerikWindow with file info + full-featured WaveSurfer
+    (Timeline, Hover, Zoom, Spectrogram, Regions, built-in controls).
+*@
+
+@namespace Ben.Web.Library.Manage.Audio
+@inject IBenAdminClient AdminClient
+
+@if (_loading)
+{
+    <div style="height:80px;display:flex;align-items:center;justify-content:center;">
+        <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
+    </div>
+}
+else if (_source is null)
+{
+    <span class="badge bg-secondary text-truncate" style="max-width:120px;" title="@FileName">@FileName</span>
+}
+else
+{
+    @* ── Compact waveform — click to play/pause, right-click for menu ── *@
+    <div id="@_wrapperId"
+         style="position:relative;cursor:pointer;border-radius:4px;overflow:hidden;"
+         @onclick="TogglePlayAsync"
+         @oncontextmenu="ShowContextMenuAsync"
+         @oncontextmenu:preventDefault="true"
+         title="@(!_playing ? "Click to play" : "Click to pause")">
+
+        @* Play icon overlay — shown when paused and waveform is ready *@
+        @if (!_playing && _ready)
+        {
+            <div style="position:absolute;inset:0;display:flex;align-items:center;
+                        justify-content:center;z-index:2;pointer-events:none;
+                        background:rgba(0,0,0,.18);border-radius:4px;">
+                <span style="font-size:1.6rem;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.7);">▶</span>
+            </div>
+        }
+
+        <WaveSurferPlayer @ref="_player"
+                          Config="@_compactConfig"
+                          OnReady="@(() => { _ready = true; StateHasChanged(); })"
+                          OnPlay="@(() => { _playing = true; StateHasChanged(); })"
+                          OnPause="@(() => { _playing = false; StateHasChanged(); })"
+                          OnFinish="@(() => { _playing = false; StateHasChanged(); })"
+                          OnTimeUpdate="@(t => _currentTime = t)" />
+    </div>
+}
+
+@* ── Context menu ────────────────────────────────────────────────────────── *@
+<TelerikContextMenu @ref="_contextMenu"
+                    Data="@_menuItems"
+                    TextField="@nameof(AudioContextMenuItem.Text)"
+                    OnClick="@(async (AudioContextMenuItem item) => await OnMenuClickAsync(item))">
+</TelerikContextMenu>
+
+@* ── Full-view window ────────────────────────────────────────────────────── *@
+<TelerikWindow @bind-Visible="@_showModal"
+               Width="92vw"
+               Height="88vh"
+               Modal="true"
+               Centered="true">
+    <WindowTitle>@FileName</WindowTitle>
+    <WindowActions>
+        <WindowAction Name="Close" />
+    </WindowActions>
+    <WindowContent>
+        @if (_showModal && _source is not null)
+        {
+            @* File info bar *@
+            <div class="d-flex flex-wrap gap-4 mb-3 p-2 rounded"
+                 style="background:var(--kendo-color-surface,#f5f5f5);font-size:.875rem;">
+                <span><strong>Size:</strong>@(" ")@FormatSize(FileSize)</span>
+                <span><strong>Type:</strong>@(" ")@ContentType</span>
+                <span><strong>Duration:</strong>@(" ")@FormatTime(_modalDuration)</span>
+                <span><strong>Position:</strong>@(" ")@FormatTime(_modalTime)</span>
+            </div>
+
+            @* Full WaveSurfer player *@
+            <WaveSurferPlayer @ref="_modalPlayer"
+                              Config="@_fullConfig"
+                              OnReady="@OnModalReadyAsync"
+                              OnTimeUpdate="@(t => { _modalTime = t; StateHasChanged(); })"
+                              OnFinish="@(() => { _modalTime = 0; StateHasChanged(); })" />
+        }
+    </WindowContent>
+</TelerikWindow>
+
+@code {
+    // ── Parameters ────────────────────────────────────────────────────────────
+
+    [Parameter, EditorRequired] public Guid   FileId      { get; set; }
+    [Parameter, EditorRequired] public string FileName    { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string ContentType { get; set; } = string.Empty;
+    [Parameter]                 public long   FileSize    { get; set; }
+
+    // ── State ─────────────────────────────────────────────────────────────────
+
+    private WsAudioSource? _source;
+    private bool   _loading = true;
+    private bool   _ready;
+    private bool   _playing;
+    private double _currentTime;
+    private double _modalTime;
+    private double _modalDuration;
+    private bool   _showModal;
+
+    private WaveSurferPlayer?                          _player;
+    private WaveSurferPlayer?                          _modalPlayer;
+    private TelerikContextMenu<AudioContextMenuItem>?  _contextMenu;
+
+    private readonly string _wrapperId = $"afp-{Guid.NewGuid():N}";
+
+    // ── Context menu items ────────────────────────────────────────────────────
+
+    private static readonly List<AudioContextMenuItem> _menuItems =
+    [
+        new("play",     "▶  Play"),
+        new("pause",    "⏸  Pause"),
+        new("rewind",   "⏮  Rewind"),
+        new("fullview", "⤢  Open Full View"),
+    ];
+
+    // ── WsConfig objects ──────────────────────────────────────────────────────
+
+    private WsConfig _compactConfig => new()
+    {
+        Source  = _source,
+        Options = new WsOptions { Interact = false, Normalize = true },
+        Plugins = new WsPluginConfig { Hover = true },
+        InitialHeight = "80px",
+        MinHeight     = "80px",
+        MaxHeight     = "80px",
+        ShowControls  = false,
+    };
+
+    private WsConfig _fullConfig => new()
+    {
+        Source  = _source,
+        Options = new WsOptions { Normalize = true },
+        Plugins = new WsPluginConfig
+        {
+            Hover       = true,
+            Timeline    = true,
+            Zoom        = true,
+            Spectrogram = true,
+            Regions     = true,
+        },
+        InitialHeight = "280px",
+        MinHeight     = "120px",
+        MaxHeight     = "600px",
+        ShowControls  = true,
+    };
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var result = await AdminClient.GetFileDataAsync(FileId);
+        if (result is not null)
+            _source = WsAudioSource.FromBytes(result.Value.Data, result.Value.ContentType);
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    // ── Player event handlers ─────────────────────────────────────────────────
+
+    private Task OnModalReadyAsync()
+    {
+        _modalDuration = _modalPlayer?.Duration ?? 0;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    // ── Waveform click → toggle play/pause ────────────────────────────────────
+
+    private async Task TogglePlayAsync()
+    {
+        if (_player is null) return;
+        await _player.PlayPauseAsync();
+    }
+
+    // ── Context menu ──────────────────────────────────────────────────────────
+
+    private async Task ShowContextMenuAsync(MouseEventArgs e)
+    {
+        if (_contextMenu is null) return;
+        await _contextMenu.ShowAsync(e.ClientX, e.ClientY);
+    }
+
+    private async Task OnMenuClickAsync(AudioContextMenuItem item)
+    {
+        switch (item.Action)
+        {
+            case "play":
+                if (_player is not null) await _player.PlayAsync();
+                break;
+            case "pause":
+                if (_player is not null) await _player.PauseAsync();
+                break;
+            case "rewind":
+                if (_player is not null) await _player.StopAsync();
+                _currentTime = 0;
+                break;
+            case "fullview":
+                if (_playing && _player is not null)
+                    await _player.PauseAsync();
+                _modalTime     = 0;
+                _modalDuration = 0;
+                _showModal     = true;
+                StateHasChanged();
+                break;
+        }
+    }
+
+    // ── Formatting helpers ────────────────────────────────────────────────────
+
+    private static string FormatTime(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.TotalHours >= 1
+            ? ts.ToString(@"h\:mm\:ss\.f")
+            : ts.ToString(@"m\:ss\.f");
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes >= 1_073_741_824) return $"{bytes / 1_073_741_824.0:F2} GB  ({bytes:N0} bytes)";
+        if (bytes >= 1_048_576)     return $"{bytes / 1_048_576.0:F2} MB  ({bytes:N0} bytes)";
+        if (bytes >= 1_024)         return $"{bytes / 1_024.0:F2} KB  ({bytes:N0} bytes)";
+        return $"{bytes} bytes";
+    }
+
+    // ── Menu item record ──────────────────────────────────────────────────────
+
+    private sealed record AudioContextMenuItem(string Action, string Text);
+}

@@ -6,15 +6,23 @@ using Microsoft.EntityFrameworkCore;
 namespace Ben.Data.WebApi.SeedData;
 
 /// <summary>
-/// Seeds a built-in "Logo" upload file type restricted to common image formats.
+/// Seeds built-in upload file types: "Logo" (images) and "Audio" (WaveSurfer-playable audio).
 /// Idempotent — safe to run on every startup.
 /// </summary>
 internal static class UploadFileTypeSeeder
 {
-    internal const string LogoFileTypeName = "Logo";
+    internal const string LogoFileTypeName  = "Logo";
+    internal const string AudioFileTypeName = "Audio";
 
     private static readonly string[] LogoExtensions =
         [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"];
+
+    /// <summary>
+    /// Audio formats natively decoded by the Web Audio API / MediaElement backend
+    /// and supported by WaveSurfer.js v7 in all modern browsers.
+    /// </summary>
+    private static readonly string[] AudioExtensions =
+        [".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a", ".opus", ".webm"];
 
     internal static async Task SeedAsync(IServiceProvider services, IConfiguration config)
     {
@@ -26,56 +34,74 @@ internal static class UploadFileTypeSeeder
         var dbFactory   = scope.ServiceProvider.GetRequiredService<IDbContextFactory<BenDataContext>>();
 
         var owner = await userManager.FindByEmailAsync(ownerEmail);
-        if (owner is null) return; // SuperAdmin not yet seeded — skip
+        if (owner is null) return;
 
         await using var db = await dbFactory.CreateDbContextAsync();
 
-        // ── Ensure "Logo" file type exists ────────────────────────────────────
-        var logoType = await db.UploadFileTypes
-            .FirstOrDefaultAsync(t => t.Name == LogoFileTypeName);
+        await SeedFileTypeAsync(db, owner.Id,
+            name:        LogoFileTypeName,
+            description: "Organization logo images — JPEG, PNG, GIF, WebP, SVG",
+            sortOrder:   1,
+            extensions:  LogoExtensions);
 
-        if (logoType is null)
+        await SeedFileTypeAsync(db, owner.Id,
+            name:        AudioFileTypeName,
+            description: "Audio recordings displayed with the WaveSurfer waveform player — MP3, WAV, OGG, FLAC, AAC, M4A, Opus, WebM",
+            sortOrder:   2,
+            extensions:  AudioExtensions);
+    }
+
+    // ── Private helper ────────────────────────────────────────────────────────
+
+    private static async Task SeedFileTypeAsync(
+        BenDataContext db,
+        Guid           ownerId,
+        string         name,
+        string         description,
+        int            sortOrder,
+        string[]       extensions)
+    {
+        var fileType = await db.UploadFileTypes.FirstOrDefaultAsync(t => t.Name == name);
+
+        if (fileType is null)
         {
-            logoType = new UploadFileType
+            fileType = new UploadFileType
             {
                 Id                 = Guid.NewGuid(),
-                Name               = LogoFileTypeName,
-                Description        = "Organization logo images — JPEG, PNG, GIF, WebP, SVG",
+                Name               = name,
+                Description        = description,
                 IsActive           = true,
                 IsPublic           = true,
-                SortOrder          = 1,
+                SortOrder          = sortOrder,
                 AllowAllExtensions = false,
                 DateCreated        = DateTime.UtcNow,
-                CreatedByAppUserId = owner.Id
+                CreatedByAppUserId = ownerId,
             };
-            db.UploadFileTypes.Add(logoType);
+            db.UploadFileTypes.Add(fileType);
             await db.SaveChangesAsync();
         }
 
-        // ── Ensure all image extension patterns exist ─────────────────────────
-        var existingPatterns = (await db.UploadFileTypeExtensions
-            .Where(e => e.UploadFileTypeId == logoType.Id)
+        var existing = (await db.UploadFileTypeExtensions
+            .Where(e => e.UploadFileTypeId == fileType.Id)
             .Select(e => e.Pattern)
             .ToListAsync())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var added = false;
-        foreach (var ext in LogoExtensions)
+        foreach (var ext in extensions)
         {
-            if (existingPatterns.Contains(ext)) continue;
-
+            if (existing.Contains(ext)) continue;
             db.UploadFileTypeExtensions.Add(new UploadFileTypeExtension
             {
-                Id               = Guid.NewGuid(),
-                UploadFileTypeId = logoType.Id,
-                Pattern          = ext,
-                DateCreated      = DateTime.UtcNow,
-                CreatedByAppUserId = owner.Id
+                Id                 = Guid.NewGuid(),
+                UploadFileTypeId   = fileType.Id,
+                Pattern            = ext,
+                DateCreated        = DateTime.UtcNow,
+                CreatedByAppUserId = ownerId,
             });
             added = true;
         }
 
-        if (added)
-            await db.SaveChangesAsync();
+        if (added) await db.SaveChangesAsync();
     }
 }

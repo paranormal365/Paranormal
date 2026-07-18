@@ -327,6 +327,21 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         return await _api.UploadFileAsync(form, token);
     }
 
+    public async Task<UploadFileRecord?> UploadUserFileAsync(
+        Guid fileTypeId, Guid userId, string fileName, string contentType, byte[] data,
+        string? description = null, bool isPublic = false, CancellationToken token = default)
+    {
+        var form = new MultipartFormDataContent();
+        form.Add(new StringContent(fileTypeId.ToString()),             "uploadFileTypeId");
+        form.Add(new StringContent(userId.ToString()),                 "appUserId");
+        form.Add(new StringContent(description ?? string.Empty),       "description");
+        form.Add(new StringContent(isPublic ? "true" : "false"),       "isPublic");
+        var fileContent = new ByteArrayContent(data);
+        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        form.Add(fileContent, "file", fileName);
+        return await _api.UploadFileAsync(form, token);
+    }
+
     // ── Audio Config ─────────────────────────────────────────────────────
 
     public Task<UploadFileAudioConfigRecord?> GetAudioConfigAsync(Guid fileId, CancellationToken token = default)

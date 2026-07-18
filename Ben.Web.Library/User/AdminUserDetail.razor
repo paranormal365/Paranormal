@@ -5,6 +5,7 @@
 @inject NavigationManager NavManager
 
 @using System.Text.Json
+@using Ben.Web.Library.Manage.Audio
 
 <PageTitle>SuperAdmin — User Detail</PageTitle>
 
@@ -210,12 +211,26 @@ else
 
             @* ── Files ────────────────────────────────────────────────────── *@
             <TabStripTab Title=@($"Files ({_files.Count})")>
-                <TelerikGrid Data="@_files" TItem="UploadFileAdminRecord" Pageable="true" PageSize="10" Class="mt-2">
+                <div class="d-flex justify-content-end mb-2 mt-2">
+                    <TelerikButton Icon="@SvgIcon.Upload" ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                   OnClick="@OpenUploadDialog">Upload File</TelerikButton>
+                </div>
+                <TelerikGrid Data="@_files" TItem="UploadFileAdminRecord" Pageable="true" PageSize="10" Class="mt-0">
                     <GridColumns>
-                        <GridColumn Title="Preview" Width="140px">
+                        <GridColumn Title="Preview" Width="160px">
                             <Template>
                                 @{ var f = (UploadFileAdminRecord)context; }
-                                <UserMediaPreview FileId="@f.Id" ContentType="@f.ContentType" FileName="@f.FileName" />
+                                @if (IsAudioContentType(f.ContentType))
+                                {
+                                    <AudioFilePreview FileId="@f.Id"
+                                                     FileName="@f.FileName"
+                                                     ContentType="@f.ContentType"
+                                                     FileSize="@f.FileSize" />
+                                }
+                                else
+                                {
+                                    <UserMediaPreview FileId="@f.Id" ContentType="@f.ContentType" FileName="@f.FileName" />
+                                }
                             </Template>
                         </GridColumn>
                         <GridColumn Field="@nameof(UploadFileAdminRecord.FileName)" Title="File Name" />
@@ -435,6 +450,49 @@ else
     </DialogButtons>
 </TelerikDialog>
 
+@* ── Upload File dialog ───────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showUploadDialog"
+               Title="Upload File"
+               Width="520px">
+    <DialogContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">File Type <span class="text-danger">*</span></label>
+                <TelerikDropDownList Data="@_uploadFileTypes"
+                                     @bind-Value="@_uploadFileTypeId"
+                                     ValueField="@nameof(UploadFileTypeRecord.Id)"
+                                     TextField="@nameof(UploadFileTypeRecord.Name)"
+                                     Width="100%"
+                                     DefaultText="— select —" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">File <span class="text-danger">*</span></label>
+                <InputFile OnChange="@OnFileSelected" class="form-control" accept="*/*" />
+                @if (_selectedFileName is not null)
+                {
+                    <small class="text-secondary mt-1 d-block">@_selectedFileName (@FormatUploadSize(_selectedFileSize))</small>
+                }
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Description</label>
+                <TelerikTextBox @bind-Value="@_uploadDescription" Width="100%" />
+            </div>
+            <div class="col-12 d-flex align-items-center gap-2">
+                <TelerikCheckBox @bind-Value="@_uploadIsPublic" Id="upl-pub" />
+                <label for="upl-pub" class="form-label mb-0">Public</label>
+            </div>
+        </div>
+        @if (_uploadError is not null) { <div class="alert alert-danger mt-3 mb-0">@_uploadError</div> }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="@CloseUploadDialog">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" Icon="@SvgIcon.Upload"
+                       OnClick="UploadFile" Enabled="@(!_isUploading)">
+            @(_isUploading ? "Uploading…" : "Upload")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
 @code {
     [Parameter] public Guid UserId { get; set; }
 
@@ -458,6 +516,18 @@ else
     private IReadOnlyList<UserPhoneTypeRecord>   _phoneTypes   = [];
     private IReadOnlyList<UserLinkTypeRecord>    _linkTypes    = [];
     private IReadOnlyList<UserNoteTypeRecord>    _noteTypes    = [];
+
+    // Upload dialog state
+    private bool   _showUploadDialog;
+    private IReadOnlyList<UploadFileTypeRecord> _uploadFileTypes = [];
+    private Guid   _uploadFileTypeId;
+    private string? _uploadDescription;
+    private bool   _uploadIsPublic;
+    private IBrowserFile? _selectedFile;
+    private string? _selectedFileName;
+    private long   _selectedFileSize;
+    private bool   _isUploading;
+    private string? _uploadError;
 
     // Sub-entity dialog
     private bool _showSubDialog;
@@ -494,11 +564,12 @@ else
         _edit = EditModel.From(_detail.User);
 
         // Pre-load type lists for dropdowns
-        _addressTypes = await AdminClient.GetUserAddressTypesAsync();
-        _emailTypes   = await AdminClient.GetUserEmailTypesAsync();
-        _phoneTypes   = await AdminClient.GetUserPhoneTypesAsync();
-        _linkTypes    = await AdminClient.GetUserLinkTypesAsync();
-        _noteTypes    = await AdminClient.GetUserNoteTypesAsync();
+        _addressTypes    = await AdminClient.GetUserAddressTypesAsync();
+        _emailTypes      = await AdminClient.GetUserEmailTypesAsync();
+        _phoneTypes      = await AdminClient.GetUserPhoneTypesAsync();
+        _linkTypes       = await AdminClient.GetUserLinkTypesAsync();
+        _noteTypes       = await AdminClient.GetUserNoteTypesAsync();
+        _uploadFileTypes = await AdminClient.GetPublicFileTypesAsync();
 
         StateHasChanged();
     }
@@ -667,6 +738,85 @@ else
     private async Task DeleteLink(UserLinkAdminRecord r)       { if (await AdminClient.DeleteUserLinkAsync(r.Id))    await Reload(); else _errorMessage = "Delete failed."; }
     private async Task DeleteNote(UserNoteAdminRecord r)       { if (await AdminClient.DeleteUserNoteAsync(r.Id))    await Reload(); else _errorMessage = "Delete failed."; }
     private async Task DeleteFile(UploadFileAdminRecord r)     { if (await AdminClient.DeleteUploadFileAdminAsync(r.Id)) await Reload(); else _errorMessage = "Delete failed."; }
+
+    // ── Upload File dialog ────────────────────────────────────────────────────
+
+    private void OpenUploadDialog()
+    {
+        _uploadFileTypeId  = Guid.Empty;
+        _uploadDescription = null;
+        _uploadIsPublic    = false;
+        _selectedFile      = null;
+        _selectedFileName  = null;
+        _selectedFileSize  = 0;
+        _uploadError       = null;
+        _showUploadDialog  = true;
+    }
+
+    private void CloseUploadDialog()
+    {
+        _showUploadDialog = false;
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedFile     = e.File;
+        _selectedFileName = e.File.Name;
+        _selectedFileSize = e.File.Size;
+    }
+
+    private async Task UploadFile()
+    {
+        if (_selectedFile is null)    { _uploadError = "Please select a file."; return; }
+        if (_uploadFileTypeId == Guid.Empty) { _uploadError = "Please select a file type."; return; }
+
+        _isUploading = true;
+        _uploadError = null;
+        StateHasChanged();
+
+        try
+        {
+            const long maxBytes = 200 * 1024 * 1024; // 200 MB guard
+            using var ms = new System.IO.MemoryStream();
+            await _selectedFile.OpenReadStream(maxBytes).CopyToAsync(ms);
+            var bytes = ms.ToArray();
+
+            var result = await AdminClient.UploadUserFileAsync(
+                _uploadFileTypeId, UserId,
+                _selectedFile.Name, _selectedFile.ContentType,
+                bytes, _uploadDescription, _uploadIsPublic);
+
+            if (result is not null)
+            {
+                _showUploadDialog = false;
+                await Reload();
+            }
+            else
+            {
+                _uploadError = "Upload failed. The file may not match the allowed extensions for the selected type.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _uploadError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _isUploading = false;
+        }
+    }
+
+    // ── Audio detection helper ────────────────────────────────────────────────
+
+    private static bool IsAudioContentType(string? contentType) =>
+        contentType?.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static string FormatUploadSize(long bytes)
+    {
+        if (bytes >= 1_048_576) return $"{bytes / 1_048_576.0:F1} MB";
+        if (bytes >= 1_024)     return $"{bytes / 1_024.0:F0} KB";
+        return $"{bytes} B";
+    }
 
     // ── Add New Type dialog ───────────────────────────────────────────────────
 
