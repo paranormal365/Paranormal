@@ -308,19 +308,10 @@
                 <TabStripTab Title="Upload New">
                     <div class="row g-3 p-2">
                         <div class="col-12">
-                            <label class="form-label fw-semibold">File Type <span class="text-danger">*</span></label>
-                            @if (_fileTypes is not null && _fileTypes.Count > 0)
-                            {
-                                <TelerikDropDownList Data="@_fileTypes"
-                                                     @bind-Value="@_uploadFileTypeId"
-                                                     ValueField="@nameof(UploadFileTypeRecord.Id)"
-                                                     TextField="@nameof(UploadFileTypeRecord.Name)"
-                                                     Width="100%" />
-                            }
-                            else
-                            {
-                                <p class="text-secondary small mb-0">No file types available. Create one under Admin → File Types first.</p>
-                            }
+                            <label class="form-label fw-semibold">File Type</label>
+                            <p class="form-control-plaintext">
+                                @(_fileTypes?.FirstOrDefault(t => t.Id == _uploadFileTypeId)?.Name ?? "Logo")
+                            </p>
                         </div>
                         <div class="col-12">
                             <label class="form-label fw-semibold">Image File</label>
