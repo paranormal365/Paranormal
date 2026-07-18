@@ -202,3 +202,36 @@ A built-in **"Logo"** upload file type for organization logo images:
 **Seeded extension patterns:** `.jpg` · `.jpeg` · `.png` · `.gif` · `.webp` · `.svg`
 
 **Why needed:** The Add Logo dialog in `OrgCmsEditor.razor` uploads via `POST /api/upload-files` which requires a `uploadFileTypeId`. This seeder ensures a suitable type always exists and the dialog auto-selects it by name.
+
+---
+
+## Authorization (`Ben.Data.WebApi/Authorization/`) *(added 2026-07-18)*
+
+### `SuperAdminRequirement` + `SuperAdminHandler`
+
+**File:** [`Ben.Data.WebApi/Authorization/SuperAdminRequirement.cs`](../../../Ben.Data.WebApi/Authorization/SuperAdminRequirement.cs)
+
+Replaces `[Authorize(Roles = "SuperAdmin")]` attribute-based checks. All admin controllers now use `[Authorize(Policy = RoleNames.SuperAdmin)]` backed by this DB-querying handler.
+
+#### Why it was needed
+
+`[Authorize(Roles = "SuperAdmin")]` relies on `ClaimTypes.Role` being present in the JWT principal. For Entra JWTs, the `IClaimsTransformation` is supposed to inject these claims, but due to authentication scheme caching behaviour the enriched claims were not reliably seen by the `RolesAuthorizationRequirement` check. A custom handler that queries `UserManager` directly bypasses the claim pipeline entirely.
+
+#### Three authentication paths
+
+| Path | Mechanism | Used for |
+|---|---|---|
+| 1 | `context.User.IsInRole("SuperAdmin")` | Local Identity bearer tokens (role claim present) |
+| 2 | `app_user_id` claim → `UserManager.FindByIdAsync` | Entra tokens enriched by `EntraClaimsTransformation` |
+| 3 | `oid` claim → `UserManager.FindByLoginAsync("Microsoft", oid)` | Entra tokens where `app_user_id` not present |
+
+#### Registration (Program.cs)
+
+```csharp
+builder.Services.AddScoped<IAuthorizationHandler, SuperAdminHandler>();
+
+options.AddPolicy(RoleNames.SuperAdmin, policy =>
+    policy.AddAuthenticationSchemes(schemes)
+          .RequireAuthenticatedUser()
+          .AddRequirements(new SuperAdminRequirement()));
+```

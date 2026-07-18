@@ -263,3 +263,54 @@ Reusable lazy-loading thumbnail component. Fetches raw file bytes from `IBenAdmi
 
 #### Lifecycle
 Data is fetched in `OnParametersSetAsync` and the component re-renders on `FileId` change. Each instance issues one `GetFileDataAsync` call; results are **not** shared across instances — cache at the parent level if needed for galleries.
+
+---
+
+### `UserMediaPreview.razor` *(added 2026-07-18)*
+
+**File:** [`Ben.Web.Library/User/UserMediaPreview.razor`](../../../Ben.Web.Library/User/UserMediaPreview.razor)
+
+#### Summary
+Renders a contextual preview for an `UploadFile` based on its `ContentType`. Fetches raw bytes server-side via `IBenAdminClient.GetFileDataAsync` and renders as a base64 data URL — no bearer token needed in the browser.
+
+#### Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `FileId` | `Guid` | ID of the file to preview. |
+| `ContentType` | `string?` | MIME type — determines render mode. |
+| `FileName` | `string?` | Used for alt text and fallback badge. |
+
+#### Render modes
+
+| ContentType prefix | Rendered as |
+|---|---|
+| `image/*` | `<img>` — click to open fullscreen overlay |
+| `video/*` | `<video controls>` player |
+| `audio/*` | `<audio controls>` player |
+| Anything else | Grey badge showing filename |
+
+#### WaveSurfer (planned)
+WaveSurfer.js v7.12.11 source has been added to `Ben.Web.WebApp/wwwroot/ts/wavesurfer/`. Future work: replace the `<audio>` element with a WaveSurfer waveform visualization via Blazor JS interop.
+
+---
+
+### `AdminUserDetail.razor` — Updated 2026-07-18
+
+Complete rewrite. Added full CRUD on all sub-entity tabs and media preview on the Files tab.
+
+#### New capabilities
+
+| Tab | Add | Edit | Delete | Notes |
+|---|---|---|---|---|
+| Profile | — | ✅ | — | Same as before |
+| Addresses | ✅ | ✅ | ✅ | Type dropdown + "New Type" button |
+| Emails | ✅ | ✅ | ✅ | Type dropdown + Primary/Public flags |
+| Phones | ✅ | ✅ | ✅ | Type dropdown + Primary/Cellular flags |
+| Links | ✅ | ✅ | ✅ | Type dropdown + Active flag |
+| Notes | ✅ | ✅ | ✅ | Type dropdown + Subject/Body |
+| Memberships | — | — | — | Read-only (role shown) |
+| Files | — | — | ✅ | **`UserMediaPreview`** column for images/video/audio |
+
+#### Type management
+Every type dropdown has a ✚ **New** button that opens a mini `TelerikDialog` to create a new type inline, then reloads the dropdown without navigating away.

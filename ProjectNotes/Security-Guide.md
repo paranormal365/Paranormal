@@ -1,6 +1,6 @@
 # Ben Security Reference Guide
 
-**Last Updated:** 2026-07-14  
+**Last Updated:** 2026-07-18  
 **Status:** ✅ Fully implemented and integrated
 
 ---
@@ -12,14 +12,15 @@
 3. [JWT — Structure, Claims & Parsing](#3-jwt--structure-claims--parsing)
 4. [Level 2 — Organization-Level Authorization](#4-level-2--organization-level-authorization)
 5. [SuperAdmin Role](#5-superadmin-role)
-6. [User Impersonation](#6-user-impersonation)
-7. [Security Level Comparison — Examples](#7-security-level-comparison--examples)
-8. [Organization Security Service](#8-organization-security-service)
-9. [OrganizationSecurityAuthorize Attribute](#9-organizationsecurityauthorize-attribute)
-10. [Example: Securing a Full CRUD Controller](#10-example-securing-a-full-crud-controller)
-11. [WebApp Auth State](#11-webapp-auth-state)
-12. [Database Schema](#12-database-schema)
-13. [Best Practices](#13-best-practices)
+6. [Microsoft Entra (External) Authentication](#6-microsoft-entra-external-authentication)
+7. [User Impersonation](#7-user-impersonation)
+8. [Security Level Comparison — Examples](#8-security-level-comparison--examples)
+9. [Organization Security Service](#9-organization-security-service)
+10. [OrganizationSecurityAuthorize Attribute](#10-organizationsecurityauthorize-attribute)
+11. [Example: Securing a Full CRUD Controller](#11-example-securing-a-full-crud-controller)
+12. [WebApp Auth State](#12-webapp-auth-state)
+13. [Database Schema](#13-database-schema)
+14. [Best Practices](#14-best-practices)
 
 ---
 
@@ -378,15 +379,52 @@ Grant found AND (Actions & action) != None?  ──YES──▶ ✅ ALLOW
 
 - Seeded automatically at startup via `SuperAdminSeeder` in `Ben.Data.WebApi/SeedData/`
 - Only one role exists: `"SuperAdmin"` in `AspNetRoles`
-- All `/api/admin/*` endpoints require this role (`[Authorize(Roles = "SuperAdmin")]`)
+- All `/api/admin/*` endpoints require this role via the **`"SuperAdmin"` policy** (not a Roles attribute — see below)
 - SuperAdmin bypasses all `IOrganizationSecurityService` permission checks
 - SuperAdmin is detected from the JWT `role` claim, stored in `IWebApiTokenStore.IsSuperAdmin`
+
+### Why Policy, Not `[Authorize(Roles = "SuperAdmin")]`
+
+With Microsoft Entra JWTs, the `role` claim is not guaranteed to be present even after `IClaimsTransformation` runs — authentication scheme caching can cause the enriched claims to be missed by `RolesAuthorizationRequirement`. A custom `IAuthorizationHandler` that queries the database directly is more reliable for both token types.
+
+All admin controllers use:
+```csharp
+[Authorize(Policy = RoleNames.SuperAdmin)]
+```
+
+### `SuperAdminHandler` (DB-Backed Authorization)
+
+**File:** `Ben.Data.WebApi/Authorization/SuperAdminRequirement.cs`
+
+`SuperAdminHandler` extends `AuthorizationHandler<SuperAdminRequirement>` and checks the SuperAdmin role via three paths, in order:
+
+| Path | How | Used for |
+|---|---|---|
+| 1 | `context.User.IsInRole("SuperAdmin")` | Local Identity bearer tokens (fast path — role claim present) |
+| 2 | `app_user_id` claim → `UserManager.FindByIdAsync` → `IsInRoleAsync` | Entra JWTs enriched by `EntraClaimsTransformation` |
+| 3 | `oid` claim → `UserManager.FindByLoginAsync("Microsoft", oid)` → `IsInRoleAsync` | Entra JWTs where `app_user_id` is absent |
+
+If no user is found or the user is not in the SuperAdmin role, the requirement is not marked succeeded (returns 403).
+
+#### Registration in Program.cs
+
+```csharp
+builder.Services.AddScoped<IAuthorizationHandler, SuperAdminHandler>();
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(RoleNames.SuperAdmin, policy =>
+        policy.AddAuthenticationSchemes(schemes)
+              .RequireAuthenticatedUser()
+              .AddRequirements(new SuperAdminRequirement()));
+});
+```
 
 ### Admin Controller Base
 
 ```csharp
 [ApiController]
-[Authorize(Roles = "SuperAdmin")]
+[Authorize(Policy = RoleNames.SuperAdmin)]
 public abstract class AdminEntityControllerBase<TEntity, TRecord> : ControllerBase
 {
     // GetAll, GetById, Create, Update, Delete — all SuperAdmin only
@@ -406,11 +444,86 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : ControllerBa
 
 ---
 
-## 6. User Impersonation
+## 6. Microsoft Entra (External) Authentication
+
+### Overview
+
+Ben supports Microsoft Entra ID (Azure AD) as an **external login provider**. Users can sign in with a Microsoft account and have it linked to their Ben `AppUser` record. Once linked, Entra JWT tokens are accepted at all WebApi endpoints that require `[Authorize]`.
+
+### App Registration
+
+| Setting | Value |
+|---|---|
+| App name | `AverageBen.net (2026-07-18)` |
+| Client ID | `3e37e6d7-13ea-4b94-b271-618267256d8b` |
+| Tenant | `common` (personal + work Microsoft accounts) |
+| signInAudience | `AzureADandPersonalMicrosoftAccount` |
+| Token version | `2` (must be set in manifest JSON) |
+| Redirect URIs | `https://localhost:5078/signin-oidc` |
+| Client secret | In `appsettings.Development.json` (gitignored) |
+
+### Entra Login Flow
+
+```
+User clicks "Sign in with Microsoft"
+  ↓
+WebApp redirects to Microsoft OIDC endpoint
+  ↓ Microsoft login / consent
+Microsoft redirects back with authorization code
+  ↓
+WebApp exchanges code for ID + access tokens
+  ↓
+WebApp calls GET /api/entra/link-or-register
+  ↓
+WebApi checks AspNetUserLogins for OID:
+  FOUND  → return existing AppUser token
+  NOT FOUND + email match → link OID → return token
+  NOT FOUND + no email match → redirect to /entra/complete-profile
+  ↓
+WebApp stores bearer token in IWebApiTokenStore
+```
+
+### `EntraClaimsTransformation` (WebApi)
+
+**File:** `Ben.Data.WebApi/Services/EntraClaimsTransformation.cs`
+
+Runs for every Entra JWT request. Enriches the `ClaimsPrincipal` with:
+- `app_user_id` — the Ben `AppUser.Id` (Guid)
+- `role` claims — the user's Ben roles (e.g. `SuperAdmin`)
+
+Lookup order:
+1. `oid` claim → `FindByLoginAsync("Microsoft", oid)` — exact OID match
+2. `preferred_username` / `email` claim → `FindByEmailAsync` + auto-re-links OID
+
+> ⚠️ Custom API access tokens do not always include `preferred_username`. For authorization decisions, `SuperAdminHandler` is the authoritative check; `EntraClaimsTransformation` is a best-effort enrichment.
+
+### Account Linking
+
+An Entra OID is stored in `AspNetUserLogins` with `LoginProvider = "Microsoft"` and `ProviderKey = oid`. Linking happens automatically when:
+- User registers via Entra (new account)
+- Existing account's email matches the Entra `preferred_username`
+- SuperAdmin manually links an account
+
+### Token Differences — Local vs Entra
+
+| Aspect | Local Identity Token | Entra JWT |
+|---|---|---|
+| Issuer | `dotnet-user-jwts` / WebApi URL | `https://login.microsoftonline.com/{tenantId}/v2.0` |
+| `sub` claim | `AppUser.Id` | Entra `sub` (not the AppUser ID) |
+| `role` claim | ✅ Always present | ❌ Not present by default |
+| `oid` claim | ❌ Not present | ✅ Always present |
+| `app_user_id` claim | ❌ Not present | ✅ Added by `EntraClaimsTransformation` |
+| SuperAdmin check | `User.IsInRole("SuperAdmin")` (fast path) | `SuperAdminHandler` path 2 or 3 (DB lookup) |
+
+---
+
+## 7. User Impersonation
 
 SuperAdmin can view the application exactly as any user, then return to their own account.
 
 ### How It Works
+
+> Note: Impersonation tokens are Local Identity tokens (not Entra). SuperAdmin must be logged in with a local account or an Entra account that has been linked to a local SuperAdmin `AppUser`.
 
 ```
 SuperAdmin clicks "Impersonate" on /admin/users page
@@ -496,7 +609,7 @@ public sealed class ImpersonateController : ControllerBase
 
 ---
 
-## 7. Security Level Comparison — Examples
+## 8. Security Level Comparison — Examples
 
 This section shows the same endpoint concept implemented at three different security levels, so you can see exactly what each layer adds.
 
@@ -687,7 +800,7 @@ HasPermission(orgId, UserNote, Read)?  ──NO──▶ 403
 
 ---
 
-## 8. Organization Security Service
+## 9. Organization Security Service
 
 Defined in `Ben.Service.Security/Services/IOrganizationSecurityService.cs`.  
 Registered in WebApi DI as `AddScoped<IOrganizationSecurityService, OrganizationSecurityService>()`.
@@ -779,7 +892,7 @@ public class MemberController : ControllerBase
 
 ---
 
-## 9. OrganizationSecurityAuthorize Attribute
+## 10. OrganizationSecurityAuthorize Attribute
 
 Automatically enforces org-level permission checks on controller actions.
 
@@ -848,7 +961,7 @@ public class OrgNoteController : ControllerBase
 
 ---
 
-## 10. Example: Securing a Full CRUD Controller
+## 11. Example: Securing a Full CRUD Controller
 
 This example shows a complete secured controller for managing users within an organization:
 
@@ -952,7 +1065,7 @@ await security.GrantAccessAsync(orgId, userId,
 
 ---
 
-## 11. WebApp Auth State
+## 12. WebApp Auth State
 
 ### Checking Auth State in Blazor Components
 
@@ -1007,7 +1120,7 @@ else
 
 ---
 
-## 12. Database Schema
+## 13. Database Schema
 
 ### Identity Tables (ASP.NET Identity managed)
 
@@ -1037,7 +1150,7 @@ AppUsers ──< OrganizationAccessGrants >────── Organizations
 
 ---
 
-## 13. Best Practices
+## 14. Best Practices
 
 ### ✅ DO
 
@@ -1048,18 +1161,23 @@ AppUsers ──< OrganizationAccessGrants >────── Organizations
 - Soft-delete membership records (`IsActive = false`) — never hard-delete
 - Refresh the access token before sensitive operations using `RefreshIfNeededAsync()`
 - Guard admin Blazor pages with `OnInitialized` redirect if not SuperAdmin
+- Use `[Authorize(Policy = RoleNames.SuperAdmin)]` for all admin endpoints — the `SuperAdminHandler` works for both Local Identity and Entra tokens
+- Use `AddAuthenticationSchemes(...)` in the policy to accept all valid authentication schemes
 
 ### ❌ DON'T
 
-- Never add `[Authorize(Roles = "Admin")]` — the only role is `"SuperAdmin"`
+- Never use `[Authorize(Roles = "SuperAdmin")]` — use `[Authorize(Policy = RoleNames.SuperAdmin)]` instead. The Roles attribute relies on role claims that may not be present in Entra JWTs
 - Don't bypass `[OrganizationSecurityAuthorize]` for org-scoped data
 - Don't hard-delete `OrganizationUserMembership` rows — use `IsActive = false`
 - Don't store bearer tokens in browser localStorage (only in the Blazor circuit's `IWebApiTokenStore`)
 - Don't call impersonation endpoints from the WebApp unless `IsSuperAdmin` is true
 - Don't cache `IsSuperAdmin` beyond the token lifetime — re-parse on every `ApplyTokenResponse`
+- Don't rely on `IClaimsTransformation` alone for SuperAdmin authorization with Entra tokens — use `SuperAdminHandler`
 
 ### Known Technical Debt
 
 | Item | Location | Notes |
 |---|---|---|
 | NU1903 `Microsoft.OpenApi` advisory | `Ben.Data.WebApi` | Transitive vulnerability; awaiting upstream fix |
+| `preferred_username` missing in Entra access tokens | `EntraClaimsTransformation` | Custom API access tokens may omit this claim; email fallback may miss non-standard accounts. `SuperAdminHandler` is authoritative and unaffected. |
+| Entra client secret expiry | `appsettings.Development.json` / Azure Portal | Secret ID `9b9c40f2` expires 2028-07-17; rotate before expiry via Azure Portal → App registrations → `AverageBen.net (2026-07-18)` → Certificates & secrets |
