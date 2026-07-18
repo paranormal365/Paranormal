@@ -41,5 +41,7 @@ public enum OrganizationSecurityTable
     UserNote = 23,
     UserNoteType = 24,
     UserPhone = 25,
-    UserPhoneType = 26
+    UserPhoneType = 26,
+    CmsSection = 27,
+    OrgMemberGroup = 28
 }

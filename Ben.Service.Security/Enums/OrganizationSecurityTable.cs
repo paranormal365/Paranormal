@@ -30,5 +30,7 @@ public enum OrganizationSecurityTable
     UserPhoneType = 22,
     UserLinkType = 23,
     UserNoteType = 24,
-    UserMessageType = 25
+    UserMessageType = 25,
+    CmsSection = 26,
+    OrgMemberGroup = 27
 }
