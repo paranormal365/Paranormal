@@ -278,7 +278,7 @@
     <DialogContent>
         @if (_orgImageFiles is null)
         {
-            <TelerikLoaderContainer Visible="true" Text="Loading image library…" />
+            <div class="p-3 text-secondary"><span class="spinner-border spinner-border-sm me-2"></span>Loading…</div>
         }
         else
         {
@@ -612,15 +612,15 @@
 
     private async Task OpenLogoDialog()
     {
+        // Reset dialog state
         _selectedLogoFileId = null;
         _uploadedLogoName   = null;
         _logoAltText        = null;
         _logoIsActive       = true;
         _logoError          = null;
-        _orgImageFiles      = null;
-        _showLogoDialog     = true;
-        StateHasChanged();
 
+        // Load data BEFORE opening the dialog — avoids the TelerikDialog portal
+        // not seeing StateHasChanged() calls made after the dialog is already open.
         try
         {
             var allFiles = await AdminClient.GetOrgSharedFilesAsync(OrgId);
@@ -636,12 +636,12 @@
         }
         catch
         {
-            // Ensure the loader is always dismissed even on API error
             _orgImageFiles ??= [];
             _logoError = "Could not load the file library. You can still upload a new image using the Upload tab.";
         }
 
-        StateHasChanged();
+        // Open the dialog now that all data is ready — content renders correctly on first paint.
+        _showLogoDialog = true;
     }
 
     private void CloseLogoDialog()
