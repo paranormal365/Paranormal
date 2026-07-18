@@ -133,3 +133,14 @@ Defines all SuperAdmin HTTP operations available to library Blazor components.
 | `CmsUpdateSectionRequest(Title?, ContentJson, IsActive)` | Update section payload. *(added 2026-07-18)* |
 | `CmsCreateLogoRequest(UploadFileId, AltText?, IsActive, SortOrder)` | Add logo payload. *(added 2026-07-18)* |
 | `CmsUpdateLogoRequest(AltText?, IsActive, SortOrder)` | Update logo payload. *(added 2026-07-18)* |
+
+### CMS File Library Methods *(added 2026-07-18)*
+
+Used by [`CmsFileThumbnail.razor`](../../../Ben.Web.Library/Organization/Cms/CmsFileThumbnail.razor) and the logo picker dialog in [`OrgCmsEditor.razor`](../../../Ben.Web.Library/Organization/Cms/OrgCmsEditor.razor).
+
+| Method | Returns | Description |
+|---|---|---|
+| `GetOrgSharedFilesAsync(orgId, token)` | `IReadOnlyList<UploadFileRecord>` | Files shared with the org — used to populate the logo gallery. Calls `GET /api/upload-files/org/{orgId}`. |
+| `GetFileDataAsync(fileId, token)` | `(byte[] Data, string ContentType)?` | Downloads raw file bytes for base64 thumbnail rendering. Returns `null` if unavailable. |
+| `GetPublicFileTypesAsync(token)` | `IReadOnlyList<UploadFileTypeRecord>` | Active upload file types — used in the Upload tab dropdown. |
+| `UploadImageAsync(fileTypeId, userId, fileName, contentType, data, token)` | `UploadFileRecord?` | Constructs multipart form data and calls `POST /api/upload-files`. Sets `isPublic=true`. Returns the created record, or `null` on failure. |

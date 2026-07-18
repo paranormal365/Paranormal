@@ -234,3 +234,32 @@ Reusable component that renders the appropriate content editor for a given `CmsS
 | `MemberRoster` | Raw JSON `TelerikTextArea` | `{ "memberIds": [...], "showRole": bool, "showBio": bool }` |
 
 ContentJson is parsed via `JsonDocument.Parse` on load and serialised via `JsonSerializer.Serialize` on change.
+
+---
+
+### `CmsFileThumbnail.razor` *(added 2026-07-18)*
+
+**File:** [`Ben.Web.Library/Organization/Cms/CmsFileThumbnail.razor`](../../../Ben.Web.Library/Organization/Cms/CmsFileThumbnail.razor)
+
+#### Summary
+Reusable lazy-loading thumbnail component. Fetches raw file bytes from `IBenAdminClient.GetFileDataAsync`, converts to a `data:` URI (base64), and renders as an `<img>`. Used in the logo picker gallery and the logos grid in `OrgCmsEditor`.
+
+#### Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `FileId` | `Guid` | — | ID of the file to display. Pass `Guid.Empty` to skip loading. |
+| `Width` | `string` | `"100px"` | CSS width applied to the element. |
+| `Height` | `string` | `"75px"` | CSS height applied to the element. |
+| `Alt` | `string?` | `null` | Alt text for the `<img>` tag. |
+
+#### States
+
+| State | Rendered as |
+|---|---|
+| Loading | Bootstrap `spinner-border-sm` centred in the bounding box |
+| Loaded | `<img src="data:…;base64,…">` with `object-fit:cover` |
+| Failed / no data | Grey placeholder box with "No preview" label |
+
+#### Lifecycle
+Data is fetched in `OnParametersSetAsync` and the component re-renders on `FileId` change. Each instance issues one `GetFileDataAsync` call; results are **not** shared across instances — cache at the parent level if needed for galleries.

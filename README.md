@@ -17,16 +17,16 @@ Full-stack .NET solution — ASP.NET Core Web API + Blazor Server + EF Core + SQ
 | `Ben.Service.Security` | Org-level tenant security service |
 | `Ben.Web.Library` | Razor Class Library — shared Blazor + Telerik components |
 | `Ben.Web.WebApp` | Blazor Server app — Telerik UI for Blazor (`:5078`) |
-| `Ben.Service.RepositoryService.Tests` | xUnit — 123 tests |
-| `Ben.Web.Tests` | xUnit — 102 tests |
+| `Ben.Service.RepositoryService.Tests` | xUnit — 142 tests |
+| `Ben.Web.Tests` | xUnit — 206 tests |
 
-**225 tests — 0 failures, 0 warnings**
+**348 tests — 0 failures, 0 warnings**
 
 ---
 
 ## 🚀 Getting Started
 
-**Prerequisites:** .NET 9 SDK, Docker Desktop, Telerik license
+**Prerequisites:** .NET 10 SDK, Docker Desktop, Telerik license
 
 ```bash
 # Start Docker DB + WebApi + WebApp in one step
@@ -43,6 +43,33 @@ Add your secrets to `appsettings.Development.json` (see [WebApp-WebApi Integrati
 ---
 
 ## 📋 Daily Logs
+
+### [2026-07-18](./ProjectNotes/DailyLogs/2026-07-18.md) — Organisation CMS, Tests, Telerik API Fixes
+**Summary:** Designed and built the full Organisation CMS feature — data model (5 new entities + migration), API layer (5 controllers), Blazor UI (`OrgCmsEditor`, `OrgCmsPageEdit`, `CmsSectionEditor`, `CmsFileThumbnail`), logo thumbnail gallery with file upload, and 66 new tests. Fixed Telerik 14.x `TelerikTabStrip`/`TelerikWindow` API changes. 348 tests, 0 errors.
+
+**Key Accomplishments:**
+- CMS data model: ✅ `OrganizationLogo`, `CmsSection`, `OrgMemberGroup`, `OrgMemberGroupMembership`, `CmsPagePermission` + migration `20260718122428_AddCmsEntities`
+- CMS API: ✅ `OrgCmsPageController`, `CmsSectionController`, `OrganizationLogoController`, `OrgMemberGroupController`, `CmsPagePermissionController` (all under `/api/organizations/{orgId}/...`)
+- CMS UI: ✅ `OrgCmsEditor.razor` (tabbed hub — pages gallery + logo management), `OrgCmsPageEdit.razor` (page metadata + ordered sections + inline preview), `CmsSectionEditor.razor` (type-switching editor with `TelerikEditor` for rich text), `CmsFileThumbnail.razor` (base64 lazy-load thumbnails)
+- Logo picker: ✅ Replaced GUID-input with thumbnail gallery from org shared files + `InputFile` upload
+- Telerik fixes: ✅ `TelerikTabStrip` — removed `ActiveTabIndex` (use `ActiveTabId`); `TelerikWindow` — `Title` → `<WindowTitle>` child tag
+- Tests: ✅ 348/348 — 59 CMS controller tests + 7 CMS file library adapter tests
+
+---
+
+### [2026-07-17](./ProjectNotes/DailyLogs/2026-07-17.md) — Telerik Upgrade, SuperAdmin Pages, Org CRUD, Entra Fix
+**Summary:** Upgraded Telerik to 14.1.0, added Create User and Site Roles admin pages, extracted `MainNavigationDrawer`, built org CRUD with permission-aware API, fixed Entra claims transformation so `User.IsInRole()` works for Entra JWT tokens. 225 tests.
+
+**Key Accomplishments:**
+- Telerik 14.0.0 → 14.1.0: ✅ `e.Items.First()` API fix in 3 components
+- `AdminUserCreate.razor` (`/admin/users/create`): ✅ SuperAdmin create-user form
+- `AdminRoles.razor` + `AdminRoleController`: ✅ Site-level role CRUD
+- `MainNavigationDrawer.razor`: ✅ Extracted drawer into standalone component
+- `OrganizationList.razor` + `OrganizationCreateEdit.razor`: ✅ Org CRUD with `CanEdit`/`CanDelete` flags
+- `OrganizationController`: ✅ Permission-aware GET/POST/PUT/DELETE at `/api/organizations`
+- `EntraClaimsTransformation`: ✅ Injects `app_user_id` + DB role claims after Entra JWT auth
+
+---
 
 ### [2026-07-16](./ProjectNotes/DailyLogs/2026-07-16.md) — GitHub Repository Setup, Ben Agent
 **Summary:** Initialized git repository, configured `.gitignore` (moved `TelerikKey` to Development config, added standard .NET patterns), resolved merge conflict with GitHub template, pushed to `VandyBen/AverageBen`. Created `.github/agents/ben.agent.md` — a VS Code Copilot agent with full solution context.
