@@ -1,20 +1,3 @@
--- ============================================================
--- create-database.sql  |  BenDb full SQL Server schema
---
--- GENERATED — do not hand-edit.  Re-run the command below after
--- adding any new EF Core migration to keep this file current.
---
--- Coverage: all 10 migrations from InitialCreate →
---           20260718122428_AddCmsEntities
---
--- ── Regenerate ──────────────────────────────────────────────
---   cd /path/to/Ben
---   dotnet ef migrations script --     --project Ben.Data.Source --     --startup-project Ben.Data.WebApi --     --output scripts/create-database.sql --     --idempotent
---
--- ── Apply to SQL Server ──────────────────────────────────────
---   sqlcmd -S localhost,1433 -U sa -P YourStrong@Password1 --          -d BenDb -i scripts/create-database.sql
--- ============================================================
-
 ﻿IF OBJECT_ID(N'[__EFMigrationsHistory]') IS NULL
 BEGIN
     CREATE TABLE [__EFMigrationsHistory] (
@@ -2520,6 +2503,97 @@ IF NOT EXISTS (
 BEGIN
     INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
     VALUES (N'20260718122428_AddCmsEntities', N'10.0.9');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260718193225_AddUploadFileAudioConfig'
+)
+BEGIN
+    CREATE TABLE [UploadFileAudioConfigs] (
+        [Id] uniqueidentifier NOT NULL,
+        [UploadFileId] uniqueidentifier NOT NULL,
+        [WaveColor] nvarchar(max) NULL,
+        [ProgressColor] nvarchar(max) NULL,
+        [CursorColor] nvarchar(max) NULL,
+        [CursorWidth] int NULL,
+        [Height] int NULL,
+        [BarWidth] int NULL,
+        [BarGap] int NULL,
+        [BarRadius] int NULL,
+        [BarHeight] float NULL,
+        [BarAlign] nvarchar(max) NULL,
+        [Normalize] bit NOT NULL,
+        [DragToSeek] bit NOT NULL,
+        [HideScrollbar] bit NOT NULL,
+        [AudioRate] float NULL,
+        [EnableHover] bit NOT NULL,
+        [EnableTimeline] bit NOT NULL,
+        [EnableZoom] bit NOT NULL,
+        [EnableMinimap] bit NOT NULL,
+        [EnableSpectrogram] bit NOT NULL,
+        [EnableSpectrogramWindowed] bit NOT NULL,
+        [EnableEnvelope] bit NOT NULL,
+        [EnableRegions] bit NOT NULL,
+        [HoverOptionsJson] nvarchar(max) NULL,
+        [TimelineOptionsJson] nvarchar(max) NULL,
+        [ZoomOptionsJson] nvarchar(max) NULL,
+        [MinimapOptionsJson] nvarchar(max) NULL,
+        [SpectrogramOptionsJson] nvarchar(max) NULL,
+        [SpectrogramWindowedOptionsJson] nvarchar(max) NULL,
+        [EnvelopeOptionsJson] nvarchar(max) NULL,
+        [InitialHeight] nvarchar(max) NULL,
+        [MinHeight] nvarchar(max) NULL,
+        [MaxHeight] nvarchar(max) NULL,
+        [ShowControls] bit NOT NULL,
+        [MinZoom] float NOT NULL,
+        [MaxZoom] float NOT NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_UploadFileAudioConfigs] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_UploadFileAudioConfigs_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_UploadFileAudioConfigs_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_UploadFileAudioConfigs_UploadFiles_UploadFileId] FOREIGN KEY ([UploadFileId]) REFERENCES [UploadFiles] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260718193225_AddUploadFileAudioConfig'
+)
+BEGIN
+    CREATE INDEX [IX_UploadFileAudioConfigs_CreatedByAppUserId] ON [UploadFileAudioConfigs] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260718193225_AddUploadFileAudioConfig'
+)
+BEGIN
+    CREATE INDEX [IX_UploadFileAudioConfigs_UpdatedByAppUserId] ON [UploadFileAudioConfigs] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260718193225_AddUploadFileAudioConfig'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_UploadFileAudioConfigs_UploadFileId] ON [UploadFileAudioConfigs] ([UploadFileId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260718193225_AddUploadFileAudioConfig'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260718193225_AddUploadFileAudioConfig', N'10.0.9');
 END;
 
 COMMIT;
