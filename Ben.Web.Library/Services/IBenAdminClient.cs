@@ -161,6 +161,20 @@ public interface IBenAdminClient
     Task<OrganizationLogoRecord?> CreateOrgLogoAsync(Guid orgId, CmsCreateLogoRequest request, CancellationToken token = default);
     Task<OrganizationLogoRecord?> UpdateOrgLogoAsync(Guid orgId, Guid logoId, CmsUpdateLogoRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default);
+
+    // ── CMS File Library ──────────────────────────────────────────────────────
+
+    /// <summary>Returns upload files shared with the given organisation (for logo/gallery selection).</summary>
+    Task<IReadOnlyList<UploadFileRecord>> GetOrgSharedFilesAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>Downloads raw file bytes + content-type for in-browser thumbnail rendering.</summary>
+    Task<(byte[] Data, string ContentType)?> GetFileDataAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Returns all active upload file types (used to choose a type when uploading a logo).</summary>
+    Task<IReadOnlyList<UploadFileTypeRecord>> GetPublicFileTypesAsync(CancellationToken token = default);
+
+    /// <summary>Uploads an image file and returns its record. Used to add a logo from device.</summary>
+    Task<UploadFileRecord?> UploadImageAsync(Guid fileTypeId, Guid userId, string fileName, string contentType, byte[] data, CancellationToken token = default);
 }
 
 /// <summary>

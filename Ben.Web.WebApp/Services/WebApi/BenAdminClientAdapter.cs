@@ -153,4 +153,37 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/logos/{logoId}", token);
+
+    // ── CMS File Library ──────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<UploadFileRecord>> GetOrgSharedFilesAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetOrgSharedFilesAsync(orgId, token);
+        return result ?? [];
+    }
+
+    public async Task<(byte[] Data, string ContentType)?> GetFileDataAsync(Guid fileId, CancellationToken token = default)
+    {
+        var result = await _api.DownloadFileAsync(fileId, token);
+        if (result is null) return null;
+        return (result.Value.Data, result.Value.ContentType);
+    }
+
+    public async Task<IReadOnlyList<UploadFileTypeRecord>> GetPublicFileTypesAsync(CancellationToken token = default)
+        => await _api.GetUploadFileTypesAsync(token);
+
+    public async Task<UploadFileRecord?> UploadImageAsync(
+        Guid fileTypeId, Guid userId, string fileName, string contentType, byte[] data,
+        CancellationToken token = default)
+    {
+        var form = new MultipartFormDataContent();
+        form.Add(new StringContent(fileTypeId.ToString()), "uploadFileTypeId");
+        form.Add(new StringContent(userId.ToString()), "appUserId");
+        form.Add(new StringContent(""), "description");
+        form.Add(new StringContent("true"), "isPublic");
+        var fileContent = new ByteArrayContent(data);
+        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        form.Add(fileContent, "file", fileName);
+        return await _api.UploadFileAsync(form, token);
+    }
 }

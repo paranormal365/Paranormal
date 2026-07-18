@@ -125,7 +125,7 @@
             <div class="d-flex justify-content-end mb-2">
                 <TelerikButton Icon="@SvgIcon.Plus"
                                ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                               OnClick="@(() => { _showLogoDialog = true; _logoForm = new(); })">
+                               OnClick="OpenLogoDialog">
                     Add Logo
                 </TelerikButton>
             </div>
@@ -145,6 +145,12 @@
                              Pageable="false"
                              Sortable="false">
                     <GridColumns>
+                        <GridColumn Title="Preview" Width="120px">
+                            <Template>
+                                @{ var lp = (OrganizationLogoRecord)context; }
+                                <CmsFileThumbnail FileId="@lp.UploadFileId" Width="100px" Height="65px" />
+                            </Template>
+                        </GridColumn>
                         <GridColumn Title="Active" Width="80px">
                             <Template>
                                 @{ var l = (OrganizationLogoRecord)context; }
@@ -155,7 +161,6 @@
                             </Template>
                         </GridColumn>
                         <GridColumn Field="@nameof(OrganizationLogoRecord.AltText)" Title="Alt Text" />
-                        <GridColumn Field="@nameof(OrganizationLogoRecord.UploadFileId)" Title="File ID" />
                         <GridColumn Title="Actions" Width="160px">
                             <Template>
                                 @{ var logo = (OrganizationLogoRecord)context; }
@@ -269,20 +274,78 @@
 @* ── Add Logo dialog ──────────────────────────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showLogoDialog"
                Title="Add Logo"
-               Width="480px">
+               Width="620px">
     <DialogContent>
+        @if (_orgImageFiles is null)
+        {
+            <TelerikLoaderContainer Visible="true" Text="Loading image library…" />
+        }
+        else
+        {
+            <TelerikTabStrip>
+                <TabStripTab Title="From Library">
+                    @if (_orgImageFiles.Count == 0)
+                    {
+                        <p class="text-secondary p-3 mb-0">No image files are shared with this organisation yet. Use the Upload tab to add one.</p>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-wrap gap-2 p-2" style="max-height:260px;overflow-y:auto;">
+                            @foreach (var f in _orgImageFiles)
+                            {
+                                var fId = f.Id;
+                                var selected = _selectedLogoFileId == fId;
+                                <div style="cursor:pointer;width:120px;text-align:center;" @onclick="@(() => _selectedLogoFileId = fId)">
+                                    <div class="@(selected ? "border border-primary border-2 rounded" : "border rounded")" style="padding:3px;">
+                                        <CmsFileThumbnail FileId="@fId" Width="110px" Height="75px" Alt="@f.FileName" />
+                                    </div>
+                                    <small class="text-truncate d-block mt-1" style="max-width:120px;" title="@f.FileName">@f.FileName</small>
+                                </div>
+                            }
+                        </div>
+                    }
+                </TabStripTab>
+                <TabStripTab Title="Upload New">
+                    <div class="row g-3 p-2">
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">File Type <span class="text-danger">*</span></label>
+                            @if (_fileTypes is not null && _fileTypes.Count > 0)
+                            {
+                                <TelerikDropDownList Data="@_fileTypes"
+                                                     @bind-Value="@_uploadFileTypeId"
+                                                     ValueField="@nameof(UploadFileTypeRecord.Id)"
+                                                     TextField="@nameof(UploadFileTypeRecord.Name)"
+                                                     Width="100%" />
+                            }
+                            else
+                            {
+                                <p class="text-secondary small mb-0">No file types available. Create one under Admin → File Types first.</p>
+                            }
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Image File</label>
+                            <InputFile OnChange="@OnLogoFileSelected" accept="image/*" class="form-control" />
+                            <div class="form-text">Accepted: JPEG, PNG, GIF, WebP, SVG, etc.</div>
+                        </div>
+                        @if (_uploadedLogoName is not null)
+                        {
+                            <div class="col-12">
+                                <div class="alert alert-success mb-0">✓ <strong>@_uploadedLogoName</strong> uploaded and selected.</div>
+                            </div>
+                        }
+                    </div>
+                </TabStripTab>
+            </TelerikTabStrip>
+        }
+
+        <hr class="my-3" />
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Upload File ID <span class="text-danger">*</span></label>
-                <TelerikTextBox @bind-Value="@_logoFileIdStr" Width="100%" Placeholder="Paste the GUID of an uploaded image file" />
-                <div class="form-text">Go to Upload Files, copy the file's ID, and paste it here.</div>
-            </div>
-            <div class="col-12">
                 <label class="form-label fw-semibold">Alt Text</label>
-                <TelerikTextBox @bind-Value="@_logoForm.AltText" Width="100%" Placeholder="Logo alt text for accessibility" />
+                <TelerikTextBox @bind-Value="@_logoAltText" Width="100%" Placeholder="Logo alt text (for accessibility)" />
             </div>
             <div class="col-6 d-flex align-items-center gap-2">
-                <TelerikCheckBox @bind-Value="@_logoForm.IsActive" Id="logo-active" />
+                <TelerikCheckBox @bind-Value="@_logoIsActive" Id="logo-active" />
                 <label for="logo-active" class="form-label mb-0">Set as active logo</label>
             </div>
         </div>
@@ -292,11 +355,11 @@
         }
     </DialogContent>
     <DialogButtons>
-        <TelerikButton OnClick="@(() => { _showLogoDialog = false; _logoError = null; })">Cancel</TelerikButton>
+        <TelerikButton OnClick="CloseLogoDialog">Cancel</TelerikButton>
         <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                        Icon="@SvgIcon.Save"
                        OnClick="SaveLogo"
-                       Enabled="@(!_isBusy)">
+                       Enabled="@(!_isBusy && _selectedLogoFileId is not null)">
             @(_isBusy ? "Saving…" : "Add Logo")
         </TelerikButton>
     </DialogButtons>
@@ -362,8 +425,13 @@
     // Logos
     private IReadOnlyList<OrganizationLogoRecord>? _logos;
     private bool _showLogoDialog;
-    private LogoFormModel _logoForm = new();
-    private string _logoFileIdStr = "";
+    private Guid? _selectedLogoFileId;
+    private string? _uploadedLogoName;
+    private string? _logoAltText;
+    private bool _logoIsActive = true;
+    private IList<UploadFileRecord>? _orgImageFiles;
+    private IReadOnlyList<UploadFileTypeRecord>? _fileTypes;
+    private Guid _uploadFileTypeId;
 
     // Preview
     private bool _showPreview;
@@ -542,21 +610,97 @@
 
     // ── Logo management ───────────────────────────────────────────────────────
 
+    private async Task OpenLogoDialog()
+    {
+        _selectedLogoFileId = null;
+        _uploadedLogoName   = null;
+        _logoAltText        = null;
+        _logoIsActive       = true;
+        _logoError          = null;
+        _orgImageFiles      = null;
+        _showLogoDialog     = true;
+        StateHasChanged();
+
+        var allFiles = await AdminClient.GetOrgSharedFilesAsync(OrgId);
+        _orgImageFiles = allFiles.Where(f => f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (_fileTypes is null)
+            _fileTypes = await AdminClient.GetPublicFileTypesAsync();
+
+        if (_fileTypes.Count > 0 && _uploadFileTypeId == Guid.Empty)
+            _uploadFileTypeId = _fileTypes[0].Id;
+
+        StateHasChanged();
+    }
+
+    private void CloseLogoDialog()
+    {
+        _showLogoDialog   = false;
+        _selectedLogoFileId = null;
+        _uploadedLogoName   = null;
+        _logoError          = null;
+    }
+
+    private async Task OnLogoFileSelected(InputFileChangeEventArgs e)
+    {
+        _logoError = null;
+        if (_uploadFileTypeId == Guid.Empty)
+        {
+            _logoError = "Please select a file type before uploading.";
+            return;
+        }
+        var file = e.File;
+        if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            _logoError = "Please select an image file (JPEG, PNG, GIF, WebP, SVG…)";
+            return;
+        }
+        _isBusy = true;
+        StateHasChanged();
+        try
+        {
+            const long maxBytes = 10 * 1024 * 1024;
+            using var stream = file.OpenReadStream(maxBytes);
+            using var ms = new System.IO.MemoryStream();
+            await stream.CopyToAsync(ms);
+            var bytes  = ms.ToArray();
+            var userId = UserState.UserId ?? Guid.Empty;
+            var uploaded = await AdminClient.UploadImageAsync(
+                _uploadFileTypeId, userId, file.Name, file.ContentType, bytes);
+            if (uploaded is null)
+            {
+                _logoError = "Upload failed. Check the file type allows images.";
+            }
+            else
+            {
+                _selectedLogoFileId = uploaded.Id;
+                _uploadedLogoName   = file.Name;
+                // Refresh the library list so the new image appears
+                var allFiles = await AdminClient.GetOrgSharedFilesAsync(OrgId);
+                _orgImageFiles = allFiles.Where(f => f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException)
+        {
+            _logoError = $"File too large or invalid: {ex.Message}";
+        }
+        _isBusy = false;
+    }
+
     private async Task SaveLogo()
     {
-        if (!Guid.TryParse(_logoFileIdStr, out var fileId))
+        if (_selectedLogoFileId is null)
         {
-            _logoError = "Please enter a valid file ID (GUID).";
+            _logoError = "Please select or upload an image first.";
             return;
         }
         _isBusy = true;
         _logoError = null;
         var result = await AdminClient.CreateOrgLogoAsync(OrgId, new CmsCreateLogoRequest(
-            fileId, _logoForm.AltText?.Trim(), _logoForm.IsActive, (_logos?.Count ?? 0) + 1));
-
+            _selectedLogoFileId.Value, _logoAltText?.Trim(), _logoIsActive, (_logos?.Count ?? 0) + 1));
         _isBusy = false;
-        if (result is null) { _logoError = "Failed to add logo. Ensure the file ID is valid."; }
-        else { _showLogoDialog = false; _logoFileIdStr = ""; await LoadAsync(); }
+        if (result is null) { _logoError = "Failed to add logo. Ensure the file exists."; }
+        else { CloseLogoDialog(); await LoadAsync(); }
     }
 
     private async Task SetLogoActive(OrganizationLogoRecord logo)
@@ -587,12 +731,6 @@
         public bool IsPublic     { get; set; }
         public Guid? ParentPageId { get; set; }
         public int SortOrder     { get; set; } = 1;
-    }
-
-    private sealed class LogoFormModel
-    {
-        public string? AltText  { get; set; }
-        public bool IsActive    { get; set; } = true;
     }
 
     private sealed record PageOption(Guid Id, string Title);
