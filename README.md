@@ -17,10 +17,10 @@ Full-stack .NET solution — ASP.NET Core Web API + Blazor Server + EF Core + SQ
 | `Ben.Service.Security` | Org-level tenant security service |
 | `Ben.Web.Library` | Razor Class Library — shared Blazor + Telerik components |
 | `Ben.Web.WebApp` | Blazor Server app — Telerik UI for Blazor (`:5078`) |
-| `Ben.Service.RepositoryService.Tests` | xUnit — 142 tests |
+| `Ben.Service.RepositoryService.Tests` | xUnit — 163 tests |
 | `Ben.Web.Tests` | xUnit — 206 tests |
 
-**348 tests — 0 failures, 0 warnings**
+**369 tests — 0 failures, 0 warnings**
 
 ---
 

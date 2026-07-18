@@ -176,3 +176,29 @@ Full group CRUD plus member sub-resource:
 | `james.thornton@benco.dev` | Member |
 | `emma.rodriguez@benco.dev` | Member |
 | `daniel.park@benco.dev` | *(not seeded into org)* |
+
+---
+
+### `UploadFileTypeSeeder` *(added 2026-07-18)*
+
+**File:** [`Ben.Data.WebApi/SeedData/UploadFileTypeSeeder.cs`](../../../Ben.Data.WebApi/SeedData/UploadFileTypeSeeder.cs)  
+**When called:** After `OrganizationSeeder`, at startup.  
+**Idempotent:** Yes — checks by name before creating; checks by pattern before adding extensions.
+
+**What it creates:**
+
+A built-in **"Logo"** upload file type for organization logo images:
+
+| Property | Value |
+|---|---|
+| `Name` | `"Logo"` |
+| `Description` | `"Organization logo images — JPEG, PNG, GIF, WebP, SVG"` |
+| `IsActive` | `true` |
+| `IsPublic` | `true` |
+| `AllowAllExtensions` | `false` |
+| `SortOrder` | `1` |
+| `CreatedByAppUserId` | SuperAdmin (`haveben@msn.com`) |
+
+**Seeded extension patterns:** `.jpg` · `.jpeg` · `.png` · `.gif` · `.webp` · `.svg`
+
+**Why needed:** The Add Logo dialog in `OrgCmsEditor.razor` uploads via `POST /api/upload-files` which requires a `uploadFileTypeId`. This seeder ensures a suitable type always exists and the dialog auto-selects it by name.
