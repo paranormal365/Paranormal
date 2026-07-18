@@ -214,6 +214,20 @@ public interface IBenAdminClient
 
     /// <summary>Uploads an image file and returns its record. Used to add a logo from device.</summary>
     Task<UploadFileRecord?> UploadImageAsync(Guid fileTypeId, Guid userId, string fileName, string contentType, byte[] data, CancellationToken token = default);
+
+    // ── Audio Config ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the saved WaveSurfer config for an audio UploadFile,
+    /// or <c>null</c> if none has been saved (component uses defaults).
+    /// </summary>
+    Task<UploadFileAudioConfigRecord?> GetAudioConfigAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Creates or fully replaces the WaveSurfer config for an audio UploadFile.</summary>
+    Task<UploadFileAudioConfigRecord?> UpsertAudioConfigAsync(Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default);
+
+    /// <summary>Removes the saved WaveSurfer config; the player will use theme-derived defaults on next render.</summary>
+    Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default);
 }
 
 /// <summary>

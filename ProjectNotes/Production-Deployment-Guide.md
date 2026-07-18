@@ -16,9 +16,10 @@ All commands are **PowerShell** unless noted otherwise.
 6. [Telerik License](#6-telerik-license)
 7. [Microsoft Entra OIDC (optional)](#7-microsoft-entra-oidc-optional)
 8. [Apply Database Schema](#8-apply-database-schema)
-9. [Run the Applications](#9-run-the-applications)
-10. [Verify Deployment](#10-verify-deployment)
-11. [Updating an Existing Deployment](#11-updating-an-existing-deployment)
+9. [Build Front-End Assets (WaveSurfer)](#9-build-front-end-assets-wavesurfer)
+10. [Run the Applications](#10-run-the-applications)
+11. [Verify Deployment](#11-verify-deployment)
+12. [Updating an Existing Deployment](#12-updating-an-existing-deployment)
 
 ---
 
@@ -240,7 +241,7 @@ dotnet ef database update `
   --startup-project Ben.Data.WebApi
 ```
 
-Applies all 10 migrations. If the database is already partially migrated, only pending ones are applied.
+Applies all 11 migrations. If the database is already partially migrated, only pending ones are applied.
 
 ### Option B — SQL script
 
@@ -268,7 +269,46 @@ Commit the updated file: `git add scripts\create-database.sql && git commit -m "
 
 ---
 
-## 9. Run the Applications
+## 10. Build Front-End Assets (WaveSurfer)
+
+The `WaveSurferPlayer` Blazor component (in `Ben.Web.Library/Manage/Audio/`) depends on
+pre-built WaveSurfer ESM bundles in `Ben.Web.WebApp/wwwroot/js/wavesurfer/`.
+
+> **node_modules and dist/ are git-ignored.** The build artifacts at `wwwroot/js/wavesurfer/`
+> **are committed** and are already present after `git clone`/`git pull`. You only need to
+> re-run the build when WaveSurfer source files have been changed.
+
+**Prerequisites:** Node.js 20+ and npm installed on the build machine.
+
+```powershell
+# From the repository root
+cd Ben.Web.WebApp\wwwroot\ts\wavesurfer
+npm install --legacy-peer-deps   # first-time only; installs build tooling
+npm run build:blazor             # compiles TypeScript → ESM bundles in wwwroot/js/wavesurfer/
+cd ..\..\..\..
+```
+
+**What is built:**
+
+| Output | Description |
+|---|---|
+| `wwwroot/js/wavesurfer/wavesurfer.esm.js` | Core WaveSurfer library |
+| `wwwroot/js/wavesurfer/plugins/regions.esm.js` | Regions plugin |
+| `wwwroot/js/wavesurfer/plugins/hover.esm.js` | Hover / cursor label plugin |
+| `wwwroot/js/wavesurfer/plugins/timeline.esm.js` | Timeline ruler plugin |
+| `wwwroot/js/wavesurfer/plugins/zoom.esm.js` | Mouse-wheel zoom plugin |
+| `wwwroot/js/wavesurfer/plugins/minimap.esm.js` | Navigation minimap plugin |
+| `wwwroot/js/wavesurfer/plugins/spectrogram.esm.js` | Spectrogram plugin |
+| `wwwroot/js/wavesurfer/plugins/spectrogram-windowed.esm.js` | Windowed spectrogram (long files) |
+| `wwwroot/js/wavesurfer/plugins/envelope.esm.js` | Volume envelope plugin |
+| `wwwroot/js/wavesurfer/plugins/record.esm.js` | Microphone recording plugin |
+
+**Telerik color integration:** Colors are resolved at runtime from Telerik CSS custom
+properties (`--kendo-color-primary`, `--kendo-body-text`, etc.) — no build configuration needed.
+
+---
+
+## 10. Run the Applications
 
 Both services must run simultaneously — the WebApp calls the WebApi on every authenticated request.
 
@@ -375,7 +415,7 @@ Restart-Service BenWebApi, BenWebApp
 
 ---
 
-## 10. Verify Deployment
+## 11. Verify Deployment
 
 | Check | How | Expected |
 |---|---|---|
@@ -383,14 +423,19 @@ Restart-Service BenWebApi, BenWebApp
 | WebApi login | `POST http://<host>:5252/login` `{"email":"...","password":"..."}` | `{"accessToken":"..."}` |
 | WebApp loads | Browser: `http://<host>:5078` | Login page renders with Telerik styles |
 | Local login | Sign in with SuperAdmin credentials | Home page — "Administration" button visible |
-| DB tables | SSMS: `SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'` | **41** |
+| DB tables | SSMS: `SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'` | **≥ 47** (11 migrations) |
 | Seeders ran | SSMS: `SELECT Email FROM AppUsers` | SuperAdmin email present |
 | Logo file type | SSMS: `SELECT Name FROM UploadFileTypes` | `Logo` row present |
 | Entra login | Click "Sign in with Microsoft" (if configured) | Redirects to Microsoft, returns to app |
 
 ---
 
-## 11. Updating an Existing Deployment
+| WaveSurfer assets | Browser: `/_content/Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor.js` | Module loads without 404 |
+| WaveSurfer core | Browser DevTools: `http://<host>:5078/js/wavesurfer/wavesurfer.esm.js` | JS module response (not 404) |
+
+---
+
+## 12. Updating an Existing Deployment
 
 ```powershell
 # 1. Stop services
@@ -405,7 +450,12 @@ dotnet ef database update `
   --project Ben.Data.Source `
   --startup-project Ben.Data.WebApi
 
-# 4. Regenerate and commit the SQL script
+# 4. Re-build WaveSurfer front-end assets (only needed if wavesurfer source changed)
+cd Ben.Web.WebApp\wwwroot\ts\wavesurfer
+npm run build:blazor
+cd ..\..\..\..
+
+# 5. Regenerate and commit the SQL script
 dotnet ef migrations script `
   --project Ben.Data.Source `
   --startup-project Ben.Data.WebApi `
@@ -415,13 +465,13 @@ git add scripts\create-database.sql
 git commit -m "Update create-database.sql for migration <name>"
 git push
 
-# 5. Re-publish
+# 6. Re-publish
 dotnet publish Ben.Data.WebApi\Ben.Data.WebApi.csproj `
   -c Release -r win-x64 --self-contained true -o C:\Ben\WebApi
 dotnet publish Ben.Web.WebApp\Ben.Web.WebApp.csproj `
   -c Release -r win-x64 --self-contained true -o C:\Ben\WebApp
 
-# 6. Restart services
+# 7. Restart services
 Start-Service BenWebApi, BenWebApp
 ```
 

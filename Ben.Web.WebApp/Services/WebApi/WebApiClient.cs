@@ -168,6 +168,16 @@ public sealed class WebApiClient : IWebApiClient
         return (data, contentType, fileName);
     }
 
+    // ── Audio Config ──────────────────────────────────────────────────────────
+    public Task<UploadFileAudioConfigRecord?> GetAudioConfigAsync(Guid fileId, CancellationToken token = default)
+        => GetAsync<UploadFileAudioConfigRecord>($"/api/upload-files/{fileId}/audio-config", token);
+
+    public Task<UploadFileAudioConfigRecord?> UpsertAudioConfigAsync(Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default)
+        => PutAsync<UpsertAudioConfigRequest, UploadFileAudioConfigRecord>($"/api/upload-files/{fileId}/audio-config", request, token);
+
+    public Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default)
+        => DeleteAsync($"/api/upload-files/{fileId}/audio-config", token);
+
     // ── Org Sharing ──────────────────────────────────────────────────────────
     public async Task<IReadOnlyList<UploadFileOrgShareResponse>> GetFileOrgSharesAsync(Guid fileId, CancellationToken token = default)
     {

@@ -57,6 +57,7 @@
     "clean": "node ./scripts/clean.cjs",
     "build:dev": "tsc -w --target ESNext",
     "build": "npm run clean && tsc && rollup -c",
+    "build:blazor": "npm run clean && tsc && rollup -c rollup.blazor.config.js",
     "prepublishOnly": "npm run build",
     "lint": "eslint \"src/**/*.ts\" --fix",
     "lint:report": "eslint \"src/**/*.ts\" --output-file eslint_report.json --format json",

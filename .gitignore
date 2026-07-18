@@ -37,6 +37,13 @@ packages/
 Thumbs.db
 
 # ============================================================
+# WaveSurfer TypeScript build tooling (run `npm run build:blazor` to regenerate)
+# ============================================================
+Ben.Web.WebApp/wwwroot/ts/wavesurfer/node_modules/
+Ben.Web.WebApp/wwwroot/ts/wavesurfer/dist/
+Ben.Web.WebApp/wwwroot/assets/
+
+# ============================================================
 # Secrets / sensitive config
 # ============================================================
 

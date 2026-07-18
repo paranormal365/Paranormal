@@ -326,4 +326,15 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         form.Add(fileContent, "file", fileName);
         return await _api.UploadFileAsync(form, token);
     }
+
+    // ── Audio Config ─────────────────────────────────────────────────────
+
+    public Task<UploadFileAudioConfigRecord?> GetAudioConfigAsync(Guid fileId, CancellationToken token = default)
+        => _api.GetAudioConfigAsync(fileId, token);
+
+    public Task<UploadFileAudioConfigRecord?> UpsertAudioConfigAsync(Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default)
+        => _api.UpsertAudioConfigAsync(fileId, request, token);
+
+    public Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default)
+        => _api.DeleteAudioConfigAsync(fileId, token);
 }

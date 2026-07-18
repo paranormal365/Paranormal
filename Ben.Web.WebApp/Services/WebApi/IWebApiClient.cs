@@ -32,6 +32,11 @@ public interface IWebApiClient
     Task<bool> DeleteUploadFileAsync(Guid id, CancellationToken token = default);
     Task<(byte[] Data, string ContentType, string FileName)?> DownloadFileAsync(Guid id, CancellationToken token = default);
 
+    // Upload File — Audio Config
+    Task<UploadFileAudioConfigRecord?> GetAudioConfigAsync(Guid fileId, CancellationToken token = default);
+    Task<UploadFileAudioConfigRecord?> UpsertAudioConfigAsync(Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default);
+    Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default);
+
     // Upload File — Org Sharing
     Task<IReadOnlyList<UploadFileOrgShareResponse>> GetFileOrgSharesAsync(Guid fileId, CancellationToken token = default);
     Task<IReadOnlyList<UploadFileRecord>> GetOrgSharedFilesAsync(Guid orgId, CancellationToken token = default);

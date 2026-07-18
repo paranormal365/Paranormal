@@ -314,3 +314,121 @@ Complete rewrite. Added full CRUD on all sub-entity tabs and media preview on th
 
 #### Type management
 Every type dropdown has a ✚ **New** button that opens a mini `TelerikDialog` to create a new type inline, then reloads the dropdown without navigating away.
+
+---
+
+## Audio Components (`Manage/Audio/` folder)
+
+### `WaveSurferPlayer.razor`
+
+**Route:** *(no route — embedded component)*  
+**File:** [`Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor`](../../../Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor)  
+**JS Module:** [`Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor.js`](../../../Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor.js)  
+**Models:** [`Ben.Web.Library/Manage/Audio/WaveSurferOptions.cs`](../../../Ben.Web.Library/Manage/Audio/WaveSurferOptions.cs)
+
+#### Summary
+A full-featured Blazor audio waveform player backed by **WaveSurfer.js v7.12.11**. Fills its
+container width, supports user drag-resize of height, and adapts colors from the active Telerik theme
+at runtime via CSS custom properties. All parameter names use the PascalCase equivalents of the
+WaveSurfer JS option names.
+
+#### Audio Sources (`WsAudioSource`)
+
+| Type | Factory | Description |
+|---|---|---|
+| `Url` | `WsAudioSource.FromUrl(url)` | Direct URL — stream, CDN, or `/api/upload-files/{id}/download` |
+| `Bytes` | `WsAudioSource.FromBytes(bytes, contentType)` | Raw bytes fetched from DB via `IBenAdminClient` |
+| `Base64` | `WsAudioSource.FromBase64(base64, contentType)` | Pre-encoded base64 audio string |
+| `Url` (data URL) | `WsAudioSource.FromDataUrl(dataUrl)` | Full `data:audio/…;base64,…` string |
+
+`ToLoadUrl()` resolves the source to the string WaveSurfer's `load()` accepts. The resolution
+happens in C# before any JS interop call — the JS module never converts binary data.
+
+#### Key Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `Source` | `WsAudioSource?` | `null` | Audio source (see above) |
+| `Options` | `WsOptions` | `new()` | WaveSurfer core options (PascalCase JS names) |
+| `Plugins` | `WsPluginConfig` | `new()` | Plugin enable flags + options |
+| `ShowControls` | `bool` | `true` | Render built-in play/pause/stop/volume/zoom/rate bar |
+| `InitialHeight` | `string` | `"200px"` | Starting height of the component |
+| `MinHeight` | `string` | `"80px"` | Minimum drag-resize height |
+| `MaxHeight` | `string` | `"800px"` | Maximum drag-resize height |
+| `CssClass` | `string?` | `null` | Extra CSS class on the wrapper |
+| `ExtraControls` | `RenderFragment?` | `null` | Additional controls rendered inside the controls bar |
+
+#### WsOptions — color defaults (Telerik theme integration)
+
+Colors default to `null`; the JS module reads Telerik CSS custom properties at init time:
+
+| C# property | JS option | CSS variable read | Light fallback | Dark fallback |
+|---|---|---|---|---|
+| `WaveColor` | `waveColor` | `--kendo-color-primary` | `#3B82F6` | `#93C5FD` |
+| `ProgressColor` | `progressColor` | `--kendo-color-primary-emphasis` | `#1D4ED8` | `#2563EB` |
+| `CursorColor` | `cursorColor` | `--kendo-body-text` | `#1E293B` | `#F1F5F9` |
+
+#### Plugins (`WsPluginConfig`)
+
+| Plugin flag | Options class | Description |
+|---|---|---|
+| `Regions` | — | Draggable/resizable audio segments |
+| `Hover` | `WsHoverOptions` | Cursor timestamp label on hover |
+| `Timeline` | `WsTimelineOptions` | Time ruler |
+| `Zoom` | `WsZoomOptions` | Mouse-wheel / pinch zoom |
+| `Minimap` | `WsMinimapOptions` | Navigation thumbnail |
+| `Spectrogram` | `WsSpectrogramOptions` | Frequency spectrogram |
+| `SpectrogramWindowed` | `WsSpectrogramOptions` | Memory-efficient spectrogram for long files |
+| `Envelope` | `WsEnvelopeOptions` | Volume-fade SVG overlay with drag handles |
+
+#### Events
+
+| Callback | Signature | Fired when |
+|---|---|---|
+| `OnReady` | `EventCallback` | WaveSurfer fires `ready` |
+| `OnPlay` / `OnPause` / `OnFinish` | `EventCallback` | Playback state changes |
+| `OnTimeUpdate` | `EventCallback<double>` | Current time changes during playback |
+| `OnLoading` | `EventCallback<int>` | Load progress 0–100 |
+| `OnError` | `EventCallback<string>` | WaveSurfer error |
+| `OnZoom` | `EventCallback<double>` | Zoom level changed |
+| `OnSeeking` | `EventCallback<double>` | User seeks to a new position |
+| `OnRegionCreated/Updated/Removed/Clicked/In/Out` | `EventCallback<WsRegionData>` or `<string>` | Region lifecycle |
+| `OnEnvelopePointsChanged` | `EventCallback<List<WsEnvelopePoint>>` | Envelope control points changed |
+| `OnEnvelopeVolumeChanged` | `EventCallback<double>` | Envelope volume changed |
+
+#### Public Methods (programmatic control)
+
+`PlayAsync`, `PauseAsync`, `PlayPauseAsync`, `StopAsync`, `SeekToAsync(double progress)`,
+`SetVolumeAsync(double)`, `SetMutedAsync(bool)`, `SetPlaybackRateAsync(double)`, `SetZoomAsync(double)`,
+`LoadAsync(string url)`, `IsPlayingAsync()`, `GetCurrentTimeAsync()`, `GetDurationAsync()`,
+`GetVolumeAsync()`,
+`AddRegionAsync(WsRegionParams)`, `RemoveRegionAsync(string)`, `ClearRegionsAsync()`,
+`GetRegionsAsync()`, `PlayRegionAsync(string)`,
+`SetEnvelopePointsAsync(List<WsEnvelopePoint>)`, `AddEnvelopePointAsync(WsEnvelopePoint)`,
+`RemoveEnvelopePointAsync(string)`, `SetEnvelopeVolumeAsync(double)`, `GetEnvelopePointsAsync()`.
+
+#### JS Module (`WaveSurferPlayer.razor.js`)
+
+Served at `/_content/Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor.js`.
+
+- WaveSurfer core + each plugin are lazy-loaded via dynamic `import()` on first use and cached
+- `resolveTelerikColors()` reads Kendo CSS vars via `getComputedStyle(document.documentElement)`
+  and detects dark mode by perceived luminance of `--kendo-body-bg`
+- `ResizeObserver` on the wrapper div debounces (50 ms) and calls `ws.setOptions({ height: 'auto' })`
+  to trigger WaveSurfer's internal resize logic after a user drag-resize
+- `destroy(containerId)` disconnects the `ResizeObserver` and calls `ws.destroy()`
+
+#### Build Notes
+
+ESM bundles are pre-built and committed at `Ben.Web.WebApp/wwwroot/js/wavesurfer/`.
+
+To rebuild (e.g. after updating WaveSurfer source):
+
+```bash
+cd Ben.Web.WebApp/wwwroot/ts/wavesurfer
+npm install --legacy-peer-deps   # first time only
+npm run build:blazor
+```
+
+`node_modules/` and `dist/` are git-ignored (`wwwroot/ts/wavesurfer/node_modules/`,
+`wwwroot/ts/wavesurfer/dist/`).

@@ -47,6 +47,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UploadFile> UploadFiles { get; set; }
         public virtual DbSet<UploadFileOrganizationShare> UploadFileOrganizationShares { get; set; }
         public virtual DbSet<UploadFilePermissionRequest> UploadFilePermissionRequests { get; set; }
+        public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -553,6 +554,36 @@ namespace Ben.Data.Source.Context
                 .HasIndex(e => e.UserId);
             modelBuilder.Entity<AuditLog>()
                 .HasIndex(e => e.OccurredAt);
+
+            // ── UploadFileAudioConfig ────────────────────────────────────────
+            // One-to-one with UploadFile; cascade so config is deleted with the file.
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .HasOne(e => e.UploadFile).WithOne(e => e.AudioConfig)
+                .HasForeignKey<UploadFileAudioConfig>(e => e.UploadFileId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .HasIndex(e => e.UploadFileId).IsUnique();
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // JSON option columns — nvarchar(max) to accommodate any plugin config
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .Property(e => e.HoverOptionsJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .Property(e => e.TimelineOptionsJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .Property(e => e.ZoomOptionsJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .Property(e => e.MinimapOptionsJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .Property(e => e.SpectrogramOptionsJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .Property(e => e.SpectrogramWindowedOptionsJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .Property(e => e.EnvelopeOptionsJson).HasColumnType("nvarchar(max)");
         }
     }
 }
