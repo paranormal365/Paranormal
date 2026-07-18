@@ -44,6 +44,6 @@ Every entity follows a **two-file partial class** pattern:
 | [Context.md](Context.md) | `BenDataContext` — DbContext, model configuration, migration history |
 | [Entities-Core.md](Entities-Core.md) | `AppUser`, `Organization`, `OrganizationUserMembership`, `OrganizationAccessGrant`, `AuditLog` |
 | [Entities-User.md](Entities-User.md) | User sub-entities: address, email, phone, link, message, note + their type entities |
-| [Entities-Org.md](Entities-Org.md) | Organisation sub-entities: address, email, phone, link, note, page + their type entities |
+| [Entities-Org.md](Entities-Org.md) | Organization sub-entities: address, email, phone, link, note, page + their type entities |
 | [Entities-Upload.md](Entities-Upload.md) | `UploadFileType`, `UploadFileTypeExtension`, `UploadFile`, `UploadFileOrganizationShare`, `UploadFilePermissionRequest` |
 | [Enums.md](Enums.md) | Data-layer enumerations defined in `Ben.Data.Source.Enums` |

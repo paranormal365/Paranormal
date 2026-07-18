@@ -10,14 +10,14 @@ These are **service-layer value objects** (not EF entities) used internally by `
 ## `OrganizationUserPermission`
 
 ### Summary
-Represents the resolved permission a user holds for a specific table and action within an organisation.  
+Represents the resolved permission a user holds for a specific table and action within an organization.  
 Returned by permission query helpers in the security service.
 
 ### Properties
 
 | Property | Type | Description |
 |---|---|---|
-| `OrganizationId` | `Guid` | The target organisation. |
+| `OrganizationId` | `Guid` | The target organization. |
 | `UserId` | `Guid` | The user whose permission this represents. |
 | `Table` | [`OrganizationSecurityTable`](Enums.md#organizationsecuritytable) | The domain table. |
 | `Actions` | `OrganizationSecurityAction` | Bitmask of granted CRUD actions. |
@@ -42,7 +42,7 @@ Carries enough information to evaluate a permission decision without reloading t
 
 | Property | Type | Description |
 |---|---|---|
-| `OrganizationId` | `Guid` | The target organisation. |
+| `OrganizationId` | `Guid` | The target organization. |
 | `UserId` | `Guid` | User who holds the grant. |
 | `Table` | [`OrganizationSecurityTable`](Enums.md#organizationsecuritytable) | The domain table this grant covers. |
 | `Actions` | `OrganizationSecurityAction` | Bitmask of permitted CRUD operations. |
@@ -62,7 +62,7 @@ A lightweight representation of an org membership used in the service / attribut
 
 | Property | Type | Description |
 |---|---|---|
-| `OrganizationId` | `Guid` | The target organisation. |
+| `OrganizationId` | `Guid` | The target organization. |
 | `UserId` | `Guid` | The member user. |
 | `Role` | `OrganizationMemberRole` | Owner / Administrator / Manager / Member / Viewer. |
 | `JoinedAt` | `DateTime` | UTC timestamp when the membership was created. |

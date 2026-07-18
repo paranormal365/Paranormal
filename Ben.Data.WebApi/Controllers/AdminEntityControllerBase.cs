@@ -10,7 +10,7 @@ using System.Security.Claims;
 namespace Ben.Data.WebApi.Controllers;
 
 [ApiController]
-[Authorize(Roles = RoleNames.SuperAdmin)]
+[Authorize(Policy = RoleNames.SuperAdmin)]
 public abstract class AdminEntityControllerBase<TEntity, TRecord> : ControllerBase
     where TEntity : class
 {
@@ -108,8 +108,8 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : ControllerBa
 
     private Guid GetCurrentUserId()
     {
-        var value = User.FindFirstValue(ClaimTypes.NameIdentifier)
-                    ?? User.FindFirstValue("sub");
+        var value = User.FindFirstValue(Ben.Data.WebApi.Services.EntraClaimsTransformation.AppUserIdClaimType)
+                    ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
         return Guid.TryParse(value, out var id) ? id : Guid.Empty;
     }
 

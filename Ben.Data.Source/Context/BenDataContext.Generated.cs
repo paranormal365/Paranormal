@@ -35,6 +35,11 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrganizationPhoneType> OrganizationPhoneTypes { get; set; }
         public virtual DbSet<OrganizationNoteType> OrganizationNoteTypes { get; set; }
         public virtual DbSet<OrganizationPage> OrganizationPages { get; set; }
+        public virtual DbSet<OrganizationLogo> OrganizationLogos { get; set; }
+        public virtual DbSet<OrgMemberGroup> OrgMemberGroups { get; set; }
+        public virtual DbSet<OrgMemberGroupMembership> OrgMemberGroupMemberships { get; set; }
+        public virtual DbSet<CmsSection> CmsSections { get; set; }
+        public virtual DbSet<CmsPagePermission> CmsPagePermissions { get; set; }
         public virtual DbSet<OrganizationUserMembership> OrganizationUserMemberships { get; set; }
         public virtual DbSet<OrganizationAccessGrant> OrganizationAccessGrants { get; set; }
         public virtual DbSet<UploadFileType> UploadFileTypes { get; set; }
@@ -42,6 +47,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UploadFile> UploadFiles { get; set; }
         public virtual DbSet<UploadFileOrganizationShare> UploadFileOrganizationShares { get; set; }
         public virtual DbSet<UploadFilePermissionRequest> UploadFilePermissionRequests { get; set; }
+        public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -323,9 +329,81 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.Organization).WithMany(e => e.OrganizationPages)
                 .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<OrganizationPage>()
+                .HasOne(e => e.ParentPage).WithMany(e => e.ChildPages)
+                .HasForeignKey(e => e.ParentPageId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationPage>()
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<OrganizationPage>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── OrganizationLogo ─────────────────────────────────────────────
+            modelBuilder.Entity<OrganizationLogo>()
+                .HasOne(e => e.Organization).WithMany(e => e.OrganizationLogos)
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrganizationLogo>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationLogo>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationLogo>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── OrgMemberGroup ───────────────────────────────────────────────
+            modelBuilder.Entity<OrgMemberGroup>()
+                .HasOne(e => e.Organization).WithMany(e => e.MemberGroups)
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrgMemberGroup>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgMemberGroup>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── OrgMemberGroupMembership ─────────────────────────────────────
+            modelBuilder.Entity<OrgMemberGroupMembership>()
+                .HasIndex(e => new { e.OrgMemberGroupId, e.OrganizationUserMembershipId })
+                .IsUnique();
+            modelBuilder.Entity<OrgMemberGroupMembership>()
+                .HasOne(e => e.OrgMemberGroup).WithMany(e => e.Members)
+                .HasForeignKey(e => e.OrgMemberGroupId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrgMemberGroupMembership>()
+                .HasOne(e => e.OrganizationUserMembership).WithMany()
+                .HasForeignKey(e => e.OrganizationUserMembershipId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgMemberGroupMembership>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── CmsSection ───────────────────────────────────────────────────
+            modelBuilder.Entity<CmsSection>()
+                .HasOne(e => e.OrganizationPage).WithMany(e => e.CmsSections)
+                .HasForeignKey(e => e.OrganizationPageId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CmsSection>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CmsSection>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CmsSection>()
+                .Property(e => e.ContentJson).HasColumnType("nvarchar(max)");
+
+            // ── CmsPagePermission ────────────────────────────────────────────
+            modelBuilder.Entity<CmsPagePermission>()
+                .HasOne(e => e.OrganizationPage).WithMany(e => e.PagePermissions)
+                .HasForeignKey(e => e.OrganizationPageId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CmsPagePermission>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CmsPagePermission>()
+                .HasOne(e => e.OrgMemberGroup).WithMany()
+                .HasForeignKey(e => e.OrgMemberGroupId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CmsPagePermission>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CmsPagePermission>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
@@ -476,6 +554,36 @@ namespace Ben.Data.Source.Context
                 .HasIndex(e => e.UserId);
             modelBuilder.Entity<AuditLog>()
                 .HasIndex(e => e.OccurredAt);
+
+            // ── UploadFileAudioConfig ────────────────────────────────────────
+            // One-to-one with UploadFile; cascade so config is deleted with the file.
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .HasOne(e => e.UploadFile).WithOne(e => e.AudioConfig)
+                .HasForeignKey<UploadFileAudioConfig>(e => e.UploadFileId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .HasIndex(e => e.UploadFileId).IsUnique();
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // JSON option columns — nvarchar(max) to accommodate any plugin config
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .Property(e => e.HoverOptionsJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .Property(e => e.TimelineOptionsJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .Property(e => e.ZoomOptionsJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .Property(e => e.MinimapOptionsJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .Property(e => e.SpectrogramOptionsJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .Property(e => e.SpectrogramWindowedOptionsJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<UploadFileAudioConfig>()
+                .Property(e => e.EnvelopeOptionsJson).HasColumnType("nvarchar(max)");
         }
     }
 }

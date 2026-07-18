@@ -1,0 +1,189 @@
+@page "/admin/roles"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>SuperAdmin — Site Roles</PageTitle>
+
+<div class="container-fluid px-3">
+
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Site Roles</h3>
+        </div>
+    </div>
+
+    @if (_errorMessage is not null)
+    {
+        <div class="alert alert-danger mb-3">@_errorMessage</div>
+    }
+    @if (_successMessage is not null)
+    {
+        <div class="alert alert-success mb-3">@_successMessage</div>
+    }
+
+    @* ── New Role ── *@
+    <div class="d-flex align-items-center gap-2 mb-3" style="max-width:440px">
+        <TelerikTextBox @bind-Value="@_newRoleName"
+                        Placeholder="New role name…"
+                        Width="100%" />
+        <TelerikButton Icon="@SvgIcon.Plus"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       OnClick="CreateRole"
+                       Enabled="@(!_isSaving)">
+            Add
+        </TelerikButton>
+    </div>
+
+    @* ── Grid ── *@
+    @if (_roles is null)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading roles…" />
+    }
+    else
+    {
+        <div style="max-width:640px">
+        <TelerikGrid Data="@_roles"
+                     TItem="AdminRoleWithCountResponse"
+                     Sortable="true"
+                     Class="admin-roles-grid">
+            <GridColumns>
+                <GridColumn Field="@($"{nameof(AdminRoleWithCountResponse.Role)}.{nameof(AppRoleAdminRecord.Name)}")"
+                            Title="Role Name" />
+                <GridColumn Field="@nameof(AdminRoleWithCountResponse.UserCount)"
+                            Title="Users" Width="90px" />
+                <GridCommandColumn Width="110px">
+                    <GridCommandButton Command="Delete"
+                                       Icon="@SvgIcon.Trash"
+                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                       OnClick="@((GridCommandEventArgs e) => RequestDelete((AdminRoleWithCountResponse)e.Items.First()))">
+                        Delete
+                    </GridCommandButton>
+                </GridCommandColumn>
+            </GridColumns>
+        </TelerikGrid>
+        </div>
+    }
+</div>
+
+@* ── Delete Confirmation ── *@
+<TelerikDialog @bind-Visible="@_showDeleteDialog"
+               Title="Delete Role"
+               Width="380px">
+    <DialogContent>
+        @if (_pendingDelete is not null)
+        {
+            <p>Delete role <strong>@_pendingDelete.Role.Name</strong>?</p>
+            @if (_pendingDelete.UserCount > 0)
+            {
+                <div class="alert alert-warning mb-0">
+                    This role has <strong>@_pendingDelete.UserCount</strong> user(s) assigned — it cannot be deleted until they are removed from the role.
+                </div>
+            }
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="CancelDelete">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                       OnClick="ConfirmDelete"
+                       Enabled="@(_pendingDelete?.UserCount == 0 && !_isSaving)">
+            @(_isSaving ? "Deleting…" : "Delete")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@code {
+    private IReadOnlyList<AdminRoleWithCountResponse>? _roles;
+    private string _newRoleName = string.Empty;
+    private bool _isSaving;
+    private string? _errorMessage;
+    private string? _successMessage;
+
+    private bool _showDeleteDialog;
+    private AdminRoleWithCountResponse? _pendingDelete;
+
+    protected override void OnInitialized()
+    {
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
+            NavManager.NavigateTo("/");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadRoles();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadRoles()
+    {
+        _roles = await AdminClient.GetRolesAsync();
+    }
+
+    private async Task CreateRole()
+    {
+        _errorMessage   = null;
+        _successMessage = null;
+
+        var name = _newRoleName.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            _errorMessage = "Role name cannot be empty.";
+            return;
+        }
+
+        _isSaving = true;
+        var created = await AdminClient.CreateRoleAsync(name);
+        _isSaving = false;
+
+        if (created is not null)
+        {
+            _newRoleName    = string.Empty;
+            _successMessage = $"Role '{created.Name}' created.";
+            await LoadRoles();
+        }
+        else
+        {
+            _errorMessage = $"Failed to create role '{name}'. It may already exist.";
+        }
+    }
+
+    private void RequestDelete(AdminRoleWithCountResponse row)
+    {
+        _errorMessage      = null;
+        _successMessage    = null;
+        _pendingDelete     = row;
+        _showDeleteDialog  = true;
+    }
+
+    private void CancelDelete()
+    {
+        _showDeleteDialog = false;
+        _pendingDelete    = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_pendingDelete is null) return;
+        _isSaving = true;
+
+        var ok = await AdminClient.DeleteRoleAsync(_pendingDelete.Role.Id);
+        _isSaving         = false;
+        _showDeleteDialog = false;
+
+        if (ok)
+        {
+            _successMessage = $"Role '{_pendingDelete.Role.Name}' deleted.";
+            _pendingDelete  = null;
+            await LoadRoles();
+        }
+        else
+        {
+            _errorMessage  = $"Could not delete role '{_pendingDelete.Role.Name}'.";
+            _pendingDelete = null;
+        }
+    }
+}

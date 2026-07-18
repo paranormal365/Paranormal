@@ -72,6 +72,7 @@ builder.Services.AddScoped<Ben.Service.Security.Services.IOrganizationSecuritySe
 builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService, Ben.Service.RepositoryService.Services.OrganizationSecurityService>();
 builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService, Ben.Service.RepositoryService.Services.AuditLogService>();
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);
+builder.Services.AddTransient<Microsoft.AspNetCore.Authentication.IClaimsTransformation, Ben.Data.WebApi.Services.EntraClaimsTransformation>();
 
 builder.Services.AddIdentityApiEndpoints<AppUser>(options =>
        {
@@ -117,16 +118,29 @@ if (entraEnabled)
 }
 
 // Default authorization policy accepts local Identity bearer OR Entra JWT.
-// [Authorize(Roles = "SuperAdmin")] continues to require the local Identity role.
 var schemes = entraEnabled
     ? new[] { IdentityConstants.BearerScheme, EntraScheme }
     : new[] { IdentityConstants.BearerScheme };
+
+// SuperAdmin authorization handler — checks role directly in DB via UserManager.
+// This works for both local Identity (role claims) and Entra JWT (OID DB lookup),
+// bypassing any claim-injection issues with IClaimsTransformation.
+builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
+    Ben.Data.WebApi.Authorization.SuperAdminHandler>();
 
 builder.Services.AddAuthorization(options =>
 {
     options.DefaultPolicy = new AuthorizationPolicyBuilder(schemes)
         .RequireAuthenticatedUser()
         .Build();
+
+    // Named "SuperAdmin" policy used by [Authorize(Policy = RoleNames.SuperAdmin)]
+    // on all admin controllers. Delegates to SuperAdminHandler for DB-based role check.
+    options.AddPolicy(RoleNames.SuperAdmin, policy =>
+        policy
+            .AddAuthenticationSchemes(schemes)
+            .RequireAuthenticatedUser()
+            .AddRequirements(new Ben.Data.WebApi.Authorization.SuperAdminRequirement()));
 });
 
 var app = builder.Build();
@@ -173,6 +187,7 @@ app.MapIdentityApi<AppUser>();
 
 await Ben.Data.WebApi.SeedData.SuperAdminSeeder.SeedAsync(app.Services, app.Configuration);
 await Ben.Data.WebApi.SeedData.OrganizationSeeder.SeedAsync(app.Services, app.Configuration);
+await Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.SeedAsync(app.Services, app.Configuration);
 
 app.Run();
 

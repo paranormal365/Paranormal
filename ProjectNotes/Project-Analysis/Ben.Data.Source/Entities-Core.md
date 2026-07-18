@@ -37,7 +37,7 @@ Intentionally does **not** implement `IAuditableEntity` because users are the ac
 **Table:** `Organizations`
 
 ### Summary
-A tenant/organisation that groups users and content.  
+A tenant/organization that groups users and content.  
 Created via [`RegisterOrganizationAsync`](../Ben.Service.RepositoryService/Services.md#organizationsecurityservice) which also seeds an Owner membership.
 
 ### Properties
@@ -65,7 +65,7 @@ Created via [`RegisterOrganizationAsync`](../Ben.Service.RepositoryService/Servi
 **Unique index:** `(OrganizationId, AppUserId)`
 
 ### Summary
-Links a user to an organisation with a role. One row per user-per-organisation.  
+Links a user to an organization with a role. One row per user-per-organization.  
 `IsActive = false` marks a soft-deleted/removed membership (the row is retained for audit history).
 
 ### Properties
@@ -75,7 +75,7 @@ Links a user to an organisation with a role. One row per user-per-organisation.
 | `Id` | `Guid` | No | PK |
 | `OrganizationId` | `Guid` | No | FK → `Organization` |
 | `AppUserId` | `Guid` | No | FK → `AppUser` |
-| `Role` | [`OrganizationMemberRole`](../Ben.Data.Common/Enums.md#organizationmemberrole) | No | The user's role in the organisation. Stored as `int`. |
+| `Role` | [`OrganizationMemberRole`](../Ben.Data.Common/Enums.md#organizationmemberrole) | No | The user's role in the organization. Stored as `int`. |
 | `IsActive` | `bool` | No | `false` after `RemoveMemberAsync` is called. |
 | `DateCreated` | `DateTime` | No | Audit |
 | `DateUpdated` | `DateTime?` | Yes | Audit |
@@ -92,7 +92,7 @@ Links a user to an organisation with a role. One row per user-per-organisation.
 **Unique index:** `(OrganizationId, AppUserId, TableName)`
 
 ### Summary
-Stores the set of permitted actions for a user within an organisation for a specific table, as a single integer bitmask.  
+Stores the set of permitted actions for a user within an organization for a specific table, as a single integer bitmask.  
 One row per (user, org, table); the `Actions` field combines multiple CRUD flags.  
 Used by [`OrganizationSecurityService.HasAccessAsync`](../Ben.Service.RepositoryService/Services.md) to determine whether a non-Owner/Admin member can perform an operation.
 

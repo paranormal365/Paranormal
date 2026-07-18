@@ -139,6 +139,172 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("AuditLogs", (string)null);
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.CmsPagePermission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Actions")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("AppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("OrgMemberGroupId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrganizationPageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppUserId");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrgMemberGroupId");
+
+                    b.HasIndex("OrganizationPageId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("CmsPagePermissions");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.CmsSection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ContentJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("OrganizationPageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SectionType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationPageId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("CmsSections");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMemberGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("OrgMemberGroups");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMemberGroupMembership", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrgMemberGroupId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrganizationUserMembershipId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationUserMembershipId");
+
+                    b.HasIndex("OrgMemberGroupId", "OrganizationUserMembershipId")
+                        .IsUnique();
+
+                    b.ToTable("OrgMemberGroupMemberships");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.Organization", b =>
                 {
                     b.Property<Guid>("Id")
@@ -557,6 +723,52 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("OrganizationLinkTypes");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationLogo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AltText")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("UploadFileId");
+
+                    b.ToTable("OrganizationLogos");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationNote", b =>
                 {
                     b.Property<Guid>("Id")
@@ -680,6 +892,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<bool>("IsHome")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsPublished")
                         .HasColumnType("bit");
 
@@ -691,6 +906,9 @@ namespace Ben.Data.Source.Migrations
 
                     b.Property<string>("PageTitle")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("ParentPageId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
@@ -706,6 +924,8 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("CreatedByAppUserId");
 
                     b.HasIndex("OrganizationId");
+
+                    b.HasIndex("ParentPageId");
 
                     b.HasIndex("UpdatedByAppUserId");
 
@@ -924,6 +1144,144 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("UploadFileTypeId");
 
                     b.ToTable("UploadFiles");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.UploadFileAudioConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double?>("AudioRate")
+                        .HasColumnType("float");
+
+                    b.Property<string>("BarAlign")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("BarGap")
+                        .HasColumnType("int");
+
+                    b.Property<double?>("BarHeight")
+                        .HasColumnType("float");
+
+                    b.Property<int?>("BarRadius")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("BarWidth")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CursorColor")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("CursorWidth")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("DragToSeek")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("EnableEnvelope")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("EnableHover")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("EnableMinimap")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("EnableRegions")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("EnableSpectrogram")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("EnableSpectrogramWindowed")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("EnableTimeline")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("EnableZoom")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("EnvelopeOptionsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("Height")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("HideScrollbar")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("HoverOptionsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("InitialHeight")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("MaxHeight")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<double>("MaxZoom")
+                        .HasColumnType("float");
+
+                    b.Property<string>("MinHeight")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<double>("MinZoom")
+                        .HasColumnType("float");
+
+                    b.Property<string>("MinimapOptionsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("Normalize")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ProgressColor")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("ShowControls")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("SpectrogramOptionsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SpectrogramWindowedOptionsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TimelineOptionsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("WaveColor")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ZoomOptionsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("UploadFileId")
+                        .IsUnique();
+
+                    b.ToTable("UploadFileAudioConfigs");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.UploadFileOrganizationShare", b =>
@@ -1924,6 +2282,125 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.CmsPagePermission", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
+                        .WithMany()
+                        .HasForeignKey("AppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrgMemberGroup", "OrgMemberGroup")
+                        .WithMany()
+                        .HasForeignKey("OrgMemberGroupId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.OrganizationPage", "OrganizationPage")
+                        .WithMany("PagePermissions")
+                        .HasForeignKey("OrganizationPageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("AppUser");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("OrgMemberGroup");
+
+                    b.Navigation("OrganizationPage");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.CmsSection", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrganizationPage", "OrganizationPage")
+                        .WithMany("CmsSections")
+                        .HasForeignKey("OrganizationPageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("OrganizationPage");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMemberGroup", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany("MemberGroups")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMemberGroupMembership", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrgMemberGroup", "OrgMemberGroup")
+                        .WithMany("Members")
+                        .HasForeignKey("OrgMemberGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrganizationUserMembership", "OrganizationUserMembership")
+                        .WithMany()
+                        .HasForeignKey("OrganizationUserMembershipId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("OrgMemberGroup");
+
+                    b.Navigation("OrganizationUserMembership");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.Organization", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
@@ -2129,6 +2606,40 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UpdatedByAppUser");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationLogo", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany("OrganizationLogos")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "UploadFile")
+                        .WithMany()
+                        .HasForeignKey("UploadFileId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("UpdatedByAppUser");
+
+                    b.Navigation("UploadFile");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationNote", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
@@ -2202,6 +2713,11 @@ namespace Ben.Data.Source.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
+                    b.HasOne("Ben.Data.Source.Entities.OrganizationPage", "ParentPage")
+                        .WithMany("ChildPages")
+                        .HasForeignKey("ParentPageId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
                         .WithMany()
                         .HasForeignKey("UpdatedByAppUserId")
@@ -2210,6 +2726,8 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("CreatedByAppUser");
 
                     b.Navigation("Organization");
+
+                    b.Navigation("ParentPage");
 
                     b.Navigation("UpdatedByAppUser");
                 });
@@ -2324,6 +2842,32 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UpdatedByAppUser");
 
                     b.Navigation("UploadFileType");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.UploadFileAudioConfig", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "UploadFile")
+                        .WithOne("AudioConfig")
+                        .HasForeignKey("Ben.Data.Source.Entities.UploadFileAudioConfig", "UploadFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("UpdatedByAppUser");
+
+                    b.Navigation("UploadFile");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.UploadFileOrganizationShare", b =>
@@ -2858,13 +3402,22 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UserPhones");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMemberGroup", b =>
+                {
+                    b.Navigation("Members");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.Organization", b =>
                 {
+                    b.Navigation("MemberGroups");
+
                     b.Navigation("OrganizationAddresses");
 
                     b.Navigation("OrganizationEmails");
 
                     b.Navigation("OrganizationLinks");
+
+                    b.Navigation("OrganizationLogos");
 
                     b.Navigation("OrganizationNotes");
 
@@ -2898,6 +3451,15 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("OrganizationNotes");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationPage", b =>
+                {
+                    b.Navigation("ChildPages");
+
+                    b.Navigation("CmsSections");
+
+                    b.Navigation("PagePermissions");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationPhoneType", b =>
                 {
                     b.Navigation("OrganizationPhones");
@@ -2905,6 +3467,8 @@ namespace Ben.Data.Source.Migrations
 
             modelBuilder.Entity("Ben.Data.Source.Entities.UploadFile", b =>
                 {
+                    b.Navigation("AudioConfig");
+
                     b.Navigation("OrganizationShares");
 
                     b.Navigation("PermissionRequests");

@@ -27,13 +27,13 @@ Identifies the type of CRUD operation recorded in an `AuditLog` entry.
 **Used by:** [`IOrganizationSecurityService`](../../Ben.Service.Security/Interfaces.md), [`OrganizationSecurityService`](../../Ben.Service.RepositoryService/Services.md#organizationsecurityservice)
 
 ### Summary
-Defines the hierarchical roles a user can hold within an organisation.  
+Defines the hierarchical roles a user can hold within an organization.  
 Integer values are ordered from **highest privilege (1) to lowest (5)**, allowing range checks:  
 `membership.Role <= OrganizationMemberRole.Administrator` → user has elevated access.
 
 | Value | Int | Description |
 |---|---|---|
-| `Owner` | 1 | Full ownership. One owner per organisation, set at registration. |
+| `Owner` | 1 | Full ownership. One owner per organization, set at registration. |
 | `Administrator` | 2 | Administrative rights for day-to-day management. |
 | `Manager` | 3 | Can manage content; no access to membership/security settings. |
 | `Member` | 4 | Standard membership; permissions governed by `OrganizationAccessGrant` rows. |
@@ -102,10 +102,49 @@ Identifies a domain table for which per-user access grants can be configured.
 | `UserNoteType` | 24 |
 | `UserPhone` | 25 |
 | `UserPhoneType` | 26 |
+| `CmsSection` | 27 |
+| `OrgMemberGroup` | 28 |
+
+> **2026-07-18:** `CmsSection=27` and `OrgMemberGroup=28` added alongside the CMS feature. The parallel `Ben.Service.Security` enum received matching entries at `CmsSection=26` and `OrgMemberGroup=27` (its values differ by 1 throughout).
 
 ---
 
-## `FilePermissionType`
+## `CmsSectionType`
+
+**File:** [`Ben.Data.Common/Enums/CmsSectionType.cs`](../../../Ben.Data.Common/Enums/CmsSectionType.cs)  
+**Stored on:** `CmsSection.SectionType` (int column)  
+**Added:** 2026-07-18
+
+### Summary
+Identifies the kind of content stored in a `CmsSection`. Determines how `ContentJson` is interpreted by the UI and preview renderer.
+
+| Value | Int | ContentJson format |
+|---|---|---|
+| `RichText` | 1 | `{ "html": "<p>...</p>" }` — authored with `TelerikEditor` |
+| `ImageBanner` | 2 | `{ "uploadFileId": "guid", "altText": "...", "linkUrl": "..." }` |
+| `FileGallery` | 3 | `{ "uploadFileIds": ["guid1", "guid2"] }` |
+| `ContactInfo` | 4 | `{ "showAddresses": bool, "showEmails": bool, "showPhones": bool, "showLinks": bool }` |
+| `MemberRoster` | 5 | `{ "memberIds": ["guid"], "showRole": bool, "showBio": bool }` |
+| `CustomHtml` | 6 | `{ "html": "<div>...</div>" }` — raw HTML block |
+
+---
+
+## `CmsPageAction`
+
+**File:** [`Ben.Data.Common/Enums/CmsPageAction.cs`](../../../Ben.Data.Common/Enums/CmsPageAction.cs)  
+**Type:** `[Flags]` enum  
+**Stored on:** `CmsPagePermission.Actions` (int bitmask column)  
+**Added:** 2026-07-18
+
+### Summary
+Bitmask of per-page CMS actions that can be granted to individual org members or member groups via `CmsPagePermission`. Intentionally separate from `OrganizationSecurityAction` to allow fine-grained page-level access independent of org-level table grants.
+
+| Value | Int | Description |
+|---|---|---|
+| `None` | 0 | No access. |
+| `View` | 1 | Permission to view this page even when restricted to specific members. |
+| `Edit` | 2 | Permission to edit this page's content and sections. |
+| `Delete` | 4 | Permission to delete this page. |
 
 **File:** [`Ben.Data.Common/Enums/FilePermissionType.cs`](../../../Ben.Data.Common/Enums/FilePermissionType.cs)  
 **Type:** `[Flags]` enum  
@@ -118,7 +157,7 @@ Types of access that can be requested for a shared file. Combinable via bitwise 
 |---|---|---|
 | `None` | 0 | No permissions. |
 | `Use` | 1 | Embed or reference in content. |
-| `Share` | 2 | Re-share with others or a different organisation. |
+| `Share` | 2 | Re-share with others or a different organization. |
 | `Display` | 4 | Display the file publicly. |
 
 ---
@@ -129,13 +168,13 @@ Types of access that can be requested for a shared file. Combinable via bitwise 
 **Stored on:** `UploadFileOrganizationShare.Visibility`
 
 ### Summary
-Controls who can see a file when it is shared with an organisation.
+Controls who can see a file when it is shared with an organization.
 
 | Value | Int | Description |
 |---|---|---|
-| `OrgAdminsOnly` | 0 | Visible only to organisation Owners and Administrators. |
-| `OrgMembers` | 1 | Visible to all active organisation members. |
-| `Public` | 2 | Visible to anyone with access to the organisation's content. |
+| `OrgAdminsOnly` | 0 | Visible only to organization Owners and Administrators. |
+| `OrgMembers` | 1 | Visible to all active organization members. |
+| `Public` | 2 | Visible to anyone with access to the organization's content. |
 
 ---
 

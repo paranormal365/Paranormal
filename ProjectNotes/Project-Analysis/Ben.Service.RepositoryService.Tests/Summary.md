@@ -26,3 +26,18 @@ Uses an in-memory EF Core provider so tests run without a database.
 
 - **Cascade deletes** only occur when child entities are loaded (tracked) before removing the parent. Tests that need cascade must `Include` children before deletion.
 - **Unique index constraints** are not enforced at runtime — tests verify EF model metadata instead.
+
+### `LogoFileTypeTests` *(added 2026-07-18)*
+
+**File:** [`Ben.Service.RepositoryService.Tests/LogoFileTypeTests.cs`](../../../Ben.Service.RepositoryService.Tests/LogoFileTypeTests.cs)  
+**Test count:** 14 tests  
+**Purpose:** Validates the design decisions implemented by `UploadFileTypeSeeder` — the "Logo" file type's `AllowAllExtensions=false` + specific image extension patterns work correctly with `FileExtensionPatternMatcher`.
+
+| Test group | Coverage |
+|---|---|
+| DB persistence | `AllowAllExtensions=false`, 6 extensions stored, name round-trip |
+| Allowed extensions | `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.svg` (Theory) |
+| Case insensitivity | `.JPG`, `.PNG`, `.Svg` all accepted |
+| Blocked extensions | `.pdf`, `.exe`, `.txt`, `.docx`, `.mp4`, `.zip` (Theory) |
+| Array shape | Exactly 6 entries, all lowercase, all dot-prefixed |
+| AllowAllExtensions bypass | `AllowAllExtensions=true` short-circuits pattern check |

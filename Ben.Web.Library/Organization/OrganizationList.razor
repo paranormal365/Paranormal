@@ -1,0 +1,172 @@
+@page "/organizations"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>Organizations</PageTitle>
+
+<div class="container-fluid px-3">
+
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Organizations</h3>
+        </div>
+        @if (UserState.IsSuperAdmin && !UserState.IsImpersonating)
+        {
+            <div class="col-auto">
+                <TelerikButton Icon="@SvgIcon.Plus"
+                               ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                               OnClick="@(() => NavManager.NavigateTo("/organizations/create"))">
+                    New Organization
+                </TelerikButton>
+            </div>
+        }
+    </div>
+
+    @if (_errorMessage is not null)
+    {
+        <div class="alert alert-danger mb-3">@_errorMessage</div>
+    }
+    @if (_successMessage is not null)
+    {
+        <div class="alert alert-success mb-3">@_successMessage</div>
+    }
+
+    @if (_orgs is null)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading organizations…" />
+    }
+    else
+    {
+        <TelerikGrid Data="@_orgs"
+                     TItem="OrganizationListItemResponse"
+                     Pageable="true"
+                     PageSize="25"
+                     Sortable="true"
+                     Class="org-list-grid">
+            <GridColumns>
+                <GridColumn Field="@nameof(OrganizationListItemResponse.Name)" Title="Name" />
+                <GridColumn Field="@nameof(OrganizationListItemResponse.UrlName)" Title="URL Name" Width="180px" />
+                <GridColumn Field="@nameof(OrganizationListItemResponse.DateCreated)" Title="Created"
+                            DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                <GridColumn Title="Actions" Width="240px">
+                    <Template>
+                        @{
+                            var org = (OrganizationListItemResponse)context;
+                        }
+                        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
+                                       OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/cms"))">
+                            CMS
+                        </TelerikButton>
+                        @if (org.CanEdit)
+                        {
+                            <TelerikButton Icon="@SvgIcon.Pencil"
+                                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                           Size="@ThemeConstants.Button.Size.Small"
+                                           OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/edit"))">
+                                Edit
+                            </TelerikButton>
+                        }
+                        @if (org.CanDelete)
+                        {
+                            <TelerikButton Icon="@SvgIcon.Trash"
+                                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                           Size="@ThemeConstants.Button.Size.Small"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                           OnClick="@(() => RequestDelete(org))">
+                                Delete
+                            </TelerikButton>
+                        }
+                    </Template>
+                </GridColumn>
+            </GridColumns>
+        </TelerikGrid>
+    }
+</div>
+
+@* ── Delete Confirmation ── *@
+<TelerikDialog @bind-Visible="@_showDeleteDialog"
+               Title="Delete Organization"
+               Width="400px">
+    <DialogContent>
+        @if (_pendingDelete is not null)
+        {
+            <p>Permanently delete <strong>@_pendingDelete.Name</strong>?</p>
+            <p class="text-secondary small mb-0">This cannot be undone. All associated data will be removed.</p>
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="CancelDelete">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                       OnClick="ConfirmDelete"
+                       Enabled="@(!_isBusy)">
+            @(_isBusy ? "Deleting…" : "Delete")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@code {
+    private IReadOnlyList<OrganizationListItemResponse>? _orgs;
+    private string? _errorMessage;
+    private string? _successMessage;
+    private bool _isBusy;
+    private bool _showDeleteDialog;
+    private OrganizationListItemResponse? _pendingDelete;
+
+    protected override void OnInitialized()
+    {
+        if (!UserState.IsAuthenticated)
+            NavManager.NavigateTo("/login");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadOrgs();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadOrgs()
+        => _orgs = await AdminClient.GetOrganizationsAsync();
+
+    private void RequestDelete(OrganizationListItemResponse org)
+    {
+        _errorMessage     = null;
+        _successMessage   = null;
+        _pendingDelete    = org;
+        _showDeleteDialog = true;
+    }
+
+    private void CancelDelete()
+    {
+        _showDeleteDialog = false;
+        _pendingDelete    = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_pendingDelete is null) return;
+        _isBusy = true;
+
+        var ok = await AdminClient.DeleteOrganizationAsync(_pendingDelete.Id);
+        _isBusy           = false;
+        _showDeleteDialog = false;
+
+        if (ok)
+        {
+            _successMessage = $"'{_pendingDelete.Name}' deleted.";
+            _pendingDelete  = null;
+            await LoadOrgs();
+        }
+        else
+        {
+            _errorMessage  = $"Could not delete '{_pendingDelete?.Name}'. It may have active members or related data.";
+            _pendingDelete = null;
+        }
+    }
+}

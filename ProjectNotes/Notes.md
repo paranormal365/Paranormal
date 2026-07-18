@@ -660,7 +660,7 @@ Example (`appsettings.Development.json`):
 
 NOTE: 
 Name: Ben-Dev
-Value: [REDACTED - secret rotated 2026-07-18, deleted from Azure Portal 2026-08-16; see SECRETS.md]
+Value: [REDACTED — this value was exposed in git history; rotate the secret in Azure Portal → App Registrations → AverageBen.net → Certificates & Secrets]
 Secret ID: 2b52e4a6-6361-4a25-adbb-421c6960dd47
 Expires: 7/13/2028
 
@@ -974,7 +974,308 @@ npm run build
 ## Open Questions
 
 - Add unresolved questions here.
-Telerik Nuget Key: LnT9PfeiaEOFnLkWiZqtdA==.7+ZoVtzD9JFnSKY00SxMpKf98NnMv7yf2DB6E4IVdz/veTTqkAeLVyh/9vexKV5P0FPW2NVDVxyPWXxvu5+NUg==
+
+---
+
+## WaveSurferPlayer Component
+
+### Overview
+
+`Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor` — a full-featured Blazor audio waveform player
+backed by WaveSurfer.js v7.12.11 (BSD-3-Clause). Accepts a single `WsConfig` object that aggregates
+all settings: audio source, WaveSurfer options, plugin selection, and component layout.
+
+**Key files:**
+
+| File | Purpose |
+|---|---|
+| `Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor` | Blazor component |
+| `Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor.js` | Colocated JS isolation module |
+| `Ben.Web.Library/Manage/Audio/WaveSurferOptions.cs` | `WsConfig`, `WsAudioSource`, `WsOptions`, `WsPluginConfig`, DTOs, extension method |
+| `Ben.Web.WebApp/wwwroot/ts/wavesurfer/` | WaveSurfer TypeScript source (build tooling — git-ignored node_modules/dist) |
+| `Ben.Web.WebApp/wwwroot/js/wavesurfer/` | Built ESM bundles (committed; served at runtime) |
+| `Ben.Data.Source/Entities/BenDataModel.UploadFileAudioConfig.cs` | Entity (one-to-one with UploadFile) |
+| `Ben.Data.WebApi/Controllers/Entities/UploadFileAudioConfigController.cs` | GET / PUT / DELETE audio config API |
+| `Ben.Service.Models/Entities/UploadFileAudioConfigRecord.cs` | Read DTO + `UpsertAudioConfigRequest` |
+
+---
+
+### `WsConfig` — the single configuration object
+
+`WsConfig` aggregates everything needed to render the player. Pass it as the `Config` parameter:
+
+```razor
+<WaveSurferPlayer Config="@_config"
+                  OnReady="@OnPlayerReady"
+                  OnTimeUpdate="@(t => _time = t)" />
+```
+
+**`WsConfig` properties:**
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `Source` | `WsAudioSource?` | `null` | Audio to play (see Audio Sources below). |
+| `Options` | `WsOptions` | `new()` | WaveSurfer core options (colors, dimensions, behavior). |
+| `Plugins` | `WsPluginConfig` | `new()` | Which plugins to enable and their options. |
+| `InitialHeight` | `string` | `"200px"` | Starting height of the resizable wrapper (any CSS length). |
+| `MinHeight` | `string` | `"80px"` | Minimum drag-resize height. |
+| `MaxHeight` | `string` | `"800px"` | Maximum drag-resize height. |
+| `ShowControls` | `bool` | `true` | Show built-in play/pause/stop/volume/zoom/rate controls bar. |
+| `MinZoom` | `double` | `10` | Minimum zoom slider value (minPxPerSec). |
+| `MaxZoom` | `double` | `1000` | Maximum zoom slider value (minPxPerSec). |
+| `CssClass` | `string?` | `null` | Extra CSS class on the outermost wrapper `<div>`. |
+
+**Factory methods** (`WsConfig.Default`, `WsConfig.Rich`, `WsConfig.Compact`):
+
+```csharp
+// Hover + Timeline enabled, 200px height, theme colors
+var config = WsConfig.Default(WsAudioSource.FromUrl("/audio.mp3"));
+
+// Hover + Timeline + Zoom + Minimap
+var config = WsConfig.Rich(source);
+
+// No controls, compact 100px height
+var config = WsConfig.Compact(source);
+```
+
+---
+
+### `WsAudioSource` — audio source types
+
+Three source types map to different ways audio reaches the browser:
+
+| Type | Factory | Resolved to | Use when |
+|---|---|---|---|
+| `Url` | `WsAudioSource.FromUrl(url)` | Passed directly to WaveSurfer `load(url)` | Streaming URL, CDN, or `/api/upload-files/{id}/download` |
+| `Bytes` | `WsAudioSource.FromBytes(bytes, contentType)` | `data:{type};base64,{base64}` | Bytes fetched via `IBenAdminClient.GetFileDataAsync` |
+| `Base64` | `WsAudioSource.FromBase64(base64, contentType)` | `data:{type};base64,{base64}` | Already-encoded base64 string |
+| `Url` (data URL) | `WsAudioSource.FromDataUrl(dataUrl)` | Passed as-is | Full `data:audio/…;base64,…` string |
+
+`ToLoadUrl()` resolves the source to the string WaveSurfer accepts. Conversion happens in C# — the
+JS module never touches raw bytes.
+
+**`IsValid` property** — `true` when the source has sufficient data:
+
+| Type | Valid when |
+|---|---|
+| `Url` | `Url` is non-empty |
+| `Bytes` | `Bytes` array is non-empty |
+| `Base64` | `Base64` and `ContentType` are non-empty |
+
+---
+
+### `WsOptions` — WaveSurfer core options
+
+Property names are the PascalCase equivalents of the WaveSurfer JS option names.
+**Color properties default to `null`** — the JS interop resolves them from the active Telerik CSS
+custom properties at render time, so the player automatically matches any Telerik theme.
+
+| Property (C#) | JS option | Default | Description |
+|---|---|---|---|
+| `WaveColor` | `waveColor` | `null` → `--kendo-color-primary` | Unplayed waveform color. |
+| `ProgressColor` | `progressColor` | `null` → `--kendo-color-primary-emphasis` | Played portion color. |
+| `CursorColor` | `cursorColor` | `null` → `--kendo-body-text` | Playback cursor color. |
+| `CursorWidth` | `cursorWidth` | `null` | Cursor width in pixels. |
+| `Height` | `height` | `null` → `"auto"` | Canvas height in pixels; `null` fills container. |
+| `Width` | `width` | `null` → 100% | Canvas width. |
+| `BarWidth` | `barWidth` | `null` | Bar width → bar-style waveform; `null` = solid. |
+| `BarGap` | `barGap` | `null` | Gap between bars. |
+| `BarRadius` | `barRadius` | `null` | Bar corner radius. |
+| `BarHeight` | `barHeight` | `null` | Vertical scale factor. |
+| `BarAlign` | `barAlign` | `null` | `"top"` or `"bottom"`. |
+| `BarMinHeight` | `barMinHeight` | `null` | Minimum bar height in pixels. |
+| `MinPxPerSec` | `minPxPerSec` | `null` → 0 | Initial zoom (pixels per second). |
+| `FillParent` | `fillParent` | `true` | Stretch to container width. |
+| `Interact` | `interact` | `true` | Allow clicking to seek. |
+| `DragToSeek` | `dragToSeek` | `null` | Allow dragging cursor to seek. |
+| `HideScrollbar` | `hideScrollbar` | `null` | Hide horizontal scrollbar. |
+| `AudioRate` | `audioRate` | `null` | Initial playback speed. |
+| `AutoScroll` | `autoScroll` | `true` | Scroll to keep cursor in view. |
+| `AutoCenter` | `autoCenter` | `true` | Keep cursor centered during playback. |
+| `Normalize` | `normalize` | `null` | Stretch peaks to full height. |
+| `SampleRate` | `sampleRate` | `null` → 8000 | Decoding sample rate. |
+| `Backend` | `backend` | `null` → `"MediaElement"` | `"WebAudio"` or `"MediaElement"`. |
+| `MediaControls` | `mediaControls` | `null` | Show native browser audio controls. |
+| `Autoplay` | `autoplay` | `null` | Play immediately after load. |
+
+---
+
+### `WsPluginConfig` — plugin selection
+
+Each flag enables a plugin. Optional `*Options` properties configure it.
+All options classes use PascalCase names matching the WaveSurfer JS option names.
+
+| Flag | Options class | Description |
+|---|---|---|
+| `Hover` | `WsHoverOptions?` | Hover cursor with timestamp label. Options: `LineColor`, `LineWidth`, `LabelColor`, `LabelSize`, `LabelBackground`, `LabelPreferLeft`. |
+| `Timeline` | `WsTimelineOptions?` | Time ruler below (or above) the waveform. Options: `Height`, `InsertPosition`, `TimeInterval`, `PrimaryLabelInterval`, `SecondaryLabelInterval`, `TimeOffset`, `Style`, `SecondaryLabelOpacity`. |
+| `Zoom` | `WsZoomOptions?` | Mouse-wheel / pinch-to-zoom. Options: `Scale`, `MaxZoom`, `DeltaThreshold`, `ExponentialZooming`, `Iterations`. |
+| `Minimap` | `WsMinimapOptions?` | Navigation thumbnail. Options: `Height`, `OverlayColor`, `InsertPosition`, `WaveColor`, `ProgressColor`. |
+| `Spectrogram` | `WsSpectrogramOptions?` | Frequency spectrogram. Options: `Height`, `Labels`, `FftSamples`, `WindowFunc`, `FrequencyMin`, `FrequencyMax`. |
+| `SpectrogramWindowed` | `WsSpectrogramOptions?` | Memory-efficient spectrogram for long audio. Same options as Spectrogram. |
+| `Envelope` | `WsEnvelopeOptions?` | Volume-fade SVG overlay. Options: `Volume`, `LineWidth`, `LineColor`, `DragLine`, `DragPointSize`, `DragPointFill`, `DragPointStroke`, `Points`. |
+| `Regions` | *(no options class)* | Draggable/resizable region markers. Managed via `AddRegionAsync` / `RemoveRegionAsync`. |
+
+---
+
+### Telerik Theme Colors
+
+Colors default to `null`, resolved at runtime from the active Telerik CSS custom properties:
+
+| `WsOptions` property | CSS variable read | Fallback (light) | Fallback (dark) |
+|---|---|---|---|
+| `WaveColor` | `--kendo-color-primary` | `#3B82F6` | `#93C5FD` |
+| `ProgressColor` | `--kendo-color-primary-emphasis` | `#1D4ED8` | `#2563EB` |
+| `CursorColor` | `--kendo-body-text` | `#1E293B` | `#F1F5F9` |
+
+Dark mode is detected by computing the perceived luminance of `--kendo-body-bg`.
+Override by setting explicit hex values in `WsConfig.Options`.
+
+---
+
+### DB-backed config: `UploadFileAudioConfig`
+
+Stores per-file player settings. Absent row = component uses theme defaults.
+
+**Entity:** `Ben.Data.Source/Entities/BenDataModel.UploadFileAudioConfig.Generated.cs`  
+**Table:** `UploadFileAudioConfigs` (one-to-one with `UploadFile`, cascade delete)  
+**Migration:** `20260718_AddUploadFileAudioConfig`
+
+All color/option columns are nullable. `null` = "resolve from Telerik theme at runtime."  
+Boolean plugin flags default to `false` in the DB (except `EnableHover`/`EnableTimeline` which default
+to `true` in `UpsertAudioConfigRequest`).
+
+**Load + render pattern:**
+
+```csharp
+// In OnInitializedAsync or OnParametersSetAsync:
+var record = await AdminClient.GetAudioConfigAsync(fileId);  // null if none saved
+var source  = WsAudioSource.FromUrl($"/api/upload-files/{fileId}/download");
+
+_config = record is not null
+    ? record.ToWsConfig(source)   // restore saved settings; null colors → theme
+    : WsConfig.Default(source);   // all colors → theme
+```
+
+**`record.ToWsConfig(source)`** — `UploadFileAudioConfigExtensions.ToWsConfig()` in `WaveSurferOptions.cs`:
+- Maps all DB columns to `WsConfig.Options` and `WsConfig.Plugins` properties
+- `null` color columns stay `null` in `WsOptions` → JS resolves from Telerik CSS vars
+- JSON plugin option columns are deserialized via `JsonSerializer`; invalid JSON silently becomes `null`
+- Layout settings (`InitialHeight`, `ShowControls`, etc.) copied directly
+
+**Save pattern:**
+
+```csharp
+await AdminClient.UpsertAudioConfigAsync(fileId, new UpsertAudioConfigRequest
+{
+    WaveColor      = "#FF6358",   // explicit override
+    ProgressColor  = null,        // keep theme default
+    EnableZoom     = true,
+    ZoomOptionsJson = System.Text.Json.JsonSerializer.Serialize(
+        new WsZoomOptions { MaxZoom = 500, Scale = 0.3 }),
+    InitialHeight  = "260px",
+    ShowControls   = true,
+    EnableHover    = true,
+    EnableTimeline = true,
+    MinHeight      = "80px",
+    MaxHeight      = "800px",
+});
+```
+
+**Reset:** `await AdminClient.DeleteAudioConfigAsync(fileId);`
+
+---
+
+### Component parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `Config` | `WsConfig?` | Complete player config. Falls back to `WsConfig.Default()` when `null`. |
+| `ExtraControls` | `RenderFragment?` | Additional Blazor content rendered inside the built-in controls bar. |
+| `OnReady` | `EventCallback` | Fired when WaveSurfer finishes decoding and is ready to play. |
+| `OnPlay` | `EventCallback` | Fired when playback starts. |
+| `OnPause` | `EventCallback` | Fired when playback pauses. |
+| `OnFinish` | `EventCallback` | Fired when audio reaches the end. |
+| `OnTimeUpdate` | `EventCallback<double>` | Fired continuously during playback with the current position (seconds). |
+| `OnLoading` | `EventCallback<int>` | Fired during load with progress 0–100. |
+| `OnError` | `EventCallback<string>` | Fired on WaveSurfer error with the error message. |
+| `OnZoom` | `EventCallback<double>` | Fired when zoom level changes (minPxPerSec). |
+| `OnSeeking` | `EventCallback<double>` | Fired when the user seeks to a new position (seconds). |
+| `OnRegionCreated` | `EventCallback<WsRegionData>` | Fired when a region is created (`Id`, `Start`, `End`, `Color`). |
+| `OnRegionUpdated` | `EventCallback<WsRegionData>` | Fired when a region is dragged or resized. |
+| `OnRegionRemoved` | `EventCallback<string>` | Fired when a region is removed (passes `Id`). |
+| `OnRegionClicked` | `EventCallback<string>` | Fired when a region is clicked (passes `Id`). |
+| `OnRegionIn` | `EventCallback<string>` | Fired when playback enters a region. |
+| `OnRegionOut` | `EventCallback<string>` | Fired when playback leaves a region. |
+| `OnEnvelopePointsChanged` | `EventCallback<List<WsEnvelopePoint>>` | Fired when envelope control points change. |
+| `OnEnvelopeVolumeChanged` | `EventCallback<double>` | Fired when envelope master volume changes. |
+
+**Public state properties:** `IsReady`, `IsPlaying`, `Duration`, `CurrentTime`, `LoadingPercent`.
+
+---
+
+### Programmatic control (via `@ref`)
+
+```razor
+<WaveSurferPlayer @ref="_player" Config="@_config" />
+
+@code {
+    WaveSurferPlayer? _player;
+
+    // Playback
+    async Task Play()      => await (_player?.PlayAsync()       ?? Task.CompletedTask);
+    async Task Pause()     => await (_player?.PauseAsync()      ?? Task.CompletedTask);
+    async Task Toggle()    => await (_player?.PlayPauseAsync()  ?? Task.CompletedTask);
+    async Task Stop()      => await (_player?.StopAsync()       ?? Task.CompletedTask);
+    async Task JumpTo50()  => await (_player?.SeekToAsync(0.5)  ?? Task.CompletedTask);  // 0–1
+
+    // Volume / rate / zoom
+    async Task Mute()      => await (_player?.SetMutedAsync(true)          ?? Task.CompletedTask);
+    async Task HalfSpeed() => await (_player?.SetPlaybackRateAsync(0.5)    ?? Task.CompletedTask);
+    async Task ZoomIn()    => await (_player?.SetZoomAsync(200)            ?? Task.CompletedTask);
+
+    // Load new audio
+    async Task LoadNew(string url) => await (_player?.LoadAsync(url) ?? Task.CompletedTask);
+
+    // Regions
+    async Task AddMarker() => await (_player?.AddRegionAsync(new WsRegionParams
+    {
+        Start = 10, End = 15, Color = "rgba(255,99,71,0.3)", Content = "Verse"
+    }) ?? Task.CompletedTask);
+
+    async Task ClearAll()  => await (_player?.ClearRegionsAsync() ?? Task.CompletedTask);
+}
+```
+
+---
+
+### Build / Rebuild WaveSurfer Bundles
+
+`node_modules/` and `dist/` in `wwwroot/ts/wavesurfer/` are **git-ignored**.
+The built ESM output in `wwwroot/js/wavesurfer/` **is committed**.
+
+```bash
+cd Ben.Web.WebApp/wwwroot/ts/wavesurfer
+npm install --legacy-peer-deps   # first time only (cypress peer-dep conflict — harmless)
+npm run build:blazor             # clean → tsc → rollup → wwwroot/js/wavesurfer/
+```
+
+Output: `wavesurfer.esm.js` + `plugins/{regions,hover,timeline,zoom,minimap,spectrogram,spectrogram-windowed,envelope,record}.esm.js`
+
+---
+
+### JS Module
+
+Served at `/_content/Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor.js` (Blazor RCL colocated JS).
+
+Key behaviors:
+- WaveSurfer core and all plugin modules are lazy-loaded via dynamic `import()` on first use and cached in module scope
+- `resolveTelerikColors()` reads `--kendo-color-primary`, `--kendo-color-primary-emphasis`, `--kendo-body-text`, `--kendo-body-bg` from `getComputedStyle(document.documentElement)` and detects dark mode by luminance
+- `ResizeObserver` on the wrapper `<div>` debounces (50 ms) and calls `ws.setOptions({ height: 'auto' })` when the user drag-resizes
+- `destroy(containerId)` disconnects `ResizeObserver` and calls `ws.destroy()`
+
+---
+Telerik Nuget Key: [REDACTED — was exposed in git history; retrieve current key from telerik.com → Your Account → Downloads → License Keys]
 
 ## Microsoft URLs
 

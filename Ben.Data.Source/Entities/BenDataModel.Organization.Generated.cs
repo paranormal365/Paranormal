@@ -20,5 +20,7 @@ namespace Ben.Data.Source.Entities
         public virtual ICollection<OrganizationLink> OrganizationLinks { get; set; } = new List<OrganizationLink>();
         public virtual ICollection<OrganizationNote> OrganizationNotes { get; set; } = new List<OrganizationNote>();
         public virtual ICollection<OrganizationPage> OrganizationPages { get; set; } = new List<OrganizationPage>();
+        public virtual ICollection<OrganizationLogo> OrganizationLogos { get; set; } = new List<OrganizationLogo>();
+        public virtual ICollection<OrgMemberGroup> MemberGroups { get; set; } = new List<OrgMemberGroup>();
     }
 }

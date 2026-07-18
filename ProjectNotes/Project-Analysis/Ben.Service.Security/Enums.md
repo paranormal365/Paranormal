@@ -8,7 +8,7 @@
 **File:** [`Ben.Service.Security/Enums/OrganizationSecurityTable.cs`](../../../Ben.Service.Security/Enums/OrganizationSecurityTable.cs)
 
 ### Summary
-Identifies an organisation-related domain table for which per-user access grants can be configured.  
+Identifies an organization-related domain table for which per-user access grants can be configured.  
 Used as the `table` parameter in `IOrganizationSecurityService` methods and as the constructor argument for `OrganizationSecurityAuthorizeAttribute`.
 
 > **Note:** A parallel enum `Ben.Data.Common.Enums.OrganizationSecurityTable` exists with **different integer values** and is used at the entity/database layer. A cast is applied inside `OrganizationSecurityService` when querying the DB. Do not mix the two without the explicit cast.

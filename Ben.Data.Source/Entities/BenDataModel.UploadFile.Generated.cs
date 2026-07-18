@@ -25,5 +25,6 @@ namespace Ben.Data.Source.Entities
         public virtual AppUser? UpdatedByAppUser { get; set; }
         public virtual ICollection<UploadFileOrganizationShare> OrganizationShares { get; set; } = new List<UploadFileOrganizationShare>();
         public virtual ICollection<UploadFilePermissionRequest> PermissionRequests { get; set; } = new List<UploadFilePermissionRequest>();
+        public virtual UploadFileAudioConfig? AudioConfig { get; set; }
     }
 }

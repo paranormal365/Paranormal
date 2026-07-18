@@ -5,7 +5,7 @@ namespace Ben.Data.Common.Enums;
 /// </summary>
 /// <remarks>
 /// Stored as a single <c>int</c> bitmask column.  Each grant row holds all permitted
-/// actions for a (user, organisation, table) combination.
+/// actions for a (user, organization, table) combination.
 /// </remarks>
 [Flags]
 public enum OrganizationSecurityAction

@@ -1,0 +1,751 @@
+@page "/organizations/{OrgId:guid}/cms"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@using System.Text.Json
+@using Ben.Data.Common.Enums
+
+<PageTitle>CMS — @(_orgName ?? OrgId.ToString())</PageTitle>
+
+<div class="container-fluid px-3">
+
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <TelerikButton Icon="@SvgIcon.ArrowLeft"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           OnClick="@(() => NavManager.NavigateTo("/organizations"))">
+                Back to Organizations
+            </TelerikButton>
+            <h3 class="d-inline-block ms-3 mb-0">CMS — @(_orgName ?? OrgId.ToString())</h3>
+        </div>
+    </div>
+
+    @if (_errorMessage is not null)
+    {
+        <div class="alert alert-danger mb-3">@_errorMessage</div>
+    }
+    @if (_successMessage is not null)
+    {
+        <div class="alert alert-success mb-3">@_successMessage</div>
+    }
+
+    <TelerikTabStrip>
+
+        @* ── Pages tab ─────────────────────────────────────────────────────── *@
+        <TabStripTab Title="Pages">
+
+            <div class="d-flex justify-content-end mb-2">
+                <TelerikButton Icon="@SvgIcon.Plus"
+                               ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                               OnClick="OpenNewPageDialog">
+                    New Page
+                </TelerikButton>
+            </div>
+
+            @if (_pages is null)
+            {
+                <TelerikLoaderContainer Visible="true" Text="Loading pages…" />
+            }
+            else
+            {
+                <TelerikGrid Data="@_pages"
+                             TItem="CmsPageListItem"
+                             Pageable="true"
+                             PageSize="25"
+                             Sortable="true">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(CmsPageListItem.PageTitle)" Title="Title" />
+                        <GridColumn Field="@nameof(CmsPageListItem.UrlName)" Title="URL Slug" Width="160px" />
+                        <GridColumn Title="Status" Width="110px">
+                            <Template>
+                                @{ var p = (CmsPageListItem)context; }
+                                @if (p.IsPublished)
+                                {
+                                    <span class="badge bg-success">Published</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning text-dark">Draft</span>
+                                }
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Title="Visibility" Width="130px">
+                            <Template>
+                                @{ var p2 = (CmsPageListItem)context; }
+                                <span>@(p2.IsPublic ? "Public" : "Members only")</span>
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="@nameof(CmsPageListItem.SectionCount)" Title="Sections" Width="90px" />
+                        <GridColumn Title="Actions" Width="260px">
+                            <Template>
+                                @{ var pg = (CmsPageListItem)context; }
+                                @if (pg.CanEdit)
+                                {
+                                    <TelerikButton Icon="@SvgIcon.Pencil"
+                                                   FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                   Size="@ThemeConstants.Button.Size.Small"
+                                                   OnClick="@(() => OpenEditPageDialog(pg))">
+                                        Edit
+                                    </TelerikButton>
+                                }
+                                <TelerikButton Icon="@SvgIcon.LayoutStacked"
+                                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                               Size="@ThemeConstants.Button.Size.Small"
+                                               OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cms/pages/{pg.Id}"))">
+                                    Sections
+                                </TelerikButton>
+                                <TelerikButton Icon="@SvgIcon.Eye"
+                                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                               Size="@ThemeConstants.Button.Size.Small"
+                                               OnClick="@(() => OpenPreview(pg))">
+                                    Preview
+                                </TelerikButton>
+                                @if (pg.CanDelete)
+                                {
+                                    <TelerikButton Icon="@SvgIcon.Trash"
+                                                   FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                   Size="@ThemeConstants.Button.Size.Small"
+                                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                                   OnClick="@(() => RequestDeletePage(pg))">
+                                        Delete
+                                    </TelerikButton>
+                                }
+                            </Template>
+                        </GridColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            }
+        </TabStripTab>
+
+        @* ── Logos tab ─────────────────────────────────────────────────────── *@
+        <TabStripTab Title="Logos">
+
+            <div class="d-flex justify-content-end mb-2">
+                <TelerikButton Icon="@SvgIcon.Plus"
+                               ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                               OnClick="OpenLogoDialog">
+                    Add Logo
+                </TelerikButton>
+            </div>
+
+            @if (_logos is null)
+            {
+                <TelerikLoaderContainer Visible="true" Text="Loading logos…" />
+            }
+            else if (_logos.Count == 0)
+            {
+                <p class="text-secondary">No logos yet. Add one using the button above.</p>
+            }
+            else
+            {
+                <TelerikGrid Data="@_logos"
+                             TItem="OrganizationLogoRecord"
+                             Pageable="false"
+                             Sortable="false">
+                    <GridColumns>
+                        <GridColumn Title="Preview" Width="120px">
+                            <Template>
+                                @{ var lp = (OrganizationLogoRecord)context; }
+                                <CmsFileThumbnail FileId="@lp.UploadFileId" Width="100px" Height="65px" />
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Title="Active" Width="80px">
+                            <Template>
+                                @{ var l = (OrganizationLogoRecord)context; }
+                                @if (l.IsActive)
+                                {
+                                    <span class="badge bg-success">Active</span>
+                                }
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="@nameof(OrganizationLogoRecord.AltText)" Title="Alt Text" />
+                        <GridColumn Title="Actions" Width="160px">
+                            <Template>
+                                @{ var logo = (OrganizationLogoRecord)context; }
+                                @if (!logo.IsActive)
+                                {
+                                    <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                   Size="@ThemeConstants.Button.Size.Small"
+                                                   OnClick="@(() => SetLogoActive(logo))">
+                                        Set Active
+                                    </TelerikButton>
+                                }
+                                <TelerikButton Icon="@SvgIcon.Trash"
+                                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                               Size="@ThemeConstants.Button.Size.Small"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                               OnClick="@(() => DeleteLogo(logo))">
+                                    Remove
+                                </TelerikButton>
+                            </Template>
+                        </GridColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            }
+        </TabStripTab>
+
+    </TelerikTabStrip>
+</div>
+
+@* ── New/Edit Page dialog ─────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showPageDialog"
+               Title="@(_editingPage is null ? "New Page" : "Edit Page")"
+               Width="580px">
+    <DialogContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
+                <TelerikTextBox @bind-Value="@_pageForm.PageTitle" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">URL Slug <span class="text-danger">*</span></label>
+                <TelerikTextBox @bind-Value="@_pageForm.UrlName" Width="100%" />
+                <div class="form-text">Lowercase, hyphens only (e.g. <code>about-us</code>).</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Summary / Intro HTML</label>
+                <TelerikTextBox @bind-Value="@_pageForm.PageHtml" Width="100%" />
+                <div class="form-text">Short intro shown above sections. Full editing available in Sections.</div>
+            </div>
+            <div class="col-6">
+                <label class="form-label fw-semibold">Sort Order</label>
+                <TelerikNumericTextBox @bind-Value="@_pageForm.SortOrder" Width="100%" Min="0" />
+            </div>
+            <div class="col-6">
+                <label class="form-label fw-semibold">Parent Page</label>
+                <TelerikDropDownList Data="@_parentPageOptions"
+                                     @bind-Value="@_pageForm.ParentPageId"
+                                     ValueField="@nameof(PageOption.Id)"
+                                     TextField="@nameof(PageOption.Title)"
+                                     DefaultText="— None (top level) —"
+                                     Width="100%" />
+            </div>
+            <div class="col-6 d-flex align-items-center gap-2">
+                <TelerikCheckBox @bind-Value="@_pageForm.IsPublic" Id="pg-public" />
+                <label for="pg-public" class="form-label mb-0">Visible to public</label>
+            </div>
+            @if (_editingPage is not null)
+            {
+                <div class="col-6 d-flex align-items-center gap-2">
+                    <TelerikCheckBox @bind-Value="@_pageForm.IsPublished" Id="pg-published" />
+                    <label for="pg-published" class="form-label mb-0">Published</label>
+                </div>
+            }
+        </div>
+        @if (_dialogError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="ClosePageDialog">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Icon="@SvgIcon.Save"
+                       OnClick="SavePage"
+                       Enabled="@(!_isBusy)">
+            @(_isBusy ? "Saving…" : "Save")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Delete page confirmation ─────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showDeletePageDialog"
+               Title="Delete Page"
+               Width="420px">
+    <DialogContent>
+        @if (_pendingDeletePage is not null)
+        {
+            <p>Permanently delete <strong>@_pendingDeletePage.PageTitle</strong>?</p>
+            <p class="text-secondary small mb-0">All sections and permissions for this page will also be removed. Child pages will be re-parented.</p>
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="@(() => { _showDeletePageDialog = false; _pendingDeletePage = null; })">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                       OnClick="ConfirmDeletePage"
+                       Enabled="@(!_isBusy)">
+            @(_isBusy ? "Deleting…" : "Delete")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Add Logo dialog ──────────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showLogoDialog"
+               Title="Add Logo"
+               Width="620px">
+    <DialogContent>
+        @if (_orgImageFiles is null)
+        {
+            <div class="p-3 text-secondary"><span class="spinner-border spinner-border-sm me-2"></span>Loading…</div>
+        }
+        else
+        {
+            <TelerikTabStrip>
+                <TabStripTab Title="From Library">
+                    @if (_orgImageFiles.Count == 0)
+                    {
+                        <p class="text-secondary p-3 mb-0">No image files are shared with this organization yet. Use the Upload tab to add one.</p>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-wrap gap-2 p-2" style="max-height:260px;overflow-y:auto;">
+                            @foreach (var f in _orgImageFiles)
+                            {
+                                var fId = f.Id;
+                                var selected = _selectedLogoFileId == fId;
+                                <div style="cursor:pointer;width:120px;text-align:center;" @onclick="@(() => _selectedLogoFileId = fId)">
+                                    <div class="@(selected ? "border border-primary border-2 rounded" : "border rounded")" style="padding:3px;">
+                                        <CmsFileThumbnail FileId="@fId" Width="110px" Height="75px" Alt="@f.FileName" />
+                                    </div>
+                                    <small class="text-truncate d-block mt-1" style="max-width:120px;" title="@f.FileName">@f.FileName</small>
+                                </div>
+                            }
+                        </div>
+                    }
+                </TabStripTab>
+                <TabStripTab Title="Upload New">
+                    <div class="row g-3 p-2">
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">File Type</label>
+                            <p class="form-control-plaintext">
+                                @(_fileTypes?.FirstOrDefault(t => t.Id == _uploadFileTypeId)?.Name ?? "Logo")
+                            </p>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Image File</label>
+                            <InputFile OnChange="@OnLogoFileSelected" accept="image/*" class="form-control" />
+                            <div class="form-text">Accepted: JPEG, PNG, GIF, WebP, SVG, etc.</div>
+                        </div>
+                        @if (_uploadedLogoName is not null)
+                        {
+                            <div class="col-12">
+                                <div class="alert alert-success mb-0">✓ <strong>@_uploadedLogoName</strong> uploaded and selected.</div>
+                            </div>
+                        }
+                    </div>
+                </TabStripTab>
+            </TelerikTabStrip>
+        }
+
+        <hr class="my-3" />
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Alt Text</label>
+                <TelerikTextBox @bind-Value="@_logoAltText" Width="100%" Placeholder="Logo alt text (for accessibility)" />
+            </div>
+            <div class="col-6 d-flex align-items-center gap-2">
+                <TelerikCheckBox @bind-Value="@_logoIsActive" Id="logo-active" />
+                <label for="logo-active" class="form-label mb-0">Set as active logo</label>
+            </div>
+        </div>
+        @if (_logoError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_logoError</div>
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="CloseLogoDialog">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Icon="@SvgIcon.Save"
+                       OnClick="SaveLogo"
+                       Enabled="@(!_isBusy)">
+            @(_isBusy ? "Saving…" : "Add Logo")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Page preview window ──────────────────────────────────────────────────── *@
+<TelerikWindow @bind-Visible="@_showPreview"
+               Width="820px"
+               Height="600px"
+               Resizable="true"
+               Draggable="true"
+               Modal="false">
+    <WindowTitle>Preview — @(_previewPage?.PageTitle)</WindowTitle>
+    <WindowActions>
+        <WindowAction Name="Close" />
+    </WindowActions>
+    <WindowContent>
+        @if (_previewDetail is null)
+        {
+            <TelerikLoaderContainer Visible="true" Text="Loading preview…" />
+        }
+        else
+        {
+            <div class="cms-preview p-3" style="overflow-y:auto;height:100%;">
+                <h2>@_previewDetail.PageTitle</h2>
+                @if (!string.IsNullOrWhiteSpace(_previewDetail.PageHtml))
+                {
+                    <div class="cms-summary mb-4">@((MarkupString)_previewDetail.PageHtml)</div>
+                }
+                @foreach (var section in _previewDetail.Sections.Where(s => s.IsActive).OrderBy(s => s.SortOrder))
+                {
+                    <div class="cms-section mb-4">
+                        @if (!string.IsNullOrWhiteSpace(section.Title))
+                        {
+                            <h4>@section.Title</h4>
+                        }
+                        @RenderSectionPreview(section)
+                    </div>
+                }
+            </div>
+        }
+    </WindowContent>
+</TelerikWindow>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private string? _orgName;
+    private string? _errorMessage;
+    private string? _successMessage;
+    private string? _dialogError;
+    private string? _logoError;
+    private bool _isBusy;
+
+    // Pages
+    private IReadOnlyList<CmsPageListItem>? _pages;
+    private bool _showPageDialog;
+    private CmsPageListItem? _editingPage;
+    private PageFormModel _pageForm = new();
+    private bool _showDeletePageDialog;
+    private CmsPageListItem? _pendingDeletePage;
+
+    // Logos
+    private IReadOnlyList<OrganizationLogoRecord>? _logos;
+    private bool _showLogoDialog;
+    private Guid? _selectedLogoFileId;
+    private string? _uploadedLogoName;
+    private string? _logoAltText;
+    private bool _logoIsActive = true;
+    private IList<UploadFileRecord>? _orgImageFiles;
+    private IReadOnlyList<UploadFileTypeRecord>? _fileTypes;
+    private Guid _uploadFileTypeId;
+
+    // Preview
+    private bool _showPreview;
+    private CmsPageListItem? _previewPage;
+    private CmsPageDetail? _previewDetail;
+
+    protected override void OnInitialized()
+    {
+        if (!UserState.IsAuthenticated)
+            NavManager.NavigateTo("/login");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        // Get org name from the pages list (or first page's org)
+        _pages = await AdminClient.GetCmsPagesAsync(OrgId);
+        _logos = await AdminClient.GetOrgLogosAsync(OrgId);
+
+        // Try to get org name
+        var org = await AdminClient.GetOrganizationAsync(OrgId);
+        _orgName = org?.Name;
+    }
+
+    // ── Parent page dropdown ──────────────────────────────────────────────────
+
+    private IEnumerable<PageOption> _parentPageOptions =>
+        (_pages ?? [])
+            .Where(p => _editingPage is null || p.Id != _editingPage.Id)
+            .Select(p => new PageOption(p.Id, p.PageTitle));
+
+    // ── Page dialog ───────────────────────────────────────────────────────────
+
+    private void OpenNewPageDialog()
+    {
+        _editingPage  = null;
+        _dialogError  = null;
+        _pageForm     = new PageFormModel { SortOrder = (_pages?.Count ?? 0) + 1 };
+        _showPageDialog = true;
+    }
+
+    private void OpenEditPageDialog(CmsPageListItem pg)
+    {
+        _editingPage = pg;
+        _dialogError = null;
+        _pageForm = new PageFormModel
+        {
+            PageTitle   = pg.PageTitle,
+            UrlName     = pg.UrlName,
+            IsPublished = pg.IsPublished,
+            IsPublic    = pg.IsPublic,
+            ParentPageId = pg.ParentPageId,
+            SortOrder   = pg.SortOrder
+        };
+        _showPageDialog = true;
+    }
+
+    private void ClosePageDialog()
+    {
+        _showPageDialog = false;
+        _editingPage    = null;
+        _dialogError    = null;
+    }
+
+    private async Task SavePage()
+    {
+        if (string.IsNullOrWhiteSpace(_pageForm.PageTitle) || string.IsNullOrWhiteSpace(_pageForm.UrlName))
+        {
+            _dialogError = "Title and URL Slug are required.";
+            return;
+        }
+
+        _isBusy = true;
+        _dialogError = null;
+
+        if (_editingPage is null)
+        {
+            var result = await AdminClient.CreateCmsPageAsync(OrgId, new CmsCreatePageRequest(
+                _pageForm.PageTitle.Trim(),
+                _pageForm.UrlName.Trim().ToLowerInvariant(),
+                _pageForm.PageHtml,
+                _pageForm.IsPublic,
+                _pageForm.ParentPageId,
+                _pageForm.SortOrder));
+
+            if (result is null) _dialogError = "Failed to create page. The URL slug may already be in use.";
+            else { _showPageDialog = false; _successMessage = $"Page '{result.PageTitle}' created."; }
+        }
+        else
+        {
+            var result = await AdminClient.UpdateCmsPageAsync(OrgId, _editingPage.Id, new CmsUpdatePageRequest(
+                _pageForm.PageTitle.Trim(),
+                _pageForm.UrlName.Trim().ToLowerInvariant(),
+                _pageForm.PageHtml,
+                _pageForm.IsPublished,
+                _pageForm.IsPublic,
+                _pageForm.ParentPageId,
+                _pageForm.SortOrder));
+
+            if (result is null) _dialogError = "Failed to update page.";
+            else { _showPageDialog = false; _successMessage = $"Page '{result.PageTitle}' updated."; }
+        }
+
+        _isBusy = false;
+        if (!_showPageDialog) await LoadAsync();
+    }
+
+    private void RequestDeletePage(CmsPageListItem pg)
+    {
+        _errorMessage = _successMessage = null;
+        _pendingDeletePage = pg;
+        _showDeletePageDialog = true;
+    }
+
+    private async Task ConfirmDeletePage()
+    {
+        if (_pendingDeletePage is null) return;
+        _isBusy = true;
+        var ok = await AdminClient.DeleteCmsPageAsync(OrgId, _pendingDeletePage.Id);
+        _isBusy = false;
+        _showDeletePageDialog = false;
+
+        if (ok) { _successMessage = $"Page '{_pendingDeletePage.PageTitle}' deleted."; }
+        else    { _errorMessage   = $"Could not delete '{_pendingDeletePage.PageTitle}'."; }
+
+        _pendingDeletePage = null;
+        await LoadAsync();
+    }
+
+    // ── Preview ───────────────────────────────────────────────────────────────
+
+    private async Task OpenPreview(CmsPageListItem pg)
+    {
+        _previewPage   = pg;
+        _previewDetail = null;
+        _showPreview   = true;
+        _previewDetail = await AdminClient.GetCmsPageAsync(OrgId, pg.Id);
+    }
+
+    private RenderFragment RenderSectionPreview(CmsSectionRecord section)
+    {
+        return builder =>
+        {
+            string html = ExtractHtmlFromSection(section);
+            if (!string.IsNullOrEmpty(html))
+            {
+                builder.AddMarkupContent(0, html);
+            }
+            else
+            {
+                builder.AddMarkupContent(0, $"<em class=\"text-secondary\">[{section.SectionType} section]</em>");
+            }
+        };
+    }
+
+    private static string ExtractHtmlFromSection(CmsSectionRecord section)
+    {
+        if (section.SectionType is CmsSectionType.RichText or CmsSectionType.CustomHtml)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(section.ContentJson);
+                if (doc.RootElement.TryGetProperty("html", out var el))
+                    return el.GetString() ?? string.Empty;
+            }
+            catch { }
+        }
+        return string.Empty;
+    }
+
+    // ── Logo management ───────────────────────────────────────────────────────
+
+    private async Task OpenLogoDialog()
+    {
+        // Reset dialog state
+        _selectedLogoFileId = null;
+        _uploadedLogoName   = null;
+        _logoAltText        = null;
+        _logoIsActive       = true;
+        _logoError          = null;
+
+        // Load data BEFORE opening the dialog — avoids the TelerikDialog portal
+        // not seeing StateHasChanged() calls made after the dialog is already open.
+        try
+        {
+            var allFiles = await AdminClient.GetOrgSharedFilesAsync(OrgId);
+            _orgImageFiles = allFiles
+                .Where(f => f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (_fileTypes is null)
+                _fileTypes = await AdminClient.GetPublicFileTypesAsync();
+
+            // Auto-select the dedicated "Logo" type; fall back to first available
+            if (_fileTypes is not null && _uploadFileTypeId == Guid.Empty)
+            {
+                var logoType = _fileTypes.FirstOrDefault(t =>
+                    string.Equals(t.Name, "Logo", StringComparison.OrdinalIgnoreCase));
+                _uploadFileTypeId = (logoType ?? _fileTypes.FirstOrDefault())?.Id ?? Guid.Empty;
+            }
+        }
+        catch
+        {
+            _orgImageFiles ??= [];
+            _logoError = "Could not load the file library. You can still upload a new image using the Upload tab.";
+        }
+
+        // Open the dialog now that all data is ready — content renders correctly on first paint.
+        _showLogoDialog = true;
+    }
+
+    private void CloseLogoDialog()
+    {
+        _showLogoDialog   = false;
+        _selectedLogoFileId = null;
+        _uploadedLogoName   = null;
+        _logoError          = null;
+    }
+
+    private async Task OnLogoFileSelected(InputFileChangeEventArgs e)
+    {
+        _logoError = null;
+        if (_uploadFileTypeId == Guid.Empty)
+        {
+            _logoError = "Please select a file type before uploading.";
+            return;
+        }
+        var file = e.File;
+        if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            _logoError = "Please select an image file (JPEG, PNG, GIF, WebP, SVG…)";
+            return;
+        }
+        _isBusy = true;
+        StateHasChanged();
+        try
+        {
+            const long maxBytes = 10 * 1024 * 1024;
+            using var stream = file.OpenReadStream(maxBytes);
+            using var ms = new System.IO.MemoryStream();
+            await stream.CopyToAsync(ms);
+            var bytes  = ms.ToArray();
+            var userId = UserState.UserId ?? Guid.Empty;
+            var uploaded = await AdminClient.UploadImageAsync(
+                _uploadFileTypeId, userId, file.Name, file.ContentType, bytes);
+            if (uploaded is null)
+            {
+                _logoError = "Upload failed. Check the file type allows images.";
+            }
+            else
+            {
+                _selectedLogoFileId = uploaded.Id;
+                _uploadedLogoName   = file.Name;
+                // Refresh the library list so the new image appears
+                var allFiles = await AdminClient.GetOrgSharedFilesAsync(OrgId);
+                _orgImageFiles = allFiles.Where(f => f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException)
+        {
+            _logoError = $"File too large or invalid: {ex.Message}";
+        }
+        catch
+        {
+            _logoError = "An unexpected error occurred during upload.";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task SaveLogo()
+    {
+        if (_selectedLogoFileId is null)
+        {
+            _logoError = "Please select or upload an image first.";
+            return;
+        }
+        _isBusy = true;
+        _logoError = null;
+        var result = await AdminClient.CreateOrgLogoAsync(OrgId, new CmsCreateLogoRequest(
+            _selectedLogoFileId.Value, _logoAltText?.Trim(), _logoIsActive, (_logos?.Count ?? 0) + 1));
+        _isBusy = false;
+        if (result is null) { _logoError = "Failed to add logo. Ensure the file exists."; }
+        else { CloseLogoDialog(); await LoadAsync(); }
+    }
+
+    private async Task SetLogoActive(OrganizationLogoRecord logo)
+    {
+        _isBusy = true;
+        await AdminClient.UpdateOrgLogoAsync(OrgId, logo.Id,
+            new CmsUpdateLogoRequest(logo.AltText, IsActive: true, logo.SortOrder));
+        _isBusy = false;
+        await LoadAsync();
+    }
+
+    private async Task DeleteLogo(OrganizationLogoRecord logo)
+    {
+        _isBusy = true;
+        await AdminClient.DeleteOrgLogoAsync(OrgId, logo.Id);
+        _isBusy = false;
+        await LoadAsync();
+    }
+
+    // ── Form models ───────────────────────────────────────────────────────────
+
+    private sealed class PageFormModel
+    {
+        public string PageTitle  { get; set; } = "";
+        public string UrlName    { get; set; } = "";
+        public string? PageHtml  { get; set; }
+        public bool IsPublished  { get; set; }
+        public bool IsPublic     { get; set; }
+        public Guid? ParentPageId { get; set; }
+        public int SortOrder     { get; set; } = 1;
+    }
+
+    private sealed record PageOption(Guid Id, string Title);
+}

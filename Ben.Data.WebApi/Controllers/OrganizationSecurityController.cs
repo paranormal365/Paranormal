@@ -134,8 +134,8 @@ public class OrganizationSecurityController : ControllerBase
 
     private Guid GetCurrentUserId()
     {
-        var value = User.FindFirstValue(ClaimTypes.NameIdentifier)
-                    ?? User.FindFirstValue("sub");
+        var value = User.FindFirstValue(Ben.Data.WebApi.Services.EntraClaimsTransformation.AppUserIdClaimType)
+                    ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         if (!Guid.TryParse(value, out var appUserId))
         {

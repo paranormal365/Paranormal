@@ -42,6 +42,19 @@ else
 fi
 
 echo "[startup] Launching WebApp at $WEBAPP_URL"
+
+# Open the browser once the webapp is accepting connections.
+# Runs as an orphaned background process so exec can replace this shell immediately.
+(
+  for _ in {1..60}; do
+    sleep 1
+    if curl -sS -o /dev/null --max-time 1 "$WEBAPP_URL" 2>/dev/null; then
+      open "$WEBAPP_URL"
+      break
+    fi
+  done
+) &
+
 cd "$ROOT_DIR"
 exec env ASPNETCORE_ENVIRONMENT=Development \
   dotnet run --project Ben.Web.WebApp/Ben.Web.WebApp.csproj --urls "$WEBAPP_URL"

@@ -64,9 +64,17 @@ public sealed class WebApiClient : IWebApiClient
         return response.IsSuccessStatusCode;
     }
 
+    public async Task<bool> PutVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Put, relativeUrl);
+        req.Content = JsonContent.Create(payload);
+        using var response = await _httpClient.SendAsync(req, token);
+        return response.IsSuccessStatusCode;
+    }
+
     public async Task<IReadOnlyList<AppUserRecord>> GetUsersAsync(CancellationToken token = default)
     {
-        var users = await GetAsync<List<AppUserRecord>>("/api/users", token);
+        var users = await GetAsync<List<AppUserRecord>>("/api/app-users", token);
         return users ?? [];
     }
 
@@ -159,6 +167,16 @@ public sealed class WebApiClient : IWebApiClient
         var fileName = response.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? "file";
         return (data, contentType, fileName);
     }
+
+    // ── Audio Config ──────────────────────────────────────────────────────────
+    public Task<UploadFileAudioConfigRecord?> GetAudioConfigAsync(Guid fileId, CancellationToken token = default)
+        => GetAsync<UploadFileAudioConfigRecord>($"/api/upload-files/{fileId}/audio-config", token);
+
+    public Task<UploadFileAudioConfigRecord?> UpsertAudioConfigAsync(Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default)
+        => PutAsync<UpsertAudioConfigRequest, UploadFileAudioConfigRecord>($"/api/upload-files/{fileId}/audio-config", request, token);
+
+    public Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default)
+        => DeleteAsync($"/api/upload-files/{fileId}/audio-config", token);
 
     // ── Org Sharing ──────────────────────────────────────────────────────────
     public async Task<IReadOnlyList<UploadFileOrgShareResponse>> GetFileOrgSharesAsync(Guid fileId, CancellationToken token = default)

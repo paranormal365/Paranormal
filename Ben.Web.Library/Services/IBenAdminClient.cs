@@ -1,6 +1,7 @@
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Entities;
 using Ben.Service.Models.People;
+using Ben.Data.Common.Enums;
 
 namespace Ben.Web.Library.Services;
 
@@ -19,6 +20,37 @@ namespace Ben.Web.Library.Services;
 /// </remarks>
 public interface IBenAdminClient
 {
+    // ── Organizations ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns organizations visible to the current user, each with CanEdit and CanDelete flags.
+    /// SuperAdmins see all organizations; others see only orgs they are active members of.
+    /// </summary>
+    Task<IReadOnlyList<OrganizationListItemResponse>> GetOrganizationsAsync(CancellationToken token = default);
+
+    /// <summary>Returns a single organization for pre-filling the edit form. Returns null if not found or forbidden.</summary>
+    Task<OrganizationAdminRecord?> GetOrganizationAsync(Guid id, CancellationToken token = default);
+
+    /// <summary>Creates a new organization (SuperAdmin only).</summary>
+    Task<OrganizationAdminRecord?> CreateOrganizationAsync(AdminCreateOrganizationRequest request, CancellationToken token = default);
+
+    /// <summary>Updates an organization's Name and UrlName. Requires Update access or SuperAdmin.</summary>
+    Task<OrganizationAdminRecord?> UpdateOrganizationAsync(Guid id, AdminUpdateOrganizationRequest request, CancellationToken token = default);
+
+    /// <summary>Deletes an organization. Requires Delete access or SuperAdmin.</summary>
+    Task<bool> DeleteOrganizationAsync(Guid id, CancellationToken token = default);
+
+    // ── Roles ─────────────────────────────────────────────────────────────────
+
+    /// <summary>Returns all site-level roles with the number of users currently assigned to each.</summary>
+    Task<IReadOnlyList<AdminRoleWithCountResponse>> GetRolesAsync(CancellationToken token = default);
+
+    /// <summary>Creates a new site-level role.</summary>
+    Task<AppRoleAdminRecord?> CreateRoleAsync(string roleName, CancellationToken token = default);
+
+    /// <summary>Deletes a role. Will fail if any users are still assigned to it.</summary>
+    Task<bool> DeleteRoleAsync(Guid roleId, CancellationToken token = default);
+
     // ── Users ─────────────────────────────────────────────────────────────────
 
     /// <summary>Returns a lightweight list of all application users.</summary>
@@ -30,6 +62,12 @@ public interface IBenAdminClient
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
     /// <returns>The detail record, or <c>null</c> if the user was not found.</returns>
     Task<AppUserDetailAdminRecord?> GetUserDetailAsync(Guid userId, CancellationToken token = default);
+
+    /// <summary>Creates a new application user with an initial password.</summary>
+    /// <param name="request">The new user fields including email, password, display name and role flags.</param>
+    /// <param name="token">Propagates cancellation from the Blazor component.</param>
+    /// <returns>The created <see cref="AppUserAdminRecord"/>, or <c>null</c> if creation failed.</returns>
+    Task<AppUserAdminRecord?> CreateUserAsync(AdminCreateUserRequest request, CancellationToken token = default);
 
     /// <summary>Updates editable profile fields for a user including audit timestamps.</summary>
     /// <param name="userId">The <see cref="Guid"/> primary key of the user to update.</param>
@@ -101,6 +139,95 @@ public interface IBenAdminClient
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
     /// <returns><c>true</c> if deletion succeeded; <c>false</c> otherwise.</returns>
     Task<bool> DeleteFileTypeExtensionAsync(Guid id, CancellationToken token = default);
+
+    // ── CMS Pages ─────────────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<CmsPageListItem>> GetCmsPagesAsync(Guid orgId, CancellationToken token = default);
+    Task<CmsPageDetail?> GetCmsPageAsync(Guid orgId, Guid pageId, CancellationToken token = default);
+    Task<CmsPageDetail?> CreateCmsPageAsync(Guid orgId, CmsCreatePageRequest request, CancellationToken token = default);
+    Task<CmsPageDetail?> UpdateCmsPageAsync(Guid orgId, Guid pageId, CmsUpdatePageRequest request, CancellationToken token = default);
+    Task<bool> DeleteCmsPageAsync(Guid orgId, Guid pageId, CancellationToken token = default);
+
+    // ── CMS Sections ──────────────────────────────────────────────────────────
+
+    Task<CmsSectionRecord?> CreateCmsSectionAsync(Guid orgId, Guid pageId, CmsCreateSectionRequest request, CancellationToken token = default);
+    Task<CmsSectionRecord?> UpdateCmsSectionAsync(Guid orgId, Guid pageId, Guid sectionId, CmsUpdateSectionRequest request, CancellationToken token = default);
+    Task<bool> ReorderCmsSectionsAsync(Guid orgId, Guid pageId, IList<Guid> orderedIds, CancellationToken token = default);
+    Task<bool> DeleteCmsSectionAsync(Guid orgId, Guid pageId, Guid sectionId, CancellationToken token = default);
+
+    // ── Organization Logos ────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<OrganizationLogoRecord>> GetOrgLogosAsync(Guid orgId, CancellationToken token = default);
+    Task<OrganizationLogoRecord?> CreateOrgLogoAsync(Guid orgId, CmsCreateLogoRequest request, CancellationToken token = default);
+    Task<OrganizationLogoRecord?> UpdateOrgLogoAsync(Guid orgId, Guid logoId, CmsUpdateLogoRequest request, CancellationToken token = default);
+    Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default);
+
+    // ── User sub-entity type lists (for dropdowns) ────────────────────────────
+
+    Task<IReadOnlyList<UserAddressTypeRecord>> GetUserAddressTypesAsync(CancellationToken token = default);
+    Task<IReadOnlyList<UserEmailTypeRecord>> GetUserEmailTypesAsync(CancellationToken token = default);
+    Task<IReadOnlyList<UserPhoneTypeRecord>> GetUserPhoneTypesAsync(CancellationToken token = default);
+    Task<IReadOnlyList<UserLinkTypeRecord>> GetUserLinkTypesAsync(CancellationToken token = default);
+    Task<IReadOnlyList<UserNoteTypeRecord>> GetUserNoteTypesAsync(CancellationToken token = default);
+
+    // Type management (SuperAdmin creates new types)
+    Task<bool> CreateUserAddressTypeAsync(string name, CancellationToken token = default);
+    Task<bool> CreateUserEmailTypeAsync(string name, CancellationToken token = default);
+    Task<bool> CreateUserPhoneTypeAsync(string name, CancellationToken token = default);
+    Task<bool> CreateUserLinkTypeAsync(string name, CancellationToken token = default);
+    Task<bool> CreateUserNoteTypeAsync(string name, CancellationToken token = default);
+
+    // ── User sub-entity CRUD (SuperAdmin) ─────────────────────────────────────
+
+    Task<bool> CreateUserAddressAsync(Guid userId, Guid actorId, UserAddressUpsertRequest req, CancellationToken token = default);
+    Task<bool> UpdateUserAddressAsync(Guid id, Guid userId, Guid actorId, UserAddressUpsertRequest req, CancellationToken token = default);
+    Task<bool> DeleteUserAddressAsync(Guid id, CancellationToken token = default);
+
+    Task<bool> CreateUserEmailAsync(Guid userId, Guid actorId, UserEmailUpsertRequest req, CancellationToken token = default);
+    Task<bool> UpdateUserEmailAsync(Guid id, Guid userId, Guid actorId, UserEmailUpsertRequest req, CancellationToken token = default);
+    Task<bool> DeleteUserEmailAsync(Guid id, CancellationToken token = default);
+
+    Task<bool> CreateUserPhoneAsync(Guid userId, Guid actorId, UserPhoneUpsertRequest req, CancellationToken token = default);
+    Task<bool> UpdateUserPhoneAsync(Guid id, Guid userId, Guid actorId, UserPhoneUpsertRequest req, CancellationToken token = default);
+    Task<bool> DeleteUserPhoneAsync(Guid id, CancellationToken token = default);
+
+    Task<bool> CreateUserLinkAsync(Guid userId, Guid actorId, UserLinkUpsertRequest req, CancellationToken token = default);
+    Task<bool> UpdateUserLinkAsync(Guid id, Guid userId, Guid actorId, UserLinkUpsertRequest req, CancellationToken token = default);
+    Task<bool> DeleteUserLinkAsync(Guid id, CancellationToken token = default);
+
+    Task<bool> CreateUserNoteAsync(Guid userId, Guid actorId, UserNoteUpsertRequest req, CancellationToken token = default);
+    Task<bool> UpdateUserNoteAsync(Guid id, Guid userId, Guid actorId, UserNoteUpsertRequest req, CancellationToken token = default);
+    Task<bool> DeleteUserNoteAsync(Guid id, CancellationToken token = default);
+
+    Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default);
+
+    // ── CMS File Library ──────────────────────────────────────────────────────
+
+    /// <summary>Returns upload files shared with the given organization (for logo/gallery selection).</summary>
+    Task<IReadOnlyList<UploadFileRecord>> GetOrgSharedFilesAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>Downloads raw file bytes + content-type for in-browser thumbnail rendering.</summary>
+    Task<(byte[] Data, string ContentType)?> GetFileDataAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Returns all active upload file types (used to choose a type when uploading a logo).</summary>
+    Task<IReadOnlyList<UploadFileTypeRecord>> GetPublicFileTypesAsync(CancellationToken token = default);
+
+    /// <summary>Uploads an image file and returns its record. Used to add a logo from device.</summary>
+    Task<UploadFileRecord?> UploadImageAsync(Guid fileTypeId, Guid userId, string fileName, string contentType, byte[] data, CancellationToken token = default);
+
+    // ── Audio Config ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the saved WaveSurfer config for an audio UploadFile,
+    /// or <c>null</c> if none has been saved (component uses defaults).
+    /// </summary>
+    Task<UploadFileAudioConfigRecord?> GetAudioConfigAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Creates or fully replaces the WaveSurfer config for an audio UploadFile.</summary>
+    Task<UploadFileAudioConfigRecord?> UpsertAudioConfigAsync(Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default);
+
+    /// <summary>Removes the saved WaveSurfer config; the player will use theme-derived defaults on next render.</summary>
+    Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default);
 }
 
 /// <summary>
@@ -143,6 +270,36 @@ public sealed record AdminCreateFileTypeExtensionRequest(
     string Pattern,
     Guid CreatedByAppUserId);
 
+/// <summary>Organization list row returned by <c>GET /api/organizations</c>.</summary>
+public sealed record OrganizationListItemResponse(
+    Guid Id,
+    string Name,
+    string UrlName,
+    DateTime DateCreated,
+    bool CanEdit,
+    bool CanDelete);
+
+/// <summary>Request body for creating a new organization (SuperAdmin only).</summary>
+public sealed record AdminCreateOrganizationRequest(string Name, string UrlName);
+
+/// <summary>Request body for updating an organization's Name and UrlName.</summary>
+public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName);
+
+/// <summary>Role record paired with its current user count.</summary>
+public sealed record AdminRoleWithCountResponse(AppRoleAdminRecord Role, int UserCount);
+
+/// <summary>
+/// Request body for creating a new application user.
+/// Mirrors the <c>AdminCreateUserRequest</c> DTO in <c>Ben.Data.WebApi</c>.
+/// </summary>
+public sealed record AdminCreateUserRequest(
+    string Email,
+    string Password,
+    string? DisplayName,
+    string? UserName,
+    bool IsEmailConfirmed,
+    bool IsSuperAdmin);
+
 /// <summary>
 /// Request body for updating a user's editable profile fields.
 /// Mirrors the <c>AdminUpdateUserProfileRequest</c> DTO in <c>Ben.Data.WebApi</c>.
@@ -159,3 +316,84 @@ public sealed record AdminUpdateUserProfileRequest(
     DateTime DateCreated,
     DateTime? DateUpdated);
 
+// ── CMS types ─────────────────────────────────────────────────────────────────
+
+/// <summary>Page row returned by GET /api/organizations/{orgId}/pages.</summary>
+public sealed record CmsPageListItem(
+    Guid Id,
+    Guid OrganizationId,
+    Guid? ParentPageId,
+    string PageTitle,
+    string UrlName,
+    bool IsHome,
+    bool IsPublished,
+    bool IsPublic,
+    int SortOrder,
+    int SectionCount,
+    bool CanEdit,
+    bool CanDelete,
+    DateTime DateCreated);
+
+/// <summary>Full page with sections returned by GET /api/organizations/{orgId}/pages/{pageId}.</summary>
+public sealed record CmsPageDetail(
+    Guid Id,
+    Guid OrganizationId,
+    Guid? ParentPageId,
+    string PageTitle,
+    string UrlName,
+    string PageHtml,
+    bool IsHome,
+    bool IsPublished,
+    bool IsPublic,
+    int SortOrder,
+    DateTime DateCreated,
+    DateTime? DateUpdated,
+    IReadOnlyList<CmsSectionRecord> Sections);
+
+public sealed record CmsCreatePageRequest(string PageTitle, string UrlName, string? PageHtml, bool IsPublic, Guid? ParentPageId, int SortOrder);
+public sealed record CmsUpdatePageRequest(string PageTitle, string UrlName, string? PageHtml, bool IsPublished, bool IsPublic, Guid? ParentPageId, int SortOrder);
+public sealed record CmsCreateSectionRequest(CmsSectionType SectionType, string? Title, string ContentJson, int SortOrder, bool IsActive);
+public sealed record CmsUpdateSectionRequest(string? Title, string ContentJson, bool IsActive);
+public sealed record CmsCreateLogoRequest(Guid UploadFileId, string? AltText, bool IsActive, int SortOrder);
+public sealed record CmsUpdateLogoRequest(string? AltText, bool IsActive, int SortOrder);
+
+// ── User sub-entity request records ──────────────────────────────────────────
+
+public sealed record UserAddressUpsertRequest(
+    Guid UserAddressTypeId,
+    string StreetAddress1,
+    string? StreetAddress2,
+    string City,
+    string State,
+    string ZipCode,
+    string Country,
+    bool IsPublic,
+    int SortOrder = 0);
+
+public sealed record UserEmailUpsertRequest(
+    Guid UserEmailTypeId,
+    string EmailAddress,
+    bool IsPrimary,
+    bool IsPublic,
+    int SortOrder = 0);
+
+public sealed record UserPhoneUpsertRequest(
+    Guid UserPhoneTypeId,
+    string PhoneNumber,
+    string? PhoneCountry,
+    bool IsPrimary,
+    bool IsCellular,
+    bool IsPublic);
+
+public sealed record UserLinkUpsertRequest(
+    Guid UserLinkTypeId,
+    string LinkUrl,
+    string? DisplayText,
+    bool IsPublic,
+    bool IsActive);
+
+public sealed record UserNoteUpsertRequest(
+    Guid UserNoteTypeId,
+    string NoteSubject,
+    string NoteBody,
+    bool IsPublic);

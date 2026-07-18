@@ -76,3 +76,68 @@ Controllers are unit-tested by directly instantiating them with mocked or in-mem
 | `Upload_WhenExtensionNotAllowed_ReturnsBadRequest` | `.png` not in `[".txt", ".pdf"]` → 400 containing the rejected extension |
 
 ---
+
+## `OrganizationControllerTests` *(added 2026-07-18)*
+
+**File:** [`Ben.Web.Tests/Controllers/OrganizationControllerTests.cs`](../../../Ben.Web.Tests/Controllers/OrganizationControllerTests.cs)  
+**Test count:** 27 tests  
+**Subject:** `Ben.Data.WebApi.Controllers.Entities.OrganizationController`  
+**Infrastructure:** InMemory DB + `IOrganizationSecurityService` mocked.
+
+Covers GetAllWithPermissions, GetByIdWithPermissions, Update, Delete, Create — for each: 401 (no userId), 403 (denied), 200/201/204 (superadmin and member paths), 400 (blank fields, duplicate slug), 404 (not found). URL slug lowercasing verified. SuperAdmin never calls `HasAccessAsync`.
+
+---
+
+## `AdminRoleControllerTests` *(added 2026-07-18)*
+
+**File:** [`Ben.Web.Tests/Controllers/AdminRoleControllerTests.cs`](../../../Ben.Web.Tests/Controllers/AdminRoleControllerTests.cs)  
+**Test count:** 11 tests  
+**Subject:** `Ben.Data.WebApi.Controllers.Admin.AdminRoleController`  
+**Infrastructure:** `RoleManager<IdentityRole<Guid>>` and `UserManager<AppUser>` mocked.
+
+| Test group | Scenarios |
+|---|---|
+| `GetAll` | Returns ordered list with user counts; empty list |
+| `Create` | Valid name → 201; blank → 400; RoleManager failure → 400; name trimmed |
+| `Delete` | Not found → 404; users assigned → 409; empty role → 204; RoleManager failure → 400 |
+
+---
+
+## CMS Controller Tests *(added 2026-07-18)*
+
+Five files covering `Ben.Data.WebApi.Controllers.Cms.*`. All share the same test infrastructure: InMemory DB, mocked `IMapper`, mocked `IOrganizationSecurityService` (GrantAll/DenyAll helpers), `SuperAdmin(userId)` principal.
+
+### `OrgCmsPageControllerTests` — 13 tests
+
+Key scenarios beyond standard Unauthorized/Forbid/NotFound:
+- SuperAdmin sees all pages with `CanEdit=true`, `CanDelete=true`; never calls `HasAccessAsync`
+- Duplicate URL slug → 400
+- Self-parent guard (update with `ParentPageId == pageId`) → 400
+- Delete re-parents child pages to the deleted page's parent (`null` if top-level)
+
+### `CmsSectionControllerTests` — 12 tests
+
+- Page-not-found guard on GetAll, Create
+- Create populates `ContentJson`; verified in DB
+- Reorder → 204 NoContent (no body)
+- Delete removes row from DB
+
+### `OrganizationLogoControllerTests` — 11 tests
+
+- `Create` with missing `UploadFileId` → 400
+- `Create` with `IsActive=true` deactivates all existing active logos for the org
+- `Update` persists AltText and SortOrder
+
+### `OrgMemberGroupControllerTests` — 12 tests
+
+- Blank name → 400
+- `AddMember` with membership from wrong org → 400
+- `AddMember` duplicate → 409 Conflict
+- `RemoveMember` not-found → 404
+
+### `CmsPagePermissionControllerTests` — 11 tests
+
+- Both `AppUserId` and `OrgMemberGroupId` null → 400
+- `Actions = None` blocked on Create and Update
+- User-grant and group-grant paths verified independently
+- Delete removes row from DB

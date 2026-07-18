@@ -6,7 +6,7 @@
 ## Purpose
 
 Implements the repository pattern over `BenDataContext`.  
-Provides typed repository interfaces and concrete implementations for all 26 entities, plus business-logic services for organisation security, audit logging, and geocoding.
+Provides typed repository interfaces and concrete implementations for all 26 entities, plus business-logic services for organization security, audit logging, and geocoding.
 
 ## Dependencies
 

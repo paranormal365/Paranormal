@@ -112,3 +112,23 @@ Uses Moq to mock HTTP client interfaces; no real HTTP calls or database access.
 > **Background:** `WebApiBearerTokenHandler` was removed from the `IWebApiClient` pipeline because `IHttpClientFactory` resolves `DelegatingHandler` instances from the root DI scope, giving each handler an empty, unrelated `IWebApiTokenStore`. Auth header injection was moved into `WebApiClient` directly — which IS resolved from the circuit scope as a typed transient — so `_tokenStore` is always the correct instance.
 
 ---
+
+
+## `CmsFileLibraryTests` *(added 2026-07-18)*
+
+**File:** [`Ben.Web.Tests/Services/CmsFileLibraryTests.cs`](../../../Ben.Web.Tests/Services/CmsFileLibraryTests.cs)  
+**Test count:** 7 tests  
+**Subject:** `Ben.Web.WebApp.Services.WebApi.BenAdminClientAdapter` — CMS file library methods  
+**Infrastructure:** `IWebApiClient` mocked with Moq; no HTTP calls.
+
+### Coverage
+
+| Test | Scenario |
+|---|---|
+| `GetOrgSharedFilesAsync_DelegatesToApiAndReturnsFiles` | Happy path — delegates to `IWebApiClient.GetOrgSharedFilesAsync` and returns the file list |
+| `GetOrgSharedFilesAsync_WhenApiReturnsNull_ReturnsEmpty` | Null from API → empty list (never throws) |
+| `GetFileDataAsync_ReturnsBytesAndContentType` | `DownloadFileAsync` succeeds → bytes + ContentType returned |
+| `GetFileDataAsync_WhenApiReturnsNull_ReturnsNull` | `DownloadFileAsync` returns null → null propagated |
+| `GetPublicFileTypesAsync_DelegatesToApi` | Delegates to `GetUploadFileTypesAsync` |
+| `UploadImageAsync_PassesCorrectFormFieldsToApi` | Verifies multipart form fields: `uploadFileTypeId`, `appUserId`, `isPublic=true`, correct `file` part with file name |
+| `UploadImageAsync_WhenApiReturnsNull_ReturnsNull` | API failure → null propagated |

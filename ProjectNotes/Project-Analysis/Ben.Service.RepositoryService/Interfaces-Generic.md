@@ -79,13 +79,13 @@ Records CRUD activity to the `AuditLogs` table.
 **See also:** [Ben.Service.Security version](../Ben.Service.Security/Interfaces.md)
 
 ### Summary
-Organisation security and membership operations used by WebApi controllers.
+Organization security and membership operations used by WebApi controllers.
 
 | Method | Description |
 |---|---|
 | `SearchUsersAsync(actingUserId, query, skip, take, token)` | User search scoped to the acting user's visibility. SuperAdmins see all. |
 | `HasAccessAsync(appUserId, organizationId, tableName, actionName, token)` | Returns `true` if the user can perform the action on the table within the org. |
-| `GetOrganizationsForUserAsync(appUserId, token)` | All organisations the user is an active member of. SuperAdmins get all. |
+| `GetOrganizationsForUserAsync(appUserId, token)` | All organizations the user is an active member of. SuperAdmins get all. |
 | `RegisterOrganizationAsync(appUserId, name, urlName, token)` | Creates org + seeds Owner membership. Throws if name/urlName is blank or urlName is taken. |
 | `GetOrganizationUsersAsync(organizationId, actingUserId, token)` | All membership rows for the org (requires Owner/Admin or SuperAdmin). |
 | `UpsertMembershipAsync(organizationId, targetUserId, role, isActive, actingUserId, token)` | Creates or updates a membership row. |
@@ -128,7 +128,7 @@ Groups all AppUser-domain repositories behind a single interface. Accessed via `
 **Implemented by:** [`OrganizationRepositoryManager`](RepositoryManager.md#organizationrepositorymanager)
 
 ### Summary
-Groups all Organisation-domain repositories behind a single interface. Accessed via `IRepositoryManager.Organization`.
+Groups all Organization-domain repositories behind a single interface. Accessed via `IRepositoryManager.Organization`.
 
 | Property | Type | Entity |
 |---|---|---|

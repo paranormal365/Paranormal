@@ -34,7 +34,7 @@ public record MeResponse(Guid UserId, string Email, bool IsSuperAdmin);
 **Authorization:** `[Authorize]`
 
 ### Summary
-Manages organisation membership, access grants, and permission checks for a specific organisation.  
+Manages organization membership, access grants, and permission checks for a specific organization.  
 Depends on `Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService`.
 
 ### Endpoints
@@ -43,7 +43,7 @@ Depends on `Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurit
 |---|---|---|
 | `GET` | `my-access?table=&action=` | Checks the calling user's access for a given table/action. |
 | `POST` | `check-access` | Checks a specified user's access (caller must be the target or an admin). |
-| `GET` | `users` | Returns all membership rows for the organisation. |
+| `GET` | `users` | Returns all membership rows for the organization. |
 | `PUT` | `users/{targetUserId:guid}/membership` | Creates or updates a user's membership and role. |
 | `PUT` | `users/{targetUserId:guid}/grants` | Creates or updates an access grant for a table/action. |
 
@@ -72,15 +72,15 @@ Depends on `Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurit
 **Authorization:** `[Authorize]`
 
 ### Summary
-Membership discovery and organisation registration for the calling user.
+Membership discovery and organization registration for the calling user.
 
 ### Endpoints
 
 | Method | Route (relative) | Description |
 |---|---|---|
 | `GET` | `users/search?q=&skip=&take=` | Searches users visible to the caller. SuperAdmins see all; others see only users in shared orgs. |
-| `GET` | `mine` | Returns all organisations the authenticated user is a member of. |
-| `POST` | `register` | Creates a new organisation with the caller as Owner. |
+| `GET` | `mine` | Returns all organizations the authenticated user is a member of. |
+| `POST` | `register` | Creates a new organization with the caller as Owner. |
 
 ---
 

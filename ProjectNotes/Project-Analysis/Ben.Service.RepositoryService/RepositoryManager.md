@@ -67,7 +67,7 @@ Each property is lazily initialised on first access — only the repositories th
 **Implements:** [`IOrganizationRepositoryManager`](Interfaces-Generic.md#iorganizationrepositorymanager)
 
 ### Summary
-Aggregates all Organisation-domain repository instances.  
+Aggregates all Organization-domain repository instances.  
 Same lazy-initialisation pattern as `AppUserRepositoryManager`.
 
 ### Repository Properties

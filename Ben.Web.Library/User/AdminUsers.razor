@@ -11,6 +11,13 @@
         <div class="col">
             <h3 class="mb-0">All Users</h3>
         </div>
+        <div class="col-auto">
+            <TelerikButton Icon="@SvgIcon.Plus"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           OnClick="@(() => NavManager.NavigateTo("/admin/users/create"))">
+                New User
+            </TelerikButton>
+        </div>
     </div>
 
     <div class="mb-3">
@@ -51,13 +58,13 @@
             <GridCommandColumn Width="200px">
                 <GridCommandButton Command="View"
                                    Icon="@SvgIcon.Eye"
-                                   OnClick="@((GridCommandEventArgs e) => ViewUser((AppUserRecord)e.Item))">
+                                   OnClick="@((GridCommandEventArgs e) => ViewUser((AppUserRecord)e.Items.First()))">
                     View
                 </GridCommandButton>
                 <GridCommandButton Command="Impersonate"
                                    Icon="@SvgIcon.User"
                                    ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
-                                   OnClick="@((GridCommandEventArgs e) => Impersonate((AppUserRecord)e.Item))">
+                                   OnClick="@((GridCommandEventArgs e) => Impersonate((AppUserRecord)e.Items.First()))">
                     Impersonate
                 </GridCommandButton>
             </GridCommandColumn>

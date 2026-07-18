@@ -9,7 +9,7 @@
 **See also:** [RepositoryService version](../Ben.Service.RepositoryService/Interfaces-Generic.md#iorganizationsecurityservice)
 
 ### Summary
-The **policy-enforcement contract** — used by `OrganizationSecurityAuthorizeAttribute` and the middleware layer to gate access to organisation-scoped resources.
+The **policy-enforcement contract** — used by `OrganizationSecurityAuthorizeAttribute` and the middleware layer to gate access to organization-scoped resources.
 
 ### Methods
 
@@ -17,7 +17,7 @@ The **policy-enforcement contract** — used by `OrganizationSecurityAuthorizeAt
 |---|---|---|
 | `HasPermissionAsync(userId, organizationId, table, action, ct)` | `bool` | `true` if the user holds an explicit grant for the table/action. Owners always return `true`. |
 | `IsMemberAsync(userId, organizationId, ct)` | `bool` | `true` if an active membership row exists. |
-| `GetUserOrganizationsAsync(userId, ct)` | `IReadOnlyList<Guid>` | IDs of all organisations the user is an active member of. |
+| `GetUserOrganizationsAsync(userId, ct)` | `IReadOnlyList<Guid>` | IDs of all organizations the user is an active member of. |
 | `GetUserRoleAsync(userId, organizationId, ct)` | `OrganizationMemberRole?` | User's role or `null` if not a member. |
 | `IsOwnerAsync(userId, organizationId, ct)` | `bool` | `true` if the user's role is `Owner`. |
 | `GetOrganizationMembersAsync(organizationId, ct)` | `IReadOnlyList<(Guid UserId, OrganizationMemberRole Role)>` | All active members and their roles. |

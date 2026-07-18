@@ -9,7 +9,7 @@
 **Implements:** `Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService` AND `Ben.Service.Security.Services.IOrganizationSecurityService`
 
 ### Summary
-The concrete organisation security and membership implementation.  
+The concrete organization security and membership implementation.  
 Registered **twice** in DI — once for each interface — so both the controller layer and the attribute/middleware layer can resolve it independently.
 
 **DI registration in `Ben.Data.WebApi/Program.cs`:**
@@ -24,7 +24,7 @@ builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IOrga
 
 #### `SearchUsersAsync`
 - SuperAdmins: queries all `AppUsers`.
-- Others: joins `OrganizationUserMemberships` to find users in shared organisations, then applies the text filter.
+- Others: joins `OrganizationUserMemberships` to find users in shared organizations, then applies the text filter.
 - Result ordered by `DisplayName` then `Email`.
 
 #### `HasAccessAsync`

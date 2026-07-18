@@ -21,6 +21,7 @@
 # ============================================================
 .vscode/webapi.log
 .vscode/.webapi.pid
+**/webapi-*.log
 
 # ============================================================
 # NuGet
@@ -36,6 +37,13 @@ packages/
 Thumbs.db
 
 # ============================================================
+# WaveSurfer TypeScript build tooling (run `npm run build:blazor` to regenerate)
+# ============================================================
+Ben.Web.WebApp/wwwroot/ts/wavesurfer/node_modules/
+Ben.Web.WebApp/wwwroot/ts/wavesurfer/dist/
+Ben.Web.WebApp/wwwroot/assets/
+
+# ============================================================
 # Secrets / sensitive config
 # ============================================================
 
@@ -49,5 +57,9 @@ telerik-license.txt
 
 # .NET user secrets
 **/secrets.json
+
+# Local secrets / credentials reference (never commit)
+SECRETS.md
+**/SECRETS.md
 .env
 .env.*

@@ -9,6 +9,7 @@ public interface IWebApiClient
     Task<TResponse?> GetAsync<TResponse>(string relativeUrl, CancellationToken token = default);
     Task<TResponse?> PostAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<TResponse?> PutAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);
+    Task<bool> PutVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> DeleteAsync(string relativeUrl, CancellationToken token = default);
 
     // Example typed endpoint usage using service models.
@@ -30,6 +31,11 @@ public interface IWebApiClient
     Task<UploadFileRecord?> UpdateUploadFileAsync(Guid id, UpdateUploadFileRequest request, CancellationToken token = default);
     Task<bool> DeleteUploadFileAsync(Guid id, CancellationToken token = default);
     Task<(byte[] Data, string ContentType, string FileName)?> DownloadFileAsync(Guid id, CancellationToken token = default);
+
+    // Upload File — Audio Config
+    Task<UploadFileAudioConfigRecord?> GetAudioConfigAsync(Guid fileId, CancellationToken token = default);
+    Task<UploadFileAudioConfigRecord?> UpsertAudioConfigAsync(Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default);
+    Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default);
 
     // Upload File — Org Sharing
     Task<IReadOnlyList<UploadFileOrgShareResponse>> GetFileOrgSharesAsync(Guid fileId, CancellationToken token = default);

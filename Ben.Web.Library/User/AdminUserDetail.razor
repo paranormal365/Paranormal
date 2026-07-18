@@ -4,50 +4,39 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 
+@using System.Text.Json
+
 <PageTitle>SuperAdmin — User Detail</PageTitle>
 
 @if (_detail is null)
 {
-    <TelerikLoaderContainer Visible="true" Text="Loading user…" />
+    <div class="container-fluid px-3 py-4 text-center text-secondary">
+        <div class="spinner-border mb-2"></div><br/>Loading user…
+    </div>
 }
 else
 {
     <div class="container-fluid px-3">
 
-        @* ── Header ────────────────────────────────────────────────────────── *@
+        @* Header *@
         <div class="row mb-3 align-items-center">
             <div class="col">
-                <TelerikButton Icon="@SvgIcon.ArrowLeft"
-                               FillMode="@ThemeConstants.Button.FillMode.Flat"
-                               OnClick="@(() => NavManager.NavigateTo("/admin/users"))">
-                    Back to Users
-                </TelerikButton>
-                <h3 class="d-inline-block ms-3 mb-0">
-                    @(_detail.User.DisplayName ?? _detail.User.Email)
-                </h3>
+                <TelerikButton Icon="@SvgIcon.ArrowLeft" FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               OnClick="@(() => NavManager.NavigateTo("/admin/users"))">Back to Users</TelerikButton>
+                <h3 class="d-inline-block ms-3 mb-0">@(_detail.User.DisplayName ?? _detail.User.Email)</h3>
             </div>
             <div class="col-auto">
-                <TelerikButton Icon="@SvgIcon.User"
-                               ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
-                               OnClick="ImpersonateUser">
-                    Impersonate
-                </TelerikButton>
+                <TelerikButton Icon="@SvgIcon.User" ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
+                               OnClick="ImpersonateUser">Impersonate</TelerikButton>
             </div>
         </div>
 
-        @if (_errorMessage is not null)
-        {
-            <div class="alert alert-danger mb-3">@_errorMessage</div>
-        }
-        @if (_successMessage is not null)
-        {
-            <div class="alert alert-success mb-3">@_successMessage</div>
-        }
+        @if (_errorMessage is not null) { <div class="alert alert-danger mb-3">@_errorMessage</div> }
+        @if (_successMessage is not null) { <div class="alert alert-success mb-3">@_successMessage</div> }
 
-        @* ── Tabs ──────────────────────────────────────────────────────────── *@
         <TelerikTabStrip>
 
-            @* Profile tab *@
+            @* ── Profile ─────────────────────────────────────────────────── *@
             <TabStripTab Title="Profile">
                 <div class="row g-3 mt-1" style="max-width:760px">
                     <div class="col-md-6">
@@ -66,132 +55,149 @@ else
                         <label class="form-label fw-semibold">Phone</label>
                         <TelerikTextBox @bind-Value="@_edit.PhoneNumber" Width="100%" />
                     </div>
-
-                    @* Flags *@
                     <div class="col-12 d-flex flex-wrap gap-4 mt-1">
-                        <label class="d-flex align-items-center gap-2">
-                            <TelerikCheckBox @bind-Value="@_edit.IsEmailConfirmed" />
-                            Email Confirmed
-                        </label>
-                        <label class="d-flex align-items-center gap-2">
-                            <TelerikCheckBox @bind-Value="@_edit.IsTwoFactorEnabled" />
-                            2FA Enabled
-                        </label>
-                        <label class="d-flex align-items-center gap-2">
-                            <TelerikCheckBox @bind-Value="@_edit.IsLockoutEnabled" />
-                            Lockout Enabled
-                        </label>
+                        <label class="d-flex align-items-center gap-2"><TelerikCheckBox @bind-Value="@_edit.IsEmailConfirmed" /> Email Confirmed</label>
+                        <label class="d-flex align-items-center gap-2"><TelerikCheckBox @bind-Value="@_edit.IsTwoFactorEnabled" /> 2FA Enabled</label>
+                        <label class="d-flex align-items-center gap-2"><TelerikCheckBox @bind-Value="@_edit.IsLockoutEnabled" /> Lockout Enabled</label>
                     </div>
-
-                    @* Audit fields — visible to SuperAdmin only *@
-                    <div class="col-12 mt-2">
-                        <p class="text-secondary small mb-1">Audit Fields (SuperAdmin only)</p>
-                    </div>
+                    <div class="col-12 mt-2"><p class="text-secondary small mb-1">Audit Fields</p></div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Date Created</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.DateCreated"
-                                              Format="yyyy-MM-dd HH:mm"
-                                              Width="100%" />
+                        <TelerikDateTimePicker @bind-Value="@_edit.DateCreated" Format="yyyy-MM-dd HH:mm" Width="100%" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Date Updated</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.DateUpdated"
-                                              Format="yyyy-MM-dd HH:mm"
-                                              Width="100%" />
+                        <TelerikDateTimePicker @bind-Value="@_edit.DateUpdated" Format="yyyy-MM-dd HH:mm" Width="100%" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Lockout End</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.LockoutEnd"
-                                              Format="yyyy-MM-dd HH:mm"
-                                              Width="100%" />
+                        <TelerikDateTimePicker @bind-Value="@_edit.LockoutEnd" Format="yyyy-MM-dd HH:mm" Width="100%" />
                     </div>
                     <div class="col-md-3">
                         <label class="form-label fw-semibold">Access Failed Count</label>
                         <p class="form-control-plaintext">@_detail.User.AccessFailedCount</p>
                     </div>
-
                     <div class="col-12 mt-2">
                         <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                                       OnClick="SaveProfile"
-                                       Enabled="@(!_isSaving)">
+                                       OnClick="SaveProfile" Enabled="@(!_isSaving)">
                             @(_isSaving ? "Saving…" : "Save Profile")
                         </TelerikButton>
                     </div>
                 </div>
             </TabStripTab>
 
-            @* Addresses *@
-            <TabStripTab Title=@($"Addresses ({_detail.Addresses.Count})")>
-                <TelerikGrid Data="@_detail.Addresses" TItem="UserAddressAdminRecord"
-                             Pageable="true" PageSize="10" Class="mt-2">
+            @* ── Addresses ────────────────────────────────────────────────── *@
+            <TabStripTab Title=@($"Addresses ({_addresses.Count})")>
+                <div class="d-flex justify-content-end mb-2 mt-2">
+                    <TelerikButton Icon="@SvgIcon.Plus" ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                   OnClick="@(() => OpenSubDialog("address", null))">Add Address</TelerikButton>
+                </div>
+                <TelerikGrid Data="@_addresses" TItem="UserAddressAdminRecord" Pageable="true" PageSize="10">
                     <GridColumns>
                         <GridColumn Field="@nameof(UserAddressAdminRecord.StreetAddress1)" Title="Street" />
                         <GridColumn Field="@nameof(UserAddressAdminRecord.City)" Title="City" Width="120px" />
                         <GridColumn Field="@nameof(UserAddressAdminRecord.State)" Title="State" Width="80px" />
                         <GridColumn Field="@nameof(UserAddressAdminRecord.ZipCode)" Title="Zip" Width="90px" />
                         <GridColumn Field="@nameof(UserAddressAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridColumn Field="@nameof(UserAddressAdminRecord.DateCreated)" Title="Created"
-                                    DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                        <GridCommandColumn Width="130px">
+                            <GridCommandButton Icon="@SvgIcon.Pencil"
+                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("address", e.Items.First()))">Edit</GridCommandButton>
+                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteAddress((UserAddressAdminRecord)e.Items.First()))">Del</GridCommandButton>
+                        </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
             </TabStripTab>
 
-            @* Emails *@
-            <TabStripTab Title=@($"Emails ({_detail.Emails.Count})")>
-                <TelerikGrid Data="@_detail.Emails" TItem="UserEmailAdminRecord"
-                             Pageable="true" PageSize="10" Class="mt-2">
+            @* ── Emails ───────────────────────────────────────────────────── *@
+            <TabStripTab Title=@($"Emails ({_emails.Count})")>
+                <div class="d-flex justify-content-end mb-2 mt-2">
+                    <TelerikButton Icon="@SvgIcon.Plus" ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                   OnClick="@(() => OpenSubDialog("email", null))">Add Email</TelerikButton>
+                </div>
+                <TelerikGrid Data="@_emails" TItem="UserEmailAdminRecord" Pageable="true" PageSize="10">
                     <GridColumns>
                         <GridColumn Field="@nameof(UserEmailAdminRecord.EmailAddress)" Title="Email" />
+                        <GridColumn Field="@nameof(UserEmailAdminRecord.IsPrimary)" Title="Primary" Width="80px" />
                         <GridColumn Field="@nameof(UserEmailAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridColumn Field="@nameof(UserEmailAdminRecord.DateCreated)" Title="Created"
-                                    DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                        <GridCommandColumn Width="130px">
+                            <GridCommandButton Icon="@SvgIcon.Pencil"
+                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("email", e.Items.First()))">Edit</GridCommandButton>
+                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteEmail((UserEmailAdminRecord)e.Items.First()))">Del</GridCommandButton>
+                        </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
             </TabStripTab>
 
-            @* Phones *@
-            <TabStripTab Title=@($"Phones ({_detail.Phones.Count})")>
-                <TelerikGrid Data="@_detail.Phones" TItem="UserPhoneAdminRecord"
-                             Pageable="true" PageSize="10" Class="mt-2">
+            @* ── Phones ───────────────────────────────────────────────────── *@
+            <TabStripTab Title=@($"Phones ({_phones.Count})")>
+                <div class="d-flex justify-content-end mb-2 mt-2">
+                    <TelerikButton Icon="@SvgIcon.Plus" ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                   OnClick="@(() => OpenSubDialog("phone", null))">Add Phone</TelerikButton>
+                </div>
+                <TelerikGrid Data="@_phones" TItem="UserPhoneAdminRecord" Pageable="true" PageSize="10">
                     <GridColumns>
                         <GridColumn Field="@nameof(UserPhoneAdminRecord.PhoneNumber)" Title="Number" />
+                        <GridColumn Field="@nameof(UserPhoneAdminRecord.IsPrimary)" Title="Primary" Width="80px" />
+                        <GridColumn Field="@nameof(UserPhoneAdminRecord.IsCellular)" Title="Cell" Width="70px" />
                         <GridColumn Field="@nameof(UserPhoneAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridColumn Field="@nameof(UserPhoneAdminRecord.DateCreated)" Title="Created"
-                                    DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                        <GridCommandColumn Width="130px">
+                            <GridCommandButton Icon="@SvgIcon.Pencil"
+                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("phone", e.Items.First()))">Edit</GridCommandButton>
+                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeletePhone((UserPhoneAdminRecord)e.Items.First()))">Del</GridCommandButton>
+                        </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
             </TabStripTab>
 
-            @* Links *@
-            <TabStripTab Title=@($"Links ({_detail.Links.Count})")>
-                <TelerikGrid Data="@_detail.Links" TItem="UserLinkAdminRecord"
-                             Pageable="true" PageSize="10" Class="mt-2">
+            @* ── Links ────────────────────────────────────────────────────── *@
+            <TabStripTab Title=@($"Links ({_links.Count})")>
+                <div class="d-flex justify-content-end mb-2 mt-2">
+                    <TelerikButton Icon="@SvgIcon.Plus" ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                   OnClick="@(() => OpenSubDialog("link", null))">Add Link</TelerikButton>
+                </div>
+                <TelerikGrid Data="@_links" TItem="UserLinkAdminRecord" Pageable="true" PageSize="10">
                     <GridColumns>
                         <GridColumn Field="@nameof(UserLinkAdminRecord.LinkUrl)" Title="URL" />
+                        <GridColumn Field="@nameof(UserLinkAdminRecord.DisplayText)" Title="Label" Width="120px" />
                         <GridColumn Field="@nameof(UserLinkAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridColumn Field="@nameof(UserLinkAdminRecord.DateCreated)" Title="Created"
-                                    DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                        <GridColumn Field="@nameof(UserLinkAdminRecord.IsActive)" Title="Active" Width="70px" />
+                        <GridCommandColumn Width="130px">
+                            <GridCommandButton Icon="@SvgIcon.Pencil"
+                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("link", e.Items.First()))">Edit</GridCommandButton>
+                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteLink((UserLinkAdminRecord)e.Items.First()))">Del</GridCommandButton>
+                        </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
             </TabStripTab>
 
-            @* Notes *@
-            <TabStripTab Title=@($"Notes ({_detail.Notes.Count})")>
-                <TelerikGrid Data="@_detail.Notes" TItem="UserNoteAdminRecord"
-                             Pageable="true" PageSize="10" Class="mt-2">
+            @* ── Notes ────────────────────────────────────────────────────── *@
+            <TabStripTab Title=@($"Notes ({_notes.Count})")>
+                <div class="d-flex justify-content-end mb-2 mt-2">
+                    <TelerikButton Icon="@SvgIcon.Plus" ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                   OnClick="@(() => OpenSubDialog("note", null))">Add Note</TelerikButton>
+                </div>
+                <TelerikGrid Data="@_notes" TItem="UserNoteAdminRecord" Pageable="true" PageSize="10">
                     <GridColumns>
-                        <GridColumn Field="@nameof(UserNoteAdminRecord.NoteBody)" Title="Content" />
-                        <GridColumn Field="@nameof(UserNoteAdminRecord.NoteSubject)" Title="Subject" Width="120px" />
-                        <GridColumn Field="@nameof(UserNoteAdminRecord.DateCreated)" Title="Created"
-                                    DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                        <GridColumn Field="@nameof(UserNoteAdminRecord.NoteSubject)" Title="Subject" Width="150px" />
+                        <GridColumn Field="@nameof(UserNoteAdminRecord.NoteBody)" Title="Body" />
+                        <GridColumn Field="@nameof(UserNoteAdminRecord.NoteBody)" Title="Body" />
+                        <GridCommandColumn Width="130px">
+                            <GridCommandButton Icon="@SvgIcon.Pencil"
+                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("note", e.Items.First()))">Edit</GridCommandButton>
+                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteNote((UserNoteAdminRecord)e.Items.First()))">Del</GridCommandButton>
+                        </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
             </TabStripTab>
 
-            @* Org Memberships *@
-            <TabStripTab Title=@($"Memberships ({_detail.Memberships.Count})")>
-                <TelerikGrid Data="@_detail.Memberships" TItem="OrganizationUserMembershipAdminRecord"
-                             Pageable="true" PageSize="10" Class="mt-2">
+            @* ── Memberships ──────────────────────────────────────────────── *@
+            <TabStripTab Title=@($"Memberships ({_memberships.Count})")>
+                <TelerikGrid Data="@_memberships" TItem="OrganizationUserMembershipAdminRecord" Pageable="true" PageSize="10" Class="mt-2">
                     <GridColumns>
                         <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.OrganizationId)" Title="Org ID" />
                         <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.Role)" Title="Role" Width="120px" />
@@ -202,17 +208,24 @@ else
                 </TelerikGrid>
             </TabStripTab>
 
-            @* Upload Files *@
-            <TabStripTab Title=@($"Files ({_detail.UploadFiles.Count})")>
-                <TelerikGrid Data="@_detail.UploadFiles" TItem="UploadFileAdminRecord"
-                             Pageable="true" PageSize="10" Class="mt-2">
+            @* ── Files ────────────────────────────────────────────────────── *@
+            <TabStripTab Title=@($"Files ({_files.Count})")>
+                <TelerikGrid Data="@_files" TItem="UploadFileAdminRecord" Pageable="true" PageSize="10" Class="mt-2">
                     <GridColumns>
+                        <GridColumn Title="Preview" Width="140px">
+                            <Template>
+                                @{ var f = (UploadFileAdminRecord)context; }
+                                <UserMediaPreview FileId="@f.Id" ContentType="@f.ContentType" FileName="@f.FileName" />
+                            </Template>
+                        </GridColumn>
                         <GridColumn Field="@nameof(UploadFileAdminRecord.FileName)" Title="File Name" />
-                        <GridColumn Field="@nameof(UploadFileAdminRecord.ContentType)" Title="Type" Width="140px" />
-                        <GridColumn Field="@nameof(UploadFileAdminRecord.FileSize)" Title="Size" Width="90px" />
+                        <GridColumn Field="@nameof(UploadFileAdminRecord.ContentType)" Title="Type" Width="130px" />
+                        <GridColumn Field="@nameof(UploadFileAdminRecord.FileSize)" Title="Size" Width="80px" />
                         <GridColumn Field="@nameof(UploadFileAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridColumn Field="@nameof(UploadFileAdminRecord.DateCreated)" Title="Uploaded"
-                                    DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                        <GridCommandColumn Width="90px">
+                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteFile((UploadFileAdminRecord)e.Items.First()))">Del</GridCommandButton>
+                        </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
             </TabStripTab>
@@ -221,14 +234,250 @@ else
     </div>
 }
 
+@* ══ Sub-entity dialog (shared for address/email/phone/link/note) ═══════════ *@
+<TelerikDialog @bind-Visible="@_showSubDialog"
+               Title="@_subDialogTitle"
+               Width="580px">
+    <DialogContent>
+        @if (_subEntityType == "address")
+        {
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Type</label>
+                    <div class="d-flex gap-2">
+                        <TelerikDropDownList Data="@_addressTypes" @bind-Value="@_addr.TypeId"
+                                             ValueField="@nameof(UserAddressTypeRecord.Id)"
+                                             TextField="@nameof(UserAddressTypeRecord.Name)"
+                                             Width="100%" />
+                        <TelerikButton Size="@ThemeConstants.Button.Size.Small" Icon="@SvgIcon.Plus"
+                                       OnClick="@(() => OpenAddTypeDialog("address"))">New</TelerikButton>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Street 1 <span class="text-danger">*</span></label>
+                    <TelerikTextBox @bind-Value="@_addr.StreetAddress1" Width="100%" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Street 2</label>
+                    <TelerikTextBox @bind-Value="@_addr.StreetAddress2" Width="100%" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">City <span class="text-danger">*</span></label>
+                    <TelerikTextBox @bind-Value="@_addr.City" Width="100%" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">State</label>
+                    <TelerikTextBox @bind-Value="@_addr.State" Width="100%" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Zip</label>
+                    <TelerikTextBox @bind-Value="@_addr.ZipCode" Width="100%" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Country</label>
+                    <TelerikTextBox @bind-Value="@_addr.Country" Width="100%" />
+                </div>
+                <div class="col-md-6 d-flex align-items-center gap-2">
+                    <TelerikCheckBox @bind-Value="@_addr.IsPublic" Id="addr-pub" />
+                    <label for="addr-pub" class="form-label mb-0">Public</label>
+                </div>
+            </div>
+        }
+        else if (_subEntityType == "email")
+        {
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Type</label>
+                    <div class="d-flex gap-2">
+                        <TelerikDropDownList Data="@_emailTypes" @bind-Value="@_eml.TypeId"
+                                             ValueField="@nameof(UserEmailTypeRecord.Id)"
+                                             TextField="@nameof(UserEmailTypeRecord.Name)"
+                                             Width="100%" />
+                        <TelerikButton Size="@ThemeConstants.Button.Size.Small" Icon="@SvgIcon.Plus"
+                                       OnClick="@(() => OpenAddTypeDialog("email"))">New</TelerikButton>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Email Address <span class="text-danger">*</span></label>
+                    <TelerikTextBox @bind-Value="@_eml.EmailAddress" Width="100%" />
+                </div>
+                <div class="col-md-6 d-flex align-items-center gap-2">
+                    <TelerikCheckBox @bind-Value="@_eml.IsPrimary" Id="eml-pri" />
+                    <label for="eml-pri" class="form-label mb-0">Primary</label>
+                </div>
+                <div class="col-md-6 d-flex align-items-center gap-2">
+                    <TelerikCheckBox @bind-Value="@_eml.IsPublic" Id="eml-pub" />
+                    <label for="eml-pub" class="form-label mb-0">Public</label>
+                </div>
+            </div>
+        }
+        else if (_subEntityType == "phone")
+        {
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Type</label>
+                    <div class="d-flex gap-2">
+                        <TelerikDropDownList Data="@_phoneTypes" @bind-Value="@_phn.TypeId"
+                                             ValueField="@nameof(UserPhoneTypeRecord.Id)"
+                                             TextField="@nameof(UserPhoneTypeRecord.Name)"
+                                             Width="100%" />
+                        <TelerikButton Size="@ThemeConstants.Button.Size.Small" Icon="@SvgIcon.Plus"
+                                       OnClick="@(() => OpenAddTypeDialog("phone"))">New</TelerikButton>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label fw-semibold">Phone Number <span class="text-danger">*</span></label>
+                    <TelerikTextBox @bind-Value="@_phn.PhoneNumber" Width="100%" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Country Code</label>
+                    <TelerikTextBox @bind-Value="@_phn.PhoneCountry" Width="100%" Placeholder="+1" />
+                </div>
+                <div class="col-md-4 d-flex align-items-center gap-2">
+                    <TelerikCheckBox @bind-Value="@_phn.IsPrimary" Id="phn-pri" />
+                    <label for="phn-pri" class="form-label mb-0">Primary</label>
+                </div>
+                <div class="col-md-4 d-flex align-items-center gap-2">
+                    <TelerikCheckBox @bind-Value="@_phn.IsCellular" Id="phn-cell" />
+                    <label for="phn-cell" class="form-label mb-0">Cellular</label>
+                </div>
+                <div class="col-md-4 d-flex align-items-center gap-2">
+                    <TelerikCheckBox @bind-Value="@_phn.IsPublic" Id="phn-pub" />
+                    <label for="phn-pub" class="form-label mb-0">Public</label>
+                </div>
+            </div>
+        }
+        else if (_subEntityType == "link")
+        {
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Type</label>
+                    <div class="d-flex gap-2">
+                        <TelerikDropDownList Data="@_linkTypes" @bind-Value="@_lnk.TypeId"
+                                             ValueField="@nameof(UserLinkTypeRecord.Id)"
+                                             TextField="@nameof(UserLinkTypeRecord.Name)"
+                                             Width="100%" />
+                        <TelerikButton Size="@ThemeConstants.Button.Size.Small" Icon="@SvgIcon.Plus"
+                                       OnClick="@(() => OpenAddTypeDialog("link"))">New</TelerikButton>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">URL <span class="text-danger">*</span></label>
+                    <TelerikTextBox @bind-Value="@_lnk.LinkUrl" Width="100%" Placeholder="https://..." />
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Display Label</label>
+                    <TelerikTextBox @bind-Value="@_lnk.DisplayText" Width="100%" />
+                </div>
+                <div class="col-md-6 d-flex align-items-center gap-2">
+                    <TelerikCheckBox @bind-Value="@_lnk.IsPublic" Id="lnk-pub" />
+                    <label for="lnk-pub" class="form-label mb-0">Public</label>
+                </div>
+                <div class="col-md-6 d-flex align-items-center gap-2">
+                    <TelerikCheckBox @bind-Value="@_lnk.IsActive" Id="lnk-act" />
+                    <label for="lnk-act" class="form-label mb-0">Active</label>
+                </div>
+            </div>
+        }
+        else if (_subEntityType == "note")
+        {
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Type</label>
+                    <div class="d-flex gap-2">
+                        <TelerikDropDownList Data="@_noteTypes" @bind-Value="@_nte.TypeId"
+                                             ValueField="@nameof(UserNoteTypeRecord.Id)"
+                                             TextField="@nameof(UserNoteTypeRecord.Name)"
+                                             Width="100%" />
+                        <TelerikButton Size="@ThemeConstants.Button.Size.Small" Icon="@SvgIcon.Plus"
+                                       OnClick="@(() => OpenAddTypeDialog("note"))">New</TelerikButton>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Subject</label>
+                    <TelerikTextBox @bind-Value="@_nte.NoteSubject" Width="100%" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Body <span class="text-danger">*</span></label>
+                    <TelerikTextArea @bind-Value="@_nte.NoteBody" Rows="4" Width="100%" />
+                </div>
+                <div class="col-md-6 d-flex align-items-center gap-2">
+                    <TelerikCheckBox @bind-Value="@_nte.IsPublic" Id="nte-pub" />
+                    <label for="nte-pub" class="form-label mb-0">Public</label>
+                </div>
+            </div>
+        }
+
+        @if (_subError is not null) { <div class="alert alert-danger mt-3 mb-0">@_subError</div> }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="CloseSubDialog">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" Icon="@SvgIcon.Save"
+                       OnClick="SaveSubEntity" Enabled="@(!_isSaving)">
+            @(_isSaving ? "Saving…" : "Save")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Add New Type mini-dialog ─────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showAddTypeDialog"
+               Title="@($"New {_addTypeFor} Type")"
+               Width="380px">
+    <DialogContent>
+        <label class="form-label fw-semibold">Type Name <span class="text-danger">*</span></label>
+        <TelerikTextBox @bind-Value="@_newTypeName" Width="100%" />
+        @if (_typeError is not null) { <div class="alert alert-danger mt-2 mb-0">@_typeError</div> }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="@(() => { _showAddTypeDialog = false; _typeError = null; })">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" OnClick="SaveNewType"
+                       Enabled="@(!_isSaving)">Save</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
 @code {
     [Parameter] public Guid UserId { get; set; }
 
     private AppUserDetailAdminRecord? _detail;
+    private List<UserAddressAdminRecord> _addresses = [];
+    private List<UserEmailAdminRecord>   _emails    = [];
+    private List<UserPhoneAdminRecord>   _phones    = [];
+    private List<UserLinkAdminRecord>    _links     = [];
+    private List<UserNoteAdminRecord>    _notes     = [];
+    private List<OrganizationUserMembershipAdminRecord> _memberships = [];
+    private List<UploadFileAdminRecord>  _files     = [];
+
     private EditModel _edit = new();
     private bool _isSaving;
     private string? _errorMessage;
     private string? _successMessage;
+
+    // Type lists (for dropdowns)
+    private IReadOnlyList<UserAddressTypeRecord> _addressTypes = [];
+    private IReadOnlyList<UserEmailTypeRecord>   _emailTypes   = [];
+    private IReadOnlyList<UserPhoneTypeRecord>   _phoneTypes   = [];
+    private IReadOnlyList<UserLinkTypeRecord>    _linkTypes    = [];
+    private IReadOnlyList<UserNoteTypeRecord>    _noteTypes    = [];
+
+    // Sub-entity dialog
+    private bool _showSubDialog;
+    private string _subDialogTitle = "";
+    private string _subEntityType = "";
+    private string? _subError;
+    private Guid _editingSubId;
+
+    // Per-type form models
+    private AddrForm  _addr = new();
+    private EmlForm   _eml  = new();
+    private PhnForm   _phn  = new();
+    private LnkForm   _lnk  = new();
+    private NteForm   _nte  = new();
+
+    // Add type mini-dialog
+    private bool _showAddTypeDialog;
+    private string _addTypeFor = "";
+    private string _newTypeName = "";
+    private string? _typeError;
 
     protected override void OnInitialized()
     {
@@ -238,59 +487,232 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
-        {
-            _detail = await AdminClient.GetUserDetailAsync(UserId);
-            if (_detail is null)
-            {
-                NavManager.NavigateTo("/admin/users");
-                return;
-            }
-            _edit = EditModel.From(_detail.User);
-            StateHasChanged();
-        }
+        if (!firstRender) return;
+        _detail = await AdminClient.GetUserDetailAsync(UserId);
+        if (_detail is null) { NavManager.NavigateTo("/admin/users"); return; }
+        RefreshLists();
+        _edit = EditModel.From(_detail.User);
+
+        // Pre-load type lists for dropdowns
+        _addressTypes = await AdminClient.GetUserAddressTypesAsync();
+        _emailTypes   = await AdminClient.GetUserEmailTypesAsync();
+        _phoneTypes   = await AdminClient.GetUserPhoneTypesAsync();
+        _linkTypes    = await AdminClient.GetUserLinkTypesAsync();
+        _noteTypes    = await AdminClient.GetUserNoteTypesAsync();
+
+        StateHasChanged();
     }
+
+    private void RefreshLists()
+    {
+        if (_detail is null) return;
+        _addresses   = [.. _detail.Addresses];
+        _emails      = [.. _detail.Emails];
+        _phones      = [.. _detail.Phones];
+        _links       = [.. _detail.Links];
+        _notes       = [.. _detail.Notes];
+        _memberships = [.. _detail.Memberships];
+        _files       = [.. _detail.UploadFiles];
+    }
+
+    private async Task Reload()
+    {
+        _detail = await AdminClient.GetUserDetailAsync(UserId);
+        if (_detail is not null) RefreshLists();
+    }
+
+    // ── Profile save ──────────────────────────────────────────────────────────
 
     private async Task SaveProfile()
     {
         if (_detail is null) return;
-        _isSaving = true;
-        _errorMessage = null;
-        _successMessage = null;
-
+        _isSaving = true; _errorMessage = null; _successMessage = null;
         var updated = await AdminClient.UpdateUserProfileAsync(UserId, new AdminUpdateUserProfileRequest(
-            _edit.DisplayName,
-            _edit.UserName,
-            _edit.Email,
-            _edit.PhoneNumber,
-            _edit.IsEmailConfirmed,
-            _edit.IsTwoFactorEnabled,
-            _edit.IsLockoutEnabled,
-            _edit.LockoutEnd,
-            _edit.DateCreated,
-            _edit.DateUpdated));
-
-        if (updated is not null)
-        {
-            _detail = _detail with { User = updated };
-            _successMessage = "Profile saved.";
-        }
-        else
-        {
-            _errorMessage = "Save failed. Check WebApi logs.";
-        }
+            _edit.DisplayName, _edit.UserName, _edit.Email, _edit.PhoneNumber,
+            _edit.IsEmailConfirmed, _edit.IsTwoFactorEnabled, _edit.IsLockoutEnabled,
+            _edit.LockoutEnd, _edit.DateCreated, _edit.DateUpdated));
         _isSaving = false;
+        if (updated is not null) { _detail = _detail with { User = updated }; _successMessage = "Profile saved."; }
+        else _errorMessage = "Save failed.";
     }
 
     private async Task ImpersonateUser()
     {
         if (_detail is null) return;
         var ok = await AdminClient.ImpersonateUserAsync(UserId, _detail.User.Email ?? string.Empty);
-        if (ok)
-            NavManager.NavigateTo("/");
-        else
-            _errorMessage = "Impersonation failed.";
+        if (ok) NavManager.NavigateTo("/");
+        else _errorMessage = "Impersonation failed.";
     }
+
+    // ── Sub-entity dialog open/close ──────────────────────────────────────────
+
+    private void OpenSubDialog(string entityType, object? existing)
+    {
+        _subEntityType = entityType;
+        _subError = null;
+        _editingSubId = Guid.Empty;
+        bool isEdit = existing is not null;
+
+        switch (entityType)
+        {
+            case "address":
+                _subDialogTitle = isEdit ? "Edit Address" : "New Address";
+                var a = existing as UserAddressAdminRecord;
+                _addr = a is null ? new() : new AddrForm
+                {
+                    TypeId = a.UserAddressTypeId, StreetAddress1 = a.StreetAddress1,
+                    StreetAddress2 = a.StreetAddress2, City = a.City, State = a.State,
+                    ZipCode = a.ZipCode, Country = a.Country, IsPublic = a.IsPublic
+                };
+                if (a is not null) _editingSubId = a.Id;
+                break;
+            case "email":
+                _subDialogTitle = isEdit ? "Edit Email" : "New Email";
+                var em = existing as UserEmailAdminRecord;
+                _eml = em is null ? new() : new EmlForm
+                {
+                    TypeId = em.UserEmailTypeId, EmailAddress = em.EmailAddress,
+                    IsPrimary = em.IsPrimary, IsPublic = em.IsPublic
+                };
+                if (em is not null) _editingSubId = em.Id;
+                break;
+            case "phone":
+                _subDialogTitle = isEdit ? "Edit Phone" : "New Phone";
+                var ph = existing as UserPhoneAdminRecord;
+                _phn = ph is null ? new() : new PhnForm
+                {
+                    TypeId = ph.UserPhoneTypeId, PhoneNumber = ph.PhoneNumber,
+                    PhoneCountry = ph.PhoneCountry, IsPrimary = ph.IsPrimary,
+                    IsCellular = ph.IsCellular, IsPublic = ph.IsPublic
+                };
+                if (ph is not null) _editingSubId = ph.Id;
+                break;
+            case "link":
+                _subDialogTitle = isEdit ? "Edit Link" : "New Link";
+                var ln = existing as UserLinkAdminRecord;
+                _lnk = ln is null ? new() { IsActive = true } : new LnkForm
+                {
+                    TypeId = ln.UserLinkTypeId, LinkUrl = ln.LinkUrl,
+                    DisplayText = ln.DisplayText, IsPublic = ln.IsPublic, IsActive = ln.IsActive
+                };
+                if (ln is not null) _editingSubId = ln.Id;
+                break;
+            case "note":
+                _subDialogTitle = isEdit ? "Edit Note" : "New Note";
+                var nt = existing as UserNoteAdminRecord;
+                _nte = nt is null ? new() : new NteForm
+                {
+                    TypeId = nt.UserNoteTypeId, NoteSubject = nt.NoteSubject,
+                    NoteBody = nt.NoteBody, IsPublic = false
+                };
+                if (nt is not null) _editingSubId = nt.Id;
+                break;
+        }
+        _showSubDialog = true;
+    }
+
+    private void CloseSubDialog() { _showSubDialog = false; _subError = null; }
+
+    private async Task SaveSubEntity()
+    {
+        _isSaving = true; _subError = null;
+        var actor = UserState.UserId ?? Guid.Empty;
+        bool ok = false;
+
+        switch (_subEntityType)
+        {
+            case "address":
+                var areq = new UserAddressUpsertRequest(_addr.TypeId, _addr.StreetAddress1 ?? "", _addr.StreetAddress2,
+                    _addr.City ?? "", _addr.State ?? "", _addr.ZipCode ?? "", _addr.Country ?? "US", _addr.IsPublic);
+                ok = _editingSubId == Guid.Empty
+                    ? await AdminClient.CreateUserAddressAsync(UserId, actor, areq)
+                    : await AdminClient.UpdateUserAddressAsync(_editingSubId, UserId, actor, areq);
+                break;
+            case "email":
+                var ereq = new UserEmailUpsertRequest(_eml.TypeId, _eml.EmailAddress ?? "", _eml.IsPrimary, _eml.IsPublic);
+                ok = _editingSubId == Guid.Empty
+                    ? await AdminClient.CreateUserEmailAsync(UserId, actor, ereq)
+                    : await AdminClient.UpdateUserEmailAsync(_editingSubId, UserId, actor, ereq);
+                break;
+            case "phone":
+                var preq = new UserPhoneUpsertRequest(_phn.TypeId, _phn.PhoneNumber ?? "", _phn.PhoneCountry, _phn.IsPrimary, _phn.IsCellular, _phn.IsPublic);
+                ok = _editingSubId == Guid.Empty
+                    ? await AdminClient.CreateUserPhoneAsync(UserId, actor, preq)
+                    : await AdminClient.UpdateUserPhoneAsync(_editingSubId, UserId, actor, preq);
+                break;
+            case "link":
+                var lreq = new UserLinkUpsertRequest(_lnk.TypeId, _lnk.LinkUrl ?? "", _lnk.DisplayText, _lnk.IsPublic, _lnk.IsActive);
+                ok = _editingSubId == Guid.Empty
+                    ? await AdminClient.CreateUserLinkAsync(UserId, actor, lreq)
+                    : await AdminClient.UpdateUserLinkAsync(_editingSubId, UserId, actor, lreq);
+                break;
+            case "note":
+                var nreq = new UserNoteUpsertRequest(_nte.TypeId, _nte.NoteSubject ?? "", _nte.NoteBody ?? "", _nte.IsPublic);
+                ok = _editingSubId == Guid.Empty
+                    ? await AdminClient.CreateUserNoteAsync(UserId, actor, nreq)
+                    : await AdminClient.UpdateUserNoteAsync(_editingSubId, UserId, actor, nreq);
+                break;
+        }
+
+        _isSaving = false;
+        if (ok) { _showSubDialog = false; await Reload(); }
+        else _subError = "Save failed. Check all required fields.";
+    }
+
+    // ── Delete helpers ────────────────────────────────────────────────────────
+
+    private async Task DeleteAddress(UserAddressAdminRecord r) { if (await AdminClient.DeleteUserAddressAsync(r.Id)) await Reload(); else _errorMessage = "Delete failed."; }
+    private async Task DeleteEmail(UserEmailAdminRecord r)     { if (await AdminClient.DeleteUserEmailAsync(r.Id))   await Reload(); else _errorMessage = "Delete failed."; }
+    private async Task DeletePhone(UserPhoneAdminRecord r)     { if (await AdminClient.DeleteUserPhoneAsync(r.Id))   await Reload(); else _errorMessage = "Delete failed."; }
+    private async Task DeleteLink(UserLinkAdminRecord r)       { if (await AdminClient.DeleteUserLinkAsync(r.Id))    await Reload(); else _errorMessage = "Delete failed."; }
+    private async Task DeleteNote(UserNoteAdminRecord r)       { if (await AdminClient.DeleteUserNoteAsync(r.Id))    await Reload(); else _errorMessage = "Delete failed."; }
+    private async Task DeleteFile(UploadFileAdminRecord r)     { if (await AdminClient.DeleteUploadFileAdminAsync(r.Id)) await Reload(); else _errorMessage = "Delete failed."; }
+
+    // ── Add New Type dialog ───────────────────────────────────────────────────
+
+    private void OpenAddTypeDialog(string entityType)
+    {
+        _addTypeFor = entityType; _newTypeName = ""; _typeError = null;
+        _showAddTypeDialog = true;
+    }
+
+    private async Task SaveNewType()
+    {
+        if (string.IsNullOrWhiteSpace(_newTypeName)) { _typeError = "Name is required."; return; }
+        _isSaving = true;
+        bool ok = _addTypeFor switch
+        {
+            "address" => await AdminClient.CreateUserAddressTypeAsync(_newTypeName.Trim()),
+            "email"   => await AdminClient.CreateUserEmailTypeAsync(_newTypeName.Trim()),
+            "phone"   => await AdminClient.CreateUserPhoneTypeAsync(_newTypeName.Trim()),
+            "link"    => await AdminClient.CreateUserLinkTypeAsync(_newTypeName.Trim()),
+            "note"    => await AdminClient.CreateUserNoteTypeAsync(_newTypeName.Trim()),
+            _ => false
+        };
+        if (ok)
+        {
+            // Reload the relevant type list
+            switch (_addTypeFor)
+            {
+                case "address": _addressTypes = await AdminClient.GetUserAddressTypesAsync(); break;
+                case "email":   _emailTypes   = await AdminClient.GetUserEmailTypesAsync(); break;
+                case "phone":   _phoneTypes   = await AdminClient.GetUserPhoneTypesAsync(); break;
+                case "link":    _linkTypes    = await AdminClient.GetUserLinkTypesAsync(); break;
+                case "note":    _noteTypes    = await AdminClient.GetUserNoteTypesAsync(); break;
+            }
+            _showAddTypeDialog = false;
+        }
+        else _typeError = "Failed to create type.";
+        _isSaving = false;
+    }
+
+    // ── Form models ───────────────────────────────────────────────────────────
+
+    private sealed class AddrForm { public Guid TypeId; public string? StreetAddress1; public string? StreetAddress2; public string? City; public string? State; public string? ZipCode; public string? Country = "US"; public bool IsPublic; }
+    private sealed class EmlForm  { public Guid TypeId; public string? EmailAddress; public bool IsPrimary; public bool IsPublic; }
+    private sealed class PhnForm  { public Guid TypeId; public string? PhoneNumber; public string? PhoneCountry; public bool IsPrimary; public bool IsCellular; public bool IsPublic; }
+    private sealed class LnkForm  { public Guid TypeId; public string? LinkUrl; public string? DisplayText; public bool IsPublic; public bool IsActive = true; }
+    private sealed class NteForm  { public Guid TypeId; public string? NoteSubject; public string? NoteBody; public bool IsPublic; }
 
     private sealed class EditModel
     {
@@ -307,16 +729,10 @@ else
 
         public static EditModel From(AppUserAdminRecord u) => new()
         {
-            DisplayName       = u.DisplayName,
-            UserName          = u.UserName,
-            Email             = u.Email,
-            PhoneNumber       = u.PhoneNumber,
-            IsEmailConfirmed  = u.IsEmailConfirmed,
-            IsTwoFactorEnabled = u.IsTwoFactorEnabled,
-            IsLockoutEnabled  = u.IsLockoutEnabled,
-            LockoutEnd        = u.LockoutEnd,
-            DateCreated       = u.DateCreated,
-            DateUpdated       = u.DateUpdated
+            DisplayName = u.DisplayName, UserName = u.UserName, Email = u.Email,
+            PhoneNumber = u.PhoneNumber, IsEmailConfirmed = u.IsEmailConfirmed,
+            IsTwoFactorEnabled = u.IsTwoFactorEnabled, IsLockoutEnabled = u.IsLockoutEnabled,
+            LockoutEnd = u.LockoutEnd, DateCreated = u.DateCreated, DateUpdated = u.DateUpdated
         };
     }
 }

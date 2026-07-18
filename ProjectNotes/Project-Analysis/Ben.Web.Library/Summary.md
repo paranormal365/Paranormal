@@ -2,11 +2,11 @@
 
 **Type:** Razor Class Library (`Microsoft.NET.Sdk.Razor`)  
 **Target Framework:** net10.0  
-**Packages:** `Telerik.UI.for.Blazor 14.0.0`
+**Packages:** `Telerik.UI.for.Blazor 14.1.0`
 
 ## Purpose
 
-A shared Blazor component library containing SuperAdmin UI components and user detail pages that can be consumed by the `Ben.Web.WebApp` host without coupling the host to the specific UI implementation.
+A shared Blazor component library containing SuperAdmin UI, user management, organization management, CMS editor components, and audio player components. Consumed by `Ben.Web.WebApp`.
 
 ## Dependencies
 
@@ -29,5 +29,14 @@ Library pages are discovered in the WebApp via:
 | File | Description |
 |---|---|
 | [Services.md](Services.md) | `IBenAdminClient`, `IBenUserState` — the two interfaces library components depend on |
-| [Components-SuperAdmin.md](Components-SuperAdmin.md) | `AdminSidePanel`, `AdminFileTypes` — SuperAdmin UI components |
-| [Components-User.md](Components-User.md) | `AdminUsers`, `AdminUserDetail` — user management pages |
+| [Components.md](Components.md) | All Blazor components grouped by folder |
+
+## Folder Map
+
+| Folder | Components |
+|---|---|
+| `SuperAdmin/` | `AdminSidePanel`, `AdminFileTypes`, `AdminRoles` |
+| `User/` | `AdminUsers`, `AdminUserCreate`, `AdminUserDetail`, `UserMediaPreview` |
+| `Organization/` | `OrganizationList`, `OrganizationCreateEdit` |
+| `Organization/Cms/` | `OrgCmsEditor`, `OrgCmsPageEdit`, `CmsSectionEditor`, `CmsFileThumbnail` |
+| `Manage/Audio/` | `WaveSurferPlayer` (WaveSurfer.js v7.12.11 wrapper with full plugin support) |
