@@ -432,3 +432,82 @@ npm run build:blazor
 
 `node_modules/` and `dist/` are git-ignored (`wwwroot/ts/wavesurfer/node_modules/`,
 `wwwroot/ts/wavesurfer/dist/`).
+
+---
+
+### `AudioFilePreview.razor`
+
+**Route:** *(no route — embedded component)*  
+**File:** [`Ben.Web.Library/Manage/Audio/AudioFilePreview.razor`](../../../Ben.Web.Library/Manage/Audio/AudioFilePreview.razor)
+
+#### Summary
+A compact waveform preview widget designed to sit inside the Files-tab grid of `AdminUserDetail`.
+Fetches audio bytes via `IBenAdminClient.GetFileDataAsync` on first render and displays an 80 px
+WaveSurfer waveform with a ▶ play overlay. Right-clicking opens a Telerik context menu; one of the
+menu items opens a full-featured modal window.
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `FileId` | `Guid` | ✅ | `UploadFile.Id` — used to fetch bytes and construct the `WsAudioSource`. |
+| `FileName` | `string` | ✅ | Shown as the modal window title and in the fallback badge. |
+| `ContentType` | `string` | ✅ | MIME type displayed in the full-view info bar. |
+| `FileSize` | `long` | | Byte count formatted by `AudioFormatUtils.FormatSize` in the info bar. |
+
+#### Compact View (grid cell)
+
+- **Height:** 80 px, no controls bar, `interact: false` (click-to-seek disabled)
+- **▶ overlay:** shown whenever `_ready && !_playing` — disappears while audio plays
+- **Click anywhere on waveform:** calls `WaveSurferPlayer.PlayPauseAsync()`
+- **Right-click:** opens `TelerikContextMenu` at cursor position
+
+#### Context Menu Items
+
+| Item | Action |
+|---|---|
+| ▶ Play | `_player.PlayAsync()` |
+| ⏸ Pause | `_player.PauseAsync()` |
+| ⏮ Rewind | `_player.StopAsync()` (seeks to 0, stops) |
+| ⤢ Open Full View | Pauses compact player; opens modal window |
+
+#### Full-View Modal (`TelerikWindow`)
+
+- **Size:** 92 vw × 88 vh, modal, centered
+- **Title:** `FileName`
+- **Close:** `TelerikWindow` × action
+
+**Info bar** (live-updating):
+
+| Field | Value |
+|---|---|
+| Size | `AudioFormatUtils.FormatSize(FileSize)` — e.g. `3.14 MB  (3,293,184 bytes)` |
+| Type | Raw MIME type string |
+| Duration | `AudioFormatUtils.FormatTime(_modalDuration)` — updates on `OnReady` |
+| Position | `AudioFormatUtils.FormatTime(_modalTime)` — live via `OnTimeUpdate` |
+
+**Full WaveSurfer player** inside the modal:
+
+| Setting | Value |
+|---|---|
+| Plugins | Hover, Timeline, Zoom, Spectrogram, Regions |
+| `InitialHeight` | 280 px |
+| `MinHeight` / `MaxHeight` | 120 px / 600 px (user drag-resize) |
+| `ShowControls` | `true` |
+
+#### `AudioFormatUtils` — shared helpers
+
+**File:** [`Ben.Web.Library/Manage/Audio/AudioFormatUtils.cs`](../../../Ben.Web.Library/Manage/Audio/AudioFormatUtils.cs)
+
+| Method | Returns | Description |
+|---|---|---|
+| `IsAudioContentType(string?)` | `bool` | `true` when MIME starts with `audio/` (case-insensitive). Used by `AdminUserDetail` to choose between `AudioFilePreview` and `UserMediaPreview`. |
+| `FormatTime(double seconds)` | `string` | `m:ss.f` or `h:mm:ss.f` format for player time displays. |
+| `FormatSize(long bytes)` | `string` | Human-readable size + raw byte count in parens (e.g. `3.14 MB  (3,293,184 bytes)`). |
+| `FormatSizeCompact(long bytes)` | `string` | Short form without raw byte count (e.g. `3.1 MB`). Used in upload dialogs. |
+
+#### Dependencies
+- `IBenAdminClient.GetFileDataAsync` — fetches audio bytes on first render
+- `WaveSurferPlayer` — both compact and modal instances share the same `WsAudioSource`
+- `TelerikContextMenu<AudioContextMenuItem>` — right-click menu
+- `TelerikWindow` — full-view modal

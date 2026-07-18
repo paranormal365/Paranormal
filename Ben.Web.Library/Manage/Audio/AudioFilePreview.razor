@@ -222,23 +222,10 @@ else
         }
     }
 
-    // ── Formatting helpers ────────────────────────────────────────────────────
+    // ── Formatting helpers (delegated to AudioFormatUtils) ────────────────────
 
-    private static string FormatTime(double seconds)
-    {
-        var ts = TimeSpan.FromSeconds(seconds);
-        return ts.TotalHours >= 1
-            ? ts.ToString(@"h\:mm\:ss\.f")
-            : ts.ToString(@"m\:ss\.f");
-    }
-
-    private static string FormatSize(long bytes)
-    {
-        if (bytes >= 1_073_741_824) return $"{bytes / 1_073_741_824.0:F2} GB  ({bytes:N0} bytes)";
-        if (bytes >= 1_048_576)     return $"{bytes / 1_048_576.0:F2} MB  ({bytes:N0} bytes)";
-        if (bytes >= 1_024)         return $"{bytes / 1_024.0:F2} KB  ({bytes:N0} bytes)";
-        return $"{bytes} bytes";
-    }
+    private static string FormatTime(double seconds) => AudioFormatUtils.FormatTime(seconds);
+    private static string FormatSize(long bytes)      => AudioFormatUtils.FormatSize(bytes);
 
     // ── Menu item record ──────────────────────────────────────────────────────
 

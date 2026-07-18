@@ -809,14 +809,10 @@ else
     // ── Audio detection helper ────────────────────────────────────────────────
 
     private static bool IsAudioContentType(string? contentType) =>
-        contentType?.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) == true;
+        AudioFormatUtils.IsAudioContentType(contentType);
 
-    private static string FormatUploadSize(long bytes)
-    {
-        if (bytes >= 1_048_576) return $"{bytes / 1_048_576.0:F1} MB";
-        if (bytes >= 1_024)     return $"{bytes / 1_024.0:F0} KB";
-        return $"{bytes} B";
-    }
+    private static string FormatUploadSize(long bytes) =>
+        AudioFormatUtils.FormatSizeCompact(bytes);
 
     // ── Add New Type dialog ───────────────────────────────────────────────────
 
