@@ -1,6 +1,7 @@
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Entities;
 using Ben.Service.Models.People;
+using Ben.Data.Common.Enums;
 
 namespace Ben.Web.Library.Services;
 
@@ -138,6 +139,28 @@ public interface IBenAdminClient
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
     /// <returns><c>true</c> if deletion succeeded; <c>false</c> otherwise.</returns>
     Task<bool> DeleteFileTypeExtensionAsync(Guid id, CancellationToken token = default);
+
+    // ── CMS Pages ─────────────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<CmsPageListItem>> GetCmsPagesAsync(Guid orgId, CancellationToken token = default);
+    Task<CmsPageDetail?> GetCmsPageAsync(Guid orgId, Guid pageId, CancellationToken token = default);
+    Task<CmsPageDetail?> CreateCmsPageAsync(Guid orgId, CmsCreatePageRequest request, CancellationToken token = default);
+    Task<CmsPageDetail?> UpdateCmsPageAsync(Guid orgId, Guid pageId, CmsUpdatePageRequest request, CancellationToken token = default);
+    Task<bool> DeleteCmsPageAsync(Guid orgId, Guid pageId, CancellationToken token = default);
+
+    // ── CMS Sections ──────────────────────────────────────────────────────────
+
+    Task<CmsSectionRecord?> CreateCmsSectionAsync(Guid orgId, Guid pageId, CmsCreateSectionRequest request, CancellationToken token = default);
+    Task<CmsSectionRecord?> UpdateCmsSectionAsync(Guid orgId, Guid pageId, Guid sectionId, CmsUpdateSectionRequest request, CancellationToken token = default);
+    Task<bool> ReorderCmsSectionsAsync(Guid orgId, Guid pageId, IList<Guid> orderedIds, CancellationToken token = default);
+    Task<bool> DeleteCmsSectionAsync(Guid orgId, Guid pageId, Guid sectionId, CancellationToken token = default);
+
+    // ── Organisation Logos ────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<OrganizationLogoRecord>> GetOrgLogosAsync(Guid orgId, CancellationToken token = default);
+    Task<OrganizationLogoRecord?> CreateOrgLogoAsync(Guid orgId, CmsCreateLogoRequest request, CancellationToken token = default);
+    Task<OrganizationLogoRecord?> UpdateOrgLogoAsync(Guid orgId, Guid logoId, CmsUpdateLogoRequest request, CancellationToken token = default);
+    Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default);
 }
 
 /// <summary>
@@ -226,3 +249,43 @@ public sealed record AdminUpdateUserProfileRequest(
     DateTime DateCreated,
     DateTime? DateUpdated);
 
+// ── CMS types ─────────────────────────────────────────────────────────────────
+
+/// <summary>Page row returned by GET /api/organizations/{orgId}/pages.</summary>
+public sealed record CmsPageListItem(
+    Guid Id,
+    Guid OrganizationId,
+    Guid? ParentPageId,
+    string PageTitle,
+    string UrlName,
+    bool IsHome,
+    bool IsPublished,
+    bool IsPublic,
+    int SortOrder,
+    int SectionCount,
+    bool CanEdit,
+    bool CanDelete,
+    DateTime DateCreated);
+
+/// <summary>Full page with sections returned by GET /api/organizations/{orgId}/pages/{pageId}.</summary>
+public sealed record CmsPageDetail(
+    Guid Id,
+    Guid OrganizationId,
+    Guid? ParentPageId,
+    string PageTitle,
+    string UrlName,
+    string PageHtml,
+    bool IsHome,
+    bool IsPublished,
+    bool IsPublic,
+    int SortOrder,
+    DateTime DateCreated,
+    DateTime? DateUpdated,
+    IReadOnlyList<CmsSectionRecord> Sections);
+
+public sealed record CmsCreatePageRequest(string PageTitle, string UrlName, string? PageHtml, bool IsPublic, Guid? ParentPageId, int SortOrder);
+public sealed record CmsUpdatePageRequest(string PageTitle, string UrlName, string? PageHtml, bool IsPublished, bool IsPublic, Guid? ParentPageId, int SortOrder);
+public sealed record CmsCreateSectionRequest(CmsSectionType SectionType, string? Title, string ContentJson, int SortOrder, bool IsActive);
+public sealed record CmsUpdateSectionRequest(string? Title, string ContentJson, bool IsActive);
+public sealed record CmsCreateLogoRequest(Guid UploadFileId, string? AltText, bool IsActive, int SortOrder);
+public sealed record CmsUpdateLogoRequest(string? AltText, bool IsActive, int SortOrder);

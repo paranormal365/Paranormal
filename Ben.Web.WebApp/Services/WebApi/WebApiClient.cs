@@ -64,6 +64,14 @@ public sealed class WebApiClient : IWebApiClient
         return response.IsSuccessStatusCode;
     }
 
+    public async Task<bool> PutVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Put, relativeUrl);
+        req.Content = JsonContent.Create(payload);
+        using var response = await _httpClient.SendAsync(req, token);
+        return response.IsSuccessStatusCode;
+    }
+
     public async Task<IReadOnlyList<AppUserRecord>> GetUsersAsync(CancellationToken token = default)
     {
         var users = await GetAsync<List<AppUserRecord>>("/api/users", token);
