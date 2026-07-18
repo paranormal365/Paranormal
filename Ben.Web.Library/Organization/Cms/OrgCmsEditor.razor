@@ -304,12 +304,12 @@
 
 @* ── Page preview window ──────────────────────────────────────────────────── *@
 <TelerikWindow @bind-Visible="@_showPreview"
-               Title="@($"Preview — {_previewPage?.PageTitle}")"
                Width="820px"
                Height="600px"
                Resizable="true"
                Draggable="true"
                Modal="false">
+    <WindowTitle>Preview — @(_previewPage?.PageTitle)</WindowTitle>
     <WindowActions>
         <WindowAction Name="Close" />
     </WindowActions>
