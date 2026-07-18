@@ -104,3 +104,133 @@ Fetches `AppUserDetailAdminRecord` from `IBenAdminClient.GetUserDetailAsync`.
 | Notes | Grid of `UserNoteAdminRecord` | ❌ |
 | Memberships | Grid of `OrganizationUserMembershipAdminRecord` with `Role` column | ❌ |
 | Files | Grid of `UploadFileAdminRecord` | ❌ |
+
+---
+
+## Organisation Components (`Organization/` folder)
+
+### `OrganizationList.razor`
+
+**Route:** `/organizations`  
+**File:** [`Ben.Web.Library/Organization/OrganizationList.razor`](../../../Ben.Web.Library/Organization/OrganizationList.razor)
+
+#### Summary
+Displays all organisations visible to the current user with per-row permission flags.
+
+#### Features
+- `TelerikGrid` with Name, URL Slug, Created date columns.
+- **CMS** button (Info colour) — always visible; navigates to `/organizations/{id}/cms`. *(added 2026-07-18)*
+- **Edit** button (shown when `CanEdit`) — navigates to `/organizations/{id}/edit`.
+- **Delete** button (shown when `CanDelete`) — opens `TelerikDialog` confirmation.
+- **New Organization** button at top (shown for SuperAdmin only).
+
+---
+
+### `OrganizationCreateEdit.razor`
+
+**Routes:** `/organizations/create`, `/organizations/{OrgId:guid}/edit`  
+**File:** [`Ben.Web.Library/Organization/OrganizationCreateEdit.razor`](../../../Ben.Web.Library/Organization/OrganizationCreateEdit.razor)
+
+#### Summary
+Form for creating or editing an organisation's Name and UrlName.
+
+---
+
+## CMS Components (`Organization/Cms/` folder) *(added 2026-07-18)*
+
+### `OrgCmsEditor.razor`
+
+**Route:** `/organizations/{OrgId:guid}/cms`  
+**File:** [`Ben.Web.Library/Organization/Cms/OrgCmsEditor.razor`](../../../Ben.Web.Library/Organization/Cms/OrgCmsEditor.razor)
+
+#### Summary
+Main CMS hub page for an organisation. Entry point from the "CMS" button in `OrganizationList`.
+
+#### Dependencies
+- `IBenAdminClient` — CMS page and logo methods
+- `IBenUserState` — auth check
+- Telerik Blazor components (`TelerikTabStrip`, `TelerikGrid`, `TelerikDialog`, `TelerikWindow`)
+
+#### Tabs
+
+| Tab | Content |
+|---|---|
+| **Pages** | `TelerikGrid` with page list — Status badge, Visibility, section count, per-row actions |
+| **Logos** | `TelerikGrid` with logo list — Active badge, alt text, file ID |
+
+#### Pages Tab Actions
+
+| Action | Behaviour |
+|---|---|
+| Edit | Opens `TelerikDialog` with page metadata form |
+| Sections | Navigates to `OrgCmsPageEdit` |
+| Preview | Opens `TelerikWindow` rendering full page HTML + active sections |
+| Delete | Opens `TelerikDialog` confirmation; children re-parented |
+
+#### Page Form (New / Edit dialog)
+`TelerikTextBox` for Title and URL slug (auto-lowercased); `TelerikEditor` field for summary HTML; `TelerikNumericTextBox` for sort order; `TelerikDropDownList` for parent page; `TelerikCheckBox` for Is Public and Is Published.
+
+#### Logos Tab
+Add logo by pasting an UploadFile GUID; "Set Active" deactivates others; "Remove" hard-deletes.
+
+---
+
+### `OrgCmsPageEdit.razor`
+
+**Route:** `/organizations/{OrgId:guid}/cms/pages/{PageId:guid}`  
+**File:** [`Ben.Web.Library/Organization/Cms/OrgCmsPageEdit.razor`](../../../Ben.Web.Library/Organization/Cms/OrgCmsPageEdit.razor)
+
+#### Summary
+Detailed CMS page editor. Manages page metadata, the `PageHtml` summary, and an ordered list of `CmsSection` items.
+
+#### Layout
+Three Bootstrap cards stacked vertically:
+1. **Page Settings** — title, URL slug, sort order, Published/Public toggles; Save button calls `UpdateCmsPageAsync`
+2. **Summary / Intro** — `TelerikEditor` bound to `PageHtml`
+3. **Sections** — ordered list of section rows with ↑↓ reorder buttons, type badge, content preview, Edit/Delete per row; "Add Section" button opens the section dialog
+
+**Inline preview:** Toggle button splits the view 50/50. The right column re-renders immediately as content changes using `@((MarkupString)html)` for rich-text sections.
+
+#### Section Dialog
+`TelerikDialog` with:
+- `TelerikDropDownList` for section type (shown only when creating)
+- `TelerikTextBox` for optional title
+- `TelerikCheckBox` for IsActive
+- `<CmsSectionEditor>` component for type-specific content editing
+
+#### Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `OrgId` | `Guid` | Route — organisation. |
+| `PageId` | `Guid` | Route — page to edit. |
+
+---
+
+### `CmsSectionEditor.razor`
+
+**File:** [`Ben.Web.Library/Organization/Cms/CmsSectionEditor.razor`](../../../Ben.Web.Library/Organization/Cms/CmsSectionEditor.razor)
+
+#### Summary
+Reusable component that renders the appropriate content editor for a given `CmsSectionType`. Used inside the section dialog in `OrgCmsPageEdit`.
+
+#### Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `SectionType` | `CmsSectionType` | Determines which editor is shown. |
+| `ContentJson` | `string` | Current JSON content — bound two-way via `ContentJsonChanged`. |
+| `ContentJsonChanged` | `EventCallback<string>` | Fires with new JSON whenever content changes. |
+
+#### Type → Editor Mapping
+
+| `SectionType` | Editor | ContentJson schema |
+|---|---|---|
+| `RichText` | `TelerikEditor` | `{ "html": "..." }` |
+| `CustomHtml` | `TelerikEditor` | `{ "html": "..." }` |
+| `ImageBanner` | `TelerikTextBox` fields (fileId, altText, linkUrl) | `{ "uploadFileId": "...", "altText": "...", "linkUrl": "..." }` |
+| `ContactInfo` | `TelerikCheckBox` grid (showAddresses, showEmails, showPhones, showLinks) | `{ "showAddresses": bool, ... }` |
+| `FileGallery` | Raw JSON `TelerikTextArea` | `{ "uploadFileIds": [...] }` |
+| `MemberRoster` | Raw JSON `TelerikTextArea` | `{ "memberIds": [...], "showRole": bool, "showBio": bool }` |
+
+ContentJson is parsed via `JsonDocument.Parse` on load and serialised via `JsonSerializer.Serialize` on change.

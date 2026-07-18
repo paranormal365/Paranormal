@@ -71,6 +71,70 @@ Submit, list, and review permission requests. Approval requires the file owner o
 
 ---
 
+## CMS Controllers *(added 2026-07-18)*
+
+**Namespace:** `Ben.Data.WebApi.Controllers.Cms`  
+**Auth:** `[Authorize]` on base class — all endpoints require an authenticated session.  
+**Security model:** `IsCmsAuthorizedAsync(userId, orgId, table, action)` returns `true` when the user is a site-level SuperAdmin OR `IOrganizationSecurityService.HasAccessAsync` returns true (org Owners/Admins always satisfy this).
+
+All user ID resolution uses `GetCurrentUserId()` — checks `app_user_id` claim first (Entra), then `ClaimTypes.NameIdentifier` (local Identity).
+
+### `OrgCmsControllerBase`
+
+Abstract base class shared by all CMS controllers.
+
+| Method | Description |
+|---|---|
+| `GetCurrentUserId()` | Returns `Guid?` from claims. |
+| `IsCmsAuthorizedAsync(userId, orgId, table, action, ct)` | `true` if SuperAdmin OR `HasAccessAsync` passes. |
+
+### `OrgCmsPageController` — `api/organizations/{orgId}/pages`
+
+Permission-aware CMS page CRUD.
+
+| Endpoint | Auth check | Response | Key behaviour |
+|---|---|---|---|
+| `GET /` | Read | `CmsPageListItemResponse[]` | Each row has `CanEdit`/`CanDelete` flags. SuperAdmin skips per-page checks. |
+| `GET /{pageId}` | Read | `CmsPageDetailResponse` | Includes ordered sections. |
+| `POST /` | Create | `CmsPageDetailResponse` 201 | Validates duplicate UrlName; normalises to lowercase. |
+| `PUT /{pageId}` | Update | `CmsPageDetailResponse` | Self-parent guard (`ParentPageId != pageId`); UrlName uniqueness check. |
+| `DELETE /{pageId}` | Delete | 204 | Children are re-parented to the deleted page's parent before removal. |
+
+### `CmsSectionController` — `api/organizations/{orgId}/pages/{pageId}/sections`
+
+| Endpoint | Description |
+|---|---|
+| `GET /` | Lists sections ordered by `SortOrder`. 404 if page not found. |
+| `POST /` | Creates section. ContentJson defaulted to `{}` if empty. |
+| `PUT /{sectionId}` | Updates Title, ContentJson, IsActive. |
+| `PUT /reorder` | Accepts `{ OrderedSectionIds: [...] }` — assigns `SortOrder 1..N`. Returns 204. |
+| `DELETE /{sectionId}` | Removes section. |
+
+### `OrganizationLogoController` — `api/organizations/{orgId}/logos`
+
+| Endpoint | Key behaviour |
+|---|---|
+| `POST /` | Verifies UploadFile exists; if `IsActive=true`, deactivates all other org logos. |
+| `PUT /{logoId}` | Same active-logo deactivation on `IsActive=true`. |
+
+### `OrgMemberGroupController` — `api/organizations/{orgId}/groups`
+
+Full group CRUD plus member sub-resource:
+
+| Endpoint | Key behaviour |
+|---|---|
+| `POST /{groupId}/members` | Validates membership belongs to the same org; 409 on duplicate. |
+| `DELETE /{groupId}/members/{membershipId}` | Removes a specific `OrgMemberGroupMembership` row. |
+
+### `CmsPagePermissionController` — `api/organizations/{orgId}/pages/{pageId}/permissions`
+
+| Validation | Enforced on |
+|---|---|
+| At least one of `AppUserId`/`OrgMemberGroupId` must be set | Create |
+| `Actions != None` | Create and Update |
+
+---
+
 ## Seed Data
 
 ### `SuperAdminSeeder`

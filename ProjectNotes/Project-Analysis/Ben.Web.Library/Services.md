@@ -82,6 +82,34 @@ Defines all SuperAdmin HTTP operations available to library Blazor components.
 | `UpdateFileTypeExtensionAsync(id, pattern, token)` | `UploadFileTypeExtensionRecord?` | Replaces the pattern string. |
 | `DeleteFileTypeExtensionAsync(id, token)` | `bool` | Removes a pattern. |
 
+### CMS Page Methods *(added 2026-07-18)*
+
+| Method | Returns | Description |
+|---|---|---|
+| `GetCmsPagesAsync(orgId, token)` | `IReadOnlyList<CmsPageListItem>` | Pages for the org with `CanEdit`/`CanDelete` flags. |
+| `GetCmsPageAsync(orgId, pageId, token)` | `CmsPageDetail?` | Full page detail including ordered sections. |
+| `CreateCmsPageAsync(orgId, request, token)` | `CmsPageDetail?` | Creates a page. |
+| `UpdateCmsPageAsync(orgId, pageId, request, token)` | `CmsPageDetail?` | Updates page metadata. |
+| `DeleteCmsPageAsync(orgId, pageId, token)` | `bool` | Deletes the page. |
+
+### CMS Section Methods *(added 2026-07-18)*
+
+| Method | Returns | Description |
+|---|---|---|
+| `CreateCmsSectionAsync(orgId, pageId, request, token)` | `CmsSectionRecord?` | Creates a section. |
+| `UpdateCmsSectionAsync(orgId, pageId, sectionId, request, token)` | `CmsSectionRecord?` | Updates section content. |
+| `ReorderCmsSectionsAsync(orgId, pageId, orderedIds, token)` | `bool` | Sets `SortOrder` per the ordered list. Uses `PutVoidAsync`. |
+| `DeleteCmsSectionAsync(orgId, pageId, sectionId, token)` | `bool` | Removes a section. |
+
+### Organisation Logo Methods *(added 2026-07-18)*
+
+| Method | Returns | Description |
+|---|---|---|
+| `GetOrgLogosAsync(orgId, token)` | `IReadOnlyList<OrganizationLogoRecord>` | All logos for the org. |
+| `CreateOrgLogoAsync(orgId, request, token)` | `OrganizationLogoRecord?` | Associates an upload file as a logo. |
+| `UpdateOrgLogoAsync(orgId, logoId, request, token)` | `OrganizationLogoRecord?` | Updates alt text / active state / sort order. |
+| `DeleteOrgLogoAsync(orgId, logoId, token)` | `bool` | Removes logo record. |
+
 ### Request/Response Records
 
 | Type | Description |
@@ -97,3 +125,11 @@ Defines all SuperAdmin HTTP operations available to library Blazor components.
 | `AdminUpdateFileTypeRequest` | Update payload. |
 | `AdminCreateFileTypeExtensionRequest(UploadFileTypeId, Pattern, CreatedByAppUserId)` | Extension create payload. Pattern format: `.txt` or `.doc*`. |
 | `AdminUpdateUserProfileRequest` | All editable profile fields including audit timestamps (SuperAdmin editable). |
+| `CmsPageListItem(Id, OrganizationId, ParentPageId, PageTitle, UrlName, IsHome, IsPublished, IsPublic, SortOrder, SectionCount, CanEdit, CanDelete, DateCreated)` | CMS page list row. *(added 2026-07-18)* |
+| `CmsPageDetail(Id, ..., Sections)` | Full page including `IReadOnlyList<CmsSectionRecord>`. *(added 2026-07-18)* |
+| `CmsCreatePageRequest(PageTitle, UrlName, PageHtml?, IsPublic, ParentPageId?, SortOrder)` | Create page payload. *(added 2026-07-18)* |
+| `CmsUpdatePageRequest(PageTitle, UrlName, PageHtml?, IsPublished, IsPublic, ParentPageId?, SortOrder)` | Update page payload. *(added 2026-07-18)* |
+| `CmsCreateSectionRequest(SectionType, Title?, ContentJson, SortOrder, IsActive)` | Create section payload. *(added 2026-07-18)* |
+| `CmsUpdateSectionRequest(Title?, ContentJson, IsActive)` | Update section payload. *(added 2026-07-18)* |
+| `CmsCreateLogoRequest(UploadFileId, AltText?, IsActive, SortOrder)` | Add logo payload. *(added 2026-07-18)* |
+| `CmsUpdateLogoRequest(AltText?, IsActive, SortOrder)` | Update logo payload. *(added 2026-07-18)* |
