@@ -1,6 +1,8 @@
-# AverageBen — Production Deployment Guide
+# AverageBen — Production Deployment Guide (Windows / MS SQL Server)
 
-This guide walks through standing up a fresh **Ben.Data.WebApi** + **Ben.Web.WebApp** installation on a production (or staging) server from a clean OS.
+This guide walks through standing up **Ben.Data.WebApi** + **Ben.Web.WebApp** on a Windows production (or staging) server from scratch, using Microsoft SQL Server as the database.
+
+All commands are **PowerShell** unless noted otherwise.
 
 ---
 
@@ -22,66 +24,91 @@ This guide walks through standing up a fresh **Ben.Data.WebApi** + **Ben.Web.Web
 
 ## 1. Prerequisites
 
-| Requirement | Version | Notes |
+| Requirement | Version | Download |
 |---|---|---|
-| .NET SDK | 10.0 or newer | `dotnet --version` to check |
-| SQL Server | 2019+ (or SQL Azure) | Any edition; Express works for small deployments |
-| Git | any | For cloning / pulling |
-| Telerik UI for Blazor license | 14.1.0+ | Required at **build time** — see §6 |
+| Windows Server | 2019 / 2022 or Windows 10/11 | — |
+| .NET SDK | 10.0 or newer | https://dot.net/download |
+| Microsoft SQL Server | 2019+ (any edition; Express is fine for small installs) | https://www.microsoft.com/sql-server/sql-server-downloads |
+| SQL Server Management Studio (SSMS) | Latest | https://aka.ms/ssms |
+| Git for Windows | Latest | https://git-scm.com/download/win |
+| Telerik UI for Blazor license | 14.1.0+ | https://www.telerik.com (see §6) |
 
-**Optional (for Docker-based SQL Server):**
+**Verify .NET is installed (PowerShell):**
 
-```bash
-# Docker Desktop or Docker Engine
-docker --version
+```powershell
+dotnet --version   # must be 10.0.x or newer
+```
+
+**Install the EF Core CLI tools** (required for applying migrations):
+
+```powershell
+dotnet tool install --global dotnet-ef
+dotnet ef --version   # verify
 ```
 
 ---
 
 ## 2. Clone the Repository
 
-```bash
+```powershell
 git clone https://github.com/VandyBen/AverageBen.git
 cd AverageBen
-git checkout main   # or the branch/tag you want to deploy
+git checkout main   # or the branch/tag to deploy
 ```
 
 ---
 
 ## 3. SQL Server Database
 
-### Option A — Use an existing SQL Server instance
+### Create the database
 
-Create an empty database named `BenDb` (or any name you choose; update the connection string to match):
+Open **SSMS**, connect to your SQL Server instance, and run:
 
 ```sql
--- Run in SSMS, sqlcmd, or Azure Data Studio
 CREATE DATABASE BenDb;
 ```
 
-### Option B — Docker (lightweight / staging)
+Or use `sqlcmd` (comes with SQL Server):
 
-```bash
-docker run -e ACCEPT_EULA=Y \
-           -e MSSQL_SA_PASSWORD=<YOUR_STRONG_PASSWORD> \
-           -p 1433:1433 \
-           --name bendb-sql \
-           --restart unless-stopped \
-           -d mcr.microsoft.com/mssql/server:2022-latest
+```powershell
+# Windows Authentication
+sqlcmd -S .\SQLEXPRESS -E -Q "CREATE DATABASE BenDb"
+
+# SQL Authentication
+sqlcmd -S localhost -U sa -P "<password>" -Q "CREATE DATABASE BenDb"
 ```
 
-> **Apple Silicon (M1/M2/M3):** Add `--platform linux/amd64` — SQL Server has no ARM image and runs under Rosetta 2.
+Replace `.\SQLEXPRESS` with your SQL Server instance name (e.g., `localhost`, `SERVER01`, `SERVER01\MSSQLSERVER`).
+
+### Create a dedicated SQL login (recommended)
+
+```sql
+-- Run in SSMS connected to your SQL Server instance
+CREATE LOGIN benapp WITH PASSWORD = '<strong-password>';
+USE BenDb;
+CREATE USER benapp FOR LOGIN benapp;
+ALTER ROLE db_owner ADD MEMBER benapp;
+```
+
+This gives the application a dedicated login rather than using `sa`.
+
+### Authentication modes
+
+| Mode | Connection string | When to use |
+|---|---|---|
+| **SQL Server Auth** | `User Id=benapp;Password=...` | Dedicated app account (recommended) |
+| **Windows Auth** | `Integrated Security=True` | App runs as a domain/service account |
 
 ---
 
 ## 4. Configure Ben.Data.WebApi
 
-Create `Ben.Data.WebApi/appsettings.Production.json` (this file is git-ignored — never commit real secrets).
+Create `Ben.Data.WebApi\appsettings.Production.json`. This file is **git-ignored** — never commit secrets.
 
 ```json
 {
   "ConnectionStrings": {
-    "BenDbConnectionString": "Server=<host>,<port>;Database=BenDb;User Id=<user>;Password=<password>;Encrypt=True;TrustServerCertificate=True;"
+    "BenDbConnectionString": "Server=<instance>;Database=BenDb;User Id=<user>;Password=<password>;Encrypt=True;TrustServerCertificate=True;"
   },
   "AzureAd": {
     "TenantId": "common",
@@ -111,29 +138,30 @@ Create `Ben.Data.WebApi/appsettings.Production.json` (this file is git-ignored �
 
 ### Connection string reference
 
-| Placeholder | Example |
-|---|---|
-| `<host>` | `localhost` / `sql.mycompany.com` / `mydb.database.windows.net` |
-| `<port>` | `1433` (default; omit for Azure SQL) |
-| `<user>` | `sa` / `benapp` |
-| `<password>` | strong password — store in a secrets manager in production |
+| Placeholder | SQL Auth example | Windows Auth example |
+|---|---|---|
+| `<instance>` | `SERVERNAME\SQLEXPRESS` or `localhost,1433` | same |
+| Credentials | `User Id=benapp;Password=P@ss!` | `Integrated Security=True` (remove User Id/Password) |
+| `Encrypt` | `True` (use `False` only if getting SSL errors on a non-TLS setup) | same |
+| `TrustServerCertificate` | `True` for self-signed certs; `False` if a proper cert is installed | same |
 
 ### SeedData notes
 
-- **`SuperAdmin`** — created once at first startup. Sets the email/password for the initial administrator account.  
-  Set `Password` to `REPLACE_ME_WITH_YOUR_PASSWORD` to disable seeding (the seeder skips on that value).
-- **`SeedOrganization.Enabled`** — set `false` for a clean production deployment (seed org is for development only).
+| Key | Notes |
+|---|---|
+| `SuperAdmin.Email` / `Password` | Creates the initial admin account on first startup. Set `Password` to `REPLACE_ME_WITH_YOUR_PASSWORD` to skip seeding. |
+| `SeedOrganization.Enabled: false` | Keep `false` for production. Set `true` only to pre-populate demo data. |
 
 ---
 
 ## 5. Configure Ben.Web.WebApp
 
-Create `Ben.Web.WebApp/appsettings.Production.json`.
+Create `Ben.Web.WebApp\appsettings.Production.json`.
 
 ```json
 {
   "WebApi": {
-    "BaseUrl": "https://<webapi-host>:<port>",
+    "BaseUrl": "http://<webapi-host>:<port>",
     "TelerikKey": "<your-telerik-license-key>"
   },
   "AzureAd": {
@@ -146,12 +174,12 @@ Create `Ben.Web.WebApp/appsettings.Production.json`.
   },
   "DownstreamApis": {
     "BenWebApi": {
-      "BaseUrl": "https://<webapi-host>:<port>",
+      "BaseUrl": "http://<webapi-host>:<port>",
       "Scope": "api://e75f71ef-cc2e-43ad-ba0f-9e24c6f805f1/access_as_user"
     }
   },
   "ConnectionStrings": {
-    "BenDbConnectionString": "Server=<host>,<port>;Database=BenDb;User Id=<user>;Password=<password>;Encrypt=True;TrustServerCertificate=True;"
+    "BenDbConnectionString": "Server=<instance>;Database=BenDb;User Id=<user>;Password=<password>;Encrypt=True;TrustServerCertificate=True;"
   }
 }
 ```
@@ -160,50 +188,41 @@ Create `Ben.Web.WebApp/appsettings.Production.json`.
 
 | Key | Description |
 |---|---|
-| `WebApi:BaseUrl` | URL the **browser-server** uses to call the API (must be reachable from the app server, not the user's browser) |
-| `WebApi:TelerikKey` | Telerik license key — copied from your Telerik account → `telerik-license.txt` (base64 content) |
-| `AzureAd:ClientSecret` | Entra app registration client secret — see §7 |
-
-> **If Entra login is not required**, you can leave `AzureAd` and `DownstreamApis` out of the config. Local Identity login (email/password) will still work.
+| `WebApi:BaseUrl` | URL the WebApp **server** uses to call the WebApi. If both run on the same machine: `http://localhost:5252`. |
+| `WebApi:TelerikKey` | Telerik license key string — see §6. |
+| `AzureAd:ClientSecret` | Entra client secret — see §7. Omit the entire `AzureAd` block if Microsoft login is not needed. |
 
 ---
 
 ## 6. Telerik License
 
-Telerik UI for Blazor requires a license key at **build time**.  
-The key lives in `~/.telerik/telerik-license.txt` (checked automatically by the NuGet package) or can be passed as the `TelerikKey` config value at runtime.
+Telerik UI for Blazor requires a valid license key at build time and runtime.
 
 1. Log in at [telerik.com](https://www.telerik.com) → Your Account → Downloads → License Keys.
 2. Download `telerik-license.txt`.
-3. Copy it to `~/.telerik/telerik-license.txt` on the build/server machine.
+3. Place it in your Windows user profile so the NuGet package finds it automatically:
 
-```bash
-mkdir -p ~/.telerik
-cp telerik-license.txt ~/.telerik/telerik-license.txt
+```powershell
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.telerik"
+Copy-Item "C:\Downloads\telerik-license.txt" "$env:USERPROFILE\.telerik\telerik-license.txt"
 ```
+
+The Telerik build tasks automatically resolve `%USERPROFILE%\.telerik\telerik-license.txt`.  
+Alternatively, paste the license key string into `WebApi:TelerikKey` in `appsettings.Production.json` (see §5).
 
 ---
 
 ## 7. Microsoft Entra OIDC (optional)
 
-Only needed if users will sign in with Microsoft accounts (Entra ID).  
-If skipped, local Identity login (email/password) is fully functional.
+Only required for Microsoft account sign-in. Local email/password login works without any Entra configuration.
 
-### App registration (already created — `AverageBen.net`)
+### For the existing registration (`AverageBen.net`, Client ID `e75f71ef-...`)
 
-| Setting | Value |
-|---|---|
-| Client ID | `e75f71ef-cc2e-43ad-ba0f-9e24c6f805f1` |
-| Tenant | `common` (multi-tenant) |
-
-### Steps for a new environment
-
-1. In the Azure Portal → App Registrations → `AverageBen.net`:
-   - **Authentication** → add redirect URIs for your production domain:
-     - `https://<webapp-host>/signin-oidc`
-     - `https://<webapp-host>/signout-oidc`
-   - **Certificates & Secrets** → create a new client secret, copy the value.
-2. Add the secret to `Ben.Web.WebApp/appsettings.Production.json` → `AzureAd:ClientSecret`.
+1. **Azure Portal** → App Registrations → `AverageBen.net` → **Authentication**:
+   - Add **Redirect URI** (type: Web): `https://<webapp-host>/signin-oidc`
+   - Add **Front-channel logout URL**: `https://<webapp-host>/signout-oidc`
+2. **Certificates & Secrets** → **New client secret** → copy the value immediately (shown once only).
+3. Add the secret to `Ben.Web.WebApp\appsettings.Production.json` → `AzureAd:ClientSecret`.
 
 ---
 
@@ -211,139 +230,199 @@ If skipped, local Identity login (email/password) is fully functional.
 
 ### Option A — EF Core migrations (recommended)
 
-```bash
-cd /path/to/AverageBen
+Run from the repository root in PowerShell:
 
-# Set environment so Production config is used
-export ASPNETCORE_ENVIRONMENT=Production
+```powershell
+$env:ASPNETCORE_ENVIRONMENT = "Production"
 
-dotnet ef database update \
-  --project Ben.Data.Source \
+dotnet ef database update `
+  --project Ben.Data.Source `
   --startup-project Ben.Data.WebApi
 ```
 
-This applies all 10 migrations in order. If the database already exists and is partially migrated, only pending migrations are applied.
+Applies all 10 migrations. If the database is already partially migrated, only pending ones are applied.
 
 ### Option B — SQL script
 
-```bash
-# Execute the pre-generated idempotent script
-sqlcmd -S <host>,<port> -U <user> -P <password> \
-       -d BenDb -i scripts/create-database.sql
+```powershell
+sqlcmd -S <instance> -U <user> -P <password> `
+       -d BenDb `
+       -i scripts\create-database.sql
 ```
 
-The script is in `scripts/create-database.sql`. It is idempotent — re-running it against an existing database is safe.
+The script at `scripts\create-database.sql` is **idempotent** — safe to re-run; only missing migrations are applied.
 
-### Regenerate the script after new migrations
+You can also open `scripts\create-database.sql` directly in **SSMS** and execute it.
 
-```bash
-dotnet ef migrations script \
-  --project Ben.Data.Source \
-  --startup-project Ben.Data.WebApi \
-  --output scripts/create-database.sql \
+### Regenerate the SQL script after adding a new migration
+
+```powershell
+dotnet ef migrations script `
+  --project Ben.Data.Source `
+  --startup-project Ben.Data.WebApi `
+  --output scripts\create-database.sql `
   --idempotent
 ```
 
-> Always commit the updated `scripts/create-database.sql` after adding a migration.
+Commit the updated file: `git add scripts\create-database.sql && git commit -m "Update schema script"`
 
 ---
 
 ## 9. Run the Applications
 
-Both applications must be running simultaneously. The WebApp calls the WebApi on every authenticated request.
+Both services must run simultaneously — the WebApp calls the WebApi on every authenticated request.
 
-### Ben.Data.WebApi
+### Option A — Quick test (`dotnet run`)
 
-```bash
-cd /path/to/AverageBen
-ASPNETCORE_ENVIRONMENT=Production \
-dotnet run --project Ben.Data.WebApi/Ben.Data.WebApi.csproj \
-           --urls "http://0.0.0.0:5252"
+Open two PowerShell windows:
+
+```powershell
+# Window 1 — WebApi
+$env:ASPNETCORE_ENVIRONMENT = "Production"
+dotnet run --project Ben.Data.WebApi\Ben.Data.WebApi.csproj --urls "http://0.0.0.0:5252"
 ```
 
-On first startup, the three seeders run automatically:
-
-| Seeder | What it creates |
-|---|---|
-| `SuperAdminSeeder` | `SuperAdmin` role + initial admin user (email/password from config) |
-| `OrganizationSeeder` | Seed org + users (only if `Enabled: true` in config — disable for production) |
-| `UploadFileTypeSeeder` | `"Logo"` upload file type with 6 image extension patterns |
-
-### Ben.Web.WebApp
-
-```bash
-ASPNETCORE_ENVIRONMENT=Production \
-dotnet run --project Ben.Web.WebApp/Ben.Web.WebApp.csproj \
-           --urls "http://0.0.0.0:5078"
+```powershell
+# Window 2 — WebApp
+$env:ASPNETCORE_ENVIRONMENT = "Production"
+dotnet run --project Ben.Web.WebApp\Ben.Web.WebApp.csproj --urls "http://0.0.0.0:5078"
 ```
 
-### Running as a systemd service (Linux)
+> On **first startup** the three seeders run automatically:
+>
+> | Seeder | Creates |
+> |---|---|
+> | `SuperAdminSeeder` | `SuperAdmin` role + initial admin user |
+> | `OrganizationSeeder` | Seed org + users (only if `Enabled: true`) |
+> | `UploadFileTypeSeeder` | `"Logo"` file type with `.jpg/.jpeg/.png/.gif/.webp/.svg` |
 
-Create `/etc/systemd/system/ben-webapi.service`:
+### Option B — Windows Service (production / auto-start)
 
-```ini
-[Unit]
-Description=Ben WebApi
-After=network.target
+**Publish self-contained executables first:**
 
-[Service]
-WorkingDirectory=/path/to/AverageBen
-ExecStart=/usr/bin/dotnet run --project Ben.Data.WebApi/Ben.Data.WebApi.csproj --urls http://0.0.0.0:5252
-Restart=always
-Environment=ASPNETCORE_ENVIRONMENT=Production
-User=www-data
+```powershell
+# WebApi
+dotnet publish Ben.Data.WebApi\Ben.Data.WebApi.csproj `
+  -c Release -r win-x64 --self-contained true `
+  -o C:\Ben\WebApi
 
-[Install]
-WantedBy=multi-user.target
+# WebApp
+dotnet publish Ben.Web.WebApp\Ben.Web.WebApp.csproj `
+  -c Release -r win-x64 --self-contained true `
+  -o C:\Ben\WebApp
 ```
 
-```bash
-sudo systemctl enable ben-webapi
-sudo systemctl start ben-webapi
+**Register as Windows Services** (run PowerShell **as Administrator**):
+
+```powershell
+# WebApi
+New-Service -Name "BenWebApi" `
+            -BinaryPathName "C:\Ben\WebApi\Ben.Data.WebApi.exe --urls http://0.0.0.0:5252" `
+            -DisplayName "Ben Web API" `
+            -StartupType Automatic
+
+Set-ItemProperty `
+  -Path "HKLM:\SYSTEM\CurrentControlSet\Services\BenWebApi" `
+  -Name "Environment" `
+  -Value "ASPNETCORE_ENVIRONMENT=Production"
+
+# WebApp
+New-Service -Name "BenWebApp" `
+            -BinaryPathName "C:\Ben\WebApp\Ben.Web.WebApp.exe --urls http://0.0.0.0:5078" `
+            -DisplayName "Ben Web App" `
+            -StartupType Automatic
+
+Set-ItemProperty `
+  -Path "HKLM:\SYSTEM\CurrentControlSet\Services\BenWebApp" `
+  -Name "Environment" `
+  -Value "ASPNETCORE_ENVIRONMENT=Production"
+
+# Start both
+Start-Service BenWebApi, BenWebApp
 ```
 
-Repeat for `ben-webapp.service` pointing at `Ben.Web.WebApp`.
+**Manage services:**
+
+```powershell
+Get-Service     BenWebApi, BenWebApp
+Start-Service   BenWebApi, BenWebApp
+Stop-Service    BenWebApi, BenWebApp
+Restart-Service BenWebApi, BenWebApp
+```
+
+### Option C — IIS Reverse Proxy (recommended for enterprise / HTTPS termination)
+
+1. Install the **ASP.NET Core Hosting Bundle** (includes the IIS Module):  
+   https://dotnet.microsoft.com/download → ASP.NET Core Runtime → Hosting Bundle
+
+2. Publish both apps (see Option B publish commands).
+
+3. In **IIS Manager**, create two sites:
+   - `BenWebApi` → physical path `C:\Ben\WebApi` → port `5252`
+   - `BenWebApp` → physical path `C:\Ben\WebApp` → port `5078` (or `80`/`443` if user-facing)
+
+4. Each site's `web.config` (auto-generated on publish) — verify it contains:
+
+```xml
+<aspNetCore processPath=".\Ben.Data.WebApi.exe" arguments="" stdoutLogEnabled="true">
+  <environmentVariables>
+    <environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Production" />
+  </environmentVariables>
+</aspNetCore>
+```
+
+5. Set the IIS application pool identity to a Windows account (or the `benapp` SQL login's service account) that has `db_owner` on `BenDb`.
 
 ---
 
 ## 10. Verify Deployment
 
-| Check | URL / Command | Expected |
+| Check | How | Expected |
 |---|---|---|
-| WebApi health | `GET http://<host>:5252/swagger/index.html` | Swagger UI with ~131 endpoints |
-| WebApi login | `POST http://<host>:5252/login` with `{ "email": "...", "password": "..." }` | `{ "accessToken": "...", "refreshToken": "..." }` |
-| WebApp loads | `http://<host>:5078` | Login page renders |
-| Local login | Log in with SuperAdmin email/password | Home page, "Administration" button visible |
-| Entra login | Click "Sign in with Microsoft" | Redirects to Microsoft, returns to app |
-| DB tables | `SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'` | 41 tables |
-| Seeders ran | `SELECT Email FROM AppUsers` | SuperAdmin email present |
+| WebApi responds | Browser: `http://<host>:5252/swagger/index.html` | Swagger UI — ~131 endpoints listed |
+| WebApi login | `POST http://<host>:5252/login` `{"email":"...","password":"..."}` | `{"accessToken":"..."}` |
+| WebApp loads | Browser: `http://<host>:5078` | Login page renders with Telerik styles |
+| Local login | Sign in with SuperAdmin credentials | Home page — "Administration" button visible |
+| DB tables | SSMS: `SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'` | **41** |
+| Seeders ran | SSMS: `SELECT Email FROM AppUsers` | SuperAdmin email present |
+| Logo file type | SSMS: `SELECT Name FROM UploadFileTypes` | `Logo` row present |
+| Entra login | Click "Sign in with Microsoft" (if configured) | Redirects to Microsoft, returns to app |
 
 ---
 
 ## 11. Updating an Existing Deployment
 
-```bash
-# 1. Pull latest code
+```powershell
+# 1. Stop services
+Stop-Service BenWebApi, BenWebApp
+
+# 2. Pull latest code
 git pull origin main
 
-# 2. If new migrations exist, apply them
-dotnet ef database update \
-  --project Ben.Data.Source \
+# 3. Apply any new EF migrations
+$env:ASPNETCORE_ENVIRONMENT = "Production"
+dotnet ef database update `
+  --project Ben.Data.Source `
   --startup-project Ben.Data.WebApi
 
-# 3. Regenerate SQL script and commit
-dotnet ef migrations script \
-  --project Ben.Data.Source \
-  --startup-project Ben.Data.WebApi \
-  --output scripts/create-database.sql \
+# 4. Regenerate and commit the SQL script
+dotnet ef migrations script `
+  --project Ben.Data.Source `
+  --startup-project Ben.Data.WebApi `
+  --output scripts\create-database.sql `
   --idempotent
-git add scripts/create-database.sql
+git add scripts\create-database.sql
 git commit -m "Update create-database.sql for migration <name>"
 git push
 
-# 4. Restart services
-sudo systemctl restart ben-webapi
-sudo systemctl restart ben-webapp
+# 5. Re-publish
+dotnet publish Ben.Data.WebApi\Ben.Data.WebApi.csproj `
+  -c Release -r win-x64 --self-contained true -o C:\Ben\WebApi
+dotnet publish Ben.Web.WebApp\Ben.Web.WebApp.csproj `
+  -c Release -r win-x64 --self-contained true -o C:\Ben\WebApp
+
+# 6. Restart services
+Start-Service BenWebApi, BenWebApp
 ```
 
 ---
@@ -352,11 +431,23 @@ sudo systemctl restart ben-webapp
 
 | File | Purpose | Git-tracked? |
 |---|---|---|
-| `Ben.Data.WebApi/appsettings.json` | Base config (non-secret defaults) | ✅ Yes |
-| `Ben.Data.WebApi/appsettings.Development.json` | Dev secrets (DB, seed passwords) | ❌ No (gitignored) |
-| `Ben.Data.WebApi/appsettings.Production.json` | Production secrets | ❌ No (gitignored) |
-| `Ben.Web.WebApp/appsettings.json` | Base config | ✅ Yes |
-| `Ben.Web.WebApp/appsettings.Development.json` | Dev secrets (Entra, Telerik key) | ❌ No (gitignored) |
-| `Ben.Web.WebApp/appsettings.Production.json` | Production secrets | ❌ No (gitignored) |
-| `~/.telerik/telerik-license.txt` | Telerik license key | ❌ No (machine-local) |
-| `scripts/create-database.sql` | Full idempotent schema script | ✅ Yes |
+| `Ben.Data.WebApi\appsettings.json` | Base config (non-secret defaults) | ✅ Yes |
+| `Ben.Data.WebApi\appsettings.Development.json` | Dev secrets | ❌ Gitignored |
+| `Ben.Data.WebApi\appsettings.Production.json` | **Production secrets** | ❌ Gitignored |
+| `Ben.Web.WebApp\appsettings.json` | Base config | ✅ Yes |
+| `Ben.Web.WebApp\appsettings.Development.json` | Dev secrets | ❌ Gitignored |
+| `Ben.Web.WebApp\appsettings.Production.json` | **Production secrets** | ❌ Gitignored |
+| `%USERPROFILE%\.telerik\telerik-license.txt` | Telerik license key | ❌ Machine-local |
+| `scripts\create-database.sql` | Idempotent schema script | ✅ Yes |
+
+---
+
+## Firewall / Port Notes
+
+| Port | Service | Expose externally? |
+|---|---|---|
+| `5252` | Ben.Data.WebApi | Only if WebApp is on a separate server; otherwise keep internal |
+| `5078` | Ben.Web.WebApp | Yes — user-facing (or put behind IIS on 80/443) |
+| `1433` | MS SQL Server | No — keep on the internal network; never expose SQL Server to the internet |
+
+If using IIS with TLS termination, only ports `80`/`443` need to be open in the Windows Firewall.
