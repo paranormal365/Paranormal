@@ -9,6 +9,8 @@ public record OrganizationPageAdminRecord
     public required string UrlName { get; init; }
     public required string PageHtml { get; init; }
     public bool IsPublished { get; init; }
+    public bool IsPublic { get; init; }
+    public Guid? ParentPageId { get; init; }
     public int SortOrder { get; init; }
     public DateTime DateCreated { get; init; }
     public DateTime? DateUpdated { get; init; }
