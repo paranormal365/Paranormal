@@ -74,7 +74,7 @@ public sealed class WebApiClient : IWebApiClient
 
     public async Task<IReadOnlyList<AppUserRecord>> GetUsersAsync(CancellationToken token = default)
     {
-        var users = await GetAsync<List<AppUserRecord>>("/api/users", token);
+        var users = await GetAsync<List<AppUserRecord>>("/api/app-users", token);
         return users ?? [];
     }
 
