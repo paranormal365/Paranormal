@@ -660,7 +660,7 @@ Example (`appsettings.Development.json`):
 
 NOTE: 
 Name: Ben-Dev
-Value: [REDACTED - secret rotated 2026-07-18, deleted from Azure Portal 2026-08-16; see SECRETS.md]
+Value: [REDACTED — this value was exposed in git history; rotate the secret in Azure Portal → App Registrations → AverageBen.net → Certificates & Secrets]
 Secret ID: 2b52e4a6-6361-4a25-adbb-421c6960dd47
 Expires: 7/13/2028
 
@@ -974,7 +974,7 @@ npm run build
 ## Open Questions
 
 - Add unresolved questions here.
-Telerik Nuget Key: LnT9PfeiaEOFnLkWiZqtdA==.7+ZoVtzD9JFnSKY00SxMpKf98NnMv7yf2DB6E4IVdz/veTTqkAeLVyh/9vexKV5P0FPW2NVDVxyPWXxvu5+NUg==
+Telerik Nuget Key: [REDACTED — was exposed in git history; retrieve current key from telerik.com → Your Account → Downloads → License Keys]
 
 ## Microsoft URLs
 
