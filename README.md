@@ -42,7 +42,63 @@ Add your secrets to `appsettings.Development.json` (see [WebApp-WebApi Integrati
 
 ---
 
-## 📋 Daily Logs
+## �️ Database Setup
+
+### Development (Docker — default)
+
+```bash
+docker start bendb-sql   # start existing container
+# or create fresh:
+docker run -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD=YourStrong@Password1 \
+           -p 1433:1433 --name bendb-sql \
+           -d mcr.microsoft.com/mssql/server:2022-latest
+```
+
+Then apply migrations:
+
+```bash
+dotnet ef database update \
+  --project Ben.Data.Source \
+  --startup-project Ben.Data.WebApi
+```
+
+### New / Production environment
+
+**Option A — EF Core migrations (recommended)**
+
+```bash
+# Set the production connection string, then:
+dotnet ef database update \
+  --project Ben.Data.Source \
+  --startup-project Ben.Data.WebApi
+```
+
+The WebApi seeders run automatically at first startup and create the SuperAdmin role/user, seed organization, and "Logo" upload file type.
+
+**Option B — SQL script**
+
+A pre-generated idempotent SQL script covers all 10 migrations:
+
+```bash
+sqlcmd -S <host>,<port> -U <user> -P <password> \
+       -d BenDb -i scripts/create-database.sql
+```
+
+### Regenerating the SQL script (after adding a migration)
+
+```bash
+dotnet ef migrations script \
+  --project Ben.Data.Source \
+  --startup-project Ben.Data.WebApi \
+  --output scripts/create-database.sql \
+  --idempotent
+```
+
+See [today's log](./ProjectNotes/DailyLogs/2026-07-18.md#database-script-scriptscreate-databasesql) for the full deployment guide including connection string format and post-deploy checklist.
+
+---
+
+## �📋 Daily Logs
 
 ### [2026-07-18](./ProjectNotes/DailyLogs/2026-07-18.md) — Organization CMS, Tests, Telerik API Fixes
 **Summary:** Designed and built the full Organization CMS feature — data model (5 new entities + migration), API layer (5 controllers), Blazor UI (`OrgCmsEditor`, `OrgCmsPageEdit`, `CmsSectionEditor`, `CmsFileThumbnail`), logo thumbnail gallery with file upload, and 66 new tests. Fixed Telerik 14.x `TelerikTabStrip`/`TelerikWindow` API changes. 348 tests, 0 errors.
