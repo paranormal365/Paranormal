@@ -96,6 +96,8 @@ dotnet ef migrations script \
 
 See [today's log](./ProjectNotes/DailyLogs/2026-07-18.md#database-script-scriptscreate-databasesql) for the full deployment guide including connection string format and post-deploy checklist.
 
+For a full end-to-end production setup walkthrough see the [Production Deployment Guide](./ProjectNotes/Production-Deployment-Guide.md).
+
 ---
 
 ## �📋 Daily Logs
