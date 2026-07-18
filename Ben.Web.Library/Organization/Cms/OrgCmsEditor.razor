@@ -31,7 +31,7 @@
         <div class="alert alert-success mb-3">@_successMessage</div>
     }
 
-    <TelerikTabStrip @bind-ActiveTabIndex="@_activeTab">
+    <TelerikTabStrip>
 
         @* ── Pages tab ─────────────────────────────────────────────────────── *@
         <TabStripTab Title="Pages">
@@ -344,7 +344,6 @@
 @code {
     [Parameter] public Guid OrgId { get; set; }
 
-    private int _activeTab;
     private string? _orgName;
     private string? _errorMessage;
     private string? _successMessage;
