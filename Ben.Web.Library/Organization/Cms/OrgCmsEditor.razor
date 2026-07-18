@@ -359,7 +359,7 @@
         <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                        Icon="@SvgIcon.Save"
                        OnClick="SaveLogo"
-                       Enabled="@(!_isBusy && _selectedLogoFileId is not null)">
+                       Enabled="@(!_isBusy)">
             @(_isBusy ? "Saving…" : "Add Logo")
         </TelerikButton>
     </DialogButtons>
@@ -695,7 +695,14 @@
         {
             _logoError = $"File too large or invalid: {ex.Message}";
         }
-        _isBusy = false;
+        catch
+        {
+            _logoError = "An unexpected error occurred during upload.";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
     }
 
     private async Task SaveLogo()
