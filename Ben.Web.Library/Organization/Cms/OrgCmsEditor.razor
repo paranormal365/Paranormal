@@ -621,14 +621,25 @@
         _showLogoDialog     = true;
         StateHasChanged();
 
-        var allFiles = await AdminClient.GetOrgSharedFilesAsync(OrgId);
-        _orgImageFiles = allFiles.Where(f => f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)).ToList();
+        try
+        {
+            var allFiles = await AdminClient.GetOrgSharedFilesAsync(OrgId);
+            _orgImageFiles = allFiles
+                .Where(f => f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
-        if (_fileTypes is null)
-            _fileTypes = await AdminClient.GetPublicFileTypesAsync();
+            if (_fileTypes is null)
+                _fileTypes = await AdminClient.GetPublicFileTypesAsync();
 
-        if (_fileTypes.Count > 0 && _uploadFileTypeId == Guid.Empty)
-            _uploadFileTypeId = _fileTypes[0].Id;
+            if (_fileTypes is not null && _fileTypes.Count > 0 && _uploadFileTypeId == Guid.Empty)
+                _uploadFileTypeId = _fileTypes[0].Id;
+        }
+        catch
+        {
+            // Ensure the loader is always dismissed even on API error
+            _orgImageFiles ??= [];
+            _logoError = "Could not load the file library. You can still upload a new image using the Upload tab.";
+        }
 
         StateHasChanged();
     }
