@@ -631,8 +631,13 @@
             if (_fileTypes is null)
                 _fileTypes = await AdminClient.GetPublicFileTypesAsync();
 
-            if (_fileTypes is not null && _fileTypes.Count > 0 && _uploadFileTypeId == Guid.Empty)
-                _uploadFileTypeId = _fileTypes[0].Id;
+            // Auto-select the dedicated "Logo" type; fall back to first available
+            if (_fileTypes is not null && _uploadFileTypeId == Guid.Empty)
+            {
+                var logoType = _fileTypes.FirstOrDefault(t =>
+                    string.Equals(t.Name, "Logo", StringComparison.OrdinalIgnoreCase));
+                _uploadFileTypeId = (logoType ?? _fileTypes.FirstOrDefault())?.Id ?? Guid.Empty;
+            }
         }
         catch
         {
