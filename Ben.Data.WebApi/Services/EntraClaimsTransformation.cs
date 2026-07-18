@@ -42,8 +42,29 @@ public sealed class EntraClaimsTransformation : IClaimsTransformation
         if (string.IsNullOrEmpty(oidStr) || !Guid.TryParse(oidStr, out var oid))
             return principal;
 
-        // Look up the linked local AppUser
+        // Look up the linked local AppUser by OID first
         var user = await _userManager.FindByLoginAsync("Microsoft", oid.ToString());
+
+        // Fallback: if OID not linked yet, try matching by email.
+        // This handles cases where the app registration was rotated and the token
+        // now carries a different OID from the one stored in AspNetUserLogins.
+        if (user is null)
+        {
+            var email = principal.FindFirstValue("email")
+                        ?? principal.FindFirstValue("preferred_username")
+                        ?? principal.FindFirstValue("upn");
+
+            if (!string.IsNullOrEmpty(email))
+                user = await _userManager.FindByEmailAsync(email);
+
+            // Re-link the new OID so future requests use the fast path
+            if (user is not null)
+            {
+                var loginInfo = new UserLoginInfo("Microsoft", oid.ToString(), "Microsoft");
+                await _userManager.AddLoginAsync(user, loginInfo);
+            }
+        }
+
         if (user is null)
             return principal; // Entra user with no linked local account — leave principal as-is
 
