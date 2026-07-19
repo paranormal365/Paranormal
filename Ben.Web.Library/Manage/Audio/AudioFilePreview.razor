@@ -124,6 +124,7 @@ else
                 <div class="flex-shrink-0">
                     <WaveSurferPlayer @ref="_modalPlayer"
                                       Config="@_fullConfig"
+                                      Resizable="true"
                                       OnReady="@OnModalReadyAsync"
                                       OnTimeUpdate="@(t => { _modalTime = t; StateHasChanged(); })"
                                       OnFinish="@(() => { _modalTime = 0; StateHasChanged(); })"
