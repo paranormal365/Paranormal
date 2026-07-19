@@ -2599,3 +2599,105 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    ALTER TABLE [UploadFiles] ADD [ParentFileId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    ALTER TABLE [UploadFiles] ADD [RegionEnd] float NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    ALTER TABLE [UploadFiles] ADD [RegionStart] float NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    CREATE TABLE [UploadFileRegionNotes] (
+        [Id] uniqueidentifier NOT NULL,
+        [UploadFileId] uniqueidentifier NOT NULL,
+        [RegionStart] float NOT NULL,
+        [RegionEnd] float NOT NULL,
+        [RegionLabel] nvarchar(max) NULL,
+        [TimeOffset] float NULL,
+        [NoteHtml] nvarchar(max) NULL,
+        [IsPublic] bit NOT NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_UploadFileRegionNotes] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_UploadFileRegionNotes_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_UploadFileRegionNotes_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_UploadFileRegionNotes_UploadFiles_UploadFileId] FOREIGN KEY ([UploadFileId]) REFERENCES [UploadFiles] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    CREATE INDEX [IX_UploadFiles_ParentFileId] ON [UploadFiles] ([ParentFileId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    CREATE INDEX [IX_UploadFileRegionNotes_CreatedByAppUserId] ON [UploadFileRegionNotes] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    CREATE INDEX [IX_UploadFileRegionNotes_UpdatedByAppUserId] ON [UploadFileRegionNotes] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    CREATE INDEX [IX_UploadFileRegionNotes_UploadFileId] ON [UploadFileRegionNotes] ([UploadFileId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    ALTER TABLE [UploadFiles] ADD CONSTRAINT [FK_UploadFiles_UploadFiles_ParentFileId] FOREIGN KEY ([ParentFileId]) REFERENCES [UploadFiles] ([Id]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260719142238_AddUploadFileRegionNotesAndParentClip', N'10.0.9');
+END;
+
+COMMIT;
+GO
+
