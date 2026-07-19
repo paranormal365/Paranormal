@@ -278,7 +278,7 @@ public class UploadFileAudioClipControllerTests
         var ctrl    = Build(factory, userId);
 
         var result  = await ctrl.Clip(fileId,
-            new ClipAudioRequest(0.0, 1.0, null, isPublic: true, typeId), default);
+            new ClipAudioRequest(0.0, 1.0, null, true, typeId), default);
 
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         var record  = Assert.IsType<UploadFileRecord>(created.Value);
