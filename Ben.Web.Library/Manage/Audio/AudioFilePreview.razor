@@ -61,7 +61,8 @@ else
 </TelerikContextMenu>
 
 @* ── Full-view window ────────────────────────────────────────────────────── *@
-<TelerikWindow @bind-Visible="@_showModal"
+<TelerikWindow Visible="@_showModal"
+               VisibleChanged="@OnModalVisibleChanged"
                Width="92vw"
                Height="92vh"
                Modal="true">
@@ -234,7 +235,8 @@ else
                       ContentType="@ContentType"
                       FileSize="@FileSize"
                       Region="@_explorerRegion"
-                      @bind-Visible="@_showExplorer"
+                      Visible="@_showExplorer"
+                      VisibleChanged="@OnExplorerVisibleChanged"
                       OnClipSaved="@OnChildClipSaved" />
 }
 
@@ -302,7 +304,7 @@ else
     private static readonly List<RegionContextMenuItem> _regionMenuItems =
     [
         new("play",    "▶  Play Region"),
-        new("explore", "⤢  Explore Region &amp; Notes"),
+        new("explore", "⤢  Explore Region & Notes"),
         new("save",    "🎵  Create Audio File from Region"),
         new("label",   "✏  Edit Label"),
         new("delete",  "🗑  Delete Region"),
@@ -471,6 +473,29 @@ else
         }
     }
 
+    // ── Modal + explorer visibility handlers ──────────────────────────────────
+
+    private void OnModalVisibleChanged(bool visible)
+    {
+        _showModal = visible;
+        if (!visible)
+        {
+            // Close the region explorer if it was open underneath the modal
+            _showExplorer       = false;
+            _explorerRegion     = null;
+            _spectrogramEnabled = false;
+            _spectrogramLabels  = false;
+            _modalReady         = false;
+        }
+    }
+
+    private void OnExplorerVisibleChanged(bool visible)
+    {
+        _showExplorer = visible;
+        if (!visible)
+            _explorerRegion = null; // unmount so right-click shows menu, not explorer
+    }
+
     // ── Waveform click → toggle play/pause ────────────────────────────────────
 
     private async Task TogglePlayAsync()
@@ -504,12 +529,9 @@ else
             case "fullview":
                 if (_playing && _player is not null)
                     await _player.PauseAsync();
-                _modalTime          = 0;
-                _modalDuration      = 0;
-                _modalReady         = false;
-                _spectrogramEnabled = false;
-                _spectrogramLabels  = false;
-                _showModal          = true;
+                _modalTime  = 0;
+                _modalDuration = 0;
+                _showModal  = true;
                 StateHasChanged();
                 break;
         }

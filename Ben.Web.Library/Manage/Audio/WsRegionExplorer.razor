@@ -11,6 +11,7 @@
 *@
 
 @namespace Ben.Web.Library.Manage.Audio
+@using Telerik.Blazor.Components.Editor
 @inject IBenAdminClient AdminClient
 @inject IBenUserState   UserState
 
@@ -204,7 +205,7 @@
                                     <div class="card-body py-1 px-2">
                                         @if (_editNoteId == note.Id)
                                         {
-                                            <TelerikEditor @bind-Value="@_editNoteHtml" Height="140px" />
+                                            <TelerikEditor @bind-Value="@_editNoteHtml" Height="140px" Tools="@_noteEditorTools" />
                                             <div class="d-flex align-items-center gap-2 mt-1">
                                                 <TelerikCheckBox @bind-Value="@_editNotePublic" Id="@($"enp-{note.Id}")" />
                                                 <label for="@($"enp-{note.Id}")" class="form-label form-label-sm mb-0">Public</label>
@@ -237,7 +238,7 @@
                                 Attach to current position (@FormatTime(_currentTime))
                             </label>
                         </div>
-                        <TelerikEditor @bind-Value="@_noteHtml" Height="120px" />
+                        <TelerikEditor @bind-Value="@_noteHtml" Height="120px" Tools="@_noteEditorTools" />
                         <div class="d-flex align-items-center gap-2 mt-2">
                             <TelerikCheckBox @bind-Value="@_noteIsPublic" Id="note-pub" />
                             <label for="note-pub" class="form-label form-label-sm mb-0">Public</label>
@@ -289,6 +290,19 @@
 }
 
 @code {
+    // ── Editor toolbar — Bold / Italic / Underline / Ordered list / Unordered list ──
+
+    private static readonly List<IEditorTool> _noteEditorTools = new()
+    {
+        new EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.Bold(),
+            new Telerik.Blazor.Components.Editor.Italic(),
+            new Telerik.Blazor.Components.Editor.Underline()),
+        new EditorButtonGroup(
+            new UnorderedList(),
+            new OrderedList()),
+    };
+
     // ── Parameters ────────────────────────────────────────────────────────────
 
     [Parameter, EditorRequired] public Guid         FileId      { get; set; }
