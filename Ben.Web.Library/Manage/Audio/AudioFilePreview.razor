@@ -63,7 +63,7 @@ else
 @* ── Full-view window ────────────────────────────────────────────────────── *@
 <TelerikWindow @bind-Visible="@_showModal"
                Width="92vw"
-               Height="88vh"
+               Height="92vh"
                Modal="true">
     <WindowTitle>@FileName</WindowTitle>
     <WindowActions>
@@ -72,41 +72,90 @@ else
     <WindowContent>
         @if (_showModal && _source is not null)
         {
-            @* File info bar *@
-            <div class="d-flex flex-wrap gap-4 mb-3 p-2 rounded"
-                 style="background:var(--kendo-color-surface,#f5f5f5);font-size:.875rem;">
-                <span><strong>Size:</strong>@(" ")@FormatSize(FileSize)</span>
-                <span><strong>Type:</strong>@(" ")@ContentType</span>
-                <span><strong>Duration:</strong>@(" ")@FormatTime(_modalDuration)</span>
-                <span><strong>Position:</strong>@(" ")@FormatTime(_modalTime)</span>
-            </div>
+            <div class="d-flex flex-column h-100" style="overflow:hidden;">
 
-            @* Child clip chips *@
-            @if (_childClips.Any())
-            {
-                <div class="d-flex flex-wrap gap-1 mb-2 align-items-center">
-                    <span class="small text-secondary me-1">Clips:</span>
-                    @foreach (var clip in _childClips)
-                    {
-                        <span class="badge"
-                              style="background:rgba(16,185,129,.15);color:var(--kendo-color-on-base,#1e293b);
-                                     cursor:pointer;font-weight:500;font-size:.75rem;"
-                              title="@clip.FileName — @FormatTime(clip.RegionStart ?? 0) to @FormatTime(clip.RegionEnd ?? 0)"
-                              @onclick="@(() => OpenClipExplorer(clip))">
-                            @(string.IsNullOrWhiteSpace(clip.Description) ? clip.FileName : clip.Description)
-                            (@FormatTime(clip.RegionStart ?? 0)–@FormatTime(clip.RegionEnd ?? 0))
-                        </span>
-                    }
+                @* Info bar *@
+                <div class="d-flex flex-wrap gap-4 mb-2 p-2 rounded flex-shrink-0"
+                     style="background:var(--kendo-color-surface,#f5f5f5);font-size:.875rem;">
+                    <span><strong>Size:</strong>@(" ")@FormatSize(FileSize)</span>
+                    <span><strong>Type:</strong>@(" ")@ContentType</span>
+                    <span><strong>Duration:</strong>@(" ")@FormatTime(_modalDuration)</span>
+                    <span><strong>Position:</strong>@(" ")@FormatTime(_modalTime)</span>
+                    <span class="ms-auto small text-secondary fst-italic">
+                        Drag on the waveform to mark a region
+                    </span>
                 </div>
-            }
 
-            @* Full WaveSurfer player *@
-            <WaveSurferPlayer @ref="_modalPlayer"
-                              Config="@_fullConfig"
-                              OnReady="@OnModalReadyAsync"
-                              OnTimeUpdate="@(t => { _modalTime = t; StateHasChanged(); })"
-                              OnFinish="@(() => { _modalTime = 0; StateHasChanged(); })"
-                              OnRegionContextMenu="@OnRegionRightClick" />
+                @* Pending region toolbar *@
+                @if (_hasActiveUserRegion && _newUserRegion is not null)
+                {
+                    <div class="d-flex align-items-center gap-3 px-2 py-1 mb-2 rounded flex-shrink-0"
+                         style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);">
+                        <span class="small fw-semibold text-primary">
+                            Region: @FormatTime(_newUserRegion.Start) &ndash; @FormatTime(_newUserRegion.End)
+                            (@FormatTime(_newUserRegion.End - _newUserRegion.Start))
+                        </span>
+                        <span class="small text-secondary fst-italic">
+                            Drag the handles to adjust
+                        </span>
+                        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                       Icon="@SvgIcon.Save"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       OnClick="@(() => _showSaveClipDialog = true)">
+                            Save Region
+                        </TelerikButton>
+                        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       OnClick="DiscardUserRegionAsync">
+                            Discard
+                        </TelerikButton>
+                    </div>
+                }
+
+                @* Full WaveSurfer player *@
+                <div class="flex-shrink-0">
+                    <WaveSurferPlayer @ref="_modalPlayer"
+                                      Config="@_fullConfig"
+                                      OnReady="@OnModalReadyAsync"
+                                      OnTimeUpdate="@(t => { _modalTime = t; StateHasChanged(); })"
+                                      OnFinish="@(() => { _modalTime = 0; StateHasChanged(); })"
+                                      OnRegionContextMenu="@OnRegionRightClick"
+                                      OnRegionCreated="@OnModalRegionCreated"
+                                      OnRegionUpdated="@OnModalRegionUpdated" />
+                </div>
+
+                @* Child clips section *@
+                @if (_childClips.Any())
+                {
+                    <div class="mt-3 flex-shrink-0" style="overflow-y:auto;max-height:40vh;">
+                        <h6 class="mb-2 text-secondary small fw-semibold text-uppercase letter-spacing-1">
+                            Saved Clips (@_childClips.Count)
+                        </h6>
+                        @foreach (var clip in _childClips)
+                        {
+                            <div class="mb-2 p-2 rounded"
+                                 style="background:var(--kendo-color-surface,#f5f5f5);">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="badge bg-success bg-opacity-75 small">
+                                        @FormatTime(clip.RegionStart ?? 0)–@FormatTime(clip.RegionEnd ?? 0)
+                                    </span>
+                                    <span class="small fw-semibold">
+                                        @(string.IsNullOrWhiteSpace(clip.Description) ? clip.FileName : clip.Description)
+                                    </span>
+                                    <span class="small text-secondary ms-auto">
+                                        @FormatSize(clip.FileSize)
+                                    </span>
+                                </div>
+                                <AudioFilePreview FileId="@clip.Id"
+                                                  FileName="@clip.FileName"
+                                                  ContentType="@clip.ContentType"
+                                                  FileSize="@clip.FileSize" />
+                            </div>
+                        }
+                    </div>
+                }
+
+            </div>
         }
     </WindowContent>
 </TelerikWindow>
@@ -131,7 +180,87 @@ else
                        OnClick="SaveRegionLabelAsync">Save</TelerikButton>
     </DialogButtons>
 </TelerikDialog>
+@* ── Region created — confirm dialog ────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showRegionCreatedDialog"
+               Title="New Region"
+               Width="400px">
+    <DialogContent>
+        @if (_newUserRegion is not null)
+        {
+            <p class="mb-1">
+                Region marked: <strong>@FormatTime(_newUserRegion.Start)</strong>
+                &ndash; <strong>@FormatTime(_newUserRegion.End)</strong>
+                (@FormatTime(_newUserRegion.End - _newUserRegion.Start))
+            </p>
+            <p class="text-secondary small mb-0">What would you like to do?</p>
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="DiscardUserRegionAsync">Discard</TelerikButton>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
+                       OnClick="KeepEditingRegion">Keep Editing</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Icon="@SvgIcon.Save"
+                       OnClick="@(() => { _showRegionCreatedDialog = false; _showSaveClipDialog = true; })">
+            Save as New File
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
 
+@* ── Save region as clip dialog ──────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showSaveClipDialog"
+               Title="Save Region as Clip"
+               Width="460px">
+    <DialogContent>
+        @if (_newUserRegion is not null)
+        {
+            <p class="text-secondary small mb-3">
+                Clipping <strong>@FormatTime(_newUserRegion.Start)</strong>
+                &ndash; <strong>@FormatTime(_newUserRegion.End)</strong>
+                from <em>@FileName</em>. Output will be saved as WAV.
+            </p>
+        }
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Label / Description</label>
+                <TelerikTextBox @bind-Value="@_saveClipLabel"
+                                PlaceHolder="Optional — auto-generated if blank"
+                                Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">File Type <span class="text-danger">*</span></label>
+                <TelerikDropDownList Data="@_fileTypes"
+                                     @bind-Value="@_saveClipTypeId"
+                                     TextField="@nameof(UploadFileTypeRecord.Name)"
+                                     ValueField="@nameof(UploadFileTypeRecord.Id)"
+                                     DefaultText="— select —"
+                                     Width="100%" />
+            </div>
+            <div class="col-12 d-flex align-items-center gap-2">
+                <TelerikCheckBox @bind-Value="@_saveClipIsPublic" Id="clip-pub-afp" />
+                <label for="clip-pub-afp" class="form-label mb-0">Public</label>
+            </div>
+        </div>
+        @if (_saveClipError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0 py-2 small">@_saveClipError</div>
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="@(() => { _showSaveClipDialog = false; _saveClipError = null; })">
+            Cancel
+        </TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Icon="@SvgIcon.Save"
+                       Enabled="@(!_isSavingClip && _saveClipTypeId != Guid.Empty)"
+                       OnClick="SaveClipAsync">
+            @(_isSavingClip ? "Saving…" : "Save as WAV")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
 @* ── Region explorer ───────────────────────────────────────────── *@
 @if (_explorerRegion is not null)
 {
@@ -164,6 +293,24 @@ else
     private bool   _showModal;
     private IReadOnlyList<UploadFileRecord> _childClips = [];
 
+    // ── Region creation workflow ──────────────────────────────────────────────
+
+    /// <summary>IDs of regions added programmatically (overlays, focus regions) — not user-drawn.</summary>
+    private readonly HashSet<string> _programmaticRegionIds = [];
+
+    /// <summary>The most recently user-drawn region awaiting confirmation or save.</summary>
+    private WsRegionData? _newUserRegion;
+
+    private bool   _hasActiveUserRegion;     // user chose “Keep Editing”
+    private bool   _showRegionCreatedDialog; // initial confirm after drawing
+    private bool   _showSaveClipDialog;      // save-as-clip form
+    private bool   _isSavingClip;
+    private string? _saveClipError;
+    private string  _saveClipLabel    = string.Empty;
+    private Guid    _saveClipTypeId;
+    private bool    _saveClipIsPublic;
+    private IReadOnlyList<UploadFileTypeRecord> _fileTypes = [];
+
     private WaveSurferPlayer?                          _player;
     private WaveSurferPlayer?                          _modalPlayer;
     private TelerikContextMenu<AudioContextMenuItem>?  _contextMenu;
@@ -182,6 +329,7 @@ else
         new("play",    "▶  Play Region"),
         new("explore", "⤢  Explore Region"),
         new("label",   "✏  Edit Label"),
+        new("save",    "💾  Save Region as Clip"),
         new("delete",  "🗑  Delete Region"),
     ];
 
@@ -216,11 +364,12 @@ else
         Options = new WsOptions { Normalize = true },
         Plugins = new WsPluginConfig
         {
-            Hover       = true,
-            Timeline    = true,
-            Zoom        = true,
-            Spectrogram = true,
-            Regions     = true,
+            Hover              = true,
+            Timeline           = true,
+            Zoom               = true,
+            Spectrogram        = true,
+            Regions            = true,
+            RegionsDragToCreate = true,
         },
         InitialHeight = "280px",
         MinHeight     = "120px",
@@ -252,6 +401,16 @@ else
     {
         _modalDuration = _modalPlayer?.Duration ?? 0;
         StateHasChanged();
+
+        // Load file types for the save-clip dialog and overlay child clips in parallel
+        try
+        {
+            _fileTypes = await AdminClient.GetPublicFileTypesAsync();
+            if (_fileTypes.Any() && _saveClipTypeId == Guid.Empty)
+                _saveClipTypeId = _fileTypes[0].Id;
+        }
+        catch { /* non-critical */ }
+
         await OverlayChildClipRegionsAsync();
     }
 
@@ -264,9 +423,11 @@ else
             foreach (var clip in _childClips)
             {
                 if (clip.RegionStart is null || clip.RegionEnd is null) continue;
+                var id = clip.Id.ToString();
+                _programmaticRegionIds.Add(id);  // mark as programmatic so it doesn't trigger the confirm dialog
                 await _modalPlayer.AddRegionAsync(new WsRegionParams
                 {
-                    Id      = clip.Id.ToString(),
+                    Id      = id,
                     Start   = clip.RegionStart.Value,
                     End     = clip.RegionEnd.Value,
                     Color   = "rgba(16,185,129,0.20)",
@@ -278,6 +439,89 @@ else
             StateHasChanged();
         }
         catch { /* silently ignore */ }
+    }
+
+    // ── New region drawn by user ──────────────────────────────────────────────
+
+    private void OnModalRegionCreated(WsRegionData r)
+    {
+        // Ignore regions we added programmatically (child-clip overlays, focus regions)
+        if (_programmaticRegionIds.Contains(r.Id)) return;
+
+        _newUserRegion            = r;
+        _showRegionCreatedDialog  = true;
+        StateHasChanged();
+    }
+
+    private void OnModalRegionUpdated(WsRegionData r)
+    {
+        // Keep _newUserRegion in sync when the user resizes/moves it
+        if (_newUserRegion is not null && r.Id == _newUserRegion.Id)
+        {
+            _newUserRegion = r;
+            StateHasChanged();
+        }
+    }
+
+    private void KeepEditingRegion()
+    {
+        _showRegionCreatedDialog = false;
+        _hasActiveUserRegion     = true;
+        StateHasChanged();
+    }
+
+    private async Task DiscardUserRegionAsync()
+    {
+        _showRegionCreatedDialog = false;
+        _hasActiveUserRegion     = false;
+        if (_newUserRegion is not null && _modalPlayer is not null)
+            await _modalPlayer.RemoveRegionAsync(_newUserRegion.Id);
+        _newUserRegion = null;
+    }
+
+    private async Task SaveClipAsync()
+    {
+        if (_newUserRegion is null || _saveClipTypeId == Guid.Empty) return;
+
+        _isSavingClip = true;
+        _saveClipError = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await AdminClient.ClipAudioAsync(FileId, new ClipAudioRequest(
+                _newUserRegion.Start, _newUserRegion.End,
+                string.IsNullOrWhiteSpace(_saveClipLabel) ? null : _saveClipLabel.Trim(),
+                _saveClipIsPublic, _saveClipTypeId));
+
+            if (result is not null)
+            {
+                _showSaveClipDialog  = false;
+                _hasActiveUserRegion = false;
+                _saveClipLabel       = string.Empty;
+                _saveClipError       = null;
+
+                // Remove the user-drawn region — it will be replaced by the persisted overlay
+                if (_modalPlayer is not null)
+                    await _modalPlayer.RemoveRegionAsync(_newUserRegion.Id);
+                _newUserRegion = null;
+
+                // Refresh child clips and overlay the newly saved one
+                await OverlayChildClipRegionsAsync();
+            }
+            else
+            {
+                _saveClipError = "Save failed. Only WAV and MP3 sources can be clipped.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _saveClipError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _isSavingClip = false;
+        }
     }
 
     // ── Waveform click → toggle play/pause ────────────────────────────────────
@@ -326,22 +570,10 @@ else
     private static string FormatTime(double seconds) => AudioFormatUtils.FormatTime(seconds);
     private static string FormatSize(long bytes)      => AudioFormatUtils.FormatSize(bytes);
 
-    private void OpenClipExplorer(UploadFileRecord clip)
-    {
-        _explorerRegion = new WsRegionData
-        {
-            Id    = clip.Id.ToString(),
-            Start = clip.RegionStart ?? 0,
-            End   = clip.RegionEnd   ?? 0,
-            Label = clip.Description ?? clip.FileName,
-        };
-        _showExplorer = true;
-        StateHasChanged();
-    }
-
     private async Task OnChildClipSaved(UploadFileRecord _)
     {
-        // Refresh the child-clip overlay on the waveform so the new clip appears immediately
+        // Refresh the child-clip overlay — clear tracked IDs first so we don't skip the new one
+        _programmaticRegionIds.Clear();
         await OverlayChildClipRegionsAsync();
     }
 
@@ -377,8 +609,30 @@ else
                 _editLabelText       = _pendingRegion.Label ?? string.Empty;
                 _showEditLabelDialog = true;
                 break;
+            case "save":
+                // Treat the right-clicked region as the current user region to save
+                _newUserRegion = new WsRegionData
+                {
+                    Id    = _pendingRegion.RegionId,
+                    Start = _pendingRegion.Start,
+                    End   = _pendingRegion.End,
+                    Label = _pendingRegion.Label,
+                };
+                _hasActiveUserRegion = true;
+                _showSaveClipDialog  = true;
+                StateHasChanged();
+                break;
             case "delete":
-                if (_modalPlayer is not null) await _modalPlayer.RemoveRegionAsync(_pendingRegion.RegionId);
+                if (_modalPlayer is not null)
+                {
+                    await _modalPlayer.RemoveRegionAsync(_pendingRegion.RegionId);
+                    // If this was the active user region, clear that state too
+                    if (_newUserRegion?.Id == _pendingRegion.RegionId)
+                    {
+                        _newUserRegion       = null;
+                        _hasActiveUserRegion = false;
+                    }
+                }
                 break;
         }
     }

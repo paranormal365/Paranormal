@@ -373,6 +373,10 @@ public class WsPluginConfig
     [JsonPropertyName("regions")]
     public bool Regions { get; set; }
 
+    /// <summary>When true, the user can draw new regions by clicking and dragging on the waveform.</summary>
+    [JsonPropertyName("regionsDragToCreate")]
+    public bool RegionsDragToCreate { get; set; }
+
     [JsonPropertyName("hover")]
     public bool Hover { get; set; }
 

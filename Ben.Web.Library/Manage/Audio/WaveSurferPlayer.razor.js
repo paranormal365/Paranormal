@@ -136,7 +136,7 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
   let envelopePlugin = null
 
   if (plugins.regions && RegionsPlugin) {
-    regionsPlugin = RegionsPlugin.create()
+    regionsPlugin = RegionsPlugin.create({ dragToCreate: plugins.regionsDragToCreate ?? false })
     wsPlugins.push(regionsPlugin)
   }
   if (plugins.hover && HoverPlugin)
