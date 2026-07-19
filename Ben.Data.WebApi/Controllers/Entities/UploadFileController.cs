@@ -86,6 +86,25 @@ public sealed class UploadFileController : ControllerBase
 
         using var ms = new MemoryStream();
         await file.CopyToAsync(ms, cancellationToken);
+        var fileBytes    = ms.ToArray();
+        var contentType  = file.ContentType;
+        var isSvg        = contentType.Contains("svg", StringComparison.OrdinalIgnoreCase)
+                        || Path.GetExtension(file.FileName).Equals(".svg", StringComparison.OrdinalIgnoreCase);
+
+        if (isSvg)
+        {
+            // Normalise content type — some browsers omit or mis-report SVG MIME
+            contentType = "image/svg+xml";
+
+            try
+            {
+                fileBytes = SvgSanitizer.Sanitize(fileBytes);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest($"SVG rejected: {ex.Message}");
+            }
+        }
 
         var entity = new UploadFile
         {
@@ -94,9 +113,9 @@ public sealed class UploadFileController : ControllerBase
             AppUserId = appUserId,
             FileName = file.FileName,
             StoredFileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}",
-            ContentType = file.ContentType,
-            FileSize = file.Length,
-            FileData = ms.ToArray(),
+            ContentType = contentType,
+            FileSize = fileBytes.Length,
+            FileData = fileBytes,
             Description = description,
             IsPublic = isPublic,
             SortOrder = 0,
