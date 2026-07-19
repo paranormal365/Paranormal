@@ -90,35 +90,11 @@ else
                                        OnClick="ToggleSpectrogramAsync">
                             📊 @(_spectrogramEnabled ? "Hide Spectrogram" : "Show Spectrogram")
                         </TelerikButton>
-                        <span class="small text-secondary fst-italic">Drag to mark a region</span>
+                        <span class="small text-secondary fst-italic">
+                            Click &amp; drag to mark a region &mdash; right-click to explore, add notes, or export
+                        </span>
                     </span>
                 </div>
-
-                @* Pending region toolbar *@
-                @if (_hasActiveUserRegion && _newUserRegion is not null)
-                {
-                    <div class="d-flex align-items-center gap-3 px-2 py-1 mb-2 rounded flex-shrink-0"
-                         style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);">
-                        <span class="small fw-semibold text-primary">
-                            Region: @FormatTime(_newUserRegion.Start) &ndash; @FormatTime(_newUserRegion.End)
-                            (@FormatTime(_newUserRegion.End - _newUserRegion.Start))
-                        </span>
-                        <span class="small text-secondary fst-italic">
-                            Drag the handles to adjust
-                        </span>
-                        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                                       Icon="@SvgIcon.Save"
-                                       Size="@ThemeConstants.Button.Size.Small"
-                                       OnClick="@(() => _showSaveClipDialog = true)">
-                            Save Region
-                        </TelerikButton>
-                        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                                       Size="@ThemeConstants.Button.Size.Small"
-                                       OnClick="DiscardUserRegionAsync">
-                            Discard
-                        </TelerikButton>
-                    </div>
-                }
 
                 @* Full WaveSurfer player *@
                 <div class="flex-shrink-0">
@@ -130,7 +106,6 @@ else
                                       OnFinish="@(() => { _modalTime = 0; StateHasChanged(); })"
                                       OnRegionContextMenu="@OnRegionRightClick"
                                       OnRegionCreated="@OnModalRegionCreated"
-                                      OnRegionUpdated="@OnModalRegionUpdated"
                                       OnSpectrogramReady="@(() => StateHasChanged())"
                                       OnSpectrogramContextMenu="@OnSpectrogramContextMenuFired" />
                 </div>
@@ -198,38 +173,10 @@ else
                        OnClick="SaveRegionLabelAsync">Save</TelerikButton>
     </DialogButtons>
 </TelerikDialog>
-@* ── Region created — confirm dialog ────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showRegionCreatedDialog"
-               Title="New Region"
-               Width="400px">
-    <DialogContent>
-        @if (_newUserRegion is not null)
-        {
-            <p class="mb-1">
-                Region marked: <strong>@FormatTime(_newUserRegion.Start)</strong>
-                &ndash; <strong>@FormatTime(_newUserRegion.End)</strong>
-                (@FormatTime(_newUserRegion.End - _newUserRegion.Start))
-            </p>
-            <p class="text-secondary small mb-0">What would you like to do?</p>
-        }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="DiscardUserRegionAsync">Discard</TelerikButton>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
-                       OnClick="KeepEditingRegion">Keep Editing</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Icon="@SvgIcon.Save"
-                       OnClick="@(() => { _showRegionCreatedDialog = false; _showSaveClipDialog = true; })">
-            Save as New File
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
 
 @* ── Save region as clip dialog ──────────────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showSaveClipDialog"
-               Title="Save Region as Clip"
+               Title="Create Audio File from Region"
                Width="460px">
     <DialogContent>
         @if (_newUserRegion is not null)
@@ -328,11 +275,9 @@ else
     /// <summary>IDs of regions added programmatically (overlays, focus regions) — not user-drawn.</summary>
     private readonly HashSet<string> _programmaticRegionIds = [];
 
-    /// <summary>The most recently user-drawn region awaiting confirmation or save.</summary>
+    /// <summary>Region currently being acted on (set from right-click args when saving/clipping).</summary>
     private WsRegionData? _newUserRegion;
 
-    private bool   _hasActiveUserRegion;     // user chose “Keep Editing”
-    private bool   _showRegionCreatedDialog; // initial confirm after drawing
     private bool   _showSaveClipDialog;      // save-as-clip form
     private bool   _isSavingClip;
     private string? _saveClipError;
@@ -357,9 +302,9 @@ else
     private static readonly List<RegionContextMenuItem> _regionMenuItems =
     [
         new("play",    "▶  Play Region"),
-        new("explore", "⤢  Explore Region"),
+        new("explore", "⤢  Explore Region &amp; Notes"),
+        new("save",    "🎵  Create Audio File from Region"),
         new("label",   "✏  Edit Label"),
-        new("save",    "💾  Save Region as Clip"),
         new("delete",  "🗑  Delete Region"),
     ];
 
@@ -476,38 +421,10 @@ else
 
     private void OnModalRegionCreated(WsRegionData r)
     {
-        // Ignore regions we added programmatically (child-clip overlays, focus regions)
+        // Silently ignore programmatically added overlay regions.
+        // User-drawn regions stay on the waveform; the right-click
+        // context menu is the action surface.
         if (_programmaticRegionIds.Contains(r.Id)) return;
-
-        _newUserRegion            = r;
-        _showRegionCreatedDialog  = true;
-        StateHasChanged();
-    }
-
-    private void OnModalRegionUpdated(WsRegionData r)
-    {
-        // Keep _newUserRegion in sync when the user resizes/moves it
-        if (_newUserRegion is not null && r.Id == _newUserRegion.Id)
-        {
-            _newUserRegion = r;
-            StateHasChanged();
-        }
-    }
-
-    private void KeepEditingRegion()
-    {
-        _showRegionCreatedDialog = false;
-        _hasActiveUserRegion     = true;
-        StateHasChanged();
-    }
-
-    private async Task DiscardUserRegionAsync()
-    {
-        _showRegionCreatedDialog = false;
-        _hasActiveUserRegion     = false;
-        if (_newUserRegion is not null && _modalPlayer is not null)
-            await _modalPlayer.RemoveRegionAsync(_newUserRegion.Id);
-        _newUserRegion = null;
     }
 
     private async Task SaveClipAsync()
@@ -528,12 +445,11 @@ else
             if (result is not null)
             {
                 _showSaveClipDialog  = false;
-                _hasActiveUserRegion = false;
                 _saveClipLabel       = string.Empty;
                 _saveClipError       = null;
 
-                // Remove the user-drawn region — it will be replaced by the persisted overlay
-                if (_modalPlayer is not null)
+                // Remove the user-drawn region — replaced by the persisted overlay
+                if (_newUserRegion is not null && _modalPlayer is not null)
                     await _modalPlayer.RemoveRegionAsync(_newUserRegion.Id);
                 _newUserRegion = null;
 
@@ -588,12 +504,12 @@ else
             case "fullview":
                 if (_playing && _player is not null)
                     await _player.PauseAsync();
-                _modalTime         = 0;
-                _modalDuration     = 0;
-                _modalReady        = false;
+                _modalTime          = 0;
+                _modalDuration      = 0;
+                _modalReady         = false;
                 _spectrogramEnabled = false;
                 _spectrogramLabels  = false;
-                _showModal         = true;
+                _showModal          = true;
                 StateHasChanged();
                 break;
         }
@@ -669,7 +585,7 @@ else
                 _showEditLabelDialog = true;
                 break;
             case "save":
-                // Treat the right-clicked region as the current user region to save
+                // Use the right-clicked region's current position for clipping
                 _newUserRegion = new WsRegionData
                 {
                     Id    = _pendingRegion.RegionId,
@@ -677,20 +593,15 @@ else
                     End   = _pendingRegion.End,
                     Label = _pendingRegion.Label,
                 };
-                _hasActiveUserRegion = true;
-                _showSaveClipDialog  = true;
+                _showSaveClipDialog = true;
                 StateHasChanged();
                 break;
             case "delete":
                 if (_modalPlayer is not null)
                 {
                     await _modalPlayer.RemoveRegionAsync(_pendingRegion.RegionId);
-                    // If this was the active user region, clear that state too
                     if (_newUserRegion?.Id == _pendingRegion.RegionId)
-                    {
-                        _newUserRegion       = null;
-                        _hasActiveUserRegion = false;
-                    }
+                        _newUserRegion = null;
                 }
                 break;
         }
