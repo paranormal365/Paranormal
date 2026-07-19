@@ -1,7 +1,7 @@
 # Ben.Service.RepositoryService.Tests — Summary
 
 **Type:** xUnit Test Project  
-**Test count:** 119 tests (all passing)  
+**Test count:** 172 tests (all passing)  
 **Framework:** xUnit with `Microsoft.EntityFrameworkCore.InMemory`
 
 ## Purpose
@@ -21,6 +21,8 @@ Uses an in-memory EF Core provider so tests run without a database.
 | `UploadFileTypeExtensionTests.cs` | 38 tests | `UploadFileType.AllowAllExtensions`, extension CRUD, cascade delete, pattern matching integration, `FileExtensionPatternMatcher` |
 | `AuditChangeTrackerTests.cs` | 16 tests | `AuditChangeTracker.GetChanges`, `ToPropertySnapshot`, scalar type coverage, navigation property exclusion |
 | `AuditLogServiceTests.cs` | 15 tests | `AuditLogService.LogCreateAsync`, `LogUpdateAsync`, `LogDeleteAsync` — JSON shape, action values, source, uniqueness |
+| `UploadFileRegionNoteTests.cs` | 8 tests | `UploadFileRegionNote` entity CRUD, cascade delete, `TimeOffset` null vs value, parent-file tracking columns |
+| `CmsEntityTests.cs` | ~12 tests | CMS entities (logos, member groups, sections, page permissions) |
 
 ## InMemory Constraints
 

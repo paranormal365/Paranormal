@@ -1,7 +1,61 @@
 # Ben.Web.Tests — Summary
 
 **Type:** xUnit Test Project  
-**Test count:** 100 tests (all passing)
+**Test count:** 407 tests (all passing)  
+**Framework:** xUnit, Moq, `Microsoft.EntityFrameworkCore.InMemory`
+
+## Purpose
+
+Unit tests for the `Ben.Web.WebApp` service layer and `Ben.Data.WebApi` controllers.  
+Uses Moq for mocking HTTP client dependencies and EF InMemory for controller tests; no real HTTP calls or database access.
+
+## Test Files — Controllers
+
+| File | Tests | Coverage |
+|---|---|---|
+| `MeControllerTests.cs` | ~12 | `MeController.Get` — OID-first lookup, local fallback, unlinked Entra |
+| `EntraAuthControllerTests.cs` | ~15 | Register + Link — happy paths, duplicates, rollback |
+| `SuperAdminHandlerTests.cs` | 8 | SuperAdmin policy handler — all claim paths |
+| `OrganizationControllerTests.cs` | 27 | Permission-aware org CRUD |
+| `AdminRoleControllerTests.cs` | 11 | Role CRUD, user counts |
+| `OrganizationLogoControllerTests.cs` | ~8 | Logo create/delete, org association |
+| `OrgMemberGroupControllerTests.cs` | ~12 | Member-group CRUD, membership |
+| `OrgCmsPageControllerTests.cs` | ~15 | CMS page CRUD, permission check |
+| `CmsSectionControllerTests.cs` | ~10 | Section CRUD |
+| `CmsPagePermissionControllerTests.cs` | ~8 | Page permission CRUD |
+| `UploadFileControllerTests.cs` | 4 | Extension validation, type-not-found, empty file |
+| `UploadFileAudioConfigControllerTests.cs` | ~12 | Audio config get/upsert/delete |
+| `UploadFileAudioClipControllerTests.cs` | 11 | Clip validation, parent tracking, WAV output, preview (no DB write) |
+| `UploadFileRegionNoteControllerTests.cs` | 14 | Region note CRUD, ordering, file scope |
+| `UploadFileShareControllerTests.cs` | 8 | Share create/reactivate/visibility/soft-delete |
+| `UploadFilePermissionRequestControllerTests.cs` | 7 | Pending requests scope |
+| `AdminAppUserControllerTests.cs` | 8 | GetDetail aggregate, CreateUser, UpdateProfile |
+| `AdminUploadFileTypeControllerTests.cs` | 10 | GetAll, GetWithExtensions, CRUD |
+| `AdminEntityControllerBaseTests.cs` | 10 | Base CRUD via `AdminUserAddressTypeController` |
+| `OrganizationMembershipControllerTests.cs` | 7 | SearchUsers, GetMyOrgs, RegisterOrg |
+
+## Test Files — Services
+
+| File | Tests | Coverage |
+|---|---|---|
+| `JwtClaimsParserTests.cs` | ~15 | JWT parsing, base64url fixes |
+| `WebApiTokenStoreTests.cs` | ~10 | Token store state, impersonation fields |
+| `WebApiAuthServiceTests.cs` | ~25 | Login, logout, impersonate, stop-impersonate, refresh |
+| `EntraTests.cs` | ~10 | Entra session flag behaviour |
+| `WebApiClientTests.cs` | 14 | Auth header injection, HTTP verbs, non-2xx |
+| `AudioFormatUtilsTests.cs` | ~8 | MIME detection, time/size formatting |
+| `CmsFileLibraryTests.cs` | ~10 | CMS file upload, GetFileDataAsync |
+| `WaveSurferModelTests.cs` | ~30 | `WsAudioSource`, `WsConfig`, `WsOptions`, `WsRegionData.Label`, `WsRegionContextMenuArgs` |
+| `UploadFileTypeSeederTests.cs` | ~8 | Logo/Audio seed idempotency |
+| `RegionExplorerClientTests.cs` | 14 | GetRegionNotesAsync, CreateRegionNoteAsync, ClipAudioAsync, GetChildClipsAsync, GetClipPreviewAsync |
+
+## Total Tests
+
+| Project | Count |
+|---|---|
+| `Ben.Service.RepositoryService.Tests` | 172 |
+| `Ben.Web.Tests` | 407 |
+| **Total** | **579** |
 
 ## Purpose
 

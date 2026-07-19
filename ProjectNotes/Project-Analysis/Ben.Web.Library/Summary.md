@@ -37,6 +37,7 @@ Library pages are discovered in the WebApp via:
 |---|---|
 | `SuperAdmin/` | `AdminSidePanel`, `AdminFileTypes`, `AdminRoles` |
 | `User/` | `AdminUsers`, `AdminUserCreate`, `AdminUserDetail`, `UserMediaPreview` |
-| `Organization/` | `OrganizationList`, `OrganizationCreateEdit` |
+| `Organization/` | `OrganizationList`, `OrganizationCreateEdit`, `OrganizationView` |
 | `Organization/Cms/` | `OrgCmsEditor`, `OrgCmsPageEdit`, `CmsSectionEditor`, `CmsFileThumbnail` |
-| `Manage/Audio/` | `WaveSurferPlayer` (WaveSurfer.js v7.12.11 wrapper with full plugin support) |
+| `Manage/` | `UploadFileVoteBar` |
+| `Manage/Audio/` | `WaveSurferPlayer` (WaveSurfer.js v7.12.11 wrapper), `WaveSurferOptions.cs` (config records), `AudioFilePreview` (compact + full-view modal with regions, spectrogram, clip, child-clips), `WsRegionExplorer` (region audio + notes + sub-regions), `AudioFormatUtils` |

@@ -41,12 +41,20 @@ builder.Services.AddDbContextFactory<BenDataContext>(options => ...);
 
 // Repository + Security services
 builder.Services.AddScoped<IRepositoryManager, RepositoryManager>();
-builder.Services.AddScoped<Ben.Service.Security.Services.IOrganizationSecurityService,
-    Ben.Service.RepositoryService.Services.OrganizationSecurityService>();
-builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService,
-    Ben.Service.RepositoryService.Services.OrganizationSecurityService>();
+builder.Services.AddScoped<Ben.Service.Security.Services.IOrganizationSecurityService, ...>();
+builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService, ...>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+
+// Entra claims enrichment (injects app_user_id + role claims from DB after Entra JWT auth)
+builder.Services.AddTransient<IClaimsTransformation, EntraClaimsTransformation>();
 
 // AutoMapper — scans Ben.Service.Mappings assembly
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);
 ```
+
+## NuGet Packages (notable additions)
+
+| Package | Purpose |
+|---|---|
+| `NAudio 2.2.1` | WAV/MP3 server-side audio clipping (`AudioClipper` in `UploadFileAudioClipController`) |
+| `Swashbuckle.AspNetCore` | Swagger UI at `/swagger/index.html` |
