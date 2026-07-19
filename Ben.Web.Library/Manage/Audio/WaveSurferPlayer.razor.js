@@ -136,10 +136,8 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
   let envelopePlugin = null
 
   if (plugins.regions && RegionsPlugin) {
-    regionsPlugin = RegionsPlugin.create({
-      dragToCreate:        plugins.regionsDragToCreate ?? false,
-      dragBackgroundColor: 'rgba(59,130,246,0.25)',
-    })
+    regionsPlugin = RegionsPlugin.create()
+    // dragToCreate is implemented manually below for reliable seek/draw separation
     wsPlugins.push(regionsPlugin)
   }
   if (plugins.hover && HoverPlugin)
@@ -258,6 +256,114 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
   resizeObserver.observe(container.parentElement ?? container)
 
   instances.set(containerId, { ws, regionsPlugin, envelopePlugin, resizeObserver })
+
+  // ── Custom drag-to-create (only when requested) ────────────────────────
+  // We implement drag-to-create manually instead of relying on RegionsPlugin's
+  // built-in option so that:
+  //   1. A plain click still seeks (WaveSurfer handles it via 'click' event)
+  //   2. A click-and-drag creates a region with a live blue preview overlay
+  //   3. WaveSurfer's click-to-seek is blocked when the user actually dragged
+
+  if (plugins.regionsDragToCreate && regionsPlugin) {
+    const DRAG_THRESHOLD = 5   // px moved before we treat this as a drag
+
+    let dragStartX    = null
+    let dragStartTime = null
+    let isDragging    = false
+    let wasDragging   = false   // stays true until 'click' fires
+    let previewDiv    = null
+
+    const onPointerDown = (ev) => {
+      if (ev.button !== 0) return
+      const duration = ws.getDuration()
+      if (!duration) return
+      try { container.setPointerCapture(ev.pointerId) } catch {}
+      const rect      = container.getBoundingClientRect()
+      dragStartX    = ev.clientX
+      dragStartTime = Math.max(0, ((ev.clientX - rect.left) / rect.width) * duration)
+      isDragging    = false
+      wasDragging   = false
+    }
+
+    const onPointerMove = (ev) => {
+      if (dragStartX === null) return
+      if (Math.abs(ev.clientX - dragStartX) > DRAG_THRESHOLD) isDragging = true
+      if (!isDragging) return
+
+      // Create / update the preview overlay
+      if (!previewDiv) {
+        previewDiv = document.createElement('div')
+        previewDiv.style.cssText =
+          'position:absolute;top:0;bottom:0;z-index:20;pointer-events:none;' +
+          'background:rgba(59,130,246,0.18);' +
+          'border:2px solid rgba(59,130,246,0.55);border-radius:2px;'
+        container.style.position = 'relative'
+        container.appendChild(previewDiv)
+      }
+      const rect   = container.getBoundingClientRect()
+      const leftPx = Math.min(dragStartX, ev.clientX) - rect.left
+      const wdPx   = Math.abs(ev.clientX - dragStartX)
+      previewDiv.style.left  = `${Math.max(0, leftPx)}px`
+      previewDiv.style.width = `${wdPx}px`
+    }
+
+    const onPointerUp = (ev) => {
+      if (previewDiv) { previewDiv.remove(); previewDiv = null }
+      try { container.releasePointerCapture(ev.pointerId) } catch {}
+
+      if (isDragging && dragStartTime !== null) {
+        wasDragging = true
+        const rect     = container.getBoundingClientRect()
+        const duration = ws.getDuration()
+        const endTime  = Math.max(0, Math.min(duration,
+          ((ev.clientX - rect.left) / rect.width) * duration))
+        const start = Math.min(dragStartTime, endTime)
+        const end   = Math.max(dragStartTime, endTime)
+
+        if (end - start > 0.05) {   // at least 50 ms
+          regionsPlugin.addRegion({
+            start, end,
+            color: 'rgba(59,130,246,0.2)',
+            drag: true, resize: true,
+          })
+        }
+      }
+
+      dragStartX    = null
+      dragStartTime = null
+      isDragging    = false
+    }
+
+    const onPointerCancel = () => {
+      if (previewDiv) { previewDiv.remove(); previewDiv = null }
+      dragStartX = null; dragStartTime = null
+      isDragging = false; wasDragging = false
+    }
+
+    // Stop WaveSurfer's seek when the user dragged instead of clicking
+    const onClickCapture = (ev) => {
+      if (wasDragging) {
+        ev.stopImmediatePropagation()
+        wasDragging = false
+      }
+    }
+
+    container.addEventListener('pointerdown',   onPointerDown,   { capture: true })
+    container.addEventListener('pointermove',   onPointerMove,   { capture: true })
+    container.addEventListener('pointerup',     onPointerUp,     { capture: true })
+    container.addEventListener('pointercancel', onPointerCancel, { capture: true })
+    container.addEventListener('click',         onClickCapture,  { capture: true })
+
+    // Store cleanup function so destroy() can remove the listeners
+    instances.get(containerId).dragCleanup = () => {
+      container.removeEventListener('pointerdown',   onPointerDown,   { capture: true })
+      container.removeEventListener('pointermove',   onPointerMove,   { capture: true })
+      container.removeEventListener('pointerup',     onPointerUp,     { capture: true })
+      container.removeEventListener('pointercancel', onPointerCancel, { capture: true })
+      container.removeEventListener('click',         onClickCapture,  { capture: true })
+      if (previewDiv) { previewDiv.remove(); previewDiv = null }
+    }
+  }
 
   if (audioUrl) {
     await ws.load(audioUrl)
@@ -547,6 +653,7 @@ function _drawSpectrogram(canvas, data, showLabels, sampleRate, fftSamples) {
 export function destroy(containerId) {
   const instance = instances.get(containerId)
   if (!instance) return
+  instance.dragCleanup?.()
   instance.resizeObserver?.disconnect()
   try { instance.ws?.destroy() } catch { /* ignore */ }
   instances.delete(containerId)
