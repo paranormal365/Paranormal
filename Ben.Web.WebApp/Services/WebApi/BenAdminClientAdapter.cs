@@ -292,7 +292,7 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     // ── File admin delete ─────────────────────────────────────────────────────
 
     public Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default)
-        => _api.DeleteAsync($"/api/admin/upload-files/{id}", token);
+        => _api.DeleteAsync($"/api/upload-files/{id}", token);
 
     // ── CMS File Library ──────────────────────────────────────────────────────
 

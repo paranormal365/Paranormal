@@ -73,9 +73,13 @@ else
         _dataUrl = null;
         StateHasChanged();
 
-        var result = await AdminClient.GetFileDataAsync(FileId);
-        if (result is not null)
-            _dataUrl = $"data:{ContentType};base64,{Convert.ToBase64String(result.Value.Data)}";
+        try
+        {
+            var result = await AdminClient.GetFileDataAsync(FileId);
+            if (result is not null)
+                _dataUrl = $"data:{ContentType};base64,{Convert.ToBase64String(result.Value.Data)}";
+        }
+        catch { /* silently fail — component shows file-type badge as fallback */ }
 
         _loading = false;
     }

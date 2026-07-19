@@ -199,13 +199,21 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        try
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor.js");
 
-        _module = await JS.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor.js");
+            _dotnetRef = DotNetObjectReference.Create(this);
 
-        _dotnetRef = DotNetObjectReference.Create(this);
-
-        await InitAsync();
+            await InitAsync();
+        }
+        catch (Exception ex)
+        {
+            _loading = false;
+            _errorMessage = $"Player init failed: {ex.Message}";
+            StateHasChanged();
+        }
     }
 
     protected override async Task OnParametersSetAsync()
@@ -216,7 +224,17 @@
         if (currentSource == _lastSource) return;
         _lastSource = currentSource;
         if (currentSource is not null)
-            await _module.InvokeVoidAsync("load", _containerId, currentSource.ToLoadUrl());
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("load", _containerId, currentSource.ToLoadUrl());
+            }
+            catch (Exception ex)
+            {
+                _errorMessage = $"Load failed: {ex.Message}";
+                StateHasChanged();
+            }
+        }
     }
 
     private async Task InitAsync()

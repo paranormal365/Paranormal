@@ -226,7 +226,10 @@
             var maxSize = 50 * 1024 * 1024; // 50 MB
             await using var stream = _selectedFile.OpenReadStream(maxSize);
             var fileContent = new StreamContent(stream);
-            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(_selectedFile.ContentType);
+            var contentType = string.IsNullOrWhiteSpace(_selectedFile.ContentType)
+                ? "application/octet-stream"
+                : _selectedFile.ContentType;
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
             content.Add(fileContent, "file", _selectedFile.Name);
 
             var result = await Api.UploadFileAsync(content);

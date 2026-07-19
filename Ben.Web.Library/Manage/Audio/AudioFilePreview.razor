@@ -64,8 +64,7 @@ else
 <TelerikWindow @bind-Visible="@_showModal"
                Width="92vw"
                Height="88vh"
-               Modal="true"
-               Centered="true">
+               Modal="true">
     <WindowTitle>@FileName</WindowTitle>
     <WindowActions>
         <WindowAction Name="Close" />
@@ -164,9 +163,13 @@ else
     {
         if (!firstRender) return;
 
-        var result = await AdminClient.GetFileDataAsync(FileId);
-        if (result is not null)
-            _source = WsAudioSource.FromBytes(result.Value.Data, result.Value.ContentType);
+        try
+        {
+            var result = await AdminClient.GetFileDataAsync(FileId);
+            if (result is not null)
+                _source = WsAudioSource.FromBytes(result.Value.Data, result.Value.ContentType);
+        }
+        catch { /* silently fail — component shows filename badge as fallback */ }
 
         _loading = false;
         StateHasChanged();
