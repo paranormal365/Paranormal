@@ -342,6 +342,203 @@ export function removeEnvelopePoint(containerId, id)    { instances.get(containe
 export function setEnvelopeVolume(containerId, volume)  { instances.get(containerId)?.envelopePlugin?.setVolume(volume) }
 export function getEnvelopePoints(containerId)          { return instances.get(containerId)?.envelopePlugin?.getPoints() ?? [] }
 
+// ── Spectrogram (Web-Worker FFT) ─────────────────────────────────────────────
+
+/**
+ * Enables or disables the custom canvas spectrogram for the given player.
+ * When enabling, a Web Worker computes FFT data; progress/ready events fire
+ * back through the dotnetRef so Blazor can update its UI if desired.
+ * The loading-progress text is managed purely in the DOM for performance.
+ *
+ * @param {string}               containerId  Player container ID
+ * @param {boolean}              enable       true = show, false = remove
+ * @param {boolean}              showLabels   Render frequency-axis labels
+ * @param {DotNetObjectReference} dotnetRef   Used to fire progress/ready/menu callbacks
+ */
+export async function toggleSpectrogram(containerId, enable, showLabels, dotnetRef) {
+  const instance = instances.get(containerId)
+  if (!instance) return
+
+  const canvasId = `${containerId}-spectro`
+
+  if (!enable) {
+    document.getElementById(`${canvasId}-wrapper`)?.remove()
+    instance.spectrogramWorker?.terminate()
+    delete instance.spectrogramWorker
+    delete instance.spectrogramData
+    delete instance.spectrogramMeta
+    return
+  }
+
+  // Already computed — rebuild the canvas from cached data
+  if (instance.spectrogramData) {
+    _ensureSpectrogramCanvas(canvasId, containerId, dotnetRef)
+    const canvas = document.getElementById(canvasId)
+    if (canvas) {
+      _drawSpectrogram(canvas, instance.spectrogramData, showLabels,
+        instance.spectrogramMeta.sampleRate, instance.spectrogramMeta.fftSamples)
+      _hideSpectrogramLoading(canvasId)
+    }
+    return
+  }
+
+  const ws          = instance.ws
+  const audioBuffer = ws.getDecodedData?.()
+  if (!audioBuffer) {
+    console.warn('WaveSurfer audio not yet decoded — spectrogram unavailable')
+    return
+  }
+
+  // Create wrapper + loading text + canvas in the DOM
+  const canvas = _ensureSpectrogramCanvas(canvasId, containerId, dotnetRef)
+  if (!canvas) return
+
+  const fftSamples = 512
+  const noverlap   = 256
+  const channelCopy = new Float32Array(audioBuffer.getChannelData(0))
+
+  const worker = new Worker('/js/wavesurfer/spectrogram-worker.js')
+  instance.spectrogramWorker = worker
+  instance.spectrogramMeta   = { sampleRate: audioBuffer.sampleRate, fftSamples }
+
+  const safe = (fn) => fn.catch(() => {})
+
+  worker.onmessage = (e) => {
+    if (e.data.type === 'progress') {
+      _updateSpectrogramLoading(canvasId, e.data.percent)
+      safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramProgress', e.data.percent))
+    } else if (e.data.type === 'done') {
+      instance.spectrogramData = e.data.data
+      const c = document.getElementById(canvasId)
+      if (c) _drawSpectrogram(c, e.data.data, showLabels, e.data.sampleRate, e.data.fftSamples)
+      _hideSpectrogramLoading(canvasId)
+      safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramReady'))
+      worker.terminate()
+      delete instance.spectrogramWorker
+    }
+  }
+  worker.onerror = () => {
+    _hideSpectrogramLoading(canvasId)
+    safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramReady'))
+  }
+
+  worker.postMessage(
+    { channels: [channelCopy], sampleRate: audioBuffer.sampleRate, fftSamples, noverlap },
+    [channelCopy.buffer]
+  )
+}
+
+/**
+ * Redraws the spectrogram canvas with the cached FFT data, toggling labels.
+ */
+export function updateSpectrogramLabels(containerId, showLabels) {
+  const instance = instances.get(containerId)
+  if (!instance?.spectrogramData) return
+  const canvas = document.getElementById(`${containerId}-spectro`)
+  if (!canvas) return
+  _drawSpectrogram(canvas, instance.spectrogramData, showLabels,
+    instance.spectrogramMeta.sampleRate, instance.spectrogramMeta.fftSamples)
+}
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+function _ensureSpectrogramCanvas(canvasId, containerId, dotnetRef) {
+  if (document.getElementById(canvasId)) return document.getElementById(canvasId)
+
+  const waveformEl = document.getElementById(containerId)
+  if (!waveformEl) return null
+
+  const wrapper  = document.createElement('div')
+  wrapper.id     = `${canvasId}-wrapper`
+  wrapper.style.cssText = 'position:relative;width:100%;'
+
+  const loadingEl = document.createElement('div')
+  loadingEl.id    = `${canvasId}-loading`
+  loadingEl.style.cssText = 'font-size:0.72rem;color:var(--kendo-color-subtle-text,#888);font-style:italic;padding:2px 4px;'
+  loadingEl.textContent   = 'Generating spectrogram… 0%'
+
+  const canvas = document.createElement('canvas')
+  canvas.id    = canvasId
+  canvas.style.cssText = 'display:block;width:100%;height:128px;cursor:context-menu;'
+
+  wrapper.appendChild(loadingEl)
+  wrapper.appendChild(canvas)
+
+  // Insert immediately after the waveform container
+  waveformEl.parentNode.insertBefore(wrapper, waveformEl.nextSibling)
+
+  // Right-click → context menu
+  const safe = (fn) => fn.catch(() => {})
+  canvas.addEventListener('contextmenu', (ev) => {
+    ev.preventDefault()
+    ev.stopPropagation()
+    safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramContextMenu', ev.clientX, ev.clientY))
+  })
+
+  return canvas
+}
+
+function _updateSpectrogramLoading(canvasId, percent) {
+  const el = document.getElementById(`${canvasId}-loading`)
+  if (el) el.textContent = `Generating spectrogram… ${percent}%`
+}
+
+function _hideSpectrogramLoading(canvasId) {
+  const el = document.getElementById(`${canvasId}-loading`)
+  if (el) el.style.display = 'none'
+}
+
+function _drawSpectrogram(canvas, data, showLabels, sampleRate, fftSamples) {
+  if (!data?.length) return
+
+  const W      = canvas.parentElement?.offsetWidth || 800
+  const H      = 128
+  canvas.width  = W
+  canvas.height = H
+
+  const ctx     = canvas.getContext('2d')
+  const nFrames = data.length
+  const nBins   = fftSamples / 2
+  const colW    = W / nFrames
+
+  // Normalise over the entire dataset
+  let maxMag = 1e-9
+  for (const frame of data)
+    for (const v of frame)
+      if (v > maxMag) maxMag = v
+
+  for (let x = 0; x < nFrames; x++) {
+    const frame = data[x]
+    for (let y = 0; y < nBins; y++) {
+      const t  = frame[y] / maxMag                 // 0..1
+      // Viridis-inspired: dark-navy → cyan → yellow
+      const r  = Math.floor(255 * Math.pow(t, 0.5))
+      const g  = Math.floor(255 * Math.min(1, t * 1.5))
+      const b  = Math.floor(255 * Math.max(0, 0.9 - t))
+      ctx.fillStyle = `rgb(${r},${g},${b})`
+      const cy = H - Math.floor((y / nBins) * H) - 1
+      ctx.fillRect(x * colW, cy, colW + 1, 1)
+    }
+  }
+
+  if (showLabels) {
+    const nyquist = sampleRate / 2
+    ctx.font      = '10px monospace'
+    ctx.textAlign = 'left'
+    for (const freq of [250, 500, 1000, 2000, 4000, 8000, 16000]) {
+      if (freq >= nyquist) continue
+      const y = H - Math.floor((freq / nyquist) * H)
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)'
+      ctx.setLineDash([3, 3])
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
+      ctx.setLineDash([])
+      ctx.fillStyle = 'rgba(255,255,255,0.85)'
+      const label = freq >= 1000 ? `${freq / 1000}kHz` : `${freq}Hz`
+      ctx.fillText(label, 4, y - 2)
+    }
+  }
+}
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 export function destroy(containerId) {

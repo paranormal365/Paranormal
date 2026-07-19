@@ -170,6 +170,11 @@
     [Parameter] public EventCallback<List<WsEnvelopePoint>> OnEnvelopePointsChanged  { get; set; }
     [Parameter] public EventCallback<double>                 OnEnvelopeVolumeChanged  { get; set; }
 
+    // Spectrogram events
+    [Parameter] public EventCallback<int>       OnSpectrogramProgress    { get; set; }
+    [Parameter] public EventCallback             OnSpectrogramReady        { get; set; }
+    [Parameter] public EventCallback<WsPointArgs> OnSpectrogramContextMenu { get; set; }
+
     // ── Layout parameters ─────────────────────────────────────────────────────
 
     /// <summary>When <c>true</c> the player container gets <c>resize: vertical</c> so the user can drag to resize.</summary>
@@ -299,6 +304,22 @@
         await _module.InvokeVoidAsync("updateRegionLabel", _containerId, regionId, label);
     }
 
+    // ── Spectrogram ──────────────────────────────────────────────────────
+
+    /// <summary>Enables or disables the canvas-based spectrogram (Web Worker FFT). Idempotent.</summary>
+    public async Task ToggleSpectrogramAsync(bool enable, bool showLabels)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("toggleSpectrogram", _containerId, enable, showLabels, _dotnetRef);
+    }
+
+    /// <summary>Redraws the spectrogram with cached FFT data, toggling frequency-axis labels.</summary>
+    public async Task UpdateSpectrogramLabelsAsync(bool showLabels)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("updateSpectrogramLabels", _containerId, showLabels);
+    }
+
     // Regions
     public async Task<string?> AddRegionAsync(WsRegionParams region)
         => _module is null ? null : await _module.InvokeAsync<string?>("addRegion", _containerId, region);
@@ -390,6 +411,12 @@
 
     [JSInvokable] public async Task OnWsEnvelopePointsChanged(List<WsEnvelopePoint> pts) => await OnEnvelopePointsChanged.InvokeAsync(pts);
     [JSInvokable] public async Task OnWsEnvelopeVolumeChanged(double v)                  => await OnEnvelopeVolumeChanged.InvokeAsync(v);
+
+    // Spectrogram callbacks
+    [JSInvokable] public async Task OnWsSpectrogramProgress(int percent)  => await OnSpectrogramProgress.InvokeAsync(percent);
+    [JSInvokable] public async Task OnWsSpectrogramReady()                 => await OnSpectrogramReady.InvokeAsync();
+    [JSInvokable] public async Task OnWsSpectrogramContextMenu(double clientX, double clientY)
+        => await OnSpectrogramContextMenu.InvokeAsync(new WsPointArgs { ClientX = clientX, ClientY = clientY });
 
     // ── UI handlers ───────────────────────────────────────────────────────────
 

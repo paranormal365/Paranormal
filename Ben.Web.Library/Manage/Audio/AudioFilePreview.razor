@@ -81,8 +81,16 @@ else
                     <span><strong>Type:</strong>@(" ")@ContentType</span>
                     <span><strong>Duration:</strong>@(" ")@FormatTime(_modalDuration)</span>
                     <span><strong>Position:</strong>@(" ")@FormatTime(_modalTime)</span>
-                    <span class="ms-auto small text-secondary fst-italic">
-                        Drag on the waveform to mark a region
+                    <span class="ms-auto d-flex align-items-center gap-2">
+                        @* Spectrogram toggle *@
+                        <TelerikButton ThemeColor="@(_spectrogramEnabled ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Enabled="@_modalReady"
+                                       OnClick="ToggleSpectrogramAsync">
+                            📊 @(_spectrogramEnabled ? "Hide Spectrogram" : "Show Spectrogram")
+                        </TelerikButton>
+                        <span class="small text-secondary fst-italic">Drag to mark a region</span>
                     </span>
                 </div>
 
@@ -121,7 +129,9 @@ else
                                       OnFinish="@(() => { _modalTime = 0; StateHasChanged(); })"
                                       OnRegionContextMenu="@OnRegionRightClick"
                                       OnRegionCreated="@OnModalRegionCreated"
-                                      OnRegionUpdated="@OnModalRegionUpdated" />
+                                      OnRegionUpdated="@OnModalRegionUpdated"
+                                      OnSpectrogramReady="@(() => StateHasChanged())"
+                                      OnSpectrogramContextMenu="@OnSpectrogramContextMenuFired" />
                 </div>
 
                 @* Child clips section *@
@@ -159,6 +169,13 @@ else
         }
     </WindowContent>
 </TelerikWindow>
+
+@* ── Spectrogram context menu (right-click on spectrogram canvas) ───── *@
+<TelerikContextMenu @ref="_spectrogramMenu"
+                    Data="@_spectrogramMenuItems"
+                    TextField="@nameof(SpectrogramMenuItem.Text)"
+                    OnClick="@(async (SpectrogramMenuItem item) => await OnSpectrogramMenuClickAsync(item))">
+</TelerikContextMenu>
 
 @* ── Region context menu (right-click in full-view player) ───────────── *@
 <TelerikContextMenu @ref="_regionMenu"
@@ -291,7 +308,19 @@ else
     private double _modalTime;
     private double _modalDuration;
     private bool   _showModal;
+    private bool   _modalReady;
     private IReadOnlyList<UploadFileRecord> _childClips = [];
+
+    // ── Spectrogram state ──────────────────────────────────────────────
+
+    private bool   _spectrogramEnabled;
+    private bool   _spectrogramLabels;
+    private TelerikContextMenu<SpectrogramMenuItem>? _spectrogramMenu;
+
+    private static readonly List<SpectrogramMenuItem> _spectrogramMenuItems =
+    [
+        new("labels", "🔤  Toggle Labels"),
+    ];
 
     // ── Region creation workflow ──────────────────────────────────────────────
 
@@ -400,6 +429,7 @@ else
     private async Task OnModalReadyAsync()
     {
         _modalDuration = _modalPlayer?.Duration ?? 0;
+        _modalReady    = true;
         StateHasChanged();
 
         // Load file types for the save-clip dialog and overlay child clips in parallel
@@ -557,9 +587,12 @@ else
             case "fullview":
                 if (_playing && _player is not null)
                     await _player.PauseAsync();
-                _modalTime     = 0;
-                _modalDuration = 0;
-                _showModal     = true;
+                _modalTime         = 0;
+                _modalDuration     = 0;
+                _modalReady        = false;
+                _spectrogramEnabled = false;
+                _spectrogramLabels  = false;
+                _showModal         = true;
                 StateHasChanged();
                 break;
         }
@@ -569,6 +602,31 @@ else
 
     private static string FormatTime(double seconds) => AudioFormatUtils.FormatTime(seconds);
     private static string FormatSize(long bytes)      => AudioFormatUtils.FormatSize(bytes);
+
+    // ── Spectrogram toggle + context menu ─────────────────────────────────────
+
+    private async Task ToggleSpectrogramAsync()
+    {
+        _spectrogramEnabled = !_spectrogramEnabled;
+        if (_modalPlayer is null) return;
+        await _modalPlayer.ToggleSpectrogramAsync(_spectrogramEnabled, _spectrogramLabels);
+    }
+
+    private async Task OnSpectrogramContextMenuFired(WsPointArgs args)
+    {
+        if (_spectrogramMenu is not null)
+            await _spectrogramMenu.ShowAsync(args.ClientX, args.ClientY);
+    }
+
+    private async Task OnSpectrogramMenuClickAsync(SpectrogramMenuItem item)
+    {
+        if (item.Action == "labels")
+        {
+            _spectrogramLabels = !_spectrogramLabels;
+            if (_modalPlayer is not null)
+                await _modalPlayer.UpdateSpectrogramLabelsAsync(_spectrogramLabels);
+        }
+    }
 
     private async Task OnChildClipSaved(UploadFileRecord _)
     {
@@ -657,4 +715,5 @@ else
 
     private sealed record AudioContextMenuItem(string Action, string Text);
     private sealed record RegionContextMenuItem(string Action, string Text);
+    private sealed record SpectrogramMenuItem(string Action, string Text);
 }

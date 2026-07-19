@@ -506,6 +506,13 @@ public class WsEnvelopePoint
     public double Volume { get; set; }
 }
 
+/// <summary>Coordinates payload used by the spectrogram context-menu callback.</summary>
+public class WsPointArgs
+{
+    [JsonPropertyName("clientX")] public double ClientX { get; set; }
+    [JsonPropertyName("clientY")] public double ClientY { get; set; }
+}
+
 // ── Aggregated Config ─────────────────────────────────────────────────────────
 
 /// <summary>
