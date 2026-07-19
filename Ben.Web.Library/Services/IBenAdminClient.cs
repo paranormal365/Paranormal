@@ -270,6 +270,20 @@ public interface IBenAdminClient
 
     /// <summary>Returns all child clip files that were derived from <paramref name="fileId"/> via the region-clip workflow.</summary>
     Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default);
+
+    // ── Votes ──────────────────────────────────────────────────────
+
+    /// <summary>Returns the aggregated vote summary including the current user's vote (if any).</summary>
+    Task<UploadFileVoteSummary?> GetVoteSummaryAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>
+    /// Creates or updates the current user's vote (upsert).
+    /// Pass score 1 for upvote, -1 for downvote.
+    /// </summary>
+    Task<UploadFileVoteRecord?> UpsertMyVoteAsync(Guid fileId, int score, CancellationToken token = default);
+
+    /// <summary>Removes the current user's vote. No-op if the user has not voted.</summary>
+    Task<bool> RemoveMyVoteAsync(Guid fileId, CancellationToken token = default);
 }
 
 /// <summary>

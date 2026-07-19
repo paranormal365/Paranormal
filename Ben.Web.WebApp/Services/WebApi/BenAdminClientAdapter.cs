@@ -377,4 +377,15 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default)
         => _api.GetClipPreviewAsync(fileId, start, end, token);
+
+    // ── Votes ────────────────────────────────────────────────
+
+    public Task<UploadFileVoteSummary?> GetVoteSummaryAsync(Guid fileId, CancellationToken token = default)
+        => _api.GetVoteSummaryAsync(fileId, token);
+
+    public Task<UploadFileVoteRecord?> UpsertMyVoteAsync(Guid fileId, int score, CancellationToken token = default)
+        => _api.UpsertMyVoteAsync(fileId, score, token);
+
+    public Task<bool> RemoveMyVoteAsync(Guid fileId, CancellationToken token = default)
+        => _api.RemoveMyVoteAsync(fileId, token);
 }

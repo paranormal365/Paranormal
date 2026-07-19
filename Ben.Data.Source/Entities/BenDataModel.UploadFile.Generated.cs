@@ -38,5 +38,6 @@ namespace Ben.Data.Source.Entities
         public virtual ICollection<UploadFilePermissionRequest> PermissionRequests { get; set; } = new List<UploadFilePermissionRequest>();
         public virtual UploadFileAudioConfig? AudioConfig { get; set; }
         public virtual ICollection<UploadFileRegionNote> RegionNotes { get; set; } = new List<UploadFileRegionNote>();
+        public virtual ICollection<UploadFileVote> Votes { get; set; } = new List<UploadFileVote>();
     }
 }

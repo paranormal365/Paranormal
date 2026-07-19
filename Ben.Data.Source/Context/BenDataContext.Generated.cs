@@ -49,6 +49,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UploadFilePermissionRequest> UploadFilePermissionRequests { get; set; }
         public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
         public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
+        public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -606,6 +607,17 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<UploadFileRegionNote>()
                 .Property(e => e.NoteHtml).HasColumnType("nvarchar(max)");
+
+            // ── UploadFileVote ───────────────────────────────────────────────
+            // One vote per (user, file): unique index enforces the business rule.
+            modelBuilder.Entity<UploadFileVote>()
+                .HasOne(e => e.UploadFile).WithMany(e => e.Votes)
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UploadFileVote>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileVote>()
+                .HasIndex(e => new { e.UploadFileId, e.AppUserId }).IsUnique();
         }
     }
 }

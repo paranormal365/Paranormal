@@ -215,6 +215,17 @@ public sealed class WebApiClient : IWebApiClient
         return (data, contentType);
     }
 
+    // ── Votes ──────────────────────────────────────────────────
+    public Task<UploadFileVoteSummary?> GetVoteSummaryAsync(Guid fileId, CancellationToken token = default)
+        => GetAsync<UploadFileVoteSummary>($"/api/upload-files/{fileId}/votes", token);
+
+    public Task<UploadFileVoteRecord?> UpsertMyVoteAsync(Guid fileId, int score, CancellationToken token = default)
+        => PutAsync<UpsertVoteRequest, UploadFileVoteRecord>(
+                $"/api/upload-files/{fileId}/votes/my-vote", new UpsertVoteRequest(score), token);
+
+    public Task<bool> RemoveMyVoteAsync(Guid fileId, CancellationToken token = default)
+        => DeleteAsync($"/api/upload-files/{fileId}/votes/my-vote", token);
+
     // ── Org Sharing ──────────────────────────────────────────────────────────
     public async Task<IReadOnlyList<UploadFileOrgShareResponse>> GetFileOrgSharesAsync(Guid fileId, CancellationToken token = default)
     {
