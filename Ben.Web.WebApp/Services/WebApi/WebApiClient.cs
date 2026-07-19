@@ -204,6 +204,17 @@ public sealed class WebApiClient : IWebApiClient
         return result ?? [];
     }
 
+    public async Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Get,
+            $"/api/upload-files/{fileId}/clip/preview?start={start.ToString(System.Globalization.CultureInfo.InvariantCulture)}&end={end.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+        using var response = await _httpClient.SendAsync(req, token);
+        if (!response.IsSuccessStatusCode) return null;
+        var data        = await response.Content.ReadAsByteArrayAsync(token);
+        var contentType = response.Content.Headers.ContentType?.ToString() ?? "audio/wav";
+        return (data, contentType);
+    }
+
     // ── Org Sharing ──────────────────────────────────────────────────────────
     public async Task<IReadOnlyList<UploadFileOrgShareResponse>> GetFileOrgSharesAsync(Guid fileId, CancellationToken token = default)
     {

@@ -3,11 +3,13 @@
   ──────────────────────
   Full-featured explorer window for a selected WaveSurfer region.
 
-  • Loads the original audio and highlights the selected region.
-  • Plays only the region on "Play Region" (using WaveSurfer Regions plugin).
-  • Lets the user add overall or point-in-time notes (rich text via TelerikEditor).
-  • Allows clipping the region to a new UploadFile (WAV / MP3 → WAV).
-  • Right-clicking a sub-region inside the explorer opens another WsRegionExplorer.
+  • Loads ONLY the region’s audio (server-side WAV clip, no DB record).
+  • All times displayed are relative to the region start (clip time 0 = Region.Start).
+  • Notes shown are filtered to those whose RegionStart/End matches this region or
+    whose TimeOffset falls within [Region.Start, Region.End].
+  • Point-in-time notes are stored with absolute file time (Region.Start + clip time).
+  • Sub-regions can be drawn with click-drag; their times are relative to the clip.
+  • Sub-region “Explore” / “Save” converts back to absolute original-file coordinates.
 *@
 
 @namespace Ben.Web.Library.Manage.Audio
@@ -61,7 +63,7 @@
                         {
                             <WaveSurferPlayer @ref="_player"
                                               Config="@BuildConfig()"
-                                              OnReady="@OnPlayerReady"
+                                              OnReady="@(() => OnPlayerReady())"
                                               OnPlay="@(() => { _isPlaying = true; StateHasChanged(); })"
                                               OnPause="@(() => { _isPlaying = false; StateHasChanged(); })"
                                               OnFinish="@(() => { _isPlaying = false; StateHasChanged(); })"
@@ -164,8 +166,10 @@
                                         <span>
                                             @if (note.TimeOffset.HasValue)
                                             {
-                                                <span class="badge bg-primary me-1" title="Point-in-time note">
-                                                    ⏱ @FormatTime(note.TimeOffset.Value)
+                                                @* TimeOffset is absolute; show clip-relative time *@
+                                                <span class="badge bg-primary me-1"
+                                                      title="File time: @FormatTime(note.TimeOffset.Value)">
+                                                    ⏱ +@FormatTime(note.TimeOffset.Value - (Region?.Start ?? 0))
                                                 </span>
                                             }
                                             else
@@ -235,7 +239,8 @@
                         <div class="d-flex align-items-center gap-2 mb-2">
                             <TelerikCheckBox @bind-Value="@_isPointInTime" Id="pit-note" />
                             <label for="pit-note" class="form-label form-label-sm mb-0">
-                                Attach to current position (@FormatTime(_currentTime))
+                                Attach to current position (+@FormatTime(_currentTime) in clip
+                                / @FormatTime(_currentTime + (Region?.Start ?? 0)) in file)
                             </label>
                         </div>
                         <TelerikEditor @bind-Value="@_noteHtml" Height="120px" Tools="@_noteEditorTools" />
@@ -325,9 +330,8 @@
     private WaveSurferPlayer? _player;
     private bool            _ready;
     private bool            _isPlaying;
-    private double          _currentTime;
+    private double          _currentTime;     // relative to clip start (0 = Region.Start)
     private double          _playbackRate = 1.0;
-    private string?         _focusRegionId;   // ID of the locked region representing the selected bounds
 
     // ── Clip state ────────────────────────────────────────────────────────────
 
@@ -382,26 +386,28 @@
 
     private async Task LoadAsync()
     {
+        if (Region is null) return;
         _loading = true;
         _loadError = null;
         StateHasChanged();
 
         try
         {
-            var fileTask  = AdminClient.GetFileDataAsync(FileId);
+            // Load ONLY the region’s bytes — no full-file download
+            var clipTask  = AdminClient.GetClipPreviewAsync(FileId, Region.Start, Region.End);
             var typesTask = AdminClient.GetPublicFileTypesAsync();
             var notesTask = AdminClient.GetRegionNotesAsync(FileId);
 
-            await Task.WhenAll(fileTask, typesTask, notesTask);
+            await Task.WhenAll(clipTask, typesTask, notesTask);
 
-            var fileData = fileTask.Result;
-            if (fileData is not null)
-                _source = WsAudioSource.FromBytes(fileData.Value.Data, fileData.Value.ContentType);
+            var clip = clipTask.Result;
+            if (clip is not null)
+                _source = WsAudioSource.FromBytes(clip.Value.Data, clip.Value.ContentType);
             else
-                _loadError = "Could not load audio data.";
+                _loadError = "Could not clip audio for this region. Only WAV and MP3 sources are supported.";
 
             _fileTypes = typesTask.Result;
-            _notes     = notesTask.Result;
+            _notes     = FilterNotesForRegion(notesTask.Result);
 
             if (_fileTypes.Any())
                 _clipFileTypeId = _fileTypes[0].Id;
@@ -414,33 +420,42 @@
         _loading = false;
     }
 
+    /// <summary>
+    /// Returns only notes that belong to this region:
+    /// exact region match, or point-in-time offset within [Region.Start, Region.End].
+    /// </summary>
+    private IReadOnlyList<UploadFileRegionNoteRecord> FilterNotesForRegion(
+        IReadOnlyList<UploadFileRegionNoteRecord> all)
+    {
+        if (Region is null) return [];
+        return all.Where(n =>
+            // Exact region match
+            (Math.Abs(n.RegionStart - Region.Start) < 0.05 && Math.Abs(n.RegionEnd - Region.End) < 0.05)
+            // Point-in-time note whose absolute offset falls within this region
+            || (n.TimeOffset.HasValue
+                && n.TimeOffset.Value >= Region.Start
+                && n.TimeOffset.Value <= Region.End)
+        ).ToList();
+    }
+
     private async Task ReloadNotesAsync()
     {
         _loadingNotes = true;
-        try { _notes = await AdminClient.GetRegionNotesAsync(FileId); }
+        try
+        {
+            var all = await AdminClient.GetRegionNotesAsync(FileId);
+            _notes = FilterNotesForRegion(all);
+        }
         catch { /* silently ignore */ }
         _loadingNotes = false;
     }
 
-    // ── Player ready — add locked region overlay ──────────────────────────────
+    // ── Player ready ────────────────────────────────────────────────────────────
+    // The audio IS the region; no locked overlay needed.
 
-    private async Task OnPlayerReady()
+    private void OnPlayerReady()
     {
         _ready = true;
-        if (Region is not null && _player is not null)
-        {
-            var regionId = await _player.AddRegionAsync(new WsRegionParams
-            {
-                Id      = "focus-region",
-                Start   = Region.Start,
-                End     = Region.End,
-                Color   = "rgba(59,130,246,0.18)",
-                Drag    = false,
-                Resize  = false,
-                Content = Region.Label,
-            });
-            _focusRegionId = regionId;
-        }
         StateHasChanged();
     }
 
@@ -448,8 +463,9 @@
 
     private async Task PlayRegionAsync()
     {
-        if (_player is null || _focusRegionId is null) return;
-        await _player.PlayRegionAsync(_focusRegionId);
+        if (_player is null) return;
+        await _player.SeekToAsync(0); // clip start = region start
+        await _player.PlayAsync();
     }
 
     private async Task TogglePlayAsync()
@@ -523,7 +539,8 @@
                 RegionStart: Region.Start,
                 RegionEnd:   Region.End,
                 RegionLabel: Region.Label,
-                TimeOffset:  _isPointInTime ? _currentTime : null,
+                // _currentTime is clip-relative; store absolute (original file) time
+                TimeOffset:  _isPointInTime ? (_currentTime + Region.Start) : null,
                 NoteHtml:    _noteHtml,
                 IsPublic:    _noteIsPublic));
 
@@ -588,7 +605,6 @@
 
     private async Task OnSubRegionContextMenu(WsRegionContextMenuArgs args)
     {
-        if (args.RegionId == _focusRegionId) return; // skip the locked focus overlay
         _pendingSubRegion = args;
         if (_subRegionMenu is not null)
             await _subRegionMenu.ShowAsync(args.ClientX, args.ClientY);
@@ -603,11 +619,13 @@
                 if (_player is not null) await _player.PlayRegionAsync(_pendingSubRegion.RegionId);
                 break;
             case "explore":
+                // Sub-region times are relative to the clip (0 = Region.Start);
+                // convert to absolute original-file coordinates before opening nested explorer
                 _subRegion = new WsRegionData
                 {
                     Id    = _pendingSubRegion.RegionId,
-                    Start = _pendingSubRegion.Start,
-                    End   = _pendingSubRegion.End,
+                    Start = Region!.Start + _pendingSubRegion.Start,
+                    End   = Region!.Start + _pendingSubRegion.End,
                     Label = _pendingSubRegion.Label,
                 };
                 _showSubExplorer = true;
@@ -647,15 +665,16 @@
         Options       = new WsOptions { Normalize = true },
         Plugins       = new WsPluginConfig
         {
-            Hover      = true,
-            Timeline   = true,
-            Zoom       = true,
-            Regions    = true,
+            Hover               = true,
+            Timeline            = true,
+            Zoom                = true,
+            Regions             = true,
+            RegionsDragToCreate = true,  // allow drawing sub-regions
         },
         InitialHeight = "260px",
         MinHeight     = "100px",
         MaxHeight     = "600px",
-        ShowControls  = false,   // custom controls row is used instead
+        ShowControls  = false,
     };
 
     // ── Helpers ───────────────────────────────────────────────────────────────

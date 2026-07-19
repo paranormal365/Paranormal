@@ -261,6 +261,13 @@ public interface IBenAdminClient
     /// </summary>
     Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default);
 
+    /// <summary>
+    /// Returns clipped audio bytes for the given time range WITHOUT saving a new file.
+    /// Used by <c>WsRegionExplorer</c> to load only the region's audio.
+    /// Returns null if the source format is unsupported (non-WAV / non-MP3).
+    /// </summary>
+    Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default);
+
     /// <summary>Returns all child clip files that were derived from <paramref name="fileId"/> via the region-clip workflow.</summary>
     Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default);
 }

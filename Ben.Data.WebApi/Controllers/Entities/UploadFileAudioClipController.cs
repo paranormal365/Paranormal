@@ -27,6 +27,35 @@ public sealed class UploadFileAudioClipController : ControllerBase
         _mapper = mapper;
     }
 
+    /// <summary>
+    /// Returns clipped audio bytes for a time range without persisting to the database.
+    /// Supports WAV and MP3 sources; always outputs WAV.
+    /// </summary>
+    [HttpGet("preview")]
+    public async Task<IActionResult> ClipPreview(
+        Guid fileId,
+        [FromQuery] double start,
+        [FromQuery] double end,
+        CancellationToken ct)
+    {
+        if (end <= start) return BadRequest("end must be greater than start.");
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var source = await db.UploadFiles.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == fileId, ct);
+        if (source is null) return NotFound();
+
+        try
+        {
+            var (bytes, contentType, _) = AudioClipper.Clip(source.FileData, source.ContentType, start, end);
+            return File(bytes, contentType);
+        }
+        catch (NotSupportedException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
     [HttpPost]
     public async Task<ActionResult<UploadFileRecord>> Clip(
         Guid fileId,

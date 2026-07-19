@@ -374,4 +374,7 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
         => _api.GetChildClipsAsync(fileId, token);
+
+    public Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default)
+        => _api.GetClipPreviewAsync(fileId, start, end, token);
 }
