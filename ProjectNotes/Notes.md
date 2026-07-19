@@ -1399,9 +1399,12 @@ When a region is saved as a new file, the clipped `UploadFile` stores a back-ref
 
 **API:**
 ```
-POST /api/upload-files/{fileId}/clip            ← ClipAudioRequest
+POST /api/upload-files/{fileId}/clip            ← ClipAudioRequest (saves new UploadFile)
+GET  /api/upload-files/{fileId}/clip/preview    ← ?start=&end= (bytes only, no DB write)
 GET  /api/upload-files/{fileId}/clips           → UploadFileRecord[] ordered by RegionStart
 ```
+
+The **preview** endpoint returns clipped WAV bytes (WAV/MP3 → WAV) without creating an `UploadFile` record. Used by `WsRegionExplorer` to stream just the region's audio on open.
 
 ### Audio clipping (NAudio)
 

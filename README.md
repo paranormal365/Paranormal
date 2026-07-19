@@ -18,9 +18,9 @@ Full-stack .NET solution — ASP.NET Core Web API + Blazor Server + EF Core + SQ
 | `Ben.Web.Library` | Razor Class Library — shared Blazor + Telerik components (inc. `WaveSurferPlayer`, `AudioFilePreview`, `WsRegionExplorer`) |
 | `Ben.Web.WebApp` | Blazor Server app — Telerik UI for Blazor (`:5078`) |
 | `Ben.Service.RepositoryService.Tests` | xUnit — 172 tests |
-| `Ben.Web.Tests` | xUnit — 311 tests |
+| `Ben.Web.Tests` | xUnit — 407 tests |
 
-**483 tests — 0 failures, 0 warnings**
+**579 tests — 0 failures, 0 warnings**
 
 ---
 

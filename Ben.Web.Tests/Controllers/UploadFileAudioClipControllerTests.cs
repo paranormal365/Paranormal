@@ -341,4 +341,60 @@ public class UploadFileAudioClipControllerTests
         Assert.Equal(0.0,    entity.RegionStart);
         Assert.Equal(1.0,    entity.RegionEnd);
     }
+
+    // ── ClipPreview (GET — no DB write) ───────────────────────────────────────
+
+    [Fact]
+    public async Task ClipPreview_ReturnsBadRequest_WhenEndBeforeStart()
+    {
+        var factory = CreateFactory();
+        var ctrl    = Build(factory, Guid.NewGuid());
+
+        var result  = await ctrl.ClipPreview(Guid.NewGuid(), start: 5, end: 2, default);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task ClipPreview_ReturnsNotFound_WhenFileDoesNotExist()
+    {
+        var factory = CreateFactory();
+        var ctrl    = Build(factory, Guid.NewGuid());
+
+        var result  = await ctrl.ClipPreview(Guid.NewGuid(), start: 0, end: 1, default);
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task ClipPreview_ReturnsBadRequest_ForUnsupportedFormat()
+    {
+        var factory  = CreateFactory();
+        var fileId   = await SeedFileAsync(factory, new byte[100], "audio/ogg");
+        var ctrl     = Build(factory, Guid.NewGuid());
+
+        var result   = await ctrl.ClipPreview(fileId, start: 0, end: 0.5, default);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task ClipPreview_ReturnsWavBytes_WithoutPersistingToDatabase()
+    {
+        var factory = CreateFactory();
+        var fileId  = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, Guid.NewGuid());
+
+        var result  = await ctrl.ClipPreview(fileId, start: 0.0, end: 1.0, default);
+
+        // Should return a file result, not a created-at-action
+        var fileResult = Assert.IsType<FileContentResult>(result);
+        Assert.Equal("audio/wav", fileResult.ContentType);
+        Assert.NotEmpty(fileResult.FileContents);
+
+        // Verify no new UploadFile was created
+        await using var db    = await factory.CreateDbContextAsync();
+        var count             = await db.UploadFiles.CountAsync();
+        Assert.Equal(1, count); // only the seeded source file
+    }
 }

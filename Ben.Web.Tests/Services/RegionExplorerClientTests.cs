@@ -229,4 +229,36 @@ public class RegionExplorerClientTests
 
         Assert.Empty(result);
     }
+
+    // ── GetClipPreviewAsync ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetClipPreviewAsync_DelegatesToApiAndReturnsBytesAndContentType()
+    {
+        var fileId      = Guid.NewGuid();
+        var bytes       = new byte[] { 0x52, 0x49, 0x46, 0x46 }; // RIFF
+        var apiMock     = ApiMock();
+        apiMock.Setup(x => x.GetClipPreviewAsync(fileId, 5.0, 10.0, default))
+               .ReturnsAsync((bytes, "audio/wav"));
+
+        var result = await Build(apiMock).GetClipPreviewAsync(fileId, 5.0, 10.0);
+
+        Assert.NotNull(result);
+        Assert.Equal(bytes,       result!.Value.Data);
+        Assert.Equal("audio/wav", result!.Value.ContentType);
+        apiMock.Verify(x => x.GetClipPreviewAsync(fileId, 5.0, 10.0, default), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetClipPreviewAsync_ReturnsNull_WhenApiReturnsNull()
+    {
+        var fileId  = Guid.NewGuid();
+        var apiMock = ApiMock();
+        apiMock.Setup(x => x.GetClipPreviewAsync(fileId, 0, 5, default))
+               .ReturnsAsync((ValueTuple<byte[], string>?)null);
+
+        var result = await Build(apiMock).GetClipPreviewAsync(fileId, 0, 5);
+
+        Assert.Null(result);
+    }
 }
