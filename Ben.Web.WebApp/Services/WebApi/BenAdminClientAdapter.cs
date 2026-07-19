@@ -352,4 +352,26 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default)
         => _api.DeleteAudioConfigAsync(fileId, token);
+
+    // ── Region Notes ──────────────────────────────────────────────────────────
+
+    public Task<IReadOnlyList<UploadFileRegionNoteRecord>> GetRegionNotesAsync(Guid fileId, CancellationToken token = default)
+        => _api.GetRegionNotesAsync(fileId, token);
+
+    public Task<UploadFileRegionNoteRecord?> CreateRegionNoteAsync(Guid fileId, CreateRegionNoteRequest request, CancellationToken token = default)
+        => _api.CreateRegionNoteAsync(fileId, request, token);
+
+    public Task<UploadFileRegionNoteRecord?> UpdateRegionNoteAsync(Guid fileId, Guid noteId, UpdateRegionNoteRequest request, CancellationToken token = default)
+        => _api.UpdateRegionNoteAsync(fileId, noteId, request, token);
+
+    public Task<bool> DeleteRegionNoteAsync(Guid fileId, Guid noteId, CancellationToken token = default)
+        => _api.DeleteRegionNoteAsync(fileId, noteId, token);
+
+    // ── Audio Clip ────────────────────────────────────────────────────────────
+
+    public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)
+        => _api.ClipAudioAsync(fileId, request, token);
+
+    public Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
+        => _api.GetChildClipsAsync(fileId, token);
 }

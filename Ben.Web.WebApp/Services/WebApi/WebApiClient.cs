@@ -178,6 +178,32 @@ public sealed class WebApiClient : IWebApiClient
     public Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default)
         => DeleteAsync($"/api/upload-files/{fileId}/audio-config", token);
 
+    // ── Region Notes ──────────────────────────────────────────────────────────
+    public async Task<IReadOnlyList<UploadFileRegionNoteRecord>> GetRegionNotesAsync(Guid fileId, CancellationToken token = default)
+    {
+        var result = await GetAsync<List<UploadFileRegionNoteRecord>>($"/api/upload-files/{fileId}/region-notes", token);
+        return result ?? [];
+    }
+
+    public Task<UploadFileRegionNoteRecord?> CreateRegionNoteAsync(Guid fileId, CreateRegionNoteRequest request, CancellationToken token = default)
+        => PostAsync<CreateRegionNoteRequest, UploadFileRegionNoteRecord>($"/api/upload-files/{fileId}/region-notes", request, token);
+
+    public Task<UploadFileRegionNoteRecord?> UpdateRegionNoteAsync(Guid fileId, Guid noteId, UpdateRegionNoteRequest request, CancellationToken token = default)
+        => PutAsync<UpdateRegionNoteRequest, UploadFileRegionNoteRecord>($"/api/upload-files/{fileId}/region-notes/{noteId}", request, token);
+
+    public Task<bool> DeleteRegionNoteAsync(Guid fileId, Guid noteId, CancellationToken token = default)
+        => DeleteAsync($"/api/upload-files/{fileId}/region-notes/{noteId}", token);
+
+    // ── Audio Clip ────────────────────────────────────────────────────────────
+    public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)
+        => PostAsync<ClipAudioRequest, UploadFileRecord>($"/api/upload-files/{fileId}/clip", request, token);
+
+    public async Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
+    {
+        var result = await GetAsync<List<UploadFileRecord>>($"/api/upload-files/{fileId}/clips", token);
+        return result ?? [];
+    }
+
     // ── Org Sharing ──────────────────────────────────────────────────────────
     public async Task<IReadOnlyList<UploadFileOrgShareResponse>> GetFileOrgSharesAsync(Guid fileId, CancellationToken token = default)
     {

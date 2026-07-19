@@ -8,19 +8,19 @@ Full-stack .NET solution — ASP.NET Core Web API + Blazor Server + EF Core + SQ
 
 | Project | Role |
 |---|---|
-| `Ben.Data.Common` | Shared enums, interfaces (`IIDStd`), helpers (`FileExtensionPatternMatcher`) |
+| `Ben.Data.Common` | Shared enums, interfaces (`IIDStd`), helpers (`FileExtensionPatternMatcher`, `AudioFormatUtils`) |
 | `Ben.Data.Source` | EF Core data layer — entities, `BenDataContext`, migrations |
 | `Ben.Data.WebApi` | ASP.NET Core Web API — Identity, controllers, seeders (`:5252`) |
 | `Ben.Service.Mappings` | AutoMapper profiles (Entity → Record) |
 | `Ben.Service.Models` | DTOs / records |
 | `Ben.Service.RepositoryService` | Repository pattern over `BenDataContext` |
 | `Ben.Service.Security` | Org-level tenant security service |
-| `Ben.Web.Library` | Razor Class Library — shared Blazor + Telerik components |
+| `Ben.Web.Library` | Razor Class Library — shared Blazor + Telerik components (inc. `WaveSurferPlayer`, `AudioFilePreview`, `WsRegionExplorer`) |
 | `Ben.Web.WebApp` | Blazor Server app — Telerik UI for Blazor (`:5078`) |
-| `Ben.Service.RepositoryService.Tests` | xUnit — 163 tests |
-| `Ben.Web.Tests` | xUnit — 206 tests |
+| `Ben.Service.RepositoryService.Tests` | xUnit — 172 tests |
+| `Ben.Web.Tests` | xUnit — 311 tests |
 
-**369 tests — 0 failures, 0 warnings**
+**483 tests — 0 failures, 0 warnings**
 
 ---
 

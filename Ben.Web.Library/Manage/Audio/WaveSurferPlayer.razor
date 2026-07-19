@@ -25,7 +25,7 @@
             min-height:@cfg.MinHeight;
             max-height:@cfg.MaxHeight;
             height:@cfg.InitialHeight;
-            resize:vertical;
+            @(Resizable ? "resize:vertical;" : "")
             overflow:hidden;
             display:flex;
             flex-direction:column;
@@ -164,9 +164,16 @@
     [Parameter] public EventCallback<string>        OnRegionIn      { get; set; }
     [Parameter] public EventCallback<string>        OnRegionOut     { get; set; }
 
+    [Parameter] public EventCallback<WsRegionContextMenuArgs> OnRegionContextMenu { get; set; }
+
     // Envelope events
     [Parameter] public EventCallback<List<WsEnvelopePoint>> OnEnvelopePointsChanged  { get; set; }
     [Parameter] public EventCallback<double>                 OnEnvelopeVolumeChanged  { get; set; }
+
+    // ── Layout parameters ─────────────────────────────────────────────────────
+
+    /// <summary>When <c>true</c> the player container gets <c>resize: vertical</c> so the user can drag to resize.</summary>
+    [Parameter] public bool Resizable { get; set; }
 
     // ── Public state ──────────────────────────────────────────────────────────
 
@@ -285,6 +292,13 @@
     public async Task<double> GetDurationAsync()  => await InvokeGet<double>("getDuration");
     public async Task<double> GetVolumeAsync()    => await InvokeGet<double>("getVolume");
 
+    /// <summary>Updates the text label of an existing region without recreating it.</summary>
+    public async Task UpdateRegionLabelAsync(string regionId, string? label)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("updateRegionLabel", _containerId, regionId, label);
+    }
+
     // Regions
     public async Task<string?> AddRegionAsync(WsRegionParams region)
         => _module is null ? null : await _module.InvokeAsync<string?>("addRegion", _containerId, region);
@@ -360,6 +374,11 @@
     {
         _currentTime = time; StateHasChanged();
         await OnSeeking.InvokeAsync(time);
+    }
+
+    [JSInvokable] public async Task OnWsRegionContextMenu(WsRegionContextMenuArgs args)
+    {
+        await OnRegionContextMenu.InvokeAsync(args);
     }
 
     [JSInvokable] public async Task OnWsRegionCreated(WsRegionData r) => await OnRegionCreated.InvokeAsync(r);

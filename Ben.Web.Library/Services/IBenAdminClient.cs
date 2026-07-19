@@ -238,6 +238,31 @@ public interface IBenAdminClient
 
     /// <summary>Removes the saved WaveSurfer config; the player will use theme-derived defaults on next render.</summary>
     Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default);
+
+    // ── Region Notes ──────────────────────────────────────────────
+
+    /// <summary>Returns all region notes for the given file, ordered by region start then time offset.</summary>
+    Task<IReadOnlyList<UploadFileRegionNoteRecord>> GetRegionNotesAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Creates a new region note and returns the persisted record.</summary>
+    Task<UploadFileRegionNoteRecord?> CreateRegionNoteAsync(Guid fileId, CreateRegionNoteRequest request, CancellationToken token = default);
+
+    /// <summary>Updates an existing region note (text, public flag, time offset).</summary>
+    Task<UploadFileRegionNoteRecord?> UpdateRegionNoteAsync(Guid fileId, Guid noteId, UpdateRegionNoteRequest request, CancellationToken token = default);
+
+    /// <summary>Permanently deletes a region note.</summary>
+    Task<bool> DeleteRegionNoteAsync(Guid fileId, Guid noteId, CancellationToken token = default);
+
+    // ── Audio Clip ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Clips the audio of <paramref name="fileId"/> to the specified time range and saves the
+    /// result as a new UploadFile. Currently supports WAV and MP3 sources; output is WAV.
+    /// </summary>
+    Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default);
+
+    /// <summary>Returns all child clip files that were derived from <paramref name="fileId"/> via the region-clip workflow.</summary>
+    Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default);
 }
 
 /// <summary>

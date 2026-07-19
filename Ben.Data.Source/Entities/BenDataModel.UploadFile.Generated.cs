@@ -19,12 +19,24 @@ namespace Ben.Data.Source.Entities
         public Guid CreatedByAppUserId { get; set; }
         public Guid? UpdatedByAppUserId { get; set; }
 
+        /// <summary>When this file was clipped from another file, the ID of the source file.</summary>
+        public Guid? ParentFileId { get; set; }
+
+        /// <summary>Start time (seconds) within the parent file that this clip begins at.</summary>
+        public double? RegionStart { get; set; }
+
+        /// <summary>End time (seconds) within the parent file that this clip ends at.</summary>
+        public double? RegionEnd { get; set; }
+
         public virtual UploadFileType UploadFileType { get; set; } = null!;
         public virtual AppUser AppUser { get; set; } = null!;
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
+        public virtual UploadFile? ParentFile { get; set; }
+        public virtual ICollection<UploadFile> ChildClips { get; set; } = new List<UploadFile>();
         public virtual ICollection<UploadFileOrganizationShare> OrganizationShares { get; set; } = new List<UploadFileOrganizationShare>();
         public virtual ICollection<UploadFilePermissionRequest> PermissionRequests { get; set; } = new List<UploadFilePermissionRequest>();
         public virtual UploadFileAudioConfig? AudioConfig { get; set; }
+        public virtual ICollection<UploadFileRegionNote> RegionNotes { get; set; } = new List<UploadFileRegionNote>();
     }
 }

@@ -509,5 +509,39 @@ menu items opens a full-featured modal window.
 #### Dependencies
 - `IBenAdminClient.GetFileDataAsync` — fetches audio bytes on first render
 - `WaveSurferPlayer` — both compact and modal instances share the same `WsAudioSource`
-- `TelerikContextMenu<AudioContextMenuItem>` — right-click menu
+- `TelerikContextMenu<AudioContextMenuItem>` — right-click menu (compact waveform)
+- `TelerikContextMenu<RegionContextMenuItem>` — right-click menu for waveform regions (full-view modal)
 - `TelerikWindow` — full-view modal
+- `WsRegionExplorer` — opened when user clicks "Explore Region" in the region context menu
+
+#### Region Context Menu (added 2026-07-19)
+Right-clicking any WaveSurfer region in the full-view modal shows:  
+**Play Region** / **Explore Region** / **Edit Label** / **Delete Region**.  
+After a clip is saved from `WsRegionExplorer`, `OnChildClipSaved` refreshes the overlay; child clips appear as green locked regions and badge chips above the player.
+
+---
+
+### `WsRegionExplorer.razor`
+
+**File:** [`Ben.Web.Library/Manage/Audio/WsRegionExplorer.razor`](../../../Ben.Web.Library/Manage/Audio/WsRegionExplorer.razor)
+
+Full-featured modal window for exploring, annotating, and clipping a selected audio region.
+
+#### Parameters
+
+| Parameter | Type | Notes |
+|---|---|---|
+| `FileId` | `Guid` | Source file ID |
+| `FileName` | `string` | Display name |
+| `ContentType` | `string` | MIME type of the source file |
+| `FileSize` | `long` | Byte length of source |
+| `Region` | `WsRegionData?` | The region to explore (`Id`, `Start`, `End`, `Label`) |
+| `Visible` / `VisibleChanged` | `bool` / `EventCallback<bool>` | Two-way bind for open/close |
+| `OnClipSaved` | `EventCallback<UploadFileRecord>` | Fires after a successful save-as-clip |
+
+#### Features
+- Loads the **full audio** and overlays the selected region as a locked blue region
+- **Speed slider** (0.25× – 3.0×) calls `SetPlaybackRateAsync` live
+- **Save Region as WAV** — posts `ClipAudioRequest` to `/api/upload-files/{id}/clip` (NAudio WAV/MP3 support); fires `OnClipSaved`
+- **Region Notes** — create/edit/delete rich-text notes via `TelerikEditor`; can be overall (no time) or point-in-time (pinned to `_currentTime`)
+- **Sub-region exploration** — right-click user-drawn regions inside the explorer → nested `WsRegionExplorer`

@@ -142,6 +142,18 @@ public sealed class UploadFileController : ControllerBase
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
+
+    /// <summary>Returns all child clip files that were derived from this file via the region-clip workflow.</summary>
+    [HttpGet("{id:guid}/clips")]
+    public async Task<ActionResult<IEnumerable<UploadFileRecord>>> GetChildClips(Guid id, CancellationToken cancellationToken)
+    {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var clips = await db.UploadFiles.AsNoTracking()
+            .Where(f => f.ParentFileId == id)
+            .OrderBy(f => f.RegionStart)
+            .ToListAsync(cancellationToken);
+        return Ok(_mapper.Map<IEnumerable<UploadFileRecord>>(clips));
+    }
 }
 
 public sealed record UpdateUploadFileRequest(

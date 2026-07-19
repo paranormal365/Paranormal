@@ -48,6 +48,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UploadFileOrganizationShare> UploadFileOrganizationShares { get; set; }
         public virtual DbSet<UploadFilePermissionRequest> UploadFilePermissionRequests { get; set; }
         public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
+        public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -555,6 +556,12 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<AuditLog>()
                 .HasIndex(e => e.OccurredAt);
 
+            // ── UploadFile self-reference (clip parent/child) ─────────────────
+            modelBuilder.Entity<UploadFile>()
+                .HasOne(e => e.ParentFile).WithMany(e => e.ChildClips)
+                .HasForeignKey(e => e.ParentFileId)
+                .IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
             // ── UploadFileAudioConfig ────────────────────────────────────────
             // One-to-one with UploadFile; cascade so config is deleted with the file.
             modelBuilder.Entity<UploadFileAudioConfig>()
@@ -584,6 +591,21 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.SpectrogramWindowedOptionsJson).HasColumnType("nvarchar(max)");
             modelBuilder.Entity<UploadFileAudioConfig>()
                 .Property(e => e.EnvelopeOptionsJson).HasColumnType("nvarchar(max)");
+
+            // ── UploadFileRegionNote ─────────────────────────────────────────
+            modelBuilder.Entity<UploadFileRegionNote>()
+                .HasOne(e => e.UploadFile).WithMany(e => e.RegionNotes)
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UploadFileRegionNote>()
+                .HasIndex(e => e.UploadFileId);
+            modelBuilder.Entity<UploadFileRegionNote>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileRegionNote>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileRegionNote>()
+                .Property(e => e.NoteHtml).HasColumnType("nvarchar(max)");
         }
     }
 }

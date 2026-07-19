@@ -212,8 +212,19 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
 
   // ── Regions events ───────────────────────────────────────────────────────
   if (regionsPlugin) {
-    const rd = (r) => ({ id: r.id, start: r.start, end: r.end, color: r.color })
-    regionsPlugin.on('region-created', (r)  => safe(dotnetRef.invokeMethodAsync('OnWsRegionCreated', rd(r))))
+    const rd = (r) => ({ id: r.id, start: r.start, end: r.end, color: r.color, label: r.content ?? null })
+    regionsPlugin.on('region-created', (r)  => {
+      safe(dotnetRef.invokeMethodAsync('OnWsRegionCreated', rd(r)))
+      // Attach right-click (contextmenu) listener so the host can show a context menu
+      if (r.element) {
+        r.element.addEventListener('contextmenu', (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          safe(dotnetRef.invokeMethodAsync('OnWsRegionContextMenu',
+            { id: r.id, start: r.start, end: r.end, label: r.content ?? null, clientX: e.clientX, clientY: e.clientY }))
+        })
+      }
+    })
     regionsPlugin.on('region-updated', (r)  => safe(dotnetRef.invokeMethodAsync('OnWsRegionUpdated', rd(r))))
     regionsPlugin.on('region-removed', (r)  => safe(dotnetRef.invokeMethodAsync('OnWsRegionRemoved', r.id)))
     regionsPlugin.on('region-clicked', (r)  => safe(dotnetRef.invokeMethodAsync('OnWsRegionClicked', r.id)))
@@ -315,6 +326,12 @@ export function getRegions(containerId) {
 export function playRegion(containerId, regionId) {
   const { regionsPlugin } = instances.get(containerId) ?? {}
   regionsPlugin?.getRegions().find((r) => r.id === regionId)?.play()
+}
+
+export function updateRegionLabel(containerId, regionId, label) {
+  const { regionsPlugin } = instances.get(containerId) ?? {}
+  const region = regionsPlugin?.getRegions().find((r) => r.id === regionId)
+  if (region) region.setOptions({ content: label ?? '' })
 }
 
 // ── Envelope API ──────────────────────────────────────────────────────────────

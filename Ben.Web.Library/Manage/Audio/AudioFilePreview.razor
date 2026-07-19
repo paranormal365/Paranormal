@@ -81,15 +81,68 @@ else
                 <span><strong>Position:</strong>@(" ")@FormatTime(_modalTime)</span>
             </div>
 
+            @* Child clip chips *@
+            @if (_childClips.Any())
+            {
+                <div class="d-flex flex-wrap gap-1 mb-2 align-items-center">
+                    <span class="small text-secondary me-1">Clips:</span>
+                    @foreach (var clip in _childClips)
+                    {
+                        <span class="badge"
+                              style="background:rgba(16,185,129,.15);color:var(--kendo-color-on-base,#1e293b);
+                                     cursor:pointer;font-weight:500;font-size:.75rem;"
+                              title="@clip.FileName — @FormatTime(clip.RegionStart ?? 0) to @FormatTime(clip.RegionEnd ?? 0)"
+                              @onclick="@(() => OpenClipExplorer(clip))">
+                            @(string.IsNullOrWhiteSpace(clip.Description) ? clip.FileName : clip.Description)
+                            (@FormatTime(clip.RegionStart ?? 0)–@FormatTime(clip.RegionEnd ?? 0))
+                        </span>
+                    }
+                </div>
+            }
+
             @* Full WaveSurfer player *@
             <WaveSurferPlayer @ref="_modalPlayer"
                               Config="@_fullConfig"
                               OnReady="@OnModalReadyAsync"
                               OnTimeUpdate="@(t => { _modalTime = t; StateHasChanged(); })"
-                              OnFinish="@(() => { _modalTime = 0; StateHasChanged(); })" />
+                              OnFinish="@(() => { _modalTime = 0; StateHasChanged(); })"
+                              OnRegionContextMenu="@OnRegionRightClick" />
         }
     </WindowContent>
 </TelerikWindow>
+
+@* ── Region context menu (right-click in full-view player) ───────────── *@
+<TelerikContextMenu @ref="_regionMenu"
+                    Data="@_regionMenuItems"
+                    TextField="@nameof(RegionContextMenuItem.Text)"
+                    OnClick="@(async (RegionContextMenuItem item) => await OnRegionMenuClickAsync(item))">
+</TelerikContextMenu>
+
+@* ── Region label edit dialog ────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showEditLabelDialog" Title="Edit Region Label" Width="360px">
+    <DialogContent>
+        <label class="form-label fw-semibold">Label</label>
+        <TelerikTextBox @bind-Value="@_editLabelText" Width="100%" />
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="@(() => _showEditLabelDialog = false)">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       OnClick="SaveRegionLabelAsync">Save</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Region explorer ───────────────────────────────────────────── *@
+@if (_explorerRegion is not null)
+{
+    <WsRegionExplorer FileId="@FileId"
+                      FileName="@FileName"
+                      ContentType="@ContentType"
+                      FileSize="@FileSize"
+                      Region="@_explorerRegion"
+                      @bind-Visible="@_showExplorer"
+                      OnClipSaved="@OnChildClipSaved" />
+}
 
 @code {
     // ── Parameters ────────────────────────────────────────────────────────────
@@ -109,10 +162,28 @@ else
     private double _modalTime;
     private double _modalDuration;
     private bool   _showModal;
+    private IReadOnlyList<UploadFileRecord> _childClips = [];
 
     private WaveSurferPlayer?                          _player;
     private WaveSurferPlayer?                          _modalPlayer;
     private TelerikContextMenu<AudioContextMenuItem>?  _contextMenu;
+
+    // ── Region context menu state ──────────────────────────────────────────────
+
+    private TelerikContextMenu<RegionContextMenuItem>? _regionMenu;
+    private WsRegionContextMenuArgs? _pendingRegion;
+    private bool   _showEditLabelDialog;
+    private string _editLabelText = string.Empty;
+    private WsRegionData? _explorerRegion;
+    private bool   _showExplorer;
+
+    private static readonly List<RegionContextMenuItem> _regionMenuItems =
+    [
+        new("play",    "▶  Play Region"),
+        new("explore", "⤢  Explore Region"),
+        new("label",   "✏  Edit Label"),
+        new("delete",  "🗑  Delete Region"),
+    ];
 
     private readonly string _wrapperId = $"afp-{Guid.NewGuid():N}";
 
@@ -177,11 +248,36 @@ else
 
     // ── Player event handlers ─────────────────────────────────────────────────
 
-    private Task OnModalReadyAsync()
+    private async Task OnModalReadyAsync()
     {
         _modalDuration = _modalPlayer?.Duration ?? 0;
         StateHasChanged();
-        return Task.CompletedTask;
+        await OverlayChildClipRegionsAsync();
+    }
+
+    private async Task OverlayChildClipRegionsAsync()
+    {
+        if (_modalPlayer is null) return;
+        try
+        {
+            _childClips = await AdminClient.GetChildClipsAsync(FileId);
+            foreach (var clip in _childClips)
+            {
+                if (clip.RegionStart is null || clip.RegionEnd is null) continue;
+                await _modalPlayer.AddRegionAsync(new WsRegionParams
+                {
+                    Id      = clip.Id.ToString(),
+                    Start   = clip.RegionStart.Value,
+                    End     = clip.RegionEnd.Value,
+                    Color   = "rgba(16,185,129,0.20)",
+                    Drag    = false,
+                    Resize  = false,
+                    Content = clip.Description ?? clip.FileName,
+                });
+            }
+            StateHasChanged();
+        }
+        catch { /* silently ignore */ }
     }
 
     // ── Waveform click → toggle play/pause ────────────────────────────────────
@@ -230,7 +326,81 @@ else
     private static string FormatTime(double seconds) => AudioFormatUtils.FormatTime(seconds);
     private static string FormatSize(long bytes)      => AudioFormatUtils.FormatSize(bytes);
 
-    // ── Menu item record ──────────────────────────────────────────────────────
+    private void OpenClipExplorer(UploadFileRecord clip)
+    {
+        _explorerRegion = new WsRegionData
+        {
+            Id    = clip.Id.ToString(),
+            Start = clip.RegionStart ?? 0,
+            End   = clip.RegionEnd   ?? 0,
+            Label = clip.Description ?? clip.FileName,
+        };
+        _showExplorer = true;
+        StateHasChanged();
+    }
+
+    private async Task OnChildClipSaved(UploadFileRecord _)
+    {
+        // Refresh the child-clip overlay on the waveform so the new clip appears immediately
+        await OverlayChildClipRegionsAsync();
+    }
+
+    // ── Region right-click (full-view modal player) ───────────────────────────
+
+    private async Task OnRegionRightClick(WsRegionContextMenuArgs args)
+    {
+        _pendingRegion = args;
+        if (_regionMenu is not null)
+            await _regionMenu.ShowAsync(args.ClientX, args.ClientY);
+    }
+
+    private async Task OnRegionMenuClickAsync(RegionContextMenuItem item)
+    {
+        if (_pendingRegion is null) return;
+        switch (item.Action)
+        {
+            case "play":
+                if (_modalPlayer is not null) await _modalPlayer.PlayRegionAsync(_pendingRegion.RegionId);
+                break;
+            case "explore":
+                _explorerRegion = new WsRegionData
+                {
+                    Id    = _pendingRegion.RegionId,
+                    Start = _pendingRegion.Start,
+                    End   = _pendingRegion.End,
+                    Label = _pendingRegion.Label,
+                };
+                _showExplorer = true;
+                StateHasChanged();
+                break;
+            case "label":
+                _editLabelText       = _pendingRegion.Label ?? string.Empty;
+                _showEditLabelDialog = true;
+                break;
+            case "delete":
+                if (_modalPlayer is not null) await _modalPlayer.RemoveRegionAsync(_pendingRegion.RegionId);
+                break;
+        }
+    }
+
+    private async Task SaveRegionLabelAsync()
+    {
+        if (_pendingRegion is null || _modalPlayer is null) return;
+        await _modalPlayer.UpdateRegionLabelAsync(_pendingRegion.RegionId, _editLabelText);
+        _pendingRegion = new WsRegionContextMenuArgs
+        {
+            RegionId = _pendingRegion.RegionId,
+            Start    = _pendingRegion.Start,
+            End      = _pendingRegion.End,
+            Label    = _editLabelText,
+            ClientX  = _pendingRegion.ClientX,
+            ClientY  = _pendingRegion.ClientY,
+        };
+        _showEditLabelDialog = false;
+    }
+
+    // ── Menu item records ─────────────────────────────────────────────────────
 
     private sealed record AudioContextMenuItem(string Action, string Text);
+    private sealed record RegionContextMenuItem(string Action, string Text);
 }

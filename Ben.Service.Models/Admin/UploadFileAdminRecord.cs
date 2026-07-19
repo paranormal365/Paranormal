@@ -17,4 +17,9 @@ public record UploadFileAdminRecord
     public DateTime? DateUpdated { get; init; }
     public Guid CreatedByAppUserId { get; init; }
     public Guid? UpdatedByAppUserId { get; init; }
+
+    /// <summary>Set when this file was created by clipping a parent audio file.</summary>
+    public Guid?   ParentFileId { get; init; }
+    public double? RegionStart  { get; init; }
+    public double? RegionEnd    { get; init; }
 }
