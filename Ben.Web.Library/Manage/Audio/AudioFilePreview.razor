@@ -394,11 +394,11 @@ else
         Options = new WsOptions { Normalize = true },
         Plugins = new WsPluginConfig
         {
-            Hover              = true,
-            Timeline           = true,
-            Zoom               = true,
-            Spectrogram        = true,
-            Regions            = true,
+            Hover               = true,
+            Timeline            = true,
+            Zoom                = true,
+            Spectrogram         = false,   // built-in plugin disabled; toggle button uses custom canvas
+            Regions             = true,
             RegionsDragToCreate = true,
         },
         InitialHeight = "280px",
