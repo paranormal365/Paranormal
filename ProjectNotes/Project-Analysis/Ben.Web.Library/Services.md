@@ -219,3 +219,36 @@ await AdminClient.UpsertAudioConfigAsync(fileId, new UpsertAudioConfigRequest
 // 3. Reset to defaults
 await AdminClient.DeleteAudioConfigAsync(fileId);
 ```
+
+---
+
+### New `IBenAdminClient` methods (added 2026-07-18/19)
+
+#### Audio Config
+| Method | Returns | Description |
+|---|---|---|
+| `GetAudioConfigAsync(fileId)` | `UploadFileAudioConfigRecord?` | Saved WaveSurfer config for a file |
+| `UpsertAudioConfigAsync(fileId, request)` | `UploadFileAudioConfigRecord?` | Create or replace |
+| `DeleteAudioConfigAsync(fileId)` | `bool` | Remove saved config |
+
+#### Region Notes
+| Method | Returns | Description |
+|---|---|---|
+| `GetRegionNotesAsync(fileId)` | `IReadOnlyList<UploadFileRegionNoteRecord>` | All notes ordered by region start / time offset |
+| `CreateRegionNoteAsync(fileId, request)` | `UploadFileRegionNoteRecord?` | Create note |
+| `UpdateRegionNoteAsync(fileId, noteId, request)` | `UploadFileRegionNoteRecord?` | Update |
+| `DeleteRegionNoteAsync(fileId, noteId)` | `bool` | Delete |
+
+#### Audio Clip
+| Method | Returns | Description |
+|---|---|---|
+| `ClipAudioAsync(fileId, request)` | `UploadFileRecord?` | Server-clip WAV/MP3 → WAV, saves as new `UploadFile` with parent tracking |
+| `GetClipPreviewAsync(fileId, start, end)` | `(byte[] Data, string ContentType)?` | Clip bytes only — no DB record created. Used by `WsRegionExplorer` |
+| `GetChildClipsAsync(fileId)` | `IReadOnlyList<UploadFileRecord>` | All child clips ordered by `RegionStart` |
+
+#### Votes
+| Method | Returns | Description |
+|---|---|---|
+| `GetVoteSummaryAsync(fileId)` | `UploadFileVoteSummary?` | Aggregated counts + calling user's score |
+| `UpsertMyVoteAsync(fileId, score)` | `UploadFileVoteRecord?` | Create or update vote (score: 1 upvote / -1 downvote) |
+| `RemoveMyVoteAsync(fileId)` | `bool` | Remove vote; no-op if none exists |

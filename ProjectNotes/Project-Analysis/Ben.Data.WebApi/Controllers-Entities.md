@@ -235,3 +235,56 @@ options.AddPolicy(RoleNames.SuperAdmin, policy =>
           .RequireAuthenticatedUser()
           .AddRequirements(new SuperAdminRequirement()));
 ```
+
+---
+
+## `UploadFileAudioConfigController`
+
+**Route:** `api/upload-files/{fileId:guid}/audio-config` | **Auth:** `[Authorize]`
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/audio-config` | Returns saved WaveSurfer config or null |
+| `PUT` | `/audio-config` | Create or replace (upsert) via `UpsertAudioConfigRequest` |
+| `DELETE` | `/audio-config` | Remove saved config; player reverts to theme defaults |
+
+---
+
+## `UploadFileRegionNoteController`
+
+**Route:** `api/upload-files/{fileId:guid}/region-notes` | **Auth:** `[Authorize]`
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/region-notes` | All notes for file, ordered by `RegionStart` then `TimeOffset` |
+| `GET` | `/region-notes/{noteId}` | Single note |
+| `POST` | `/region-notes` | Create (`CreateRegionNoteRequest`) |
+| `PUT` | `/region-notes/{noteId}` | Update note text, public flag, time offset |
+| `DELETE` | `/region-notes/{noteId}` | Delete |
+
+---
+
+## `UploadFileAudioClipController`
+
+**Route:** `api/upload-files/{fileId:guid}/clip` | **Auth:** `[Authorize]`
+
+| Method | Route | Description |
+|---|---|---|
+| `POST` | `/clip` | Clip audio to time range; creates new `UploadFile` with `ParentFileId` set |
+| `GET` | `/clip/preview?start=&end=` | Returns clipped WAV bytes **without** creating a DB record |
+
+**Supported input formats:** WAV, MP3. Output is always WAV. Returns 400 for unsupported formats.
+
+---
+
+## `UploadFileVoteController`
+
+**Route:** `api/upload-files/{fileId:guid}/votes` | **Auth:** `[Authorize]`
+
+Business rule: one vote per `(UploadFileId, AppUserId)` — enforced by unique DB index. Upsert pattern prevents duplicates at the application level too.
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/votes` | Returns `UploadFileVoteSummary` (UpvoteCount, DownvoteCount, TotalScore, TotalVotes, UserScore?) |
+| `PUT` | `/votes/my-vote` | Create or update own vote (`UpsertVoteRequest { Score }`). 201 on first vote, 200 on update. |
+| `DELETE` | `/votes/my-vote` | Remove own vote. 204 whether or not vote existed. |

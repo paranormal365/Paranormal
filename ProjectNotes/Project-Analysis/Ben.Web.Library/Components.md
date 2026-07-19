@@ -545,3 +545,51 @@ Full-featured modal window for exploring, annotating, and clipping a selected au
 - **Save Region as WAV** — posts `ClipAudioRequest` to `/api/upload-files/{id}/clip` (NAudio WAV/MP3 support); fires `OnClipSaved`
 - **Region Notes** — create/edit/delete rich-text notes via `TelerikEditor`; can be overall (no time) or point-in-time (pinned to `_currentTime`)
 - **Sub-region exploration** — right-click user-drawn regions inside the explorer → nested `WsRegionExplorer`
+
+---
+
+### `UploadFileVoteBar.razor` (added 2026-07-19)
+
+**File:** `Ben.Web.Library/Manage/UploadFileVoteBar.razor`  
+**Usage:** `<UploadFileVoteBar FileId="@id" />`
+
+Reusable vote bar for any `UploadFile`. Renders 👍 N | ±score | 👎 M. Active vote is highlighted (Primary/Error colour). Clicking an active vote removes it (toggle-off). Unauthenticated users see "Sign in to vote" with buttons disabled.
+
+**Calls:** `GetVoteSummaryAsync`, `UpsertMyVoteAsync`, `RemoveMyVoteAsync`.
+
+---
+
+### `OrganizationView.razor` (added 2026-07-19)
+
+**File:** `Ben.Web.Library/Organization/OrganizationView.razor`  
+**Route:** `/organizations/{OrgId:guid}`  
+**Query param:** `?returnUrl=` — back button returns to caller page
+
+Read-only view of an organization's name, URL slug, ID, and timestamps. Shows an **Edit** button when `UserState.IsSuperAdmin || listItem.CanEdit` (fetched via `GetOrganizationsAsync`). Edit mode is inline (Name + UrlName fields) with Save/Cancel.
+
+Used from `AdminUserDetail` Memberships tab via the **View** command button.
+
+---
+
+### WsRegionExplorer — updated behaviour (2026-07-19)
+
+Key behaviour changes from original implementation:
+
+| Aspect | Updated behaviour |
+|---|---|
+| Audio loaded | Only the region's bytes (`GetClipPreviewAsync` — no DB record) |
+| Waveform | Shows only the selected region (time 0 = Region.Start in original file) |
+| Focus overlay | Removed — the whole clip is the region |
+| Notes shown | Filtered to exact region match or point-in-time within [Region.Start, Region.End] |
+| Point-in-time storage | Stored as absolute file time (`Region.Start + _currentTime`) |
+| Sub-region explore | Converts clip-relative times to absolute before opening nested explorer |
+| Sub-region draw | `RegionsDragToCreate = true` — users can drag to create sub-regions |
+
+---
+
+### AudioFilePreview — full-view modal additions (2026-07-19)
+
+- **Spectrogram toggle**: "Show/Hide Spectrogram" button in info bar. Web Worker (`spectrogram-worker.js`) computes FFT off the main thread; viridis colormap canvas inserted after waveform. Right-click → context menu with "Toggle Labels".
+- **Region draw**: Click-and-drag creates a blue preview overlay, then a WaveSurfer region on release. Single click still seeks. Right-click context menu: Play / Explore & Notes / Create Audio File / Edit Label / Delete.
+- **Child clip overlay**: Saved clips overlaid as green locked regions on the parent waveform; shown as `AudioFilePreview` components below the player.
+- **Resizable**: Full-view player has `Resizable="true"` — bottom edge can be dragged.

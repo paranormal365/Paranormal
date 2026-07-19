@@ -95,3 +95,11 @@ All profiles extend `AutoMapper.Profile` and are in the `Ben.Service.Mappings` n
 | Profile Class | Source | Target |
 |---|---|---|
 | *(see Admin profiles above — Identity types are mapped there)* | | |
+
+### New profiles (added 2026-07-18/19)
+
+| Profile Class | Source | Target |
+|---|---|---|
+| `UploadFileAudioConfigProfile` | `UploadFileAudioConfig` | `UploadFileAudioConfigRecord` |
+| `UploadFileRegionNoteProfile` | `UploadFileRegionNote` | `UploadFileRegionNoteRecord` |
+| `UploadFileVoteProfile` | `UploadFileVote` | `UploadFileVoteRecord` |

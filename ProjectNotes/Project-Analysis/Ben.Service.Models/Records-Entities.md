@@ -154,3 +154,52 @@ Thin projections of ASP.NET Core Identity join-table entities used by Admin endp
 | `IdentityUserLoginRecord` | `IdentityUserLogin<Guid>` |
 | `IdentityUserRoleRecord` | `IdentityUserRole<Guid>` |
 | `IdentityUserTokenRecord` | `IdentityUserToken<Guid>` |
+
+---
+
+### `UploadFileAudioConfigRecord` (added 2026-07-18)
+
+Per-file WaveSurfer player settings. Fields mirror `UploadFileAudioConfig` entity columns: colors, dimensions, plugin enable flags, plugin option JSON blobs, `InitialHeight`, `MinHeight`, `MaxHeight`, `ShowControls`, `MinZoom`, `MaxZoom`.
+
+**Request:** `UpsertAudioConfigRequest` — full replacement (PUT).
+
+---
+
+### `UploadFileRegionNoteRecord` (added 2026-07-19)
+
+| Field | Type | Description |
+|---|---|---|
+| `Id` | `Guid` | |
+| `UploadFileId` | `Guid` | Parent file |
+| `RegionStart` | `double` | Absolute start time in original file (seconds) |
+| `RegionEnd` | `double` | Absolute end time in original file (seconds) |
+| `RegionLabel` | `string?` | Optional WaveSurfer region label |
+| `TimeOffset` | `double?` | Null = whole-region note; value = absolute file time for point-in-time note |
+| `NoteHtml` | `string` | Rich text (TelerikEditor output) |
+| `IsPublic` | `bool` | |
+| Audit cols | — | |
+
+**Requests:** `CreateRegionNoteRequest`, `UpdateRegionNoteRequest`.
+
+---
+
+### `UploadFileVoteRecord` (added 2026-07-19)
+
+| Field | Type | Description |
+|---|---|---|
+| `Id` | `Guid` | |
+| `UploadFileId` | `Guid` | |
+| `AppUserId` | `Guid` | |
+| `Score` | `int` | 1 = upvote, -1 = downvote |
+| `DateCreated` | `DateTime` | |
+| `DateUpdated` | `DateTime?` | |
+
+**Summary:** `UploadFileVoteSummary(UploadFileId, UpvoteCount, DownvoteCount, TotalScore, TotalVotes, UserScore?)`.  
+**Request:** `UpsertVoteRequest(Score)`.
+
+---
+
+### `ClipAudioRequest` / `UploadFileClip`
+
+`ClipAudioRequest(Start, End, Label?, IsPublic, UploadFileTypeId)` — passed to `POST /api/upload-files/{id}/clip`.  
+Result is a new `UploadFileRecord` with `ParentFileId`, `RegionStart`, `RegionEnd` set. No separate record type — the clipped file is a regular `UploadFileRecord`.

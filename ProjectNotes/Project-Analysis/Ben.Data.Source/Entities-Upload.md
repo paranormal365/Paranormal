@@ -178,3 +178,41 @@ Three nullable columns were added to `UploadFile` itself to support the region-c
 | `RegionEnd` | `double?` | End time (seconds) within the parent file |
 
 Navigation: `UploadFile.ParentFile` (→ parent) and `UploadFile.ChildClips` (← all clips derived from this file).
+
+---
+
+## `UploadFileAudioConfig`
+
+**Files:** `BenDataModel.UploadFileAudioConfig.cs` · `BenDataModel.UploadFileAudioConfig.Generated.cs`  
+**Table:** `UploadFileAudioConfigs`
+
+One-to-one with `UploadFile` (CASCADE delete). Persists per-file WaveSurfer player settings so they survive page reloads.
+
+Key columns: `WaveColor`, `ProgressColor`, `CursorColor`, `Height`, `Enable{Hover,Timeline,Zoom,Minimap,Spectrogram,Envelope,Regions}`, `{Hover,Timeline,Zoom,…}OptionsJson`, `InitialHeight`, `MinHeight`, `MaxHeight`, `ShowControls`, `MinZoom`, `MaxZoom`, audit columns.
+
+---
+
+## `UploadFileVote`
+
+**Files:** `BenDataModel.UploadFileVote.cs` · `BenDataModel.UploadFileVote.Generated.cs`  
+**Implements:** `IIDStd`  
+**Table:** `UploadFileVotes`  
+**Migration:** `20260719163758_AddUploadFileVotes`
+
+### Summary
+Per-user vote on an `UploadFile`. Unique index on `(UploadFileId, AppUserId)` enforces the one-vote-per-user business rule at the database level.
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `Id` | `Guid` | PK |
+| `UploadFileId` | `Guid` | FK → `UploadFile` (CASCADE delete) |
+| `AppUserId` | `Guid` | FK → `AppUser` (NoAction) |
+| `Score` | `int` | 1 = upvote, -1 = downvote. Integer allows future star-rating schemes. |
+| `DateCreated` | `DateTime` | |
+| `DateUpdated` | `DateTime?` | Set on score change |
+
+### Constraints
+- **Unique index** on `(UploadFileId, AppUserId)` — one vote per user per file.
+- FKs use `NoAction` for `AppUser`; `Cascade` for `UploadFile` (vote removed when file deleted).
