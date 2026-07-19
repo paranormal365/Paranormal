@@ -1,0 +1,213 @@
+@page "/organizations/{OrgId:guid}"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState   UserState
+@inject NavigationManager NavManager
+
+<PageTitle>@(_org?.Name ?? "Organization")</PageTitle>
+
+<div class="container-fluid px-3" style="max-width:640px;">
+
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <TelerikButton Icon="@SvgIcon.ArrowLeft"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           OnClick="@(() => NavManager.NavigateTo(ReturnUrl ?? "/organizations"))">
+                Back
+            </TelerikButton>
+            <h3 class="d-inline-block ms-3 mb-0">Organization</h3>
+        </div>
+        @if (_canEdit && !_editMode)
+        {
+            <div class="col-auto">
+                <TelerikButton Icon="@SvgIcon.Pencil"
+                               FillMode="@ThemeConstants.Button.FillMode.Outline"
+                               OnClick="BeginEdit">
+                    Edit
+                </TelerikButton>
+            </div>
+        }
+    </div>
+
+    @if (_errorMessage is not null)
+    {
+        <div class="alert alert-danger mb-3">@_errorMessage</div>
+    }
+    @if (_successMessage is not null)
+    {
+        <div class="alert alert-success mb-3">@_successMessage</div>
+    }
+
+    @if (_loading)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading organization…" />
+    }
+    else if (_org is null)
+    {
+        <div class="alert alert-warning">Organization not found or you do not have access.</div>
+    }
+    else if (_editMode && _canEdit)
+    {
+        @* ── Edit form ────────────────────────────────────────────────────── *@
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+                <TelerikTextBox @bind-Value="@_editName" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">URL Name <span class="text-danger">*</span></label>
+                <TelerikTextBox @bind-Value="@_editUrlName" Width="100%" />
+                <div class="form-text">URL-safe slug (lowercase, letters, numbers, hyphens). Must be unique.</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label text-secondary small">ID</label>
+                <div class="text-secondary small font-monospace">@_org.Id</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label text-secondary small">Created</label>
+                <div class="text-secondary small">@_org.DateCreated.ToString("yyyy-MM-dd HH:mm") UTC</div>
+            </div>
+            <div class="col-12 d-flex gap-2 mt-1">
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                               Icon="@SvgIcon.Save"
+                               OnClick="SaveAsync"
+                               Enabled="@(!_isSaving)">
+                    @(_isSaving ? "Saving…" : "Save")
+                </TelerikButton>
+                <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                               OnClick="CancelEdit">
+                    Cancel
+                </TelerikButton>
+            </div>
+        </div>
+    }
+    else
+    {
+        @* ── Read-only view ───────────────────────────────────────────────── *@
+        <dl class="row g-2">
+            <dt class="col-sm-3 text-secondary small">Name</dt>
+            <dd class="col-sm-9 fw-semibold mb-0">@_org.Name</dd>
+
+            <dt class="col-sm-3 text-secondary small">URL Name</dt>
+            <dd class="col-sm-9 mb-0">
+                <code>@_org.UrlName</code>
+            </dd>
+
+            <dt class="col-sm-3 text-secondary small">ID</dt>
+            <dd class="col-sm-9 mb-0 font-monospace small text-secondary">@_org.Id</dd>
+
+            <dt class="col-sm-3 text-secondary small">Created</dt>
+            <dd class="col-sm-9 mb-0 small">@_org.DateCreated.ToString("yyyy-MM-dd HH:mm") UTC</dd>
+
+            @if (_org.DateUpdated.HasValue)
+            {
+                <dt class="col-sm-3 text-secondary small">Updated</dt>
+                <dd class="col-sm-9 mb-0 small">@_org.DateUpdated.Value.ToString("yyyy-MM-dd HH:mm") UTC</dd>
+            }
+        </dl>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid   OrgId     { get; set; }
+
+    /// <summary>Optional return URL injected by callers (e.g. admin user-detail page).
+    /// When null falls back to /organizations.</summary>
+    [Parameter, SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    private OrganizationAdminRecord? _org;
+    private bool   _canEdit;
+    private bool   _loading   = true;
+    private bool   _editMode;
+    private bool   _isSaving;
+    private string? _errorMessage;
+    private string? _successMessage;
+
+    // Edit form state
+    private string _editName    = string.Empty;
+    private string _editUrlName = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        if (!UserState.IsAuthenticated)
+            NavManager.NavigateTo("/login");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+        _successMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            // Load org details and the org list (for CanEdit flag) in parallel
+            var orgTask  = AdminClient.GetOrganizationAsync(OrgId);
+            var listTask = AdminClient.GetOrganizationsAsync();
+
+            await Task.WhenAll(orgTask, listTask);
+
+            _org = orgTask.Result;
+
+            var listItem = listTask.Result.FirstOrDefault(o => o.Id == OrgId);
+            _canEdit = UserState.IsSuperAdmin || (listItem?.CanEdit ?? false);
+        }
+        catch
+        {
+            _errorMessage = "Failed to load organization.";
+        }
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void CancelEdit()
+    {
+        _editMode = false;
+        _errorMessage = null;
+        _successMessage = null;
+    }
+
+    private void BeginEdit()
+    {
+        if (_org is null) return;
+        _editName    = _org.Name;
+        _editUrlName = _org.UrlName;
+        _editMode    = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_editName))    { _errorMessage = "Name is required.";     return; }
+        if (string.IsNullOrWhiteSpace(_editUrlName)) { _errorMessage = "URL Name is required."; return; }
+
+        _isSaving = true;
+        StateHasChanged();
+
+        var updated = await AdminClient.UpdateOrganizationAsync(OrgId,
+            new AdminUpdateOrganizationRequest(_editName.Trim(), _editUrlName.Trim().ToLowerInvariant()));
+
+        _isSaving = false;
+
+        if (updated is not null)
+        {
+            _org          = updated;
+            _editMode     = false;
+            _successMessage = "Organization saved.";
+        }
+        else
+        {
+            _errorMessage = "Save failed. The URL name may already be in use, or you may not have permission.";
+        }
+    }
+}

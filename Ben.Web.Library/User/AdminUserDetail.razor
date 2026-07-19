@@ -200,11 +200,22 @@ else
             <TabStripTab Title=@($"Memberships ({_memberships.Count})")>
                 <TelerikGrid Data="@_memberships" TItem="OrganizationUserMembershipAdminRecord" Pageable="true" PageSize="10" Class="mt-2">
                     <GridColumns>
-                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.OrganizationId)" Title="Org ID" />
-                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.Role)" Title="Role" Width="120px" />
+                        <GridColumn Title="Organization">
+                            <Template>
+                                @{ var m = (OrganizationUserMembershipAdminRecord)context; }
+                                @(_orgNames.TryGetValue(m.OrganizationId, out var orgName) ? orgName : m.OrganizationId.ToString("D")[..8] + "…")
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.Role)" Title="Role" Width="130px" />
                         <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.IsActive)" Title="Active" Width="70px" />
                         <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.DateCreated)" Title="Joined"
                                     DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                        <GridCommandColumn Width="80px">
+                            <GridCommandButton Icon="@SvgIcon.Eye"
+                                OnClick="@((GridCommandEventArgs e) => ViewOrganization((OrganizationUserMembershipAdminRecord)e.Items.First()))">
+                                View
+                            </GridCommandButton>
+                        </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
             </TabStripTab>
@@ -503,6 +514,7 @@ else
     private List<UserLinkAdminRecord>    _links     = [];
     private List<UserNoteAdminRecord>    _notes     = [];
     private List<OrganizationUserMembershipAdminRecord> _memberships = [];
+    private Dictionary<Guid, string> _orgNames = [];
     private List<UploadFileAdminRecord>  _files     = [];
 
     private EditModel _edit = new();
@@ -570,6 +582,14 @@ else
         _linkTypes       = await AdminClient.GetUserLinkTypesAsync();
         _noteTypes       = await AdminClient.GetUserNoteTypesAsync();
         _uploadFileTypes = await AdminClient.GetPublicFileTypesAsync();
+
+        // Build org-name lookup for the Memberships tab
+        try
+        {
+            var orgs = await AdminClient.GetOrganizationsAsync();
+            _orgNames = orgs.ToDictionary(o => o.Id, o => o.Name);
+        }
+        catch { /* non-critical — memberships tab falls back to ID */ }
 
         StateHasChanged();
     }
@@ -738,6 +758,14 @@ else
     private async Task DeleteLink(UserLinkAdminRecord r)       { if (await AdminClient.DeleteUserLinkAsync(r.Id))    await Reload(); else _errorMessage = "Delete failed."; }
     private async Task DeleteNote(UserNoteAdminRecord r)       { if (await AdminClient.DeleteUserNoteAsync(r.Id))    await Reload(); else _errorMessage = "Delete failed."; }
     private async Task DeleteFile(UploadFileAdminRecord r)     { if (await AdminClient.DeleteUploadFileAdminAsync(r.Id)) await Reload(); else _errorMessage = "Delete failed."; }
+
+    // ── Membership navigation ─────────────────────────────────────────────────
+
+    private void ViewOrganization(OrganizationUserMembershipAdminRecord m)
+    {
+        var returnUrl = Uri.EscapeDataString(NavManager.Uri);
+        NavManager.NavigateTo($"/organizations/{m.OrganizationId}?returnUrl={returnUrl}");
+    }
 
     // ── Upload File dialog ────────────────────────────────────────────────────
 
