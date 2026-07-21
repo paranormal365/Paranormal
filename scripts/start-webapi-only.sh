@@ -1,51 +1,65 @@
 #!/usr/bin/env bash
 # start-webapi-only.sh
-# Starts the WebApi (if not already running) then opens the Swagger UI.
-# Designed to be run as the "start-webapi-swagger" VS Code task.
+# Starts the WebApi (if not already running), polls until Swagger is ready,
+# opens the browser, then stays alive so the VS Code task keeps the process running.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 API_URL="${BEN_WEBAPI_URL:-http://localhost:5252}"
 SWAGGER_URL="$API_URL/swagger/index.html"
-API_PID_FILE="$ROOT_DIR/.vscode/.webapi.pid"
+LOG="$ROOT_DIR/.vscode/webapi.log"
 
 is_api_up() {
-  curl -sf -o /dev/null --max-time 2 "$SWAGGER_URL" && return 0
-  return 1
+  curl -sf -o /dev/null --max-time 2 "$SWAGGER_URL" 2>/dev/null
 }
 
-# ── Start API if not already running ────────────────────────────────────────
 echo "[startup] Checking WebApi at $API_URL..."
 
+# ── Already running ──────────────────────────────────────────────────────────
 if is_api_up; then
   echo "[startup] WebApi already running at $API_URL"
-else
-  echo "[startup] Starting WebApi..."
-  (
-    cd "$ROOT_DIR"
-    ASPNETCORE_ENVIRONMENT=Development \
-    dotnet run --project Ben.Data.WebApi/Ben.Data.WebApi.csproj --urls "$API_URL" \
-      > "$ROOT_DIR/.vscode/webapi.log" 2>&1 &
-    echo $! > "$API_PID_FILE"
-  )
-
-  # Wait up to 60 s for Swagger to become available
-  for _ in {1..60}; do
-    if is_api_up; then
-      echo "[startup] WebApi is running at $API_URL"
-      break
-    fi
-    sleep 1
-  done
-
-  if ! is_api_up; then
-    echo "[startup] WebApi failed to start. See .vscode/webapi.log"
-    exit 1
-  fi
+  open "$SWAGGER_URL"
+  echo "[swagger] Swagger UI launched — following log (Ctrl+C to stop)"
+  # Keep the task alive by tailing the log
+  tail -f "$LOG"
+  exit 0
 fi
 
-# ── Open Swagger UI ──────────────────────────────────────────────────────────
-echo "[startup] Opening Swagger at $SWAGGER_URL"
-open "$SWAGGER_URL"
+# ── Start WebApi in background ───────────────────────────────────────────────
+echo "[startup] Starting WebApi..."
+ASPNETCORE_ENVIRONMENT=Development \
+  dotnet run --project "$ROOT_DIR/Ben.Data.WebApi/Ben.Data.WebApi.csproj" \
+    --urls "$API_URL" > "$LOG" 2>&1 &
 
-echo "[swagger] Swagger UI launched — WebApi running at $API_URL"
+WEBAPI_PID=$!
+echo "[startup] WebApi started (PID $WEBAPI_PID)"
+
+# ── Poll until Swagger responds ──────────────────────────────────────────────
+for _ in {1..90}; do
+  # Abort if the process died
+  if ! kill -0 "$WEBAPI_PID" 2>/dev/null; then
+    echo "[startup] WebApi process exited unexpectedly. Last lines:"
+    tail -20 "$LOG"
+    exit 1
+  fi
+
+  if is_api_up; then
+    echo "[startup] Swagger is ready at $SWAGGER_URL"
+    open "$SWAGGER_URL"
+    echo "[swagger] Swagger UI launched — following log (Ctrl+C to stop task)"
+    break
+  fi
+
+  sleep 1
+done
+
+if ! is_api_up; then
+  echo "[startup] Timeout — WebApi did not start within 90s. Last lines:"
+  tail -20 "$LOG"
+  exit 1
+fi
+
+# ── Keep task alive ──────────────────────────────────────────────────────────
+# 'wait' blocks until dotnet run exits. This prevents VS Code from killing
+# the WebApi process when the task shell would otherwise exit.
+wait "$WEBAPI_PID"
