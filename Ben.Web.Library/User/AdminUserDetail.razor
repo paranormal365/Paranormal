@@ -104,7 +104,7 @@ else
                             <GridCommandButton Icon="@SvgIcon.Pencil"
                                 OnClick="@((GridCommandEventArgs e) => OpenSubDialog("address", e.Items.First()))">Edit</GridCommandButton>
                             <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeleteAddress((UserAddressAdminRecord)e.Items.First()))">Del</GridCommandButton>
+                                OnClick="@((GridCommandEventArgs e) => DeleteAddress((UserAddressAdminRecord)e.Items.First()))"></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -125,7 +125,7 @@ else
                             <GridCommandButton Icon="@SvgIcon.Pencil"
                                 OnClick="@((GridCommandEventArgs e) => OpenSubDialog("email", e.Items.First()))">Edit</GridCommandButton>
                             <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeleteEmail((UserEmailAdminRecord)e.Items.First()))">Del</GridCommandButton>
+                                OnClick="@((GridCommandEventArgs e) => DeleteEmail((UserEmailAdminRecord)e.Items.First()))"></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -147,7 +147,7 @@ else
                             <GridCommandButton Icon="@SvgIcon.Pencil"
                                 OnClick="@((GridCommandEventArgs e) => OpenSubDialog("phone", e.Items.First()))">Edit</GridCommandButton>
                             <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeletePhone((UserPhoneAdminRecord)e.Items.First()))">Del</GridCommandButton>
+                                OnClick="@((GridCommandEventArgs e) => DeletePhone((UserPhoneAdminRecord)e.Items.First()))"></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -169,7 +169,7 @@ else
                             <GridCommandButton Icon="@SvgIcon.Pencil"
                                 OnClick="@((GridCommandEventArgs e) => OpenSubDialog("link", e.Items.First()))">Edit</GridCommandButton>
                             <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeleteLink((UserLinkAdminRecord)e.Items.First()))">Del</GridCommandButton>
+                                OnClick="@((GridCommandEventArgs e) => DeleteLink((UserLinkAdminRecord)e.Items.First()))"></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -190,7 +190,7 @@ else
                             <GridCommandButton Icon="@SvgIcon.Pencil"
                                 OnClick="@((GridCommandEventArgs e) => OpenSubDialog("note", e.Items.First()))">Edit</GridCommandButton>
                             <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeleteNote((UserNoteAdminRecord)e.Items.First()))">Del</GridCommandButton>
+                                OnClick="@((GridCommandEventArgs e) => DeleteNote((UserNoteAdminRecord)e.Items.First()))"></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -239,11 +239,15 @@ else
                         </GridColumn>
                         <GridColumn Field="@nameof(UploadFileAdminRecord.FileName)" Title="File Name" />
                         <GridColumn Field="@nameof(UploadFileAdminRecord.ContentType)" Title="Type" Width="130px" />
-                        <GridColumn Field="@nameof(UploadFileAdminRecord.FileSize)" Title="Size" Width="80px" />
+                        <GridColumn Field="@nameof(UploadFileAdminRecord.FileSize)" Title="Size" Width="80px">
+                            <Template>
+                                @(AudioFormatUtils.FormatSize(((UploadFileAdminRecord)context).FileSize))
+                            </Template>
+                        </GridColumn>
                         <GridColumn Field="@nameof(UploadFileAdminRecord.IsPublic)" Title="Public" Width="70px" />
                         <GridCommandColumn Width="90px">
                             <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeleteFile((UploadFileAdminRecord)e.Items.First()))">Del</GridCommandButton>
+                                OnClick="@((GridCommandEventArgs e) => DeleteFile((UploadFileAdminRecord)e.Items.First()))"></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
