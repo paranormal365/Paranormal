@@ -6,6 +6,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Ben.Data.WebApi.Controllers.Admin;
 
+/// <summary>
+/// Issues a bearer token for a target user so a SuperAdmin can act on their
+/// behalf without knowing their password. The original SuperAdmin session is
+/// restored by the client when impersonation ends.
+/// </summary>
 [ApiController]
 [Route("api/admin/impersonate")]
 [Authorize(Policy = RoleNames.SuperAdmin)]

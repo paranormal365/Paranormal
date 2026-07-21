@@ -10,6 +10,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
+/// <summary>
+/// Manages user-uploaded files: upload (multipart/form-data), metadata update,
+/// download, and delete. Files are stored on the configured filesystem path;
+/// the database holds metadata only. The download endpoint falls back to the
+/// legacy <c>FileData</c> blob for rows not yet migrated by FileMigrationService.
+/// </summary>
 [ApiController]
 [Route("api/upload-files")]
 [Authorize]

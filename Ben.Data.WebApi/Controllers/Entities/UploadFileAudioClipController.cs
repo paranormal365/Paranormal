@@ -11,8 +11,10 @@ using NAudio.Wave;
 namespace Ben.Data.WebApi.Controllers.Entities;
 
 /// <summary>
-/// Clips an existing UploadFile's audio to a time range and persists the result as a new UploadFile.
-/// Supported input formats: WAV, MP3. Output is always WAV (PCM, lossless clip).
+/// Clips audio from an existing UploadFile to a time range.
+/// Supports WAV and MP3 source formats; always outputs WAV (PCM, lossless).
+/// Use <c>GET preview</c> for an in-browser preview without saving;
+/// <c>POST</c> persists the clip as a new UploadFile record on disk.
 /// </summary>
 [ApiController]
 [Route("api/upload-files/{fileId:guid}/clip")]
@@ -165,7 +167,7 @@ public sealed class UploadFileAudioClipController : BenControllerBase
 internal static class AudioClipper
 {
     /// <summary>
-    /// Clips <paramref name="sourceBytes"/> to [<paramref name="startSeconds"/>, <paramref name="endSeconds"/>].
+    /// Clips <paramref name="sourceStream"/> to [<paramref name="startSeconds"/>, <paramref name="endSeconds"/>].
     /// Returns the clipped PCM bytes as WAV together with its content-type and file extension.
     /// </summary>
     /// <exception cref="NotSupportedException">Thrown when the source format cannot be decoded by NAudio.</exception>

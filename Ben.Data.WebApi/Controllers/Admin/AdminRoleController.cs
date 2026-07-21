@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Ben.Data.WebApi.Controllers.Admin;
 
+/// <summary>CRUD management for ASP.NET Core Identity roles (SuperAdmin only).</summary>
 [ApiController]
 [Route("api/admin/roles")]
 [Authorize(Policy = RoleNames.SuperAdmin)]
