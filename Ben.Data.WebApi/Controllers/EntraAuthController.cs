@@ -7,7 +7,7 @@ namespace Ben.Data.WebApi.Controllers;
 
 [ApiController]
 [Route("api/auth/entra")]
-public sealed class EntraAuthController : ControllerBase
+public sealed class EntraAuthController : BenControllerBase
 {
     private readonly UserManager<AppUser> _userManager;
 

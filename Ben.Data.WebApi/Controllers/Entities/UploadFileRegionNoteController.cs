@@ -12,7 +12,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [ApiController]
 [Route("api/upload-files/{fileId:guid}/region-notes")]
 [Authorize]
-public sealed class UploadFileRegionNoteController : ControllerBase
+public sealed class UploadFileRegionNoteController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;
@@ -111,14 +111,5 @@ public sealed class UploadFileRegionNoteController : ControllerBase
         db.UploadFileRegionNotes.Remove(entity);
         await db.SaveChangesAsync(ct);
         return NoContent();
-    }
-
-    private Guid GetCurrentUserId()
-    {
-        var appUserIdClaim = User.FindFirst("app_user_id")?.Value;
-        if (Guid.TryParse(appUserIdClaim, out var id)) return id;
-        var sub = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-               ?? User.FindFirst("sub")?.Value;
-        return Guid.TryParse(sub, out var subId) ? subId : Guid.Empty;
     }
 }

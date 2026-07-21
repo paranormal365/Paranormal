@@ -4,7 +4,6 @@ using Ben.Data.Source.Entities;
 using Ben.Service.Models.Admin;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 
 namespace Ben.Data.WebApi.Controllers.Admin;
 
@@ -48,22 +47,13 @@ public sealed class AdminOrganizationController : AdminEntityControllerBase<Orga
             Name               = request.Name.Trim(),
             UrlName            = urlName,
             DateCreated        = DateTime.UtcNow,
-            CreatedByAppUserId = GetCurrentUserId()
+            CreatedByAppUserId = GetCurrentUserIdOrThrow()
         };
 
         db.Organizations.Add(org);
         await db.SaveChangesAsync(ct);
 
         return CreatedAtAction(nameof(GetById), new { id = org.Id }, _mapper.Map<OrganizationAdminRecord>(org));
-    }
-
-    private Guid GetCurrentUserId()
-    {
-        var value = User.FindFirstValue(Ben.Data.WebApi.Services.EntraClaimsTransformation.AppUserIdClaimType)
-                    ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(value, out var id))
-            throw new UnauthorizedAccessException("User id claim missing or invalid.");
-        return id;
     }
 }
 

@@ -17,7 +17,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [ApiController]
 [Route("api/upload-files/{fileId:guid}/clip")]
 [Authorize]
-public sealed class UploadFileAudioClipController : ControllerBase
+public sealed class UploadFileAudioClipController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;
@@ -157,15 +157,6 @@ public sealed class UploadFileAudioClipController : ControllerBase
         if (file.FileData is not null)
             return new MemoryStream(file.FileData);
         throw new InvalidOperationException($"File {file.Id} has no StoragePath and no FileData.");
-    }
-
-    private Guid GetCurrentUserId()
-    {
-        var appUserIdClaim = User.FindFirst("app_user_id")?.Value;
-        if (Guid.TryParse(appUserIdClaim, out var id)) return id;
-        var sub = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-               ?? User.FindFirst("sub")?.Value;
-        return Guid.TryParse(sub, out var subId) ? subId : Guid.Empty;
     }
 }
 

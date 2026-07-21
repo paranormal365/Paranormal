@@ -9,7 +9,6 @@ using Ben.Service.Models.Entities;
 using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -50,7 +49,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
     [HttpGet]
     public async Task<ActionResult<IEnumerable<OrganizationListItemResponse>>> GetAllWithPermissions(CancellationToken ct)
     {
-        var userId       = GetCurrentUserId();
+        var userId       = GetCurrentUserIdOrNull();
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
         var orgs = await _security.GetOrganizationsForUserAsync(userId.Value, ct);
@@ -78,7 +77,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<OrganizationAdminRecord>> GetByIdWithPermissions(Guid id, CancellationToken ct)
     {
-        var userId       = GetCurrentUserId();
+        var userId       = GetCurrentUserIdOrNull();
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
 
@@ -102,7 +101,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
     public async Task<ActionResult<OrganizationAdminRecord>> Update(
         Guid id, [FromBody] AdminUpdateOrganizationRequest request, CancellationToken ct)
     {
-        var userId       = GetCurrentUserId();
+        var userId       = GetCurrentUserIdOrNull();
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
 
@@ -132,7 +131,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var userId       = GetCurrentUserId();
+        var userId       = GetCurrentUserIdOrNull();
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
 
@@ -156,7 +155,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
     public async Task<ActionResult<OrganizationAdminRecord>> Create(
         [FromBody] AdminCreateOrganizationRequest request, CancellationToken ct)
     {
-        var userId = GetCurrentUserId();
+        var userId = GetCurrentUserIdOrNull();
         if (userId is null) return Unauthorized();
 
         if (!User.IsInRole(RoleNames.SuperAdmin)) return Forbid();
@@ -185,12 +184,6 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
             _mapper2.Map<OrganizationAdminRecord>(org));
     }
 
-    private Guid? GetCurrentUserId()
-    {
-        var value = User.FindFirstValue(Services.EntraClaimsTransformation.AppUserIdClaimType)
-                    ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return Guid.TryParse(value, out var id) ? id : null;
-    }
 }
 
 public sealed record OrganizationListItemResponse(

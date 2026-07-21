@@ -507,7 +507,7 @@
 
             if (result is not null)
             {
-                _clipSuccess = $"Saved as \"{result.FileName}\" ({FormatSize(result.FileSize)}).";
+                _clipSuccess = $"Saved as \"{result.FileName}\" ({AudioFormatUtils.FormatSize(result.FileSize)}).";
                 await OnClipSaved.InvokeAsync(result);
             }
             else
@@ -684,13 +684,6 @@
         var ts = TimeSpan.FromSeconds(seconds);
         return ts.TotalHours >= 1 ? ts.ToString(@"h\:mm\:ss\.ff") : ts.ToString(@"m\:ss\.ff");
     }
-
-    private static string FormatSize(long bytes) => bytes switch
-    {
-        < 1024        => $"{bytes} B",
-        < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
-        _             => $"{bytes / (1024.0 * 1024):F1} MB",
-    };
 
     // ── Menu item record ──────────────────────────────────────────────────────
 

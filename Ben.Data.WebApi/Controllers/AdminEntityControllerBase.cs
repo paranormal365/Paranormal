@@ -5,13 +5,12 @@ using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 
 namespace Ben.Data.WebApi.Controllers;
 
 [ApiController]
 [Authorize(Policy = RoleNames.SuperAdmin)]
-public abstract class AdminEntityControllerBase<TEntity, TRecord> : ControllerBase
+public abstract class AdminEntityControllerBase<TEntity, TRecord> : BenControllerBase
     where TEntity : class
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
@@ -105,13 +104,6 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : ControllerBa
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
-
-    private Guid GetCurrentUserId()
-    {
-        var value = User.FindFirstValue(Ben.Data.WebApi.Services.EntraClaimsTransformation.AppUserIdClaimType)
-                    ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return Guid.TryParse(value, out var id) ? id : Guid.Empty;
-    }
 
     /// <summary>
     /// Awaits an audit task and silently swallows exceptions so that an audit

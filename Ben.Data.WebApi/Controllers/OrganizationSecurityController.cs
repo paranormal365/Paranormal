@@ -2,14 +2,13 @@ using Ben.Data.Common.Enums;
 using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace Ben.Data.WebApi.Controllers;
 
 [ApiController]
 [Authorize]
 [Route("api/organizations/{organizationId:guid}/security")]
-public class OrganizationSecurityController : ControllerBase
+public class OrganizationSecurityController : BenControllerBase
 {
     private readonly IOrganizationSecurityService _organizationSecurityService;
 
@@ -25,7 +24,7 @@ public class OrganizationSecurityController : ControllerBase
         [FromQuery] OrganizationSecurityAction action,
         CancellationToken cancellationToken)
     {
-        var appUserId = GetCurrentUserId();
+        var appUserId = GetCurrentUserIdOrThrow();
         var hasAccess = await _organizationSecurityService.HasAccessAsync(appUserId, organizationId, table, action, cancellationToken);
         return Ok(hasAccess);
     }
@@ -36,7 +35,7 @@ public class OrganizationSecurityController : ControllerBase
         [FromBody] CheckOrganizationAccessRequest request,
         CancellationToken cancellationToken)
     {
-        var actingUserId = GetCurrentUserId();
+        var actingUserId = GetCurrentUserIdOrThrow();
 
         // Users can check themselves; org admins/superadmin can check others.
         if (actingUserId != request.AppUserId)
@@ -59,7 +58,7 @@ public class OrganizationSecurityController : ControllerBase
         Guid organizationId,
         CancellationToken cancellationToken)
     {
-        var actingUserId = GetCurrentUserId();
+        var actingUserId = GetCurrentUserIdOrThrow();
         var members = await _organizationSecurityService.GetOrganizationUsersAsync(organizationId, actingUserId, cancellationToken);
 
         return Ok(members.Select(m => new OrganizationUserMembershipResponse
@@ -81,7 +80,7 @@ public class OrganizationSecurityController : ControllerBase
         [FromBody] UpsertOrganizationMembershipRequest request,
         CancellationToken cancellationToken)
     {
-        var actingUserId = GetCurrentUserId();
+        var actingUserId = GetCurrentUserIdOrThrow();
 
         var membership = await _organizationSecurityService.UpsertMembershipAsync(
             organizationId,
@@ -110,7 +109,7 @@ public class OrganizationSecurityController : ControllerBase
         [FromBody] SetOrganizationGrantRequest request,
         CancellationToken cancellationToken)
     {
-        var actingUserId = GetCurrentUserId();
+        var actingUserId = GetCurrentUserIdOrThrow();
 
         var grant = await _organizationSecurityService.SetAccessGrantAsync(
             organizationId,
@@ -143,23 +142,10 @@ public class OrganizationSecurityController : ControllerBase
         [FromQuery] OrganizationSecurityTable? table,
         CancellationToken cancellationToken)
     {
-        var actingUserId = GetCurrentUserId();
+        var actingUserId = GetCurrentUserIdOrThrow();
         var deleted = await _organizationSecurityService.DeleteGrantAsync(
             organizationId, targetUserId, table, actingUserId, cancellationToken);
         return Ok(new { deleted });
-    }
-
-    private Guid GetCurrentUserId()
-    {
-        var value = User.FindFirstValue(Ben.Data.WebApi.Services.EntraClaimsTransformation.AppUserIdClaimType)
-                    ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!Guid.TryParse(value, out var appUserId))
-        {
-            throw new UnauthorizedAccessException("Authenticated user id claim is missing or invalid.");
-        }
-
-        return appUserId;
     }
 
     public sealed class UpsertOrganizationMembershipRequest

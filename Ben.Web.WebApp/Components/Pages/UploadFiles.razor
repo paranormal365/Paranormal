@@ -316,12 +316,7 @@
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
-    private static string FormatSize(long bytes) => bytes switch
-    {
-        < 1024         => $"{bytes} B",
-        < 1024 * 1024  => $"{bytes / 1024.0:F1} KB",
-        _              => $"{bytes / (1024.0 * 1024):F1} MB"
-    };
+    private static string FormatSize(long bytes) => Ben.Web.Library.Manage.Audio.AudioFormatUtils.FormatSize(bytes);
 
     private sealed class NewUploadModel
     {

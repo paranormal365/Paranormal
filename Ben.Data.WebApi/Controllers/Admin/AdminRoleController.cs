@@ -8,7 +8,7 @@ namespace Ben.Data.WebApi.Controllers.Admin;
 [ApiController]
 [Route("api/admin/roles")]
 [Authorize(Policy = RoleNames.SuperAdmin)]
-public sealed class AdminRoleController : ControllerBase
+public sealed class AdminRoleController : BenControllerBase
 {
     private readonly RoleManager<IdentityRole<Guid>> _roleManager;
     private readonly UserManager<AppUser> _userManager;

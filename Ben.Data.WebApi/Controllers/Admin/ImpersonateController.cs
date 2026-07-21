@@ -9,7 +9,7 @@ namespace Ben.Data.WebApi.Controllers.Admin;
 [ApiController]
 [Route("api/admin/impersonate")]
 [Authorize(Policy = RoleNames.SuperAdmin)]
-public sealed class ImpersonateController : ControllerBase
+public sealed class ImpersonateController : BenControllerBase
 {
     private readonly UserManager<AppUser> _userManager;
     private readonly SignInManager<AppUser> _signInManager;

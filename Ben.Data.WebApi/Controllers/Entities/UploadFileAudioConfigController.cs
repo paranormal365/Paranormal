@@ -4,7 +4,6 @@ using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 using Ben.Data.Source.Entities;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
@@ -17,7 +16,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [ApiController]
 [Authorize]
 [Route("api/upload-files/{fileId:guid}/audio-config")]
-public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper) : ControllerBase
+public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper) : BenControllerBase
 {
     // ── GET /api/upload-files/{fileId}/audio-config ───────────────────────────
 
@@ -92,17 +91,6 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper) 
 
     private async Task<bool> FileExistsAsync(Guid fileId)
         => await db.UploadFiles.AnyAsync(f => f.Id == fileId);
-
-    private Guid GetCurrentUserId()
-    {
-        // app_user_id claim (set by EntraClaimsTransformation for Entra tokens)
-        var appUserIdClaim = User.FindFirstValue("app_user_id");
-        if (appUserIdClaim is not null && Guid.TryParse(appUserIdClaim, out var id1)) return id1;
-
-        // Standard sub claim (Identity bearer token)
-        var sub = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return sub is not null && Guid.TryParse(sub, out var id2) ? id2 : Guid.Empty;
-    }
 
     private static void Apply(UpsertAudioConfigRequest req, UploadFileAudioConfig entity)
     {

@@ -12,7 +12,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [ApiController]
 [Route("api/upload-file-permission-requests")]
 [Authorize]
-public sealed class UploadFilePermissionRequestController : ControllerBase
+public sealed class UploadFilePermissionRequestController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;

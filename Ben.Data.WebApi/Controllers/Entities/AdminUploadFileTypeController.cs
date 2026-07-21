@@ -11,7 +11,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [ApiController]
 [Authorize(Policy = RoleNames.SuperAdmin)]
 [Route("api/admin/upload-file-types")]
-public sealed class AdminUploadFileTypeController : ControllerBase
+public sealed class AdminUploadFileTypeController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;

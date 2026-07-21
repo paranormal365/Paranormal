@@ -5,7 +5,6 @@ using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -21,7 +20,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [ApiController]
 [Route("api/upload-files/{fileId:guid}/votes")]
 [Authorize]
-public sealed class UploadFileVoteController : ControllerBase
+public sealed class UploadFileVoteController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;
@@ -118,14 +117,4 @@ public sealed class UploadFileVoteController : ControllerBase
         return NoContent();
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private Guid GetCurrentUserId()
-    {
-        var appUserIdClaim = User.FindFirst("app_user_id")?.Value;
-        if (Guid.TryParse(appUserIdClaim, out var id)) return id;
-        var sub = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-               ?? User.FindFirst("sub")?.Value;
-        return Guid.TryParse(sub, out var subId) ? subId : Guid.Empty;
-    }
 }
