@@ -10,7 +10,18 @@ namespace Ben.Data.Source.Entities
         public string StoredFileName { get; set; } = null!;
         public string ContentType { get; set; } = null!;
         public long FileSize { get; set; }
-        public byte[] FileData { get; set; } = null!;
+
+        /// <summary>
+        /// Relative path within the configured file-storage root (e.g. "users/{userId}/{storedFileName}").
+        /// Null only on legacy rows that have not yet been migrated from the FileData column.
+        /// </summary>
+        public string? StoragePath { get; set; }
+
+        /// <summary>
+        /// Legacy binary blob.  Null for all new uploads; populated only on rows not yet
+        /// migrated by FileMigrationService.  Will be dropped in a future migration.
+        /// </summary>
+        public byte[]? FileData { get; set; }
         public string? Description { get; set; }
         public bool IsPublic { get; set; }
         public int SortOrder { get; set; }

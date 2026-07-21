@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Entities;
 using Ben.Service.Models.People;
@@ -102,6 +103,23 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteFileTypeExtensionAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/admin/upload-file-type-extensions/{id}", token);
 
+    // ── Generic Lookup Types ──────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<LookupTypeAdminRecord>> GetLookupTypesAsync(string route, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<LookupTypeAdminRecord>>($"/{route}", token);
+        return result ?? [];
+    }
+
+    public Task<LookupTypeAdminRecord?> CreateLookupTypeAsync(string route, LookupTypeUpsertRequest request, CancellationToken token = default)
+        => _api.PostAsync<LookupTypeUpsertRequest, LookupTypeAdminRecord>($"/{route}", request, token);
+
+    public Task<LookupTypeAdminRecord?> UpdateLookupTypeAsync(string route, Guid id, LookupTypeUpsertRequest request, CancellationToken token = default)
+        => _api.PutAsync<LookupTypeUpsertRequest, LookupTypeAdminRecord>($"/{route}/{id}", request, token);
+
+    public Task<bool> DeleteLookupTypeAsync(string route, Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/{route}/{id}", token);
+
     // ── CMS Pages ─────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<CmsPageListItem>> GetCmsPagesAsync(Guid orgId, CancellationToken token = default)
@@ -153,6 +171,60 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/logos/{logoId}", token);
+
+    // ── Org Member Groups ─────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetOrganizationUsersAsync(orgId, token);
+        return result.Select(m => new OrgMembershipItem(m.MembershipId, m.AppUserId, m.Role, m.IsActive)).ToList();
+    }
+
+    public async Task<IReadOnlyList<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrgMemberGroupRecord>>($"/api/organizations/{orgId}/groups", token);
+        return result ?? [];
+    }
+
+    public Task<OrgMemberGroupRecord?> CreateGroupAsync(Guid orgId, OrgGroupUpsertRequest request, CancellationToken token = default)
+        => _api.PostAsync<OrgGroupUpsertRequest, OrgMemberGroupRecord>($"/api/organizations/{orgId}/groups", request, token);
+
+    public Task<OrgMemberGroupRecord?> UpdateGroupAsync(Guid orgId, Guid groupId, OrgGroupUpsertRequest request, CancellationToken token = default)
+        => _api.PutAsync<OrgGroupUpsertRequest, OrgMemberGroupRecord>($"/api/organizations/{orgId}/groups/{groupId}", request, token);
+
+    public Task<bool> DeleteGroupAsync(Guid orgId, Guid groupId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/groups/{groupId}", token);
+
+    public async Task<IReadOnlyList<OrgMemberGroupMembershipRecord>> GetGroupMembersAsync(Guid orgId, Guid groupId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrgMemberGroupMembershipRecord>>($"/api/organizations/{orgId}/groups/{groupId}/members", token);
+        return result ?? [];
+    }
+
+    public Task<OrgMemberGroupMembershipRecord?> AddGroupMemberAsync(Guid orgId, Guid groupId, Guid membershipId, CancellationToken token = default)
+        => _api.PostAsync<object, OrgMemberGroupMembershipRecord>($"/api/organizations/{orgId}/groups/{groupId}/members",
+            new { OrganizationUserMembershipId = membershipId }, token);
+
+    public Task<bool> RemoveGroupMemberAsync(Guid orgId, Guid groupId, Guid membershipId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/groups/{groupId}/members/{membershipId}", token);
+
+    // ── CMS Page Permissions ──────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<CmsPagePermissionRecord>> GetPagePermissionsAsync(Guid orgId, Guid pageId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<CmsPagePermissionRecord>>($"/api/organizations/{orgId}/pages/{pageId}/permissions", token);
+        return result ?? [];
+    }
+
+    public Task<CmsPagePermissionRecord?> CreatePagePermissionAsync(Guid orgId, Guid pageId, PagePermissionCreateRequest request, CancellationToken token = default)
+        => _api.PostAsync<PagePermissionCreateRequest, CmsPagePermissionRecord>($"/api/organizations/{orgId}/pages/{pageId}/permissions", request, token);
+
+    public Task<CmsPagePermissionRecord?> UpdatePagePermissionAsync(Guid orgId, Guid pageId, Guid permId, CmsPageAction actions, CancellationToken token = default)
+        => _api.PutAsync<object, CmsPagePermissionRecord>($"/api/organizations/{orgId}/pages/{pageId}/permissions/{permId}",
+            new { Actions = actions }, token);
+
+    public Task<bool> DeletePagePermissionAsync(Guid orgId, Guid pageId, Guid permId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/pages/{pageId}/permissions/{permId}", token);
 
     // ── User sub-entity type lists ────────────────────────────────────────────
 

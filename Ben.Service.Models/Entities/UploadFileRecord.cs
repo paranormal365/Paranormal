@@ -10,6 +10,10 @@ public record UploadFileRecord
     public required string StoredFileName { get; init; }
     public required string ContentType { get; init; }
     public long FileSize { get; init; }
+
+    /// <summary>Relative path within file storage (e.g. "users/{userId}/{storedFileName}").</summary>
+    public string? StoragePath { get; init; }
+
     public string? Description { get; init; }
     public bool IsPublic { get; init; }
     public int SortOrder { get; init; }

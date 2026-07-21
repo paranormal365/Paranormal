@@ -1,6 +1,13 @@
-namespace Ben.Service.Models.Entities;
+namespace Ben.Service.Models.Admin;
 
-public record UploadFileTypeRecord
+/// <summary>
+/// Shared projection record for all lookup-type entities
+/// (UserAddressType, UserEmailType, UserPhoneType, UserLinkType, UserNoteType, UserMessageType,
+///  OrganizationAddressType, OrganizationEmailType, OrganizationPhoneType,
+///  OrganizationLinkType, OrganizationNoteType).
+/// All 11 tables have an identical schema so a single record handles them all.
+/// </summary>
+public record LookupTypeAdminRecord
 {
     public Guid Id { get; init; }
     public required string Name { get; init; }
@@ -10,8 +17,6 @@ public record UploadFileTypeRecord
     public bool IsActive { get; init; }
     public bool IsPublic { get; init; }
     public int SortOrder { get; init; }
-    public bool AllowAllExtensions { get; init; }
-    public IReadOnlyList<string> AllowedPatterns { get; init; } = [];
     public DateTime DateCreated { get; init; }
     public DateTime? DateUpdated { get; init; }
     public Guid CreatedByAppUserId { get; init; }

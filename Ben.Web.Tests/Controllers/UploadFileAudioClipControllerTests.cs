@@ -58,7 +58,8 @@ public class UploadFileAudioClipControllerTests
     private static UploadFileAudioClipController Build(
         IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new UploadFileAudioClipController(factory, CreateMapper());
+        var ctrl = new UploadFileAudioClipController(factory, CreateMapper(),
+            new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

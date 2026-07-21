@@ -1,4 +1,5 @@
 using AutoMapper;
+using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Service.Models.Entities;
@@ -20,11 +21,16 @@ public sealed class UploadFileAudioClipController : ControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;
+    private readonly IFileStorageService _fileStorage;
 
-    public UploadFileAudioClipController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper)
+    public UploadFileAudioClipController(
+        IDbContextFactory<BenDataContext> dbContextFactory,
+        IMapper mapper,
+        IFileStorageService fileStorage)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
+        _fileStorage = fileStorage;
     }
 
     /// <summary>
@@ -47,8 +53,12 @@ public sealed class UploadFileAudioClipController : ControllerBase
 
         try
         {
-            var (bytes, contentType, _) = AudioClipper.Clip(source.FileData, source.ContentType, start, end);
-            return File(bytes, contentType);
+            Stream sourceStream = await OpenSourceStreamAsync(source, ct);
+            await using (sourceStream)
+            {
+                var (bytes, contentType, _) = AudioClipper.Clip(sourceStream, source.ContentType, start, end);
+                return File(bytes, contentType);
+            }
         }
         catch (NotSupportedException ex)
         {
@@ -82,8 +92,12 @@ public sealed class UploadFileAudioClipController : ControllerBase
         string outExtension;
         try
         {
-            (clippedBytes, outContentType, outExtension) =
-                AudioClipper.Clip(source.FileData, source.ContentType, request.Start, request.End);
+            Stream sourceStream = await OpenSourceStreamAsync(source, ct);
+            await using (sourceStream)
+            {
+                (clippedBytes, outContentType, outExtension) =
+                    AudioClipper.Clip(sourceStream, source.ContentType, request.Start, request.End);
+            }
         }
         catch (NotSupportedException ex)
         {
@@ -106,7 +120,7 @@ public sealed class UploadFileAudioClipController : ControllerBase
             StoredFileName     = $"{Guid.NewGuid()}{outExtension}",
             ContentType        = outContentType,
             FileSize           = clippedBytes.Length,
-            FileData           = clippedBytes,
+            FileData           = null,  // written to disk below
             Description        = string.IsNullOrWhiteSpace(request.Label)
                 ? $"Clip of '{source.FileName}' [{start.Minutes:D2}m{start.Seconds:D2}s-{end.Minutes:D2}m{end.Seconds:D2}s]"
                 : request.Label,
@@ -118,11 +132,31 @@ public sealed class UploadFileAudioClipController : ControllerBase
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
+
+        // Write clip to disk before committing the DB record
+        var relativePath = _fileStorage.UserFilePath(userId, entity.StoredFileName);
+        using (var ms = new MemoryStream(clippedBytes))
+            await _fileStorage.WriteAsync(relativePath, ms, ct);
+        entity.StoragePath = relativePath;
+
         db.UploadFiles.Add(entity);
         await db.SaveChangesAsync(ct);
 
         return CreatedAtAction("GetById", "UploadFile", new { id = entity.Id },
             _mapper.Map<UploadFileRecord>(entity));
+    }
+
+    /// <summary>
+    /// Opens the source audio as a stream: from disk if StoragePath is set,
+    /// otherwise falls back to FileData bytes (legacy rows awaiting migration).
+    /// </summary>
+    private async Task<Stream> OpenSourceStreamAsync(UploadFile file, CancellationToken ct)
+    {
+        if (!string.IsNullOrEmpty(file.StoragePath))
+            return await _fileStorage.OpenReadAsync(file.StoragePath, ct);
+        if (file.FileData is not null)
+            return new MemoryStream(file.FileData);
+        throw new InvalidOperationException($"File {file.Id} has no StoragePath and no FileData.");
     }
 
     private Guid GetCurrentUserId()
@@ -145,19 +179,17 @@ internal static class AudioClipper
     /// </summary>
     /// <exception cref="NotSupportedException">Thrown when the source format cannot be decoded by NAudio.</exception>
     public static (byte[] Bytes, string ContentType, string Extension) Clip(
-        byte[] sourceBytes, string sourceContentType, double startSeconds, double endSeconds)
+        Stream sourceStream, string sourceContentType, double startSeconds, double endSeconds)
     {
-        using var inputStream = new MemoryStream(sourceBytes);
-
         WaveStream waveStream;
         if (sourceContentType.Contains("wav", StringComparison.OrdinalIgnoreCase))
         {
-            waveStream = new WaveFileReader(inputStream);
+            waveStream = new WaveFileReader(sourceStream);
         }
         else if (sourceContentType.Contains("mp3", StringComparison.OrdinalIgnoreCase) ||
                  sourceContentType.Contains("mpeg", StringComparison.OrdinalIgnoreCase))
         {
-            waveStream = new Mp3FileReader(inputStream);
+            waveStream = new Mp3FileReader(sourceStream);
         }
         else
         {

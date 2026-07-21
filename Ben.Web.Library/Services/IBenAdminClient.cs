@@ -140,6 +140,22 @@ public interface IBenAdminClient
     /// <returns><c>true</c> if deletion succeeded; <c>false</c> otherwise.</returns>
     Task<bool> DeleteFileTypeExtensionAsync(Guid id, CancellationToken token = default);
 
+    // ── Generic Lookup Types ──────────────────────────────────────────────────
+    // Covers UserAddressType, UserEmailType, UserPhoneType, UserLinkType, UserNoteType,
+    // UserMessageType, and the five Org equivalents — all share the same schema.
+
+    /// <summary>Returns all rows for a lookup-type table at the given admin API route.</summary>
+    Task<IReadOnlyList<LookupTypeAdminRecord>> GetLookupTypesAsync(string route, CancellationToken token = default);
+
+    /// <summary>Creates a new row in a lookup-type table.</summary>
+    Task<LookupTypeAdminRecord?> CreateLookupTypeAsync(string route, LookupTypeUpsertRequest request, CancellationToken token = default);
+
+    /// <summary>Updates an existing row in a lookup-type table.</summary>
+    Task<LookupTypeAdminRecord?> UpdateLookupTypeAsync(string route, Guid id, LookupTypeUpsertRequest request, CancellationToken token = default);
+
+    /// <summary>Deletes a row from a lookup-type table.</summary>
+    Task<bool> DeleteLookupTypeAsync(string route, Guid id, CancellationToken token = default);
+
     // ── CMS Pages ─────────────────────────────────────────────────────────────
 
     Task<IReadOnlyList<CmsPageListItem>> GetCmsPagesAsync(Guid orgId, CancellationToken token = default);
@@ -161,6 +177,24 @@ public interface IBenAdminClient
     Task<OrganizationLogoRecord?> CreateOrgLogoAsync(Guid orgId, CmsCreateLogoRequest request, CancellationToken token = default);
     Task<OrganizationLogoRecord?> UpdateOrgLogoAsync(Guid orgId, Guid logoId, CmsUpdateLogoRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default);
+
+    // ── Org Member Groups ─────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default);
+    Task<IReadOnlyList<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default);
+    Task<OrgMemberGroupRecord?> CreateGroupAsync(Guid orgId, OrgGroupUpsertRequest request, CancellationToken token = default);
+    Task<OrgMemberGroupRecord?> UpdateGroupAsync(Guid orgId, Guid groupId, OrgGroupUpsertRequest request, CancellationToken token = default);
+    Task<bool> DeleteGroupAsync(Guid orgId, Guid groupId, CancellationToken token = default);
+    Task<IReadOnlyList<OrgMemberGroupMembershipRecord>> GetGroupMembersAsync(Guid orgId, Guid groupId, CancellationToken token = default);
+    Task<OrgMemberGroupMembershipRecord?> AddGroupMemberAsync(Guid orgId, Guid groupId, Guid membershipId, CancellationToken token = default);
+    Task<bool> RemoveGroupMemberAsync(Guid orgId, Guid groupId, Guid membershipId, CancellationToken token = default);
+
+    // ── CMS Page Permissions ──────────────────────────────────────────────────
+
+    Task<IReadOnlyList<CmsPagePermissionRecord>> GetPagePermissionsAsync(Guid orgId, Guid pageId, CancellationToken token = default);
+    Task<CmsPagePermissionRecord?> CreatePagePermissionAsync(Guid orgId, Guid pageId, PagePermissionCreateRequest request, CancellationToken token = default);
+    Task<CmsPagePermissionRecord?> UpdatePagePermissionAsync(Guid orgId, Guid pageId, Guid permId, CmsPageAction actions, CancellationToken token = default);
+    Task<bool> DeletePagePermissionAsync(Guid orgId, Guid pageId, Guid permId, CancellationToken token = default);
 
     // ── User sub-entity type lists (for dropdowns) ────────────────────────────
 
@@ -453,3 +487,29 @@ public sealed record UserNoteUpsertRequest(
     string NoteSubject,
     string NoteBody,
     bool IsPublic);
+
+/// <summary>
+/// Request body for creating or fully replacing a lookup-type row
+/// (UserAddressType, OrganizationEmailType, etc.).
+/// The Id field must be set to the existing Id on update, or <see cref="Guid.Empty"/> on create.
+/// </summary>
+public sealed record LookupTypeUpsertRequest(
+    Guid Id,
+    string Name,
+    string? Description,
+    string? IconClass,
+    string? ColorClass,
+    bool IsActive,
+    bool IsPublic,
+    int SortOrder,
+    DateTime DateCreated,
+    DateTime? DateUpdated,
+    Guid CreatedByAppUserId,
+    Guid? UpdatedByAppUserId);
+
+public sealed record OrgGroupUpsertRequest(string Name, string? Description, bool IsActive, int SortOrder);
+
+public sealed record PagePermissionCreateRequest(Guid? AppUserId, Guid? OrgMemberGroupId, CmsPageAction Actions);
+
+/// <summary>Org membership row from GET /api/organizations/{orgId}/security/users.</summary>
+public sealed record OrgMembershipItem(Guid MembershipId, Guid AppUserId, OrganizationMemberRole Role, bool IsActive);

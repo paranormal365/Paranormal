@@ -83,6 +83,22 @@ else
                     <span><strong>Duration:</strong>@(" ")@FormatTime(_modalDuration)</span>
                     <span><strong>Position:</strong>@(" ")@FormatTime(_modalTime)</span>
                     <span class="ms-auto d-flex align-items-center gap-2">
+                        @* Timeline toggle *@
+                        <TelerikButton ThemeColor="@(_timelineEnabled ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Enabled="@_modalReady"
+                                       OnClick="ToggleTimelineAsync">
+                            🕐 @(_timelineEnabled ? "Hide Timeline" : "Show Timeline")
+                        </TelerikButton>
+                        @* Clear user-drawn regions *@
+                        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Enabled="@_modalReady"
+                                       OnClick="ClearUserRegionsAsync">
+                            🗑 Clear Regions
+                        </TelerikButton>
                         @* Spectrogram toggle *@
                         <TelerikButton ThemeColor="@(_spectrogramEnabled ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
                                        FillMode="@ThemeConstants.Button.FillMode.Outline"
@@ -92,7 +108,7 @@ else
                             📊 @(_spectrogramEnabled ? "Hide Spectrogram" : "Show Spectrogram")
                         </TelerikButton>
                         <span class="small text-secondary fst-italic">
-                            Click &amp; drag to mark a region &mdash; right-click to explore, add notes, or export
+                            Click &amp; drag to mark a region &mdash; right-click to play, save, or edit
                         </span>
                     </span>
                 </div>
@@ -227,18 +243,10 @@ else
         </TelerikButton>
     </DialogButtons>
 </TelerikDialog>
-@* ── Region explorer ───────────────────────────────────────────── *@
-@if (_explorerRegion is not null)
-{
-    <WsRegionExplorer FileId="@FileId"
-                      FileName="@FileName"
-                      ContentType="@ContentType"
-                      FileSize="@FileSize"
-                      Region="@_explorerRegion"
-                      Visible="@_showExplorer"
-                      VisibleChanged="@OnExplorerVisibleChanged"
-                      OnClipSaved="@OnChildClipSaved" />
-}
+@* ── Toast notifications ────────────────────────────────────────────── *@
+<TelerikNotification @ref="_toast"
+                     HorizontalPosition="@NotificationHorizontalPosition.Right"
+                     VerticalPosition="@NotificationVerticalPosition.Top" />
 
 @code {
     // ── Parameters ────────────────────────────────────────────────────────────
@@ -261,8 +269,9 @@ else
     private bool   _modalReady;
     private IReadOnlyList<UploadFileRecord> _childClips = [];
 
-    // ── Spectrogram state ──────────────────────────────────────────────
+    // ── Timeline + Spectrogram state ───────────────────────────────────
 
+    private bool   _timelineEnabled  = true;
     private bool   _spectrogramEnabled;
     private bool   _spectrogramLabels;
     private TelerikContextMenu<SpectrogramMenuItem>? _spectrogramMenu;
@@ -291,6 +300,7 @@ else
     private WaveSurferPlayer?                          _player;
     private WaveSurferPlayer?                          _modalPlayer;
     private TelerikContextMenu<AudioContextMenuItem>?  _contextMenu;
+    private TelerikNotification?                       _toast;
 
     // ── Region context menu state ──────────────────────────────────────────────
 
@@ -298,13 +308,10 @@ else
     private WsRegionContextMenuArgs? _pendingRegion;
     private bool   _showEditLabelDialog;
     private string _editLabelText = string.Empty;
-    private WsRegionData? _explorerRegion;
-    private bool   _showExplorer;
 
     private static readonly List<RegionContextMenuItem> _regionMenuItems =
     [
         new("play",    "▶  Play Region"),
-        new("explore", "⤢  Explore Region & Notes"),
         new("save",    "🎵  Create Audio File from Region"),
         new("label",   "✏  Edit Label"),
         new("delete",  "🗑  Delete Region"),
@@ -421,12 +428,16 @@ else
 
     // ── New region drawn by user ──────────────────────────────────────────────
 
-    private void OnModalRegionCreated(WsRegionData r)
+    private async Task OnModalRegionCreated(WsRegionData r)
     {
         // Silently ignore programmatically added overlay regions.
-        // User-drawn regions stay on the waveform; the right-click
-        // context menu is the action surface.
         if (_programmaticRegionIds.Contains(r.Id)) return;
+
+        // Only one user-drawn region is allowed at a time.
+        // Remove every other user-drawn region, keeping the new one + saved overlays.
+        if (_modalPlayer is not null)
+            await _modalPlayer.ClearUserRegionsAsync(
+                _programmaticRegionIds.Append(r.Id));
     }
 
     private async Task SaveClipAsync()
@@ -457,10 +468,12 @@ else
 
                 // Refresh child clips and overlay the newly saved one
                 await OverlayChildClipRegionsAsync();
+                Notify($"Saved \"{result.FileName}\"", "success");
             }
             else
             {
-                _saveClipError = "Save failed. Only WAV and MP3 sources can be clipped.";
+                Notify("Save failed — only WAV and MP3 sources can be clipped.", "error");
+                _saveClipError = "Only WAV and MP3 sources can be clipped.";
             }
         }
         catch (Exception ex)
@@ -480,20 +493,11 @@ else
         _showModal = visible;
         if (!visible)
         {
-            // Close the region explorer if it was open underneath the modal
-            _showExplorer       = false;
-            _explorerRegion     = null;
+            _timelineEnabled    = true;
             _spectrogramEnabled = false;
             _spectrogramLabels  = false;
             _modalReady         = false;
         }
-    }
-
-    private void OnExplorerVisibleChanged(bool visible)
-    {
-        _showExplorer = visible;
-        if (!visible)
-            _explorerRegion = null; // unmount so right-click shows menu, not explorer
     }
 
     // ── Waveform click → toggle play/pause ────────────────────────────────────
@@ -542,7 +546,23 @@ else
     private static string FormatTime(double seconds) => AudioFormatUtils.FormatTime(seconds);
     private static string FormatSize(long bytes)      => AudioFormatUtils.FormatSize(bytes);
 
+    private void Notify(string message, string themeColor = "warning") =>
+        _toast?.Show(new NotificationModel { Text = message, ThemeColor = themeColor, CloseAfter = 4000 });
+
     // ── Spectrogram toggle + context menu ─────────────────────────────────────
+
+    private async Task ClearUserRegionsAsync()
+    {
+        if (_modalPlayer is null) return;
+        await _modalPlayer.ClearUserRegionsAsync(_programmaticRegionIds);
+    }
+
+    private async Task ToggleTimelineAsync()
+    {
+        _timelineEnabled = !_timelineEnabled;
+        if (_modalPlayer is null) return;
+        await _modalPlayer.ToggleTimelineAsync(_timelineEnabled);
+    }
 
     private async Task ToggleSpectrogramAsync()
     {
@@ -567,13 +587,6 @@ else
         }
     }
 
-    private async Task OnChildClipSaved(UploadFileRecord _)
-    {
-        // Refresh the child-clip overlay — clear tracked IDs first so we don't skip the new one
-        _programmaticRegionIds.Clear();
-        await OverlayChildClipRegionsAsync();
-    }
-
     // ── Region right-click (full-view modal player) ───────────────────────────
 
     private async Task OnRegionRightClick(WsRegionContextMenuArgs args)
@@ -590,17 +603,6 @@ else
         {
             case "play":
                 if (_modalPlayer is not null) await _modalPlayer.PlayRegionAsync(_pendingRegion.RegionId);
-                break;
-            case "explore":
-                _explorerRegion = new WsRegionData
-                {
-                    Id    = _pendingRegion.RegionId,
-                    Start = _pendingRegion.Start,
-                    End   = _pendingRegion.End,
-                    Label = _pendingRegion.Label,
-                };
-                _showExplorer = true;
-                StateHasChanged();
                 break;
             case "label":
                 _editLabelText       = _pendingRegion.Label ?? string.Empty;

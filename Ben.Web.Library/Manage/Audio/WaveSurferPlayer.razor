@@ -60,7 +60,12 @@
     <div id="@_containerId"
          style="flex:1;min-height:0;width:100%;overflow:hidden;">
     </div>
-
+    @* ── Timeline bar — OUTSIDE the waveform container so it is never clipped ── *@
+    @* The Timeline plugin inserts its 20 px canvas here via the `container`    *@
+    @* option.  display:none collapses it; flex:1 on the waveform fills the gap. *@
+    <div id="@(_containerId)-tl"
+         style="width:100%;overflow:hidden;">
+    </div>
     @* ── Built-in controls bar ─────────────────────────────────────────────── *@
     @if (cfg.ShowControls && _ready)
     {
@@ -304,6 +309,15 @@
         await _module.InvokeVoidAsync("updateRegionLabel", _containerId, regionId, label);
     }
 
+    // ── Timeline ─────────────────────────────────────────────────────────
+
+    /// <summary>Shows or hides the Timeline plugin bar. When showing, fires zoom() to repaint labels.</summary>
+    public async Task ToggleTimelineAsync(bool visible)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("toggleTimeline", _containerId, visible);
+    }
+
     // ── Spectrogram ──────────────────────────────────────────────────────
 
     /// <summary>Enables or disables the canvas-based spectrogram (Web Worker FFT). Idempotent.</summary>
@@ -326,6 +340,14 @@
 
     public async Task RemoveRegionAsync(string id)    => await Invoke("removeRegion", id);
     public async Task ClearRegionsAsync()             => await Invoke("clearRegions");
+
+    /// <summary>Removes all user-drawn regions, keeping the specified IDs (e.g. saved-clip overlays).</summary>
+    public async Task ClearUserRegionsAsync(IEnumerable<string> keepIds)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("clearUserRegions", _containerId, keepIds.ToArray());
+    }
+
     public async Task PlayRegionAsync(string id)      => await Invoke("playRegion", id);
 
     public async Task<List<WsRegionData>> GetRegionsAsync()

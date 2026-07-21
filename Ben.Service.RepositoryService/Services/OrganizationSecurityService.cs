@@ -274,6 +274,23 @@ public class OrganizationSecurityService : IOrganizationSecurityService
         return existing;
     }
 
+    public async Task<int> DeleteGrantAsync(Guid organizationId, Guid targetUserId, OrganizationSecurityTable? tableName, Guid actingUserId, CancellationToken token = default)
+    {
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(token);
+        await EnsureCanManageOrganizationAsync(dbContext, actingUserId, organizationId, token);
+
+        IQueryable<OrganizationAccessGrant> query = dbContext.OrganizationAccessGrants
+            .Where(g => g.OrganizationId == organizationId && g.AppUserId == targetUserId);
+
+        if (tableName.HasValue)
+            query = query.Where(g => g.TableName == tableName.Value);
+
+        var rows = await query.ToListAsync(token);
+        dbContext.OrganizationAccessGrants.RemoveRange(rows);
+        await dbContext.SaveChangesAsync(token);
+        return rows.Count;
+    }
+
     private static async Task<bool> IsSuperAdminAsync(BenDataContext dbContext, Guid appUserId, CancellationToken token)
     {
         return await

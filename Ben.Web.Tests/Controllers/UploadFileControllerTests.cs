@@ -40,7 +40,8 @@ public class UploadFileControllerTests
                 StoredFileName = "stored.txt",
                 ContentType = "text/plain"
             });
-        return new UploadFileController(factory, mapperMock.Object);
+        return new UploadFileController(factory, mapperMock.Object,
+            new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object);
     }
 
     private static IFormFile MakeFile(string fileName, long size = 256)

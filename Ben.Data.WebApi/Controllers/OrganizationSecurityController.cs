@@ -132,6 +132,23 @@ public class OrganizationSecurityController : ControllerBase
         });
     }
 
+    /// <summary>
+    /// Deletes one or all access grants for a user in an organization.
+    /// Omit <paramref name="table"/> to delete all grants for the user.
+    /// </summary>
+    [HttpDelete("users/{targetUserId:guid}/grants")]
+    public async Task<ActionResult> DeleteGrant(
+        Guid organizationId,
+        Guid targetUserId,
+        [FromQuery] OrganizationSecurityTable? table,
+        CancellationToken cancellationToken)
+    {
+        var actingUserId = GetCurrentUserId();
+        var deleted = await _organizationSecurityService.DeleteGrantAsync(
+            organizationId, targetUserId, table, actingUserId, cancellationToken);
+        return Ok(new { deleted });
+    }
+
     private Guid GetCurrentUserId()
     {
         var value = User.FindFirstValue(Ben.Data.WebApi.Services.EntraClaimsTransformation.AppUserIdClaimType)

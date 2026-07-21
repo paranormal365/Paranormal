@@ -4,6 +4,7 @@
 @inject IWebApiTokenStore TokenStore
 @inject NavigationManager NavManager
 @inject IConfiguration Configuration
+@inject IWebHostEnvironment Env
 
 <PageTitle>Login</PageTitle>
 
@@ -77,6 +78,12 @@
         // AccessToken alone may be set from a partial Entra bridge state (no UserId yet).
         if (TokenStore.IsAuthenticated && TokenStore.UserId.HasValue)
             NavManager.NavigateTo("/");
+
+        if (Env.IsDevelopment())
+        {
+            _model.Email    = Configuration["DevLogin:Email"]    ?? string.Empty;
+            _model.Password = Configuration["DevLogin:Password"] ?? string.Empty;
+        }
     }
 
     private async Task HandleLogin()

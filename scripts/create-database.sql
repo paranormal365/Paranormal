@@ -2745,6 +2745,29 @@ BEGIN
     VALUES (N'20260719163758_AddUploadFileVotes', N'10.0.9');
 END;
 
+-- ── Migration 10: AddFileStoragePath (2026-07-21) ────────────────────────────
+-- Adds StoragePath for filesystem-based file storage. FileData made nullable
+-- (was already NULL in DB). Existing blobs migrated to disk by FileMigrationService
+-- on next WebApi startup. FileData column will be dropped in a future migration
+-- once all rows have StoragePath populated.
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260721133025_AddFileStoragePath'
+)
+BEGIN
+    ALTER TABLE [UploadFiles] ADD [StoragePath] nvarchar(500) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260721133025_AddFileStoragePath'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260721133025_AddFileStoragePath', N'10.0.9');
+END;
+
 COMMIT;
 GO
 

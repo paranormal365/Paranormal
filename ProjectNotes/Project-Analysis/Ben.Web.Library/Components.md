@@ -403,7 +403,9 @@ Colors default to `null`; the JS module reads Telerik CSS custom properties at i
 `LoadAsync(string url)`, `IsPlayingAsync()`, `GetCurrentTimeAsync()`, `GetDurationAsync()`,
 `GetVolumeAsync()`,
 `AddRegionAsync(WsRegionParams)`, `RemoveRegionAsync(string)`, `ClearRegionsAsync()`,
-`GetRegionsAsync()`, `PlayRegionAsync(string)`,
+`GetRegionsAsync()`, `PlayRegionAsync(string)`, `UpdateRegionLabelAsync(string, string)`,
+`ToggleTimelineAsync(bool)` — shows/hides the Timeline bar; fires `ws.zoom()` to repaint labels *(added 2026-07-20)*,
+`ToggleSpectrogramAsync(bool enable, bool showLabels)`, `UpdateSpectrogramLabelsAsync(bool)`,
 `SetEnvelopePointsAsync(List<WsEnvelopePoint>)`, `AddEnvelopePointAsync(WsEnvelopePoint)`,
 `RemoveEnvelopePointAsync(string)`, `SetEnvelopeVolumeAsync(double)`, `GetEnvelopePointsAsync()`.
 
@@ -416,6 +418,14 @@ Served at `/_content/Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor.js`.
   and detects dark mode by perceived luminance of `--kendo-body-bg`
 - `ResizeObserver` on the wrapper div debounces (50 ms) and calls `ws.setOptions({ height: 'auto' })`
   to trigger WaveSurfer's internal resize logic after a user drag-resize
+- **`ready` repaint *(2026-07-20)*:** fires `ws.zoom(minPxPerSec)` at 50/200/400 ms after `ready`
+  to repaint Timeline labels once the TelerikWindow open animation settles. Replaced the earlier
+  `setOptions` approach which was a no-op when `height` was unchanged.
+- **`toggleTimeline(containerId, visible)` *(2026-07-20)*:** sets `display` on `[part="timeline"]`;
+  calls `ws.zoom()` when making visible to force repaint.
+- **`toggleSpectrogram` height expansion *(2026-07-20)*:** on enable, saves `playerEl.style.height`,
+  expands `.ws-player` by 128 px (capped at CSS `max-height`), calls `ws.setOptions({ height: 'auto' })`
+  so waveform refills the taller container; on disable, restores saved height.
 - `destroy(containerId)` disconnects the `ResizeObserver` and calls `ws.destroy()`
 
 #### Build Notes
@@ -485,6 +495,8 @@ menu items opens a full-featured modal window.
 | Type | Raw MIME type string |
 | Duration | `AudioFormatUtils.FormatTime(_modalDuration)` — updates on `OnReady` |
 | Position | `AudioFormatUtils.FormatTime(_modalTime)` — live via `OnTimeUpdate` |
+| **🕐 Timeline button** *(2026-07-20)* | Toggles `ToggleTimelineAsync`; active (blue) = visible, inactive = hidden |
+| **📊 Spectrogram button** | Toggles spectrogram; expands player by 128 px on enable *(2026-07-20)* |
 
 **Full WaveSurfer player** inside the modal:
 
@@ -512,12 +524,16 @@ menu items opens a full-featured modal window.
 - `TelerikContextMenu<AudioContextMenuItem>` — right-click menu (compact waveform)
 - `TelerikContextMenu<RegionContextMenuItem>` — right-click menu for waveform regions (full-view modal)
 - `TelerikWindow` — full-view modal
-- `WsRegionExplorer` — opened when user clicks "Explore Region" in the region context menu
+- `TelerikNotification` — top-right toast; 4 s auto-dismiss *(added 2026-07-20)*
 
-#### Region Context Menu (added 2026-07-19)
+#### Region Context Menu (updated 2026-07-20)
 Right-clicking any WaveSurfer region in the full-view modal shows:  
-**Play Region** / **Explore Region** / **Edit Label** / **Delete Region**.  
-After a clip is saved from `WsRegionExplorer`, `OnChildClipSaved` refreshes the overlay; child clips appear as green locked regions and badge chips above the player.
+**Play Region** / **Create Audio File from Region** / **Edit Label** / **Delete Region**.
+
+"Explore Region & Notes" was removed (2026-07-20). It opened `WsRegionExplorer` (96 vw window)
+which immediately failed for non-WAV/MP3 files. Errors now surface as toasts:
+- Save success → green toast `Saved "filename.wav"`
+- Format not supported → red toast with the restriction message
 
 ---
 
@@ -587,9 +603,16 @@ Key behaviour changes from original implementation:
 
 ---
 
-### AudioFilePreview — full-view modal additions (2026-07-19)
+### AudioFilePreview — full-view modal additions (2026-07-19 / updated 2026-07-20)
 
-- **Spectrogram toggle**: "Show/Hide Spectrogram" button in info bar. Web Worker (`spectrogram-worker.js`) computes FFT off the main thread; viridis colormap canvas inserted after waveform. Right-click → context menu with "Toggle Labels".
-- **Region draw**: Click-and-drag creates a blue preview overlay, then a WaveSurfer region on release. Single click still seeks. Right-click context menu: Play / Explore & Notes / Create Audio File / Edit Label / Delete.
-- **Child clip overlay**: Saved clips overlaid as green locked regions on the parent waveform; shown as `AudioFilePreview` components below the player.
+- **Toast notifications** *(2026-07-20)*: `TelerikNotification` (top-right, 4 s) for save success/failure.
+- **Timeline toggle button** *(2026-07-20)*: "🕐 Hide/Show Timeline" in info bar. Starts enabled.
+  Hides/shows `[part="timeline"]`; fires `ws.zoom()` to repaint labels at correct container width.
+- **Spectrogram toggle**: "Show/Hide Spectrogram" button in info bar. Web Worker FFT off-thread;
+  viridis colormap canvas inserted after waveform. Right-click → "Toggle Labels".
+  *(Updated 2026-07-20)* Player expands by 128 px on enable (capped at `MaxHeight`); waveform is not
+  squished unless already at max height.
+- **Region draw**: Click-and-drag creates a region. Right-click context menu:
+  Play / Create Audio File / Edit Label / Delete. *("Explore" removed 2026-07-20)*
+- **Child clip overlay**: Saved clips overlaid as green locked regions; shown as `AudioFilePreview` below.
 - **Resizable**: Full-view player has `Resizable="true"` — bottom edge can be dragged.

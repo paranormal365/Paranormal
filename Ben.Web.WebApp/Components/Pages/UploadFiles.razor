@@ -6,6 +6,7 @@
 @inject IJSRuntime JS
 
 @using Ben.Data.Common.Enums
+@using Ben.Data.Common.Helpers
 @using Ben.Service.Models.Entities
 @using Microsoft.AspNetCore.Components.Forms
 
@@ -33,7 +34,8 @@
                 <div class="col-md-4">
                     <label class="form-label">File Type</label>
                     <TelerikDropDownList Data="@_fileTypes"
-                                         @bind-Value="@_newUpload.FileTypeId"
+                                         Value="@_newUpload.FileTypeId"
+                                         ValueChanged="@((Guid id) => { _newUpload.FileTypeId = id; _uploadError = GetExtensionError(_selectedFile); })"
                                          TextField="@nameof(UploadFileTypeRecord.Name)"
                                          ValueField="@nameof(UploadFileTypeRecord.Id)"
                                          Width="100%" />
@@ -203,12 +205,32 @@
     private void OnFileSelected(InputFileChangeEventArgs e)
     {
         _selectedFile = e.File;
-        _uploadError = null;
+        _uploadError = GetExtensionError(_selectedFile);
+    }
+
+    private string? GetExtensionError(IBrowserFile? file)
+    {
+        if (file is null) return null;
+        var type = _fileTypes.FirstOrDefault(t => t.Id == _newUpload.FileTypeId);
+        if (type is null || type.AllowAllExtensions) return null;
+        var ext = Path.GetExtension(file.Name);
+        if (!FileExtensionPatternMatcher.IsAllowedByPatterns(type.AllowedPatterns, ext))
+        {
+            var allowed = type.AllowedPatterns.Count > 0
+                ? string.Join(", ", type.AllowedPatterns)
+                : "(none defined)";
+            return $"File extension '{ext}' is not allowed for type '{type.Name}'. Allowed: {allowed}";
+        }
+        return null;
     }
 
     private async Task UploadFile()
     {
         if (_selectedFile is null || TokenStore.UserEmail is null) return;
+
+        // Re-validate extension in case file type selection changed after file was picked
+        _uploadError = GetExtensionError(_selectedFile);
+        if (_uploadError is not null) return;
 
         _isUploading = true;
         _uploadError = null;

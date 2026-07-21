@@ -1,5 +1,6 @@
 @* Renders an image thumbnail, video player, or audio player for an UploadFile.
    Fetches file bytes server-side and renders as a base64 data URL.
+   Audio files are delegated to AudioFilePreview (WaveSurfer waveform).
    For non-media types renders a plain file-type badge. *@
 
 @inject IBenAdminClient AdminClient
@@ -7,6 +8,13 @@
 @if (FileId == Guid.Empty || string.IsNullOrEmpty(ContentType))
 {
     <span class="badge bg-secondary">@(FileName ?? "file")</span>
+}
+else if (_isAudio)
+{
+    <AudioFilePreview FileId="@FileId"
+                      FileName="@(FileName ?? string.Empty)"
+                      ContentType="@ContentType"
+                      FileSize="@FileSize" />
 }
 else if (_loading)
 {
@@ -38,13 +46,6 @@ else if (_dataUrl is not null)
             <em class="text-secondary small">Browser does not support video.</em>
         </video>
     }
-    else if (_isAudio)
-    {
-        <audio controls style="width:260px;">
-            <source src="@_dataUrl" type="@ContentType" />
-            <em class="text-secondary small">Browser does not support audio.</em>
-        </audio>
-    }
 }
 else
 {
@@ -52,9 +53,10 @@ else
 }
 
 @code {
-    [Parameter] public Guid FileId { get; set; }
+    [Parameter] public Guid    FileId      { get; set; }
     [Parameter] public string? ContentType { get; set; }
-    [Parameter] public string? FileName { get; set; }
+    [Parameter] public string? FileName    { get; set; }
+    [Parameter] public long    FileSize    { get; set; }
 
     private string? _dataUrl;
     private bool _loading;
@@ -63,7 +65,7 @@ else
     private bool _isImage => ContentType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true;
     private bool _isVideo => ContentType?.StartsWith("video/", StringComparison.OrdinalIgnoreCase) == true;
     private bool _isAudio => ContentType?.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) == true;
-    private bool _hasPreview => _isImage || _isVideo || _isAudio;
+    private bool _hasPreview => _isImage || _isVideo;
 
     protected override async Task OnParametersSetAsync()
     {

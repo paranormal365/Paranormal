@@ -496,7 +496,10 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<UploadFile>()
-                .Property(e => e.FileData).HasColumnType("varbinary(max)");
+                .Property(e => e.FileData).HasColumnType("varbinary(max)").IsRequired(false);
+
+            modelBuilder.Entity<UploadFile>()
+                .Property(e => e.StoragePath).HasMaxLength(500).IsRequired(false);
 
             // ── UploadFileOrganizationShare ───────────────────────────────────
             modelBuilder.Entity<UploadFileOrganizationShare>()

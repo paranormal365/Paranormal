@@ -12,6 +12,26 @@
 // Map of containerId → { ws, regionsPlugin, envelopePlugin, resizeObserver }
 const instances = new Map()
 
+// Timeline is hidden automatically when the player is shorter than this.
+const TIMELINE_MIN_HEIGHT = 150   // px
+
+/**
+ * Show or hide the external timeline bar, respecting both the user's explicit
+ * preference (_timelineEnabled on the instance) and the available height.
+ * Called on create, on every resize, and when the user clicks the toggle.
+ */
+function _syncTimelineVisibility(containerId) {
+  const instance = instances.get(containerId)
+  const tlEl     = document.getElementById(containerId + '-tl')
+  if (!tlEl) return
+
+  const playerEl  = document.getElementById(containerId)?.parentElement
+  const hasRoom   = playerEl ? playerEl.offsetHeight >= TIMELINE_MIN_HEIGHT : false
+  const userWants = instance ? instance._timelineEnabled !== false : true
+
+  tlEl.style.display = (hasRoom && userWants) ? '' : 'none'
+}
+
 // ── Lazy-loaded module cache ──────────────────────────────────────────────────
 let WaveSurfer = null
 let RegionsPlugin = null
@@ -142,8 +162,15 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
   }
   if (plugins.hover && HoverPlugin)
     wsPlugins.push(HoverPlugin.create(plugins.hoverOptions ?? {}))
-  if (plugins.timeline && TimelinePlugin)
-    wsPlugins.push(TimelinePlugin.create(plugins.timelineOptions ?? {}))
+  if (plugins.timeline && TimelinePlugin) {
+    // Render the timeline in the dedicated external div so it is never clipped
+    // by the waveform container's overflow:hidden.
+    const tlEl = document.getElementById(containerId + '-tl')
+    wsPlugins.push(TimelinePlugin.create({
+      ...(plugins.timelineOptions ?? {}),
+      ...(tlEl ? { container: tlEl } : {}),
+    }))
+  }
   if (plugins.zoom && ZoomPlugin)
     wsPlugins.push(ZoomPlugin.create(plugins.zoomOptions ?? {}))
   if (plugins.minimap && MinimapPlugin)
@@ -201,7 +228,20 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
   // ── Core event forwarding ────────────────────────────────────────────────
   const safe = (fn) => fn.catch(() => {})
 
-  ws.on('ready',      (duration)  => safe(dotnetRef.invokeMethodAsync('OnWsReady',      duration)))
+  ws.on('ready', (duration) => {
+    // Force Timeline repaint after the TelerikWindow open animation completes.
+    // Also re-evaluate height-based visibility at each attempt.
+    ;[50, 200, 400].forEach(ms =>
+      setTimeout(() => {
+        const inst = instances.get(containerId)
+        if (inst) {
+          _syncTimelineVisibility(containerId)
+          inst.ws.zoom(inst.ws.options.minPxPerSec ?? 0)
+        }
+      }, ms)
+    )
+    safe(dotnetRef.invokeMethodAsync('OnWsReady', duration))
+  })
   ws.on('play',       ()          => safe(dotnetRef.invokeMethodAsync('OnWsPlay')))
   ws.on('pause',      ()          => safe(dotnetRef.invokeMethodAsync('OnWsPause')))
   ws.on('finish',     ()          => safe(dotnetRef.invokeMethodAsync('OnWsFinish')))
@@ -248,8 +288,8 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
     resizeTimer = setTimeout(() => {
       const inst = instances.get(containerId)
       if (inst) {
-        // Re-apply height:'auto' to trigger internal re-measure
         inst.ws.setOptions({ height: 'auto' })
+        _syncTimelineVisibility(containerId)
       }
     }, 50)
   })
@@ -427,14 +467,74 @@ export function clearRegions(containerId) {
   instances.get(containerId)?.regionsPlugin?.clearRegions()
 }
 
+/**
+ * Removes all regions except those whose IDs are in keepIds.
+ * Used to clear only user-drawn regions while preserving saved-clip overlays.
+ */
+export function clearUserRegions(containerId, keepIds) {
+  const { regionsPlugin } = instances.get(containerId) ?? {}
+  if (!regionsPlugin) return
+  const keep = new Set(keepIds ?? [])
+  regionsPlugin.getRegions()
+    .filter(r => !keep.has(r.id))
+    .forEach(r => r.remove())
+}
+
 export function getRegions(containerId) {
   const { regionsPlugin } = instances.get(containerId) ?? {}
   return regionsPlugin?.getRegions().map((r) => ({ id: r.id, start: r.start, end: r.end, color: r.color })) ?? []
 }
 
 export function playRegion(containerId, regionId) {
-  const { regionsPlugin } = instances.get(containerId) ?? {}
-  regionsPlugin?.getRegions().find((r) => r.id === regionId)?.play()
+  const instance = instances.get(containerId)
+  if (!instance) return
+  const { ws, regionsPlugin } = instance
+
+  const region = regionsPlugin?.getRegions().find(r => r.id === regionId)
+  if (!region) return
+
+  // Cancel any in-progress region-play monitor from a previous call
+  instance._regionPlayCleanup?.()
+  instance._regionPlayCleanup = null
+
+  const duration = ws.getDuration()
+  if (!duration) return
+
+  ws.seekTo(region.start / duration)
+  ws.play()
+
+  // WaveSurfer 7’s .on() returns an unsubscribe function
+  let unsubs = []
+
+  const stopAndClean = () => {
+    unsubs.forEach(u => u?.())
+    unsubs = []
+    if (instance._regionPlayCleanup === stopAndClean)
+      instance._regionPlayCleanup = null
+  }
+
+  // On every timeupdate, read the LIVE region end so that resize/expand/delete
+  // all take effect without touching the audio file itself.
+  unsubs.push(ws.on('timeupdate', () => {
+    const live = regionsPlugin.getRegions().find(r => r.id === regionId)
+    if (!live) {
+      // Region was deleted while playing — stop immediately
+      stopAndClean()
+      ws.pause()
+      return
+    }
+    if (ws.getCurrentTime() >= live.end) {
+      stopAndClean()
+      ws.pause()
+    }
+  }))
+
+  // Clean up if the user manually pauses, the track finishes, or seeks away
+  unsubs.push(ws.on('pause',   stopAndClean))
+  unsubs.push(ws.on('finish',  stopAndClean))
+  unsubs.push(ws.on('seeking', stopAndClean))
+
+  instance._regionPlayCleanup = stopAndClean
 }
 
 export function updateRegionLabel(containerId, regionId, label) {
@@ -476,7 +576,29 @@ export async function toggleSpectrogram(containerId, enable, showLabels, dotnetR
     delete instance.spectrogramWorker
     delete instance.spectrogramData
     delete instance.spectrogramMeta
+    // Restore the player container to its pre-spectrogram height
+    const _waveEl2 = document.getElementById(containerId)
+    const _playerEl2 = _waveEl2?.parentElement
+    if (_playerEl2 && instance._savedPlayerHeight !== undefined) {
+      _playerEl2.style.height = instance._savedPlayerHeight
+      delete instance._savedPlayerHeight
+      instance.ws.setOptions({ height: 'auto' })
+    }
     return
+  }
+
+  // Expand the player container so the waveform keeps its current height and
+  // the spectrogram adds below it.  Only shrink the waveform if the expanded
+  // size would exceed the player's CSS max-height.
+  const SPECTRO_H  = 128   // canvas height (px) defined in _ensureSpectrogramCanvas
+  const _waveEl    = document.getElementById(containerId)
+  const _playerEl  = _waveEl?.parentElement
+  if (_playerEl && instance._savedPlayerHeight === undefined) {
+    const curH = _playerEl.offsetHeight
+    const maxH = parseFloat(getComputedStyle(_playerEl).maxHeight) || 9999
+    instance._savedPlayerHeight = _playerEl.style.height   // save inline value
+    _playerEl.style.height = `${Math.min(curH + SPECTRO_H, maxH)}px`
+    instance.ws.setOptions({ height: 'auto' })
   }
 
   // Already computed — rebuild the canvas from cached data
@@ -535,6 +657,21 @@ export async function toggleSpectrogram(containerId, enable, showLabels, dotnetR
     { channels: [channelCopy], sampleRate: audioBuffer.sampleRate, fftSamples, noverlap },
     [channelCopy.buffer]
   )
+}
+
+/**
+ * Shows or hides the WaveSurfer Timeline plugin bar.
+ * When making it visible, fires zoom() so the Timeline plugin repaints its
+ * notches at the current container width.
+ */
+export function toggleTimeline(containerId, visible) {
+  const instance = instances.get(containerId)
+  // Store the user's preference so _syncTimelineVisibility can respect it
+  if (instance) instance._timelineEnabled = visible
+  _syncTimelineVisibility(containerId)
+  if (visible && instance) {
+    instance.ws.zoom(instance.ws.options.minPxPerSec ?? 0)
+  }
 }
 
 /**
@@ -653,6 +790,7 @@ function _drawSpectrogram(canvas, data, showLabels, sampleRate, fftSamples) {
 export function destroy(containerId) {
   const instance = instances.get(containerId)
   if (!instance) return
+  instance._regionPlayCleanup?.()
   instance.dragCleanup?.()
   instance.resizeObserver?.disconnect()
   try { instance.ws?.destroy() } catch { /* ignore */ }

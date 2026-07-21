@@ -231,17 +231,10 @@ else
                         <GridColumn Title="Preview" Width="160px">
                             <Template>
                                 @{ var f = (UploadFileAdminRecord)context; }
-                                @if (IsAudioContentType(f.ContentType))
-                                {
-                                    <AudioFilePreview FileId="@f.Id"
-                                                     FileName="@f.FileName"
-                                                     ContentType="@f.ContentType"
-                                                     FileSize="@f.FileSize" />
-                                }
-                                else
-                                {
-                                    <UserMediaPreview FileId="@f.Id" ContentType="@f.ContentType" FileName="@f.FileName" />
-                                }
+                                <UserMediaPreview FileId="@f.Id"
+                                                  ContentType="@f.ContentType"
+                                                  FileName="@f.FileName"
+                                                  FileSize="@f.FileSize" />
                             </Template>
                         </GridColumn>
                         <GridColumn Field="@nameof(UploadFileAdminRecord.FileName)" Title="File Name" />
@@ -833,11 +826,6 @@ else
             _isUploading = false;
         }
     }
-
-    // ── Audio detection helper ────────────────────────────────────────────────
-
-    private static bool IsAudioContentType(string? contentType) =>
-        AudioFormatUtils.IsAudioContentType(contentType);
 
     private static string FormatUploadSize(long bytes) =>
         AudioFormatUtils.FormatSizeCompact(bytes);

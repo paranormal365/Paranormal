@@ -1,5 +1,6 @@
 using AutoMapper;
 using Ben.Data.Common.Helpers;
+using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Service.Models.Entities;
@@ -16,11 +17,16 @@ public sealed class UploadFileController : ControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;
+    private readonly IFileStorageService _fileStorage;
 
-    public UploadFileController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper)
+    public UploadFileController(
+        IDbContextFactory<BenDataContext> dbContextFactory,
+        IMapper mapper,
+        IFileStorageService fileStorage)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
+        _fileStorage = fileStorage;
     }
 
     [HttpGet]
@@ -50,7 +56,18 @@ public sealed class UploadFileController : ControllerBase
         var entity = await db.UploadFiles.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
         if (entity is null) return NotFound();
-        return File(entity.FileData, entity.ContentType, entity.FileName);
+
+        // Prefer disk; fall back to FileData for rows not yet migrated
+        if (!string.IsNullOrEmpty(entity.StoragePath))
+        {
+            var stream = await _fileStorage.OpenReadAsync(entity.StoragePath, cancellationToken);
+            return File(stream, entity.ContentType, entity.FileName);
+        }
+
+        if (entity.FileData is not null)
+            return File(entity.FileData, entity.ContentType, entity.FileName);
+
+        return NotFound("File data is unavailable.");
     }
 
     [HttpPost]
@@ -115,13 +132,19 @@ public sealed class UploadFileController : ControllerBase
             StoredFileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}",
             ContentType = contentType,
             FileSize = fileBytes.Length,
-            FileData = fileBytes,
+            FileData = null,   // not stored in DB — written to disk below
             Description = description,
             IsPublic = isPublic,
             SortOrder = 0,
             DateCreated = DateTime.UtcNow,
             CreatedByAppUserId = appUserId
         };
+
+        // Write to disk first; if this throws the DB record is never committed
+        var relativePath = _fileStorage.UserFilePath(appUserId, entity.StoredFileName);
+        using (var writeStream = new MemoryStream(fileBytes))
+            await _fileStorage.WriteAsync(relativePath, writeStream, cancellationToken);
+        entity.StoragePath = relativePath;
 
         db.UploadFiles.Add(entity);
         await db.SaveChangesAsync(cancellationToken);
@@ -159,6 +182,11 @@ public sealed class UploadFileController : ControllerBase
 
         db.UploadFiles.Remove(entity);
         await db.SaveChangesAsync(cancellationToken);
+
+        // Delete from disk after the DB record is gone
+        if (!string.IsNullOrEmpty(entity.StoragePath))
+            await _fileStorage.DeleteAsync(entity.StoragePath, cancellationToken);
+
         return NoContent();
     }
 
