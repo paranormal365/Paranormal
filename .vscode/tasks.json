@@ -75,6 +75,34 @@
         "clear": true
       },
       "problemMatcher": "$msCompile"
+    },
+
+    // ── Start WebApi only + open Swagger UI ─────────────────────────────────
+    {
+      "label": "start-webapi-swagger",
+      "type": "shell",
+      "command": "bash scripts/start-webapi-only.sh",
+      "options": { "cwd": "${workspaceFolder}" },
+      "dependsOn": ["ensure-docker-db"],
+      "dependsOrder": "sequence",
+      "isBackground": true,
+      "presentation": {
+        "label": "WebApi",
+        "panel": "dedicated",
+        "reveal": "always",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": [
+        {
+          "pattern": { "regexp": "^$" },
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": "\\[startup\\]",
+            "endsPattern": "\\[swagger\\]"
+          }
+        }
+      ]
     }
   ]
 }
