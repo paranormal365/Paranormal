@@ -318,16 +318,16 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     // ── User sub-entity type creation ─────────────────────────────────────────
 
-    public async Task<bool> CreateUserAddressTypeAsync(string name, CancellationToken token = default)
-        => (await _api.PostAsync<object, object>("/api/admin/user-address-types", new { Name = name, DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.Empty }, token)) is not null;
-    public async Task<bool> CreateUserEmailTypeAsync(string name, CancellationToken token = default)
-        => (await _api.PostAsync<object, object>("/api/admin/user-email-types", new { Name = name, DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.Empty }, token)) is not null;
-    public async Task<bool> CreateUserPhoneTypeAsync(string name, CancellationToken token = default)
-        => (await _api.PostAsync<object, object>("/api/admin/user-phone-types", new { Name = name, DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.Empty }, token)) is not null;
-    public async Task<bool> CreateUserLinkTypeAsync(string name, CancellationToken token = default)
-        => (await _api.PostAsync<object, object>("/api/admin/user-link-types", new { Name = name, DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.Empty }, token)) is not null;
-    public async Task<bool> CreateUserNoteTypeAsync(string name, CancellationToken token = default)
-        => (await _api.PostAsync<object, object>("/api/admin/user-note-types", new { Name = name, DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.Empty }, token)) is not null;
+    public async Task<bool> CreateUserAddressTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, CancellationToken token = default)
+        => (await _api.PostAsync<object, object>("/api/admin/user-address-types", new { Name = name, Description = description, IsActive = isActive, IsPublic = isPublic, SortOrder = sortOrder }, token)) is not null;
+    public async Task<bool> CreateUserEmailTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, CancellationToken token = default)
+        => (await _api.PostAsync<object, object>("/api/admin/user-email-types", new { Name = name, Description = description, IsActive = isActive, IsPublic = isPublic, SortOrder = sortOrder }, token)) is not null;
+    public async Task<bool> CreateUserPhoneTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, CancellationToken token = default)
+        => (await _api.PostAsync<object, object>("/api/admin/user-phone-types", new { Name = name, Description = description, IsActive = isActive, IsPublic = isPublic, SortOrder = sortOrder }, token)) is not null;
+    public async Task<bool> CreateUserLinkTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, CancellationToken token = default)
+        => (await _api.PostAsync<object, object>("/api/admin/user-link-types", new { Name = name, Description = description, IsActive = isActive, IsPublic = isPublic, SortOrder = sortOrder }, token)) is not null;
+    public async Task<bool> CreateUserNoteTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, CancellationToken token = default)
+        => (await _api.PostAsync<object, object>("/api/admin/user-note-types", new { Name = name, Description = description, IsActive = isActive, IsPublic = isPublic, SortOrder = sortOrder }, token)) is not null;
 
     // ── User Addresses CRUD ───────────────────────────────────────────────────
 

@@ -259,11 +259,11 @@ public interface IBenAdminClient
     Task<IReadOnlyList<UserNoteTypeRecord>> GetUserNoteTypesAsync(CancellationToken token = default);
 
     // Type management (SuperAdmin creates new types)
-    Task<bool> CreateUserAddressTypeAsync(string name, CancellationToken token = default);
-    Task<bool> CreateUserEmailTypeAsync(string name, CancellationToken token = default);
-    Task<bool> CreateUserPhoneTypeAsync(string name, CancellationToken token = default);
-    Task<bool> CreateUserLinkTypeAsync(string name, CancellationToken token = default);
-    Task<bool> CreateUserNoteTypeAsync(string name, CancellationToken token = default);
+    Task<bool> CreateUserAddressTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, CancellationToken token = default);
+    Task<bool> CreateUserEmailTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, CancellationToken token = default);
+    Task<bool> CreateUserPhoneTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, CancellationToken token = default);
+    Task<bool> CreateUserLinkTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, CancellationToken token = default);
+    Task<bool> CreateUserNoteTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, CancellationToken token = default);
 
     // ── User sub-entity CRUD (SuperAdmin) ─────────────────────────────────────
 

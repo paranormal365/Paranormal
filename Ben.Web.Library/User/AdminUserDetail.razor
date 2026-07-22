@@ -445,10 +445,30 @@ else
 @* ── Add New Type mini-dialog ─────────────────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showAddTypeDialog"
                Title="@($"New {_addTypeFor} Type")"
-               Width="380px">
+               Width="440px">
     <DialogContent>
-        <label class="form-label fw-semibold">Type Name <span class="text-danger">*</span></label>
-        <TelerikTextBox @bind-Value="@_newTypeName" Width="100%" />
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+                <TelerikTextBox @bind-Value="@_newTypeName" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Description</label>
+                <TelerikTextBox @bind-Value="@_newTypeDescription" Width="100%" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Sort Order</label>
+                <TelerikNumericTextBox @bind-Value="@_newTypeSortOrder" Min="0" Width="100%" />
+            </div>
+            <div class="col-md-4 d-flex align-items-center gap-2 pt-4">
+                <TelerikCheckBox @bind-Value="@_newTypeIsActive" Id="newtype-act" />
+                <label for="newtype-act" class="form-label mb-0">Active</label>
+            </div>
+            <div class="col-md-4 d-flex align-items-center gap-2 pt-4">
+                <TelerikCheckBox @bind-Value="@_newTypeIsPublic" Id="newtype-pub" />
+                <label for="newtype-pub" class="form-label mb-0">Public</label>
+            </div>
+        </div>
         @if (_typeError is not null) { <div class="alert alert-danger mt-2 mb-0">@_typeError</div> }
     </DialogContent>
     <DialogButtons>
@@ -555,7 +575,11 @@ else
     // Add type mini-dialog
     private bool _showAddTypeDialog;
     private string _addTypeFor = "";
-    private string _newTypeName = "";
+    private string _newTypeName        = "";
+    private string _newTypeDescription = "";
+    private bool   _newTypeIsActive    = true;
+    private bool   _newTypeIsPublic;
+    private int    _newTypeSortOrder;
     private string? _typeError;
 
     protected override void OnInitialized()
@@ -838,8 +862,14 @@ else
 
     private void OpenAddTypeDialog(string entityType)
     {
-        _addTypeFor = entityType; _newTypeName = ""; _typeError = null;
-        _showAddTypeDialog = true;
+        _addTypeFor          = entityType;
+        _newTypeName         = "";
+        _newTypeDescription  = "";
+        _newTypeIsActive     = true;
+        _newTypeIsPublic     = false;
+        _newTypeSortOrder    = 0;
+        _typeError           = null;
+        _showAddTypeDialog   = true;
     }
 
     private async Task SaveNewType()
@@ -848,27 +878,47 @@ else
         _isSaving = true;
         bool ok = _addTypeFor switch
         {
-            "address" => await AdminClient.CreateUserAddressTypeAsync(_newTypeName.Trim()),
-            "email"   => await AdminClient.CreateUserEmailTypeAsync(_newTypeName.Trim()),
-            "phone"   => await AdminClient.CreateUserPhoneTypeAsync(_newTypeName.Trim()),
-            "link"    => await AdminClient.CreateUserLinkTypeAsync(_newTypeName.Trim()),
-            "note"    => await AdminClient.CreateUserNoteTypeAsync(_newTypeName.Trim()),
+            "address" => await AdminClient.CreateUserAddressTypeAsync(_newTypeName.Trim(), _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder),
+            "email"   => await AdminClient.CreateUserEmailTypeAsync(_newTypeName.Trim(),   _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder),
+            "phone"   => await AdminClient.CreateUserPhoneTypeAsync(_newTypeName.Trim(),   _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder),
+            "link"    => await AdminClient.CreateUserLinkTypeAsync(_newTypeName.Trim(),    _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder),
+            "note"    => await AdminClient.CreateUserNoteTypeAsync(_newTypeName.Trim(),    _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder),
             _ => false
         };
         if (ok)
         {
-            // Reload the relevant type list
+            // Reload the relevant type list and auto-select the new type in the form
             switch (_addTypeFor)
             {
-                case "address": _addressTypes = await AdminClient.GetUserAddressTypesAsync(); break;
-                case "email":   _emailTypes   = await AdminClient.GetUserEmailTypesAsync(); break;
-                case "phone":   _phoneTypes   = await AdminClient.GetUserPhoneTypesAsync(); break;
-                case "link":    _linkTypes    = await AdminClient.GetUserLinkTypesAsync(); break;
-                case "note":    _noteTypes    = await AdminClient.GetUserNoteTypesAsync(); break;
+                case "address":
+                    _addressTypes = await AdminClient.GetUserAddressTypesAsync();
+                    var newAddr = _addressTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
+                    if (newAddr is not null) _addr.TypeId = newAddr.Id;
+                    break;
+                case "email":
+                    _emailTypes = await AdminClient.GetUserEmailTypesAsync();
+                    var newEml = _emailTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
+                    if (newEml is not null) _eml.TypeId = newEml.Id;
+                    break;
+                case "phone":
+                    _phoneTypes = await AdminClient.GetUserPhoneTypesAsync();
+                    var newPhn = _phoneTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
+                    if (newPhn is not null) _phn.TypeId = newPhn.Id;
+                    break;
+                case "link":
+                    _linkTypes = await AdminClient.GetUserLinkTypesAsync();
+                    var newLnk = _linkTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
+                    if (newLnk is not null) _lnk.TypeId = newLnk.Id;
+                    break;
+                case "note":
+                    _noteTypes = await AdminClient.GetUserNoteTypesAsync();
+                    var newNte = _noteTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
+                    if (newNte is not null) _nte.TypeId = newNte.Id;
+                    break;
             }
             _showAddTypeDialog = false;
         }
-        else _typeError = "Failed to create type.";
+        else _typeError = "Failed to create type. Check that the name is unique.";
         _isSaving = false;
     }
 

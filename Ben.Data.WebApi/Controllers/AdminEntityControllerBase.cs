@@ -58,11 +58,20 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : BenControlle
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
         EnsureEntityId(entity);
+
+        // Always overwrite audit fields from the authenticated principal — never trust client-sent values.
+        // This prevents FK violations (e.g. Guid.Empty) and tampering regardless of entity type.
+        var now           = DateTime.UtcNow;
+        var currentUserId = GetCurrentUserId();
+        SetPropertyIfExists(entity, "CreatedByAppUserId", currentUserId);
+        SetPropertyIfExists(entity, "DateCreated",        now);
+        SetPropertyIfExists(entity, "IsActive",           GetPropertyIfNotSet<bool>(entity, "IsActive", true));
+
         dbContext.Set<TEntity>().Add(entity);
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var id = GetEntityId(entity);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(typeof(TEntity).Name, id, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(typeof(TEntity).Name, id, entity, currentUserId, AppSources.WebApi, cancellationToken));
 
         return CreatedAtAction(nameof(GetById), new { id }, _mapper.Map<TRecord>(entity));
     }
@@ -143,5 +152,25 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : BenControlle
         {
             idProperty.SetValue(entity, id);
         }
+    }
+
+    /// <summary>Sets a property by name if it exists and is writable on the entity.</summary>
+    private static void SetPropertyIfExists(TEntity entity, string propertyName, object value)
+    {
+        var prop = typeof(TEntity).GetProperty(propertyName);
+        if (prop?.CanWrite == true)
+            prop.SetValue(entity, value);
+    }
+
+    /// <summary>
+    /// Returns the property's current value if it is the default for its type, otherwise returns the
+    /// provided fallback. Used so that caller-supplied IsActive=false is still respected.
+    /// </summary>
+    private static T GetPropertyIfNotSet<T>(TEntity entity, string propertyName, T fallback)
+    {
+        var prop = typeof(TEntity).GetProperty(propertyName);
+        if (prop is null) return fallback;
+        var val = prop.GetValue(entity);
+        return (val is T t && !t.Equals(default(T))) ? t : fallback;
     }
 }
