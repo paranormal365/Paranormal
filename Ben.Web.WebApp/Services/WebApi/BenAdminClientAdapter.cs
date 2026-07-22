@@ -186,6 +186,54 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         return result ?? [];
     }
 
+    // ── Membership Requests ───────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<OrganizationMembershipRequestRecord>> GetMembershipRequestsAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrganizationMembershipRequestRecord>>($"/api/organizations/{orgId}/membership-requests", token);
+        return result ?? [];
+    }
+
+    public Task<OrganizationMembershipRequestRecord?> GetMyMembershipRequestAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetAsync<OrganizationMembershipRequestRecord>($"/api/organizations/{orgId}/membership-requests/my", token);
+
+    public Task<OrganizationMembershipRequestRecord?> ApplyForMembershipAsync(Guid orgId, string? message, CancellationToken token = default)
+        => _api.PostAsync<object, OrganizationMembershipRequestRecord>(
+               $"/api/organizations/{orgId}/membership-requests", new { Message = message }, token);
+
+    public Task<OrganizationMembershipRequestRecord?> RespondToMembershipRequestAsync(
+        Guid orgId, Guid requestId, OrganizationMembershipRequestStatus status, string? responseNote, CancellationToken token = default)
+        => _api.PutAsync<object, OrganizationMembershipRequestRecord>(
+               $"/api/organizations/{orgId}/membership-requests/{requestId}/respond",
+               new { Status = status, ResponseNote = responseNote }, token);
+
+    public Task<bool> WithdrawMembershipRequestAsync(Guid orgId, Guid requestId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/membership-requests/{requestId}", token);
+
+    // ── Organization Files ────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<OrganizationFileRecord>> GetOrgFilesAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrganizationFileRecord>>($"/api/organizations/{orgId}/files", token);
+        return result ?? [];
+    }
+
+    public Task<OrganizationFileRecord?> UploadOrgFileAsync(Guid orgId, MultipartFormDataContent content, CancellationToken token = default)
+        => _api.PostMultipartAsync<OrganizationFileRecord>($"/api/organizations/{orgId}/files", content, token);
+
+    public Task<OrganizationFileRecord?> CopyFileFromUserAsync(Guid orgId, Guid uploadFileId, string? description, bool isPublic, CancellationToken token = default)
+        => _api.PostAsync<object, OrganizationFileRecord>(
+               $"/api/organizations/{orgId}/files/copy-from-user/{uploadFileId}",
+               new { Description = description, IsPublic = isPublic }, token);
+
+    public Task<OrganizationFileRecord?> UpdateOrgFileAsync(Guid orgId, Guid fileId, string? description, bool isPublic, int sortOrder, CancellationToken token = default)
+        => _api.PutAsync<object, OrganizationFileRecord>(
+               $"/api/organizations/{orgId}/files/{fileId}",
+               new { Description = description, IsPublic = isPublic, SortOrder = sortOrder }, token);
+
+    public Task<bool> DeleteOrgFileAsync(Guid orgId, Guid fileId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/files/{fileId}", token);
+
     public Task<OrgMemberGroupRecord?> CreateGroupAsync(Guid orgId, OrgGroupUpsertRequest request, CancellationToken token = default)
         => _api.PostAsync<OrgGroupUpsertRequest, OrgMemberGroupRecord>($"/api/organizations/{orgId}/groups", request, token);
 

@@ -7,6 +7,10 @@ namespace Ben.Data.Source.Entities
     {
         public string Name { get; set; } = null!;
         public string UrlName { get; set; } = null!;
+
+        /// <summary>When true, registered users may submit membership applications to join this organization.</summary>
+        public bool IsAcceptingApplications { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }
@@ -22,5 +26,7 @@ namespace Ben.Data.Source.Entities
         public virtual ICollection<OrganizationPage> OrganizationPages { get; set; } = new List<OrganizationPage>();
         public virtual ICollection<OrganizationLogo> OrganizationLogos { get; set; } = new List<OrganizationLogo>();
         public virtual ICollection<OrgMemberGroup> MemberGroups { get; set; } = new List<OrgMemberGroup>();
+        public virtual ICollection<OrganizationMembershipRequest> MembershipRequests { get; set; } = new List<OrganizationMembershipRequest>();
+        public virtual ICollection<OrganizationFile> OrganizationFiles { get; set; } = new List<OrganizationFile>();
     }
 }

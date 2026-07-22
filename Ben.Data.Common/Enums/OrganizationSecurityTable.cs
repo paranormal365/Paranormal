@@ -43,5 +43,9 @@ public enum OrganizationSecurityTable
     UserPhone = 25,
     UserPhoneType = 26,
     CmsSection = 27,
-    OrgMemberGroup = 28
+    OrgMemberGroup = 28,
+    /// <summary>Grants access to review and respond to user membership applications.</summary>
+    MembershipRequests = 29,
+    /// <summary>Grants access to manage organization-owned files.</summary>
+    OrganizationFiles = 30,
 }

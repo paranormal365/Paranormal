@@ -42,6 +42,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<CmsPagePermission> CmsPagePermissions { get; set; }
         public virtual DbSet<OrganizationUserMembership> OrganizationUserMemberships { get; set; }
         public virtual DbSet<OrganizationAccessGrant> OrganizationAccessGrants { get; set; }
+        public virtual DbSet<OrganizationMembershipRequest> OrganizationMembershipRequests { get; set; }
+        public virtual DbSet<OrganizationFile> OrganizationFiles { get; set; }
         public virtual DbSet<UploadFileType> UploadFileTypes { get; set; }
         public virtual DbSet<UploadFileTypeExtension> UploadFileTypeExtensions { get; set; }
         public virtual DbSet<UploadFile> UploadFiles { get; set; }
@@ -621,6 +623,47 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<UploadFileVote>()
                 .HasIndex(e => new { e.UploadFileId, e.AppUserId }).IsUnique();
+
+            // ── OrganizationMembershipRequest ────────────────────────────────
+            modelBuilder.Entity<OrganizationMembershipRequest>().ToTable("OrganizationMembershipRequests");
+            modelBuilder.Entity<OrganizationMembershipRequest>()
+                .HasOne(e => e.Organization).WithMany(e => e.MembershipRequests)
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrganizationMembershipRequest>()
+                .HasOne(e => e.Applicant).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrganizationMembershipRequest>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationMembershipRequest>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationMembershipRequest>()
+                .HasIndex(e => new { e.OrganizationId, e.AppUserId });
+            modelBuilder.Entity<OrganizationMembershipRequest>()
+                .Property(e => e.RequestMessage).HasMaxLength(2000).IsRequired(false);
+
+            // ── OrganizationFile ─────────────────────────────────────────────
+            modelBuilder.Entity<OrganizationFile>().ToTable("OrganizationFiles");
+            modelBuilder.Entity<OrganizationFile>()
+                .HasOne(e => e.Organization).WithMany(e => e.OrganizationFiles)
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrganizationFile>()
+                .HasOne(e => e.UploadFileType).WithMany()
+                .HasForeignKey(e => e.UploadFileTypeId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationFile>()
+                .HasOne(e => e.SourceUploadFile).WithMany()
+                .HasForeignKey(e => e.SourceUploadFileId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationFile>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationFile>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationFile>()
+                .Property(e => e.FileData).HasColumnType("varbinary(max)").IsRequired(false);
+            modelBuilder.Entity<OrganizationFile>()
+                .Property(e => e.StoragePath).HasMaxLength(500).IsRequired(false);
         }
     }
 }

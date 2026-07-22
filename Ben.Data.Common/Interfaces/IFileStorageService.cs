@@ -27,4 +27,10 @@ public interface IFileStorageService
     /// e.g. "users/{userId}/{storedFileName}"
     /// </summary>
     string UserFilePath(Guid userId, string storedFileName);
+
+    /// <summary>
+    /// Builds the canonical relative storage path for an organization-owned file.
+    /// e.g. "orgs/{orgId}/{storedFileName}"
+    /// </summary>
+    string OrgFilePath(Guid orgId, string storedFileName);
 }

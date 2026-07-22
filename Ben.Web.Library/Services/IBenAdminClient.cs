@@ -182,6 +182,40 @@ public interface IBenAdminClient
 
     Task<IReadOnlyList<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default);
     Task<IReadOnlyList<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default);
+
+    // ── Membership Requests ───────────────────────────────────────────────────
+
+    /// <summary>Returns all membership requests for the organization (requires MembershipRequests-Read permission).</summary>
+    Task<IReadOnlyList<OrganizationMembershipRequestRecord>> GetMembershipRequestsAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>Returns the current user's membership request for the organization, or null if none exists.</summary>
+    Task<OrganizationMembershipRequestRecord?> GetMyMembershipRequestAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>Submits a membership application to the organization.</summary>
+    Task<OrganizationMembershipRequestRecord?> ApplyForMembershipAsync(Guid orgId, string? message, CancellationToken token = default);
+
+    /// <summary>Accepts or denies a pending membership application (requires MembershipRequests-Update permission).</summary>
+    Task<OrganizationMembershipRequestRecord?> RespondToMembershipRequestAsync(Guid orgId, Guid requestId, OrganizationMembershipRequestStatus status, string? responseNote, CancellationToken token = default);
+
+    /// <summary>Withdraws the applicant's own pending request.</summary>
+    Task<bool> WithdrawMembershipRequestAsync(Guid orgId, Guid requestId, CancellationToken token = default);
+
+    // ── Organization Files ────────────────────────────────────────────────────
+
+    /// <summary>Returns all files owned by the organization.</summary>
+    Task<IReadOnlyList<OrganizationFileRecord>> GetOrgFilesAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>Uploads a new file to the organization's file library.</summary>
+    Task<OrganizationFileRecord?> UploadOrgFileAsync(Guid orgId, MultipartFormDataContent content, CancellationToken token = default);
+
+    /// <summary>Copies a user's public or org-shared file into the organization's file library.</summary>
+    Task<OrganizationFileRecord?> CopyFileFromUserAsync(Guid orgId, Guid uploadFileId, string? description, bool isPublic, CancellationToken token = default);
+
+    /// <summary>Updates metadata (description, visibility, sort order) of an organization file.</summary>
+    Task<OrganizationFileRecord?> UpdateOrgFileAsync(Guid orgId, Guid fileId, string? description, bool isPublic, int sortOrder, CancellationToken token = default);
+
+    /// <summary>Permanently deletes an organization-owned file from storage and the database.</summary>
+    Task<bool> DeleteOrgFileAsync(Guid orgId, Guid fileId, CancellationToken token = default);
     Task<OrgMemberGroupRecord?> CreateGroupAsync(Guid orgId, OrgGroupUpsertRequest request, CancellationToken token = default);
     Task<OrgMemberGroupRecord?> UpdateGroupAsync(Guid orgId, Guid groupId, OrgGroupUpsertRequest request, CancellationToken token = default);
     Task<bool> DeleteGroupAsync(Guid orgId, Guid groupId, CancellationToken token = default);

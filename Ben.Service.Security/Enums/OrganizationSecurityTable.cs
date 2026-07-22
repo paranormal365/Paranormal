@@ -32,5 +32,9 @@ public enum OrganizationSecurityTable
     UserNoteType = 24,
     UserMessageType = 25,
     CmsSection = 26,
-    OrgMemberGroup = 27
+    OrgMemberGroup = 27,
+    /// <summary>Grants access to review and respond to user membership applications.</summary>
+    MembershipRequests = 28,
+    /// <summary>Grants access to manage organization-owned files.</summary>
+    OrganizationFiles = 29,
 }

@@ -1,0 +1,160 @@
+@*
+  OrganizationMembershipRequests.razor
+  ─────────────────────────────────────
+  Embedded component showing pending and resolved membership applications.
+  Used as a sub-panel on the OrganizationMembers page.
+  Org members with MembershipRequests-Update permission can Accept or Deny.
+  Applicants can withdraw their own pending request.
+*@
+
+@namespace Ben.Web.Library.Organization
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject TelerikNotification Toast
+
+<div class="mt-4">
+    <h5 class="mb-3 fw-semibold">Membership Applications</h5>
+
+    @if (_loading)
+    {
+        <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
+    }
+    else if (_requests.Count == 0)
+    {
+        <p class="text-secondary small">No membership applications for this organization.</p>
+    }
+    else
+    {
+        @* ── Pending ─────────────────────────────────────────────────────── *@
+        var pending = _requests.Where(r => r.Status == OrganizationMembershipRequestStatus.Pending).ToList();
+        @if (pending.Any())
+        {
+            <h6 class="text-warning small text-uppercase fw-semibold mb-2">Pending (@pending.Count)</h6>
+            <TelerikGrid Data="@pending" Pageable="true" PageSize="10" Class="mb-4">
+                <GridColumns>
+                    <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.ApplicantDisplayName)" Title="Applicant" />
+                    <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.ApplicantEmail)" Title="Email" />
+                    <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.RequestMessage)" Title="Message" />
+                    <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.DateCreated)" Title="Applied" DisplayFormat="{0:d}" Width="110px" />
+                    <GridCommandColumn Width="180px">
+                        <GridCommandButton OnClick="@(e => AcceptAsync((OrganizationMembershipRequestRecord)e.Item))"
+                                          ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
+                                          Size="@ThemeConstants.Button.Size.Small">Accept</GridCommandButton>
+                        <GridCommandButton OnClick="@(e => DenyAsync((OrganizationMembershipRequestRecord)e.Item))"
+                                          ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                          Size="@ThemeConstants.Button.Size.Small"
+                                          Class="ms-1">Deny</GridCommandButton>
+                    </GridCommandColumn>
+                </GridColumns>
+            </TelerikGrid>
+        }
+
+        @* ── Resolved ─────────────────────────────────────────────────────── *@
+        var resolved = _requests.Where(r => r.Status != OrganizationMembershipRequestStatus.Pending).ToList();
+        @if (resolved.Any())
+        {
+            <h6 class="text-secondary small text-uppercase fw-semibold mb-2">Resolved (@resolved.Count)</h6>
+            <TelerikGrid Data="@resolved" Pageable="true" PageSize="10">
+                <GridColumns>
+                    <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.ApplicantDisplayName)" Title="Applicant" />
+                    <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.Status)" Title="Status" Width="110px">
+                        <Template>
+                            @{ var r = (OrganizationMembershipRequestRecord)context; }
+                            <span class="badge @StatusBadge(r.Status)">@r.Status</span>
+                        </Template>
+                    </GridColumn>
+                    <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.RespondedByDisplayName)" Title="Responded By" />
+                    <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.DateResponded)" Title="Date" DisplayFormat="{0:d}" Width="110px" />
+                </GridColumns>
+            </TelerikGrid>
+        }
+    }
+</div>
+
+@* ── Deny dialog (optional response note) ─────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showDenyDialog" Title="Deny Membership Application" Width="420px">
+    <DialogContent>
+        <p class="small text-secondary mb-2">
+            Applicant: <strong>@_pendingDeny?.ApplicantDisplayName</strong>
+        </p>
+        <label class="form-label fw-semibold">Response Note <span class="text-secondary small">(optional)</span></label>
+        <TelerikTextArea @bind-Value="@_denyNote" Rows="3" Width="100%"
+                         PlaceHolder="Explain why the application was not approved..." />
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="@(() => { _showDenyDialog = false; _pendingDeny = null; _denyNote = string.Empty; })">
+            Cancel
+        </TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                       OnClick="ConfirmDenyAsync">
+            Deny Application
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+<TelerikNotification @ref="_toast" HorizontalPosition="@NotificationHorizontalPosition.Right"
+                     VerticalPosition="@NotificationVerticalPosition.Top" />
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+
+    private bool _loading = true;
+    private List<OrganizationMembershipRequestRecord> _requests = [];
+
+    private bool _showDenyDialog;
+    private OrganizationMembershipRequestRecord? _pendingDeny;
+    private string _denyNote = string.Empty;
+
+    private TelerikNotification? _toast;
+
+    protected override async Task OnParametersSetAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        try { _requests = (await AdminClient.GetMembershipRequestsAsync(OrgId)).ToList(); }
+        catch { _requests = []; }
+        finally { _loading = false; }
+    }
+
+    private async Task AcceptAsync(OrganizationMembershipRequestRecord r)
+    {
+        var updated = await AdminClient.RespondToMembershipRequestAsync(
+            OrgId, r.Id, OrganizationMembershipRequestStatus.Accepted, null);
+        if (updated is not null)
+        {
+            _toast?.Show(new NotificationModel { Text = $"Accepted {r.ApplicantDisplayName}", ThemeColor = ThemeConstants.Notification.ThemeColor.Success, CloseAfter = 4000 });
+            await ReloadAsync();
+        }
+    }
+
+    private void DenyAsync(OrganizationMembershipRequestRecord r)
+    {
+        _pendingDeny = r;
+        _denyNote    = string.Empty;
+        _showDenyDialog = true;
+    }
+
+    private async Task ConfirmDenyAsync()
+    {
+        if (_pendingDeny is null) return;
+        var updated = await AdminClient.RespondToMembershipRequestAsync(
+            OrgId, _pendingDeny.Id, OrganizationMembershipRequestStatus.Denied, _denyNote);
+        _showDenyDialog = false;
+        if (updated is not null)
+        {
+            _toast?.Show(new NotificationModel { Text = $"Denied {_pendingDeny.ApplicantDisplayName}", ThemeColor = ThemeConstants.Notification.ThemeColor.Error, CloseAfter = 4000 });
+            _pendingDeny = null;
+            await ReloadAsync();
+        }
+    }
+
+    private static string StatusBadge(OrganizationMembershipRequestStatus s) => s switch
+    {
+        OrganizationMembershipRequestStatus.Accepted  => "bg-success",
+        OrganizationMembershipRequestStatus.Denied    => "bg-danger",
+        OrganizationMembershipRequestStatus.Withdrawn => "bg-secondary",
+        _                                             => "bg-warning text-dark",
+    };
+}

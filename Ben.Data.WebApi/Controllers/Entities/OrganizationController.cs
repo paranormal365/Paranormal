@@ -68,7 +68,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
                 canEdit   = await _security.HasAccessAsync(userId.Value, org.Id, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Update, ct);
                 canDelete = await _security.HasAccessAsync(userId.Value, org.Id, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Delete, ct);
             }
-            result.Add(new OrganizationListItemResponse(org.Id, org.Name, org.UrlName, org.DateCreated, canEdit, canDelete));
+            result.Add(new OrganizationListItemResponse(org.Id, org.Name, org.UrlName, org.DateCreated, org.IsAcceptingApplications, canEdit, canDelete));
         }
         return Ok(result);
     }
@@ -118,10 +118,11 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         var org = await db.Organizations.FirstOrDefaultAsync(o => o.Id == id, ct);
         if (org is null) return NotFound();
 
-        org.Name               = request.Name.Trim();
-        org.UrlName            = request.UrlName.Trim().ToLowerInvariant();
-        org.DateUpdated        = DateTime.UtcNow;
-        org.UpdatedByAppUserId = userId.Value;
+        org.Name                   = request.Name.Trim();
+        org.UrlName                = request.UrlName.Trim().ToLowerInvariant();
+        org.IsAcceptingApplications = request.IsAcceptingApplications;
+        org.DateUpdated            = DateTime.UtcNow;
+        org.UpdatedByAppUserId     = userId.Value;
 
         await db.SaveChangesAsync(ct);
         return Ok(_mapper2.Map<OrganizationAdminRecord>(org));
@@ -191,8 +192,9 @@ public sealed record OrganizationListItemResponse(
     string Name,
     string UrlName,
     DateTime DateCreated,
+    bool IsAcceptingApplications,
     bool CanEdit,
     bool CanDelete);
 
-public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName);
+public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName, bool IsAcceptingApplications = false);
 
