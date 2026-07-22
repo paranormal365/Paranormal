@@ -140,7 +140,7 @@
                                        OnClick="@(() => _form.IconClass = string.Empty)" />
                     }
                     <TelerikButton Size="@ThemeConstants.Button.Size.Small"
-                                   Icon="@(_loadingIconPicker ? SvgIcon.Loading : SvgIcon.Search)"
+                                   Icon="@(_loadingIconPicker ? SvgIcon.ArrowRotateCw : SvgIcon.Search)"
                                    title="Browse icons"
                                    Enabled="@(!_loadingIconPicker)"
                                    OnClick="@OpenIconPickerAsync">
