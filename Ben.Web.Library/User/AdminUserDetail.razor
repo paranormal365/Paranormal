@@ -459,7 +459,8 @@ else
             @* Icon with Browse button + live preview *@
             <div class="col-12">
                 <label class="form-label fw-semibold">Icon</label>
-                <div class="d-flex align-items-center gap-2">
+                @* @key forces TextBox recreation with new Value when picker sets a class *@
+                <div class="d-flex align-items-center gap-2" @key="@_iconFieldKey">
                     <TelerikTextBox @bind-Value="@_newTypeIconClass"
                                     PlaceHolder="e.g. bi bi-house or fas fa-home or t:Home"
                                     Width="100%" />
@@ -627,6 +628,7 @@ else
     private int    _newTypeSortOrder;
     private bool   _showIconPicker;
     private bool   _loadingIconPicker;
+    private int    _iconFieldKey;
 
     private async Task OpenNewTypeIconPickerAsync()
     {
@@ -640,6 +642,7 @@ else
     private async Task OnNewTypeIconPickerSelected(string cls)
     {
         _newTypeIconClass = cls;
+        _iconFieldKey++;                      // forces TextBox recreation with new Value
         await InvokeAsync(StateHasChanged);
     }
     private string? _typeError;
@@ -932,6 +935,7 @@ else
         _newTypeIsActive     = true;
         _newTypeIsPublic     = false;
         _newTypeSortOrder    = 0;
+        _iconFieldKey        = 0;
         _typeError           = null;
         _showAddTypeDialog   = true;
     }
