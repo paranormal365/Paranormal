@@ -114,9 +114,7 @@
 @* ── Add / Edit dialog ── *@
 <TelerikDialog @bind-Visible="@_showDialog"
                Title="@(_editingItem is null ? $"New {_familyLabel}" : $"Edit {_familyLabel}")"
-               Width="520px"
-               @key="@_iconFieldKey">
-    @* @key destroys+recreates the dialog when _iconFieldKey changes so portal re-renders with new icon value *@
+               Width="520px">
     <DialogContent>
         <div class="row g-3">
             <div class="col-12">
@@ -129,40 +127,7 @@
             </div>
             <div class="col-md-6">
                 <label class="form-label">Icon <span class="text-secondary small">(optional)</span></label>
-                @* @key forces the TextBox to be recreated (fresh Value) when the picker sets a new class *@
-                <div class="d-flex align-items-center gap-1" @key="@_iconFieldKey">
-                    <TelerikTextBox @bind-Value="@_form.IconClass"
-                                    PlaceHolder="Browse or type: bi bi-house, t:Home…"
-                                    Width="100%" />
-                    @if (!string.IsNullOrWhiteSpace(_form.IconClass))
-                    {
-                        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
-                                       FillMode="@ThemeConstants.Button.FillMode.Flat"
-                                       Icon="@SvgIcon.X"
-                                       title="Clear icon"
-                                       OnClick="@ClearIconClass" />
-                    }
-                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
-                                   Icon="@SvgIcon.Search"
-                                   title="Browse icons"
-                                   OnClick="@OpenIconPickerAsync">Browse</TelerikButton>
-                    @if (!string.IsNullOrWhiteSpace(_form.IconClass))
-                    {
-                        <span class="d-flex align-items-center justify-content-center border rounded"
-                              style="min-width:34px;height:34px;flex-shrink:0;"
-                              title="@_form.IconClass">
-                            @if (_form.IconClass.StartsWith("t:"))
-                            {
-                                var svgIco = IconPickerDialog.ResolveTelerikIcon(_form.IconClass);
-                                @if (svgIco is not null) { <TelerikSvgIcon Icon="@svgIco" /> }
-                            }
-                            else
-                            {
-                                <i class="@_form.IconClass"></i>
-                            }
-                        </span>
-                    }
-                </div>
+                <IconClassPicker @bind-Value="@_form.IconClass" />
             </div>
             <div class="col-md-6">
                 <label class="form-label">Color Class</label>
@@ -213,11 +178,6 @@
                        OnClick="@(() => _showDeleteDialog = false)">Cancel</TelerikButton>
     </DialogButtons>
 </TelerikDialog>
-
-@* ── Icon Picker ─────────────────────────────────────────────── *@
-<IconPickerDialog @bind-Visible="@_showIconPicker"
-                  OnIconSelected="@OnIconPickerSelected" />
-
 @code {
 
     // ── Family catalog ────────────────────────────────────────────────────────
@@ -257,31 +217,8 @@
 
     private bool _showDeleteDialog;
     private LookupTypeAdminRecord? _deletingItem;
-    private bool _showIconPicker;
-    private bool _loadingIconPicker;
-    private int  _iconFieldKey;
 
-    private void ClearIconClass() { _form.IconClass = string.Empty; _iconFieldKey++; }
-
-    /// <summary>Opens the icon picker with a brief spinner so the UI doesn't appear frozen.</summary>
-    private async Task OpenIconPickerAsync()
-    {
-        _loadingIconPicker = true;
-        await InvokeAsync(StateHasChanged);
-        await Task.Delay(50);
-        _showIconPicker    = true;
-        _loadingIconPicker = false;
-    }
-
-    /// <summary>Receives the chosen icon class string from the picker and forces a re-render.</summary>
-    private async Task OnIconPickerSelected(string cls)
-    {
-        _form.IconClass = cls;
-        _iconFieldKey++;                      // forces TextBox recreation with new Value
-        await InvokeAsync(StateHasChanged);
-    }
-
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    // ── Lifecycle ────────────────────────────────────────────────────────────────
 
     protected override void OnInitialized()
     {
@@ -326,17 +263,15 @@
 
     private void OpenCreate()
     {
-        _editingItem  = null;
-        _form         = new FormModel { IsActive = true, SortOrder = 0 };
-        _dialogError  = null;
-        _iconFieldKey = 0;
-        _showDialog   = true;
+        _editingItem = null;
+        _form        = new FormModel { IsActive = true, SortOrder = 0 };
+        _dialogError = null;
+        _showDialog  = true;
     }
 
     private void OpenEdit(LookupTypeAdminRecord item)
     {
-        _editingItem  = item;
-        _iconFieldKey = 0;
+        _editingItem = item;
         _form = new FormModel
         {
             Name        = item.Name,

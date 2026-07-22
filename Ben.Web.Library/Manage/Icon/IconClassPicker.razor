@@ -1,0 +1,140 @@
+@*
+  IconClassPicker.razor
+  ─────────────────────
+  Self-contained reusable component for picking / editing / clearing an icon class.
+
+  Three states (managed internally — no @key trickery on parent TelerikDialog needed):
+    1. No icon     → [Browse Icons] button
+    2. Icon set    → [icon preview] [class label] [Browse] [✏ Edit] [✕ Clear]
+    3. Editing     → [textbox] [✓ Done] [✕ Clear]
+
+  The component re-renders itself via its own StateHasChanged() — independent of any
+  TelerikDialog portal ShouldRender optimization in the parent.
+
+  Usage:
+    <IconClassPicker @bind-Value="@myField" />
+*@
+
+@namespace Ben.Web.Library.Manage.Icon
+
+@* Icon picker overlay (position:fixed, rendered in this component's tree) *@
+<IconPickerDialog @bind-Visible="@_showPicker" OnIconSelected="@OnIconSelectedAsync" />
+
+@* Icon field UI *@
+<div class="d-flex align-items-center gap-1 flex-wrap" @key="@_fieldKey">
+
+    @if (_editingManually)
+    {
+        @* Manual edit mode — show textbox + Done + Clear *@
+        <TelerikTextBox Value="@_currentValue"
+                        ValueChanged="@OnTextChanged"
+                        PlaceHolder="e.g. bi bi-house, t:Home, fas fa-star"
+                        Width="200px" />
+        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                       Icon="@SvgIcon.Check"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
+                       title="Done"
+                       OnClick="@(() => _editingManually = false)" />
+        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Icon="@SvgIcon.X"
+                       title="Clear icon"
+                       OnClick="@ClearAsync" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_currentValue))
+    {
+        @* Icon selected — show preview + class label + Browse + Edit + Clear *@
+        <span class="d-flex align-items-center justify-content-center border rounded"
+              style="min-width:32px;height:32px;flex-shrink:0;" title="@_currentValue">
+            @if (_currentValue.StartsWith("t:"))
+            {
+                var ico = IconPickerDialog.ResolveTelerikIcon(_currentValue);
+                @if (ico is not null) { <TelerikSvgIcon Icon="@ico" /> }
+            }
+            else { <i class="@_currentValue"></i> }
+        </span>
+        <span class="small text-secondary text-truncate" style="max-width:130px;" title="@_currentValue">
+            @_currentValue
+        </span>
+        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       Icon="@SvgIcon.Search"
+                       title="Browse to change icon"
+                       OnClick="@(() => _showPicker = true)">Browse</TelerikButton>
+        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Icon="@SvgIcon.Pencil"
+                       title="Edit icon class manually"
+                       OnClick="@(() => _editingManually = true)" />
+        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Icon="@SvgIcon.X"
+                       title="Clear icon"
+                       OnClick="@ClearAsync" />
+    }
+    else
+    {
+        @* No icon — just Browse button *@
+        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                       Icon="@SvgIcon.Search"
+                       OnClick="@(() => _showPicker = true)">Browse Icons</TelerikButton>
+    }
+
+</div>
+
+@code {
+
+    /// <summary>Current icon class string. Use @bind-Value for two-way binding.</summary>
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+    // ── Internal state (self-managed — no parent key tricks needed) ───────────
+
+    private string? _currentValue;
+    private bool    _showPicker;
+    private bool    _editingManually;
+    private int     _fieldKey;       // forces TextBox recreation when icon is set programmatically
+
+    protected override void OnParametersSet()
+    {
+        // Sync from parameter on initial load or when not in manual-edit mode.
+        // While editing, the user controls the value via the textbox.
+        if (!_editingManually)
+            _currentValue = Value;
+    }
+
+    // ── Icon picker selected ──────────────────────────────────────────────────
+
+    private async Task OnIconSelectedAsync(string cls)
+    {
+        _currentValue    = cls;
+        _editingManually = false;
+        _fieldKey++;              // recreates the TextBox with fresh value if somehow visible
+        _showPicker      = false;
+        // Fire ValueChanged so the parent form model stays in sync for saving
+        if (ValueChanged.HasDelegate)
+            await ValueChanged.InvokeAsync(cls);
+        StateHasChanged();
+    }
+
+    // ── Manual textbox ────────────────────────────────────────────────────────
+
+    private async Task OnTextChanged(string? v)
+    {
+        _currentValue = v;
+        if (ValueChanged.HasDelegate)
+            await ValueChanged.InvokeAsync(v);
+    }
+
+    // ── Clear ─────────────────────────────────────────────────────────────────
+
+    private async Task ClearAsync()
+    {
+        _currentValue    = null;
+        _editingManually = false;
+        _fieldKey++;
+        if (ValueChanged.HasDelegate)
+            await ValueChanged.InvokeAsync(null);
+        StateHasChanged();
+    }
+}

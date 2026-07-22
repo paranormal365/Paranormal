@@ -445,9 +445,7 @@ else
 @* ── Add New Type mini-dialog ─────────────────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showAddTypeDialog"
                Title="@($"New {_addTypeFor} Type")"
-               Width="500px"
-               @key="@_iconFieldKey">
-    @* @key destroys+recreates the dialog when _iconFieldKey changes so portal re-renders with new icon value *@
+               Width="500px">
     <DialogContent>
         <div class="row g-3">
             <div class="col-12">
@@ -458,34 +456,9 @@ else
                 <label class="form-label fw-semibold">Description</label>
                 <TelerikTextBox @bind-Value="@_newTypeDescription" Width="100%" />
             </div>
-            @* Icon with Browse button + live preview *@
             <div class="col-12">
                 <label class="form-label fw-semibold">Icon</label>
-                @* @key forces TextBox recreation with new Value when picker sets a class *@
-                <div class="d-flex align-items-center gap-2" @key="@_iconFieldKey">
-                    <TelerikTextBox @bind-Value="@_newTypeIconClass"
-                                    PlaceHolder="e.g. bi bi-house or fas fa-home or t:Home"
-                                    Width="100%" />
-                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
-                                   Icon="@SvgIcon.Search"
-                                   OnClick="@OpenNewTypeIconPickerAsync"
-                                   title="Browse available icons">Browse</TelerikButton>
-                    @if (!string.IsNullOrWhiteSpace(_newTypeIconClass))
-                    {
-                        <span class="d-flex align-items-center justify-content-center border rounded px-2"
-                              style="min-width:36px;height:36px;" title="@_newTypeIconClass">
-                            @if (_newTypeIconClass.StartsWith("t:"))
-                            {
-                                var svgIco = IconPickerDialog.ResolveTelerikIcon(_newTypeIconClass);
-                                @if (svgIco is not null) { <TelerikSvgIcon Icon="@svgIco" /> }
-                            }
-                            else
-                            {
-                                <i class="@_newTypeIconClass"></i>
-                            }
-                        </span>
-                    }
-                </div>
+                <IconClassPicker @bind-Value="@_newTypeIconClass" />
                 <small class="text-secondary">Browse to pick from Telerik, Bootstrap, or Font Awesome icons.</small>
             </div>
             @* Color Class *@
@@ -517,9 +490,6 @@ else
     </DialogButtons>
 </TelerikDialog>
 
-@* ── Icon Picker (shared across all New Type dialogs) ────────────────────── *@
-<IconPickerDialog @bind-Visible="@_showIconPicker"
-                  OnIconSelected="@OnNewTypeIconPickerSelected" />
 
 @* ── Upload File dialog ───────────────────────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showUploadDialog"
@@ -625,21 +595,6 @@ else
     private bool   _newTypeIsActive    = true;
     private bool   _newTypeIsPublic;
     private int    _newTypeSortOrder;
-    private bool   _showIconPicker;
-    private bool   _loadingIconPicker;
-    private int    _iconFieldKey;
-
-    private void OpenNewTypeIconPickerAsync()
-    {
-        _showIconPicker = true;
-    }
-
-    private async Task OnNewTypeIconPickerSelected(string cls)
-    {
-        _newTypeIconClass = cls;
-        _iconFieldKey++;                      // forces TextBox recreation with new Value
-        await InvokeAsync(StateHasChanged);
-    }
     private string? _typeError;
 
     protected override void OnInitialized()
@@ -930,7 +885,6 @@ else
         _newTypeIsActive     = true;
         _newTypeIsPublic     = false;
         _newTypeSortOrder    = 0;
-        _iconFieldKey        = 0;
         _typeError           = null;
         _showAddTypeDialog   = true;
     }
