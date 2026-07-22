@@ -22,13 +22,19 @@ public class AppUserRepositoryManager : IAppUserRepositoryManager
     private IUserNoteTypeRepository? _userNoteTypeRepository;
     private IUserPhoneRepository? _userPhoneRepository;
     private IUserPhoneTypeRepository? _userPhoneTypeRepository;
+    private IUploadFileRepository? _uploadFileRepository;
+    private IUploadFileTypeRepository? _uploadFileTypeRepository;
+    private IUploadFileTypeExtensionRepository? _uploadFileTypeExtensionRepository;
+    private IUploadFileAudioConfigRepository? _uploadFileAudioConfigRepository;
+    private IUploadFileOrganizationShareRepository? _uploadFileShareRepository;
+    private IUploadFilePermissionRequestRepository? _uploadFilePermissionRequestRepository;
+    private IUploadFileRegionNoteRepository? _uploadFileRegionNoteRepository;
+    private IUploadFileVoteRepository? _uploadFileVoteRepository;
 
-
-    public AppUserRepositoryManager(IDbContextFactory<BenDataContext> dbContextFactory) 
+    public AppUserRepositoryManager(IDbContextFactory<BenDataContext> dbContextFactory)
     {
         _dbContextFactory = dbContextFactory;
     }
-
 
     public IAppUserRepository AppUserRepository => _appUserRepository ??= new AppUserRepository(_dbContextFactory);
     public IUserAddressRepository AddressRepository => _userAddressRepository ??= new UserAddressRepository(_dbContextFactory);
@@ -44,5 +50,12 @@ public class AppUserRepositoryManager : IAppUserRepositoryManager
     public IUserNoteTypeRepository NoteTypeRepository => _userNoteTypeRepository ??= new UserNoteTypeRepository(_dbContextFactory);
     public IUserPhoneRepository PhoneRepository => _userPhoneRepository ??= new UserPhoneRepository(_dbContextFactory);
     public IUserPhoneTypeRepository PhoneTypeRepository => _userPhoneTypeRepository ??= new UserPhoneTypeRepository(_dbContextFactory);
-
+    public IUploadFileRepository UploadFileRepository => _uploadFileRepository ??= new UploadFileRepository(_dbContextFactory);
+    public IUploadFileTypeRepository UploadFileTypeRepository => _uploadFileTypeRepository ??= new UploadFileTypeRepository(_dbContextFactory);
+    public IUploadFileTypeExtensionRepository UploadFileTypeExtensionRepository => _uploadFileTypeExtensionRepository ??= new UploadFileTypeExtensionRepository(_dbContextFactory);
+    public IUploadFileAudioConfigRepository UploadFileAudioConfigRepository => _uploadFileAudioConfigRepository ??= new UploadFileAudioConfigRepository(_dbContextFactory);
+    public IUploadFileOrganizationShareRepository UploadFileShareRepository => _uploadFileShareRepository ??= new UploadFileOrganizationShareRepository(_dbContextFactory);
+    public IUploadFilePermissionRequestRepository UploadFilePermissionRequestRepository => _uploadFilePermissionRequestRepository ??= new UploadFilePermissionRequestRepository(_dbContextFactory);
+    public IUploadFileRegionNoteRepository UploadFileRegionNoteRepository => _uploadFileRegionNoteRepository ??= new UploadFileRegionNoteRepository(_dbContextFactory);
+    public IUploadFileVoteRepository UploadFileVoteRepository => _uploadFileVoteRepository ??= new UploadFileVoteRepository(_dbContextFactory);
 }
