@@ -100,6 +100,20 @@ All profiles extend `AutoMapper.Profile` and are in the `Ben.Service.Mappings` n
 
 | Profile Class | Source | Target |
 |---|---|---|
-| `UploadFileAudioConfigProfile` | `UploadFileAudioConfig` | `UploadFileAudioConfigRecord` |
-| `UploadFileRegionNoteProfile` | `UploadFileRegionNote` | `UploadFileRegionNoteRecord` |
-| `UploadFileVoteProfile` | `UploadFileVote` | `UploadFileVoteRecord` |
+| `UploadFileAudioConfigProfile` | [`UploadFileAudioConfig`](../Ben.Data.Source/Entities-Upload.md) | [`UploadFileAudioConfigRecord`](../Ben.Service.Models/Records-Entities.md#uploadfileaudioconfigrecord) |
+| `UploadFileRegionNoteProfile` | [`UploadFileRegionNote`](../Ben.Data.Source/Entities-Upload.md) | [`UploadFileRegionNoteRecord`](../Ben.Service.Models/Records-Entities.md#uploadfileregionnoterecord) |
+| `UploadFileVoteProfile` | [`UploadFileVote`](../Ben.Data.Source/Entities-Upload.md) | [`UploadFileVoteRecord`](../Ben.Service.Models/Records-Entities.md#uploadfilevoterecord) |
+| `CmsSectionProfile` | [`CmsSection`](../Ben.Data.Source/Entities-Org.md#cmssection) | [`CmsSectionRecord`](../Ben.Service.Models/Records-Entities.md#cmssectionrecord) |
+| `CmsPagePermissionProfile` | [`CmsPagePermission`](../Ben.Data.Source/Entities-Org.md#cmspagepermission) | [`CmsPagePermissionRecord`](../Ben.Service.Models/Records-Entities.md#cmspagepermissionrecord) |
+| `OrgMemberGroupProfile` | [`OrgMemberGroup`](../Ben.Data.Source/Entities-Org.md#orgmembergroup) | [`OrgMemberGroupRecord`](../Ben.Service.Models/Records-Entities.md#orgmembergrouprecord) |
+| `OrgMemberGroupMembershipProfile` | [`OrgMemberGroupMembership`](../Ben.Data.Source/Entities-Org.md#orgmembergroupmembership) | [`OrgMemberGroupMembershipRecord`](../Ben.Service.Models/Records-Entities.md#orgmembergroupmembershiprecord) |
+| `OrganizationLogoProfile` | [`OrganizationLogo`](../Ben.Data.Source/Entities-Org.md#organizationlogo) | [`OrganizationLogoRecord`](../Ben.Service.Models/Records-Entities.md#organizationlogorecord) |
+
+### New profiles (added 2026-07-22)
+
+| Profile Class | Source | Target | Notes |
+|---|---|---|---|
+| `OrganizationMembershipRequestProfile` | [`OrganizationMembershipRequest`](../Ben.Data.Source/Entities-Org.md#organizationmembershiprequest) | [`OrganizationMembershipRequestRecord`](../Ben.Service.Models/Records-Entities.md#organizationmembershiprequestrecord) | Maps `Organization.Name`, `Applicant.DisplayName/Email`, `UpdatedByAppUser.DisplayName` → `RespondedByDisplayName`, `DateUpdated` → `DateResponded` |
+| `OrganizationFileProfile` | [`OrganizationFile`](../Ben.Data.Source/Entities-Org.md#organizationfile) | [`OrganizationFileRecord`](../Ben.Service.Models/Records-Entities.md#organizationfilerecord) | Maps `UploadFileType.Name`, `CreatedByAppUser.DisplayName`, `PublishedByAppUser?.DisplayName` |
+| `OrganizationFileDeleteLogProfile` | [`OrganizationFileDeleteLog`](../Ben.Data.Source/Entities-Org.md#organizationfiledeleterelog) | [`OrganizationFileDeleteLogRecord`](../Ben.Service.Models/Records-Entities.md#organizationfiledeletelogrecord) | Flat map — no nav props on source entity |
+| `OrganizationAddressMapConfigProfile` | [`OrganizationAddressMapConfig`](../Ben.Data.Source/Entities-Org.md#organizationaddressmapconfig) | [`AddressMapConfigRecord`](../Ben.Service.Models/Records-Entities.md#addressmapconfigrecord) | Flat map — all primitive fields |

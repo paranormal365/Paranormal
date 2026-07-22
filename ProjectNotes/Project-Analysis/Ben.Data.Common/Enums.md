@@ -207,3 +207,22 @@ Direction of a cryptographic operation.
 |---|---|
 | `Encrypt` | Encrypt plaintext to ciphertext. |
 | `Decrypt` | Decrypt ciphertext to recover plaintext. |
+
+---
+
+## `OrganizationMembershipRequestStatus`
+
+**File:** [`Ben.Data.Common/Enums/OrganizationMembershipRequestStatus.cs`](../../../Ben.Data.Common/Enums/OrganizationMembershipRequestStatus.cs)  
+**Stored on:** [`OrganizationMembershipRequest.Status`](../../Ben.Data.Source/Entities-Org.md#organizationmembershiprequest) (int column)  
+**Used by:** [`OrganizationMembershipRequestController`](../../Ben.Data.WebApi/Controllers-Entities.md#organizationmembershiprequestcontroller), [`OrganizationMembershipRequestRecord`](../../Ben.Service.Models/Records-Entities.md#organizationmembershiprequestrecord)  
+*(added 2026-07-22)*
+
+### Summary
+Tracks the lifecycle state of a user's application to join an organization.
+
+| Value | Int | Description |
+|---|---|---|
+| `Pending` | 0 | Application submitted; awaiting org admin response. |
+| `Accepted` | 1 | Application accepted; the applicant has been added as an org member. |
+| `Denied` | 2 | Application denied; the user remains outside the organization. |
+| `Withdrawn` | 3 | The applicant withdrew their own request before a response was given. |
