@@ -140,9 +140,12 @@
                                        OnClick="@(() => _form.IconClass = string.Empty)" />
                     }
                     <TelerikButton Size="@ThemeConstants.Button.Size.Small"
-                                   Icon="@SvgIcon.Search"
+                                   Icon="@(_loadingIconPicker ? SvgIcon.Loading : SvgIcon.Search)"
                                    title="Browse icons"
-                                   OnClick="@(() => _showIconPicker = true)">Browse</TelerikButton>
+                                   Enabled="@(!_loadingIconPicker)"
+                                   OnClick="@OpenIconPickerAsync">
+                        @(_loadingIconPicker ? "Loading…" : "Browse")
+                    </TelerikButton>
                     @if (!string.IsNullOrWhiteSpace(_form.IconClass))
                     {
                         <span class="d-flex align-items-center justify-content-center border rounded"
@@ -213,7 +216,7 @@
 
 @* ── Icon Picker ─────────────────────────────────────────────── *@
 <IconPickerDialog @bind-Visible="@_showIconPicker"
-                  OnIconSelected="@((string cls) => { _form.IconClass = cls; })" />
+                  OnIconSelected="@OnIconPickerSelected" />
 
 @code {
 
@@ -255,6 +258,24 @@
     private bool _showDeleteDialog;
     private LookupTypeAdminRecord? _deletingItem;
     private bool _showIconPicker;
+    private bool _loadingIconPicker;
+
+    /// <summary>Opens the icon picker with a brief spinner so the UI doesn't appear frozen.</summary>
+    private async Task OpenIconPickerAsync()
+    {
+        _loadingIconPicker = true;
+        StateHasChanged();
+        await Task.Yield();   // one render tick — lets the spinner appear before the dialog renders
+        _showIconPicker    = true;
+        _loadingIconPicker = false;
+    }
+
+    /// <summary>Receives the chosen icon class string from the picker and forces a re-render.</summary>
+    private void OnIconPickerSelected(string cls)
+    {
+        _form.IconClass = cls;
+        StateHasChanged();
+    }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 

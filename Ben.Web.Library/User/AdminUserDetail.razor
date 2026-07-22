@@ -464,9 +464,12 @@ else
                                     PlaceHolder="e.g. bi bi-house or fas fa-home or t:Home"
                                     Width="100%" />
                     <TelerikButton Size="@ThemeConstants.Button.Size.Small"
-                                   Icon="@SvgIcon.Search"
-                                   OnClick="@(() => _showIconPicker = true)"
-                                   title="Browse available icons">Browse</TelerikButton>
+                                   Icon="@(_loadingIconPicker ? SvgIcon.Loading : SvgIcon.Search)"
+                                   Enabled="@(!_loadingIconPicker)"
+                                   OnClick="@OpenNewTypeIconPickerAsync"
+                                   title="Browse available icons">
+                        @(_loadingIconPicker ? "Loading…" : "Browse")
+                    </TelerikButton>
                     @if (!string.IsNullOrWhiteSpace(_newTypeIconClass))
                     {
                         <span class="d-flex align-items-center justify-content-center border rounded px-2"
@@ -516,7 +519,7 @@ else
 
 @* ── Icon Picker (shared across all New Type dialogs) ────────────────────── *@
 <IconPickerDialog @bind-Visible="@_showIconPicker"
-                  OnIconSelected="@((string cls) => { _newTypeIconClass = cls; })" />
+                  OnIconSelected="@OnNewTypeIconPickerSelected" />
 
 @* ── Upload File dialog ───────────────────────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showUploadDialog"
@@ -623,6 +626,22 @@ else
     private bool   _newTypeIsPublic;
     private int    _newTypeSortOrder;
     private bool   _showIconPicker;
+    private bool   _loadingIconPicker;
+
+    private async Task OpenNewTypeIconPickerAsync()
+    {
+        _loadingIconPicker = true;
+        StateHasChanged();
+        await Task.Yield();
+        _showIconPicker    = true;
+        _loadingIconPicker = false;
+    }
+
+    private void OnNewTypeIconPickerSelected(string cls)
+    {
+        _newTypeIconClass = cls;
+        StateHasChanged();
+    }
     private string? _typeError;
 
     protected override void OnInitialized()
