@@ -51,7 +51,30 @@
             <GridColumns>
                 <GridColumn Field="@nameof(LookupTypeAdminRecord.Name)" Title="Name" />
                 <GridColumn Field="@nameof(LookupTypeAdminRecord.Description)" Title="Description" />
-                <GridColumn Field="@nameof(LookupTypeAdminRecord.IconClass)" Title="Icon" Width="110px" />
+                <GridColumn Field="@nameof(LookupTypeAdminRecord.IconClass)" Title="Icon" Width="110px">
+                    <Template>
+                        @{ var row = (LookupTypeAdminRecord)context; }
+                        @if (!string.IsNullOrWhiteSpace(row.IconClass))
+                        {
+                            @if (row.IconClass.StartsWith("t:"))
+                            {
+                                var ico = IconPickerDialog.ResolveTelerikIcon(row.IconClass);
+                                @if (ico is not null)
+                                {
+                                    <span title="@row.IconClass">
+                                        <TelerikSvgIcon Icon="@ico" />
+                                    </span>
+                                }
+                            }
+                            else
+                            {
+                                <span title="@row.IconClass">
+                                    <i class="@row.IconClass" style="font-size:1.1rem;"></i>
+                                </span>
+                            }
+                        }
+                    </Template>
+                </GridColumn>
                 <GridColumn Field="@nameof(LookupTypeAdminRecord.SortOrder)" Title="Sort" Width="70px" />
                 <GridColumn Field="@nameof(LookupTypeAdminRecord.IsActive)" Title="Active" Width="80px">
                     <Template>
@@ -103,8 +126,40 @@
                 <TelerikTextBox @bind-Value="@_form.Description" Width="100%" />
             </div>
             <div class="col-md-6">
-                <label class="form-label">Icon Class</label>
-                <TelerikTextBox @bind-Value="@_form.IconClass" Width="100%" />
+                <label class="form-label">Icon <span class="text-secondary small">(optional)</span></label>
+                <div class="d-flex align-items-center gap-1">
+                    <TelerikTextBox @bind-Value="@_form.IconClass"
+                                    PlaceHolder="Browse or type: bi bi-house, t:Home…"
+                                    Width="100%" />
+                    @if (!string.IsNullOrWhiteSpace(_form.IconClass))
+                    {
+                        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                       Icon="@SvgIcon.X"
+                                       title="Clear icon"
+                                       OnClick="@(() => _form.IconClass = string.Empty)" />
+                    }
+                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                   Icon="@SvgIcon.Search"
+                                   title="Browse icons"
+                                   OnClick="@(() => _showIconPicker = true)">Browse</TelerikButton>
+                    @if (!string.IsNullOrWhiteSpace(_form.IconClass))
+                    {
+                        <span class="d-flex align-items-center justify-content-center border rounded"
+                              style="min-width:34px;height:34px;flex-shrink:0;"
+                              title="@_form.IconClass">
+                            @if (_form.IconClass.StartsWith("t:"))
+                            {
+                                var svgIco = IconPickerDialog.ResolveTelerikIcon(_form.IconClass);
+                                @if (svgIco is not null) { <TelerikSvgIcon Icon="@svgIco" /> }
+                            }
+                            else
+                            {
+                                <i class="@_form.IconClass"></i>
+                            }
+                        </span>
+                    }
+                </div>
             </div>
             <div class="col-md-6">
                 <label class="form-label">Color Class</label>
@@ -141,7 +196,7 @@
     </DialogButtons>
 </TelerikDialog>
 
-@* ── Delete confirm dialog ── *@
+@* ── Delete confirm dialog ────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showDeleteDialog"
                Title="Confirm Delete"
                Width="400px">
@@ -155,6 +210,10 @@
                        OnClick="@(() => _showDeleteDialog = false)">Cancel</TelerikButton>
     </DialogButtons>
 </TelerikDialog>
+
+@* ── Icon Picker ─────────────────────────────────────────────── *@
+<IconPickerDialog @bind-Visible="@_showIconPicker"
+                  OnIconSelected="@((string cls) => { _form.IconClass = cls; })" />
 
 @code {
 
@@ -195,6 +254,7 @@
 
     private bool _showDeleteDialog;
     private LookupTypeAdminRecord? _deletingItem;
+    private bool _showIconPicker;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
