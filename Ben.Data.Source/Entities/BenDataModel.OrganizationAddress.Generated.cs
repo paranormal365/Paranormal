@@ -25,5 +25,6 @@ namespace Ben.Data.Source.Entities
         public virtual OrganizationAddressType OrganizationAddressType { get; set; } = null!;
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
+        public virtual OrganizationAddressMapConfig? MapConfig { get; set; }
     }
 }

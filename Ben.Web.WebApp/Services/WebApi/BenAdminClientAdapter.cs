@@ -172,6 +172,20 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/logos/{logoId}", token);
 
+    public Task<AddressMapConfigRecord?> GetOrgAddressMapConfigAsync(Guid orgId, Guid addressId, CancellationToken token = default)
+        => _api.GetAsync<AddressMapConfigRecord>($"/api/organizations/{orgId}/addresses/{addressId}/map-config", token);
+
+    public Task<AddressMapConfigRecord?> UpsertOrgAddressMapConfigAsync(Guid orgId, Guid addressId, AddressMapConfigRecord config, CancellationToken token = default)
+        => _api.PutAsync<object, AddressMapConfigRecord>(
+               $"/api/organizations/{orgId}/addresses/{addressId}/map-config",
+               new { config.IsOnMap, config.ShowMarker, config.ShowRegion, config.RegionRadiusMiles,
+                     config.MarkerColor, config.MarkerIconKey, config.RegionFillColor,
+                     config.RegionFillOpacity, config.RegionStrokeColor, config.RegionStrokeOpacity,
+                     config.RegionStrokeWidth }, token);
+
+    public Task<bool> DeleteOrgAddressMapConfigAsync(Guid orgId, Guid addressId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/addresses/{addressId}/map-config", token);
+
     // ── Org Member Groups ─────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default)

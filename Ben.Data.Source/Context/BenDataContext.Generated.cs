@@ -45,6 +45,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrganizationMembershipRequest> OrganizationMembershipRequests { get; set; }
         public virtual DbSet<OrganizationFile> OrganizationFiles { get; set; }
         public virtual DbSet<OrganizationFileDeleteLog> OrganizationFileDeleteLogs { get; set; }
+        public virtual DbSet<OrganizationAddressMapConfig> OrganizationAddressMapConfigs { get; set; }
         public virtual DbSet<UploadFileType> UploadFileTypes { get; set; }
         public virtual DbSet<UploadFileTypeExtension> UploadFileTypeExtensions { get; set; }
         public virtual DbSet<UploadFile> UploadFiles { get; set; }
@@ -688,6 +689,30 @@ namespace Ben.Data.Source.Context
                 .HasIndex(e => e.OrganizationId);
             modelBuilder.Entity<OrganizationFileDeleteLog>()
                 .HasIndex(e => e.DeletedByAppUserId);
+
+            // ── OrganizationAddressMapConfig ──────────────────────────────────
+            // One-to-one with OrganizationAddress; cascade so config is deleted with the address.
+            modelBuilder.Entity<OrganizationAddressMapConfig>().ToTable("OrganizationAddressMapConfigs");
+            modelBuilder.Entity<OrganizationAddressMapConfig>()
+                .HasOne(e => e.OrganizationAddress).WithOne(e => e.MapConfig)
+                .HasForeignKey<OrganizationAddressMapConfig>(e => e.OrganizationAddressId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrganizationAddressMapConfig>()
+                .HasIndex(e => e.OrganizationAddressId).IsUnique();
+            modelBuilder.Entity<OrganizationAddressMapConfig>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationAddressMapConfig>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationAddressMapConfig>()
+                .Property(e => e.MarkerColor).HasMaxLength(50);
+            modelBuilder.Entity<OrganizationAddressMapConfig>()
+                .Property(e => e.RegionFillColor).HasMaxLength(50);
+            modelBuilder.Entity<OrganizationAddressMapConfig>()
+                .Property(e => e.RegionStrokeColor).HasMaxLength(50);
+            modelBuilder.Entity<OrganizationAddressMapConfig>()
+                .Property(e => e.MarkerIconKey).HasMaxLength(64).IsRequired(false);
         }
     }
 }

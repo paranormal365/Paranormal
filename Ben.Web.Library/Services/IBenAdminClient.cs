@@ -178,6 +178,17 @@ public interface IBenAdminClient
     Task<OrganizationLogoRecord?> UpdateOrgLogoAsync(Guid orgId, Guid logoId, CmsUpdateLogoRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default);
 
+    // ── Organization Address Map Config ───────────────────────────────────────
+
+    /// <summary>Returns the map display config for an organization address, or null if not configured.</summary>
+    Task<AddressMapConfigRecord?> GetOrgAddressMapConfigAsync(Guid orgId, Guid addressId, CancellationToken token = default);
+
+    /// <summary>Saves (upserts) the map display config for an organization address.</summary>
+    Task<AddressMapConfigRecord?> UpsertOrgAddressMapConfigAsync(Guid orgId, Guid addressId, AddressMapConfigRecord config, CancellationToken token = default);
+
+    /// <summary>Removes the map config for an organization address (resets to "not on map").</summary>
+    Task<bool> DeleteOrgAddressMapConfigAsync(Guid orgId, Guid addressId, CancellationToken token = default);
+
     // ── Org Member Groups ─────────────────────────────────────────────────────
 
     Task<IReadOnlyList<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default);
