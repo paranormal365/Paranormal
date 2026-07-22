@@ -29,11 +29,12 @@
             <span class="text-secondary small ms-auto">Click an icon to select it</span>
         </div>
 
-        @* Only the active tab renders its icon gallery *@
-        <TelerikTabStrip @bind-ActiveTabIndex="@_activeTab">
+        @* Each tab only renders its gallery when it is active (lazy).
+           @bind-ActiveTabId wires the string ID so re-render fires on tab switch. *@
+        <TelerikTabStrip @bind-ActiveTabId="@_activeTabId">
 
-            <TabStripTab Title="@($"Telerik ({_telerikCount})")">
-                @if (_activeTab == 0)
+            <TabStripTab Id="telerik" Title="Telerik Icons">
+                @if (_activeTabId == "telerik")
                 {
                     var list = FilteredTelerik.ToList();
                     if (list.Count == 0) { <div class="icon-picker-empty">No icons match "@_search"</div> }
@@ -54,8 +55,8 @@
                 }
             </TabStripTab>
 
-            <TabStripTab Title="@($"Bootstrap ({_bsCount})")">
-                @if (_activeTab == 1)
+            <TabStripTab Id="bootstrap" Title="Bootstrap Icons">
+                @if (_activeTabId == "bootstrap")
                 {
                     var list = FilteredBootstrap.ToList();
                     if (list.Count == 0) { <div class="icon-picker-empty">No icons match "@_search"</div> }
@@ -76,8 +77,8 @@
                 }
             </TabStripTab>
 
-            <TabStripTab Title="@($"Font Awesome ({_faCount})")">
-                @if (_activeTab == 2)
+            <TabStripTab Id="fontawesome" Title="Font Awesome">
+                @if (_activeTabId == "fontawesome")
                 {
                     var list = FilteredFontAwesome.ToList();
                     if (list.Count == 0) { <div class="icon-picker-empty">No icons match "@_search"</div> }
@@ -118,12 +119,8 @@
     /// </summary>
     [Parameter] public EventCallback<string> OnIconSelected { get; set; }
 
-    private string _search    = string.Empty;
-    private int    _activeTab = 0;
-
-    private int _telerikCount => IconPickerData.TelerikIcons.Count;
-    private int _bsCount      => IconPickerData.BootstrapIcons.Count;
-    private int _faCount      => IconPickerData.FontAwesomeIcons.Count;
+    private string _search      = string.Empty;
+    private string _activeTabId = "telerik";
 
     private IEnumerable<TelerikIconEntry> FilteredTelerik =>
         string.IsNullOrWhiteSpace(_search)
@@ -149,8 +146,8 @@
 
     private async Task CloseAsync()
     {
-        _search    = string.Empty;
-        _activeTab = 0;
+        _search      = string.Empty;
+        _activeTabId = "telerik";
         if (VisibleChanged.HasDelegate)
             await VisibleChanged.InvokeAsync(false);
     }
