@@ -251,8 +251,8 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
   ws.on('zoom',       (pps)       => safe(dotnetRef.invokeMethodAsync('OnWsZoom',       pps)))
   ws.on('seeking',    (time)      => safe(dotnetRef.invokeMethodAsync('OnWsSeeking',    time)))
   // Keep spectrogram in sync with zoom and horizontal scroll
-  ws.on('zoom',   () => _redrawSpectrogramViewport(containerId))
-  ws.on('scroll', () => _redrawSpectrogramViewport(containerId))
+  ws.on('zoom',   () => _scheduleSpectrogramRedraw(containerId, false))
+  ws.on('scroll', () => _scheduleSpectrogramRedraw(containerId, true))
 
   // ── Regions events ───────────────────────────────────────────────────────
   if (regionsPlugin) {
@@ -572,8 +572,13 @@ export async function toggleSpectrogram(containerId, enable, showLabels, fftSamp
 
   if (!enable) {
     document.getElementById(`${canvasId}-wrapper`)?.remove()
+    if (instance._spectrogramDebounceTimer) { clearTimeout(instance._spectrogramDebounceTimer); delete instance._spectrogramDebounceTimer }
     instance.spectrogramWorker?.terminate()
     delete instance.spectrogramWorker
+    instance._spectrogramDrawWorker?.terminate()
+    delete instance._spectrogramDrawWorker
+    delete instance._spectrogramDrawVersion
+    delete instance._spectrogramCache
     delete instance.spectrogramData
     delete instance.spectrogramMeta
     // Restore the player container to its pre-spectrogram height
@@ -669,9 +674,14 @@ export async function setSpectrogramResolution(containerId, fftSamples, showLabe
 
   const canvasId = `${containerId}-spectro`
 
-  // Terminate any in-progress computation
+  // Terminate any in-progress computation (FFT worker and draw worker)
+  if (instance._spectrogramDebounceTimer) { clearTimeout(instance._spectrogramDebounceTimer); delete instance._spectrogramDebounceTimer }
   instance.spectrogramWorker?.terminate()
   delete instance.spectrogramWorker
+  instance._spectrogramDrawWorker?.terminate()
+  delete instance._spectrogramDrawWorker
+  delete instance._spectrogramDrawVersion
+  delete instance._spectrogramCache
   delete instance.spectrogramData
 
   // Show loading text again
@@ -753,6 +763,63 @@ export function updateSpectrogramLabels(containerId, showLabels) {
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 /**
+ * Returns WaveSurfer's internal scroll container.
+ * WaveSurfer 7 creates its waveform inside a shadow root attached to a wrapper
+ * div it appends to the container we pass, so [part="scroll"] is only reachable
+ * via the shadow root — not via a plain querySelector on the outer container.
+ *
+ * @param {HTMLElement} container  The outer WaveSurfer container element
+ * @returns {HTMLElement|null}
+ */
+function _wsScrollEl(container) {
+  if (!container) return null
+  for (const child of container.children) {
+    if (child.shadowRoot) {
+      const el = child.shadowRoot.querySelector('[part="scroll"]')
+      if (el) return el
+    }
+  }
+  return null
+}
+
+/**
+ * Shows a "Recalculating spectrogram…" message in the loading div above the
+ * canvas while a new viewport render is being computed in the background.
+ */
+function _showSpectrogramRecalculating(canvasId) {
+  const el = document.getElementById(`${canvasId}-loading`)
+  if (el) { el.textContent = 'Recalculating spectrogram…'; el.style.display = '' }
+}
+
+/**
+ * Schedules a spectrogram viewport redraw, debouncing scroll events so that
+ * rapid scrolling only triggers one redraw per idle window.
+ *
+ * @param {string}  containerId  Player container ID
+ * @param {boolean} debounce     true = scroll (60 ms debounce), false = zoom (immediate)
+ */
+function _scheduleSpectrogramRedraw(containerId, debounce) {
+  const instance = instances.get(containerId)
+  if (!instance?.spectrogramData) return
+
+  if (instance._spectrogramDebounceTimer) {
+    clearTimeout(instance._spectrogramDebounceTimer)
+    instance._spectrogramDebounceTimer = null
+  }
+
+  if (debounce) {
+    // Show feedback immediately; actual render fires after scroll settles
+    _showSpectrogramRecalculating(`${containerId}-spectro`)
+    instance._spectrogramDebounceTimer = setTimeout(() => {
+      instance._spectrogramDebounceTimer = null
+      _redrawSpectrogramViewport(containerId)
+    }, 60)
+  } else {
+    _redrawSpectrogramViewport(containerId)
+  }
+}
+
+/**
  * Returns the WaveSurfer time (seconds) at a given viewport X position.
  * Mirrors WaveSurfer's own click-to-seek formula so times are always accurate,
  * even when the waveform is zoomed in and scrolled.
@@ -767,7 +834,7 @@ function _wsTimeAtClientX(ws, container, clientX) {
   if (!duration) return 0
   // WaveSurfer 7 renders into a scrollable [part="scroll"] div inside the container.
   // Using its scrollLeft + scrollWidth mirrors WaveSurfer's own seek formula exactly.
-  const scrollEl = container.querySelector('[part="scroll"]')
+  const scrollEl = _wsScrollEl(container)
   if (scrollEl && scrollEl.scrollWidth > scrollEl.clientWidth + 1) {
     // Zoomed: position = (scrollOffset + x within visible area) / total scrollable width
     const rect = scrollEl.getBoundingClientRect()
@@ -793,26 +860,91 @@ function _redrawSpectrogramViewport(containerId) {
   const canvas   = document.getElementById(canvasId)
   if (!canvas) return
 
-  const container = document.getElementById(containerId)
-  const scrollEl  = container?.querySelector('[part="scroll"]')
+  const container  = document.getElementById(containerId)
+  const scrollEl   = _wsScrollEl(container)
   const scrollLeft  = scrollEl?.scrollLeft  ?? 0
   const scrollWidth = scrollEl?.scrollWidth ?? 0
   const clientWidth = scrollEl?.clientWidth ?? canvas.parentElement?.offsetWidth ?? 800
   const isZoomed    = scrollWidth > clientWidth + 1
+  const canvasW     = Math.max(1, canvas.parentElement?.offsetWidth ?? clientWidth ?? 800)
 
   const { sampleRate = 44100, fftSamples = 512, showLabels = false } = instance.spectrogramMeta ?? {}
   const nFrames = instance.spectrogramData.length
+  const nBins   = Math.floor(fftSamples / 2)
 
-  let framesToDraw = instance.spectrogramData
+  let startFrame = 0, endFrame = nFrames
   if (isZoomed && scrollWidth > 0) {
-    const startFrac  = scrollLeft / scrollWidth
-    const endFrac    = Math.min(1, (scrollLeft + clientWidth) / scrollWidth)
-    const startFrame = Math.floor(startFrac * nFrames)
-    const endFrame   = Math.ceil(endFrac * nFrames)
-    framesToDraw = instance.spectrogramData.slice(startFrame, endFrame)
+    startFrame = Math.max(0, Math.floor((scrollLeft / scrollWidth) * nFrames))
+    endFrame   = Math.min(nFrames, Math.ceil(((scrollLeft + clientWidth) / scrollWidth) * nFrames))
+  }
+  endFrame = Math.max(startFrame + 1, endFrame)
+
+  // ── Cache lookup ───────────────────────────────────────────────────────
+  if (!instance._spectrogramCache) instance._spectrogramCache = new Map()
+  const cacheKey = `${startFrame}:${endFrame}:${canvasW}:${showLabels ? 1 : 0}`
+  const cached   = instance._spectrogramCache.get(cacheKey)
+
+  if (cached) {
+    canvas.width  = canvasW
+    canvas.height = 128
+    canvas.getContext('2d').putImageData(cached, 0, 0)
+    _hideSpectrogramLoading(canvasId)
+    return
   }
 
-  _drawSpectrogram(canvas, framesToDraw, showLabels, sampleRate, fftSamples)
+  // ── Async draw via persistent Web Worker ────────────────────────────────
+  _showSpectrogramRecalculating(canvasId)
+
+  // Create the persistent draw worker on first use
+  if (!instance._spectrogramDrawWorker) {
+    const w = new Worker('/js/wavesurfer/spectrogram-draw-worker.js')
+    instance._spectrogramDrawWorker  = w
+    instance._spectrogramDrawVersion = 0
+
+    w.onmessage = (e) => {
+      const { pixels, width, height, version, cacheKey: ck } = e.data
+      const inst = instances.get(containerId)
+      if (!inst || version !== inst._spectrogramDrawVersion) return  // stale — discard
+
+      const c = document.getElementById(canvasId)
+      if (!c) return
+
+      c.width  = width
+      c.height = height
+      const ctx = c.getContext('2d')
+      ctx.putImageData(new ImageData(pixels, width, height), 0, 0)
+
+      // Apply frequency labels on top (fast canvas text, always fresh)
+      if (ck.endsWith(':1')) {
+        const { sampleRate: sr = 44100, fftSamples: fs = 512 } = inst.spectrogramMeta ?? {}
+        _drawSpectrogramLabels(c, sr, Math.floor(fs / 2))
+      }
+
+      // Cache the fully-rendered image (including labels if applicable)
+      if (!inst._spectrogramCache) inst._spectrogramCache = new Map()
+      if (inst._spectrogramCache.size >= 30)
+        inst._spectrogramCache.delete(inst._spectrogramCache.keys().next().value)
+      inst._spectrogramCache.set(ck, ctx.getImageData(0, 0, width, height))
+
+      _hideSpectrogramLoading(canvasId)
+    }
+    w.onerror = () => _hideSpectrogramLoading(canvasId)
+  }
+
+  // Bump version so any in-flight render is discarded when it arrives
+  instance._spectrogramDrawVersion = (instance._spectrogramDrawVersion ?? 0) + 1
+
+  // Flatten the visible frame slice into a transferable Float32Array
+  const sliceLen = endFrame - startFrame
+  const flat     = new Float32Array(sliceLen * nBins)
+  for (let i = 0; i < sliceLen; i++)
+    flat.set(instance.spectrogramData[startFrame + i], i * nBins)
+
+  instance._spectrogramDrawWorker.postMessage(
+    { flat, nFrames: sliceLen, nBins, width: canvasW, height: 128,
+      version: instance._spectrogramDrawVersion, cacheKey },
+    [flat.buffer]
+  )
 }
 
 function _ensureSpectrogramCanvas(canvasId, containerId, dotnetRef) {
@@ -861,54 +993,73 @@ function _hideSpectrogramLoading(canvasId) {
   if (el) el.style.display = 'none'
 }
 
+/**
+ * Draws a spectrogram to a canvas synchronously using a pixel-buffer approach
+ * (O(W×H) output iterations instead of O(nFrames×nBins) fillRect calls).
+ * Used for the initial render once FFT data is ready. Subsequent viewport
+ * redraws triggered by zoom/scroll use the async Worker path in
+ * _redrawSpectrogramViewport instead.
+ */
 function _drawSpectrogram(canvas, data, showLabels, sampleRate, fftSamples) {
   if (!data?.length) return
 
-  const W      = canvas.parentElement?.offsetWidth || 800
-  const H      = 128
+  const W     = Math.max(1, canvas.parentElement?.offsetWidth || 800)
+  const H     = 128
   canvas.width  = W
   canvas.height = H
 
-  const ctx     = canvas.getContext('2d')
   const nFrames = data.length
-  const nBins   = fftSamples / 2
-  const colW    = W / nFrames
+  const nBins   = Math.floor(fftSamples / 2)
 
-  // Normalise over the entire dataset
+  // Normalise over the visible slice
   let maxMag = 1e-9
   for (const frame of data)
     for (const v of frame)
       if (v > maxMag) maxMag = v
 
-  for (let x = 0; x < nFrames; x++) {
-    const frame = data[x]
-    for (let y = 0; y < nBins; y++) {
-      const t  = frame[y] / maxMag                 // 0..1
-      // Viridis-inspired: dark-navy → cyan → yellow
+  // O(W×H) pixel-buffer render — one putImageData instead of millions of fillRects
+  const pixels = new Uint8ClampedArray(W * H * 4)
+  for (let px = 0; px < W; px++) {
+    const frame = data[Math.min(nFrames - 1, Math.floor(px * nFrames / W))]
+    for (let py = 0; py < H; py++) {
+      const binIdx = nBins - 1 - Math.min(nBins - 1, Math.floor(py * nBins / H))
+      const t  = frame[binIdx] / maxMag
       const r  = Math.floor(255 * Math.pow(t, 0.5))
       const g  = Math.floor(255 * Math.min(1, t * 1.5))
       const b  = Math.floor(255 * Math.max(0, 0.9 - t))
-      ctx.fillStyle = `rgb(${r},${g},${b})`
-      const cy = H - Math.floor((y / nBins) * H) - 1
-      ctx.fillRect(x * colW, cy, colW + 1, 1)
+      const idx = (py * W + px) * 4
+      pixels[idx]     = r
+      pixels[idx + 1] = g
+      pixels[idx + 2] = b
+      pixels[idx + 3] = 255
     }
   }
+  canvas.getContext('2d').putImageData(new ImageData(pixels, W, H), 0, 0)
 
-  if (showLabels) {
-    const nyquist = sampleRate / 2
-    ctx.font      = '10px monospace'
-    ctx.textAlign = 'left'
-    for (const freq of [250, 500, 1000, 2000, 4000, 8000, 16000]) {
-      if (freq >= nyquist) continue
-      const y = H - Math.floor((freq / nyquist) * H)
-      ctx.strokeStyle = 'rgba(255,255,255,0.3)'
-      ctx.setLineDash([3, 3])
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
-      ctx.setLineDash([])
-      ctx.fillStyle = 'rgba(255,255,255,0.85)'
-      const label = freq >= 1000 ? `${freq / 1000}kHz` : `${freq}Hz`
-      ctx.fillText(label, 4, y - 2)
-    }
+  if (showLabels) _drawSpectrogramLabels(canvas, sampleRate, nBins)
+}
+
+/**
+ * Overlays frequency-axis gridlines and labels on an already-drawn spectrogram canvas.
+ * Fast canvas text calls only — safe to call on the main thread after putImageData.
+ */
+function _drawSpectrogramLabels(canvas, sampleRate, nBins) {
+  const W = canvas.width
+  const H = canvas.height
+  if (!W || !H) return
+  const ctx     = canvas.getContext('2d')
+  const nyquist = sampleRate / 2
+  ctx.font      = '10px monospace'
+  ctx.textAlign = 'left'
+  for (const freq of [250, 500, 1000, 2000, 4000, 8000, 16000]) {
+    if (freq >= nyquist) continue
+    const y = H - Math.floor((freq / nyquist) * H)
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'
+    ctx.setLineDash([3, 3])
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
+    ctx.setLineDash([])
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'
+    ctx.fillText(freq >= 1000 ? `${freq / 1000}kHz` : `${freq}Hz`, 4, y - 2)
   }
 }
 
@@ -920,6 +1071,9 @@ export function destroy(containerId) {
   instance._regionPlayCleanup?.()
   instance.dragCleanup?.()
   instance.resizeObserver?.disconnect()
+  if (instance._spectrogramDebounceTimer) clearTimeout(instance._spectrogramDebounceTimer)
+  instance.spectrogramWorker?.terminate()
+  instance._spectrogramDrawWorker?.terminate()
   try { instance.ws?.destroy() } catch { /* ignore */ }
   instances.delete(containerId)
 }
