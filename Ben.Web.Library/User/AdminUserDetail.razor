@@ -445,7 +445,7 @@ else
 @* ── Add New Type mini-dialog ─────────────────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showAddTypeDialog"
                Title="@($"New {_addTypeFor} Type")"
-               Width="440px">
+               Width="500px">
     <DialogContent>
         <div class="row g-3">
             <div class="col-12">
@@ -455,6 +455,42 @@ else
             <div class="col-12">
                 <label class="form-label fw-semibold">Description</label>
                 <TelerikTextBox @bind-Value="@_newTypeDescription" Width="100%" />
+            </div>
+            @* Icon with Browse button + live preview *@
+            <div class="col-12">
+                <label class="form-label fw-semibold">Icon</label>
+                <div class="d-flex align-items-center gap-2">
+                    <TelerikTextBox @bind-Value="@_newTypeIconClass"
+                                    PlaceHolder="e.g. bi bi-house or fas fa-home or t:Home"
+                                    Width="100%" />
+                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                   Icon="@SvgIcon.Search"
+                                   OnClick="@(() => _showIconPicker = true)"
+                                   title="Browse available icons">Browse</TelerikButton>
+                    @if (!string.IsNullOrWhiteSpace(_newTypeIconClass))
+                    {
+                        <span class="d-flex align-items-center justify-content-center border rounded px-2"
+                              style="min-width:36px;height:36px;" title="@_newTypeIconClass">
+                            @if (_newTypeIconClass.StartsWith("t:"))
+                            {
+                                var svgIco = IconPickerDialog.ResolveTelerikIcon(_newTypeIconClass);
+                                @if (svgIco is not null) { <TelerikSvgIcon Icon="@svgIco" /> }
+                            }
+                            else
+                            {
+                                <i class="@_newTypeIconClass"></i>
+                            }
+                        </span>
+                    }
+                </div>
+                <small class="text-secondary">Browse to pick from Telerik, Bootstrap, or Font Awesome icons.</small>
+            </div>
+            @* Color Class *@
+            <div class="col-12">
+                <label class="form-label fw-semibold">Color Class <span class="text-secondary small">(CSS class, optional)</span></label>
+                <TelerikTextBox @bind-Value="@_newTypeColorClass"
+                                PlaceHolder="e.g. text-primary or text-danger"
+                                Width="100%" />
             </div>
             <div class="col-md-4">
                 <label class="form-label fw-semibold">Sort Order</label>
@@ -477,6 +513,10 @@ else
                        Enabled="@(!_isSaving)">Save</TelerikButton>
     </DialogButtons>
 </TelerikDialog>
+
+@* ── Icon Picker (shared across all New Type dialogs) ────────────────────── *@
+<IconPickerDialog @bind-Visible="@_showIconPicker"
+                  OnIconSelected="@((string cls) => { _newTypeIconClass = cls; })" />
 
 @* ── Upload File dialog ───────────────────────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showUploadDialog"
@@ -577,9 +617,12 @@ else
     private string _addTypeFor = "";
     private string _newTypeName        = "";
     private string _newTypeDescription = "";
+    private string _newTypeIconClass   = "";
+    private string _newTypeColorClass  = "";
     private bool   _newTypeIsActive    = true;
     private bool   _newTypeIsPublic;
     private int    _newTypeSortOrder;
+    private bool   _showIconPicker;
     private string? _typeError;
 
     protected override void OnInitialized()
@@ -865,6 +908,8 @@ else
         _addTypeFor          = entityType;
         _newTypeName         = "";
         _newTypeDescription  = "";
+        _newTypeIconClass    = "";
+        _newTypeColorClass   = "";
         _newTypeIsActive     = true;
         _newTypeIsPublic     = false;
         _newTypeSortOrder    = 0;
@@ -878,11 +923,11 @@ else
         _isSaving = true;
         bool ok = _addTypeFor switch
         {
-            "address" => await AdminClient.CreateUserAddressTypeAsync(_newTypeName.Trim(), _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder),
-            "email"   => await AdminClient.CreateUserEmailTypeAsync(_newTypeName.Trim(),   _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder),
-            "phone"   => await AdminClient.CreateUserPhoneTypeAsync(_newTypeName.Trim(),   _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder),
-            "link"    => await AdminClient.CreateUserLinkTypeAsync(_newTypeName.Trim(),    _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder),
-            "note"    => await AdminClient.CreateUserNoteTypeAsync(_newTypeName.Trim(),    _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder),
+            "address" => await AdminClient.CreateUserAddressTypeAsync(_newTypeName.Trim(), _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder, _newTypeIconClass?.Trim(), _newTypeColorClass?.Trim()),
+            "email"   => await AdminClient.CreateUserEmailTypeAsync(_newTypeName.Trim(),   _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder, _newTypeIconClass?.Trim(), _newTypeColorClass?.Trim()),
+            "phone"   => await AdminClient.CreateUserPhoneTypeAsync(_newTypeName.Trim(),   _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder, _newTypeIconClass?.Trim(), _newTypeColorClass?.Trim()),
+            "link"    => await AdminClient.CreateUserLinkTypeAsync(_newTypeName.Trim(),    _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder, _newTypeIconClass?.Trim(), _newTypeColorClass?.Trim()),
+            "note"    => await AdminClient.CreateUserNoteTypeAsync(_newTypeName.Trim(),    _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder, _newTypeIconClass?.Trim(), _newTypeColorClass?.Trim()),
             _ => false
         };
         if (ok)
