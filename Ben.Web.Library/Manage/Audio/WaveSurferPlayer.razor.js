@@ -250,6 +250,9 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
   ws.on('error',      (err)       => safe(dotnetRef.invokeMethodAsync('OnWsError',      err?.message ?? String(err))))
   ws.on('zoom',       (pps)       => safe(dotnetRef.invokeMethodAsync('OnWsZoom',       pps)))
   ws.on('seeking',    (time)      => safe(dotnetRef.invokeMethodAsync('OnWsSeeking',    time)))
+  // Keep spectrogram in sync with zoom and horizontal scroll
+  ws.on('zoom',   () => _redrawSpectrogramViewport(containerId))
+  ws.on('scroll', () => _redrawSpectrogramViewport(containerId))
 
   // ── Regions events ───────────────────────────────────────────────────────
   if (regionsPlugin) {
@@ -318,9 +321,8 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
       const duration = ws.getDuration()
       if (!duration) return
       try { container.setPointerCapture(ev.pointerId) } catch {}
-      const rect      = container.getBoundingClientRect()
       dragStartX    = ev.clientX
-      dragStartTime = Math.max(0, ((ev.clientX - rect.left) / rect.width) * duration)
+      dragStartTime = _wsTimeAtClientX(ws, container, ev.clientX)
       isDragging    = false
       wasDragging   = false
     }
@@ -353,10 +355,7 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
 
       if (isDragging && dragStartTime !== null) {
         wasDragging = true
-        const rect     = container.getBoundingClientRect()
-        const duration = ws.getDuration()
-        const endTime  = Math.max(0, Math.min(duration,
-          ((ev.clientX - rect.left) / rect.width) * duration))
+        const endTime = _wsTimeAtClientX(ws, container, ev.clientX)
         const start = Math.min(dragStartTime, endTime)
         const end   = Math.max(dragStartTime, endTime)
 
@@ -602,15 +601,12 @@ export async function toggleSpectrogram(containerId, enable, showLabels, fftSamp
     instance.ws.setOptions({ height: 'auto' })
   }
 
-  // Already computed — rebuild the canvas from cached data
+  // Already computed — rebuild the canvas from cached data (respects current zoom/scroll)
   if (instance.spectrogramData) {
     _ensureSpectrogramCanvas(canvasId, containerId, dotnetRef)
-    const canvas = document.getElementById(canvasId)
-    if (canvas) {
-      _drawSpectrogram(canvas, instance.spectrogramData, showLabels,
-        instance.spectrogramMeta.sampleRate, instance.spectrogramMeta.fftSamples)
-      _hideSpectrogramLoading(canvasId)
-    }
+    instance.spectrogramMeta.showLabels = showLabels
+    _hideSpectrogramLoading(canvasId)
+    _redrawSpectrogramViewport(containerId)
     return
   }
 
@@ -630,7 +626,7 @@ export async function toggleSpectrogram(containerId, enable, showLabels, fftSamp
 
   const worker = new Worker('/js/wavesurfer/spectrogram-worker.js')
   instance.spectrogramWorker = worker
-  instance.spectrogramMeta   = { sampleRate: audioBuffer.sampleRate, fftSamples }
+  instance.spectrogramMeta   = { sampleRate: audioBuffer.sampleRate, fftSamples, showLabels }
 
   const safe = (fn) => fn.catch(() => {})
 
@@ -640,9 +636,8 @@ export async function toggleSpectrogram(containerId, enable, showLabels, fftSamp
       safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramProgress', e.data.percent))
     } else if (e.data.type === 'done') {
       instance.spectrogramData = e.data.data
-      const c = document.getElementById(canvasId)
-      if (c) _drawSpectrogram(c, e.data.data, showLabels, e.data.sampleRate, e.data.fftSamples)
       _hideSpectrogramLoading(canvasId)
+      _redrawSpectrogramViewport(containerId)
       safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramReady'))
       worker.terminate()
       delete instance.spectrogramWorker
@@ -704,7 +699,7 @@ export async function setSpectrogramResolution(containerId, fftSamples, showLabe
 
   const worker = new Worker('/js/wavesurfer/spectrogram-worker.js')
   instance.spectrogramWorker = worker
-  instance.spectrogramMeta   = { sampleRate: audioBuffer.sampleRate, fftSamples }
+  instance.spectrogramMeta   = { sampleRate: audioBuffer.sampleRate, fftSamples, showLabels }
 
   worker.onmessage = (e) => {
     if (e.data.type === 'progress') {
@@ -712,9 +707,8 @@ export async function setSpectrogramResolution(containerId, fftSamples, showLabe
       safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramProgress', e.data.percent))
     } else if (e.data.type === 'done') {
       instance.spectrogramData = e.data.data
-      const c = document.getElementById(canvasId)
-      if (c) _drawSpectrogram(c, e.data.data, showLabels, e.data.sampleRate, e.data.fftSamples)
       _hideSpectrogramLoading(canvasId)
+      _redrawSpectrogramViewport(containerId)
       safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramReady'))
       worker.terminate()
       delete instance.spectrogramWorker
@@ -752,13 +746,74 @@ export function toggleTimeline(containerId, visible) {
 export function updateSpectrogramLabels(containerId, showLabels) {
   const instance = instances.get(containerId)
   if (!instance?.spectrogramData) return
-  const canvas = document.getElementById(`${containerId}-spectro`)
-  if (!canvas) return
-  _drawSpectrogram(canvas, instance.spectrogramData, showLabels,
-    instance.spectrogramMeta.sampleRate, instance.spectrogramMeta.fftSamples)
+  if (instance.spectrogramMeta) instance.spectrogramMeta.showLabels = showLabels
+  _redrawSpectrogramViewport(containerId)
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Returns the WaveSurfer time (seconds) at a given viewport X position.
+ * Mirrors WaveSurfer's own click-to-seek formula so times are always accurate,
+ * even when the waveform is zoomed in and scrolled.
+ *
+ * @param {WaveSurfer} ws          WaveSurfer instance
+ * @param {HTMLElement} container  The outer WaveSurfer container element
+ * @param {number}      clientX    Viewport X coordinate from a pointer event
+ * @returns {number}               Time in seconds, clamped to [0, duration]
+ */
+function _wsTimeAtClientX(ws, container, clientX) {
+  const duration = ws.getDuration?.() ?? 0
+  if (!duration) return 0
+  // WaveSurfer 7 renders into a scrollable [part="scroll"] div inside the container.
+  // Using its scrollLeft + scrollWidth mirrors WaveSurfer's own seek formula exactly.
+  const scrollEl = container.querySelector('[part="scroll"]')
+  if (scrollEl && scrollEl.scrollWidth > scrollEl.clientWidth + 1) {
+    // Zoomed: position = (scrollOffset + x within visible area) / total scrollable width
+    const rect = scrollEl.getBoundingClientRect()
+    const x    = clientX - rect.left + scrollEl.scrollLeft
+    return Math.max(0, Math.min(duration, (x / scrollEl.scrollWidth) * duration))
+  }
+  // Default (fill parent): simple proportion across the container width
+  const rect = container.getBoundingClientRect()
+  return Math.max(0, Math.min(duration, ((clientX - rect.left) / rect.width) * duration))
+}
+
+/**
+ * Redraws the spectrogram canvas showing only the currently visible time window.
+ * Called after zoom and scroll events so the spectrogram stays aligned with the waveform.
+ *
+ * @param {string} containerId  Player container ID
+ */
+function _redrawSpectrogramViewport(containerId) {
+  const instance = instances.get(containerId)
+  if (!instance?.spectrogramData) return
+
+  const canvasId = `${containerId}-spectro`
+  const canvas   = document.getElementById(canvasId)
+  if (!canvas) return
+
+  const container = document.getElementById(containerId)
+  const scrollEl  = container?.querySelector('[part="scroll"]')
+  const scrollLeft  = scrollEl?.scrollLeft  ?? 0
+  const scrollWidth = scrollEl?.scrollWidth ?? 0
+  const clientWidth = scrollEl?.clientWidth ?? canvas.parentElement?.offsetWidth ?? 800
+  const isZoomed    = scrollWidth > clientWidth + 1
+
+  const { sampleRate = 44100, fftSamples = 512, showLabels = false } = instance.spectrogramMeta ?? {}
+  const nFrames = instance.spectrogramData.length
+
+  let framesToDraw = instance.spectrogramData
+  if (isZoomed && scrollWidth > 0) {
+    const startFrac  = scrollLeft / scrollWidth
+    const endFrac    = Math.min(1, (scrollLeft + clientWidth) / scrollWidth)
+    const startFrame = Math.floor(startFrac * nFrames)
+    const endFrame   = Math.ceil(endFrac * nFrames)
+    framesToDraw = instance.spectrogramData.slice(startFrame, endFrame)
+  }
+
+  _drawSpectrogram(canvas, framesToDraw, showLabels, sampleRate, fftSamples)
+}
 
 function _ensureSpectrogramCanvas(canvasId, containerId, dotnetRef) {
   if (document.getElementById(canvasId)) return document.getElementById(canvasId)
