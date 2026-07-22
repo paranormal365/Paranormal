@@ -55,7 +55,7 @@
                                 {
                                     var k = $"t:{icon.Name}";
                                     <button type="button" class="icon-picker-tile" title="@icon.Name"
-                                            @onclick="@(() => SelectIconAsync(k))">
+                                            @onclick="@(async (e) => await SelectIconAsync(k))">
                                         <TelerikSvgIcon Icon="@icon.Icon" Size="@ThemeConstants.SvgIcon.Size.Large" />
                                         <span>@icon.Name</span>
                                     </button>
@@ -77,7 +77,7 @@
                                 {
                                     var cls = $"bi bi-{name}";
                                     <button type="button" class="icon-picker-tile" title="@cls"
-                                            @onclick="@(() => SelectIconAsync(cls))">
+                                            @onclick="@(async (e) => await SelectIconAsync(cls))">
                                         <i class="bi bi-@name"></i>
                                         <span>@name</span>
                                     </button>
@@ -99,7 +99,7 @@
                                 {
                                     var cls = $"fas fa-{name}";
                                     <button type="button" class="icon-picker-tile" title="@cls"
-                                            @onclick="@(() => SelectIconAsync(cls))">
+                                            @onclick="@(async (e) => await SelectIconAsync(cls))">
                                         <i class="fas fa-@name"></i>
                                         <span>@name</span>
                                     </button>

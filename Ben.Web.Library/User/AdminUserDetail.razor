@@ -446,9 +446,8 @@ else
 <TelerikDialog @bind-Visible="@_showAddTypeDialog"
                Title="@($"New {_addTypeFor} Type")"
                Width="500px"
-               Class="@($"k-dialog-subtype f{_iconFieldKey}")">
-    @* Class includes _iconFieldKey so TelerikDialog re-evaluates ShouldRender when the icon picker
-       sets a new value — forcing portal content to refresh and the @key wrapper to be re-processed. *@
+               @key="@_iconFieldKey">
+    @* @key destroys+recreates the dialog when _iconFieldKey changes so portal re-renders with new icon value *@
     <DialogContent>
         <div class="row g-3">
             <div class="col-12">
