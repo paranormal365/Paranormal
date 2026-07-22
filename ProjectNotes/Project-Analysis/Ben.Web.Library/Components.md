@@ -405,7 +405,9 @@ Colors default to `null`; the JS module reads Telerik CSS custom properties at i
 `AddRegionAsync(WsRegionParams)`, `RemoveRegionAsync(string)`, `ClearRegionsAsync()`,
 `GetRegionsAsync()`, `PlayRegionAsync(string)`, `UpdateRegionLabelAsync(string, string)`,
 `ToggleTimelineAsync(bool)` — shows/hides the Timeline bar; fires `ws.zoom()` to repaint labels *(added 2026-07-20)*,
-`ToggleSpectrogramAsync(bool enable, bool showLabels)`, `UpdateSpectrogramLabelsAsync(bool)`,
+`ToggleSpectrogramAsync(bool enable, bool showLabels, int fftSamples = 512)` *(fftSamples added 2026-07-22)*,
+`SetSpectrogramResolutionAsync(int fftSamples, bool showLabels)` — re-runs the Web Worker FFT at a new window size without toggling off *(added 2026-07-22)*,
+`UpdateSpectrogramLabelsAsync(bool)`,
 `SetEnvelopePointsAsync(List<WsEnvelopePoint>)`, `AddEnvelopePointAsync(WsEnvelopePoint)`,
 `RemoveEnvelopePointAsync(string)`, `SetEnvelopeVolumeAsync(double)`, `GetEnvelopePointsAsync()`.
 
@@ -426,6 +428,11 @@ Served at `/_content/Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor.js`.
 - **`toggleSpectrogram` height expansion *(2026-07-20)*:** on enable, saves `playerEl.style.height`,
   expands `.ws-player` by 128 px (capped at CSS `max-height`), calls `ws.setOptions({ height: 'auto' })`
   so waveform refills the taller container; on disable, restores saved height.
+- **`toggleSpectrogram` fftSamples parameter *(2026-07-22)*:** now accepts `fftSamples` (position 4, before `dotnetRef`).
+  `noverlap` is always `Math.floor(fftSamples / 2)`. Previously hardcoded at 512.
+- **`setSpectrogramResolution(containerId, fftSamples, showLabels, dotnetRef)` *(added 2026-07-22)*:**
+  terminates any in-progress Web Worker, clears cached FFT data, resets the loading indicator to 0%, clears the
+  canvas, and re-runs the worker at the new FFT window size — all without hiding/reshowing the spectrogram.
 - `destroy(containerId)` disconnects the `ResizeObserver` and calls `ws.destroy()`
 
 #### Build Notes
@@ -497,6 +504,7 @@ menu items opens a full-featured modal window.
 | Position | `AudioFormatUtils.FormatTime(_modalTime)` — live via `OnTimeUpdate` |
 | **🕐 Timeline button** *(2026-07-20)* | Toggles `ToggleTimelineAsync`; active (blue) = visible, inactive = hidden |
 | **📊 Spectrogram button** | Toggles spectrogram; expands player by 128 px on enable *(2026-07-20)* |
+| **Resolution dropdown** *(2026-07-22)* | Appears inline next to the Spectrogram button **only when the spectrogram is active**. Lets the user pick the FFT window size. Re-runs the Web Worker immediately via `SetSpectrogramResolutionAsync`. |
 
 **Full WaveSurfer player** inside the modal:
 
@@ -612,6 +620,11 @@ Key behaviour changes from original implementation:
   viridis colormap canvas inserted after waveform. Right-click → "Toggle Labels".
   *(Updated 2026-07-20)* Player expands by 128 px on enable (capped at `MaxHeight`); waveform is not
   squished unless already at max height.
+- **Spectrogram resolution dropdown** *(2026-07-22)*: `TelerikDropDownList` appears inline next to the
+  Spectrogram button only when the spectrogram is active. Options: 128 Coarse, 256 Low, 512 Standard
+  (default), 1024 High, 2048 Fine, 4096 Ultra. Changing selection calls `SetSpectrogramResolutionAsync`
+  which re-runs the Web Worker immediately — no need to toggle off and back on. Higher FFT sizes give
+  finer frequency resolution (more useful for detecting whispers, breath sounds, and subtle HF content).
 - **Region draw**: Click-and-drag creates a region. Right-click context menu:
   Play / Create Audio File / Edit Label / Delete. *("Explore" removed 2026-07-20)*
 - **Child clip overlay**: Saved clips overlaid as green locked regions; shown as `AudioFilePreview` below.

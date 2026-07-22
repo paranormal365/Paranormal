@@ -107,6 +107,18 @@ else
                                        OnClick="ToggleSpectrogramAsync">
                             📊 @(_spectrogramEnabled ? "Hide Spectrogram" : "Show Spectrogram")
                         </TelerikButton>
+                        @* Spectrogram resolution — only shown when spectrogram is active *@
+                        @if (_spectrogramEnabled)
+                        {
+                            <TelerikDropDownList Data="@_resolutionOptions"
+                                                 Value="@_spectrogramFftSamples"
+                                                 ValueChanged="@((int v) => _ = OnSpectrogramResolutionChangedAsync(v))"
+                                                 TextField="@nameof(SpectrogramResolutionOption.Label)"
+                                                 ValueField="@nameof(SpectrogramResolutionOption.Value)"
+                                                 Width="155px"
+                                                 Size="@ThemeConstants.DropDownList.Size.Small"
+                                                 Enabled="@_modalReady" />
+                        }
                         <span class="small text-secondary fst-italic">
                             Click &amp; drag to mark a region &mdash; right-click to play, save, or edit
                         </span>
@@ -274,11 +286,23 @@ else
     private bool   _timelineEnabled  = true;
     private bool   _spectrogramEnabled;
     private bool   _spectrogramLabels;
+    private int    _spectrogramFftSamples = 512;
     private TelerikContextMenu<SpectrogramMenuItem>? _spectrogramMenu;
 
     private static readonly List<SpectrogramMenuItem> _spectrogramMenuItems =
     [
         new("labels", "🔤  Toggle Labels"),
+    ];
+
+    private record SpectrogramResolutionOption(int Value, string Label);
+    private static readonly List<SpectrogramResolutionOption> _resolutionOptions =
+    [
+        new(128,  "128 – Coarse"),
+        new(256,  "256 – Low"),
+        new(512,  "512 – Standard"),
+        new(1024, "1024 – High"),
+        new(2048, "2048 – Fine"),
+        new(4096, "4096 – Ultra"),
     ];
 
     // ── Region creation workflow ──────────────────────────────────────────────
@@ -568,7 +592,14 @@ else
     {
         _spectrogramEnabled = !_spectrogramEnabled;
         if (_modalPlayer is null) return;
-        await _modalPlayer.ToggleSpectrogramAsync(_spectrogramEnabled, _spectrogramLabels);
+        await _modalPlayer.ToggleSpectrogramAsync(_spectrogramEnabled, _spectrogramLabels, _spectrogramFftSamples);
+    }
+
+    private async Task OnSpectrogramResolutionChangedAsync(int fftSamples)
+    {
+        _spectrogramFftSamples = fftSamples;
+        if (_spectrogramEnabled && _modalPlayer is not null)
+            await _modalPlayer.SetSpectrogramResolutionAsync(_spectrogramFftSamples, _spectrogramLabels);
     }
 
     private async Task OnSpectrogramContextMenuFired(WsPointArgs args)

@@ -562,9 +562,10 @@ export function getEnvelopePoints(containerId)          { return instances.get(c
  * @param {string}               containerId  Player container ID
  * @param {boolean}              enable       true = show, false = remove
  * @param {boolean}              showLabels   Render frequency-axis labels
+ * @param {number}               fftSamples   FFT window size (128/256/512/1024/2048/4096)
  * @param {DotNetObjectReference} dotnetRef   Used to fire progress/ready/menu callbacks
  */
-export async function toggleSpectrogram(containerId, enable, showLabels, dotnetRef) {
+export async function toggleSpectrogram(containerId, enable, showLabels, fftSamples, dotnetRef) {
   const instance = instances.get(containerId)
   if (!instance) return
 
@@ -624,8 +625,7 @@ export async function toggleSpectrogram(containerId, enable, showLabels, dotnetR
   const canvas = _ensureSpectrogramCanvas(canvasId, containerId, dotnetRef)
   if (!canvas) return
 
-  const fftSamples = 512
-  const noverlap   = 256
+  const noverlap   = Math.floor(fftSamples / 2)
   const channelCopy = new Float32Array(audioBuffer.getChannelData(0))
 
   const worker = new Worker('/js/wavesurfer/spectrogram-worker.js')
@@ -633,6 +633,78 @@ export async function toggleSpectrogram(containerId, enable, showLabels, dotnetR
   instance.spectrogramMeta   = { sampleRate: audioBuffer.sampleRate, fftSamples }
 
   const safe = (fn) => fn.catch(() => {})
+
+  worker.onmessage = (e) => {
+    if (e.data.type === 'progress') {
+      _updateSpectrogramLoading(canvasId, e.data.percent)
+      safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramProgress', e.data.percent))
+    } else if (e.data.type === 'done') {
+      instance.spectrogramData = e.data.data
+      const c = document.getElementById(canvasId)
+      if (c) _drawSpectrogram(c, e.data.data, showLabels, e.data.sampleRate, e.data.fftSamples)
+      _hideSpectrogramLoading(canvasId)
+      safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramReady'))
+      worker.terminate()
+      delete instance.spectrogramWorker
+    }
+  }
+  worker.onerror = () => {
+    _hideSpectrogramLoading(canvasId)
+    safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramReady'))
+  }
+
+  worker.postMessage(
+    { channels: [channelCopy], sampleRate: audioBuffer.sampleRate, fftSamples, noverlap },
+    [channelCopy.buffer]
+  )
+}
+
+/**
+ * Re-computes the spectrogram canvas at a new FFT resolution.
+ * Clears cached data, shows a fresh loading indicator, and re-runs the Web Worker.
+ *
+ * @param {string}               containerId  Player container ID
+ * @param {number}               fftSamples   FFT window size (128/256/512/1024/2048/4096)
+ * @param {boolean}              showLabels   Whether to render frequency-axis labels
+ * @param {DotNetObjectReference} dotnetRef   Progress / ready callbacks
+ */
+export async function setSpectrogramResolution(containerId, fftSamples, showLabels, dotnetRef) {
+  const instance = instances.get(containerId)
+  if (!instance?.spectrogramMeta) return   // spectrogram not currently shown
+
+  const canvasId = `${containerId}-spectro`
+
+  // Terminate any in-progress computation
+  instance.spectrogramWorker?.terminate()
+  delete instance.spectrogramWorker
+  delete instance.spectrogramData
+
+  // Show loading text again
+  const loadingEl = document.getElementById(`${canvasId}-loading`)
+  if (loadingEl) {
+    loadingEl.textContent = 'Generating spectrogram… 0%'
+    loadingEl.style.display = ''
+  }
+
+  // Clear the canvas
+  const canvas = document.getElementById(canvasId)
+  if (canvas) {
+    const ctx = canvas.getContext('2d')
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+  }
+
+  const ws          = instance.ws
+  const audioBuffer = ws.getDecodedData?.()
+  if (!audioBuffer) return
+
+  const noverlap    = Math.floor(fftSamples / 2)
+  const channelCopy = new Float32Array(audioBuffer.getChannelData(0))
+
+  const safe = (fn) => fn.catch(() => {})
+
+  const worker = new Worker('/js/wavesurfer/spectrogram-worker.js')
+  instance.spectrogramWorker = worker
+  instance.spectrogramMeta   = { sampleRate: audioBuffer.sampleRate, fftSamples }
 
   worker.onmessage = (e) => {
     if (e.data.type === 'progress') {

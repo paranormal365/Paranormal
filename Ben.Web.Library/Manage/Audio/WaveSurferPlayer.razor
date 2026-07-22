@@ -321,10 +321,17 @@
     // ── Spectrogram ──────────────────────────────────────────────────────
 
     /// <summary>Enables or disables the canvas-based spectrogram (Web Worker FFT). Idempotent.</summary>
-    public async Task ToggleSpectrogramAsync(bool enable, bool showLabels)
+    public async Task ToggleSpectrogramAsync(bool enable, bool showLabels, int fftSamples = 512)
     {
         if (_module is null) return;
-        await _module.InvokeVoidAsync("toggleSpectrogram", _containerId, enable, showLabels, _dotnetRef);
+        await _module.InvokeVoidAsync("toggleSpectrogram", _containerId, enable, showLabels, fftSamples, _dotnetRef);
+    }
+
+    /// <summary>Re-computes the spectrogram at a different FFT window size. Only effective when the spectrogram is currently visible.</summary>
+    public async Task SetSpectrogramResolutionAsync(int fftSamples, bool showLabels)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("setSpectrogramResolution", _containerId, fftSamples, showLabels, _dotnetRef);
     }
 
     /// <summary>Redraws the spectrogram with cached FFT data, toggling frequency-axis labels.</summary>
