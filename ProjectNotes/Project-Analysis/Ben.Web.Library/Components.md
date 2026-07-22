@@ -415,25 +415,68 @@ Colors default to `null`; the JS module reads Telerik CSS custom properties at i
 
 Served at `/_content/Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor.js`.
 
+**Core behaviour**
 - WaveSurfer core + each plugin are lazy-loaded via dynamic `import()` on first use and cached
 - `resolveTelerikColors()` reads Kendo CSS vars via `getComputedStyle(document.documentElement)`
   and detects dark mode by perceived luminance of `--kendo-body-bg`
 - `ResizeObserver` on the wrapper div debounces (50 ms) and calls `ws.setOptions({ height: 'auto' })`
   to trigger WaveSurfer's internal resize logic after a user drag-resize
 - **`ready` repaint *(2026-07-20)*:** fires `ws.zoom(minPxPerSec)` at 50/200/400 ms after `ready`
-  to repaint Timeline labels once the TelerikWindow open animation settles. Replaced the earlier
-  `setOptions` approach which was a no-op when `height` was unchanged.
+  to repaint Timeline labels once the TelerikWindow open animation settles.
 - **`toggleTimeline(containerId, visible)` *(2026-07-20)*:** sets `display` on `[part="timeline"]`;
   calls `ws.zoom()` when making visible to force repaint.
 - **`toggleSpectrogram` height expansion *(2026-07-20)*:** on enable, saves `playerEl.style.height`,
   expands `.ws-player` by 128 px (capped at CSS `max-height`), calls `ws.setOptions({ height: 'auto' })`
   so waveform refills the taller container; on disable, restores saved height.
-- **`toggleSpectrogram` fftSamples parameter *(2026-07-22)*:** now accepts `fftSamples` (position 4, before `dotnetRef`).
-  `noverlap` is always `Math.floor(fftSamples / 2)`. Previously hardcoded at 512.
-- **`setSpectrogramResolution(containerId, fftSamples, showLabels, dotnetRef)` *(added 2026-07-22)*:**
-  terminates any in-progress Web Worker, clears cached FFT data, resets the loading indicator to 0%, clears the
-  canvas, and re-runs the worker at the new FFT window size — all without hiding/reshowing the spectrogram.
-- `destroy(containerId)` disconnects the `ResizeObserver` and calls `ws.destroy()`
+
+**Spectrogram rendering architecture *(2026-07-22 — feature/audio-player)***
+
+Two-tier rendering pipeline:
+
+| Tier | Trigger | Cost | Description |
+|---|---|---|---|
+| **Fast path** | Any scroll/zoom/playback after pre-render | ~1 ms, synchronous | `ctx.drawImage(prerenderCanvas, srcX, 0, srcW, 128, 0, 0, canvasW, 128)` — GPU-accelerated crop of the pre-render OffscreenCanvas |
+| **Slow path** | Before pre-render is ready (first ~30 ms) | ~10 ms async | Persistent draw Worker + 30-entry `ImageData` cache keyed by `startFrame:endFrame:canvasW:showLabels:0\|1` |
+
+**Pre-render (`_startSpectrogramPrerender`):** after FFT completes, a background Worker renders the full
+audio file into an `OffscreenCanvas` at `min(8192, max(2048, nFrames)) × 128` px (~30 ms). One pixel ≈
+one FFT frame for typical `fftSamples` values. Result stored as `instance._prerenderCanvas`. All subsequent
+viewport ops (zoom, scroll, playback auto-scroll) use `drawImage` — **spectrogram follows the playhead
+smoothl during playback with no debounce needed**.
+
+**`_wsScrollEl(container)` *(2026-07-22)*:** WaveSurfer 7 attaches a shadow root to the div it creates
+inside the container. `container.querySelector('[part="scroll"]')` always returns `null`. Correct access:
+```js
+for (const child of container.children)
+  if (child.shadowRoot) return child.shadowRoot.querySelector('[part="scroll"]')
+```
+Both `_wsTimeAtClientX` and `_redrawSpectrogramViewport` use this helper.
+
+**`_wsTimeAtClientX(ws, container, clientX)` *(2026-07-22)*:** mirrors WaveSurfer's own seek formula.
+At any zoom level: `time = (scrollLeft + clientX - scrollEl.left) / scrollWidth * duration`.
+Used by the drag-to-create region handlers so region start/end times are correct when zoomed in.
+
+**`spectrogram-draw-worker.js`** (served at `/js/wavesurfer/spectrogram-draw-worker.js`):
+O(W × H) pixel-buffer renderer. Receives flat `Float32Array` (transferred); returns
+`Uint8ClampedArray` RGBA pixels (transferred). Version-aware — stale results are discarded.
+
+**`_drawSpectrogram` rewrite *(2026-07-22)*:** O(W × H) pixel-buffer approach instead of O(nFrames × nBins)
+`fillRect` calls. Orders of magnitude faster for long files / high `fftSamples`. `_drawSpectrogramLabels`
+extracted as a separate helper (used both by the sync path and by the Worker result handler).
+
+**Zoom/scroll listeners *(2026-07-22)*:**
+```js
+ws.on('zoom',   () => prerenderCanvas ? _redrawSpectrogramViewport() : _scheduleSpectrogramRedraw(false))
+ws.on('scroll', () => prerenderCanvas ? _redrawSpectrogramViewport() : _scheduleSpectrogramRedraw(true))
+```
+Scroll debounce (60 ms) used only while pre-render is computing; zoom is always immediate.
+
+**`playRegion` fix *(2026-07-22)*:** `ws.seekTo()` fires `seeking` asynchronously. Previously this
+imediately triggered `stopAndClean()` and removed the `timeupdate` end-of-region monitor before playback
+started. Fix: `let skipNextSeek = true` — the first `seeking` event (from our own `seekTo`) is ignored;
+all subsequent user-initiated seeks still stop region playback.
+
+- `destroy(containerId)` disconnects the `ResizeObserver`, terminates all workers, and calls `ws.destroy()`
 
 #### Build Notes
 
@@ -625,7 +668,17 @@ Key behaviour changes from original implementation:
   (default), 1024 High, 2048 Fine, 4096 Ultra. Changing selection calls `SetSpectrogramResolutionAsync`
   which re-runs the Web Worker immediately — no need to toggle off and back on. Higher FFT sizes give
   finer frequency resolution (more useful for detecting whispers, breath sounds, and subtle HF content).
-- **Region draw**: Click-and-drag creates a region. Right-click context menu:
-  Play / Create Audio File / Edit Label / Delete. *("Explore" removed 2026-07-20)*
+- **Spectrogram frequency labels default `true`** *(2026-07-22)*: Hz/kHz labels visible immediately on open.
+- **Spectrogram playback tracking** *(2026-07-22)*: pre-render OffscreenCanvas built after FFT (~30 ms).
+  Viewport updates (zoom, scroll, playback auto-scroll) become instant GPU `drawImage` crops. Spectrogram
+  follows the playhead smoothly at any zoom level.
+- **Spectrogram zoom — shadow DOM fix** *(2026-07-22)*: region creation and spectrogram viewport updates
+  now work correctly at any horizontal zoom level. Root cause was that `container.querySelector('[part="scroll"]')`
+  silently returned `null` (WaveSurfer 7 renders inside a shadow root). `_wsScrollEl()` traverses the
+  shadow root. `_wsTimeAtClientX()` mirrors WaveSurfer's own seek formula for accurate time-at-click.
+- **Region draw**: Click-and-drag creates a region at accurate audio times at any zoom level.
+  Right-click context menu: Play / Create Audio File / Edit Label / Delete. *("Explore" removed 2026-07-20)*
+- **Region playback** *(fixed 2026-07-22)*: "Play Region" stops at the region end. `ws.seekTo()` fires
+  `seeking` asynchronously; `skipNextSeek` flag absorbs that event so the `timeupdate` end-monitor survives.
 - **Child clip overlay**: Saved clips overlaid as green locked regions; shown as `AudioFilePreview` below.
 - **Resizable**: Full-view player has `Resizable="true"` — bottom edge can be dragged.
