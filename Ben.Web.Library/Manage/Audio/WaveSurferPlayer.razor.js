@@ -808,8 +808,8 @@ function _scheduleSpectrogramRedraw(containerId, debounce) {
   }
 
   if (debounce) {
-    // Show feedback immediately; actual render fires after scroll settles
-    _showSpectrogramRecalculating(`${containerId}-spectro`)
+    // Scroll: silent background update — no loading message during playback auto-scroll.
+    // The render fires once the scroll settles (60 ms quiet window).
     instance._spectrogramDebounceTimer = setTimeout(() => {
       instance._spectrogramDebounceTimer = null
       _redrawSpectrogramViewport(containerId)
