@@ -114,7 +114,10 @@
 @* ── Add / Edit dialog ── *@
 <TelerikDialog @bind-Visible="@_showDialog"
                Title="@(_editingItem is null ? $"New {_familyLabel}" : $"Edit {_familyLabel}")"
-               Width="520px">
+               Width="520px"
+               Class="@($"k-dialog-lookup f{_iconFieldKey}")">
+    @* Class includes _iconFieldKey so TelerikDialog re-evaluates ShouldRender when the icon picker
+       sets a new value — forcing portal content to refresh and the @key wrapper to be re-processed. *@
     <DialogContent>
         <div class="row g-3">
             <div class="col-12">
@@ -141,12 +144,9 @@
                                        OnClick="@ClearIconClass" />
                     }
                     <TelerikButton Size="@ThemeConstants.Button.Size.Small"
-                                   Icon="@(_loadingIconPicker ? SvgIcon.ArrowRotateCw : SvgIcon.Search)"
+                                   Icon="@SvgIcon.Search"
                                    title="Browse icons"
-                                   Enabled="@(!_loadingIconPicker)"
-                                   OnClick="@OpenIconPickerAsync">
-                        @(_loadingIconPicker ? "Loading…" : "Browse")
-                    </TelerikButton>
+                                   OnClick="@OpenIconPickerAsync">Browse</TelerikButton>
                     @if (!string.IsNullOrWhiteSpace(_form.IconClass))
                     {
                         <span class="d-flex align-items-center justify-content-center border rounded"

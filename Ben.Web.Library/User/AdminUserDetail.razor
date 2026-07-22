@@ -445,7 +445,10 @@ else
 @* ── Add New Type mini-dialog ─────────────────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showAddTypeDialog"
                Title="@($"New {_addTypeFor} Type")"
-               Width="500px">
+               Width="500px"
+               Class="@($"k-dialog-subtype f{_iconFieldKey}")">
+    @* Class includes _iconFieldKey so TelerikDialog re-evaluates ShouldRender when the icon picker
+       sets a new value — forcing portal content to refresh and the @key wrapper to be re-processed. *@
     <DialogContent>
         <div class="row g-3">
             <div class="col-12">
@@ -465,12 +468,9 @@ else
                                     PlaceHolder="e.g. bi bi-house or fas fa-home or t:Home"
                                     Width="100%" />
                     <TelerikButton Size="@ThemeConstants.Button.Size.Small"
-                                   Icon="@(_loadingIconPicker ? SvgIcon.ArrowRotateCw : SvgIcon.Search)"
-                                   Enabled="@(!_loadingIconPicker)"
+                                   Icon="@SvgIcon.Search"
                                    OnClick="@OpenNewTypeIconPickerAsync"
-                                   title="Browse available icons">
-                        @(_loadingIconPicker ? "Loading…" : "Browse")
-                    </TelerikButton>
+                                   title="Browse available icons">Browse</TelerikButton>
                     @if (!string.IsNullOrWhiteSpace(_newTypeIconClass))
                     {
                         <span class="d-flex align-items-center justify-content-center border rounded px-2"
@@ -630,13 +630,9 @@ else
     private bool   _loadingIconPicker;
     private int    _iconFieldKey;
 
-    private async Task OpenNewTypeIconPickerAsync()
+    private void OpenNewTypeIconPickerAsync()
     {
-        _loadingIconPicker = true;
-        await InvokeAsync(StateHasChanged);
-        await Task.Delay(50);
-        _showIconPicker    = true;
-        _loadingIconPicker = false;
+        _showIconPicker = true;
     }
 
     private async Task OnNewTypeIconPickerSelected(string cls)
