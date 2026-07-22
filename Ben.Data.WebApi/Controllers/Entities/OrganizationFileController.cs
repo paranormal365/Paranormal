@@ -41,266 +41,296 @@ public sealed class OrganizationFileController : ControllerBase
         return sub is not null && Guid.TryParse(sub, out var id2) ? id2 : null;
     }
 
-    // ── GET /api/organizations/{orgId}/files ─────────────────────────────────
+    private static IQueryable<OrganizationFile> WithIncludes(IQueryable<OrganizationFile> q) =>
+        q.Include(f => f.UploadFileType)
+         .Include(f => f.CreatedByAppUser)
+         .Include(f => f.PublishedByAppUser);
+
+    // GET /api/organizations/{orgId}/files
     [HttpGet]
     public async Task<ActionResult<IEnumerable<OrganizationFileRecord>>> GetAll(
         Guid orgId, CancellationToken ct)
     {
-        var userId       = CurrentUserId();
+        var userId = CurrentUserId();
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
-
         if (!isSuperAdmin)
         {
-            var canRead = await _security.HasAccessAsync(userId.Value, orgId,
-                OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Read, ct);
-            if (!canRead) return Forbid();
+            var ok = await _security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Read, ct);
+            if (!ok) return Forbid();
         }
-
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var files = await db.OrganizationFiles
-            .Include(f => f.UploadFileType)
-            .Include(f => f.CreatedByAppUser)
+        var files = await WithIncludes(db.OrganizationFiles)
             .Where(f => f.OrganizationId == orgId)
             .OrderBy(f => f.SortOrder).ThenBy(f => f.FileName)
-            .AsNoTracking()
-            .ToListAsync(ct);
-
+            .AsNoTracking().ToListAsync(ct);
         return Ok(_mapper.Map<List<OrganizationFileRecord>>(files));
     }
 
-    // ── GET /api/organizations/{orgId}/files/{id}/download ──────────────────
+    // GET /api/organizations/{orgId}/files/delete-log
+    [HttpGet("delete-log")]
+    public async Task<ActionResult<IEnumerable<OrganizationFileDeleteLogRecord>>> GetDeleteLog(
+        Guid orgId, CancellationToken ct)
+    {
+        var userId = CurrentUserId();
+        if (userId is null) return Unauthorized();
+        var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
+        if (!isSuperAdmin)
+        {
+            var ok = await _security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Delete, ct);
+            if (!ok) return Forbid();
+        }
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var logs = await db.OrganizationFileDeleteLogs
+            .Where(l => l.OrganizationId == orgId)
+            .OrderByDescending(l => l.DateDeleted)
+            .AsNoTracking().ToListAsync(ct);
+        return Ok(_mapper.Map<List<OrganizationFileDeleteLogRecord>>(logs));
+    }
+
+    // GET /api/organizations/{orgId}/files/{id}/download
     [HttpGet("{id:guid}/download")]
     public async Task<IActionResult> Download(Guid orgId, Guid id, CancellationToken ct)
     {
-        var userId       = CurrentUserId();
+        var userId = CurrentUserId();
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
-
         if (!isSuperAdmin)
         {
-            var canRead = await _security.HasAccessAsync(userId.Value, orgId,
-                OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Read, ct);
-            if (!canRead) return Forbid();
+            var ok = await _security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Read, ct);
+            if (!ok) return Forbid();
         }
-
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var file = await db.OrganizationFiles.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == id && f.OrganizationId == orgId, ct);
         if (file is null) return NotFound();
-
         Stream? stream = null;
         if (!string.IsNullOrEmpty(file.StoragePath) && _storage.Exists(file.StoragePath))
             stream = await _storage.OpenReadAsync(file.StoragePath, ct);
         else if (file.FileData is { Length: > 0 })
             stream = new MemoryStream(file.FileData);
-
         if (stream is null) return NotFound("File data not found in storage.");
         return File(stream, file.ContentType, file.FileName);
     }
 
-    // ── POST /api/organizations/{orgId}/files ───────────────────────────────
+    // POST /api/organizations/{orgId}/files  (direct upload)
+    // The uploader may set IsPublic; publish audit is recorded if IsPublic=true.
     [HttpPost]
     [RequestSizeLimit(200 * 1024 * 1024)]
     public async Task<ActionResult<OrganizationFileRecord>> Upload(
         Guid orgId, [FromForm] OrgFileUploadRequest request, CancellationToken ct)
     {
-        var userId       = CurrentUserId();
+        var userId = CurrentUserId();
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
-
         if (!isSuperAdmin)
         {
-            var canCreate = await _security.HasAccessAsync(userId.Value, orgId,
-                OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Create, ct);
-            if (!canCreate) return Forbid();
+            var ok = await _security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Create, ct);
+            if (!ok) return Forbid();
         }
-
         if (request.File is null || request.File.Length == 0) return BadRequest("No file provided.");
-
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-
-        var org = await db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.Id == orgId, ct);
-        if (org is null) return NotFound("Organization not found.");
-
-        var fileType = await db.UploadFileTypes.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == request.UploadFileTypeId, ct);
-        if (fileType is null) return BadRequest("Invalid file type.");
+        if (!await db.Organizations.AnyAsync(o => o.Id == orgId, ct)) return NotFound("Organization not found.");
+        if (!await db.UploadFileTypes.AnyAsync(t => t.Id == request.UploadFileTypeId, ct)) return BadRequest("Invalid file type.");
 
         var storedName  = $"{Guid.NewGuid():N}{Path.GetExtension(request.File.FileName)}";
         var storagePath = _storage.OrgFilePath(orgId, storedName);
-
         await using var stream = request.File.OpenReadStream();
         await _storage.WriteAsync(storagePath, stream, ct);
 
+        var now = DateTime.UtcNow;
         var orgFile = new OrganizationFile
         {
-            Id                 = Guid.NewGuid(),
-            OrganizationId     = orgId,
-            UploadFileTypeId   = request.UploadFileTypeId,
-            FileName           = request.File.FileName,
-            StoredFileName     = storedName,
-            ContentType        = request.File.ContentType,
-            FileSize           = request.File.Length,
-            StoragePath        = storagePath,
-            Description        = request.Description?.Trim(),
-            IsPublic           = request.IsPublic,
-            SortOrder          = request.SortOrder,
-            DateCreated        = DateTime.UtcNow,
-            CreatedByAppUserId = userId.Value,
+            Id                   = Guid.NewGuid(),
+            OrganizationId       = orgId,
+            UploadFileTypeId     = request.UploadFileTypeId,
+            FileName             = request.File.FileName,
+            StoredFileName       = storedName,
+            ContentType          = request.File.ContentType,
+            FileSize             = request.File.Length,
+            StoragePath          = storagePath,
+            Description          = request.Description?.Trim(),
+            IsPublic             = request.IsPublic,
+            SortOrder            = request.SortOrder,
+            PublishedByAppUserId = request.IsPublic ? userId : null,
+            DatePublished        = request.IsPublic ? now : null,
+            DateCreated          = now,
+            CreatedByAppUserId   = userId.Value,
         };
-
         db.OrganizationFiles.Add(orgFile);
         await db.SaveChangesAsync(ct);
-
-        var created = await db.OrganizationFiles
-            .Include(f => f.UploadFileType)
-            .Include(f => f.CreatedByAppUser)
-            .AsNoTracking()
-            .FirstAsync(f => f.Id == orgFile.Id, ct);
-
+        var created = await WithIncludes(db.OrganizationFiles).AsNoTracking().FirstAsync(f => f.Id == orgFile.Id, ct);
         return CreatedAtAction(nameof(GetAll), new { orgId }, _mapper.Map<OrganizationFileRecord>(created));
     }
 
-    // ── POST /api/organizations/{orgId}/files/copy-from-user/{uploadFileId} ──
-    /// <summary>
-    /// Copies a user's public or organization-shared UploadFile into this organization's file library.
-    /// The original user file is never modified. The member must have OrganizationFiles-Create permission.
-    /// </summary>
+    // POST /api/organizations/{orgId}/files/copy-from-user/{uploadFileId}
+    // Shares a user file into the org. Always non-public by default.
+    // If the member has Update permission they may request PublishImmediately.
+    // Returns OrgFileCopyResult which includes whether publish was possible/done.
     [HttpPost("copy-from-user/{uploadFileId:guid}")]
-    public async Task<ActionResult<OrganizationFileRecord>> CopyFromUser(
+    public async Task<ActionResult<OrgFileCopyResult>> CopyFromUser(
         Guid orgId, Guid uploadFileId, [FromBody] CopyFromUserRequest request, CancellationToken ct)
     {
-        var userId       = CurrentUserId();
+        var userId = CurrentUserId();
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
-
         if (!isSuperAdmin)
         {
-            var canCreate = await _security.HasAccessAsync(userId.Value, orgId,
-                OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Create, ct);
-            if (!canCreate) return Forbid();
+            var ok = await _security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Create, ct);
+            if (!ok) return Forbid();
         }
+        bool canPublish = isSuperAdmin || await _security.HasAccessAsync(userId.Value, orgId,
+            OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Update, ct);
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-
-        // Verify the source file is accessible (public OR shared with this org)
-        var source = await db.UploadFiles
-            .Include(f => f.UploadFileType)
-            .AsNoTracking()
+        var source = await db.UploadFiles.Include(f => f.UploadFileType).AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == uploadFileId, ct);
         if (source is null) return NotFound("Source file not found.");
 
         bool canAccess = source.IsPublic
             || await db.UploadFileOrganizationShares.AnyAsync(
                 s => s.UploadFileId == uploadFileId && s.OrganizationId == orgId && s.IsActive, ct);
-
         if (!canAccess && !isSuperAdmin)
             return Forbid("The source file is not public or shared with this organization.");
 
-        // Copy the file bytes to org storage
-        Stream? sourceStream = null;
+        Stream? srcStream = null;
         if (!string.IsNullOrEmpty(source.StoragePath) && _storage.Exists(source.StoragePath))
-            sourceStream = await _storage.OpenReadAsync(source.StoragePath, ct);
+            srcStream = await _storage.OpenReadAsync(source.StoragePath, ct);
         else if (source.FileData is { Length: > 0 })
-            sourceStream = new MemoryStream(source.FileData);
-
-        if (sourceStream is null)
-            return UnprocessableEntity("Source file has no accessible data in storage.");
+            srcStream = new MemoryStream(source.FileData);
+        if (srcStream is null) return UnprocessableEntity("Source file has no accessible data in storage.");
 
         var storedName  = $"{Guid.NewGuid():N}{Path.GetExtension(source.FileName)}";
         var storagePath = _storage.OrgFilePath(orgId, storedName);
+        await using (srcStream) await _storage.WriteAsync(storagePath, srcStream, ct);
 
-        await using (sourceStream)
-            await _storage.WriteAsync(storagePath, sourceStream, ct);
+        bool publishNow = request.PublishImmediately && canPublish;
+        var  now        = DateTime.UtcNow;
 
         var orgFile = new OrganizationFile
         {
-            Id                 = Guid.NewGuid(),
-            OrganizationId     = orgId,
-            UploadFileTypeId   = source.UploadFileTypeId,
-            FileName           = source.FileName,
-            StoredFileName     = storedName,
-            ContentType        = source.ContentType,
-            FileSize           = source.FileSize,
-            StoragePath        = storagePath,
-            Description        = request.Description?.Trim() ?? source.Description,
-            IsPublic           = request.IsPublic,
-            SortOrder          = 0,
-            SourceUploadFileId = source.Id,
-            DateCreated        = DateTime.UtcNow,
-            CreatedByAppUserId = userId.Value,
+            Id                   = Guid.NewGuid(),
+            OrganizationId       = orgId,
+            UploadFileTypeId     = source.UploadFileTypeId,
+            FileName             = source.FileName,
+            StoredFileName       = storedName,
+            ContentType          = source.ContentType,
+            FileSize             = source.FileSize,
+            StoragePath          = storagePath,
+            Description          = request.Description?.Trim() ?? source.Description,
+            IsPublic             = publishNow,
+            PublishedByAppUserId = publishNow ? userId : null,
+            DatePublished        = publishNow ? now : null,
+            SortOrder            = 0,
+            SourceUploadFileId   = source.Id,
+            DateCreated          = now,
+            CreatedByAppUserId   = userId.Value,
         };
-
         db.OrganizationFiles.Add(orgFile);
         await db.SaveChangesAsync(ct);
 
-        var created = await db.OrganizationFiles
-            .Include(f => f.UploadFileType)
-            .Include(f => f.CreatedByAppUser)
-            .AsNoTracking()
-            .FirstAsync(f => f.Id == orgFile.Id, ct);
-
-        return CreatedAtAction(nameof(GetAll), new { orgId }, _mapper.Map<OrganizationFileRecord>(created));
+        var created = await WithIncludes(db.OrganizationFiles).AsNoTracking().FirstAsync(f => f.Id == orgFile.Id, ct);
+        return CreatedAtAction(nameof(GetAll), new { orgId },
+            new OrgFileCopyResult(_mapper.Map<OrganizationFileRecord>(created), canPublish, publishNow));
     }
 
-    // ── PUT /api/organizations/{orgId}/files/{id} ────────────────────────────
+    // PUT /api/organizations/{orgId}/files/{id}/publish
+    // Approve or revoke public access. Logs approver and timestamp.
+    [HttpPut("{id:guid}/publish")]
+    public async Task<ActionResult<OrganizationFileRecord>> Publish(
+        Guid orgId, Guid id, [FromBody] PublishOrgFileRequest request, CancellationToken ct)
+    {
+        var userId = CurrentUserId();
+        if (userId is null) return Unauthorized();
+        var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
+        if (!isSuperAdmin)
+        {
+            var ok = await _security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Update, ct);
+            if (!ok) return Forbid();
+        }
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var file = await db.OrganizationFiles.FirstOrDefaultAsync(f => f.Id == id && f.OrganizationId == orgId, ct);
+        if (file is null) return NotFound();
+
+        var now = DateTime.UtcNow;
+        file.IsPublic             = request.IsPublic;
+        file.DateUpdated          = now;
+        file.UpdatedByAppUserId   = userId.Value;
+        file.PublishedByAppUserId = request.IsPublic ? userId.Value : null;
+        file.DatePublished        = request.IsPublic ? now : null;
+
+        await db.SaveChangesAsync(ct);
+        var updated = await WithIncludes(db.OrganizationFiles).AsNoTracking().FirstAsync(f => f.Id == id, ct);
+        return Ok(_mapper.Map<OrganizationFileRecord>(updated));
+    }
+
+    // PUT /api/organizations/{orgId}/files/{id}  (metadata only, not publish status)
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<OrganizationFileRecord>> Update(
         Guid orgId, Guid id, [FromBody] OrgFileUpdateRequest request, CancellationToken ct)
     {
-        var userId       = CurrentUserId();
+        var userId = CurrentUserId();
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
-
         if (!isSuperAdmin)
         {
-            var canUpdate = await _security.HasAccessAsync(userId.Value, orgId,
-                OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Update, ct);
-            if (!canUpdate) return Forbid();
+            var ok = await _security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Update, ct);
+            if (!ok) return Forbid();
         }
-
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var file = await db.OrganizationFiles
-            .FirstOrDefaultAsync(f => f.Id == id && f.OrganizationId == orgId, ct);
+        var file = await db.OrganizationFiles.FirstOrDefaultAsync(f => f.Id == id && f.OrganizationId == orgId, ct);
         if (file is null) return NotFound();
-
         file.Description        = request.Description?.Trim();
-        file.IsPublic           = request.IsPublic;
         file.SortOrder          = request.SortOrder;
         file.DateUpdated        = DateTime.UtcNow;
         file.UpdatedByAppUserId = userId.Value;
-
         await db.SaveChangesAsync(ct);
-
-        var updated = await db.OrganizationFiles
-            .Include(f => f.UploadFileType)
-            .Include(f => f.CreatedByAppUser)
-            .AsNoTracking()
-            .FirstAsync(f => f.Id == id, ct);
-
+        var updated = await WithIncludes(db.OrganizationFiles).AsNoTracking().FirstAsync(f => f.Id == id, ct);
         return Ok(_mapper.Map<OrganizationFileRecord>(updated));
     }
 
-    // ── DELETE /api/organizations/{orgId}/files/{id} ─────────────────────────
+    // DELETE /api/organizations/{orgId}/files/{id}
+    // Writes immutable audit log BEFORE deleting the file and storage bytes.
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid orgId, Guid id, CancellationToken ct)
     {
-        var userId       = CurrentUserId();
+        var userId = CurrentUserId();
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
-
         if (!isSuperAdmin)
         {
-            var canDelete = await _security.HasAccessAsync(userId.Value, orgId,
-                OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Delete, ct);
-            if (!canDelete) return Forbid();
+            var ok = await _security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Delete, ct);
+            if (!ok) return Forbid();
         }
-
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var file = await db.OrganizationFiles
+            .Include(f => f.Organization)
+            .Include(f => f.PublishedByAppUser)
             .FirstOrDefaultAsync(f => f.Id == id && f.OrganizationId == orgId, ct);
         if (file is null) return NotFound();
+
+        var deleter = await db.AppUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId.Value, ct);
+
+        // Write audit log first
+        db.OrganizationFileDeleteLogs.Add(new OrganizationFileDeleteLog
+        {
+            Id                        = Guid.NewGuid(),
+            OrganizationId            = orgId,
+            OrganizationName          = file.Organization.Name,
+            OriginalFileId            = file.Id,
+            FileName                  = file.FileName,
+            ContentType               = file.ContentType,
+            FileSize                  = file.FileSize,
+            StoragePath               = file.StoragePath,
+            SourceUploadFileId        = file.SourceUploadFileId,
+            WasPublic                 = file.IsPublic,
+            WasPublishedByAppUserId   = file.PublishedByAppUserId,
+            WasPublishedByDisplayName = file.PublishedByAppUser?.DisplayName,
+            WasDatePublished          = file.DatePublished,
+            DeletedByAppUserId        = userId.Value,
+            DeletedByDisplayName      = deleter?.DisplayName ?? userId.Value.ToString(),
+            DateDeleted               = DateTime.UtcNow,
+        });
 
         if (!string.IsNullOrEmpty(file.StoragePath))
             await _storage.DeleteAsync(file.StoragePath, ct);
@@ -311,18 +341,8 @@ public sealed class OrganizationFileController : ControllerBase
     }
 }
 
-public sealed record OrgFileUploadRequest(
-    IFormFile? File,
-    Guid UploadFileTypeId,
-    string? Description,
-    bool IsPublic,
-    int SortOrder);
-
-public sealed record OrgFileUpdateRequest(
-    string? Description,
-    bool IsPublic,
-    int SortOrder);
-
-public sealed record CopyFromUserRequest(
-    string? Description,
-    bool IsPublic);
+public sealed record OrgFileUploadRequest(IFormFile? File, Guid UploadFileTypeId, string? Description, bool IsPublic, int SortOrder);
+public sealed record OrgFileUpdateRequest(string? Description, int SortOrder);
+public sealed record CopyFromUserRequest(string? Description, bool PublishImmediately = false);
+public sealed record OrgFileCopyResult(OrganizationFileRecord File, bool CanPublishImmediately, bool PublishedImmediately);
+public sealed record PublishOrgFileRequest(bool IsPublic);

@@ -20,8 +20,15 @@ namespace Ben.Data.Source.Entities
         public byte[]? FileData { get; set; }
 
         public string? Description { get; set; }
+        /// <summary>True once a member with OrganizationFiles-Update permission has approved this file for public viewing.</summary>
         public bool IsPublic { get; set; }
         public int SortOrder { get; set; }
+
+        /// <summary>User who approved this file for public access. Null until explicitly published.</summary>
+        public Guid? PublishedByAppUserId { get; set; }
+
+        /// <summary>UTC timestamp of when this file was first approved for public access.</summary>
+        public DateTime? DatePublished { get; set; }
 
         /// <summary>
         /// When this file was copied from a user's <see cref="UploadFile"/>, the source file ID.
@@ -42,5 +49,6 @@ namespace Ben.Data.Source.Entities
 
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
+        public virtual AppUser? PublishedByAppUser { get; set; }
     }
 }

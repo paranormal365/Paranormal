@@ -218,18 +218,33 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         return result ?? [];
     }
 
+    public async Task<IReadOnlyList<OrganizationFileDeleteLogRecord>> GetOrgFileDeleteLogAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrganizationFileDeleteLogRecord>>($"/api/organizations/{orgId}/files/delete-log", token);
+        return result ?? [];
+    }
+
     public Task<OrganizationFileRecord?> UploadOrgFileAsync(Guid orgId, MultipartFormDataContent content, CancellationToken token = default)
         => _api.PostMultipartAsync<OrganizationFileRecord>($"/api/organizations/{orgId}/files", content, token);
 
-    public Task<OrganizationFileRecord?> CopyFileFromUserAsync(Guid orgId, Guid uploadFileId, string? description, bool isPublic, CancellationToken token = default)
-        => _api.PostAsync<object, OrganizationFileRecord>(
-               $"/api/organizations/{orgId}/files/copy-from-user/{uploadFileId}",
-               new { Description = description, IsPublic = isPublic }, token);
+    public async Task<OrgFileCopyClientResult?> CopyFileFromUserAsync(Guid orgId, Guid uploadFileId, string? description, bool publishImmediately, CancellationToken token = default)
+    {
+        // The API returns OrgFileCopyResult which matches OrgFileCopyClientResult shape
+        var result = await _api.PostAsync<object, OrgFileCopyClientResult>(
+            $"/api/organizations/{orgId}/files/copy-from-user/{uploadFileId}",
+            new { Description = description, PublishImmediately = publishImmediately }, token);
+        return result;
+    }
 
-    public Task<OrganizationFileRecord?> UpdateOrgFileAsync(Guid orgId, Guid fileId, string? description, bool isPublic, int sortOrder, CancellationToken token = default)
+    public Task<OrganizationFileRecord?> PublishOrgFileAsync(Guid orgId, Guid fileId, bool isPublic, CancellationToken token = default)
+        => _api.PutAsync<object, OrganizationFileRecord>(
+               $"/api/organizations/{orgId}/files/{fileId}/publish",
+               new { IsPublic = isPublic }, token);
+
+    public Task<OrganizationFileRecord?> UpdateOrgFileAsync(Guid orgId, Guid fileId, string? description, int sortOrder, CancellationToken token = default)
         => _api.PutAsync<object, OrganizationFileRecord>(
                $"/api/organizations/{orgId}/files/{fileId}",
-               new { Description = description, IsPublic = isPublic, SortOrder = sortOrder }, token);
+               new { Description = description, SortOrder = sortOrder }, token);
 
     public Task<bool> DeleteOrgFileAsync(Guid orgId, Guid fileId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/files/{fileId}", token);

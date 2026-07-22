@@ -44,6 +44,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrganizationAccessGrant> OrganizationAccessGrants { get; set; }
         public virtual DbSet<OrganizationMembershipRequest> OrganizationMembershipRequests { get; set; }
         public virtual DbSet<OrganizationFile> OrganizationFiles { get; set; }
+        public virtual DbSet<OrganizationFileDeleteLog> OrganizationFileDeleteLogs { get; set; }
         public virtual DbSet<UploadFileType> UploadFileTypes { get; set; }
         public virtual DbSet<UploadFileTypeExtension> UploadFileTypeExtensions { get; set; }
         public virtual DbSet<UploadFile> UploadFiles { get; set; }
@@ -664,6 +665,29 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.FileData).HasColumnType("varbinary(max)").IsRequired(false);
             modelBuilder.Entity<OrganizationFile>()
                 .Property(e => e.StoragePath).HasMaxLength(500).IsRequired(false);
+            modelBuilder.Entity<OrganizationFile>()
+                .HasOne(e => e.PublishedByAppUser).WithMany()
+                .HasForeignKey(e => e.PublishedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── OrganizationFileDeleteLog ────────────────────────────────────
+            // Intentionally no FKs — immutable audit snapshot, same pattern as AuditLog.
+            modelBuilder.Entity<OrganizationFileDeleteLog>().ToTable("OrganizationFileDeleteLogs");
+            modelBuilder.Entity<OrganizationFileDeleteLog>()
+                .Property(e => e.OrganizationName).HasMaxLength(256).IsRequired();
+            modelBuilder.Entity<OrganizationFileDeleteLog>()
+                .Property(e => e.FileName).HasMaxLength(512).IsRequired();
+            modelBuilder.Entity<OrganizationFileDeleteLog>()
+                .Property(e => e.ContentType).HasMaxLength(128).IsRequired();
+            modelBuilder.Entity<OrganizationFileDeleteLog>()
+                .Property(e => e.StoragePath).HasMaxLength(500).IsRequired(false);
+            modelBuilder.Entity<OrganizationFileDeleteLog>()
+                .Property(e => e.WasPublishedByDisplayName).HasMaxLength(256).IsRequired(false);
+            modelBuilder.Entity<OrganizationFileDeleteLog>()
+                .Property(e => e.DeletedByDisplayName).HasMaxLength(256).IsRequired();
+            modelBuilder.Entity<OrganizationFileDeleteLog>()
+                .HasIndex(e => e.OrganizationId);
+            modelBuilder.Entity<OrganizationFileDeleteLog>()
+                .HasIndex(e => e.DeletedByAppUserId);
         }
     }
 }

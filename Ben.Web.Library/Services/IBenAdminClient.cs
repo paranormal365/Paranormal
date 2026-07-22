@@ -205,16 +205,25 @@ public interface IBenAdminClient
     /// <summary>Returns all files owned by the organization.</summary>
     Task<IReadOnlyList<OrganizationFileRecord>> GetOrgFilesAsync(Guid orgId, CancellationToken token = default);
 
+    /// <summary>Returns the deletion audit log for organization files.</summary>
+    Task<IReadOnlyList<OrganizationFileDeleteLogRecord>> GetOrgFileDeleteLogAsync(Guid orgId, CancellationToken token = default);
+
     /// <summary>Uploads a new file to the organization's file library.</summary>
     Task<OrganizationFileRecord?> UploadOrgFileAsync(Guid orgId, MultipartFormDataContent content, CancellationToken token = default);
 
-    /// <summary>Copies a user's public or org-shared file into the organization's file library.</summary>
-    Task<OrganizationFileRecord?> CopyFileFromUserAsync(Guid orgId, Guid uploadFileId, string? description, bool isPublic, CancellationToken token = default);
+    /// <summary>
+    /// Copies a user's public or org-shared file into the organization's file library.
+    /// Returns the created file plus flags indicating whether the caller can/did publish immediately.
+    /// </summary>
+    Task<OrgFileCopyClientResult?> CopyFileFromUserAsync(Guid orgId, Guid uploadFileId, string? description, bool publishImmediately, CancellationToken token = default);
 
-    /// <summary>Updates metadata (description, visibility, sort order) of an organization file.</summary>
-    Task<OrganizationFileRecord?> UpdateOrgFileAsync(Guid orgId, Guid fileId, string? description, bool isPublic, int sortOrder, CancellationToken token = default);
+    /// <summary>Approves or revokes public access for an organization file. Logs approver and timestamp.</summary>
+    Task<OrganizationFileRecord?> PublishOrgFileAsync(Guid orgId, Guid fileId, bool isPublic, CancellationToken token = default);
 
-    /// <summary>Permanently deletes an organization-owned file from storage and the database.</summary>
+    /// <summary>Updates metadata (description, sort order) of an organization file.</summary>
+    Task<OrganizationFileRecord?> UpdateOrgFileAsync(Guid orgId, Guid fileId, string? description, int sortOrder, CancellationToken token = default);
+
+    /// <summary>Permanently deletes an organization-owned file. Writes an audit log before deleting.</summary>
     Task<bool> DeleteOrgFileAsync(Guid orgId, Guid fileId, CancellationToken token = default);
     Task<OrgMemberGroupRecord?> CreateGroupAsync(Guid orgId, OrgGroupUpsertRequest request, CancellationToken token = default);
     Task<OrgMemberGroupRecord?> UpdateGroupAsync(Guid orgId, Guid groupId, OrgGroupUpsertRequest request, CancellationToken token = default);
