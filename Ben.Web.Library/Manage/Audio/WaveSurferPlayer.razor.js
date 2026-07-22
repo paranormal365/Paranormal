@@ -536,10 +536,16 @@ export function playRegion(containerId, regionId) {
     }
   }))
 
-  // Clean up if the user manually pauses, the track finishes, or seeks away
-  unsubs.push(ws.on('pause',   stopAndClean))
-  unsubs.push(ws.on('finish',  stopAndClean))
-  unsubs.push(ws.on('seeking', stopAndClean))
+  // Clean up if the user manually pauses or the track finishes naturally.
+  // Note: ws.seekTo() above fires a 'seeking' event asynchronously; skipNextSeek
+  // absorbs that first event so it does NOT tear down the region-end monitor.
+  let skipNextSeek = true
+  unsubs.push(ws.on('pause',  stopAndClean))
+  unsubs.push(ws.on('finish', stopAndClean))
+  unsubs.push(ws.on('seeking', () => {
+    if (skipNextSeek) { skipNextSeek = false; return }
+    stopAndClean()
+  }))
 
   instance._regionPlayCleanup = stopAndClean
 }
