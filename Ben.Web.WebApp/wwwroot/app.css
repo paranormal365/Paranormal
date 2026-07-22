@@ -201,3 +201,33 @@ body[data-bs-theme="dark"] .k-drawer {
 .icon-picker-tile i { font-size: 1.35rem; line-height: 1; color: var(--kendo-color-primary, #3b82f6); }
 .icon-picker-search { margin-bottom: 10px; }
 .icon-picker-empty { padding: 20px; text-align: center; color: var(--kendo-color-subtle-text, #888); font-style: italic; }
+
+/* ── Icon Picker Overlay (non-portal fixed overlay) ─────────────────────── */
+.icon-picker-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10500;
+    background: rgba(0, 0, 0, 0.4);
+}
+.icon-picker-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10501;
+    width: min(880px, 96vw);
+    max-height: 88vh;
+    background: var(--kendo-color-base, #fff);
+    border: 1px solid var(--kendo-color-border, #e8e8e8);
+    border-radius: 8px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.icon-picker-panel-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--kendo-color-border, #e8e8e8);
+    background: var(--kendo-color-surface, #f5f5f5);
+    flex-shrink: 0;
+}

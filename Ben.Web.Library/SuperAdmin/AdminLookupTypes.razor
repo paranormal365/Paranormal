@@ -268,8 +268,8 @@
     private async Task OpenIconPickerAsync()
     {
         _loadingIconPicker = true;
-        await InvokeAsync(StateHasChanged);  // flush render so spinner appears
-        await Task.Delay(50);               // give Blazor Server's render loop time to paint
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(50);
         _showIconPicker    = true;
         _loadingIconPicker = false;
     }
