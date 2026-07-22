@@ -1,91 +1,22 @@
 @*
   IconPickerDialog.razor
   ──────────────────────
-  A browseable icon picker dialog with three tabs:
-    1. Telerik SVG Icons  — all ~400 icons from Telerik.SvgIcons.SvgIcon
-    2. Bootstrap Icons    — bi bi-* class names (requires Bootstrap Icons CSS)
-    3. Font Awesome       — fas fa-* class names (requires FA kit in App.razor)
-
-  Icon class conventions returned by OnIconSelected:
-    Telerik   →  "t:<PropertyName>"      e.g. "t:Home"
-    Bootstrap →  "bi bi-<name>"          e.g. "bi bi-house-door"
-    FA        →  "fas fa-<name>"         e.g. "fas fa-home"
-
-  Usage:
-    <IconPickerDialog @bind-Visible="@_showPicker"
-                      OnIconSelected="@OnPickerSelected" />
-
-    private void OnPickerSelected(string iconClass)
-    {
-        _myIconClass = iconClass;
-    }
+  Only the ACTIVE tab's icons are rendered at any one time, keeping the
+  initial render payload small and preventing SignalR/Blazor message-size errors.
 *@
 
 @namespace Ben.Web.Library.Manage.Icon
 
-@* Global styles injected once — needed because TelerikDialog renders in a portal
-   outside the component's DOM scope so scoped CSS can't reach the content. *@
-<style>
-    .icon-picker-gallery {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        padding: 8px 2px;
-        max-height: 360px;
-        overflow-y: auto;
-    }
-    .icon-picker-tile {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        width: 78px;
-        min-height: 72px;
-        border: 1px solid var(--kendo-color-border, #e8e8e8);
-        border-radius: 6px;
-        background: transparent;
-        cursor: pointer;
-        padding: 6px 4px 4px;
-        gap: 4px;
-        transition: background 0.12s, border-color 0.12s, transform 0.1s;
-        font-size: 0.58rem;
-        color: var(--kendo-color-on-base, #333);
-        overflow: hidden;
-    }
-    .icon-picker-tile:hover,
-    .icon-picker-tile:focus {
-        background: var(--kendo-color-base-hover, #f0f4ff);
-        border-color: var(--kendo-color-primary, #3b82f6);
-        outline: none;
-        transform: scale(1.06);
-    }
-    .icon-picker-tile span {
-        display: block;
-        width: 100%;
-        text-align: center;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .icon-picker-tile i {
-        font-size: 1.35rem;
-        line-height: 1;
-        color: var(--kendo-color-primary, #3b82f6);
-    }
-    .icon-picker-search { margin-bottom: 10px; }
-    .icon-picker-empty  { padding: 20px; text-align: center; color: var(--kendo-color-subtle-text, #888); font-style: italic; }
-</style>
-
 <TelerikDialog @bind-Visible="@Visible"
                Title="Pick an Icon"
                Width="860px"
-               Height="560px">
+               Height="580px">
     <DialogContent>
 
         @* Search bar *@
         <div class="icon-picker-search d-flex align-items-center gap-2">
             <TelerikTextBox Value="@_search"
-                            ValueChanged="@((string v) => { _search = v; })"
+                            ValueChanged="@((string v) => _search = v)"
                             PlaceHolder="Search icons by name…"
                             Width="300px" />
             @if (!string.IsNullOrEmpty(_search))
@@ -95,159 +26,141 @@
                                Icon="@SvgIcon.X"
                                OnClick="@(() => _search = string.Empty)" />
             }
-            <span class="text-secondary small ms-auto">
-                Click an icon to select it
-            </span>
+            <span class="text-secondary small ms-auto">Click an icon to select it</span>
         </div>
 
-        @* Tabs *@
+        @* Only the active tab renders its icon gallery *@
         <TelerikTabStrip @bind-ActiveTabIndex="@_activeTab">
 
-            @* ── Tab 1: Telerik SVG Icons ───────────────────────────────────── *@
-            <TabStripTab Title="Telerik Icons">
-                @{ var telerikFiltered = FilteredTelerik.ToList(); }
-                @if (telerikFiltered.Count == 0)
+            <TabStripTab Title="@($"Telerik ({_telerikCount})")">
+                @if (_activeTab == 0)
                 {
-                    <div class="icon-picker-empty">No icons match "@_search"</div>
-                }
-                else
-                {
-                    <div class="icon-picker-gallery">
-                        @foreach (var icon in telerikFiltered)
-                        {
-                            <button type="button" class="icon-picker-tile"
-                                    title="@icon.Name"
-                                    @onclick="@(() => SelectIcon($"t:{icon.Name}"))">
-                                <TelerikSvgIcon Icon="@icon.Icon" Size="@ThemeConstants.SvgIcon.Size.Large" />
-                                <span>@icon.Name</span>
-                            </button>
-                        }
-                    </div>
-                }
-            </TabStripTab>
-
-            @* ── Tab 2: Bootstrap Icons ──────────────────────────────────────── *@
-            <TabStripTab Title="Bootstrap Icons">
-                @{ var bsFiltered = FilteredBootstrap.ToList(); }
-                @if (bsFiltered.Count == 0)
-                {
-                    <div class="icon-picker-empty">No icons match "@_search"</div>
-                }
-                else
-                {
-                    <div class="icon-picker-gallery">
-                        @foreach (var name in bsFiltered)
-                        {
-                            <button type="button" class="icon-picker-tile"
-                                    title="bi bi-@name"
-                                    @onclick="@(() => SelectIcon($"bi bi-{name}"))">
-                                <i class="bi bi-@name"></i>
-                                <span>@name</span>
-                            </button>
-                        }
-                    </div>
+                    var list = FilteredTelerik.ToList();
+                    if (list.Count == 0) { <div class="icon-picker-empty">No icons match "@_search"</div> }
+                    else
+                    {
+                        <div class="icon-picker-gallery">
+                            @foreach (var icon in list)
+                            {
+                                var k = $"t:{icon.Name}";
+                                <button type="button" class="icon-picker-tile" title="@icon.Name"
+                                        @onclick="@(() => SelectIconAsync(k))">
+                                    <TelerikSvgIcon Icon="@icon.Icon" Size="@ThemeConstants.SvgIcon.Size.Large" />
+                                    <span>@icon.Name</span>
+                                </button>
+                            }
+                        </div>
+                    }
                 }
             </TabStripTab>
 
-            @* ── Tab 3: Font Awesome ─────────────────────────────────────────── *@
-            <TabStripTab Title="Font Awesome">
-                @{ var faFiltered = FilteredFontAwesome.ToList(); }
-                @if (faFiltered.Count == 0)
+            <TabStripTab Title="@($"Bootstrap ({_bsCount})")">
+                @if (_activeTab == 1)
                 {
-                    <div class="icon-picker-empty">No icons match "@_search"</div>
+                    var list = FilteredBootstrap.ToList();
+                    if (list.Count == 0) { <div class="icon-picker-empty">No icons match "@_search"</div> }
+                    else
+                    {
+                        <div class="icon-picker-gallery">
+                            @foreach (var name in list)
+                            {
+                                var cls = $"bi bi-{name}";
+                                <button type="button" class="icon-picker-tile" title="@cls"
+                                        @onclick="@(() => SelectIconAsync(cls))">
+                                    <i class="bi bi-@name"></i>
+                                    <span>@name</span>
+                                </button>
+                            }
+                        </div>
+                    }
                 }
-                else
+            </TabStripTab>
+
+            <TabStripTab Title="@($"Font Awesome ({_faCount})")">
+                @if (_activeTab == 2)
                 {
-                    <div class="icon-picker-gallery">
-                        @foreach (var name in faFiltered)
-                        {
-                            <button type="button" class="icon-picker-tile"
-                                    title="fas fa-@name"
-                                    @onclick="@(() => SelectIcon($"fas fa-{name}"))">
-                                <i class="fas fa-@name"></i>
-                                <span>@name</span>
-                            </button>
-                        }
-                    </div>
+                    var list = FilteredFontAwesome.ToList();
+                    if (list.Count == 0) { <div class="icon-picker-empty">No icons match "@_search"</div> }
+                    else
+                    {
+                        <div class="icon-picker-gallery">
+                            @foreach (var name in list)
+                            {
+                                var cls = $"fas fa-{name}";
+                                <button type="button" class="icon-picker-tile" title="@cls"
+                                        @onclick="@(() => SelectIconAsync(cls))">
+                                    <i class="fas fa-@name"></i>
+                                    <span>@name</span>
+                                </button>
+                            }
+                        </div>
+                    }
                 }
             </TabStripTab>
 
         </TelerikTabStrip>
     </DialogContent>
     <DialogButtons>
-        <TelerikButton OnClick="Close">Cancel</TelerikButton>
+        <TelerikButton OnClick="CloseAsync">Cancel</TelerikButton>
     </DialogButtons>
 </TelerikDialog>
 
 @code {
 
-    // ── Parameters ────────────────────────────────────────────────────────────
-
-    /// <summary>Controls dialog visibility. Use @bind-Visible for two-way binding.</summary>
     [Parameter] public bool Visible { get; set; }
     [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
 
     /// <summary>
-    /// Fires when the user clicks an icon. The argument is the icon class string:
+    /// Fires when the user clicks an icon.
     ///   Telerik   → "t:PropertyName"   e.g. "t:Home"
-    ///   Bootstrap → "bi bi-name"        e.g. "bi bi-house-door"
-    ///   FA        → "fas fa-name"       e.g. "fas fa-home"
+    ///   Bootstrap → "bi bi-house"
+    ///   FA        → "fas fa-home"
     /// </summary>
     [Parameter] public EventCallback<string> OnIconSelected { get; set; }
-
-    // ── Internal state ────────────────────────────────────────────────────────
 
     private string _search    = string.Empty;
     private int    _activeTab = 0;
 
-    // ── Filtered icon lists ───────────────────────────────────────────────────
+    private int _telerikCount => IconPickerData.TelerikIcons.Count;
+    private int _bsCount      => IconPickerData.BootstrapIcons.Count;
+    private int _faCount      => IconPickerData.FontAwesomeIcons.Count;
 
     private IEnumerable<TelerikIconEntry> FilteredTelerik =>
         string.IsNullOrWhiteSpace(_search)
             ? IconPickerData.TelerikIcons
-            : IconPickerData.TelerikIcons.Where(i =>
-                i.Name.Contains(_search, StringComparison.OrdinalIgnoreCase));
+            : IconPickerData.TelerikIcons.Where(i => i.Name.Contains(_search, StringComparison.OrdinalIgnoreCase));
 
     private IEnumerable<string> FilteredBootstrap =>
         string.IsNullOrWhiteSpace(_search)
             ? IconPickerData.BootstrapIcons
-            : IconPickerData.BootstrapIcons.Where(n =>
-                n.Contains(_search, StringComparison.OrdinalIgnoreCase));
+            : IconPickerData.BootstrapIcons.Where(n => n.Contains(_search, StringComparison.OrdinalIgnoreCase));
 
     private IEnumerable<string> FilteredFontAwesome =>
         string.IsNullOrWhiteSpace(_search)
             ? IconPickerData.FontAwesomeIcons
-            : IconPickerData.FontAwesomeIcons.Where(n =>
-                n.Contains(_search, StringComparison.OrdinalIgnoreCase));
+            : IconPickerData.FontAwesomeIcons.Where(n => n.Contains(_search, StringComparison.OrdinalIgnoreCase));
 
-    // ── Actions ───────────────────────────────────────────────────────────────
-
-    private async Task SelectIcon(string iconClass)
+    private async Task SelectIconAsync(string iconClass)
     {
         if (OnIconSelected.HasDelegate)
             await OnIconSelected.InvokeAsync(iconClass);
-        await Close();
+        await CloseAsync();
     }
 
-    private async Task Close()
+    private async Task CloseAsync()
     {
-        _search = string.Empty;
+        _search    = string.Empty;
+        _activeTab = 0;
         if (VisibleChanged.HasDelegate)
             await VisibleChanged.InvokeAsync(false);
     }
 
-    // ── Static render helper ──────────────────────────────────────────────────
-
-    /// <summary>
-    /// Resolves a stored icon class string to a render fragment for preview.
-    /// Returns null when the class cannot be determined.
-    /// </summary>
+    /// <summary>Converts "t:PropertyName" → ISvgIcon for inline preview rendering.</summary>
     public static ISvgIcon? ResolveTelerikIcon(string? iconClass)
     {
         if (iconClass is null || !iconClass.StartsWith("t:")) return null;
-        var name = iconClass[2..];
-        var prop = typeof(Telerik.SvgIcons.SvgIcon)
-            .GetProperty(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-        return prop?.GetValue(null) as ISvgIcon;
+        return typeof(Telerik.SvgIcons.SvgIcon)
+            .GetProperty(iconClass[2..], System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            ?.GetValue(null) as ISvgIcon;
     }
 }
