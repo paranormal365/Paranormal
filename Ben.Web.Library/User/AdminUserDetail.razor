@@ -631,16 +631,16 @@ else
     private async Task OpenNewTypeIconPickerAsync()
     {
         _loadingIconPicker = true;
-        StateHasChanged();
-        await Task.Yield();
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(50);
         _showIconPicker    = true;
         _loadingIconPicker = false;
     }
 
-    private void OnNewTypeIconPickerSelected(string cls)
+    private async Task OnNewTypeIconPickerSelected(string cls)
     {
         _newTypeIconClass = cls;
-        StateHasChanged();
+        await InvokeAsync(StateHasChanged);
     }
     private string? _typeError;
 

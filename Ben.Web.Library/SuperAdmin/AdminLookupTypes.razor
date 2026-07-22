@@ -264,17 +264,17 @@
     private async Task OpenIconPickerAsync()
     {
         _loadingIconPicker = true;
-        StateHasChanged();
-        await Task.Yield();   // one render tick — lets the spinner appear before the dialog renders
+        await InvokeAsync(StateHasChanged);  // flush render so spinner appears
+        await Task.Delay(50);               // give Blazor Server's render loop time to paint
         _showIconPicker    = true;
         _loadingIconPicker = false;
     }
 
     /// <summary>Receives the chosen icon class string from the picker and forces a re-render.</summary>
-    private void OnIconPickerSelected(string cls)
+    private async Task OnIconPickerSelected(string cls)
     {
         _form.IconClass = cls;
-        StateHasChanged();
+        await InvokeAsync(StateHasChanged);  // InvokeAsync ensures re-render reaches portal content
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
