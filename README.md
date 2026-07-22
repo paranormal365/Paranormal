@@ -8,19 +8,19 @@ Full-stack .NET solution — ASP.NET Core Web API + Blazor Server + EF Core + SQ
 
 | Project | Role |
 |---|---|
-| `Ben.Data.Common` | Shared enums, interfaces (`IIDStd`), helpers (`FileExtensionPatternMatcher`, `AudioFormatUtils`) |
-| `Ben.Data.Source` | EF Core data layer — entities, `BenDataContext`, migrations |
+| `Ben.Data.Common` | Shared enums, interfaces (`IIDStd`), helpers (`FileExtensionPatternMatcher`, `MapGeoJsonHelper`) |
+| `Ben.Data.Source` | EF Core data layer — entities, `BenDataContext`, 12 migrations |
 | `Ben.Data.WebApi` | ASP.NET Core Web API — Identity, controllers, seeders (`:5252`) |
 | `Ben.Service.Mappings` | AutoMapper profiles (Entity → Record) |
 | `Ben.Service.Models` | DTOs / records |
 | `Ben.Service.RepositoryService` | Repository pattern over `BenDataContext` |
 | `Ben.Service.Security` | Org-level tenant security service |
-| `Ben.Web.Library` | Razor Class Library — shared Blazor + Telerik components (inc. `WaveSurferPlayer`, `AudioFilePreview`, `WsRegionExplorer`) |
+| `Ben.Web.Library` | Razor Class Library — Blazor + Telerik components: `WaveSurferPlayer`, `AudioFilePreview`, `AddressMapPlayer`, `IconClassPicker`, `IconPickerDialog`, org/CMS/user management pages |
 | `Ben.Web.WebApp` | Blazor Server app — Telerik UI for Blazor (`:5078`) |
-| `Ben.Service.RepositoryService.Tests` | xUnit — 172 tests |
-| `Ben.Web.Tests` | xUnit — 407 tests |
+| `Ben.Service.RepositoryService.Tests` | xUnit — 220 tests |
+| `Ben.Web.Tests` | xUnit — 446 tests |
 
-**579 tests — 0 failures, 0 warnings**
+**666 tests — 0 failures, 0 warnings**
 
 ---
 
