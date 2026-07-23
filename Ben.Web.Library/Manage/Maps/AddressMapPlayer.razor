@@ -50,11 +50,12 @@ else
                     OnClick="@OnMapClick">
             <MapLayers>
 
-                @* Tile (OpenStreetMap) *@
+                @* Tile (OpenStreetMap) — UrlTemplate refers to the JS function
+                   defined in AddressMapPlayer.razor.js that returns the tile URL. *@
                 <MapLayer Type="@MapLayersType.Tile"
                           Attribution="&copy; <a href='https://osm.org/copyright'>OpenStreetMap contributors</a>"
                           Subdomains="@_tileSubdomains"
-                          UrlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                          UrlTemplate="addressMapTileTemplate" />
 
                 @* Region circle — Shape layer with computed GeoJSON polygon *@
                 @if (_form.ShowRegion && _circleGeoJson is not null)
