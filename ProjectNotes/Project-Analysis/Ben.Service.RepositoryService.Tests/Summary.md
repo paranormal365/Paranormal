@@ -1,7 +1,7 @@
 # Ben.Service.RepositoryService.Tests — Summary
 
 **Type:** xUnit Test Project  
-**Test count:** 265 tests (all passing)  
+**Test count:** 279 tests (all passing)  
 **Framework:** xUnit with `Microsoft.EntityFrameworkCore.InMemory`
 
 ## Purpose
@@ -17,7 +17,8 @@ Uses an in-memory EF Core provider so tests run without a database.
 | `UserRepositoryManagerTests.cs` | 14 | `AppUserRepositoryManager` — all 14 user-domain repos return cached instances |
 | `OrganizationRepositoryManagerTests.cs` | 12 | `OrganizationRepositoryManager` — all 12 org-domain repos return cached instances |
 | `OrganizationSecurityServiceTests.cs` | 20 | `Ben.Service.Security.Services.OrganizationSecurityService`: `IsMemberAsync`, `IsOwnerAsync`, `HasPermissionAsync`, `GetUserOrganizations`, `GrantAccessAsync`, `RevokeAccessAsync`, `AddMemberAsync`, `RemoveMemberAsync`, `GetOrganizationMembersAsync` |
-| `OrganizationSecurityServiceRepositoryTests.cs` | **26** | `Ben.Service.RepositoryService.Services.OrganizationSecurityService`: `SearchUsersAsync`, `HasAccessAsync`, `GetOrganizationsForUserAsync`, `RegisterOrganizationAsync`, `GetOrganizationUsersAsync`, `UpsertMembershipAsync`, `SetAccessGrantAsync` |
+| `OrganizationSecurityServiceRepositoryTests.cs` | **30** | `Ben.Service.RepositoryService.Services.OrganizationSecurityService`: `SearchUsersAsync`, `HasAccessAsync` (direct grants + named roles), `GetOrganizationsForUserAsync`, `RegisterOrganizationAsync`, `GetOrganizationUsersAsync`, `UpsertMembershipAsync`, `SetAccessGrantAsync` |
+| `OrganizationRoleTests.cs` | **14** | `OrganizationRole`, `OrganizationRolePermission`, `OrganizationRoleMembership` entity persistence, cascade deletes, unique index model config |
 | `DeleteGrantTests.cs` | 4 | `OrganizationSecurityService.DeleteGrantAsync` |
 | `RepositoryReadPathTests.cs` | **20** | `RepositoryBase<T>` read-path: `GetAllAsync`, `FindListAsync`, `FindOneAsync`, `GetByIdAsync`, `CountAllAsync`, `CountFindAsync` via `UploadFileTypeRepository` + cross-entity smoke via `OrganizationAddressTypeRepository` |
 | `AuditChangeTrackerTests.cs` | 17 | `AuditChangeTracker.GetChanges`, `ToPropertySnapshot`, scalar type coverage, navigation property exclusion |

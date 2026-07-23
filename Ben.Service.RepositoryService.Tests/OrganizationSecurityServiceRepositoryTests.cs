@@ -571,4 +571,182 @@ public class OrganizationSecurityServiceRepositoryTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             svc.SetAccessGrantAsync(orgId, outsiderId, DataTable.Organization, DataAction.Read, ownerId));
     }
+
+    // ── HasAccessAsync — named role permissions ───────────────────────────────
+
+    [Fact]
+    public async Task HasAccess_MemberWithNamedRoleGrantingPermission_ReturnsTrue()
+    {
+        var factory = CreateFactory();
+        var (orgId, ownerId, memberId) = await SeedOrgAsync(factory);
+
+        // Create a named role with Read permission on OrganizationAddress
+        var roleId       = Guid.NewGuid();
+        var membershipId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var membership = new OrganizationUserMembership
+            {
+                Id = membershipId, OrganizationId = orgId, AppUserId = memberId,
+                Role = MemberRole.Member, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId
+            };
+            db.OrganizationUserMemberships.Add(membership);
+            db.OrganizationRoles.Add(new OrganizationRole
+            {
+                Id = roleId, OrganizationId = orgId, Name = "Viewer",
+                IsActive = true, SortOrder = 1,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId
+            });
+            db.OrganizationRolePermissions.Add(new OrganizationRolePermission
+            {
+                Id = Guid.NewGuid(), OrganizationRoleId = roleId,
+                TableName = DataTable.OrganizationAddress, Actions = DataAction.Read,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId
+            });
+            db.OrganizationRoleMemberships.Add(new OrganizationRoleMembership
+            {
+                Id = Guid.NewGuid(), OrganizationRoleId = roleId,
+                OrganizationUserMembershipId = membershipId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var svc    = CreateService(factory);
+        var result = await svc.HasAccessAsync(memberId, orgId, DataTable.OrganizationAddress, DataAction.Read);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public async Task HasAccess_MemberWithNamedRole_WrongTable_ReturnsFalse()
+    {
+        var factory = CreateFactory();
+        var (orgId, ownerId, memberId) = await SeedOrgAsync(factory);
+
+        var roleId       = Guid.NewGuid();
+        var membershipId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var membership = new OrganizationUserMembership
+            {
+                Id = membershipId, OrganizationId = orgId, AppUserId = memberId,
+                Role = MemberRole.Member, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId
+            };
+            db.OrganizationUserMemberships.Add(membership);
+            db.OrganizationRoles.Add(new OrganizationRole
+            {
+                Id = roleId, OrganizationId = orgId, Name = "AddressOnly",
+                IsActive = true, SortOrder = 1,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId
+            });
+            db.OrganizationRolePermissions.Add(new OrganizationRolePermission
+            {
+                Id = Guid.NewGuid(), OrganizationRoleId = roleId,
+                TableName = DataTable.OrganizationAddress, Actions = DataAction.All,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId
+            });
+            db.OrganizationRoleMemberships.Add(new OrganizationRoleMembership
+            {
+                Id = Guid.NewGuid(), OrganizationRoleId = roleId,
+                OrganizationUserMembershipId = membershipId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var svc    = CreateService(factory);
+        // Role only grants Address permission — asking for Email should return false
+        var result = await svc.HasAccessAsync(memberId, orgId, DataTable.OrganizationEmail, DataAction.Read);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task HasAccess_MemberWithInactiveRole_ReturnsFalse()
+    {
+        var factory = CreateFactory();
+        var (orgId, ownerId, memberId) = await SeedOrgAsync(factory);
+
+        var roleId       = Guid.NewGuid();
+        var membershipId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var membership = new OrganizationUserMembership
+            {
+                Id = membershipId, OrganizationId = orgId, AppUserId = memberId,
+                Role = MemberRole.Member, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId
+            };
+            db.OrganizationUserMemberships.Add(membership);
+            db.OrganizationRoles.Add(new OrganizationRole
+            {
+                Id = roleId, OrganizationId = orgId, Name = "Inactive",
+                IsActive = false,  // ← inactive role should not grant permission
+                SortOrder = 1, DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId
+            });
+            db.OrganizationRolePermissions.Add(new OrganizationRolePermission
+            {
+                Id = Guid.NewGuid(), OrganizationRoleId = roleId,
+                TableName = DataTable.OrganizationAddress, Actions = DataAction.All,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId
+            });
+            db.OrganizationRoleMemberships.Add(new OrganizationRoleMembership
+            {
+                Id = Guid.NewGuid(), OrganizationRoleId = roleId,
+                OrganizationUserMembershipId = membershipId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var svc    = CreateService(factory);
+        var result = await svc.HasAccessAsync(memberId, orgId, DataTable.OrganizationAddress, DataAction.Read);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task HasAccess_MultipleRoles_OrLogic_ReturnsTrueWhenAnyRoleGrants()
+    {
+        var factory = CreateFactory();
+        var (orgId, ownerId, memberId) = await SeedOrgAsync(factory);
+
+        var role1Id      = Guid.NewGuid();
+        var role2Id      = Guid.NewGuid();
+        var membershipId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var membership = new OrganizationUserMembership
+            {
+                Id = membershipId, OrganizationId = orgId, AppUserId = memberId,
+                Role = MemberRole.Member, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId
+            };
+            db.OrganizationUserMemberships.Add(membership);
+
+            // Role 1: grants only Address Read
+            db.OrganizationRoles.Add(new OrganizationRole { Id = role1Id, OrganizationId = orgId, Name = "R1", IsActive = true, SortOrder = 1, DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId });
+            db.OrganizationRolePermissions.Add(new OrganizationRolePermission { Id = Guid.NewGuid(), OrganizationRoleId = role1Id, TableName = DataTable.OrganizationAddress, Actions = DataAction.Read, DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId });
+
+            // Role 2: grants Email Create
+            db.OrganizationRoles.Add(new OrganizationRole { Id = role2Id, OrganizationId = orgId, Name = "R2", IsActive = true, SortOrder = 2, DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId });
+            db.OrganizationRolePermissions.Add(new OrganizationRolePermission { Id = Guid.NewGuid(), OrganizationRoleId = role2Id, TableName = DataTable.OrganizationEmail, Actions = DataAction.Create, DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId });
+
+            db.OrganizationRoleMemberships.Add(new OrganizationRoleMembership { Id = Guid.NewGuid(), OrganizationRoleId = role1Id, OrganizationUserMembershipId = membershipId, DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId });
+            db.OrganizationRoleMemberships.Add(new OrganizationRoleMembership { Id = Guid.NewGuid(), OrganizationRoleId = role2Id, OrganizationUserMembershipId = membershipId, DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId });
+            await db.SaveChangesAsync();
+        }
+
+        var svc = CreateService(factory);
+
+        // Both role permissions should grant access via OR logic
+        Assert.True(await svc.HasAccessAsync(memberId, orgId, DataTable.OrganizationAddress, DataAction.Read));
+        Assert.True(await svc.HasAccessAsync(memberId, orgId, DataTable.OrganizationEmail,   DataAction.Create));
+
+        // Neither role grants Delete on Address → false
+        Assert.False(await svc.HasAccessAsync(memberId, orgId, DataTable.OrganizationAddress, DataAction.Delete));
+    }
 }

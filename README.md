@@ -17,10 +17,10 @@ Full-stack .NET solution — ASP.NET Core Web API + Blazor Server + EF Core + SQ
 | `Ben.Service.Security` | Org-level tenant security service |
 | `Ben.Web.Library` | Razor Class Library — Blazor + Telerik components: `WaveSurferPlayer`, `AudioFilePreview`, `AddressMapPlayer`, `IconClassPicker`, `IconPickerDialog`, org/CMS/user management pages |
 | `Ben.Web.WebApp` | Blazor Server app — Telerik UI for Blazor (`:5078`) |
-| `Ben.Service.RepositoryService.Tests` | xUnit — 265 tests |
+| `Ben.Service.RepositoryService.Tests` | xUnit — 279 tests |
 | `Ben.Web.Tests` | xUnit — 446 tests |
 
-**711 tests — 0 failures, 0 warnings**
+**737 tests — 0 failures, 0 warnings**
 
 ---
 
