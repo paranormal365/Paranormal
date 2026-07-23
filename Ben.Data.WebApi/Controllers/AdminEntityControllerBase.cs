@@ -87,6 +87,13 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : BenControlle
             return NotFound();
 
         SetEntityId(entity, id);
+
+        // Preserve immutable creation fields that the client never sends back.
+        // Without this, CreatedByAppUserId deserialises as Guid.Empty which
+        // causes an FK violation on SQL Server.
+        CopyProperty(entity, before, "CreatedByAppUserId");
+        CopyProperty(entity, before, "DateCreated");
+
         dbContext.Entry(entity).State = EntityState.Modified;
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -160,6 +167,14 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : BenControlle
         var prop = typeof(TEntity).GetProperty(propertyName);
         if (prop?.CanWrite == true)
             prop.SetValue(entity, value);
+    }
+
+    /// <summary>Copies a property value from <paramref name="source"/> to <paramref name="target"/>.</summary>
+    private static void CopyProperty(TEntity target, TEntity source, string propertyName)
+    {
+        var prop = typeof(TEntity).GetProperty(propertyName);
+        if (prop is { CanRead: true, CanWrite: true })
+            prop.SetValue(target, prop.GetValue(source));
     }
 
     /// <summary>

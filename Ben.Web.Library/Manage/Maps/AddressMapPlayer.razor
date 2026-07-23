@@ -54,7 +54,7 @@ else
                 <MapLayer Type="@MapLayersType.Tile"
                           Attribution="&copy; <a href='https://osm.org/copyright'>OpenStreetMap contributors</a>"
                           Subdomains="@_tileSubdomains"
-                          UrlTemplate="addressMapTileTemplate" />
+                          UrlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
                 @* Region circle — Shape layer with computed GeoJSON polygon *@
                 @if (_form.ShowRegion && _circleGeoJson is not null)
