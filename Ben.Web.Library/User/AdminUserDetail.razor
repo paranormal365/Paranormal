@@ -7,8 +7,11 @@
 @using System.Text.Json
 @using Ben.Web.Library.Manage.Audio
 @using Ben.Web.Library.Shared
+@using Ben.Web.Library.Manage.Maps
 
 <PageTitle>SuperAdmin — User Detail</PageTitle>
+
+<AddressMapModal @ref="_mapModal" />
 
 @if (_detail is null)
 {
@@ -101,9 +104,11 @@ else
                         <GridColumn Field="@nameof(UserAddressAdminRecord.State)" Title="State" Width="80px" />
                         <GridColumn Field="@nameof(UserAddressAdminRecord.ZipCode)" Title="Zip" Width="90px" />
                         <GridColumn Field="@nameof(UserAddressAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridCommandColumn Width="130px">
+                        <GridCommandColumn Width="160px">
                             <GridCommandButton Icon="@SvgIcon.Pencil"
                                 OnClick="@((GridCommandEventArgs e) => OpenSubDialog("address", e.Items.First()))">Edit</GridCommandButton>
+                            <GridCommandButton Icon="@SvgIcon.MapMarker"
+                                OnClick="@((GridCommandEventArgs e) => OpenAddressMap((UserAddressAdminRecord)e.Items.First()))">Map</GridCommandButton>
                             <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                 OnClick="@((GridCommandEventArgs e) => DeleteAddress((UserAddressAdminRecord)e.Items.First()))"></GridCommandButton>
                         </GridCommandColumn>
@@ -560,6 +565,7 @@ else
 
     // Per-type form models
     private AddrForm  _addr      = new();
+    private AddressMapModal?      _mapModal;
     private AddressFieldsWithMap? _addrFields;
     private AddressFieldsState    _addrState = new();
     private EmlForm   _eml  = new();
@@ -782,6 +788,16 @@ else
     // ── Delete helpers ────────────────────────────────────────────────────────
 
     private async Task DeleteAddress(UserAddressAdminRecord r) { if (await AdminClient.DeleteUserAddressAsync(r.Id)) await Reload(); else _errorMessage = "Delete failed."; }
+
+    private void OpenAddressMap(UserAddressAdminRecord r)
+    {
+        var parts = new[] { r.StreetAddress1, r.StreetAddress2, r.City, r.State, r.ZipCode, r.Country }
+                        .Where(s => !string.IsNullOrWhiteSpace(s));
+        var title = string.Join(", ", parts);
+        _mapModal?.Show(title,
+            r.Latitude  is not null ? (double)r.Latitude  : null,
+            r.Longitude is not null ? (double)r.Longitude : null);
+    }
     private async Task DeleteEmail(UserEmailAdminRecord r)     { if (await AdminClient.DeleteUserEmailAsync(r.Id))   await Reload(); else _errorMessage = "Delete failed."; }
     private async Task DeletePhone(UserPhoneAdminRecord r)     { if (await AdminClient.DeleteUserPhoneAsync(r.Id))   await Reload(); else _errorMessage = "Delete failed."; }
     private async Task DeleteLink(UserLinkAdminRecord r)       { if (await AdminClient.DeleteUserLinkAsync(r.Id))    await Reload(); else _errorMessage = "Delete failed."; }
