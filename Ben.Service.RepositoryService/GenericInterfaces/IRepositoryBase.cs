@@ -98,18 +98,6 @@ public interface IRepositoryBase<T>
     /// <returns>The first matching entity, or <c>null</c> if none found.</returns>
     Task<T?> FindOneAsync(Expression<Func<T, bool>> expressionPredicate, bool includeAllNavigations, bool trackChanges, CancellationToken token);
 
-    /// <summary>Stages a new entity for insertion into the database context.</summary>
-    /// <param name="item">The entity to add.  Call <c>SaveChanges</c> on the owning <c>IRepositoryManager</c> to persist.</param>
-    void Create(T item);
-
-    /// <summary>Stages an existing entity for an update in the database context.</summary>
-    /// <param name="item">The modified entity.  Call <c>SaveChanges</c> on the owning <c>IRepositoryManager</c> to persist.</param>
-    void Update(T item);
-
-    /// <summary>Stages an entity for deletion by its primary key.</summary>
-    /// <param name="id">The primary key of the entity to remove.  Call <c>SaveChanges</c> on the owning <c>IRepositoryManager</c> to persist.</param>
-    void Delete(Guid id);
-
     /// <summary>Returns the total number of entities in the table.</summary>
     /// <param name="token">Propagates cancellation to the underlying query.</param>
     Task<int> CountAllAsync(CancellationToken token);

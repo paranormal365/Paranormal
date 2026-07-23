@@ -12,10 +12,12 @@ public class AddressMapConfigTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    private static IDbContextFactory<BenDataContext> CreateFactory() => TestDbFactory.Create();
+
     private static async Task<(BenDataContext db, AppUser user, Organization org, OrganizationAddress addr)>
-        SeedAsync()
+        SeedAsync(IDbContextFactory<BenDataContext> factory)
     {
-        var db   = TestDbFactory.Create().CreateDbContext();
+        var db = await factory.CreateDbContextAsync();
         var user = new AppUser { Id = Guid.NewGuid(), UserName = "m@m.com", Email = "m@m.com", DisplayName = "Map User", DateCreated = DateTime.UtcNow };
         db.AppUsers.Add(user);
         var addrType = new OrganizationAddressType { Id = Guid.NewGuid(), Name = "Main", IsActive = true, IsPublic = true, SortOrder = 1, DateCreated = DateTime.UtcNow, CreatedByAppUserId = user.Id };
@@ -47,7 +49,8 @@ public class AddressMapConfigTests
     [Fact]
     public async Task MapConfig_CanBeCreatedWithDefaults()
     {
-        var (db, user, _, addr) = await SeedAsync();
+        var factory = CreateFactory();
+        var (db, user, _, addr) = await SeedAsync(factory);
         await using var _d = db;
 
         var cfg = new OrganizationAddressMapConfig
@@ -84,7 +87,8 @@ public class AddressMapConfigTests
     [Fact]
     public async Task MapConfig_CanStoreIconKey()
     {
-        var (db, user, _, addr) = await SeedAsync();
+        var factory = CreateFactory();
+        var (db, user, _, addr) = await SeedAsync(factory);
         await using var _d = db;
 
         var cfg = new OrganizationAddressMapConfig
@@ -106,7 +110,8 @@ public class AddressMapConfigTests
     [Fact]
     public async Task MapConfig_CascadeDeletesWithAddress()
     {
-        var (db, user, _, addr) = await SeedAsync();
+        var factory = CreateFactory();
+        var (db, user, _, addr) = await SeedAsync(factory);
         await using var _d = db;
 
         db.OrganizationAddressMapConfigs.Add(new OrganizationAddressMapConfig
@@ -128,7 +133,8 @@ public class AddressMapConfigTests
     public async Task MapConfig_UniqueIndex_ExistsInModelConfig()
     {
         // Verify the unique index is configured in the model (not enforced by InMemory DB)
-        var (db, user, _, addr) = await SeedAsync();
+        var factory = CreateFactory();
+        var (db, user, _, addr) = await SeedAsync(factory);
         await using var _d = db;
         var indexProps = db.Model.FindEntityType(typeof(OrganizationAddressMapConfig))!
             .GetIndexes().ToList();
@@ -139,7 +145,8 @@ public class AddressMapConfigTests
     [Fact]
     public async Task OrganizationAddress_NavToMapConfig()
     {
-        var (db, user, _, addr) = await SeedAsync();
+        var factory = CreateFactory();
+        var (db, user, _, addr) = await SeedAsync(factory);
         await using var _d = db;
 
         db.OrganizationAddressMapConfigs.Add(new OrganizationAddressMapConfig

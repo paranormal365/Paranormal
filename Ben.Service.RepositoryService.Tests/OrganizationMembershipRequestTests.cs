@@ -15,7 +15,9 @@ public class OrganizationMembershipRequestTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static async Task<(BenDataContext db, AppUser user, Organization org)>
+    private static IDbContextFactory<BenDataContext> CreateFactory() => TestDbFactory.Create();
+
+    private static async Task<(AppUser user, Organization org)>
         SeedBasicAsync(BenDataContext db)
     {
         var user = new AppUser
@@ -39,7 +41,7 @@ public class OrganizationMembershipRequestTests
         };
         db.Organizations.Add(org);
         await db.SaveChangesAsync();
-        return (db, user, org);
+        return (user, org);
     }
 
     // ── Organization.IsAcceptingApplications ──────────────────────────────────
@@ -47,7 +49,8 @@ public class OrganizationMembershipRequestTests
     [Fact]
     public async Task Organization_IsAcceptingApplications_DefaultsFalse()
     {
-        await using var db = TestDbFactory.Create().CreateDbContext();
+        var factory = CreateFactory();
+        await using var db = await factory.CreateDbContextAsync();
         var user = new AppUser { Id = Guid.NewGuid(), UserName = "a@b.com", Email = "a@b.com", DisplayName = "A", DateCreated = DateTime.UtcNow };
         db.AppUsers.Add(user);
         var org = new Organization { Id = Guid.NewGuid(), Name = "Org", UrlName = "org", DateCreated = DateTime.UtcNow, CreatedByAppUserId = user.Id };
@@ -61,8 +64,9 @@ public class OrganizationMembershipRequestTests
     [Fact]
     public async Task Organization_CanToggleIsAcceptingApplications()
     {
-        await using var db = TestDbFactory.Create().CreateDbContext();
-        var (_, user, org) = await SeedBasicAsync(db);
+        var factory = CreateFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var (user, org) = await SeedBasicAsync(db);
 
         Assert.True(org.IsAcceptingApplications);
 
@@ -78,8 +82,9 @@ public class OrganizationMembershipRequestTests
     [Fact]
     public async Task MembershipRequest_CanCreatePendingRequest()
     {
-        await using var db = TestDbFactory.Create().CreateDbContext();
-        var (_, user, org) = await SeedBasicAsync(db);
+        var factory = CreateFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var (user, org) = await SeedBasicAsync(db);
 
         var request = new OrganizationMembershipRequest
         {
@@ -107,8 +112,9 @@ public class OrganizationMembershipRequestTests
     [Fact]
     public async Task MembershipRequest_CanBeAccepted()
     {
-        await using var db = TestDbFactory.Create().CreateDbContext();
-        var (_, user, org) = await SeedBasicAsync(db);
+        var factory = CreateFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var (user, org) = await SeedBasicAsync(db);
 
         var request = new OrganizationMembershipRequest
         {
@@ -137,8 +143,9 @@ public class OrganizationMembershipRequestTests
     [Fact]
     public async Task MembershipRequest_CanBeWithdrawn()
     {
-        await using var db = TestDbFactory.Create().CreateDbContext();
-        var (_, user, org) = await SeedBasicAsync(db);
+        var factory = CreateFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var (user, org) = await SeedBasicAsync(db);
 
         var request = new OrganizationMembershipRequest
         {
@@ -165,8 +172,9 @@ public class OrganizationMembershipRequestTests
     [Fact]
     public async Task MembershipRequest_CascadeDeletesWithOrg()
     {
-        await using var db = TestDbFactory.Create().CreateDbContext();
-        var (_, user, org) = await SeedBasicAsync(db);
+        var factory = CreateFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var (user, org) = await SeedBasicAsync(db);
 
         db.OrganizationMembershipRequests.Add(new OrganizationMembershipRequest
         {
@@ -186,8 +194,9 @@ public class OrganizationMembershipRequestTests
     [Fact]
     public async Task MembershipRequest_RequestMessage_IsOptional()
     {
-        await using var db = TestDbFactory.Create().CreateDbContext();
-        var (_, user, org) = await SeedBasicAsync(db);
+        var factory = CreateFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var (user, org) = await SeedBasicAsync(db);
 
         var request = new OrganizationMembershipRequest
         {
@@ -212,8 +221,9 @@ public class OrganizationMembershipRequestTests
     [Fact]
     public async Task OrganizationFile_CanBeCreated()
     {
-        await using var db = TestDbFactory.Create().CreateDbContext();
-        var (_, user, org) = await SeedBasicAsync(db);
+        var factory = CreateFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var (user, org) = await SeedBasicAsync(db);
 
         var fileType = new UploadFileType
         {
@@ -252,8 +262,9 @@ public class OrganizationMembershipRequestTests
     [Fact]
     public async Task OrganizationFile_CanTrackSourceUploadFile()
     {
-        await using var db = TestDbFactory.Create().CreateDbContext();
-        var (_, user, org) = await SeedBasicAsync(db);
+        var factory = CreateFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var (user, org) = await SeedBasicAsync(db);
 
         var fileType = new UploadFileType
         {
@@ -299,8 +310,9 @@ public class OrganizationMembershipRequestTests
     [Fact]
     public async Task OrganizationFile_CascadeDeletesWithOrg()
     {
-        await using var db = TestDbFactory.Create().CreateDbContext();
-        var (_, user, org) = await SeedBasicAsync(db);
+        var factory = CreateFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var (user, org) = await SeedBasicAsync(db);
 
         var fileType = new UploadFileType
         {

@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace Ben.Service.RepositoryService.Services;
 
-internal static class AddressGeocodingService
+public static class AddressGeocodingService
 {
     private static readonly HttpClient HttpClient = CreateClient();
 
@@ -15,13 +15,14 @@ internal static class AddressGeocodingService
         return client;
     }
 
-    public static GeocodingLookupResult TryResolveCoordinates(
+    public static async Task<GeocodingLookupResult> TryResolveCoordinatesAsync(
         string streetAddress1,
         string? streetAddress2,
         string city,
         string state,
         string zipCode,
-        string country)
+        string country,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(streetAddress1) ||
             string.IsNullOrWhiteSpace(city) ||
@@ -42,13 +43,13 @@ internal static class AddressGeocodingService
             var encodedQuery = UrlEncoder.Default.Encode(query);
             var url = $"https://nominatim.openstreetmap.org/search?q={encodedQuery}&format=jsonv2&limit=1";
 
-            using var response = HttpClient.GetAsync(url).GetAwaiter().GetResult();
+            using var response = await HttpClient.GetAsync(url, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 return GeocodingLookupResult.Empty;
             }
 
-            var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
             var results = JsonSerializer.Deserialize<List<NominatimResult>>(json);
             var first = results?.FirstOrDefault();
 
@@ -72,7 +73,7 @@ internal static class AddressGeocodingService
         }
     }
 
-    internal sealed record GeocodingLookupResult(
+    public sealed record GeocodingLookupResult(
         decimal? Latitude,
         decimal? Longitude,
         string? RawResponseJson,

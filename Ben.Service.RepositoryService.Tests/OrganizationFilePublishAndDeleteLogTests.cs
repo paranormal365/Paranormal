@@ -12,10 +12,12 @@ public class OrganizationFilePublishAndDeleteLogTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    private static IDbContextFactory<BenDataContext> CreateFactory() => TestDbFactory.Create();
+
     private static async Task<(BenDataContext db, AppUser user, Organization org, UploadFileType ft)>
-        SeedAsync()
+        SeedAsync(IDbContextFactory<BenDataContext> factory)
     {
-        var db   = TestDbFactory.Create().CreateDbContext();
+        var db = await factory.CreateDbContextAsync();
         var user = new AppUser { Id = Guid.NewGuid(), UserName = "u@u.com", Email = "u@u.com", DisplayName = "User One", DateCreated = DateTime.UtcNow };
         db.AppUsers.Add(user);
         var org = new Organization { Id = Guid.NewGuid(), Name = "Test Org", UrlName = "test-org", DateCreated = DateTime.UtcNow, CreatedByAppUserId = user.Id };
@@ -48,7 +50,8 @@ public class OrganizationFilePublishAndDeleteLogTests
     [Fact]
     public async Task OrganizationFile_DefaultsToNotPublic()
     {
-        var (db, user, org, ft) = await SeedAsync();
+        var factory = CreateFactory();
+        var (db, user, org, ft) = await SeedAsync(factory);
         await using var _ = db;
         var file = MakeFile(org.Id, ft.Id, user.Id);
         db.OrganizationFiles.Add(file);
@@ -63,7 +66,9 @@ public class OrganizationFilePublishAndDeleteLogTests
     [Fact]
     public async Task OrganizationFile_CanBePublishedWithAudit()
     {
-        var (db, user, org, ft) = await SeedAsync(); await using var _d = db;
+        var factory = CreateFactory();
+        var (db, user, org, ft) = await SeedAsync(factory);
+        await using var _d = db;
         var file = MakeFile(org.Id, ft.Id, user.Id);
         db.OrganizationFiles.Add(file);
         await db.SaveChangesAsync();
@@ -85,7 +90,9 @@ public class OrganizationFilePublishAndDeleteLogTests
     [Fact]
     public async Task OrganizationFile_UnpublishingClearsAuditFields()
     {
-        var (db, user, org, ft) = await SeedAsync(); await using var _d = db;
+        var factory = CreateFactory();
+        var (db, user, org, ft) = await SeedAsync(factory);
+        await using var _d = db;
         var file = MakeFile(org.Id, ft.Id, user.Id, isPublic: true);
         file.PublishedByAppUserId = user.Id;
         file.DatePublished        = DateTime.UtcNow;
@@ -106,7 +113,9 @@ public class OrganizationFilePublishAndDeleteLogTests
     [Fact]
     public async Task OrganizationFile_PublishNavPropLoads()
     {
-        var (db, user, org, ft) = await SeedAsync(); await using var _d = db;
+        var factory = CreateFactory();
+        var (db, user, org, ft) = await SeedAsync(factory);
+        await using var _d = db;
         var file = MakeFile(org.Id, ft.Id, user.Id, isPublic: true);
         file.PublishedByAppUserId = user.Id;
         file.DatePublished        = DateTime.UtcNow;
@@ -124,7 +133,9 @@ public class OrganizationFilePublishAndDeleteLogTests
     [Fact]
     public async Task OrganizationFile_SourceUploadFileIdTrackedForSharedCopy()
     {
-        var (db, user, org, ft) = await SeedAsync(); await using var _d = db;
+        var factory = CreateFactory();
+        var (db, user, org, ft) = await SeedAsync(factory);
+        await using var _d = db;
         var userFile = new UploadFile
         {
             Id = Guid.NewGuid(), AppUserId = user.Id, UploadFileTypeId = ft.Id,
@@ -150,7 +161,9 @@ public class OrganizationFilePublishAndDeleteLogTests
     [Fact]
     public async Task DeleteLog_CanBeCreatedWithFullSnapshot()
     {
-        var (db, user, org, ft) = await SeedAsync(); await using var _d = db;
+        var factory = CreateFactory();
+        var (db, user, org, ft) = await SeedAsync(factory);
+        await using var _d = db;
         var file = MakeFile(org.Id, ft.Id, user.Id, isPublic: true);
         file.PublishedByAppUserId = user.Id;
         file.DatePublished        = DateTime.UtcNow;
@@ -203,7 +216,9 @@ public class OrganizationFilePublishAndDeleteLogTests
     [Fact]
     public async Task DeleteLog_PreservesLogWhenFileIsNotPublic()
     {
-        var (db, user, org, ft) = await SeedAsync(); await using var _d = db;
+        var factory = CreateFactory();
+        var (db, user, org, ft) = await SeedAsync(factory);
+        await using var _d = db;
         var file = MakeFile(org.Id, ft.Id, user.Id, isPublic: false);
         db.OrganizationFiles.Add(file);
         await db.SaveChangesAsync();
@@ -237,7 +252,9 @@ public class OrganizationFilePublishAndDeleteLogTests
     [Fact]
     public async Task DeleteLog_CanQueryByOrganizationId()
     {
-        var (db, user, org, ft) = await SeedAsync(); await using var _d = db;
+        var factory = CreateFactory();
+        var (db, user, org, ft) = await SeedAsync(factory);
+        await using var _d = db;
 
         for (int i = 0; i < 3; i++)
         {
@@ -261,7 +278,9 @@ public class OrganizationFilePublishAndDeleteLogTests
     public async Task DeleteLog_NoForeignKeyToOrgFile_SurvivesDeletion()
     {
         // The log is intentionally schema-independent so it doesn't cascade.
-        var (db, user, org, ft) = await SeedAsync(); await using var _d = db;
+        var factory = CreateFactory();
+        var (db, user, org, ft) = await SeedAsync(factory);
+        await using var _d = db;
         var file = MakeFile(org.Id, ft.Id, user.Id);
         db.OrganizationFiles.Add(file);
         await db.SaveChangesAsync();
