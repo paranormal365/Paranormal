@@ -1,0 +1,421 @@
+@namespace Ben.Web.Library.Organization
+@using Ben.Web.Library.Manage.Maps
+
+@inject IBenAdminClient AdminClient
+
+@if (_loading)
+{
+    <TelerikLoaderContainer Visible="true" Text="Loading addresses…" />
+}
+else
+{
+    @if (_errorMessage is not null)
+    {
+        <div class="alert alert-danger mb-3">@_errorMessage</div>
+    }
+
+    @* ── Toolbar ───────────────────────────────────────────────────────────── *@
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0 fw-semibold">Addresses</h6>
+        @if (!_showForm)
+        {
+            <TelerikButton Icon="@SvgIcon.Plus"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           OnClick="BeginCreate">
+                Add Address
+            </TelerikButton>
+        }
+    </div>
+
+    @* ── Create / Edit form ────────────────────────────────────────────────── *@
+    @if (_showForm)
+    {
+        <div class="card mb-4 border-primary">
+            <div class="card-body">
+                <h6 class="card-title mb-3">@(_editId.HasValue ? "Edit Address" : "New Address")</h6>
+
+                <div class="row g-3">
+                    @* Address type *@
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Type <span class="text-danger">*</span></label>
+                        <TelerikDropDownList Data="@_addressTypes"
+                                             @bind-Value="@_form.AddressTypeId"
+                                             TextField="@nameof(AddressTypeOption.Name)"
+                                             ValueField="@nameof(AddressTypeOption.Id)"
+                                             Width="100%" />
+                    </div>
+
+                    @* Street address *@
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Street Address 1 <span class="text-danger">*</span></label>
+                        <TelerikTextBox @bind-Value="@_form.StreetAddress1"
+                                        Width="100%"
+                                        OnChange="@OnAddressFieldChanged" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Street Address 2</label>
+                        <TelerikTextBox @bind-Value="@_form.StreetAddress2"
+                                        Width="100%"
+                                        OnChange="@OnAddressFieldChanged" />
+                    </div>
+
+                    @* City / State / Zip *@
+                    <div class="col-sm-5">
+                        <label class="form-label fw-semibold">City <span class="text-danger">*</span></label>
+                        <TelerikTextBox @bind-Value="@_form.City"
+                                        Width="100%"
+                                        OnChange="@OnAddressFieldChanged" />
+                    </div>
+                    <div class="col-sm-3">
+                        <label class="form-label fw-semibold">State <span class="text-danger">*</span></label>
+                        <TelerikTextBox @bind-Value="@_form.State"
+                                        Width="100%"
+                                        OnChange="@OnAddressFieldChanged" />
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label fw-semibold">ZIP <span class="text-danger">*</span></label>
+                        <TelerikTextBox @bind-Value="@_form.ZipCode"
+                                        Width="100%"
+                                        OnChange="@OnAddressFieldChanged" />
+                    </div>
+
+                    @* Country *@
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Country <span class="text-danger">*</span></label>
+                        <TelerikTextBox @bind-Value="@_form.Country"
+                                        Width="100%"
+                                        OnChange="@OnAddressFieldChanged" />
+                    </div>
+
+                    @* Public / SortOrder *@
+                    <div class="col-sm-6 d-flex align-items-center gap-2 mt-1">
+                        <TelerikCheckBox @bind-Value="@_form.IsPublic" Id="addr-public" />
+                        <label for="addr-public">Public</label>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label">Sort Order</label>
+                        <TelerikNumericTextBox @bind-Value="@_form.SortOrder" Width="100%" />
+                    </div>
+
+                    @* ── Live map preview ───────────────────────────────────── *@
+                    <div class="col-12 mt-2">
+                        @if (_geocoding)
+                        {
+                            <div class="text-muted small mb-1">
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                Looking up location…
+                            </div>
+                        }
+                        else if (!_hasPreview)
+                        {
+                            <div class="text-muted small mb-1 fst-italic">
+                                Complete the address to see the map preview.
+                            </div>
+                        }
+
+                        @if (_hasPreview)
+                        {
+                            <AddressMapPlayer Latitude="@_previewLat"
+                                              Longitude="@_previewLon"
+                                              Title="@_form.StreetAddress1"
+                                              ReadOnly="true"
+                                              ShowConfigPanel="false"
+                                              Height="240px" />
+                        }
+                    </div>
+
+                    @* Buttons *@
+                    <div class="col-12 d-flex gap-2 mt-2">
+                        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                       Icon="@SvgIcon.Save"
+                                       OnClick="SaveAsync"
+                                       Enabled="@(!_saving)">
+                            @(_saving ? "Saving…" : "Save")
+                        </TelerikButton>
+                        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       OnClick="CancelForm">
+                            Cancel
+                        </TelerikButton>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ── Address list ──────────────────────────────────────────────────────── *@
+    @if (_addresses.Any())
+    {
+        <TelerikGrid Data="@_addresses" Pageable="false" Sortable="true" Class="mb-2">
+            <GridColumns>
+                <GridColumn Title="Address" Field="@nameof(OrganizationAddressRecord.StreetAddress1)">
+                    <Template>
+                        @{ var a = (OrganizationAddressRecord)context; }
+                        <div>
+                            <div class="fw-semibold">@a.StreetAddress1@(a.StreetAddress2 is not null ? ", " + a.StreetAddress2 : "")</div>
+                            <div class="text-secondary small">@a.City, @a.State @a.ZipCode — @a.Country</div>
+                        </div>
+                    </Template>
+                </GridColumn>
+                <GridColumn Field="@nameof(OrganizationAddressRecord.IsPublic)" Title="Public" Width="80px" />
+                <GridColumn Title="" Width="100px">
+                    <Template>
+                        @{ var a2 = (OrganizationAddressRecord)context; }
+                        <div class="d-flex gap-1">
+                            <TelerikButton Icon="@SvgIcon.Pencil"
+                                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                           Size="@ThemeConstants.Button.Size.Small"
+                                           OnClick="@(() => BeginEdit(a2))" />
+                            <TelerikButton Icon="@SvgIcon.Trash"
+                                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                           Size="@ThemeConstants.Button.Size.Small"
+                                           OnClick="@(() => ConfirmDeleteAsync(a2.Id))" />
+                        </div>
+                    </Template>
+                </GridColumn>
+            </GridColumns>
+        </TelerikGrid>
+    }
+    else if (!_showForm)
+    {
+        <div class="text-muted small fst-italic">No addresses added yet.</div>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    // ── State ─────────────────────────────────────────────────────────────────
+
+    private IReadOnlyList<OrganizationAddressRecord> _addresses = [];
+    private IReadOnlyList<AddressTypeOption> _addressTypes = [];
+    private bool _loading  = true;
+    private bool _showForm = false;
+    private bool _saving   = false;
+    private string? _errorMessage;
+    private Guid? _editId;
+    private AddressFormModel _form = new();
+
+    // Map preview
+    private double  _previewLat  = 0;
+    private double  _previewLon  = 0;
+    private bool    _hasPreview  = false;
+    private bool    _geocoding   = false;
+    private CancellationTokenSource? _geocodeCts;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        await Task.WhenAll(LoadAddressesAsync(), LoadAddressTypesAsync());
+        _loading = false;
+    }
+
+    private async Task LoadAddressesAsync()
+    {
+        _addresses = await AdminClient.GetOrgAddressesAsync(OrgId);
+    }
+
+    private async Task LoadAddressTypesAsync()
+    {
+        var types = await AdminClient.GetOrgAddressTypesAsync();
+        _addressTypes = types.Where(t => t.IsActive)
+                             .OrderBy(t => t.SortOrder)
+                             .Select(t => new AddressTypeOption(t.Id, t.Name))
+                             .ToList();
+    }
+
+    // ── Form management ───────────────────────────────────────────────────────
+
+    private void BeginCreate()
+    {
+        _editId   = null;
+        _form     = new AddressFormModel
+        {
+            AddressTypeId = _addressTypes.FirstOrDefault()?.Id ?? Guid.Empty,
+            Country       = "US"
+        };
+        ResetPreview();
+        _showForm     = true;
+        _errorMessage = null;
+    }
+
+    private void BeginEdit(OrganizationAddressRecord address)
+    {
+        _editId = address.Id;
+        _form   = new AddressFormModel
+        {
+            AddressTypeId  = address.OrganizationAddressTypeId,
+            StreetAddress1 = address.StreetAddress1,
+            StreetAddress2 = address.StreetAddress2,
+            City           = address.City,
+            State          = address.State,
+            ZipCode        = address.ZipCode,
+            Country        = address.Country,
+            IsPublic       = address.IsPublic,
+            SortOrder      = address.SortOrder
+        };
+
+        // Restore existing coordinates as preview if available
+        if (address.Latitude.HasValue && address.Longitude.HasValue)
+        {
+            _previewLat = (double)address.Latitude.Value;
+            _previewLon = (double)address.Longitude.Value;
+            _hasPreview = true;
+        }
+        else
+        {
+            ResetPreview();
+        }
+
+        _showForm     = true;
+        _errorMessage = null;
+    }
+
+    private void CancelForm()
+    {
+        _geocodeCts?.Cancel();
+        _showForm = false;
+        _editId   = null;
+        ResetPreview();
+    }
+
+    private void ResetPreview()
+    {
+        _hasPreview = false;
+        _previewLat = 0;
+        _previewLon = 0;
+        _geocoding  = false;
+    }
+
+    // ── Live geocoding preview ─────────────────────────────────────────────────
+
+    private async Task OnAddressFieldChanged()
+    {
+        // Cancel any pending geocode
+        _geocodeCts?.Cancel();
+        _geocodeCts?.Dispose();
+        _geocodeCts = new CancellationTokenSource();
+        var token   = _geocodeCts.Token;
+
+        // Only preview when address has meaningful content
+        if (string.IsNullOrWhiteSpace(_form.StreetAddress1) ||
+            string.IsNullOrWhiteSpace(_form.City) ||
+            string.IsNullOrWhiteSpace(_form.State) ||
+            string.IsNullOrWhiteSpace(_form.Country))
+        {
+            ResetPreview();
+            return;
+        }
+
+        _geocoding = true;
+        StateHasChanged();
+
+        try
+        {
+            await Task.Delay(700, token); // debounce — wait for user to pause typing
+            var result = await AdminClient.PreviewGeocodingAsync(
+                _form.StreetAddress1, _form.StreetAddress2,
+                _form.City, _form.State, _form.ZipCode, _form.Country, token);
+
+            if (result?.Latitude is not null && result.Longitude is not null)
+            {
+                _previewLat = (double)result.Latitude;
+                _previewLon = (double)result.Longitude;
+                _hasPreview = true;
+            }
+            else
+            {
+                _hasPreview = false;
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            // A newer keystroke cancelled this lookup — no action needed
+            return;
+        }
+        catch
+        {
+            _hasPreview = false;
+        }
+        finally
+        {
+            _geocoding = false;
+        }
+
+        StateHasChanged();
+    }
+
+    // ── Save / Delete ─────────────────────────────────────────────────────────
+
+    private async Task SaveAsync()
+    {
+        _errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_form.StreetAddress1) || string.IsNullOrWhiteSpace(_form.City))
+        {
+            _errorMessage = "Street Address and City are required.";
+            return;
+        }
+        if (_form.AddressTypeId == Guid.Empty)
+        {
+            _errorMessage = "Address type is required.";
+            return;
+        }
+
+        _saving = true;
+        StateHasChanged();
+
+        var request = new OrgAddressUpsertRequest(
+            _form.AddressTypeId,
+            _form.StreetAddress1.Trim(),
+            _form.StreetAddress2?.Trim(),
+            _form.City.Trim(),
+            _form.State.Trim(),
+            _form.ZipCode.Trim(),
+            _form.Country.Trim(),
+            _form.IsPublic,
+            _form.SortOrder);
+
+        OrganizationAddressRecord? saved = _editId.HasValue
+            ? await AdminClient.UpdateOrgAddressAsync(OrgId, _editId.Value, request)
+            : await AdminClient.CreateOrgAddressAsync(OrgId, request);
+
+        _saving = false;
+
+        if (saved is not null)
+        {
+            await LoadAddressesAsync();
+            CancelForm();
+        }
+        else
+        {
+            _errorMessage = "Save failed. You may not have permission to manage addresses for this organization.";
+        }
+    }
+
+    private async Task ConfirmDeleteAsync(Guid addressId)
+    {
+        var ok = await AdminClient.DeleteOrgAddressAsync(OrgId, addressId);
+        if (ok) await LoadAddressesAsync();
+        else    _errorMessage = "Delete failed.";
+    }
+
+    // ── Inner types ───────────────────────────────────────────────────────────
+
+    private sealed class AddressFormModel
+    {
+        public Guid    AddressTypeId  { get; set; }
+        public string  StreetAddress1 { get; set; } = "";
+        public string? StreetAddress2 { get; set; }
+        public string  City           { get; set; } = "";
+        public string  State          { get; set; } = "";
+        public string  ZipCode        { get; set; } = "";
+        public string  Country        { get; set; } = "US";
+        public bool    IsPublic       { get; set; }
+        public int     SortOrder      { get; set; }
+    }
+
+    private sealed record AddressTypeOption(Guid Id, string Name);
+}

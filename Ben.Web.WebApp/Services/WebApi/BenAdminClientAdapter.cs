@@ -175,6 +175,40 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/logos/{logoId}", token);
 
+    // ── Organization Addresses ────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<OrganizationAddressRecord>> GetOrgAddressesAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrganizationAddressRecord>>($"/api/organizations/{orgId}/addresses", token);
+        return result ?? [];
+    }
+
+    public async Task<IReadOnlyList<OrganizationAddressTypeRecord>> GetOrgAddressTypesAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrganizationAddressTypeRecord>>("/api/organization-address-types", token);
+        return result ?? [];
+    }
+
+    public Task<OrganizationAddressRecord?> CreateOrgAddressAsync(Guid orgId, OrgAddressUpsertRequest request, CancellationToken token = default)
+        => _api.PostAsync<OrgAddressUpsertRequest, OrganizationAddressRecord>($"/api/organizations/{orgId}/addresses", request, token);
+
+    public Task<OrganizationAddressRecord?> UpdateOrgAddressAsync(Guid orgId, Guid addressId, OrgAddressUpsertRequest request, CancellationToken token = default)
+        => _api.PutAsync<OrgAddressUpsertRequest, OrganizationAddressRecord>($"/api/organizations/{orgId}/addresses/{addressId}", request, token);
+
+    public Task<bool> DeleteOrgAddressAsync(Guid orgId, Guid addressId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/addresses/{addressId}", token);
+
+    public Task<GeocodingPreviewResponse?> PreviewGeocodingAsync(
+        string streetAddress1, string? streetAddress2, string city,
+        string state, string zipCode, string country, CancellationToken token = default)
+    {
+        var qs = $"?streetAddress1={Uri.EscapeDataString(streetAddress1)}" +
+                 (streetAddress2 is not null ? $"&streetAddress2={Uri.EscapeDataString(streetAddress2)}" : "") +
+                 $"&city={Uri.EscapeDataString(city)}&state={Uri.EscapeDataString(state)}" +
+                 $"&zipCode={Uri.EscapeDataString(zipCode)}&country={Uri.EscapeDataString(country)}";
+        return _api.GetAsync<GeocodingPreviewResponse>($"/api/geocode/preview{qs}", token);
+    }
+
     // ── Public Org Pages (no auth required) ───────────────────────────────────
 
     public Task<OrgPublicHomeResponse?> GetPublicOrgAsync(string urlName, CancellationToken token = default)

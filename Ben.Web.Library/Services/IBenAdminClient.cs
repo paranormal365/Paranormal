@@ -178,6 +178,15 @@ public interface IBenAdminClient
     Task<OrganizationLogoRecord?> UpdateOrgLogoAsync(Guid orgId, Guid logoId, CmsUpdateLogoRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default);
 
+    // ── Organization Addresses ────────────────────────────────────────────────
+
+    Task<IReadOnlyList<OrganizationAddressRecord>> GetOrgAddressesAsync(Guid orgId, CancellationToken token = default);
+    Task<IReadOnlyList<OrganizationAddressTypeRecord>> GetOrgAddressTypesAsync(CancellationToken token = default);
+    Task<OrganizationAddressRecord?> CreateOrgAddressAsync(Guid orgId, OrgAddressUpsertRequest request, CancellationToken token = default);
+    Task<OrganizationAddressRecord?> UpdateOrgAddressAsync(Guid orgId, Guid addressId, OrgAddressUpsertRequest request, CancellationToken token = default);
+    Task<bool> DeleteOrgAddressAsync(Guid orgId, Guid addressId, CancellationToken token = default);
+    Task<GeocodingPreviewResponse?> PreviewGeocodingAsync(string streetAddress1, string? streetAddress2, string city, string state, string zipCode, string country, CancellationToken token = default);
+
     // ── Public Org Pages (no auth required) ──────────────────────────────────
 
     Task<OrgPublicHomeResponse?> GetPublicOrgAsync(string urlName, CancellationToken token = default);
@@ -451,6 +460,19 @@ public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName)
 public sealed record AdminRoleWithCountResponse(AppRoleAdminRecord Role, int UserCount);
 
 // ── Public org page response records ─────────────────────────────────────────
+
+public sealed record OrgAddressUpsertRequest(
+    Guid   OrganizationAddressTypeId,
+    string StreetAddress1,
+    string? StreetAddress2,
+    string City,
+    string State,
+    string ZipCode,
+    string Country,
+    bool   IsPublic,
+    int    SortOrder);
+
+public sealed record GeocodingPreviewResponse(decimal? Latitude, decimal? Longitude, string? ResultType);
 
 public sealed record OrgPublicHomeResponse(
     Guid OrgId, string OrgName, string OrgUrlName,

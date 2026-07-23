@@ -115,6 +115,12 @@
                     <OrgRolesManager OrgId="@OrgId" />
                 </TabStripTab>
             }
+            @if (_canManageRoles)
+            {
+                <TabStripTab Title="Addresses">
+                    <OrgAddressManager OrgId="@OrgId" />
+                </TabStripTab>
+            }
         </TelerikTabStrip>
     }
 </div>
