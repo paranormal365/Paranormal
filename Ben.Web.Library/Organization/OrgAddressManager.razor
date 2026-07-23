@@ -106,22 +106,17 @@ else
                                 Looking up location…
                             </div>
                         }
-                        else if (!_hasPreview)
-                        {
-                            <div class="text-muted small mb-1 fst-italic">
-                                Complete the address to see the map preview.
-                            </div>
-                        }
 
-                        @if (_hasPreview)
-                        {
-                            <AddressMapPlayer Latitude="@_previewLat"
-                                              Longitude="@_previewLon"
-                                              Title="@_form.StreetAddress1"
-                                              ReadOnly="true"
-                                              ShowConfigPanel="false"
-                                              Height="240px" />
-                        }
+                        @* Always show the map. When no geocode result yet, display a
+                           zoomed-out world view (lat=20, lon=0, zoom=2) so the user
+                           sees a map immediately and watches the pin move as they type. *@
+                        <AddressMapPlayer Latitude="@(_hasPreview ? _previewLat : 20.0)"
+                                          Longitude="@(_hasPreview ? _previewLon : 0.0)"
+                                          Zoom="@(_hasPreview ? (double?)null : 2.0)"
+                                          Title="@(_hasPreview ? _form.StreetAddress1 : "")"
+                                          ReadOnly="true"
+                                          ShowConfigPanel="false"
+                                          Height="240px" />
                     </div>
 
                     @* Buttons *@
@@ -164,7 +159,7 @@ else
                             <TelerikButton Icon="@SvgIcon.Pencil"
                                            FillMode="@ThemeConstants.Button.FillMode.Flat"
                                            Size="@ThemeConstants.Button.Size.Small"
-                                           OnClick="@(() => BeginEdit(a2))" />
+                                           OnClick="@(async () => await BeginEdit(a2))" />
                             <TelerikButton Icon="@SvgIcon.Trash"
                                            FillMode="@ThemeConstants.Button.FillMode.Flat"
                                            ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
@@ -228,8 +223,9 @@ else
 
     // ── Form management ───────────────────────────────────────────────────────
 
-    private void BeginCreate()
+    private async Task BeginCreate()
     {
+        await LoadAddressTypesAsync(); // refresh in case new types were added
         _editId   = null;
         _form     = new AddressFormModel
         {
@@ -241,8 +237,9 @@ else
         _errorMessage = null;
     }
 
-    private void BeginEdit(OrganizationAddressRecord address)
+    private async Task BeginEdit(OrganizationAddressRecord address)
     {
+        await LoadAddressTypesAsync(); // refresh in case new types were added
         _editId = address.Id;
         _form   = new AddressFormModel
         {
