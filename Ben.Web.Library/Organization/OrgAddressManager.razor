@@ -188,7 +188,9 @@ else
             City           = address.City,
             State          = address.State,
             ZipCode        = address.ZipCode,
-            Country        = address.Country
+            Country        = address.Country,
+            Latitude       = address.Latitude,    // carried into component so map shows existing pin
+            Longitude      = address.Longitude
         };
         _formAddressTypeId = address.OrganizationAddressTypeId;
         _formIsPublic      = address.IsPublic;

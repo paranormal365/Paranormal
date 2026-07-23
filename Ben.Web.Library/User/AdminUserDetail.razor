@@ -686,7 +686,9 @@ else
                     City           = _addr.City ?? "",
                     State          = _addr.State ?? "",
                     ZipCode        = _addr.ZipCode ?? "",
-                    Country        = _addr.Country ?? "US"
+                    Country        = _addr.Country ?? "US",
+                    Latitude       = a?.Latitude,     // carried into component so map shows existing pin
+                    Longitude      = a?.Longitude
                 };
                 if (a is null)
                     _addrFields?.ResetPreview();   // new address — clear previous pin

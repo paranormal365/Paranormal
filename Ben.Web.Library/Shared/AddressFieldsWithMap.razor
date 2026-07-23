@@ -134,6 +134,22 @@
     }
 
     /// <summary>
+    /// When State already carries Latitude/Longitude (e.g. an existing saved
+    /// address was loaded into the form), auto-initialize the map pin without
+    /// requiring the parent to call InitPreview() separately.
+    /// </summary>
+    protected override void OnParametersSet()
+    {
+        if (!_hasPreview && State.Latitude.HasValue && State.Longitude.HasValue
+            && !(State.Latitude == 0 && State.Longitude == 0))
+        {
+            _previewLat = (double)State.Latitude.Value;
+            _previewLon = (double)State.Longitude.Value;
+            _hasPreview = true;
+        }
+    }
+
+    /// <summary>
     /// Resets the map preview to the zoomed-out world view.
     /// Call from the parent when opening a blank 'New Address' form so the
     /// previous entry's pin is not carried over.
