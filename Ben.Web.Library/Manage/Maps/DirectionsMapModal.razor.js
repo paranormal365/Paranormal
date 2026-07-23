@@ -47,6 +47,9 @@ export function fitMapToRoute(minLat, maxLat, minLon, maxLon) {
                         new kendo.dataviz.map.Location(minLat - latPad, maxLon + lonPad)  // SE
                     );
                     w.extent(extent);
+                    // extent() snaps to integer zoom; back off 2 levels so
+                    // the full route fits rather than being clipped.
+                    w.zoom(Math.max(1, w.zoom() - 2));
                 }
             });
             if (!found) attempt(triesLeft - 1);

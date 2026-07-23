@@ -274,7 +274,7 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public async Task<IReadOnlyList<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default)
     {
         var result = await _api.GetOrganizationUsersAsync(orgId, token);
-        return result.Select(m => new OrgMembershipItem(m.MembershipId, m.AppUserId, m.Role, m.IsActive)).ToList();
+        return result.Select(m => new OrgMembershipItem(m.MembershipId, m.AppUserId, m.Role, m.IsActive, m.DisplayName)).ToList();
     }
 
     public async Task<IReadOnlyList<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default)

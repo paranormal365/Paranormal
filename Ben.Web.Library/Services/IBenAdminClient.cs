@@ -668,7 +668,16 @@ public sealed record SetRolePermissionRequest(OrganizationSecurityTable TableNam
 public sealed record PagePermissionCreateRequest(Guid? AppUserId, Guid? OrgMemberGroupId, CmsPageAction Actions);
 
 /// <summary>Org membership row from GET /api/organizations/{orgId}/security/users.</summary>
-public sealed record OrgMembershipItem(Guid MembershipId, Guid AppUserId, OrganizationMemberRole Role, bool IsActive);
+public sealed record OrgMembershipItem(Guid MembershipId, Guid AppUserId, OrganizationMemberRole Role, bool IsActive, string? DisplayName = null);
+
+/// <summary>Computed display label: DisplayName → email → id.</summary>
+public static class OrgMembershipItemExtensions
+{
+    public static string Label(this OrgMembershipItem m) =>
+        string.IsNullOrWhiteSpace(m.DisplayName)
+            ? $"{m.Role} ({m.MembershipId.ToString()[..8]}…)"
+            : $"{m.DisplayName} ({m.Role})";
+}
 
 public sealed record DirectionsResult(
     string RouteGeoJson,

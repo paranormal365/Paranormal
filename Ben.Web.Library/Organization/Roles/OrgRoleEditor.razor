@@ -119,11 +119,12 @@ else if (_role is not null)
 
             <TelerikGrid Data="@_members" Pageable="false" Class="mb-3">
                 <GridColumns>
-                    <GridColumn Title="Membership ID">
+                    <GridColumn Title="Member">
                         <Template>
                             @{
                                 var row = (OrganizationRoleMembershipRecord)context;
-                                <span class="font-monospace small">@row.OrganizationUserMembershipId</span>
+                                var info = _allOrgMembers.FirstOrDefault(m => m.MembershipId == row.OrganizationUserMembershipId);
+                                <span>@(info?.Label() ?? row.OrganizationUserMembershipId.ToString())</span>
                             }
                         </Template>
                     </GridColumn>
@@ -166,9 +167,15 @@ else if (_role is not null)
                             <ItemTemplate>
                                 @{
                                     var item = (OrgMembershipItem)context;
-                                    @($"{item.Role} — {item.MembershipId}")
+                                    @item.Label()
                                 }
                             </ItemTemplate>
+                            <ValueTemplate>
+                                @{
+                                    var item = (OrgMembershipItem)context;
+                                    @item.Label()
+                                }
+                            </ValueTemplate>
                         </TelerikDropDownList>
                     </div>
                     <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
