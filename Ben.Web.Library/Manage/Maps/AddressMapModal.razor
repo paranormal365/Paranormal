@@ -27,14 +27,15 @@
     <WindowContent>
         @if (_hasCoords)
         {
-            <div style="width:100%; height:100%; min-height:280px;">
-                <AddressMapPlayer Latitude="@_lat"
-                                  Longitude="@_lon"
-                                  Title="@_title"
-                                  ReadOnly="true"
-                                  ShowConfigPanel="false"
-                                  Height="100%" />
-            </div>
+            @* TelerikMap (Kendo Map) requires an explicit pixel height.          *@
+            @* _mapHeight is computed from the window height minus the title bar  *@
+            @* (~80px) so the map fills the available content area.               *@
+            <AddressMapPlayer Latitude="@_lat"
+                              Longitude="@_lon"
+                              Title="@_title"
+                              ReadOnly="true"
+                              ShowConfigPanel="false"
+                              Height="@_mapHeight" />
         }
         else
         {
@@ -50,16 +51,15 @@
 
 @code {
     private bool   _visible;
-    private string _title  = "";
+    private string _title   = "";
     private double _lat;
     private double _lon;
     private bool   _hasCoords;
-    private string _width  = "680px";
-    private string _height = "540px";
+    private string _width   = "680px";
+    private string _height  = "540px";
+    private string _mapHeight = "460px";  // title bar ≈ 44px + 36px footer
 
-    /// <summary>
-    /// Opens the map window centred on the supplied coordinates.
-    /// </summary>
+    /// <summary>Opens the map window centred on the supplied coordinates.</summary>
     public void Show(string title, double? latitude, double? longitude,
                      string width = "680px", string height = "540px")
     {
@@ -68,9 +68,10 @@
         _lon       = longitude ?? 0;
         _hasCoords = latitude.HasValue && longitude.HasValue
                      && !(latitude == 0 && longitude == 0);
-        _width   = width;
-        _height  = height;
-        _visible = true;
+        _width    = width;
+        _height   = height;
+        _mapHeight = MapHeightFrom(height);
+        _visible  = true;
         StateHasChanged();
     }
 
@@ -79,5 +80,15 @@
     {
         _visible = false;
         StateHasChanged();
+    }
+
+    /// <summary>Computes the Kendo Map pixel height from the window height string.</summary>
+    private static string MapHeightFrom(string windowHeight)
+    {
+        // Strip "px" suffix and subtract title bar (~44px) + small padding (~36px)
+        if (windowHeight.EndsWith("px", StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(windowHeight.AsSpan(0, windowHeight.Length - 2), out var px))
+            return $"{Math.Max(200, px - 80)}px";
+        return "460px";
     }
 }
