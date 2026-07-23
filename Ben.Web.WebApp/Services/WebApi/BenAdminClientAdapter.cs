@@ -234,6 +234,9 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         return _api.GetAsync<GeocodingPreviewResponse>($"/api/geocode/preview{qs}", token);
     }
 
+    public Task<GeocodingPreviewResponse?> SearchGeocodingAsync(string query, CancellationToken token = default)
+        => _api.GetAsync<GeocodingPreviewResponse>($"/api/geocode/search?q={Uri.EscapeDataString(query)}", token);
+
     public Task<ReverseGeocodingResponse?> ReverseGeocodeAsync(double latitude, double longitude, CancellationToken token = default)
     {
         var lat = latitude.ToString("G", System.Globalization.CultureInfo.InvariantCulture);

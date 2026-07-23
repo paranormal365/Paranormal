@@ -61,6 +61,22 @@ public sealed class GeocodingController : ControllerBase
             result.ZipCode,
             result.Country));
     }
+
+    /// <summary>
+    /// Geocodes a freeform address string without requiring individual components.
+    /// Used by the Directions modal when the user types a starting address.
+    /// </summary>
+    [HttpGet("search")]
+    public async Task<ActionResult<GeocodingPreviewResponse>> Search(
+        [FromQuery] string q,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(q))
+            return Ok(new GeocodingPreviewResponse(null, null, null));
+
+        var result = await AddressGeocodingService.TryResolveFromQueryAsync(q, ct);
+        return Ok(new GeocodingPreviewResponse(result.Latitude, result.Longitude, result.ResultType));
+    }
 }
 
 public sealed record GeocodingPreviewResponse(

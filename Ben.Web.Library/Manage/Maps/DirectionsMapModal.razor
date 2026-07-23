@@ -2,6 +2,7 @@
 
 @inject IBenAdminClient AdminClient
 @inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <style>
     @@media print {
@@ -27,13 +28,19 @@
     <WindowContent>
         <div class="directions-print-area d-flex flex-column" style="height:100%; gap:8px; padding:8px;">
 
+            @* ── To address (destination) ──────────────────────────────────── *@
+            <div class="d-flex align-items-center gap-2 small">
+                <span class="text-secondary fw-semibold" style="min-width:36px;">To:</span>
+                <span class="fw-semibold">@_toTitle</span>
+            </div>
+
             @* ── From address input ─────────────────────────────────────── *@
             <div class="d-flex gap-2 align-items-center flex-wrap">
                 <div class="flex-grow-1" style="min-width:200px;">
                     <TelerikTextBox @bind-Value="@_fromAddress"
                                     Placeholder="From address…"
                                     Width="100%"
-                                    OnChange="@OnFromAddressChanged" />
+                                    OnChange="@((object _) => OnFromAddressChanged())" />
                 </div>
                 <TelerikButton Icon="@SvgIcon.MapMarker"
                                FillMode="@ThemeConstants.Button.FillMode.Outline"
@@ -45,7 +52,7 @@
                 <TelerikButton Icon="@SvgIcon.Directions"
                                ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                                OnClick="@GetRouteAsync"
-                               Enabled="@(_fromLat.HasValue && _toLat != 0 && !_loading)">
+                               Enabled="@(!string.IsNullOrWhiteSpace(_fromAddress) && _toLat != 0 && !_loading)">
                     @(_loading ? "Routing…" : "Get Route")
                 </TelerikButton>
             </div>
@@ -64,10 +71,10 @@
                                   Subdomains="@_subdomains"
                                   UrlTemplate="directionsMapTileTemplate" />
 
-                        @if (_routeGeoJson is not null)
+                        @if (_routeGeoJsonObj is not null)
                         {
                             <MapLayer Type="@MapLayersType.Shape"
-                                      Data="@_routeGeoJson">
+                                      Data="@_routeGeoJsonObj">
                                 <MapLayerShapeSettings>
                                     <MapLayerShapeSettingsStyle>
                                         <MapLayerShapeSettingsStyleFill Color="transparent" />
@@ -160,10 +167,15 @@
     private bool              _loading;
     private string?           _errorMessage;
     private DirectionsResult? _result;
-    private string?           _routeGeoJson;
+    private object?           _routeGeoJsonObj;
 
     // Map state
-    private double[] _mapCenter = [39.5, -98.35]; // US center default
+    private bool     _needsMapRefresh = false;
+    private double   _routeMinLat;
+    private double   _routeMaxLat;
+    private double   _routeMinLon;
+    private double   _routeMaxLon;
+    private double[] _mapCenter = [39.5, -98.35]; // initial center (US)
     private double   _mapZoom   = 4;
     private IEnumerable<MapMarker> _fromMarkers = [];
     private IEnumerable<MapMarker> _toMarkers   = [];
@@ -179,12 +191,12 @@
         _width        = width;
         _height       = height;
         _mapHeight    = MapHeightFrom(height);
-        _fromAddress  = "";
-        _fromLat      = null;
-        _fromLon      = null;
-        _result       = null;
-        _routeGeoJson = null;
-        _errorMessage = null;
+        _fromAddress     = "";
+        _fromLat         = null;
+        _fromLon         = null;
+        _result          = null;
+        _routeGeoJsonObj = null;
+        _errorMessage    = null;
         _toMarkers    = [new MapMarker { LatLng = [toLat, toLon], Title = toTitle }];
         _fromMarkers  = [];
         _mapCenter    = [toLat, toLon];
@@ -201,25 +213,12 @@
 
     // ── From address ──────────────────────────────────────────────────────────
 
-    private async Task OnFromAddressChanged()
+    private void OnFromAddressChanged()
     {
-        if (string.IsNullOrWhiteSpace(_fromAddress)) { _fromLat = null; _fromLon = null; return; }
-        var parts = _fromAddress.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length < 3) return; // need at least street, city, state
-
-        var result = await AdminClient.PreviewGeocodingAsync(
-            parts[0], null,
-            parts.Length > 1 ? parts[1] : "",
-            parts.Length > 2 ? parts[2] : "",
-            parts.Length > 3 ? parts[3] : "",
-            parts.Length > 4 ? parts[4] : "US");
-
-        if (result?.Latitude is not null && result.Longitude is not null)
-        {
-            _fromLat = (double)result.Latitude;
-            _fromLon = (double)result.Longitude;
-            _fromMarkers = [new MapMarker { LatLng = [_fromLat.Value, _fromLon.Value], Title = "Start" }];
-        }
+        // Just clear the cached coords so GetRouteAsync re-geocodes on next click.
+        _fromLat = null;
+        _fromLon = null;
+        _fromMarkers = [];
     }
 
     private async Task UseMyLocationAsync()
@@ -251,32 +250,69 @@
 
     private async Task GetRouteAsync()
     {
-        if (_fromLat is null || _fromLon is null) { _errorMessage = "Enter or locate a starting address first."; return; }
-        _loading      = true;
-        _errorMessage = null;
-        _result       = null;
-        _routeGeoJson = null;
+        if (string.IsNullOrWhiteSpace(_fromAddress)) { _errorMessage = "Enter or locate a starting address first."; return; }
+
+        _loading         = true;
+        _errorMessage    = null;
+        _result          = null;
+        _routeGeoJsonObj = null;
         StateHasChanged();
 
         try
         {
-            _result = await AdminClient.GetDirectionsAsync(_fromLat.Value, _fromLon.Value, _toLat, _toLon);
+            // Geocode the typed from-address if we don't already have coords for it
+            if (_fromLat is null)
+            {
+                var geo = await AdminClient.SearchGeocodingAsync(_fromAddress);
+                if (geo?.Latitude is null || geo.Longitude is null)
+                {
+                    _errorMessage = "Could not locate the starting address. Try adding city and state, e.g. \"123 Main St, Nashville, TN\".";
+                    return;
+                }
+                _fromLat = (double)geo.Latitude;
+                _fromLon = (double)geo.Longitude;
+                _fromMarkers = [new MapMarker { LatLng = [_fromLat.Value, _fromLon.Value], Title = "Start" }];
+            }
+
+            _result = await AdminClient.GetDirectionsAsync(_fromLat!.Value, _fromLon!.Value, _toLat, _toLon);
             if (_result is null) { _errorMessage = "Could not retrieve route. Please try again."; return; }
 
-            _routeGeoJson = _result.RouteGeoJson;
-
-            // Centre map on midpoint of route bounding box
-            if (_result.RoutePoints.Count > 0)
+            // Build the Shape layer data as an anonymous object (NOT a JSON string —
+            // Telerik Map requires a .NET object that it serializes itself)
+            _routeGeoJsonObj = new
             {
-                var minLat = _result.RoutePoints.Min(p => p.Lat);
-                var maxLat = _result.RoutePoints.Max(p => p.Lat);
-                var minLon = _result.RoutePoints.Min(p => p.Lon);
-                var maxLon = _result.RoutePoints.Max(p => p.Lon);
-                _mapCenter = [(minLat + maxLat) / 2, (minLon + maxLon) / 2];
-                _mapZoom   = CalcZoom(maxLat - minLat, maxLon - minLon);
-            }
+                type = "FeatureCollection",
+                features = new[]
+                {
+                    new
+                    {
+                        type = "Feature",
+                        geometry = new
+                        {
+                            type = "LineString",
+                            coordinates = _result.RoutePoints
+                                .Select(p => new double[] { p.Lon, p.Lat })
+                                .ToArray()
+                        },
+                        properties = new { }
+                    }
+                }
+            };
+
+            // Compute bounding box over all route points + both endpoints
+            // so the full route fits in the viewport
+            var lats = _result.RoutePoints.Select(p => p.Lat)
+                .Append(_toLat).Append(_fromLat ?? _toLat);
+            var lons = _result.RoutePoints.Select(p => p.Lon)
+                .Append(_toLon).Append(_fromLon ?? _toLon);
+            _routeMinLat = lats.Min();
+            _routeMaxLat = lats.Max();
+            _routeMinLon = lons.Min();
+            _routeMaxLon = lons.Max();
+            _needsMapRefresh = true;
         }
-        catch { _errorMessage = "Routing service error. Please try again."; }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        { _errorMessage = "Routing service error. Please try again."; }
         finally { _loading = false; }
         StateHasChanged();
     }
@@ -322,4 +358,28 @@
 
     private sealed record GeoCoords(double Latitude, double Longitude);
     private sealed record MapMarker { public double[] LatLng { get; init; } = []; public string Title { get; init; } = ""; }
+
+    // ── JS module lifecycle ───────────────────────────────────────────────────
+
+    private IJSObjectReference? _jsModule;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "./_content/Ben.Web.Library/Manage/Maps/DirectionsMapModal.razor.js");
+
+        if (_needsMapRefresh && _jsModule is not null)
+        {
+            _needsMapRefresh = false;
+            await _jsModule.InvokeVoidAsync("fitMapToRoute",
+                _routeMinLat, _routeMaxLat, _routeMinLon, _routeMaxLon);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_jsModule is not null)
+            await _jsModule.DisposeAsync();
+    }
 }

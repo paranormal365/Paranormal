@@ -89,7 +89,41 @@ public static class AddressGeocodingService
         }
     }
 
-    // ── Reverse geocoding ─────────────────────────────────────────────────────
+    /// <summary>
+    /// Geocodes a freeform address query string (e.g. "705 Meeting St, Franklin, TN 37064").
+    /// Does not require individual address components.
+    /// </summary>
+    public static async Task<GeocodingLookupResult> TryResolveFromQueryAsync(
+        string query,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey) || string.IsNullOrWhiteSpace(query))
+            return GeocodingLookupResult.Empty;
+
+        try
+        {
+            var url = $"{_baseUrl}geocode?q={Uri.EscapeDataString(query.Trim())}&api_key={_apiKey}&limit=1";
+
+            using var response = await HttpClient.GetAsync(url, cancellationToken);
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode) return GeocodingLookupResult.Empty;
+
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("results", out var results) || results.GetArrayLength() == 0)
+                return new GeocodingLookupResult(null, null, json, null);
+
+            var first    = results[0];
+            var location = first.GetProperty("location");
+            var lat      = location.GetProperty("lat").GetDecimal();
+            var lng      = location.GetProperty("lng").GetDecimal();
+            var type     = first.TryGetProperty("accuracy_type", out var at) ? at.GetString() : null;
+            return new GeocodingLookupResult(lat, lng, json, type);
+        }
+        catch
+        {
+            return GeocodingLookupResult.Empty;
+        }
+    }
 
     public static async Task<ReverseGeocodingResult> ReverseGeocodeAsync(
         double latitude,

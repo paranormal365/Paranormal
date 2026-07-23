@@ -16,3 +16,41 @@ window.directionsToMarkerTemplate = () =>
 
 // Print the directions panel
 window.printDirections = () => window.print();
+
+// Called from OnAfterRenderAsync after a route is displayed.
+// Retries until the Kendo Map widget is ready, then calls resize(true)
+// which forces the tile layer to calculate viewport tiles and load them —
+// the same internal path triggered when the user pans or zooms.
+// Fits the Kendo Map to the bounding box of the full route.
+// Uses kendo.dataviz.map.Extent which auto-computes the zoom level to fill
+// the current pixel viewport — same internal path as panning/zooming.
+export function fitMapToRoute(minLat, maxLat, minLon, maxLon) {
+    const attempt = (triesLeft) => {
+        if (triesLeft <= 0) return;
+        setTimeout(() => {
+            if (typeof kendo === 'undefined' || !kendo.dataviz?.map) {
+                attempt(triesLeft - 1); return;
+            }
+            const els = document.querySelectorAll('[data-role="map"], .k-map');
+            if (!els.length) { attempt(triesLeft - 1); return; }
+            let found = false;
+            els.forEach(el => {
+                const w = kendo.widgetInstance(el);
+                if (w && !found) {
+                    found = true;
+                    // Add 15% padding on each side so markers at the edges
+                    // are not clipped by the viewport border.
+                    const latPad = Math.max((maxLat - minLat) * 0.15, 0.005);
+                    const lonPad = Math.max((maxLon - minLon) * 0.15, 0.005);
+                    const extent = new kendo.dataviz.map.Extent(
+                        new kendo.dataviz.map.Location(maxLat + latPad, minLon - lonPad), // NW
+                        new kendo.dataviz.map.Location(minLat - latPad, maxLon + lonPad)  // SE
+                    );
+                    w.extent(extent);
+                }
+            });
+            if (!found) attempt(triesLeft - 1);
+        }, 150);
+    };
+    attempt(8);
+}

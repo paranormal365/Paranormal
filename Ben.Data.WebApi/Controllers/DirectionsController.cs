@@ -13,7 +13,7 @@ namespace Ben.Data.WebApi.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/directions")]
-public sealed class DirectionsController : BenControllerBase
+public sealed class DirectionsController(ILogger<DirectionsController> logger) : BenControllerBase
 {
     private static readonly HttpClient _http = CreateClient();
 
@@ -37,7 +37,7 @@ public sealed class DirectionsController : BenControllerBase
             var tLon = toLon.ToString("G17", CultureInfo.InvariantCulture);
             var tLat = toLat.ToString("G17", CultureInfo.InvariantCulture);
 
-            var url = $"https://router.project-osrm.org/route/v1/driving/" +
+            var url = $"http://router.project-osrm.org/route/v1/driving/" +
                       $"{fLon},{fLat};{tLon},{tLat}" +
                       "?geometries=geojson&overview=full&steps=true";
 
@@ -91,9 +91,11 @@ public sealed class DirectionsController : BenControllerBase
         {
             return StatusCode(504, "Routing request timed out.");
         }
-        catch
+        catch (Exception ex)
         {
-            return StatusCode(502, "Unable to retrieve route. Please try again.");
+            logger.LogError(ex, "DirectionsController: failed calling OSRM for {FromLat},{FromLon} -> {ToLat},{ToLon}",
+                fromLat, fromLon, toLat, toLon);
+            return StatusCode(502, $"Unable to retrieve route: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
