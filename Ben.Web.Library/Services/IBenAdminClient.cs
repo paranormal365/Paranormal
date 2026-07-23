@@ -178,6 +178,12 @@ public interface IBenAdminClient
     Task<OrganizationLogoRecord?> UpdateOrgLogoAsync(Guid orgId, Guid logoId, CmsUpdateLogoRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default);
 
+    // ── Public Org Pages (no auth required) ──────────────────────────────────
+
+    Task<OrgPublicHomeResponse?> GetPublicOrgAsync(string urlName, CancellationToken token = default);
+    Task<OrgPublicPageResponse?> GetPublicOrgPageAsync(string urlName, string pageSlug, CancellationToken token = default);
+    string GetFileDownloadUrl(Guid uploadFileId);
+
     // ── Organization Address Map Config ───────────────────────────────────────
 
     /// <summary>Returns the map display config for an organization address, or null if not configured.</summary>
@@ -443,6 +449,25 @@ public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName)
 
 /// <summary>Role record paired with its current user count.</summary>
 public sealed record AdminRoleWithCountResponse(AppRoleAdminRecord Role, int UserCount);
+
+// ── Public org page response records ─────────────────────────────────────────
+
+public sealed record OrgPublicHomeResponse(
+    Guid OrgId, string OrgName, string OrgUrlName,
+    IReadOnlyList<OrgPublicLogoItem> Logos,
+    OrgPublicPageItem? HomePage,
+    IReadOnlyList<OrgPublicNavItem> NavPages);
+
+public sealed record OrgPublicPageResponse(
+    Guid OrgId, string OrgName, string OrgUrlName,
+    IReadOnlyList<OrgPublicLogoItem> Logos,
+    OrgPublicPageItem Page,
+    IReadOnlyList<OrgPublicNavItem> NavPages);
+
+public sealed record OrgPublicLogoItem(Guid LogoId, Guid UploadFileId, string? AltText, int SortOrder);
+public sealed record OrgPublicPageItem(Guid Id, string PageTitle, string UrlName, bool IsHome, IReadOnlyList<OrgPublicSectionItem> Sections);
+public sealed record OrgPublicSectionItem(Guid Id, CmsSectionType SectionType, string? Title, string ContentJson, int SortOrder);
+public sealed record OrgPublicNavItem(Guid Id, string PageTitle, string UrlName, Guid? ParentPageId, int SortOrder);
 
 /// <summary>
 /// Request body for creating a new application user.

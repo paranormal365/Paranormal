@@ -3,6 +3,7 @@ using Ben.Service.Models.Admin;
 using Ben.Service.Models.Entities;
 using Ben.Service.Models.People;
 using Ben.Web.Library.Services;
+using Microsoft.Extensions.Options;
 
 namespace Ben.Web.WebApp.Services.WebApi;
 
@@ -14,11 +15,13 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 {
     private readonly IWebApiClient _api;
     private readonly IWebApiAuthService _auth;
+    private readonly string _webApiBaseUrl;
 
-    public BenAdminClientAdapter(IWebApiClient api, IWebApiAuthService auth)
+    public BenAdminClientAdapter(IWebApiClient api, IWebApiAuthService auth, IOptions<WebApiOptions> options)
     {
-        _api  = api;
-        _auth = auth;
+        _api           = api;
+        _auth          = auth;
+        _webApiBaseUrl = options.Value.BaseUrl.TrimEnd('/');
     }
 
     // ── Organizations ─────────────────────────────────────────────────────────
@@ -171,6 +174,17 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/logos/{logoId}", token);
+
+    // ── Public Org Pages (no auth required) ───────────────────────────────────
+
+    public Task<OrgPublicHomeResponse?> GetPublicOrgAsync(string urlName, CancellationToken token = default)
+        => _api.GetAnonymousAsync<OrgPublicHomeResponse>($"/api/public/organizations/{Uri.EscapeDataString(urlName)}", token);
+
+    public Task<OrgPublicPageResponse?> GetPublicOrgPageAsync(string urlName, string pageSlug, CancellationToken token = default)
+        => _api.GetAnonymousAsync<OrgPublicPageResponse>($"/api/public/organizations/{Uri.EscapeDataString(urlName)}/pages/{Uri.EscapeDataString(pageSlug)}", token);
+
+    public string GetFileDownloadUrl(Guid uploadFileId)
+        => $"{_webApiBaseUrl}/api/upload-files/{uploadFileId}/download";
 
     public Task<AddressMapConfigRecord?> GetOrgAddressMapConfigAsync(Guid orgId, Guid addressId, CancellationToken token = default)
         => _api.GetAsync<AddressMapConfigRecord>($"/api/organizations/{orgId}/addresses/{addressId}/map-config", token);

@@ -7,6 +7,7 @@ namespace Ben.Web.WebApp.Services.WebApi;
 public interface IWebApiClient
 {
     Task<TResponse?> GetAsync<TResponse>(string relativeUrl, CancellationToken token = default);
+    Task<TResponse?> GetAnonymousAsync<TResponse>(string relativeUrl, CancellationToken token = default);
     Task<TResponse?> PostAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<TResponse?> PostMultipartAsync<TResponse>(string relativeUrl, MultipartFormDataContent content, CancellationToken token = default);
     Task<TResponse?> PutAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);

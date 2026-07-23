@@ -59,12 +59,17 @@ public sealed class UploadFileController : BenControllerBase
     }
 
     [HttpGet("{id:guid}/download")]
+    [AllowAnonymous]
     public async Task<IActionResult> Download(Guid id, CancellationToken cancellationToken)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var entity = await db.UploadFiles.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
         if (entity is null) return NotFound();
+
+        // Public files are served to anyone; private files require authentication.
+        if (!entity.IsPublic && !(User.Identity?.IsAuthenticated ?? false))
+            return Unauthorized();
 
         // Prefer disk; fall back to FileData for rows not yet migrated
         if (!string.IsNullOrEmpty(entity.StoragePath))

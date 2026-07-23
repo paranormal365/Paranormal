@@ -19,7 +19,8 @@ public class RegionExplorerClientTests
 
     private static BenAdminClientAdapter Build(
         Mock<IWebApiClient> api, Mock<IWebApiAuthService>? auth = null)
-        => new(api.Object, (auth ?? AuthMock()).Object);
+        => new(api.Object, (auth ?? AuthMock()).Object,
+            Microsoft.Extensions.Options.Options.Create(new Ben.Web.WebApp.Services.WebApi.WebApiOptions()));
 
     // ── GetRegionNotesAsync ───────────────────────────────────────────────────
 

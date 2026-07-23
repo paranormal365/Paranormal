@@ -118,7 +118,7 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : BenControlle
     /// Awaits an audit task and silently swallows exceptions so that an audit
     /// failure never rolls back or masks the main CRUD operation.
     /// </summary>
-    private static async Task TryAuditAsync(Task auditTask)
+    private new static async Task TryAuditAsync(Task auditTask)
     {
         try { await auditTask; }
         catch { /* audit failure must not surface to the caller */ }
