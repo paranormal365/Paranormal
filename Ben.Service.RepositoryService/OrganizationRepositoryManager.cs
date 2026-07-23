@@ -12,6 +12,7 @@ public class OrganizationRepositoryManager : IOrganizationRepositoryManager
     private IOrganizationAddressRepository? _organizationAddressRepository;
     private IOrganizationAddressTypeRepository? _organizationAddressTypeRepository;
     private IOrganizationAddressMapConfigRepository? _organizationAddressMapConfigRepository;
+    private IOrganizationAddressMemberAccessRepository? _organizationAddressMemberAccessRepository;
     private IOrganizationAccessGrantRepository? _organizationAccessGrantRepository;
     private IOrganizationUserMembershipRepository? _organizationUserMembershipRepository;
     private IOrganizationMembershipRequestRepository? _organizationMembershipRequestRepository;
@@ -44,6 +45,7 @@ public class OrganizationRepositoryManager : IOrganizationRepositoryManager
     public IOrganizationAddressRepository AddressRepository => _organizationAddressRepository ??= new OrganizationAddressRepository(_dbContextFactory);
     public IOrganizationAddressTypeRepository AddressTypeRepository => _organizationAddressTypeRepository ??= new OrganizationAddressTypeRepository(_dbContextFactory);
     public IOrganizationAddressMapConfigRepository AddressMapConfigRepository => _organizationAddressMapConfigRepository ??= new OrganizationAddressMapConfigRepository(_dbContextFactory);
+    public IOrganizationAddressMemberAccessRepository AddressMemberAccessRepository => _organizationAddressMemberAccessRepository ??= new OrganizationAddressMemberAccessRepository(_dbContextFactory);
     public IOrganizationAccessGrantRepository AccessGrantRepository => _organizationAccessGrantRepository ??= new OrganizationAccessGrantRepository(_dbContextFactory);
     public IOrganizationUserMembershipRepository UserMembershipRepository => _organizationUserMembershipRepository ??= new OrganizationUserMembershipRepository(_dbContextFactory);
     public IOrganizationMembershipRequestRepository MembershipRequestRepository => _organizationMembershipRequestRepository ??= new OrganizationMembershipRequestRepository(_dbContextFactory);

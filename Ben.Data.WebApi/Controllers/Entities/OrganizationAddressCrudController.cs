@@ -77,7 +77,12 @@ public sealed class OrganizationAddressCrudController : OrgCmsControllerBase
             State                     = request.State.Trim(),
             ZipCode                   = request.ZipCode.Trim(),
             Country                   = request.Country.Trim(),
-            IsPublic                  = request.IsPublic,
+            Visibility                = request.Visibility,
+            PublicDisplayMode         = request.PublicDisplayMode,
+            MemberDisplayMode         = request.MemberDisplayMode,
+            IsSearchable              = request.IsSearchable,
+            SearchVisibility          = request.SearchVisibility,
+            SearchRadiusMiles         = request.SearchRadiusMiles,
             SortOrder                 = request.SortOrder,
             Latitude                  = request.Latitude,    // use client coords if available
             Longitude                 = request.Longitude,
@@ -122,7 +127,12 @@ public sealed class OrganizationAddressCrudController : OrgCmsControllerBase
         entity.State                     = request.State.Trim();
         entity.ZipCode                   = request.ZipCode.Trim();
         entity.Country                   = request.Country.Trim();
-        entity.IsPublic                  = request.IsPublic;
+        entity.Visibility                = request.Visibility;
+        entity.PublicDisplayMode         = request.PublicDisplayMode;
+        entity.MemberDisplayMode         = request.MemberDisplayMode;
+        entity.IsSearchable              = request.IsSearchable;
+        entity.SearchVisibility          = request.SearchVisibility;
+        entity.SearchRadiusMiles         = request.SearchRadiusMiles;
         entity.SortOrder                 = request.SortOrder;
         // Use client-provided coords if available; otherwise re-geocode
         if (request.Latitude.HasValue && request.Longitude.HasValue)
@@ -187,7 +197,12 @@ public sealed record OrgAddressUpsertRequest(
     string State,
     string ZipCode,
     string Country,
-    bool   IsPublic,
     int    SortOrder,
+    OrganizationAddressVisibility  Visibility        = OrganizationAddressVisibility.Private,
+    OrganizationAddressDisplayMode PublicDisplayMode = OrganizationAddressDisplayMode.Hidden,
+    OrganizationAddressDisplayMode MemberDisplayMode = OrganizationAddressDisplayMode.FullAddressAndMap,
+    bool   IsSearchable      = false,
+    OrganizationAddressVisibility  SearchVisibility  = OrganizationAddressVisibility.Public,
+    double? SearchRadiusMiles = null,
     decimal? Latitude  = null,
     decimal? Longitude = null);

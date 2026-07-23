@@ -53,11 +53,39 @@ else
                         <AddressFieldsWithMap @ref="_addrFields" State="@_addrState" />
                     </div>
 
-                    @* Public / SortOrder *@
-                    <div class="col-sm-6 d-flex align-items-center gap-2 mt-1">
-                        <TelerikCheckBox @bind-Value="@_formIsPublic" Id="addr-public" />
-                        <label for="addr-public">Public</label>
+                    @* Visibility & display (replaces old IsPublic) *@
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Who can see this address</label>
+                        <TelerikDropDownList Data="@_visibilityOptions" @bind-Value="@_formVisibility"
+                                             TextField="Label" ValueField="Value" Width="100%" />
                     </div>
+                    <div class="col-sm-6">
+                        <label class="form-label">Public display</label>
+                        <TelerikDropDownList Data="@_displayModeOptions" @bind-Value="@_formPublicDisplayMode"
+                                             TextField="Label" ValueField="Value" Width="100%" />
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label">Member display</label>
+                        <TelerikDropDownList Data="@_displayModeOptions" @bind-Value="@_formMemberDisplayMode"
+                                             TextField="Label" ValueField="Value" Width="100%" />
+                    </div>
+                    <div class="col-12 d-flex align-items-center gap-2">
+                        <TelerikCheckBox @bind-Value="@_formIsSearchable" Id="addr-search" />
+                        <label for="addr-search">Include in proximity search</label>
+                    </div>
+                    @if (_formIsSearchable)
+                    {
+                        <div class="col-sm-6">
+                            <label class="form-label">Search visibility</label>
+                            <TelerikDropDownList Data="@_searchVisibilityOptions" @bind-Value="@_formSearchVisibility"
+                                                 TextField="Label" ValueField="Value" Width="100%" />
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label">Max search distance (miles)</label>
+                            <TelerikNumericTextBox @bind-Value="@_formSearchRadiusMiles"
+                                                   Min="0.1" Max="100" Width="100%" Placeholder="No limit" />
+                        </div>
+                    }
                     <div class="col-sm-6">
                         <label class="form-label">Sort Order</label>
                         <TelerikNumericTextBox @bind-Value="@_formSortOrder" Width="100%" />
@@ -95,7 +123,14 @@ else
                         </div>
                     </Template>
                 </GridColumn>
-                <GridColumn Field="@nameof(OrganizationAddressRecord.IsPublic)" Title="Public" Width="80px" />
+                <GridColumn Field="@nameof(OrganizationAddressRecord.Visibility)" Title="Visibility" Width="120px">
+                    <Template>
+                        @{ var av = (OrganizationAddressRecord)context; }
+                        <span class="badge @(av.Visibility == OrganizationAddressVisibility.Public ? "bg-success" : av.Visibility == OrganizationAddressVisibility.MembersOnly ? "bg-info text-dark" : "bg-secondary")">
+                            @av.Visibility
+                        </span>
+                    </Template>
+                </GridColumn>
                 <GridColumn Title="" Width="100px">
                     <Template>
                         @{ var a2 = (OrganizationAddressRecord)context; }
@@ -136,10 +171,39 @@ else
     private string? _errorMessage;
     private Guid?   _editId;
 
-    // Stores IsPublic + SortOrder — address text lives in _addrState
-    private bool _formIsPublic;
-    private int  _formSortOrder;
-    private Guid _formAddressTypeId;
+    // Address form state — text fields live in _addrState; meta fields below
+    private Guid  _formAddressTypeId;
+    private int   _formSortOrder;
+
+    // Visibility & display
+    private OrganizationAddressVisibility  _formVisibility        = OrganizationAddressVisibility.Private;
+    private OrganizationAddressDisplayMode _formPublicDisplayMode = OrganizationAddressDisplayMode.Hidden;
+    private OrganizationAddressDisplayMode _formMemberDisplayMode = OrganizationAddressDisplayMode.FullAddressAndMap;
+
+    // Searchability
+    private bool                           _formIsSearchable;
+    private OrganizationAddressVisibility  _formSearchVisibility  = OrganizationAddressVisibility.Public;
+    private double?                        _formSearchRadiusMiles;
+
+    private static readonly IReadOnlyList<LabelValue<OrganizationAddressVisibility>> _visibilityOptions = [
+        new("Public — anyone",       OrganizationAddressVisibility.Public),
+        new("Members only",          OrganizationAddressVisibility.MembersOnly),
+        new("Specific members",      OrganizationAddressVisibility.SpecificMembers),
+        new("Private (admin only)",  OrganizationAddressVisibility.Private),
+    ];
+    private static readonly IReadOnlyList<LabelValue<OrganizationAddressDisplayMode>> _displayModeOptions = [
+        new("Full address + map",  OrganizationAddressDisplayMode.FullAddressAndMap),
+        new("Full address only",   OrganizationAddressDisplayMode.FullAddressOnly),
+        new("Map pin only",        OrganizationAddressDisplayMode.MapPinOnly),
+        new("Region circle only",  OrganizationAddressDisplayMode.RegionOnly),
+        new("Hidden",              OrganizationAddressDisplayMode.Hidden),
+    ];
+    private static readonly IReadOnlyList<LabelValue<OrganizationAddressVisibility>> _searchVisibilityOptions = [
+        new("Public search",   OrganizationAddressVisibility.Public),
+        new("Members only",    OrganizationAddressVisibility.MembersOnly),
+    ];
+
+    private sealed record LabelValue<T>(string Label, T Value);
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -170,7 +234,12 @@ else
         _editId             = null;
         _addrState          = new AddressFieldsState { Country = "US" };
         _formAddressTypeId  = _addressTypes.FirstOrDefault()?.Id ?? Guid.Empty;
-        _formIsPublic       = false;
+        _formVisibility        = OrganizationAddressVisibility.Private;
+        _formPublicDisplayMode = OrganizationAddressDisplayMode.Hidden;
+        _formMemberDisplayMode = OrganizationAddressDisplayMode.FullAddressAndMap;
+        _formIsSearchable      = false;
+        _formSearchVisibility  = OrganizationAddressVisibility.Public;
+        _formSearchRadiusMiles = null;
         _formSortOrder      = 0;
         _showForm           = true;
         _errorMessage       = null;
@@ -192,9 +261,14 @@ else
             Latitude       = address.Latitude,    // carried into component so map shows existing pin
             Longitude      = address.Longitude
         };
-        _formAddressTypeId = address.OrganizationAddressTypeId;
-        _formIsPublic      = address.IsPublic;
-        _formSortOrder     = address.SortOrder;
+        _formAddressTypeId      = address.OrganizationAddressTypeId;
+        _formVisibility        = address.Visibility;
+        _formPublicDisplayMode = address.PublicDisplayMode;
+        _formMemberDisplayMode = address.MemberDisplayMode;
+        _formIsSearchable      = address.IsSearchable;
+        _formSearchVisibility  = address.SearchVisibility;
+        _formSearchRadiusMiles = address.SearchRadiusMiles;
+        _formSortOrder         = address.SortOrder;
         _showForm          = true;
         _errorMessage      = null;
 
@@ -237,9 +311,14 @@ else
             _addrState.State.Trim(),
             _addrState.ZipCode.Trim(),
             _addrState.Country.Trim(),
-            _formIsPublic,
             _formSortOrder,
-            _addrState.Latitude,    // pass preview coords so server skips re-geocoding
+            _formVisibility,
+            _formPublicDisplayMode,
+            _formMemberDisplayMode,
+            _formIsSearchable,
+            _formSearchVisibility,
+            _formSearchRadiusMiles,
+            _addrState.Latitude,
             _addrState.Longitude);
 
         var saved = _editId.HasValue

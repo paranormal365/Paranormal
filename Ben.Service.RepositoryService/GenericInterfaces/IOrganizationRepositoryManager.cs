@@ -8,6 +8,7 @@ public interface IOrganizationRepositoryManager
     IOrganizationAddressRepository AddressRepository { get; }
     IOrganizationAddressTypeRepository AddressTypeRepository { get; }
     IOrganizationAddressMapConfigRepository AddressMapConfigRepository { get; }
+    IOrganizationAddressMemberAccessRepository AddressMemberAccessRepository { get; }
     IOrganizationAccessGrantRepository AccessGrantRepository { get; }
     IOrganizationUserMembershipRepository UserMembershipRepository { get; }
     IOrganizationMembershipRequestRepository MembershipRequestRepository { get; }

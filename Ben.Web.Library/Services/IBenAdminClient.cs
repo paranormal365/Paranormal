@@ -479,8 +479,13 @@ public sealed record OrgAddressUpsertRequest(
     string State,
     string ZipCode,
     string Country,
-    bool   IsPublic,
     int    SortOrder,
+    OrganizationAddressVisibility  Visibility          = OrganizationAddressVisibility.Private,
+    OrganizationAddressDisplayMode PublicDisplayMode   = OrganizationAddressDisplayMode.Hidden,
+    OrganizationAddressDisplayMode MemberDisplayMode   = OrganizationAddressDisplayMode.FullAddressAndMap,
+    bool   IsSearchable     = false,
+    OrganizationAddressVisibility  SearchVisibility    = OrganizationAddressVisibility.Public,
+    double? SearchRadiusMiles = null,
     decimal? Latitude  = null,
     decimal? Longitude = null);
 

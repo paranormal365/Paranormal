@@ -49,6 +49,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrganizationFile> OrganizationFiles { get; set; }
         public virtual DbSet<OrganizationFileDeleteLog> OrganizationFileDeleteLogs { get; set; }
         public virtual DbSet<OrganizationAddressMapConfig> OrganizationAddressMapConfigs { get; set; }
+        public virtual DbSet<OrganizationAddressMemberAccess> OrganizationAddressMemberAccesses { get; set; }
         public virtual DbSet<UploadFileType> UploadFileTypes { get; set; }
         public virtual DbSet<UploadFileTypeExtension> UploadFileTypeExtensions { get; set; }
         public virtual DbSet<UploadFile> UploadFiles { get; set; }
@@ -756,6 +757,19 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.RegionStrokeColor).HasMaxLength(50);
             modelBuilder.Entity<OrganizationAddressMapConfig>()
                 .Property(e => e.MarkerIconKey).HasMaxLength(64).IsRequired(false);
+
+            // ── OrganizationAddressMemberAccess ──────────────────────────────────────
+            modelBuilder.Entity<OrganizationAddressMemberAccess>()
+                .HasOne(e => e.OrganizationAddress).WithMany()
+                .HasForeignKey(e => e.OrganizationAddressId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrganizationAddressMemberAccess>()
+                .HasOne(e => e.OrganizationUserMembership).WithMany()
+                .HasForeignKey(e => e.OrganizationUserMembershipId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationAddressMemberAccess>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationAddressMemberAccess>()
+                .HasIndex(e => new { e.OrganizationAddressId, e.OrganizationUserMembershipId }).IsUnique();
         }
     }
 }

@@ -1,3 +1,5 @@
+using Ben.Data.Common.Enums;
+
 namespace Ben.Service.Models.Entities;
 
 public record OrganizationAddressRecord
@@ -11,7 +13,12 @@ public record OrganizationAddressRecord
     public required string City { get; init; }
     public required string State { get; init; }
     public required string Country { get; init; }
-    public bool IsPublic { get; init; }
+    public OrganizationAddressVisibility Visibility { get; init; }
+    public OrganizationAddressDisplayMode PublicDisplayMode { get; init; }
+    public OrganizationAddressDisplayMode MemberDisplayMode { get; init; }
+    public bool IsSearchable { get; init; }
+    public OrganizationAddressVisibility SearchVisibility { get; init; }
+    public double? SearchRadiusMiles { get; init; }
     public decimal? Latitude { get; init; }
     public decimal? Longitude { get; init; }
     public int SortOrder { get; init; }

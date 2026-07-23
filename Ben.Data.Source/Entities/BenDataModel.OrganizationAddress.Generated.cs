@@ -12,7 +12,6 @@ namespace Ben.Data.Source.Entities
         public string City { get; set; } = null!;
         public string State { get; set; } = null!;
         public string Country { get; set; } = null!;
-        public bool IsPublic { get; set; }
         public decimal? Latitude { get; set; }
         public decimal? Longitude { get; set; }
         public int SortOrder { get; set; }
