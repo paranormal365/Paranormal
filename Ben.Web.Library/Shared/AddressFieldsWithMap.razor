@@ -68,6 +68,14 @@
                         Width="100%" />
     </div>
 
+    @* ── Validation ── *@
+    @if (ValidationMessage is not null)
+    {
+        <div class="col-12">
+            <div class="alert alert-warning py-1 small mb-0">@ValidationMessage</div>
+        </div>
+    }
+
     @* ── Live map preview ────────────────────────────────────────────────────── *@
     <div class="col-12 mt-1">
         @if (_geocoding)
@@ -291,4 +299,36 @@
     }
 
     private sealed record GeoCoords(double Latitude, double Longitude);
+
+    // ── Validation ────────────────────────────────────────────────────────────────
+
+    private static readonly HashSet<string> _allowedCountries = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "US", "USA", "United States", "United States of America",
+        "CA", "Canada",
+        "MX", "Mexico", "México"
+    };
+
+    /// <summary>True when all required fields are filled and country is US/CA/MX.</summary>
+    public bool IsValid =>
+        !string.IsNullOrWhiteSpace(State.StreetAddress1) &&
+        !string.IsNullOrWhiteSpace(State.City) &&
+        !string.IsNullOrWhiteSpace(State.State) &&
+        !string.IsNullOrWhiteSpace(State.ZipCode) &&
+        _allowedCountries.Contains(State.Country?.Trim() ?? "");
+
+    /// <summary>First validation error message, or null when valid.</summary>
+    public string? ValidationMessage
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(State.StreetAddress1)) return "Street Address 1 is required.";
+            if (string.IsNullOrWhiteSpace(State.City))           return "City is required.";
+            if (string.IsNullOrWhiteSpace(State.State))          return "State is required.";
+            if (string.IsNullOrWhiteSpace(State.ZipCode))        return "ZIP code is required.";
+            if (!_allowedCountries.Contains(State.Country?.Trim() ?? ""))
+                return "Country must be US, CA (Canada), or MX (Mexico).";
+            return null;
+        }
+    }
 }

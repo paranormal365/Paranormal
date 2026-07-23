@@ -1,0 +1,325 @@
+@namespace Ben.Web.Library.Manage.Maps
+
+@inject IBenAdminClient AdminClient
+@inject IJSRuntime JS
+
+<style>
+    @@media print {
+        body > * { display: none !important; }
+        .directions-print-area { display: block !important; }
+    }
+    .directions-print-area { display: block; }
+</style>
+
+<TelerikWindow @bind-Visible="@_visible"
+               Width="@_width"
+               Height="@_height"
+               Resizable="true"
+               Draggable="true"
+               Modal="true"
+               CloseOnOverlayClick="false">
+
+    <WindowTitle>Directions to @_toTitle</WindowTitle>
+    <WindowActions>
+        <WindowAction Name="Close" OnClick="@Close" />
+    </WindowActions>
+
+    <WindowContent>
+        <div class="directions-print-area d-flex flex-column" style="height:100%; gap:8px; padding:8px;">
+
+            @* ── From address input ─────────────────────────────────────── *@
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+                <div class="flex-grow-1" style="min-width:200px;">
+                    <TelerikTextBox @bind-Value="@_fromAddress"
+                                    Placeholder="From address…"
+                                    Width="100%"
+                                    OnChange="@OnFromAddressChanged" />
+                </div>
+                <TelerikButton Icon="@SvgIcon.MapMarker"
+                               FillMode="@ThemeConstants.Button.FillMode.Outline"
+                               OnClick="@UseMyLocationAsync"
+                               Enabled="@(!_locating)"
+                               Title="Use my current location">
+                    @(_locating ? "Locating…" : "My Location")
+                </TelerikButton>
+                <TelerikButton Icon="@SvgIcon.Directions"
+                               ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                               OnClick="@GetRouteAsync"
+                               Enabled="@(_fromLat.HasValue && _toLat != 0 && !_loading)">
+                    @(_loading ? "Routing…" : "Get Route")
+                </TelerikButton>
+            </div>
+
+            @if (_errorMessage is not null)
+            {
+                <div class="alert alert-warning py-1 small mb-0">@_errorMessage</div>
+            }
+
+            @* ── Map ──────────────────────────────────────────────────────── *@
+            <div style="flex:0 0 @_mapHeight;">
+                <TelerikMap Center="@_mapCenter" Zoom="@_mapZoom" Height="@_mapHeight">
+                    <MapLayers>
+                        <MapLayer Type="@MapLayersType.Tile"
+                                  Attribution="&copy; <a href='https://osm.org/copyright'>OpenStreetMap contributors</a>"
+                                  Subdomains="@_subdomains"
+                                  UrlTemplate="directionsMapTileTemplate" />
+
+                        @if (_routeGeoJson is not null)
+                        {
+                            <MapLayer Type="@MapLayersType.Shape"
+                                      Data="@_routeGeoJson">
+                                <MapLayerShapeSettings>
+                                    <MapLayerShapeSettingsStyle>
+                                        <MapLayerShapeSettingsStyleFill Color="transparent" />
+                                        <MapLayerShapeSettingsStyleStroke Color="#1a73e8" Opacity="0.9" Width="4" />
+                                    </MapLayerShapeSettingsStyle>
+                                </MapLayerShapeSettings>
+                            </MapLayer>
+                        }
+
+                        @if (_fromLat.HasValue && _fromLon.HasValue)
+                        {
+                            <MapLayer Type="@MapLayersType.Marker"
+                                      Data="@_fromMarkers">
+                                <MapLayerMarkerSettings Template="directionsFromMarkerTemplate" />
+                            </MapLayer>
+                        }
+
+                        @if (_toLat != 0)
+                        {
+                            <MapLayer Type="@MapLayersType.Marker"
+                                      Data="@_toMarkers">
+                                <MapLayerMarkerSettings Template="directionsToMarkerTemplate" />
+                            </MapLayer>
+                        }
+                    </MapLayers>
+                </TelerikMap>
+            </div>
+
+            @* ── Summary + action buttons ─────────────────────────────────── *@
+            @if (_result is not null)
+            {
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <span class="fw-semibold small">
+                        @($"{_result.TotalDistanceMiles:F1} mi") &nbsp;·&nbsp;
+                        @FormatDuration(_result.TotalDurationMinutes)
+                    </span>
+                    <div class="d-flex gap-2">
+                        <TelerikButton Icon="@SvgIcon.Globe"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       OnClick="@OpenInMaps"
+                                       Title="Open in maps app (works on phones)">
+                            Open in Maps
+                        </TelerikButton>
+                        <TelerikButton Icon="@SvgIcon.Print"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       OnClick="@PrintAsync">
+                            Print
+                        </TelerikButton>
+                    </div>
+                </div>
+
+                @* ── Step-by-step directions ──────────────────────────────── *@
+                <div style="flex:1; overflow-y:auto; border:1px solid #dee2e6; border-radius:4px; padding:8px;">
+                    <ol class="mb-0 ps-3" style="font-size:0.875rem;">
+                        @foreach (var step in _result.Steps)
+                        {
+                            <li class="mb-1">
+                                @step.Instruction
+                                @if (step.DistanceMiles > 0.01)
+                                {
+                                    <span class="text-secondary ms-1">(@($"{step.DistanceMiles:F1} mi"))</span>
+                                }
+                            </li>
+                        }
+                    </ol>
+                </div>
+            }
+        </div>
+    </WindowContent>
+</TelerikWindow>
+
+@code {
+    private bool   _visible;
+    private string _toTitle  = "";
+    private double _toLat;
+    private double _toLon;
+    private string _width    = "760px";
+    private string _height   = "700px";
+    private string _mapHeight = "300px";
+
+    private static readonly string[] _subdomains = ["a", "b", "c"];
+
+    // From state
+    private string  _fromAddress = "";
+    private double? _fromLat;
+    private double? _fromLon;
+    private bool    _locating;
+
+    // Route state
+    private bool              _loading;
+    private string?           _errorMessage;
+    private DirectionsResult? _result;
+    private string?           _routeGeoJson;
+
+    // Map state
+    private double[] _mapCenter = [39.5, -98.35]; // US center default
+    private double   _mapZoom   = 4;
+    private IEnumerable<MapMarker> _fromMarkers = [];
+    private IEnumerable<MapMarker> _toMarkers   = [];
+
+    // ── Public API ────────────────────────────────────────────────────────────
+
+    public void Show(string toTitle, double toLat, double toLon,
+                     string width = "760px", string height = "700px")
+    {
+        _toTitle      = toTitle;
+        _toLat        = toLat;
+        _toLon        = toLon;
+        _width        = width;
+        _height       = height;
+        _mapHeight    = MapHeightFrom(height);
+        _fromAddress  = "";
+        _fromLat      = null;
+        _fromLon      = null;
+        _result       = null;
+        _routeGeoJson = null;
+        _errorMessage = null;
+        _toMarkers    = [new MapMarker { LatLng = [toLat, toLon], Title = toTitle }];
+        _fromMarkers  = [];
+        _mapCenter    = [toLat, toLon];
+        _mapZoom      = 13;
+        _visible      = true;
+        StateHasChanged();
+    }
+
+    public void Close()
+    {
+        _visible = false;
+        StateHasChanged();
+    }
+
+    // ── From address ──────────────────────────────────────────────────────────
+
+    private async Task OnFromAddressChanged()
+    {
+        if (string.IsNullOrWhiteSpace(_fromAddress)) { _fromLat = null; _fromLon = null; return; }
+        var parts = _fromAddress.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length < 3) return; // need at least street, city, state
+
+        var result = await AdminClient.PreviewGeocodingAsync(
+            parts[0], null,
+            parts.Length > 1 ? parts[1] : "",
+            parts.Length > 2 ? parts[2] : "",
+            parts.Length > 3 ? parts[3] : "",
+            parts.Length > 4 ? parts[4] : "US");
+
+        if (result?.Latitude is not null && result.Longitude is not null)
+        {
+            _fromLat = (double)result.Latitude;
+            _fromLon = (double)result.Longitude;
+            _fromMarkers = [new MapMarker { LatLng = [_fromLat.Value, _fromLon.Value], Title = "Start" }];
+        }
+    }
+
+    private async Task UseMyLocationAsync()
+    {
+        _locating     = true;
+        _errorMessage = null;
+        StateHasChanged();
+        try
+        {
+            var coords = await JS.InvokeAsync<GeoCoords>("benGetCurrentPosition");
+            _fromLat     = coords.Latitude;
+            _fromLon     = coords.Longitude;
+            _fromAddress = "My current location";
+            _fromMarkers = [new MapMarker { LatLng = [_fromLat.Value, _fromLon.Value], Title = "Start" }];
+        }
+        catch (JSException ex) when (ex.Message.Contains("denied") || ex.Message.Contains("not supported"))
+        {
+            _errorMessage = "Location access was denied or not supported.";
+        }
+        catch
+        {
+            _errorMessage = "Could not get current location.";
+        }
+        finally { _locating = false; }
+        StateHasChanged();
+    }
+
+    // ── Route ─────────────────────────────────────────────────────────────────
+
+    private async Task GetRouteAsync()
+    {
+        if (_fromLat is null || _fromLon is null) { _errorMessage = "Enter or locate a starting address first."; return; }
+        _loading      = true;
+        _errorMessage = null;
+        _result       = null;
+        _routeGeoJson = null;
+        StateHasChanged();
+
+        try
+        {
+            _result = await AdminClient.GetDirectionsAsync(_fromLat.Value, _fromLon.Value, _toLat, _toLon);
+            if (_result is null) { _errorMessage = "Could not retrieve route. Please try again."; return; }
+
+            _routeGeoJson = _result.RouteGeoJson;
+
+            // Centre map on midpoint of route bounding box
+            if (_result.RoutePoints.Count > 0)
+            {
+                var minLat = _result.RoutePoints.Min(p => p.Lat);
+                var maxLat = _result.RoutePoints.Max(p => p.Lat);
+                var minLon = _result.RoutePoints.Min(p => p.Lon);
+                var maxLon = _result.RoutePoints.Max(p => p.Lon);
+                _mapCenter = [(minLat + maxLat) / 2, (minLon + maxLon) / 2];
+                _mapZoom   = CalcZoom(maxLat - minLat, maxLon - minLon);
+            }
+        }
+        catch { _errorMessage = "Routing service error. Please try again."; }
+        finally { _loading = false; }
+        StateHasChanged();
+    }
+
+    // ── Actions ───────────────────────────────────────────────────────────────
+
+    private void OpenInMaps()
+    {
+        var from = _fromLat.HasValue
+            ? $"{_fromLat.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)},{_fromLon!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+            : "My+Location";
+        var to = $"{_toLat.ToString(System.Globalization.CultureInfo.InvariantCulture)},{_toLon.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+        var url = $"https://www.google.com/maps/dir/?api=1&origin={from}&destination={to}&travelmode=driving";
+        _ = JS.InvokeVoidAsync("open", url, "_blank");
+    }
+
+    private async Task PrintAsync() => await JS.InvokeVoidAsync("printDirections");
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static string MapHeightFrom(string windowHeight)
+    {
+        if (windowHeight.EndsWith("px", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(windowHeight.AsSpan(0, windowHeight.Length - 2), out var px))
+            return $"{Math.Max(200, px - 280)}px";
+        return "300px";
+    }
+
+    private static double CalcZoom(double dLat, double dLon)
+    {
+        var d = Math.Max(dLat, dLon);
+        if (d <= 0) return 13;
+        var z = Math.Log2(160.0 / d);
+        return Math.Clamp(z, 4, 16);
+    }
+
+    private static string FormatDuration(double minutes)
+    {
+        var h = (int)(minutes / 60);
+        var m = (int)(minutes % 60);
+        return h > 0 ? $"{h} hr {m} min" : $"{m} min";
+    }
+
+    private sealed record GeoCoords(double Latitude, double Longitude);
+    private sealed record MapMarker { public double[] LatLng { get; init; } = []; public string Title { get; init; } = ""; }
+}

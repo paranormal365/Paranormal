@@ -661,4 +661,14 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<bool> RemoveMyVoteAsync(Guid fileId, CancellationToken token = default)
         => _api.RemoveMyVoteAsync(fileId, token);
+
+    // ── Directions ────────────────────────────────────────────────────────────
+    public Task<DirectionsResult?> GetDirectionsAsync(double fromLat, double fromLon, double toLat, double toLon, CancellationToken token = default)
+    {
+        var fLat = fromLat.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
+        var fLon = fromLon.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
+        var tLat = toLat.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
+        var tLon = toLon.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
+        return _api.GetAsync<DirectionsResult>($"/api/directions?fromLat={fLat}&fromLon={fLon}&toLat={tLat}&toLon={tLon}", token);
+    }
 }

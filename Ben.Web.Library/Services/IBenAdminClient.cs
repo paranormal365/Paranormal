@@ -406,6 +406,9 @@ public interface IBenAdminClient
 
     /// <summary>Removes the current user's vote. No-op if the user has not voted.</summary>
     Task<bool> RemoveMyVoteAsync(Guid fileId, CancellationToken token = default);
+
+    // ── Directions ────────────────────────────────────────────────────────────
+    Task<DirectionsResult?> GetDirectionsAsync(double fromLat, double fromLon, double toLat, double toLon, CancellationToken token = default);
 }
 
 /// <summary>
@@ -651,3 +654,14 @@ public sealed record PagePermissionCreateRequest(Guid? AppUserId, Guid? OrgMembe
 
 /// <summary>Org membership row from GET /api/organizations/{orgId}/security/users.</summary>
 public sealed record OrgMembershipItem(Guid MembershipId, Guid AppUserId, OrganizationMemberRole Role, bool IsActive);
+
+public sealed record DirectionsResult(
+    string RouteGeoJson,
+    IReadOnlyList<RoutePoint> RoutePoints,
+    double TotalDistanceMiles,
+    double TotalDurationMinutes,
+    IReadOnlyList<RouteStep> Steps);
+
+public sealed record RoutePoint(double Lat, double Lon);
+
+public sealed record RouteStep(string Instruction, double DistanceMiles, double DurationSeconds);

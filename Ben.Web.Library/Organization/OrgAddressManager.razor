@@ -215,14 +215,14 @@ else
     {
         _errorMessage = null;
 
-        if (string.IsNullOrWhiteSpace(_addrState.StreetAddress1) || string.IsNullOrWhiteSpace(_addrState.City))
-        {
-            _errorMessage = "Street Address and City are required.";
-            return;
-        }
         if (_formAddressTypeId == Guid.Empty)
         {
             _errorMessage = "Address type is required.";
+            return;
+        }
+        if (_addrFields is not null && !_addrFields.IsValid)
+        {
+            _errorMessage = _addrFields.ValidationMessage;
             return;
         }
 
