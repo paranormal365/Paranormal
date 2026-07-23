@@ -16,11 +16,13 @@ public sealed class UploadFileRegionNoteController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;
+    private readonly IAuditLogService _auditLog;
 
-    public UploadFileRegionNoteController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper)
+    public UploadFileRegionNoteController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper, IAuditLogService auditLog)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
+        _auditLog = auditLog;
     }
 
     [HttpGet]
@@ -75,6 +77,7 @@ public sealed class UploadFileRegionNoteController : BenControllerBase
         };
         db.UploadFileRegionNotes.Add(entity);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileRegionNote), entity.Id, entity, userId, AppSources.WebApi, ct));
         return CreatedAtAction(nameof(GetById), new { fileId, noteId = entity.Id },
             _mapper.Map<UploadFileRegionNoteRecord>(entity));
     }
@@ -87,18 +90,19 @@ public sealed class UploadFileRegionNoteController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var before = await db.UploadFileRegionNotes.AsNoTracking()
+            .FirstOrDefaultAsync(n => n.Id == noteId && n.UploadFileId == fileId, ct);
+        if (before is null) return NotFound();
         var entity = await db.UploadFileRegionNotes
             .FirstOrDefaultAsync(n => n.Id == noteId && n.UploadFileId == fileId, ct);
-        if (entity is null) return NotFound();
 
-        entity.TimeOffset         = request.TimeOffset;
+        entity!.TimeOffset         = request.TimeOffset;
         entity.NoteHtml           = request.NoteHtml;
         entity.IsPublic           = request.IsPublic;
         entity.DateUpdated        = DateTime.UtcNow;
         entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
 
-        await db.SaveChangesAsync(ct);
-        return Ok(_mapper.Map<UploadFileRegionNoteRecord>(entity));
+        await db.SaveChangesAsync(ct);        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileRegionNote), noteId, before, entity, userId, AppSources.WebApi, ct));        return Ok(_mapper.Map<UploadFileRegionNoteRecord>(entity));
     }
 
     [HttpDelete("{noteId:guid}")]
@@ -110,6 +114,7 @@ public sealed class UploadFileRegionNoteController : BenControllerBase
         if (entity is null) return NotFound();
         db.UploadFileRegionNotes.Remove(entity);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFileRegionNote), noteId, entity, GetCurrentUserId(), AppSources.WebApi, ct));
         return NoContent();
     }
 }

@@ -50,7 +50,7 @@ public class UploadFilePermissionRequestControllerTests
     private static UploadFilePermissionRequestController Build(
         IDbContextFactory<BenDataContext> factory)
     {
-        var ctrl = new UploadFilePermissionRequestController(factory, CreateMapper());
+        var ctrl = new UploadFilePermissionRequestController(factory, CreateMapper(), new Mock<IAuditLogService>().Object);
         ctrl.ControllerContext = new ControllerContext
             { HttpContext = new DefaultHttpContext() };
         return ctrl;

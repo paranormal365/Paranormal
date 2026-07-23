@@ -61,7 +61,7 @@ public class UploadFileShareControllerTests
 
     private static UploadFileShareController Build(IDbContextFactory<BenDataContext> factory)
     {
-        var ctrl = new UploadFileShareController(factory, CreateMapper());
+        var ctrl = new UploadFileShareController(factory, CreateMapper(), new Mock<IAuditLogService>().Object);
         ctrl.ControllerContext = new ControllerContext
             { HttpContext = new DefaultHttpContext() };
         return ctrl;

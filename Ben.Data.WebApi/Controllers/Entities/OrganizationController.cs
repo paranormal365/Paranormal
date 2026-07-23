@@ -18,16 +18,19 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
     private readonly IMapper _mapper2;
     private readonly IOrganizationSecurityService _security;
+    private readonly IAuditLogService _auditLog;
 
     public OrganizationController(
         IDbContextFactory<BenDataContext> dbContextFactory,
         IMapper mapper,
-        IOrganizationSecurityService security)
+        IOrganizationSecurityService security,
+        IAuditLogService auditLog)
         : base(dbContextFactory, mapper)
     {
         _dbFactory = dbContextFactory;
         _mapper2   = mapper;
         _security  = security;
+        _auditLog  = auditLog;
     }
 
     // ── Suppress base read-only GET endpoints ─────────────────────────────────
@@ -115,16 +118,18 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         if (string.IsNullOrWhiteSpace(request.UrlName)) return BadRequest("UrlName is required.");
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var before = await db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.Id == id, ct);
+        if (before is null) return NotFound();
         var org = await db.Organizations.FirstOrDefaultAsync(o => o.Id == id, ct);
-        if (org is null) return NotFound();
 
-        org.Name                   = request.Name.Trim();
+        org!.Name                   = request.Name.Trim();
         org.UrlName                = request.UrlName.Trim().ToLowerInvariant();
         org.IsAcceptingApplications = request.IsAcceptingApplications;
         org.DateUpdated            = DateTime.UtcNow;
         org.UpdatedByAppUserId     = userId.Value;
 
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Organization), id, before, org!, GetCurrentUserId(), AppSources.WebApi, ct));
         return Ok(_mapper2.Map<OrganizationAdminRecord>(org));
     }
 
@@ -148,6 +153,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
 
         db.Organizations.Remove(org);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(Organization), id, org, GetCurrentUserId(), AppSources.WebApi, ct));
         return NoContent();
     }
 
@@ -180,6 +186,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
 
         db.Organizations.Add(org);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi, ct));
 
         return CreatedAtAction(nameof(GetByIdWithPermissions), new { id = org.Id },
             _mapper2.Map<OrganizationAdminRecord>(org));

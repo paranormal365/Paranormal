@@ -23,15 +23,18 @@ public sealed class OrganizationAddressMapConfigController : ControllerBase
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
     private readonly IMapper _mapper;
     private readonly IOrganizationSecurityService _security;
+    private readonly IAuditLogService _auditLog;
 
     public OrganizationAddressMapConfigController(
         IDbContextFactory<BenDataContext> dbFactory,
         IMapper mapper,
-        IOrganizationSecurityService security)
+        IOrganizationSecurityService security,
+        IAuditLogService auditLog)
     {
         _dbFactory = dbFactory;
         _mapper    = mapper;
         _security  = security;
+        _auditLog  = auditLog;
     }
 
     private Guid? CurrentUserId()
@@ -93,6 +96,8 @@ public sealed class OrganizationAddressMapConfigController : ControllerBase
                 a => a.Id == addressId && a.OrganizationId == orgId, ct))
             return NotFound("Address not found in this organization.");
 
+        var cfgBefore = await db.OrganizationAddressMapConfigs.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.OrganizationAddressId == addressId, ct);
         var cfg = await db.OrganizationAddressMapConfigs
             .FirstOrDefaultAsync(c => c.OrganizationAddressId == addressId, ct);
 
@@ -127,6 +132,10 @@ public sealed class OrganizationAddressMapConfigController : ControllerBase
         cfg.RegionStrokeWidth   = Math.Max(0.0, request.RegionStrokeWidth);
 
         await db.SaveChangesAsync(ct);
+        if (cfgBefore is null)
+            _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationAddressMapConfig), cfg.Id, cfg, userId.Value, AppSources.WebApi, ct));
+        else
+            _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationAddressMapConfig), cfg.Id, cfgBefore, cfg, userId.Value, AppSources.WebApi, ct));
         return Ok(_mapper.Map<AddressMapConfigRecord>(cfg));
     }
 
@@ -154,7 +163,14 @@ public sealed class OrganizationAddressMapConfigController : ControllerBase
 
         db.OrganizationAddressMapConfigs.Remove(cfg);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationAddressMapConfig), cfg.Id, cfg, userId!.Value, AppSources.WebApi, ct));
         return NoContent();
+    }
+
+    private static async Task TryAuditAsync(Task auditTask)
+    {
+        try { await auditTask; }
+        catch { /* audit failure must not surface to the caller */ }
     }
 }
 

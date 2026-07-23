@@ -13,11 +13,17 @@ namespace Ben.Data.WebApi.Controllers.Cms;
 [Route("api/organizations/{orgId:guid}/logos")]
 public sealed class OrganizationLogoController : OrgCmsControllerBase
 {
+    private readonly IAuditLogService _auditLog;
+
     public OrganizationLogoController(
         IDbContextFactory<BenDataContext> dbFactory,
         IMapper mapper,
-        IOrganizationSecurityService security)
-        : base(dbFactory, mapper, security) { }
+        IOrganizationSecurityService security,
+        IAuditLogService auditLog)
+        : base(dbFactory, mapper, security)
+    {
+        _auditLog = auditLog;
+    }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<OrganizationLogoRecord>>> GetAll(
@@ -75,6 +81,7 @@ public sealed class OrganizationLogoController : OrgCmsControllerBase
 
         db.OrganizationLogos.Add(logo);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationLogo), logo.Id, logo, userId.Value, AppSources.WebApi, ct));
         return CreatedAtAction(nameof(GetAll), new { orgId }, Mapper.Map<OrganizationLogoRecord>(logo));
     }
 
@@ -88,11 +95,13 @@ public sealed class OrganizationLogoController : OrgCmsControllerBase
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var before = await db.OrganizationLogos.AsNoTracking()
+            .FirstOrDefaultAsync(l => l.Id == logoId && l.OrganizationId == orgId, ct);
+        if (before is null) return NotFound();
         var logo = await db.OrganizationLogos
             .FirstOrDefaultAsync(l => l.Id == logoId && l.OrganizationId == orgId, ct);
-        if (logo is null) return NotFound();
 
-        if (request.IsActive && !logo.IsActive)
+        if (request.IsActive && !logo!.IsActive)
         {
             var others = await db.OrganizationLogos
                 .Where(l => l.OrganizationId == orgId && l.IsActive && l.Id != logoId)
@@ -100,13 +109,14 @@ public sealed class OrganizationLogoController : OrgCmsControllerBase
             foreach (var o in others) o.IsActive = false;
         }
 
-        logo.AltText            = request.AltText?.Trim();
+        logo!.AltText            = request.AltText?.Trim();
         logo.IsActive           = request.IsActive;
         logo.SortOrder          = request.SortOrder;
         logo.DateUpdated        = DateTime.UtcNow;
         logo.UpdatedByAppUserId = userId.Value;
 
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationLogo), logoId, before, logo, userId.Value, AppSources.WebApi, ct));
         return Ok(Mapper.Map<OrganizationLogoRecord>(logo));
     }
 
@@ -125,6 +135,7 @@ public sealed class OrganizationLogoController : OrgCmsControllerBase
 
         db.OrganizationLogos.Remove(logo);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationLogo), logoId, logo, userId.Value, AppSources.WebApi, ct));
         return NoContent();
     }
 }

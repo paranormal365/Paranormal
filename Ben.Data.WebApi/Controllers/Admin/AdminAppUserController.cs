@@ -15,6 +15,7 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
     private readonly IMapper _mapper;
     private readonly UserManager<AppUser> _userManager;
+    private readonly IAuditLogService _auditLog;
 
     public AdminAppUserController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper,
         IAuditLogService auditLog, UserManager<AppUser> userManager)
@@ -23,6 +24,7 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         _dbFactory   = dbContextFactory;
         _mapper      = mapper;
         _userManager = userManager;
+        _auditLog    = auditLog;
     }
 
     /// <summary>Suppresses the base Create(TEntity) route — use CreateUser instead.</summary>
@@ -95,10 +97,11 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         Guid id, [FromBody] AdminUpdateUserProfileRequest request, CancellationToken ct)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var before = await db.AppUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (before is null) return NotFound();
         var user = await db.AppUsers.FirstOrDefaultAsync(u => u.Id == id, ct);
-        if (user is null) return NotFound();
 
-        user.DisplayName          = request.DisplayName;
+        user!.DisplayName          = request.DisplayName;
         user.UserName             = request.UserName ?? user.UserName;
         user.NormalizedUserName   = request.UserName?.ToUpperInvariant() ?? user.NormalizedUserName;
         user.Email                = request.Email ?? user.Email;
@@ -112,6 +115,7 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         user.DateUpdated          = request.DateUpdated;
 
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(AppUser), id, before, user!, GetCurrentUserId(), AppSources.WebApi, ct));
         return Ok(_mapper.Map<AppUserAdminRecord>(user));
     }
 }

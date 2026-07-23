@@ -12,12 +12,14 @@ public sealed class AdminOrganizationController : AdminEntityControllerBase<Orga
 {
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
     private readonly IMapper _mapper;
+    private readonly IAuditLogService _auditLog;
 
     public AdminOrganizationController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper, IAuditLogService auditLog)
         : base(dbContextFactory, mapper, auditLog)
     {
         _dbFactory = dbContextFactory;
         _mapper    = mapper;
+        _auditLog  = auditLog;
     }
 
     /// <summary>Suppresses the base Create(Organization entity) route — use CreateOrganization instead.</summary>
@@ -52,6 +54,7 @@ public sealed class AdminOrganizationController : AdminEntityControllerBase<Orga
 
         db.Organizations.Add(org);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi, ct));
 
         return CreatedAtAction(nameof(GetById), new { id = org.Id }, _mapper.Map<OrganizationAdminRecord>(org));
     }

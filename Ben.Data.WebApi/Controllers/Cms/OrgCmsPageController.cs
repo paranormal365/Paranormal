@@ -13,11 +13,17 @@ namespace Ben.Data.WebApi.Controllers.Cms;
 [Route("api/organizations/{orgId:guid}/pages")]
 public sealed class OrgCmsPageController : OrgCmsControllerBase
 {
+    private readonly IAuditLogService _auditLog;
+
     public OrgCmsPageController(
         IDbContextFactory<BenDataContext> dbFactory,
         IMapper mapper,
-        IOrganizationSecurityService security)
-        : base(dbFactory, mapper, security) { }
+        IOrganizationSecurityService security,
+        IAuditLogService auditLog)
+        : base(dbFactory, mapper, security)
+    {
+        _auditLog = auditLog;
+    }
 
     // ── GET /api/organizations/{orgId}/pages ─────────────────────────────────
 
@@ -124,6 +130,7 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
 
         db.OrganizationPages.Add(page);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationPage), page.Id, page, userId.Value, AppSources.WebApi, ct));
 
         return CreatedAtAction(nameof(GetById), new { orgId, pageId = page.Id },
             new CmsPageDetailResponse(page.Id, page.OrganizationId, page.ParentPageId,
@@ -148,9 +155,12 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
 
+        var before = await db.OrganizationPages.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == pageId && p.OrganizationId == orgId, ct);
+        if (before is null) return NotFound();
+
         var page = await db.OrganizationPages
             .FirstOrDefaultAsync(p => p.Id == pageId && p.OrganizationId == orgId, ct);
-        if (page is null) return NotFound();
 
         var urlName = request.UrlName.Trim().ToLowerInvariant();
         if (page.UrlName != urlName && await db.OrganizationPages.AnyAsync(
@@ -161,7 +171,7 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
         if (request.ParentPageId == pageId)
             return BadRequest("A page cannot be its own parent.");
 
-        page.PageTitle          = request.PageTitle.Trim();
+        page!.PageTitle          = request.PageTitle.Trim();
         page.UrlName            = urlName;
         page.PageHtml           = request.PageHtml ?? string.Empty;
         page.IsPublished        = request.IsPublished;
@@ -172,6 +182,7 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
         page.UpdatedByAppUserId = userId.Value;
 
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationPage), pageId, before, page!, userId.Value, AppSources.WebApi, ct));
 
         var sectionCount = await db.CmsSections.CountAsync(s => s.OrganizationPageId == pageId, ct);
         return Ok(new CmsPageDetailResponse(page.Id, page.OrganizationId, page.ParentPageId,
@@ -204,6 +215,7 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
 
         db.OrganizationPages.Remove(page);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationPage), pageId, page, userId.Value, AppSources.WebApi, ct));
         return NoContent();
     }
 }

@@ -62,7 +62,7 @@ public class OrganizationControllerTests
         securityMock ??= new Mock<IOrganizationSecurityService>();
         mapperMock   ??= CreateMapperMock();
 
-        var controller = new OrganizationController(factory, mapperMock.Object, securityMock.Object);
+        var controller = new OrganizationController(factory, mapperMock.Object, securityMock.Object, new Mock<IAuditLogService>().Object);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = principal ?? AnonymousPrincipal() }

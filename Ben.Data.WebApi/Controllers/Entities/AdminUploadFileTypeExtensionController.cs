@@ -15,11 +15,13 @@ public sealed class AdminUploadFileTypeExtensionController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;
+    private readonly IAuditLogService _auditLog;
 
-    public AdminUploadFileTypeExtensionController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper)
+    public AdminUploadFileTypeExtensionController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper, IAuditLogService auditLog)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
+        _auditLog = auditLog;
     }
 
     [HttpGet("{id:guid}")]
@@ -53,6 +55,7 @@ public sealed class AdminUploadFileTypeExtensionController : BenControllerBase
 
         db.UploadFileTypeExtensions.Add(entity);
         await db.SaveChangesAsync(cancellationToken);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileTypeExtension), entity.Id, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
 
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, _mapper.Map<UploadFileTypeExtensionRecord>(entity));
     }
@@ -65,12 +68,13 @@ public sealed class AdminUploadFileTypeExtensionController : BenControllerBase
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
+        var before = await db.UploadFileTypeExtensions.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+        if (before is null) return NotFound();
         var entity = await db.UploadFileTypeExtensions.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
-        if (entity is null)
-            return NotFound();
 
-        entity.Pattern = request.Pattern.Trim().ToLowerInvariant();
+        entity!.Pattern = request.Pattern.Trim().ToLowerInvariant();
         await db.SaveChangesAsync(cancellationToken);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileTypeExtension), id, before, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
 
         return Ok(_mapper.Map<UploadFileTypeExtensionRecord>(entity));
     }
@@ -85,6 +89,7 @@ public sealed class AdminUploadFileTypeExtensionController : BenControllerBase
 
         db.UploadFileTypeExtensions.Remove(entity);
         await db.SaveChangesAsync(cancellationToken);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFileTypeExtension), id, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
         return NoContent();
     }
 }

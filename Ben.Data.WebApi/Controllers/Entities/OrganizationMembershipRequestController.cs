@@ -19,15 +19,18 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
     private readonly IMapper _mapper;
     private readonly IOrganizationSecurityService _security;
+    private readonly IAuditLogService _auditLog;
 
     public OrganizationMembershipRequestController(
         IDbContextFactory<BenDataContext> dbFactory,
         IMapper mapper,
-        IOrganizationSecurityService security)
+        IOrganizationSecurityService security,
+        IAuditLogService auditLog)
     {
         _dbFactory = dbFactory;
         _mapper    = mapper;
         _security  = security;
+        _auditLog  = auditLog;
     }
 
     private Guid? CurrentUserId()
@@ -134,6 +137,7 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
 
         db.OrganizationMembershipRequests.Add(membershipRequest);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationMembershipRequest), membershipRequest.Id, membershipRequest, membershipRequest.AppUserId, AppSources.WebApi, ct));
 
         var created = await db.OrganizationMembershipRequests
             .Include(r => r.Organization)
@@ -171,6 +175,9 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var before = await db.OrganizationMembershipRequests.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == id && r.OrganizationId == orgId, ct);
 
         var membershipRequest = await db.OrganizationMembershipRequests
             .Include(r => r.Organization)
@@ -241,6 +248,7 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         });
 
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationMembershipRequest), id, before!, membershipRequest, userId.Value, AppSources.WebApi, ct));
 
         var updated = await db.OrganizationMembershipRequests
             .Include(r => r.Organization)
@@ -264,6 +272,9 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
+        var before = await db.OrganizationMembershipRequests.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == id && r.OrganizationId == orgId, ct);
+
         var request = await db.OrganizationMembershipRequests
             .FirstOrDefaultAsync(r => r.Id == id && r.OrganizationId == orgId, ct);
 
@@ -278,7 +289,14 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         request.UpdatedByAppUserId = userId.Value;
 
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationMembershipRequest), id, before!, request, userId.Value, AppSources.WebApi, ct));
         return NoContent();
+    }
+
+    private static async Task TryAuditAsync(Task auditTask)
+    {
+        try { await auditTask; }
+        catch { /* audit failure must not surface to the caller */ }
     }
 }
 
