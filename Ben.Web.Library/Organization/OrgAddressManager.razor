@@ -236,7 +236,9 @@ else
             _addrState.ZipCode.Trim(),
             _addrState.Country.Trim(),
             _formIsPublic,
-            _formSortOrder);
+            _formSortOrder,
+            _addrState.Latitude,    // pass preview coords so server skips re-geocoding
+            _addrState.Longitude);
 
         var saved = _editId.HasValue
             ? await AdminClient.UpdateOrgAddressAsync(OrgId, _editId.Value, request)

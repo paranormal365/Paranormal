@@ -118,13 +118,17 @@
     {
         if (latitude is null || longitude is null || (latitude == 0 && longitude == 0))
         {
-            _hasPreview = false;
+            _hasPreview       = false;
+            State.Latitude    = null;
+            State.Longitude   = null;
         }
         else
         {
-            _previewLat = latitude.Value;
-            _previewLon = longitude.Value;
-            _hasPreview = true;
+            _previewLat       = latitude.Value;
+            _previewLon       = longitude.Value;
+            _hasPreview       = true;
+            State.Latitude    = (decimal)latitude.Value;
+            State.Longitude   = (decimal)longitude.Value;
         }
         StateHasChanged();
     }
@@ -136,9 +140,11 @@
     /// </summary>
     public void ResetPreview()
     {
-        _hasPreview = false;
+        _hasPreview       = false;
+        State.Latitude    = null;
+        State.Longitude   = null;
         _geocodeCts?.Cancel();
-        _geocoding  = false;
+        _geocoding        = false;
         StateHasChanged();
     }
 
@@ -192,9 +198,11 @@
 
             if (result?.Latitude is not null && result.Longitude is not null)
             {
-                _previewLat = (double)result.Latitude;
-                _previewLon = (double)result.Longitude;
-                _hasPreview = true;
+                _previewLat    = (double)result.Latitude;
+                _previewLon    = (double)result.Longitude;
+                _hasPreview    = true;
+                State.Latitude  = result.Latitude;
+                State.Longitude = result.Longitude;
             }
             // No result → keep showing the last known pin rather than
             // snapping back to world view. The user may just be mid-edit.
@@ -242,9 +250,11 @@
             if (!string.IsNullOrWhiteSpace(result.Country))        State.Country        = result.Country;
 
             // Show the pin at the GPS coordinates immediately (no need to geocode again)
-            _previewLat = coords.Latitude;
-            _previewLon = coords.Longitude;
-            _hasPreview = true;
+            _previewLat     = coords.Latitude;
+            _previewLon     = coords.Longitude;
+            _hasPreview     = true;
+            State.Latitude  = (decimal)coords.Latitude;
+            State.Longitude = (decimal)coords.Longitude;
 
             await OnChanged.InvokeAsync();
         }

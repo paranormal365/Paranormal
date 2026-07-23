@@ -29,6 +29,10 @@ public sealed class AdminUserAddressController : AdminEntityControllerBase<UserA
 
     private static async Task ApplyGeocodingAsync(UserAddress entity, CancellationToken cancellationToken)
     {
+        // If the client already resolved coordinates (from the live preview), use them as-is.
+        if (entity.Latitude.HasValue && entity.Longitude.HasValue)
+            return;
+
         var result = await AddressGeocodingService.TryResolveCoordinatesAsync(
             entity.StreetAddress1, entity.StreetAddress2,
             entity.City, entity.State, entity.ZipCode, entity.Country, cancellationToken);

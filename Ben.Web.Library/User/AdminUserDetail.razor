@@ -749,7 +749,8 @@ else
         {
             case "address":
                 var areq = new UserAddressUpsertRequest(_addr.TypeId, _addrState.StreetAddress1, _addrState.StreetAddress2,
-                    _addrState.City, _addrState.State, _addrState.ZipCode, _addrState.Country, _addr.IsPublic);
+                    _addrState.City, _addrState.State, _addrState.ZipCode, _addrState.Country, _addr.IsPublic,
+                    Latitude: _addrState.Latitude, Longitude: _addrState.Longitude);
                 ok = _editingSubId == Guid.Empty
                     ? await AdminClient.CreateUserAddressAsync(UserId, actor, areq)
                     : await AdminClient.UpdateUserAddressAsync(_editingSubId, UserId, actor, areq);

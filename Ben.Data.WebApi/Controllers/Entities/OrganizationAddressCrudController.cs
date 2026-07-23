@@ -79,11 +79,15 @@ public sealed class OrganizationAddressCrudController : OrgCmsControllerBase
             Country                   = request.Country.Trim(),
             IsPublic                  = request.IsPublic,
             SortOrder                 = request.SortOrder,
+            Latitude                  = request.Latitude,    // use client coords if available
+            Longitude                 = request.Longitude,
             DateCreated               = DateTime.UtcNow,
             CreatedByAppUserId        = userId.Value
         };
 
-        await ApplyGeocodingAsync(entity, ct);
+        // Only geocode if the client didn't already resolve coordinates
+        if (!entity.Latitude.HasValue || !entity.Longitude.HasValue)
+            await ApplyGeocodingAsync(entity, ct);
 
         db.OrganizationAddresses.Add(entity);
         await db.SaveChangesAsync(ct);
@@ -120,10 +124,18 @@ public sealed class OrganizationAddressCrudController : OrgCmsControllerBase
         entity.Country                   = request.Country.Trim();
         entity.IsPublic                  = request.IsPublic;
         entity.SortOrder                 = request.SortOrder;
+        // Use client-provided coords if available; otherwise re-geocode
+        if (request.Latitude.HasValue && request.Longitude.HasValue)
+        {
+            entity.Latitude  = request.Latitude;
+            entity.Longitude = request.Longitude;
+        }
+        else
+        {
+            await ApplyGeocodingAsync(entity, ct);
+        }
         entity.DateUpdated               = DateTime.UtcNow;
         entity.UpdatedByAppUserId        = userId.Value;
-
-        await ApplyGeocodingAsync(entity, ct);
 
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationAddress), addressId, before, entity, userId.Value, AppSources.WebApi, ct));
@@ -176,4 +188,6 @@ public sealed record OrgAddressUpsertRequest(
     string ZipCode,
     string Country,
     bool   IsPublic,
-    int    SortOrder);
+    int    SortOrder,
+    decimal? Latitude  = null,
+    decimal? Longitude = null);

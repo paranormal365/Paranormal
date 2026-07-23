@@ -477,7 +477,9 @@ public sealed record OrgAddressUpsertRequest(
     string ZipCode,
     string Country,
     bool   IsPublic,
-    int    SortOrder);
+    int    SortOrder,
+    decimal? Latitude  = null,
+    decimal? Longitude = null);
 
 public sealed record GeocodingPreviewResponse(decimal? Latitude, decimal? Longitude, string? ResultType);
 
@@ -588,7 +590,9 @@ public sealed record UserAddressUpsertRequest(
     string ZipCode,
     string Country,
     bool IsPublic,
-    int SortOrder = 0);
+    int SortOrder = 0,
+    decimal? Latitude  = null,
+    decimal? Longitude = null);
 
 public sealed record UserEmailUpsertRequest(
     Guid UserEmailTypeId,

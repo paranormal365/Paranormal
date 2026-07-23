@@ -459,6 +459,7 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
             StreetAddress1 = req.StreetAddress1, StreetAddress2 = req.StreetAddress2,
             City = req.City, State = req.State, ZipCode = req.ZipCode, Country = req.Country,
             IsPublic = req.IsPublic, SortOrder = req.SortOrder,
+            Latitude = req.Latitude, Longitude = req.Longitude,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = actorId
         }, token)) is not null;
 
@@ -468,6 +469,7 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
             StreetAddress1 = req.StreetAddress1, StreetAddress2 = req.StreetAddress2,
             City = req.City, State = req.State, ZipCode = req.ZipCode, Country = req.Country,
             IsPublic = req.IsPublic, SortOrder = req.SortOrder,
+            Latitude = req.Latitude, Longitude = req.Longitude,
             DateCreated = DateTime.UtcNow, UpdatedByAppUserId = actorId
         }, token)) is not null;
 
