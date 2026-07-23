@@ -6,7 +6,7 @@
 ## Purpose
 
 Implements the repository pattern over `BenDataContext`.  
-Provides typed repository interfaces and concrete implementations for all 26 entities, plus business-logic services for organization security, audit logging, and geocoding.
+Provides typed repository interfaces and concrete implementations for all 45 entities, plus business-logic services for organization security, audit logging, and geocoding.
 
 ## Dependencies
 
@@ -27,5 +27,6 @@ Provides typed repository interfaces and concrete implementations for all 26 ent
 ## Key Design Decisions
 
 - **`IDbContextFactory<BenDataContext>`** is used everywhere (not `BenDataContext` directly) so each operation creates a short-lived, independent context — safe for concurrent requests.
+- **Repositories are read-only.** `IRepositoryBase<T>` exposes only query methods (`GetAllAsync`, `FindListAsync`, `FindOneAsync`, `GetByIdAsync`, `CountAllAsync`, `CountFindAsync`). All writes are performed directly in controllers via `IDbContextFactory<BenDataContext>`, keeping each controller action as its own unit of work.
 - **`OrganizationSecurityService`** implements **two** interfaces: `Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService` (used by controllers) and `Ben.Service.Security.Services.IOrganizationSecurityService` (used by the attribute layer). Both must be registered in DI.
 - **Audit failures are silently swallowed** in `AdminEntityControllerBase` — an audit log write failure never rolls back a successful entity operation.

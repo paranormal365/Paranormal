@@ -79,11 +79,21 @@ JSON serialisation uses `System.Text.Json` with `WriteIndented = false` and `Jso
 **File:** `Ben.Service.RepositoryService/Services/AddressGeocodingService.cs`
 
 ### Summary
-Converts a postal address to latitude/longitude coordinates using an external geocoding API.  
-Called when address entities are created or updated to populate the `Latitude` and `Longitude` columns.
+Converts a postal address to latitude/longitude coordinates by calling the Nominatim OpenStreetMap API.  
+Used by `AdminOrganizationAddressController` and `AdminUserAddressController` — geocoding is applied in the `Create` and `Update` controller overrides before delegating to `AdminEntityControllerBase`.
 
 ### Key Method
 
 | Method | Description |
 |---|---|
-| `GeocodeAddressAsync(streetAddress1, city, state, zipCode, country, token)` | Calls the geocoding API and returns `(double Lat, double Lng)?`. Returns `null` if any required field is blank or the API call fails. |
+| `TryResolveCoordinatesAsync(streetAddress1, streetAddress2, city, state, zipCode, country, CancellationToken)` | Fully async. Calls Nominatim, parses the first result. Returns a `GeocodingLookupResult` (never throws — geocoding failure returns `Empty` so address saves are not blocked). |
+
+### `GeocodingLookupResult` (public record)
+
+| Property | Type | Description |
+|---|---|---|
+| `Latitude` | `decimal?` | Null if geocoding failed or address was incomplete. |
+| `Longitude` | `decimal?` | Null if geocoding failed or address was incomplete. |
+| `RawResponseJson` | `string?` | Full Nominatim JSON response for debugging. |
+| `ResultType` | `string?` | Nominatim result type string (e.g. `"house"`, `"postcode"`). |
+| `Empty` | static | Sentinel with all null fields. |

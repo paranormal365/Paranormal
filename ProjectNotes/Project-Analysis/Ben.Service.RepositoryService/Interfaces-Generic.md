@@ -8,8 +8,10 @@
 **File:** [`Ben.Service.RepositoryService/GenericInterfaces/IRepositoryBase.cs`](../../../Ben.Service.RepositoryService/GenericInterfaces/IRepositoryBase.cs)
 
 ### Summary
-Generic repository contract providing standard query, create, update, and delete operations over a typed entity.  
+Generic repository contract providing standard **read-only** query operations over a typed entity.  
 All query methods accept a `trackChanges` flag — pass `false` for read-only operations (better performance) and `true` when the result will be modified.
+
+> **Write operations are not part of this interface.** All Create / Update / Delete work is performed directly in controllers via `IDbContextFactory<BenDataContext>`.
 
 ### Methods
 
@@ -27,9 +29,6 @@ All query methods accept a `trackChanges` flag — pass `false` for read-only op
 | `FindOneAsync(predicate, bool, CancellationToken)` | `T?` | First entity matching predicate. |
 | `FindOneAsync(predicate, Expression[]?, bool, CancellationToken)` | `T?` | First matching entity with includes. |
 | `FindOneAsync(predicate, bool, bool, CancellationToken)` | `T?` | First matching with all-navigations. |
-| `Create(T)` | `void` | Stages entity for insertion. No save — call `SaveChanges` on `IRepositoryManager`. |
-| `Update(T)` | `void` | Stages entity for update. |
-| `Delete(Guid)` | `void` | Stages entity for deletion by PK. |
 | `CountAllAsync(CancellationToken)` | `int` | Total row count. |
 | `CountFindAsync(predicate, CancellationToken)` | `int` | Count of rows matching predicate. |
 
@@ -41,16 +40,12 @@ All query methods accept a `trackChanges` flag — pass `false` for read-only op
 **File:** `Ben.Service.RepositoryService/GenericInterfaces/IRepositoryManager.cs`
 
 ### Summary
-Unit-of-work interface that exposes all typed entity repositories and a shared `SaveChangesAsync` method.  
-`RepositoryManager` is the concrete implementation — registered as `Scoped` in DI so all repositories within a single request share the same `BenDataContext`.
+Exposes the two sub-managers. No `SaveChangesAsync` — each repository owns its own short-lived context.
 
 ### Properties (repositories)
 
-Each property returns the typed repository for one entity:  
-`AppUser`, `Organization`, `OrganizationAddress`, `OrganizationAddressType`, `OrganizationEmail`, `OrganizationEmailType`, `OrganizationLink`, `OrganizationLinkType`, `OrganizationNote`, `OrganizationNoteType`, `OrganizationPage`, `OrganizationPhone`, `OrganizationPhoneType`, `UserAddress`, `UserAddressType`, `UserEmail`, `UserEmailType`, `UserLink`, `UserLinkType`, `UserMessage`, `UserMessageTo`, `UserMessageType`, `UserNote`, `UserNoteType`, `UserPhone`, `UserPhoneType`.
-
-### Methods
-`SaveChangesAsync(CancellationToken)` — persists all staged changes from all child repositories in a single transaction.
+Each property returns the typed sub-manager:
+`Organization` → `IOrganizationRepositoryManager`, `AppUser` → `IAppUserRepositoryManager`.
 
 ---
 

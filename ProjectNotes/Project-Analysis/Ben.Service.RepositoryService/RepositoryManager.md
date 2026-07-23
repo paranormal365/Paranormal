@@ -25,7 +25,7 @@ Shares a single `IDbContextFactory<BenDataContext>` that is passed down to every
 
 | Method | Notes |
 |---|---|
-| `SaveChangesAsync(CancellationToken)` | Currently throws `NotImplementedException`. Repositories use their own scoped contexts via `IDbContextFactory`. |
+| *(none)* | `SaveChangesAsync` was removed. Each repository creates its own short-lived context via `IDbContextFactory`; there is no shared unit-of-work. |
 
 ---
 
