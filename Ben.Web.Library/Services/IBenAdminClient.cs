@@ -192,6 +192,7 @@ public interface IBenAdminClient
     Task<OrganizationAddressRecord?> UpdateOrgAddressAsync(Guid orgId, Guid addressId, OrgAddressUpsertRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgAddressAsync(Guid orgId, Guid addressId, CancellationToken token = default);
     Task<GeocodingPreviewResponse?> PreviewGeocodingAsync(string streetAddress1, string? streetAddress2, string city, string state, string zipCode, string country, CancellationToken token = default);
+    Task<ReverseGeocodingResponse?> ReverseGeocodeAsync(double latitude, double longitude, CancellationToken token = default);
 
     // ── Public Org Pages (no auth required) ──────────────────────────────────
 
@@ -479,6 +480,13 @@ public sealed record OrgAddressUpsertRequest(
     int    SortOrder);
 
 public sealed record GeocodingPreviewResponse(decimal? Latitude, decimal? Longitude, string? ResultType);
+
+public sealed record ReverseGeocodingResponse(
+    string? StreetAddress1,
+    string? City,
+    string? State,
+    string? ZipCode,
+    string? Country);
 
 public sealed record OrgPublicHomeResponse(
     Guid OrgId, string OrgName, string OrgUrlName,

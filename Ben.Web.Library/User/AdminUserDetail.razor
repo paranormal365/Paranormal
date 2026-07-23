@@ -6,6 +6,7 @@
 
 @using System.Text.Json
 @using Ben.Web.Library.Manage.Audio
+@using Ben.Web.Library.Shared
 
 <PageTitle>SuperAdmin — User Detail</PageTitle>
 
@@ -277,28 +278,7 @@ else
                     </div>
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Street 1 <span class="text-danger">*</span></label>
-                    <TelerikTextBox @bind-Value="@_addr.StreetAddress1" Width="100%" />
-                </div>
-                <div class="col-12">
-                    <label class="form-label fw-semibold">Street 2</label>
-                    <TelerikTextBox @bind-Value="@_addr.StreetAddress2" Width="100%" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">City <span class="text-danger">*</span></label>
-                    <TelerikTextBox @bind-Value="@_addr.City" Width="100%" />
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label fw-semibold">State</label>
-                    <TelerikTextBox @bind-Value="@_addr.State" Width="100%" />
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label fw-semibold">Zip</label>
-                    <TelerikTextBox @bind-Value="@_addr.ZipCode" Width="100%" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Country</label>
-                    <TelerikTextBox @bind-Value="@_addr.Country" Width="100%" />
+                    <AddressFieldsWithMap @ref="_addrFields" State="@_addrState" />
                 </div>
                 <div class="col-md-6 d-flex align-items-center gap-2">
                     <TelerikCheckBox @bind-Value="@_addr.IsPublic" Id="addr-pub" />
@@ -579,7 +559,9 @@ else
     private Guid _editingSubId;
 
     // Per-type form models
-    private AddrForm  _addr = new();
+    private AddrForm  _addr      = new();
+    private AddressFieldsWithMap? _addrFields;
+    private AddressFieldsState    _addrState = new();
     private EmlForm   _eml  = new();
     private PhnForm   _phn  = new();
     private LnkForm   _lnk  = new();
@@ -691,6 +673,15 @@ else
                     StreetAddress2 = a.StreetAddress2, City = a.City, State = a.State,
                     ZipCode = a.ZipCode, Country = a.Country, IsPublic = a.IsPublic
                 };
+                _addrState = new AddressFieldsState
+                {
+                    StreetAddress1 = _addr.StreetAddress1 ?? "",
+                    StreetAddress2 = _addr.StreetAddress2,
+                    City           = _addr.City ?? "",
+                    State          = _addr.State ?? "",
+                    ZipCode        = _addr.ZipCode ?? "",
+                    Country        = _addr.Country ?? "US"
+                };
                 if (a is not null) _editingSubId = a.Id;
                 break;
             case "email":
@@ -749,8 +740,8 @@ else
         switch (_subEntityType)
         {
             case "address":
-                var areq = new UserAddressUpsertRequest(_addr.TypeId, _addr.StreetAddress1 ?? "", _addr.StreetAddress2,
-                    _addr.City ?? "", _addr.State ?? "", _addr.ZipCode ?? "", _addr.Country ?? "US", _addr.IsPublic);
+                var areq = new UserAddressUpsertRequest(_addr.TypeId, _addrState.StreetAddress1, _addrState.StreetAddress2,
+                    _addrState.City, _addrState.State, _addrState.ZipCode, _addrState.Country, _addr.IsPublic);
                 ok = _editingSubId == Guid.Empty
                     ? await AdminClient.CreateUserAddressAsync(UserId, actor, areq)
                     : await AdminClient.UpdateUserAddressAsync(_editingSubId, UserId, actor, areq);

@@ -42,9 +42,35 @@ public sealed class GeocodingController : ControllerBase
 
         return Ok(new GeocodingPreviewResponse(result.Latitude, result.Longitude, result.ResultType));
     }
+
+    /// <summary>
+    /// Reverse-geocodes a lat/lon pair into a structured postal address.
+    /// Used by the Blazor form's "Use my location" button.
+    /// </summary>
+    [HttpGet("reverse")]
+    public async Task<ActionResult<ReverseGeocodingResponse>> Reverse(
+        [FromQuery] double latitude,
+        [FromQuery] double longitude,
+        CancellationToken ct)
+    {
+        var result = await AddressGeocodingService.ReverseGeocodeAsync(latitude, longitude, ct);
+        return Ok(new ReverseGeocodingResponse(
+            result.StreetAddress1,
+            result.City,
+            result.State,
+            result.ZipCode,
+            result.Country));
+    }
 }
 
 public sealed record GeocodingPreviewResponse(
     decimal? Latitude,
     decimal? Longitude,
     string? ResultType);
+
+public sealed record ReverseGeocodingResponse(
+    string? StreetAddress1,
+    string? City,
+    string? State,
+    string? ZipCode,
+    string? Country);

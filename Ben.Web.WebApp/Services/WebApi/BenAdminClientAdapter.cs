@@ -234,6 +234,13 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         return _api.GetAsync<GeocodingPreviewResponse>($"/api/geocode/preview{qs}", token);
     }
 
+    public Task<ReverseGeocodingResponse?> ReverseGeocodeAsync(double latitude, double longitude, CancellationToken token = default)
+    {
+        var lat = latitude.ToString("G", System.Globalization.CultureInfo.InvariantCulture);
+        var lon = longitude.ToString("G", System.Globalization.CultureInfo.InvariantCulture);
+        return _api.GetAsync<ReverseGeocodingResponse>($"/api/geocode/reverse?latitude={lat}&longitude={lon}", token);
+    }
+
     // ── Public Org Pages (no auth required) ───────────────────────────────────
 
     public Task<OrgPublicHomeResponse?> GetPublicOrgAsync(string urlName, CancellationToken token = default)
