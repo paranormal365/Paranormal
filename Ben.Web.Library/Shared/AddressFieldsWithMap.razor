@@ -27,42 +27,45 @@
     }
 
     @* ── Address fields ──────────────────────────────────────────────────────── *@
+    @* ValueChanged fires on every keystroke so the map updates as the user types,
+       including after "Use my location" auto-fills a value that the user then edits.
+       The 700ms debounce inside TriggerGeocodingDebounce prevents excessive API calls. *@
     <div class="col-12">
-        <TelerikTextBox @bind-Value="@State.StreetAddress1"
+        <TelerikTextBox Value="@State.StreetAddress1"
+                        ValueChanged="@((string v) => SetField(v, s => s.StreetAddress1 = v))"
                         Width="100%"
-                        OnChange="@OnFieldChanged"
                         Placeholder="Street address, P.O. box" />
     </div>
     <div class="col-12">
         <label class="form-label">Street Address 2</label>
-        <TelerikTextBox @bind-Value="@State.StreetAddress2"
+        <TelerikTextBox Value="@State.StreetAddress2"
+                        ValueChanged="@((string v) => SetField(v, s => s.StreetAddress2 = v))"
                         Width="100%"
-                        OnChange="@OnFieldChanged"
                         Placeholder="Apt, suite, unit, building…" />
     </div>
     <div class="col-sm-5">
         <label class="form-label fw-semibold">City <span class="text-danger">*</span></label>
-        <TelerikTextBox @bind-Value="@State.City"
-                        Width="100%"
-                        OnChange="@OnFieldChanged" />
+        <TelerikTextBox Value="@State.City"
+                        ValueChanged="@((string v) => SetField(v, s => s.City = v))"
+                        Width="100%" />
     </div>
     <div class="col-sm-3">
         <label class="form-label fw-semibold">State <span class="text-danger">*</span></label>
-        <TelerikTextBox @bind-Value="@State.State"
-                        Width="100%"
-                        OnChange="@OnFieldChanged" />
+        <TelerikTextBox Value="@State.State"
+                        ValueChanged="@((string v) => SetField(v, s => s.State = v))"
+                        Width="100%" />
     </div>
     <div class="col-sm-4">
         <label class="form-label fw-semibold">ZIP <span class="text-danger">*</span></label>
-        <TelerikTextBox @bind-Value="@State.ZipCode"
-                        Width="100%"
-                        OnChange="@OnFieldChanged" />
+        <TelerikTextBox Value="@State.ZipCode"
+                        ValueChanged="@((string v) => SetField(v, s => s.ZipCode = v))"
+                        Width="100%" />
     </div>
     <div class="col-12">
         <label class="form-label fw-semibold">Country <span class="text-danger">*</span></label>
-        <TelerikTextBox @bind-Value="@State.Country"
-                        Width="100%"
-                        OnChange="@OnFieldChanged" />
+        <TelerikTextBox Value="@State.Country"
+                        ValueChanged="@((string v) => SetField(v, s => s.Country = v))"
+                        Width="100%" />
     </div>
 
     @* ── Live map preview ────────────────────────────────────────────────────── *@
@@ -126,7 +129,32 @@
         StateHasChanged();
     }
 
+    /// <summary>
+    /// Resets the map preview to the zoomed-out world view.
+    /// Call from the parent when opening a blank 'New Address' form so the
+    /// previous entry's pin is not carried over.
+    /// </summary>
+    public void ResetPreview()
+    {
+        _hasPreview = false;
+        _geocodeCts?.Cancel();
+        _geocoding  = false;
+        StateHasChanged();
+    }
+
     // ── Field change → debounce geocoding ────────────────────────────────────
+
+    /// <summary>
+    /// Updates a single field on State, notifies the parent, and starts the
+    /// geocoding debounce timer.  Used by ValueChanged on each address textbox
+    /// so the map responds on every keystroke — including after a programmatic
+    /// fill from "Use my location".
+    /// </summary>
+    private void SetField(string value, Action<AddressFieldsState> setter)
+    {
+        setter(State);
+        _ = OnFieldChanged();   // fire-and-forget so ValueChanged stays synchronous
+    }
 
     private async Task OnFieldChanged()
     {
@@ -146,7 +174,9 @@
             string.IsNullOrWhiteSpace(State.State) ||
             string.IsNullOrWhiteSpace(State.Country))
         {
-            _hasPreview = false;
+            // Keep the last known pin visible while the user is mid-edit.
+            // The map only resets to world view via ResetPreview() (called by
+            // the parent on a fresh 'New Address' form).
             return;
         }
 
@@ -166,10 +196,8 @@
                 _previewLon = (double)result.Longitude;
                 _hasPreview = true;
             }
-            else
-            {
-                _hasPreview = false;
-            }
+            // No result → keep showing the last known pin rather than
+            // snapping back to world view. The user may just be mid-edit.
         }
         catch (TaskCanceledException)
         {
@@ -177,7 +205,7 @@
         }
         catch
         {
-            _hasPreview = false;
+            // Keep last known pin on error — don't snap to world view.
         }
         finally
         {

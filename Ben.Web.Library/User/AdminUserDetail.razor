@@ -682,6 +682,8 @@ else
                     ZipCode        = _addr.ZipCode ?? "",
                     Country        = _addr.Country ?? "US"
                 };
+                if (a is null)
+                    _addrFields?.ResetPreview();   // new address — clear previous pin
                 if (a is not null) _editingSubId = a.Id;
                 break;
             case "email":
