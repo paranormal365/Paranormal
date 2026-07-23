@@ -48,4 +48,10 @@ public enum OrganizationSecurityTable
     MembershipRequests = 29,
     /// <summary>Grants access to manage organization-owned files.</summary>
     OrganizationFiles = 30,
+    /// <summary>Grants access to manage specific-member access lists on org addresses (SpecificMembers visibility).</summary>
+    OrganizationAddressMemberAccess = 31,
+    /// <summary>Grants access to configure address searchability and proximity search settings.</summary>
+    OrganizationAddressSearch = 32,
+    /// <summary>Grants access to manage org-level settings (ShowAddressMap, ShowAddressDirections, etc.).</summary>
+    OrganizationSettings = 33,
 }

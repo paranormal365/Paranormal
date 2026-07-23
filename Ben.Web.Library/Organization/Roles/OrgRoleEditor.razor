@@ -195,8 +195,11 @@ else if (_role is not null)
     private static readonly IReadOnlyList<PermissionSection> Sections =
     [
         new("Organization Settings",   OrganizationSecurityTable.Organization,            null),
+        new("Org Settings (Map/Dir)",   OrganizationSecurityTable.OrganizationSettings,    OrganizationSecurityTable.Organization),
         new("Addresses",               OrganizationSecurityTable.OrganizationAddress,     null),
         new("Address Types",           OrganizationSecurityTable.OrganizationAddressType, OrganizationSecurityTable.OrganizationAddress),
+        new("Address: Member Access",  OrganizationSecurityTable.OrganizationAddressMemberAccess, OrganizationSecurityTable.OrganizationAddress),
+        new("Address: Search Settings",OrganizationSecurityTable.OrganizationAddressSearch,       OrganizationSecurityTable.OrganizationAddress),
         new("Emails",                  OrganizationSecurityTable.OrganizationEmail,       null),
         new("Email Types",             OrganizationSecurityTable.OrganizationEmailType,   OrganizationSecurityTable.OrganizationEmail),
         new("Phones",                  OrganizationSecurityTable.OrganizationPhone,       null),

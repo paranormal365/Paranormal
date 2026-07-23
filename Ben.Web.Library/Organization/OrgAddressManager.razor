@@ -59,6 +59,42 @@ else
                         <TelerikDropDownList Data="@_visibilityOptions" @bind-Value="@_formVisibility"
                                              TextField="Label" ValueField="Value" Width="100%" />
                     </div>
+                    @if (_formVisibility == OrganizationAddressVisibility.SpecificMembers && _editId.HasValue)
+                    {
+                        <div class="col-12 mt-1">
+                            <label class="form-label fw-semibold small">Specific member access</label>
+                            <div class="border rounded p-2" style="max-height:160px; overflow-y:auto;">
+                                @if (_memberAccessList.Any())
+                                {
+                                    @foreach (var item in _memberAccessList)
+                                    {
+                                        <div class="d-flex justify-content-between align-items-center py-1 border-bottom small">
+                                            <span class="font-monospace text-secondary">@item.OrganizationUserMembershipId.ToString()[..8]…</span>
+                                            <TelerikButton Icon="@SvgIcon.Trash"
+                                                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                                           Size="@ThemeConstants.Button.Size.Small"
+                                                           OnClick="@(async () => await RemoveMemberAccessAsync(item.Id))" />
+                                        </div>
+                                    }
+                                }
+                                else { <span class="text-muted small fst-italic">No members added yet.</span> }
+                            </div>
+                            <div class="d-flex gap-2 mt-2">
+                                <TelerikDropDownList Data="@_orgMembers"
+                                                     @bind-Value="@_selectedMembershipId"
+                                                     TextField="Display" ValueField="MembershipId"
+                                                     DefaultText="Select a member…"
+                                                     Width="100%" />
+                                <TelerikButton Icon="@SvgIcon.Plus"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                               OnClick="@AddMemberAccessAsync"
+                                               Enabled="@(_selectedMembershipId != Guid.Empty)">
+                                    Add
+                                </TelerikButton>
+                            </div>
+                        </div>
+                    }
                     <div class="col-sm-6">
                         <label class="form-label">Public display</label>
                         <TelerikDropDownList Data="@_displayModeOptions" @bind-Value="@_formPublicDisplayMode"
@@ -205,6 +241,13 @@ else
 
     private sealed record LabelValue<T>(string Label, T Value);
 
+    // ── SpecificMembers access list state ─────────────────────────────────────
+    private IReadOnlyList<OrganizationAddressMemberAccessRecord> _memberAccessList = [];
+    private IReadOnlyList<OrgMemberOption> _orgMembers = [];
+    private Guid _selectedMembershipId;
+
+    private sealed record OrgMemberOption(Guid MembershipId, string Display);
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     protected override async Task OnParametersSetAsync()
@@ -226,6 +269,35 @@ else
                              .ToList();
     }
 
+    // ── SpecificMembers helper methods ────────────────────────────────────────
+
+    private async Task LoadMemberAccessAsync()
+    {
+        if (_editId is null) { _memberAccessList = []; return; }
+        _memberAccessList = await AdminClient.GetAddressMemberAccessAsync(OrgId, _editId.Value);
+    }
+
+    private async Task LoadOrgMembersAsync()
+    {
+        var members = await AdminClient.GetOrganizationMembersAsync(OrgId);
+        _orgMembers = members.Select(m => new OrgMemberOption(m.MembershipId, $"{m.Role} — {m.AppUserId.ToString()[..8]}…")).ToList();
+    }
+
+    private async Task AddMemberAccessAsync()
+    {
+        if (_editId is null || _selectedMembershipId == Guid.Empty) return;
+        await AdminClient.AddAddressMemberAccessAsync(OrgId, _editId.Value, _selectedMembershipId);
+        await LoadMemberAccessAsync();
+        _selectedMembershipId = Guid.Empty;
+    }
+
+    private async Task RemoveMemberAccessAsync(Guid accessId)
+    {
+        if (_editId is null) return;
+        await AdminClient.RemoveAddressMemberAccessAsync(OrgId, _editId.Value, accessId);
+        await LoadMemberAccessAsync();
+    }
+
     // ── Form management ───────────────────────────────────────────────────────
 
     private async Task BeginCreate()
@@ -243,6 +315,8 @@ else
         _formSortOrder      = 0;
         _showForm           = true;
         _errorMessage       = null;
+        _memberAccessList   = [];
+        _selectedMembershipId = Guid.Empty;
         _addrFields?.ResetPreview();   // clear previous entry's pin
     }
 
@@ -275,6 +349,8 @@ else
         // Restore existing pin if available
         if (_addrFields is not null && address.Latitude.HasValue && address.Longitude.HasValue)
             _addrFields.InitPreview((double)address.Latitude.Value, (double)address.Longitude.Value);
+
+        await Task.WhenAll(LoadMemberAccessAsync(), LoadOrgMembersAsync());
     }
 
     private void CancelForm()

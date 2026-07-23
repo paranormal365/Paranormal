@@ -671,4 +671,21 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         var tLon = toLon.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
         return _api.GetAsync<DirectionsResult>($"/api/directions?fromLat={fLat}&fromLon={fLon}&toLat={tLat}&toLon={tLon}", token);
     }
+
+    // ── Org address member access ──────────────────────────────────────────────
+    public async Task<IReadOnlyList<OrganizationAddressMemberAccessRecord>> GetAddressMemberAccessAsync(Guid orgId, Guid addressId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrganizationAddressMemberAccessRecord>>($"/api/organizations/{orgId}/addresses/{addressId}/member-access", token);
+        return result ?? [];
+    }
+    public Task<OrganizationAddressMemberAccessRecord?> AddAddressMemberAccessAsync(Guid orgId, Guid addressId, Guid orgUserMembershipId, CancellationToken token = default)
+        => _api.PostAsync<AddAddressMemberAccessRequest, OrganizationAddressMemberAccessRecord>($"/api/organizations/{orgId}/addresses/{addressId}/member-access", new(orgUserMembershipId), token);
+    public Task<bool> RemoveAddressMemberAccessAsync(Guid orgId, Guid addressId, Guid accessId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/addresses/{addressId}/member-access/{accessId}", token);
+
+    // ── Org settings ──────────────────────────────────────────────────────────
+    public Task<OrgSettingsResponse?> GetOrgSettingsAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetAsync<OrgSettingsResponse>($"/api/organizations/{orgId}/settings", token);
+    public Task<OrgSettingsResponse?> UpdateOrgSettingsAsync(Guid orgId, OrgSettingsRequest request, CancellationToken token = default)
+        => _api.PutAsync<OrgSettingsRequest, OrgSettingsResponse>($"/api/organizations/{orgId}/settings", request, token);
 }

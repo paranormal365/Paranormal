@@ -121,6 +121,12 @@
                     <OrgAddressManager OrgId="@OrgId" />
                 </TabStripTab>
             }
+            @if (_canManageRoles)
+            {
+                <TabStripTab Title="Settings">
+                    <OrgSettingsManager OrgId="@OrgId" />
+                </TabStripTab>
+            }
         </TelerikTabStrip>
     }
 </div>

@@ -409,6 +409,15 @@ public interface IBenAdminClient
 
     // ── Directions ────────────────────────────────────────────────────────────
     Task<DirectionsResult?> GetDirectionsAsync(double fromLat, double fromLon, double toLat, double toLon, CancellationToken token = default);
+
+    // ── Org address member access ──────────────────────────────────────────────
+    Task<IReadOnlyList<OrganizationAddressMemberAccessRecord>> GetAddressMemberAccessAsync(Guid orgId, Guid addressId, CancellationToken token = default);
+    Task<OrganizationAddressMemberAccessRecord?> AddAddressMemberAccessAsync(Guid orgId, Guid addressId, Guid orgUserMembershipId, CancellationToken token = default);
+    Task<bool> RemoveAddressMemberAccessAsync(Guid orgId, Guid addressId, Guid accessId, CancellationToken token = default);
+
+    // ── Org settings ──────────────────────────────────────────────────────────
+    Task<OrgSettingsResponse?> GetOrgSettingsAsync(Guid orgId, CancellationToken token = default);
+    Task<OrgSettingsResponse?> UpdateOrgSettingsAsync(Guid orgId, OrgSettingsRequest request, CancellationToken token = default);
 }
 
 /// <summary>
@@ -670,3 +679,7 @@ public sealed record DirectionsResult(
 public sealed record RoutePoint(double Lat, double Lon);
 
 public sealed record RouteStep(string Instruction, double DistanceMiles, double DurationSeconds);
+
+public sealed record OrgSettingsResponse(bool ShowAddressMap, bool ShowAddressDirections);
+public sealed record OrgSettingsRequest(bool ShowAddressMap, bool ShowAddressDirections);
+public sealed record AddAddressMemberAccessRequest(Guid OrganizationUserMembershipId);

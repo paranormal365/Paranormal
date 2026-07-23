@@ -175,6 +175,70 @@ public sealed class OrganizationAddressCrudController : OrgCmsControllerBase
         return NoContent();
     }
 
+    // ── SpecificMembers access list ───────────────────────────────────────────
+
+    [HttpGet("{addressId:guid}/member-access")]
+    public async Task<ActionResult<IEnumerable<OrganizationAddressMemberAccessRecord>>> GetMemberAccess(
+        Guid orgId, Guid addressId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await IsCmsAuthorizedAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationAddressMemberAccess, OrganizationSecurityAction.Read, ct))
+            return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var items = await db.OrganizationAddressMemberAccesses.AsNoTracking()
+            .Where(x => x.OrganizationAddressId == addressId)
+            .ToListAsync(ct);
+        return Ok(Mapper.Map<IEnumerable<OrganizationAddressMemberAccessRecord>>(items));
+    }
+
+    [HttpPost("{addressId:guid}/member-access")]
+    public async Task<ActionResult<OrganizationAddressMemberAccessRecord>> AddMemberAccess(
+        Guid orgId, Guid addressId, [FromBody] AddAddressMemberAccessRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await IsCmsAuthorizedAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationAddressMemberAccess, OrganizationSecurityAction.Create, ct))
+            return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await db.OrganizationAddresses.AnyAsync(a => a.Id == addressId && a.OrganizationId == orgId, ct))
+            return NotFound();
+        if (!await db.OrganizationUserMemberships.AnyAsync(m => m.Id == request.OrganizationUserMembershipId && m.OrganizationId == orgId, ct))
+            return BadRequest("Membership not found in this organisation.");
+        if (await db.OrganizationAddressMemberAccesses.AnyAsync(x => x.OrganizationAddressId == addressId && x.OrganizationUserMembershipId == request.OrganizationUserMembershipId, ct))
+            return Conflict("This member already has access.");
+
+        var entity = new OrganizationAddressMemberAccess
+        {
+            Id = Guid.NewGuid(), OrganizationAddressId = addressId,
+            OrganizationUserMembershipId = request.OrganizationUserMembershipId,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId.Value
+        };
+        db.OrganizationAddressMemberAccesses.Add(entity);
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationAddressMemberAccess), entity.Id, entity, userId.Value, AppSources.WebApi, ct));
+        return CreatedAtAction(nameof(GetMemberAccess), new { orgId, addressId }, Mapper.Map<OrganizationAddressMemberAccessRecord>(entity));
+    }
+
+    [HttpDelete("{addressId:guid}/member-access/{accessId:guid}")]
+    public async Task<IActionResult> RemoveMemberAccess(Guid orgId, Guid addressId, Guid accessId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await IsCmsAuthorizedAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationAddressMemberAccess, OrganizationSecurityAction.Delete, ct))
+            return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var entity = await db.OrganizationAddressMemberAccesses.FirstOrDefaultAsync(x => x.Id == accessId && x.OrganizationAddressId == addressId, ct);
+        if (entity is null) return NotFound();
+        db.OrganizationAddressMemberAccesses.Remove(entity);
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationAddressMemberAccess), accessId, entity, userId.Value, AppSources.WebApi, ct));
+        return NoContent();
+    }
+
     // ── Geocoding helper ──────────────────────────────────────────────────────
 
     private static async Task ApplyGeocodingAsync(OrganizationAddress entity, CancellationToken ct)
@@ -206,3 +270,5 @@ public sealed record OrgAddressUpsertRequest(
     double? SearchRadiusMiles = null,
     decimal? Latitude  = null,
     decimal? Longitude = null);
+
+public sealed record AddAddressMemberAccessRequest(Guid OrganizationUserMembershipId);
