@@ -127,6 +127,9 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<UserAddress>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // Lat/lon require 10 decimal places for sub-metre precision
+            modelBuilder.Entity<UserAddress>().Property(e => e.Latitude).HasPrecision(18, 10);
+            modelBuilder.Entity<UserAddress>().Property(e => e.Longitude).HasPrecision(18, 10);
 
             // ── UserEmail ────────────────────────────────────────────────────
             modelBuilder.Entity<UserEmail>()
@@ -230,6 +233,9 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrganizationAddress>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // Lat/lon require 10 decimal places for sub-metre precision
+            modelBuilder.Entity<OrganizationAddress>().Property(e => e.Latitude).HasPrecision(18, 10);
+            modelBuilder.Entity<OrganizationAddress>().Property(e => e.Longitude).HasPrecision(18, 10);
 
             // ── OrganizationEmail ────────────────────────────────────────────
             modelBuilder.Entity<OrganizationEmail>()

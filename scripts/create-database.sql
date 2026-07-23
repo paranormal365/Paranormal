@@ -3207,3 +3207,72 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723160816_FixLatLonPrecision'
+)
+BEGIN
+    DECLARE @var2 nvarchar(max);
+    SELECT @var2 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[UserAddresses]') AND [c].[name] = N'Longitude');
+    IF @var2 IS NOT NULL EXEC(N'ALTER TABLE [UserAddresses] DROP CONSTRAINT ' + @var2 + ';');
+    ALTER TABLE [UserAddresses] ALTER COLUMN [Longitude] decimal(18,10) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723160816_FixLatLonPrecision'
+)
+BEGIN
+    DECLARE @var3 nvarchar(max);
+    SELECT @var3 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[UserAddresses]') AND [c].[name] = N'Latitude');
+    IF @var3 IS NOT NULL EXEC(N'ALTER TABLE [UserAddresses] DROP CONSTRAINT ' + @var3 + ';');
+    ALTER TABLE [UserAddresses] ALTER COLUMN [Latitude] decimal(18,10) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723160816_FixLatLonPrecision'
+)
+BEGIN
+    DECLARE @var4 nvarchar(max);
+    SELECT @var4 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[OrganizationAddresses]') AND [c].[name] = N'Longitude');
+    IF @var4 IS NOT NULL EXEC(N'ALTER TABLE [OrganizationAddresses] DROP CONSTRAINT ' + @var4 + ';');
+    ALTER TABLE [OrganizationAddresses] ALTER COLUMN [Longitude] decimal(18,10) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723160816_FixLatLonPrecision'
+)
+BEGIN
+    DECLARE @var5 nvarchar(max);
+    SELECT @var5 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[OrganizationAddresses]') AND [c].[name] = N'Latitude');
+    IF @var5 IS NOT NULL EXEC(N'ALTER TABLE [OrganizationAddresses] DROP CONSTRAINT ' + @var5 + ';');
+    ALTER TABLE [OrganizationAddresses] ALTER COLUMN [Latitude] decimal(18,10) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723160816_FixLatLonPrecision'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260723160816_FixLatLonPrecision', N'10.0.9');
+END;
+
+COMMIT;
+GO
+
