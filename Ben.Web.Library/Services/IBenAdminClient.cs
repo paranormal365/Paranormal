@@ -51,6 +51,12 @@ public interface IBenAdminClient
     /// <summary>Deletes a role. Will fail if any users are still assigned to it.</summary>
     Task<bool> DeleteRoleAsync(Guid roleId, CancellationToken token = default);
 
+    // ── Audit Log ─────────────────────────────────────────────────────────────
+
+    Task<AuditLogPagedResponse?> GetAuditLogsAsync(int page = 1, int pageSize = 50, string? entityType = null, int? action = null, Guid? userId = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken token = default);
+    Task<IReadOnlyList<string>> GetAuditLogEntityTypesAsync(CancellationToken token = default);
+    Task<bool> SendAuditLogMessageAsync(SendAuditLogMessageRequest request, CancellationToken token = default);
+
     // ── Users ─────────────────────────────────────────────────────────────────
 
     /// <summary>Returns a lightweight list of all application users.</summary>
@@ -490,6 +496,9 @@ public sealed record OrgPublicLogoItem(Guid LogoId, Guid UploadFileId, string? A
 public sealed record OrgPublicPageItem(Guid Id, string PageTitle, string UrlName, bool IsHome, IReadOnlyList<OrgPublicSectionItem> Sections);
 public sealed record OrgPublicSectionItem(Guid Id, CmsSectionType SectionType, string? Title, string ContentJson, int SortOrder);
 public sealed record OrgPublicNavItem(Guid Id, string PageTitle, string UrlName, Guid? ParentPageId, int SortOrder);
+
+// AuditLogRecord, AuditLogPagedResponse, SendAuditLogMessageRequest
+// are defined in Ben.Service.Models.Admin (via project reference).
 
 /// <summary>
 /// Request body for creating a new application user.

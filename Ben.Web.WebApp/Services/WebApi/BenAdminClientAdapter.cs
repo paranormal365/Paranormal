@@ -58,6 +58,31 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteRoleAsync(Guid roleId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/admin/roles/{roleId}", token);
 
+    // ── Audit Log ─────────────────────────────────────────────────────────────
+
+    public async Task<AuditLogPagedResponse?> GetAuditLogsAsync(
+        int page = 1, int pageSize = 50, string? entityType = null, int? action = null,
+        Guid? userId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
+        CancellationToken token = default)
+    {
+        var qs = $"?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrWhiteSpace(entityType)) qs += $"&entityType={Uri.EscapeDataString(entityType)}";
+        if (action.HasValue)    qs += $"&action={action.Value}";
+        if (userId.HasValue)    qs += $"&userId={userId.Value}";
+        if (dateFrom.HasValue)  qs += $"&dateFrom={Uri.EscapeDataString(dateFrom.Value.ToString("o"))}";
+        if (dateTo.HasValue)    qs += $"&dateTo={Uri.EscapeDataString(dateTo.Value.ToString("o"))}";
+        return await _api.GetAsync<AuditLogPagedResponse>($"/api/admin/audit-logs{qs}", token);
+    }
+
+    public async Task<IReadOnlyList<string>> GetAuditLogEntityTypesAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<string>>("/api/admin/audit-logs/entity-types", token);
+        return result ?? [];
+    }
+
+    public Task<bool> SendAuditLogMessageAsync(SendAuditLogMessageRequest request, CancellationToken token = default)
+        => _api.PostAsync<SendAuditLogMessageRequest, bool>("/api/admin/audit-logs/send-message", request, token);
+
     // ── Users ─────────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<AppUserRecord>> GetAllUsersAsync(CancellationToken token = default)
