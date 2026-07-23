@@ -285,6 +285,48 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> RemoveGroupMemberAsync(Guid orgId, Guid groupId, Guid membershipId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/groups/{groupId}/members/{membershipId}", token);
 
+    // ── Organization Roles ────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<OrganizationRoleRecord>> GetOrgRolesAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrganizationRoleRecord>>($"/api/organizations/{orgId}/roles", token);
+        return result ?? [];
+    }
+
+    public Task<OrganizationRoleRecord?> GetOrgRoleAsync(Guid orgId, Guid roleId, CancellationToken token = default)
+        => _api.GetAsync<OrganizationRoleRecord>($"/api/organizations/{orgId}/roles/{roleId}", token);
+
+    public Task<OrganizationRoleRecord?> CreateOrgRoleAsync(Guid orgId, CreateOrgRoleRequest request, CancellationToken token = default)
+        => _api.PostAsync<CreateOrgRoleRequest, OrganizationRoleRecord>($"/api/organizations/{orgId}/roles", request, token);
+
+    public Task<OrganizationRoleRecord?> UpdateOrgRoleAsync(Guid orgId, Guid roleId, UpdateOrgRoleRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpdateOrgRoleRequest, OrganizationRoleRecord>($"/api/organizations/{orgId}/roles/{roleId}", request, token);
+
+    public Task<bool> DeleteOrgRoleAsync(Guid orgId, Guid roleId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/roles/{roleId}", token);
+
+    public async Task<IReadOnlyList<OrganizationRolePermissionRecord>> GetOrgRolePermissionsAsync(Guid orgId, Guid roleId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrganizationRolePermissionRecord>>($"/api/organizations/{orgId}/roles/{roleId}/permissions", token);
+        return result ?? [];
+    }
+
+    public Task<bool> SetOrgRolePermissionsAsync(Guid orgId, Guid roleId, IEnumerable<SetRolePermissionRequest> permissions, CancellationToken token = default)
+        => _api.PutVoidAsync($"/api/organizations/{orgId}/roles/{roleId}/permissions", permissions, token);
+
+    public async Task<IReadOnlyList<OrganizationRoleMembershipRecord>> GetOrgRoleMembersAsync(Guid orgId, Guid roleId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrganizationRoleMembershipRecord>>($"/api/organizations/{orgId}/roles/{roleId}/members", token);
+        return result ?? [];
+    }
+
+    public Task<OrganizationRoleMembershipRecord?> AddOrgRoleMemberAsync(Guid orgId, Guid roleId, Guid orgUserMembershipId, CancellationToken token = default)
+        => _api.PostAsync<object, OrganizationRoleMembershipRecord>($"/api/organizations/{orgId}/roles/{roleId}/members",
+            new { OrganizationUserMembershipId = orgUserMembershipId }, token);
+
+    public Task<bool> RemoveOrgRoleMemberAsync(Guid orgId, Guid roleId, Guid membershipId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/roles/{roleId}/members/{membershipId}", token);
+
     // ── CMS Page Permissions ──────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<CmsPagePermissionRecord>> GetPagePermissionsAsync(Guid orgId, Guid pageId, CancellationToken token = default)

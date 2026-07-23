@@ -25,6 +25,9 @@ public interface IOrganizationRepositoryManager
     IOrganizationFileDeleteLogRepository FileDeleteLogRepository { get; }
     IOrgMemberGroupRepository MemberGroupRepository { get; }
     IOrgMemberGroupMembershipRepository MemberGroupMembershipRepository { get; }
+    IOrganizationRoleRepository OrganizationRoleRepository { get; }
+    IOrganizationRolePermissionRepository OrganizationRolePermissionRepository { get; }
+    IOrganizationRoleMembershipRepository OrganizationRoleMembershipRepository { get; }
     ICmsSectionRepository CmsSectionRepository { get; }
     ICmsPagePermissionRepository CmsPagePermissionRepository { get; }
 }

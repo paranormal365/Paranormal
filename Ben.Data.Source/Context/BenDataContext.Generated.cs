@@ -38,6 +38,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrganizationLogo> OrganizationLogos { get; set; }
         public virtual DbSet<OrgMemberGroup> OrgMemberGroups { get; set; }
         public virtual DbSet<OrgMemberGroupMembership> OrgMemberGroupMemberships { get; set; }
+        public virtual DbSet<OrganizationRole> OrganizationRoles { get; set; }
+        public virtual DbSet<OrganizationRolePermission> OrganizationRolePermissions { get; set; }
+        public virtual DbSet<OrganizationRoleMembership> OrganizationRoleMemberships { get; set; }
         public virtual DbSet<CmsSection> CmsSections { get; set; }
         public virtual DbSet<CmsPagePermission> CmsPagePermissions { get; set; }
         public virtual DbSet<OrganizationUserMembership> OrganizationUserMemberships { get; set; }
@@ -382,6 +385,40 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrgMemberGroupMembership>()
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── OrganizationRole ─────────────────────────────────────────────────────
+            modelBuilder.Entity<OrganizationRole>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrganizationRole>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationRole>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── OrganizationRolePermission ──────────────────────────────────────────
+            modelBuilder.Entity<OrganizationRolePermission>()
+                .HasOne(e => e.OrganizationRole).WithMany(r => r.Permissions)
+                .HasForeignKey(e => e.OrganizationRoleId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrganizationRolePermission>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationRolePermission>()
+                .HasIndex(e => new { e.OrganizationRoleId, e.TableName }).IsUnique();
+
+            // ── OrganizationRoleMembership ──────────────────────────────────────────
+            modelBuilder.Entity<OrganizationRoleMembership>()
+                .HasOne(e => e.OrganizationRole).WithMany(r => r.Members)
+                .HasForeignKey(e => e.OrganizationRoleId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrganizationRoleMembership>()
+                .HasOne(e => e.OrganizationUserMembership).WithMany()
+                .HasForeignKey(e => e.OrganizationUserMembershipId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationRoleMembership>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationRoleMembership>()
+                .HasIndex(e => new { e.OrganizationRoleId, e.OrganizationUserMembershipId }).IsUnique();
 
             // ── CmsSection ───────────────────────────────────────────────────
             modelBuilder.Entity<CmsSection>()

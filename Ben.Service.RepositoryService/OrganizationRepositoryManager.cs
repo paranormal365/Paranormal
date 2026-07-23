@@ -29,6 +29,9 @@ public class OrganizationRepositoryManager : IOrganizationRepositoryManager
     private IOrganizationFileDeleteLogRepository? _organizationFileDeleteLogRepository;
     private IOrgMemberGroupRepository? _orgMemberGroupRepository;
     private IOrgMemberGroupMembershipRepository? _orgMemberGroupMembershipRepository;
+    private IOrganizationRoleRepository? _organizationRoleRepository;
+    private IOrganizationRolePermissionRepository? _organizationRolePermissionRepository;
+    private IOrganizationRoleMembershipRepository? _organizationRoleMembershipRepository;
     private ICmsSectionRepository? _cmsSectionRepository;
     private ICmsPagePermissionRepository? _cmsPagePermissionRepository;
 
@@ -58,6 +61,9 @@ public class OrganizationRepositoryManager : IOrganizationRepositoryManager
     public IOrganizationFileDeleteLogRepository FileDeleteLogRepository => _organizationFileDeleteLogRepository ??= new OrganizationFileDeleteLogRepository(_dbContextFactory);
     public IOrgMemberGroupRepository MemberGroupRepository => _orgMemberGroupRepository ??= new OrgMemberGroupRepository(_dbContextFactory);
     public IOrgMemberGroupMembershipRepository MemberGroupMembershipRepository => _orgMemberGroupMembershipRepository ??= new OrgMemberGroupMembershipRepository(_dbContextFactory);
+    public IOrganizationRoleRepository OrganizationRoleRepository => _organizationRoleRepository ??= new OrganizationRoleRepository(_dbContextFactory);
+    public IOrganizationRolePermissionRepository OrganizationRolePermissionRepository => _organizationRolePermissionRepository ??= new OrganizationRolePermissionRepository(_dbContextFactory);
+    public IOrganizationRoleMembershipRepository OrganizationRoleMembershipRepository => _organizationRoleMembershipRepository ??= new OrganizationRoleMembershipRepository(_dbContextFactory);
     public ICmsSectionRepository CmsSectionRepository => _cmsSectionRepository ??= new CmsSectionRepository(_dbContextFactory);
     public ICmsPagePermissionRepository CmsPagePermissionRepository => _cmsPagePermissionRepository ??= new CmsPagePermissionRepository(_dbContextFactory);
 }

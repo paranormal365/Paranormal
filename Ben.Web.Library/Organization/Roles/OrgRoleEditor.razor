@@ -1,0 +1,392 @@
+@using Ben.Service.Models.Entities
+@using Ben.Data.Common.Enums
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@if (_loading)
+{
+    <TelerikLoaderContainer Visible="true" Text="Loading role…" />
+}
+else if (_errorMessage is not null && _role is null)
+{
+    <div class="alert alert-danger">@_errorMessage</div>
+}
+else if (_role is not null)
+{
+    @if (_errorMessage is not null)
+    {
+        <div class="alert alert-danger mb-3">@_errorMessage</div>
+    }
+    @if (_successMessage is not null)
+    {
+        <div class="alert alert-success mb-3">@_successMessage</div>
+    }
+
+    @* ── Section 1: Role Details ──────────────────────────────────────── *@
+    <div class="card mb-4">
+        <div class="card-body">
+            <h6 class="card-title">Role Details</h6>
+            <div class="row g-3">
+                <div class="col-sm-6">
+                    <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+                    <TelerikTextBox @bind-Value="_editName" Width="100%" />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label fw-semibold">Description</label>
+                    <TelerikTextArea @bind-Value="_editDescription" Width="100%" Rows="2" />
+                </div>
+                <div class="col-sm-3">
+                    <label class="form-label fw-semibold">Sort Order</label>
+                    <TelerikNumericTextBox @bind-Value="_editSortOrder" Width="100%" />
+                </div>
+                <div class="col-sm-3 d-flex flex-column">
+                    <label class="form-label fw-semibold">Active</label>
+                    <TelerikSwitch @bind-Value="_editIsActive" />
+                </div>
+            </div>
+            <div class="d-flex gap-2 mt-3">
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                               Icon="@SvgIcon.Save"
+                               OnClick="SaveDetailsAsync"
+                               Enabled="@(!_isSaving)">
+                    @(_isSaving ? "Saving…" : "Save Details")
+                </TelerikButton>
+                @if (OnCancelled.HasDelegate)
+                {
+                    <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                   OnClick="@(() => OnCancelled.InvokeAsync())">
+                        Cancel
+                    </TelerikButton>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ── Section 2: Permissions ───────────────────────────────────────── *@
+    <div class="card mb-4">
+        <div class="card-body">
+            <h6 class="card-title">Permissions</h6>
+            <p class="text-secondary small">Toggle Create (C), Read (R), Update (U), Delete (D) for each resource.</p>
+            <table class="table table-sm table-bordered align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Resource</th>
+                        <th class="text-center" style="width:50px">C</th>
+                        <th class="text-center" style="width:50px">R</th>
+                        <th class="text-center" style="width:50px">U</th>
+                        <th class="text-center" style="width:50px">D</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var section in Sections)
+                    {
+                        <tr>
+                            <td class="@(section.ParentTable is not null ? "ps-4" : "")">
+                                @section.DisplayName
+                            </td>
+                            @foreach (var action in new[] { OrganizationSecurityAction.Create, OrganizationSecurityAction.Read, OrganizationSecurityAction.Update, OrganizationSecurityAction.Delete })
+                            {
+                                var tbl = section.Table;
+                                var act = action;
+                                var isSet = (_permissionMap.TryGetValue(tbl, out var current) && (current & act) != OrganizationSecurityAction.None);
+                                <td class="text-center">
+                                    <TelerikToggleButton Selected="@isSet"
+                                                         SelectedChanged="@((bool v) => TogglePermission(tbl, act, v))"
+                                                         Size="@ThemeConstants.Button.Size.Small">
+                                        @(action == OrganizationSecurityAction.Create ? "C" :
+                                          action == OrganizationSecurityAction.Read   ? "R" :
+                                          action == OrganizationSecurityAction.Update ? "U" : "D")
+                                    </TelerikToggleButton>
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Icon="@SvgIcon.Save"
+                           OnClick="SavePermissionsAsync"
+                           Enabled="@(!_isSavingPerms)">
+                @(_isSavingPerms ? "Saving…" : "Save Permissions")
+            </TelerikButton>
+        </div>
+    </div>
+
+    @* ── Section 3: Members ───────────────────────────────────────────── *@
+    <div class="card mb-4">
+        <div class="card-body">
+            <h6 class="card-title">Members</h6>
+
+            <TelerikGrid Data="@_members" Pageable="false" Class="mb-3">
+                <GridColumns>
+                    <GridColumn Title="Membership ID">
+                        <Template>
+                            @{
+                                var row = (OrganizationRoleMembershipRecord)context;
+                                <span class="font-monospace small">@row.OrganizationUserMembershipId</span>
+                            }
+                        </Template>
+                    </GridColumn>
+                    <GridColumn Title="Added" Width="160px">
+                        <Template>
+                            @{
+                                var row = (OrganizationRoleMembershipRecord)context;
+                                <span>@row.DateCreated.ToString("yyyy-MM-dd")</span>
+                            }
+                        </Template>
+                    </GridColumn>
+                    <GridColumn Title="" Width="90px">
+                        <Template>
+                            @{
+                                var row = (OrganizationRoleMembershipRecord)context;
+                                <TelerikButton Icon="@SvgIcon.Trash"
+                                               Size="@ThemeConstants.Button.Size.Small"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                               FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                               OnClick="@(() => RemoveMemberAsync(row))">
+                                    Remove
+                                </TelerikButton>
+                            }
+                        </Template>
+                    </GridColumn>
+                </GridColumns>
+            </TelerikGrid>
+
+            @* Add member ─────────────────── *@
+            @if (_availableMembers.Count > 0)
+            {
+                <div class="d-flex gap-2 align-items-end">
+                    <div>
+                        <label class="form-label">Add Member</label>
+                        <TelerikDropDownList Data="@_availableMembers"
+                                            @bind-Value="_selectedMembershipId"
+                                            TextField="@nameof(OrgMembershipItem.MembershipId)"
+                                            ValueField="@nameof(OrgMembershipItem.MembershipId)"
+                                            Width="260px">
+                            <ItemTemplate>
+                                @{
+                                    var item = (OrgMembershipItem)context;
+                                    @($"{item.Role} — {item.MembershipId}")
+                                }
+                            </ItemTemplate>
+                        </TelerikDropDownList>
+                    </div>
+                    <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                   OnClick="AddMemberAsync"
+                                   Enabled="@(_selectedMembershipId != Guid.Empty && !_isSavingMember)">
+                        @(_isSavingMember ? "Adding…" : "Add")
+                    </TelerikButton>
+                </div>
+            }
+            else if (_members.Count == 0)
+            {
+                <div class="text-secondary small">All org members are already assigned to this role.</div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid OrgId    { get; set; }
+    [Parameter] public Guid RoleId   { get; set; }
+    [Parameter] public EventCallback OnSaved    { get; set; }
+    [Parameter] public EventCallback OnCancelled { get; set; }
+
+    private static readonly IReadOnlyList<PermissionSection> Sections =
+    [
+        new("Organization Settings",   OrganizationSecurityTable.Organization,            null),
+        new("Addresses",               OrganizationSecurityTable.OrganizationAddress,     null),
+        new("Address Types",           OrganizationSecurityTable.OrganizationAddressType, OrganizationSecurityTable.OrganizationAddress),
+        new("Emails",                  OrganizationSecurityTable.OrganizationEmail,       null),
+        new("Email Types",             OrganizationSecurityTable.OrganizationEmailType,   OrganizationSecurityTable.OrganizationEmail),
+        new("Phones",                  OrganizationSecurityTable.OrganizationPhone,       null),
+        new("Phone Types",             OrganizationSecurityTable.OrganizationPhoneType,   OrganizationSecurityTable.OrganizationPhone),
+        new("Links",                   OrganizationSecurityTable.OrganizationLink,        null),
+        new("Link Types",              OrganizationSecurityTable.OrganizationLinkType,    OrganizationSecurityTable.OrganizationLink),
+        new("Notes",                   OrganizationSecurityTable.OrganizationNote,        null),
+        new("Note Types",              OrganizationSecurityTable.OrganizationNoteType,    OrganizationSecurityTable.OrganizationNote),
+        new("Pages (CMS)",             OrganizationSecurityTable.OrganizationPage,        null),
+        new("CMS Sections",            OrganizationSecurityTable.CmsSection,              OrganizationSecurityTable.OrganizationPage),
+        new("Member Groups",           OrganizationSecurityTable.OrgMemberGroup,          null),
+        new("Membership Applications", OrganizationSecurityTable.MembershipRequests,      null),
+        new("Files",                   OrganizationSecurityTable.OrganizationFiles,       null),
+    ];
+
+    private sealed record PermissionSection(
+        string DisplayName,
+        OrganizationSecurityTable Table,
+        OrganizationSecurityTable? ParentTable);
+
+    private OrganizationRoleRecord? _role;
+    private IReadOnlyList<OrganizationRoleMembershipRecord> _members = [];
+    private IReadOnlyList<OrgMembershipItem> _allOrgMembers          = [];
+    private List<OrgMembershipItem>          _availableMembers       = [];
+
+    private Dictionary<OrganizationSecurityTable, OrganizationSecurityAction> _permissionMap = new();
+
+    private bool    _loading        = true;
+    private bool    _isSaving;
+    private bool    _isSavingPerms;
+    private bool    _isSavingMember;
+    private string? _errorMessage;
+    private string? _successMessage;
+
+    // Edit fields
+    private string  _editName        = string.Empty;
+    private string? _editDescription;
+    private bool    _editIsActive    = true;
+    private int     _editSortOrder;
+
+    // Add member
+    private Guid _selectedMembershipId = Guid.Empty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+        StateHasChanged();
+        try
+        {
+            var roleTask   = AdminClient.GetOrgRoleAsync(OrgId, RoleId);
+            var permsTask  = AdminClient.GetOrgRolePermissionsAsync(OrgId, RoleId);
+            var membersTask = AdminClient.GetOrgRoleMembersAsync(OrgId, RoleId);
+            var orgMembersTask = AdminClient.GetOrganizationMembersAsync(OrgId);
+
+            await Task.WhenAll(roleTask, permsTask, membersTask, orgMembersTask);
+
+            _role         = roleTask.Result;
+            _members      = membersTask.Result;
+            _allOrgMembers = orgMembersTask.Result;
+
+            if (_role is not null)
+            {
+                _editName        = _role.Name;
+                _editDescription = _role.Description;
+                _editIsActive    = _role.IsActive;
+                _editSortOrder   = _role.SortOrder;
+            }
+
+            _permissionMap = permsTask.Result
+                .ToDictionary(p => p.TableName, p => p.Actions);
+
+            RefreshAvailableMembers();
+        }
+        catch
+        {
+            _errorMessage = "Failed to load role data.";
+        }
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void RefreshAvailableMembers()
+    {
+        var assignedIds = _members.Select(m => m.OrganizationUserMembershipId).ToHashSet();
+        _availableMembers = _allOrgMembers
+            .Where(m => !assignedIds.Contains(m.MembershipId))
+            .ToList();
+        _selectedMembershipId = _availableMembers.FirstOrDefault()?.MembershipId ?? Guid.Empty;
+    }
+
+    private void TogglePermission(OrganizationSecurityTable table, OrganizationSecurityAction action, bool value)
+    {
+        var current = _permissionMap.TryGetValue(table, out var existing) ? existing : OrganizationSecurityAction.None;
+        if (value)
+            _permissionMap[table] = current | action;
+        else
+        {
+            var updated = current & ~action;
+            if (updated == OrganizationSecurityAction.None)
+                _permissionMap.Remove(table);
+            else
+                _permissionMap[table] = updated;
+        }
+    }
+
+    private async Task SaveDetailsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editName)) { _errorMessage = "Name is required."; return; }
+
+        _isSaving      = true;
+        _errorMessage  = null;
+        _successMessage = null;
+        StateHasChanged();
+
+        var result = await AdminClient.UpdateOrgRoleAsync(OrgId, RoleId,
+            new UpdateOrgRoleRequest(_editName.Trim(), _editDescription?.Trim(), _editIsActive, _editSortOrder));
+
+        _isSaving = false;
+        if (result is not null)
+        {
+            _role           = result;
+            _successMessage = "Role details saved.";
+            await OnSaved.InvokeAsync();
+        }
+        else
+        {
+            _errorMessage = "Failed to save role.";
+        }
+    }
+
+    private async Task SavePermissionsAsync()
+    {
+        _isSavingPerms = true;
+        _errorMessage  = null;
+        _successMessage = null;
+        StateHasChanged();
+
+        var requests = _permissionMap
+            .Where(kv => kv.Value != OrganizationSecurityAction.None)
+            .Select(kv => new SetRolePermissionRequest(kv.Key, kv.Value))
+            .ToList();
+
+        var ok = await AdminClient.SetOrgRolePermissionsAsync(OrgId, RoleId, requests);
+        _isSavingPerms = false;
+        _successMessage = ok ? "Permissions saved." : null;
+        _errorMessage   = ok ? null : "Failed to save permissions.";
+    }
+
+    private async Task AddMemberAsync()
+    {
+        if (_selectedMembershipId == Guid.Empty) return;
+
+        _isSavingMember = true;
+        _errorMessage   = null;
+        StateHasChanged();
+
+        var result = await AdminClient.AddOrgRoleMemberAsync(OrgId, RoleId, _selectedMembershipId);
+        _isSavingMember = false;
+
+        if (result is not null)
+        {
+            _members = await AdminClient.GetOrgRoleMembersAsync(OrgId, RoleId);
+            RefreshAvailableMembers();
+        }
+        else
+        {
+            _errorMessage = "Failed to add member.";
+        }
+    }
+
+    private async Task RemoveMemberAsync(OrganizationRoleMembershipRecord rm)
+    {
+        _errorMessage = null;
+        StateHasChanged();
+
+        var ok = await AdminClient.RemoveOrgRoleMemberAsync(OrgId, RoleId, rm.Id);
+        if (ok)
+        {
+            _members = await AdminClient.GetOrgRoleMembersAsync(OrgId, RoleId);
+            RefreshAvailableMembers();
+        }
+        else
+        {
+            _errorMessage = "Failed to remove member.";
+        }
+    }
+}
