@@ -37,10 +37,10 @@
                     <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.RequestMessage)" Title="Message" />
                     <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.DateCreated)" Title="Applied" DisplayFormat="{0:d}" Width="110px" />
                     <GridCommandColumn Width="180px">
-                        <GridCommandButton OnClick="@(e => AcceptAsync((OrganizationMembershipRequestRecord)e.Item))"
+                        <GridCommandButton OnClick="@(e => AcceptAsync((OrganizationMembershipRequestRecord)e.Items.First()))"
                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
                                           Size="@ThemeConstants.Button.Size.Small">Accept</GridCommandButton>
-                        <GridCommandButton OnClick="@(e => DenyAsync((OrganizationMembershipRequestRecord)e.Item))"
+                        <GridCommandButton OnClick="@(e => DenyAsync((OrganizationMembershipRequestRecord)e.Items.First()))"
                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                           Size="@ThemeConstants.Button.Size.Small"
                                           Class="ms-1">Deny</GridCommandButton>

@@ -92,7 +92,7 @@ public static class AddressMapIconRegistry
     {
         new("map-marker-target", "Map Pin (default)", SvgIcon.MapMarkerTarget, PathMapMarkerTarget),
         new("pin",               "Pin",               SvgIcon.Pin,             PathPin),
-        new("pin-solid",         "Pin Solid",         SvgIcon.PinSolid,        PathPin),
+        new("pin-solid",         "Pin Solid",         SvgIcon.Pin,             PathPin),
         new("home",              "Home",              SvgIcon.Home,            PathHome),
         new("globe",             "Globe",             SvgIcon.Globe,           PathBuilding),
         new("star",              "Star",              SvgIcon.Star,            PathStar),
