@@ -337,6 +337,16 @@ public interface IBenAdminClient
 
     Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default);
 
+    // ── Client Requests ───────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<ClientRequestRecord>> GetMyClientRequestsAsync(CancellationToken token = default);
+    Task<ClientRequestRecord?> GetClientRequestAsync(Guid id, CancellationToken token = default);
+    Task<IReadOnlyList<ClientRequestOrganizationRecord>> GetClientRequestOrgsAsync(Guid id, CancellationToken token = default);
+    Task<ClientRequestRecord?> CreateClientRequestAsync(UpsertClientRequestRequest request, CancellationToken token = default);
+    Task<ClientRequestRecord?> UpdateClientRequestAsync(Guid id, UpsertClientRequestRequest request, CancellationToken token = default);
+    Task<ClientRequestRecord?> SubmitClientRequestAsync(Guid id, IList<Guid> organizationIds, CancellationToken token = default);
+    Task<ClientRequestRecord?> WithdrawClientRequestAsync(Guid id, CancellationToken token = default);
+
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
     /// <summary>Returns all approved, active categories with their types (public — no auth).</summary>
@@ -770,3 +780,17 @@ public sealed record OrgSearchResult(
     bool IsWithinRange,
     bool AcceptsClientsOutsideRange,
     Guid? ActiveLogoFileId);
+
+// ── Client Request request records ────────────────────────────────────────────
+public sealed record UpsertClientRequestRequest(
+    string StreetAddress1,
+    string? StreetAddress2,
+    string City,
+    string State,
+    string ZipCode,
+    string? Country,
+    decimal? Latitude,
+    decimal? Longitude,
+    Ben.Data.Common.Enums.ClientGender Gender,
+    int? BirthYear,
+    string? Description);

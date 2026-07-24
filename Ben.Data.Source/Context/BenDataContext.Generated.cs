@@ -58,6 +58,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UploadFile> UploadFiles { get; set; }
         public virtual DbSet<UploadFileOrganizationShare> UploadFileOrganizationShares { get; set; }
         public virtual DbSet<UploadFilePermissionRequest> UploadFilePermissionRequests { get; set; }
+        public virtual DbSet<ClientRequest> ClientRequests { get; set; }
+        public virtual DbSet<ClientRequestOrganization> ClientRequestOrganizations { get; set; }
+        public virtual DbSet<ClientRequestFile> ClientRequestFiles { get; set; }
         public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
         public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
         public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
@@ -825,6 +828,68 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrganizationAreaOfOperation>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── ClientRequest ─────────────────────────────────────────────────
+            modelBuilder.Entity<ClientRequest>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ClientRequest>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ClientRequest>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ClientRequest>()
+                .Property(e => e.Latitude).HasPrecision(18, 10);
+            modelBuilder.Entity<ClientRequest>()
+                .Property(e => e.Longitude).HasPrecision(18, 10);
+            modelBuilder.Entity<ClientRequest>()
+                .Property(e => e.Description).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<ClientRequest>()
+                .Property(e => e.StreetAddress1).HasMaxLength(256);
+            modelBuilder.Entity<ClientRequest>()
+                .Property(e => e.City).HasMaxLength(128);
+            modelBuilder.Entity<ClientRequest>()
+                .Property(e => e.State).HasMaxLength(64);
+            modelBuilder.Entity<ClientRequest>()
+                .Property(e => e.ZipCode).HasMaxLength(20);
+            modelBuilder.Entity<ClientRequest>()
+                .Property(e => e.Country).HasMaxLength(64);
+
+            // ── ClientRequestOrganization ─────────────────────────────────────
+            modelBuilder.Entity<ClientRequestOrganization>()
+                .HasOne(e => e.ClientRequest).WithMany(e => e.OrganizationApplications)
+                .HasForeignKey(e => e.ClientRequestId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ClientRequestOrganization>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ClientRequestOrganization>()
+                .HasOne(e => e.RespondedByAppUser).WithMany()
+                .HasForeignKey(e => e.RespondedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ClientRequestOrganization>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ClientRequestOrganization>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ClientRequestOrganization>()
+                .HasIndex(e => new { e.ClientRequestId, e.OrganizationId }).IsUnique();
+
+            // ── ClientRequestFile ─────────────────────────────────────────────
+            modelBuilder.Entity<ClientRequestFile>()
+                .HasOne(e => e.ClientRequest).WithMany(e => e.Files)
+                .HasForeignKey(e => e.ClientRequestId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ClientRequestFile>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ClientRequestFile>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ClientRequestFile>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ClientRequestFile>()
+                .HasIndex(e => new { e.ClientRequestId, e.UploadFileId }).IsUnique();
         }
     }
 }

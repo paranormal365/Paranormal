@@ -592,6 +592,36 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/upload-files/{id}", token);
 
+    // ── Client Requests ───────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<ClientRequestRecord>> GetMyClientRequestsAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<ClientRequestRecord>>("/api/client-requests/my", token);
+        return result ?? [];
+    }
+
+    public Task<ClientRequestRecord?> GetClientRequestAsync(Guid id, CancellationToken token = default)
+        => _api.GetAsync<ClientRequestRecord>($"/api/client-requests/{id}", token);
+
+    public async Task<IReadOnlyList<ClientRequestOrganizationRecord>> GetClientRequestOrgsAsync(Guid id, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<ClientRequestOrganizationRecord>>($"/api/client-requests/{id}/organizations", token);
+        return result ?? [];
+    }
+
+    public Task<ClientRequestRecord?> CreateClientRequestAsync(UpsertClientRequestRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertClientRequestRequest, ClientRequestRecord>("/api/client-requests", request, token);
+
+    public Task<ClientRequestRecord?> UpdateClientRequestAsync(Guid id, UpsertClientRequestRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertClientRequestRequest, ClientRequestRecord>($"/api/client-requests/{id}", request, token);
+
+    public Task<ClientRequestRecord?> SubmitClientRequestAsync(Guid id, IList<Guid> organizationIds, CancellationToken token = default)
+        => _api.PostAsync<object, ClientRequestRecord>($"/api/client-requests/{id}/submit",
+               new { OrganizationIds = organizationIds }, token);
+
+    public Task<ClientRequestRecord?> WithdrawClientRequestAsync(Guid id, CancellationToken token = default)
+        => _api.PostAsync<object, ClientRequestRecord>($"/api/client-requests/{id}/withdraw", new { }, token);
+
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<ExperienceCategoryWithTypesResponse>> GetExperienceTaxonomyAsync(CancellationToken token = default)
