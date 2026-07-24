@@ -17,4 +17,10 @@ public record OrganizationMembershipRequestRecord
     public DateTime DateCreated { get; init; }
     /// <summary>When the request was accepted, denied, or withdrawn.</summary>
     public DateTime? DateResponded { get; init; }
+
+    // ── Phase 3 fields ────────────────────────────────────────────────────────
+    public bool IsUnderReview { get; init; }
+    public DateTime? VoteDeadline { get; init; }
+    public bool? CanReapply { get; init; }
+    public string? DenialReason { get; init; }
 }

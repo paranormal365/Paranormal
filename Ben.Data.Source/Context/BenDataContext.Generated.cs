@@ -49,6 +49,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrganizationUserMembership> OrganizationUserMemberships { get; set; }
         public virtual DbSet<OrganizationAccessGrant> OrganizationAccessGrants { get; set; }
         public virtual DbSet<OrganizationMembershipRequest> OrganizationMembershipRequests { get; set; }
+        public virtual DbSet<OrganizationMembershipQuestion> OrganizationMembershipQuestions { get; set; }
+        public virtual DbSet<OrganizationMembershipAnswer> OrganizationMembershipAnswers { get; set; }
+        public virtual DbSet<MembershipReviewVote> MembershipReviewVotes { get; set; }
         public virtual DbSet<OrganizationFile> OrganizationFiles { get; set; }
         public virtual DbSet<OrganizationFileDeleteLog> OrganizationFileDeleteLogs { get; set; }
         public virtual DbSet<OrganizationAddressMapConfig> OrganizationAddressMapConfigs { get; set; }
@@ -698,6 +701,51 @@ namespace Ben.Data.Source.Context
                 .HasIndex(e => new { e.OrganizationId, e.AppUserId });
             modelBuilder.Entity<OrganizationMembershipRequest>()
                 .Property(e => e.RequestMessage).HasMaxLength(2000).IsRequired(false);
+            modelBuilder.Entity<OrganizationMembershipRequest>()
+                .Property(e => e.DenialReason).HasMaxLength(2000).IsRequired(false);
+
+            // ── OrganizationMembershipQuestion ────────────────────────────────
+            modelBuilder.Entity<OrganizationMembershipQuestion>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrganizationMembershipQuestion>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationMembershipQuestion>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationMembershipQuestion>()
+                .Property(e => e.QuestionText).HasMaxLength(1000);
+
+            // ── OrganizationMembershipAnswer ──────────────────────────────────
+            modelBuilder.Entity<OrganizationMembershipAnswer>()
+                .HasOne(e => e.MembershipRequest).WithMany(e => e.Answers)
+                .HasForeignKey(e => e.OrganizationMembershipRequestId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrganizationMembershipAnswer>()
+                .HasOne(e => e.Question).WithMany()
+                .HasForeignKey(e => e.OrganizationMembershipQuestionId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationMembershipAnswer>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationMembershipAnswer>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationMembershipAnswer>()
+                .Property(e => e.AnswerText).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<OrganizationMembershipAnswer>()
+                .HasIndex(e => new { e.OrganizationMembershipRequestId, e.OrganizationMembershipQuestionId }).IsUnique();
+
+            // ── MembershipReviewVote ──────────────────────────────────────────
+            modelBuilder.Entity<MembershipReviewVote>()
+                .HasOne(e => e.MembershipRequest).WithMany(e => e.ReviewVotes)
+                .HasForeignKey(e => e.OrganizationMembershipRequestId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<MembershipReviewVote>()
+                .HasOne(e => e.VoterAppUser).WithMany()
+                .HasForeignKey(e => e.VoterAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<MembershipReviewVote>()
+                .Property(e => e.Comment).HasMaxLength(1000);
+            modelBuilder.Entity<MembershipReviewVote>()
+                .HasIndex(e => new { e.OrganizationMembershipRequestId, e.VoterAppUserId }).IsUnique();
 
             // ── OrganizationFile ─────────────────────────────────────────────
             modelBuilder.Entity<OrganizationFile>().ToTable("OrganizationFiles");

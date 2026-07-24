@@ -197,6 +197,14 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         membershipRequest.DateUpdated        = DateTime.UtcNow;
         membershipRequest.UpdatedByAppUserId = userId.Value;
 
+        // Phase 3: persist denial metadata
+        if (denied)
+        {
+            membershipRequest.CanReapply    = request.CanReapply;
+            membershipRequest.DenialReason  = request.DenialReason?.Trim();
+            membershipRequest.IsUnderReview = false;
+        }
+
         // If accepted, create the membership
         if (accepted)
         {
@@ -293,6 +301,122 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Escalates a pending application to committee vote with a deadline.
+    /// When the deadline passes, votes are tallied and the application is
+    /// auto-resolved: majority Approve → Accepted; otherwise → Denied.
+    /// </summary>
+    [HttpPost("{id:guid}/open-vote")]
+    public async Task<ActionResult<OrganizationMembershipRequestRecord>> OpenVote(
+        Guid orgId, Guid id, [FromBody] OpenVoteRequest request, CancellationToken ct)
+    {
+        var userId = CurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!User.IsInRole(RoleNames.SuperAdmin))
+        {
+            var ok = await _security.HasAccessAsync(userId.Value, orgId,
+                OrganizationSecurityTable.MembershipRequests, OrganizationSecurityAction.Update, ct);
+            if (!ok) return Forbid();
+        }
+        if (request.VoteDeadline <= DateTime.UtcNow)
+            return BadRequest("Vote deadline must be in the future.");
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var req = await db.OrganizationMembershipRequests
+            .FirstOrDefaultAsync(r => r.Id == id && r.OrganizationId == orgId, ct);
+        if (req is null) return NotFound();
+        if (req.Status != OrganizationMembershipRequestStatus.Pending)
+            return BadRequest("Only pending requests can be opened for a vote.");
+
+        req.IsUnderReview      = true;
+        req.VoteDeadline       = request.VoteDeadline;
+        req.DateUpdated        = DateTime.UtcNow;
+        req.UpdatedByAppUserId = userId.Value;
+        await db.SaveChangesAsync(ct);
+
+        return Ok(_mapper.Map<OrganizationMembershipRequestRecord>(req));
+    }
+
+    /// <summary>Cast or update a vote on an application under review.</summary>
+    [HttpPost("{id:guid}/vote")]
+    public async Task<ActionResult<MembershipReviewVoteRecord>> CastVote(
+        Guid orgId, Guid id, [FromBody] CastVoteRequest request, CancellationToken ct)
+    {
+        var userId = CurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!User.IsInRole(RoleNames.SuperAdmin))
+        {
+            var ok = await _security.HasAccessAsync(userId.Value, orgId,
+                OrganizationSecurityTable.MembershipRequests, OrganizationSecurityAction.Update, ct);
+            if (!ok) return Forbid();
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var req = await db.OrganizationMembershipRequests
+            .FirstOrDefaultAsync(r => r.Id == id && r.OrganizationId == orgId, ct);
+        if (req is null) return NotFound();
+        if (!req.IsUnderReview) return BadRequest("This request is not currently under review.");
+        if (req.VoteDeadline.HasValue && req.VoteDeadline.Value < DateTime.UtcNow)
+            return BadRequest("The vote deadline has passed.");
+
+        // Upsert — one vote per reviewer per request
+        var existing = await db.MembershipReviewVotes
+            .FirstOrDefaultAsync(v => v.OrganizationMembershipRequestId == id
+                                   && v.VoterAppUserId == userId.Value, ct);
+        if (existing is not null)
+        {
+            existing.VoteType  = request.VoteType;
+            existing.Comment   = request.Comment?.Trim();
+            existing.DateVoted = DateTime.UtcNow;
+        }
+        else
+        {
+            var vote = new MembershipReviewVote
+            {
+                Id = Guid.NewGuid(),
+                OrganizationMembershipRequestId = id,
+                VoterAppUserId = userId.Value,
+                VoteType       = request.VoteType,
+                Comment        = request.Comment?.Trim(),
+                DateVoted      = DateTime.UtcNow,
+            };
+            db.MembershipReviewVotes.Add(vote);
+            existing = vote;
+        }
+        await db.SaveChangesAsync(ct);
+
+        var loaded = await db.MembershipReviewVotes.AsNoTracking()
+            .Include(v => v.VoterAppUser)
+            .FirstAsync(v => v.Id == existing.Id, ct);
+        return Ok(_mapper.Map<MembershipReviewVoteRecord>(loaded));
+    }
+
+    /// <summary>
+    /// Returns all votes cast on an application.
+    /// Requires MembershipRequests-Update permission.
+    /// </summary>
+    [HttpGet("{id:guid}/votes")]
+    public async Task<ActionResult<IEnumerable<MembershipReviewVoteRecord>>> GetVotes(
+        Guid orgId, Guid id, CancellationToken ct)
+    {
+        var userId = CurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!User.IsInRole(RoleNames.SuperAdmin))
+        {
+            var ok = await _security.HasAccessAsync(userId.Value, orgId,
+                OrganizationSecurityTable.MembershipRequests, OrganizationSecurityAction.Update, ct);
+            if (!ok) return Forbid();
+        }
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var votes = await db.MembershipReviewVotes
+            .AsNoTracking()
+            .Include(v => v.VoterAppUser)
+            .Where(v => v.OrganizationMembershipRequestId == id)
+            .OrderBy(v => v.DateVoted)
+            .ToListAsync(ct);
+        return Ok(_mapper.Map<IEnumerable<MembershipReviewVoteRecord>>(votes));
+    }
+
     private static async Task TryAuditAsync(Task auditTask)
     {
         try { await auditTask; }
@@ -303,4 +427,8 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
 public sealed record ApplyForMembershipRequest(string? Message);
 public sealed record RespondToMembershipRequest(
     OrganizationMembershipRequestStatus Status,
-    string? ResponseNote);
+    string? ResponseNote,
+    bool? CanReapply = null,
+    string? DenialReason = null);
+public sealed record OpenVoteRequest(DateTime VoteDeadline);
+public sealed record CastVoteRequest(Ben.Data.Common.Enums.MembershipVoteType VoteType, string? Comment);

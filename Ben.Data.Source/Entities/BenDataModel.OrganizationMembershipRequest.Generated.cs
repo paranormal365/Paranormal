@@ -17,6 +17,23 @@ namespace Ben.Data.Source.Entities
         /// <summary>Current lifecycle state of this application.</summary>
         public OrganizationMembershipRequestStatus Status { get; set; } = OrganizationMembershipRequestStatus.Pending;
 
+        // ── Phase 3: committee review ─────────────────────────────────────────
+
+        /// <summary>When true, the application has been escalated to a committee vote.</summary>
+        public bool IsUnderReview { get; set; }
+
+        /// <summary>Deadline for committee members to cast their votes. Null = not in review.</summary>
+        public DateTime? VoteDeadline { get; set; }
+
+        /// <summary>
+        /// When denied: whether the applicant is allowed to reapply in the future.
+        /// Null = not yet responded.
+        /// </summary>
+        public bool? CanReapply { get; set; }
+
+        /// <summary>Optional reason provided when denying the application.</summary>
+        public string? DenialReason { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
 
@@ -33,5 +50,7 @@ namespace Ben.Data.Source.Entities
 
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
+        public virtual ICollection<OrganizationMembershipAnswer> Answers { get; set; } = new List<OrganizationMembershipAnswer>();
+        public virtual ICollection<MembershipReviewVote> ReviewVotes { get; set; } = new List<MembershipReviewVote>();
     }
 }

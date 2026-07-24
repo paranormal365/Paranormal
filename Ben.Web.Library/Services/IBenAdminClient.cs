@@ -242,10 +242,21 @@ public interface IBenAdminClient
     Task<OrganizationMembershipRequestRecord?> ApplyForMembershipAsync(Guid orgId, string? message, CancellationToken token = default);
 
     /// <summary>Accepts or denies a pending membership application (requires MembershipRequests-Update permission).</summary>
-    Task<OrganizationMembershipRequestRecord?> RespondToMembershipRequestAsync(Guid orgId, Guid requestId, OrganizationMembershipRequestStatus status, string? responseNote, CancellationToken token = default);
+    Task<OrganizationMembershipRequestRecord?> RespondToMembershipRequestAsync(Guid orgId, Guid requestId, OrganizationMembershipRequestStatus status, string? responseNote, bool? canReapply = null, string? denialReason = null, CancellationToken token = default);
 
     /// <summary>Withdraws the applicant's own pending request.</summary>
     Task<bool> WithdrawMembershipRequestAsync(Guid orgId, Guid requestId, CancellationToken token = default);
+
+    // ── Membership Questions (Phase 3) ────────────────────────────────────────
+    Task<IReadOnlyList<OrganizationMembershipQuestionRecord>> GetMembershipQuestionsAsync(Guid orgId, CancellationToken token = default);
+    Task<OrganizationMembershipQuestionRecord?> CreateMembershipQuestionAsync(Guid orgId, UpsertMembershipQuestionRequest request, CancellationToken token = default);
+    Task<OrganizationMembershipQuestionRecord?> UpdateMembershipQuestionAsync(Guid orgId, Guid id, UpsertMembershipQuestionRequest request, CancellationToken token = default);
+    Task<bool> DeleteMembershipQuestionAsync(Guid orgId, Guid id, CancellationToken token = default);
+
+    // ── Membership Voting (Phase 3) ───────────────────────────────────────────
+    Task<OrganizationMembershipRequestRecord?> OpenMembershipVoteAsync(Guid orgId, Guid requestId, DateTime voteDeadline, CancellationToken token = default);
+    Task<MembershipReviewVoteRecord?> CastMembershipVoteAsync(Guid orgId, Guid requestId, Ben.Data.Common.Enums.MembershipVoteType voteType, string? comment, CancellationToken token = default);
+    Task<IReadOnlyList<MembershipReviewVoteRecord>> GetMembershipVotesAsync(Guid orgId, Guid requestId, CancellationToken token = default);
 
     // ── Organization Files ────────────────────────────────────────────────────
 
@@ -792,6 +803,13 @@ public sealed record OrgSearchResult(
     bool IsWithinRange,
     bool AcceptsClientsOutsideRange,
     Guid? ActiveLogoFileId);
+
+// ── Membership Phase 3 request records ────────────────────────────────────────
+public sealed record UpsertMembershipQuestionRequest(
+    string QuestionText,
+    bool IsRequired,
+    int SortOrder,
+    bool IsActive);
 
 // ── Case request records ──────────────────────────────────────────────────────
 public sealed record CreateCaseRequest(
