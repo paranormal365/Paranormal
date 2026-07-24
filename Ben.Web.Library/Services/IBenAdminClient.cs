@@ -348,6 +348,17 @@ public interface IBenAdminClient
 
     Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default);
 
+    // ── Case Transfers ────────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<CaseTransferLogRecord>> GetCaseTransfersAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<CaseTransferLogRecord?> ProposeCaseTransferAsync(Guid orgId, Guid caseId, Guid toOrganizationId, string? reason, CancellationToken token = default);
+    Task<CaseTransferLogRecord?> RespondCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, bool accept, string? rejectionReason, CancellationToken token = default);
+
+    // ── Public Case Discovery ─────────────────────────────────────────────────
+
+    Task<IReadOnlyList<PublicCaseListItem>> GetPublicCasesAsync(string orgUrlName, CancellationToken token = default);
+    Task<PublicCaseDetail?> GetPublicCaseAsync(string orgUrlName, string caseRef, CancellationToken token = default);
+
     // ── Investigations ────────────────────────────────────────────────────────
 
     Task<IReadOnlyList<InvestigationRecord>> GetInvestigationsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
@@ -847,6 +858,39 @@ public sealed record OrgSearchResult(
     bool IsWithinRange,
     bool AcceptsClientsOutsideRange,
     Guid? ActiveLogoFileId);
+
+// ── Phase 6: Case Transfer + Public Discovery records ─────────────────────────
+public sealed record PublicCaseListItem(
+    string CaseReference,
+    string Title,
+    string City,
+    string State,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    DateTime DateCaseOpened,
+    DateTime? DateCaseClosed,
+    bool IsHaunted);
+
+public sealed record PublicCaseDetail(
+    string CaseReference,
+    string Title,
+    string City,
+    string State,
+    string Country,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    bool IsHaunted,
+    string? ClientName,
+    string? Description,
+    DateTime DateCaseOpened,
+    DateTime? DateCaseClosed,
+    IReadOnlyList<PublicTimelineEntry> Timeline,
+    string OrgName,
+    string OrgUrlName);
+
+public sealed record PublicTimelineEntry(
+    Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,
+    DateTime? EventDateTime,
+    string? Title,
+    string? Body);
 
 // ── Phase 5: Investigation + Evidence Voting request records ──────────────────
 public sealed record UpsertInvestigationRequest(

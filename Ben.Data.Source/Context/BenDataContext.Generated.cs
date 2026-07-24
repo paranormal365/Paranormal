@@ -77,6 +77,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<Investigation> Investigations { get; set; }
         public virtual DbSet<InvestigationAttendee> InvestigationAttendees { get; set; }
         public virtual DbSet<EvidenceVote> EvidenceVotes { get; set; }
+        public virtual DbSet<CaseTransferLog> CaseTransferLogs { get; set; }
         public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
         public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
         public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
@@ -1183,6 +1184,27 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Comment).HasMaxLength(1000);
             modelBuilder.Entity<EvidenceVote>()
                 .HasIndex(e => new { e.UploadFileId, e.VoterAppUserId }).IsUnique();
+
+            // ── CaseTransferLog ───────────────────────────────────────────────
+            modelBuilder.Entity<CaseTransferLog>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseTransferLog>()
+                .HasOne(e => e.FromOrganization).WithMany()
+                .HasForeignKey(e => e.FromOrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseTransferLog>()
+                .HasOne(e => e.ToOrganization).WithMany()
+                .HasForeignKey(e => e.ToOrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseTransferLog>()
+                .HasOne(e => e.ProposedByAppUser).WithMany()
+                .HasForeignKey(e => e.ProposedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseTransferLog>()
+                .HasOne(e => e.RespondedByAppUser).WithMany()
+                .HasForeignKey(e => e.RespondedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseTransferLog>()
+                .Property(e => e.TransferReason).HasMaxLength(1000);
+            modelBuilder.Entity<CaseTransferLog>()
+                .Property(e => e.RejectionReason).HasMaxLength(1000);
         }
     }
 }

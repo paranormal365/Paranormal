@@ -628,6 +628,38 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/upload-files/{id}", token);
 
+    // ── Case Transfers ────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<CaseTransferLogRecord>> GetCaseTransfersAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<CaseTransferLogRecord>>(
+            $"/api/organizations/{orgId}/cases/{caseId}/transfers", token);
+        return result ?? [];
+    }
+
+    public Task<CaseTransferLogRecord?> ProposeCaseTransferAsync(Guid orgId, Guid caseId, Guid toOrganizationId, string? reason, CancellationToken token = default)
+        => _api.PostAsync<object, CaseTransferLogRecord>(
+               $"/api/organizations/{orgId}/cases/{caseId}/transfers",
+               new { ToOrganizationId = toOrganizationId, TransferReason = reason }, token);
+
+    public Task<CaseTransferLogRecord?> RespondCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, bool accept, string? rejectionReason, CancellationToken token = default)
+        => _api.PutAsync<object, CaseTransferLogRecord>(
+               $"/api/organizations/{orgId}/cases/{caseId}/transfers/{logId}/respond",
+               new { Accept = accept, Reason = rejectionReason }, token);
+
+    // ── Public Case Discovery ─────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<PublicCaseListItem>> GetPublicCasesAsync(string orgUrlName, CancellationToken token = default)
+    {
+        var result = await _api.GetAnonymousAsync<IReadOnlyList<PublicCaseListItem>>(
+            $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/cases", token);
+        return result ?? [];
+    }
+
+    public Task<PublicCaseDetail?> GetPublicCaseAsync(string orgUrlName, string caseRef, CancellationToken token = default)
+        => _api.GetAnonymousAsync<PublicCaseDetail>(
+               $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/cases/{Uri.EscapeDataString(caseRef)}", token);
+
     // ── Investigations ────────────────────────────────────────────────────────
 
     private static string InvBase(Guid orgId, Guid caseId)
