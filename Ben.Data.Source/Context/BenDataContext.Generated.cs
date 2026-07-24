@@ -74,6 +74,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrgCalendarEventType> OrgCalendarEventTypes { get; set; }
         public virtual DbSet<OrgCalendarEvent> OrgCalendarEvents { get; set; }
         public virtual DbSet<OrgCalendarEventAttendee> OrgCalendarEventAttendees { get; set; }
+        public virtual DbSet<Investigation> Investigations { get; set; }
+        public virtual DbSet<InvestigationAttendee> InvestigationAttendees { get; set; }
+        public virtual DbSet<EvidenceVote> EvidenceVotes { get; set; }
         public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
         public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
         public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
@@ -1128,6 +1131,58 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.AssignedTask).HasMaxLength(512);
             modelBuilder.Entity<OrgCalendarEventAttendee>()
                 .HasIndex(e => new { e.OrgCalendarEventId, e.AppUserId }).IsUnique();
+
+            // ── Investigation ─────────────────────────────────────────────────
+            modelBuilder.Entity<Investigation>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<Investigation>()
+                .HasOne(e => e.OrgCalendarEvent).WithMany()
+                .HasForeignKey(e => e.OrgCalendarEventId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<Investigation>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Investigation>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Investigation>()
+                .Property(e => e.Title).HasMaxLength(256);
+            modelBuilder.Entity<Investigation>()
+                .Property(e => e.Description).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<Investigation>()
+                .Property(e => e.Notes).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<Investigation>()
+                .Property(e => e.Location).HasMaxLength(512);
+
+            // ── InvestigationAttendee ─────────────────────────────────────────
+            modelBuilder.Entity<InvestigationAttendee>()
+                .HasOne(e => e.Investigation).WithMany(e => e.Attendees)
+                .HasForeignKey(e => e.InvestigationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<InvestigationAttendee>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvestigationAttendee>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvestigationAttendee>()
+                .Property(e => e.AssignedRole).HasMaxLength(128);
+            modelBuilder.Entity<InvestigationAttendee>()
+                .HasIndex(e => new { e.InvestigationId, e.AppUserId }).IsUnique();
+
+            // ── EvidenceVote ──────────────────────────────────────────────────
+            modelBuilder.Entity<EvidenceVote>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EvidenceVote>()
+                .HasOne(e => e.VoterAppUser).WithMany()
+                .HasForeignKey(e => e.VoterAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EvidenceVote>()
+                .HasOne(e => e.VoterOrganization).WithMany()
+                .HasForeignKey(e => e.VoterOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EvidenceVote>()
+                .Property(e => e.Comment).HasMaxLength(1000);
+            modelBuilder.Entity<EvidenceVote>()
+                .HasIndex(e => new { e.UploadFileId, e.VoterAppUserId }).IsUnique();
         }
     }
 }

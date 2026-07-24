@@ -628,6 +628,65 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/upload-files/{id}", token);
 
+    // ── Investigations ────────────────────────────────────────────────────────
+
+    private static string InvBase(Guid orgId, Guid caseId)
+        => $"/api/organizations/{orgId}/cases/{caseId}/investigations";
+
+    public async Task<IReadOnlyList<InvestigationRecord>> GetInvestigationsAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<InvestigationRecord>>(InvBase(orgId, caseId), token);
+        return result ?? [];
+    }
+
+    public Task<InvestigationRecord?> GetInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
+        => _api.GetAsync<InvestigationRecord>($"{InvBase(orgId, caseId)}/{id}", token);
+
+    public Task<InvestigationRecord?> CreateInvestigationAsync(Guid orgId, Guid caseId, UpsertInvestigationRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertInvestigationRequest, InvestigationRecord>(InvBase(orgId, caseId), request, token);
+
+    public Task<InvestigationRecord?> UpdateInvestigationAsync(Guid orgId, Guid caseId, Guid id, UpsertInvestigationRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertInvestigationRequest, InvestigationRecord>($"{InvBase(orgId, caseId)}/{id}", request, token);
+
+    public Task<bool> DeleteInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"{InvBase(orgId, caseId)}/{id}", token);
+
+    public async Task<IReadOnlyList<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<InvestigationAttendeeRecord>>($"{InvBase(orgId, caseId)}/{id}/attendees", token);
+        return result ?? [];
+    }
+
+    public Task<InvestigationAttendeeRecord?> AddInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, AddInvestigationAttendeeRequest request, CancellationToken token = default)
+        => _api.PostAsync<AddInvestigationAttendeeRequest, InvestigationAttendeeRecord>($"{InvBase(orgId, caseId)}/{id}/attendees", request, token);
+
+    public Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, CancellationToken token = default)
+        => _api.PutAsync<object, InvestigationAttendeeRecord>(
+               $"{InvBase(orgId, caseId)}/{id}/attendees/{attendeeId}/attendance",
+               new { DidAttend = didAttend, AssignedRole = assignedRole }, token);
+
+    public Task<bool> RemoveInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, CancellationToken token = default)
+        => _api.DeleteAsync($"{InvBase(orgId, caseId)}/{id}/attendees/{attendeeId}", token);
+
+    // ── Evidence Voting ───────────────────────────────────────────────────────
+
+    public Task<EvidenceVoteSummary?> GetEvidenceVoteSummaryAsync(Guid uploadFileId, CancellationToken token = default)
+        => _api.GetAnonymousAsync<EvidenceVoteSummary>($"/api/evidence-votes/{uploadFileId}/summary", token);
+
+    public async Task<IReadOnlyList<EvidenceVoteRecord>> GetEvidenceVotesAsync(Guid uploadFileId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<EvidenceVoteRecord>>($"/api/evidence-votes/{uploadFileId}", token);
+        return result ?? [];
+    }
+
+    public Task<EvidenceVoteSummary?> CastEvidenceVoteAsync(Guid uploadFileId, Ben.Data.Common.Enums.EvidenceVoteType voteType, string? comment, CancellationToken token = default)
+        => _api.PostAsync<object, EvidenceVoteSummary>(
+               $"/api/evidence-votes/{uploadFileId}",
+               new { VoteType = voteType, Comment = comment }, token);
+
+    public Task<bool> RemoveEvidenceVoteAsync(Guid uploadFileId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/evidence-votes/{uploadFileId}", token);
+
     // ── Messaging ─────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<OrgMessageRecord>> GetOrgInboxAsync(Guid orgId, CancellationToken token = default)

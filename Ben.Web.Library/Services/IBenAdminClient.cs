@@ -348,6 +348,25 @@ public interface IBenAdminClient
 
     Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default);
 
+    // ── Investigations ────────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<InvestigationRecord>> GetInvestigationsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<InvestigationRecord?> GetInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
+    Task<InvestigationRecord?> CreateInvestigationAsync(Guid orgId, Guid caseId, UpsertInvestigationRequest request, CancellationToken token = default);
+    Task<InvestigationRecord?> UpdateInvestigationAsync(Guid orgId, Guid caseId, Guid id, UpsertInvestigationRequest request, CancellationToken token = default);
+    Task<bool> DeleteInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
+    Task<IReadOnlyList<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
+    Task<InvestigationAttendeeRecord?> AddInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, AddInvestigationAttendeeRequest request, CancellationToken token = default);
+    Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, CancellationToken token = default);
+    Task<bool> RemoveInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, CancellationToken token = default);
+
+    // ── Evidence Voting ───────────────────────────────────────────────────────
+
+    Task<EvidenceVoteSummary?> GetEvidenceVoteSummaryAsync(Guid uploadFileId, CancellationToken token = default);
+    Task<IReadOnlyList<EvidenceVoteRecord>> GetEvidenceVotesAsync(Guid uploadFileId, CancellationToken token = default);
+    Task<EvidenceVoteSummary?> CastEvidenceVoteAsync(Guid uploadFileId, Ben.Data.Common.Enums.EvidenceVoteType voteType, string? comment, CancellationToken token = default);
+    Task<bool> RemoveEvidenceVoteAsync(Guid uploadFileId, CancellationToken token = default);
+
     // ── Messaging ─────────────────────────────────────────────────────────────
 
     Task<IReadOnlyList<OrgMessageRecord>> GetOrgInboxAsync(Guid orgId, CancellationToken token = default);
@@ -828,6 +847,19 @@ public sealed record OrgSearchResult(
     bool IsWithinRange,
     bool AcceptsClientsOutsideRange,
     Guid? ActiveLogoFileId);
+
+// ── Phase 5: Investigation + Evidence Voting request records ──────────────────
+public sealed record UpsertInvestigationRequest(
+    string Title,
+    string? Description,
+    string? Location,
+    DateTime ScheduledDateTime,
+    DateTime? EndDateTime,
+    Ben.Data.Common.Enums.InvestigationStatus Status,
+    string? Notes,
+    Guid? OrgCalendarEventId);
+
+public sealed record AddInvestigationAttendeeRequest(Guid AppUserId, string? AssignedRole);
 
 // ── Phase 4: Messaging + Calendar request records ─────────────────────────────
 public sealed record SendOrgMessageRequest(
