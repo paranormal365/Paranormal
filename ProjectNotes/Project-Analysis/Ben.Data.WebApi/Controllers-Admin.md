@@ -101,3 +101,50 @@ Full CRUD for individual extension patterns.
 Beyond the base CRUD, has:
 - `GET /api/admin/app-users/{id}/detail` — returns `AppUserDetailAdminRecord` aggregate.
 - `PUT /api/admin/app-users/{id}/profile` — updates specific profile fields.
+
+---
+
+## `AdminEntityControllerBase` — Create Fix *(2026-07-22)*
+
+The `Create` method now overwrites `CreatedByAppUserId` and `DateCreated` from the authenticated JWT claims via reflection **after** model binding, before `SaveChangesAsync`. This prevents `Guid.Empty` FK violations when the client doesn't send these fields.
+
+New helpers:
+- `SetPropertyIfExists(entity, propertyName, value)` — reflection setter with null guard
+- `GetPropertyIfNotSet<T>(entity, propertyName, defaultValue)` — returns existing value or default if property is default(T) (used to default `IsActive=true`)
+
+---
+
+## Entity-Scoped Organization Controllers *(added 2026-07-22)*
+
+These controllers live in `Controllers/Entities/` and operate under a parent `{orgId}` route segment. They use org-level `OrganizationSecurityService` permissions rather than the SuperAdmin base class.
+
+### `OrganizationMembershipRequestController` — `api/organizations/{orgId}/membership-requests`
+
+| Endpoint | Auth | Description |
+|---|---|---|
+| `GET /` | Org member | All requests for the org |
+| `GET /my` | Any user | The calling user's pending request |
+| `POST /` | Any user | Apply — validates `IsAcceptingApplications=true` and no duplicate pending |
+| `PUT /{id}/respond` | Org admin | Accept (→ auto-creates `OrganizationUserMembership` + sends `UserMessage`) or Deny |
+| `DELETE /{id}` | Applicant | Withdraw own pending request |
+
+### `OrganizationFileController` — `api/organizations/{orgId}/files`
+
+| Endpoint | Auth | Description |
+|---|---|---|
+| `GET /` | Org member | List org files |
+| `GET /delete-log` | Org admin | Immutable delete audit log |
+| `GET /{id}/download` | Org member or public | Signed download |
+| `POST /` | Org + Create perm | Direct upload |
+| `POST /copy-from-user/{id}` | Org + Create perm | Copy accessible user file to org storage; returns `OrgFileCopyResult` with `CanPublishImmediately` |
+| `PUT /{id}/publish` | Org + Update perm | Toggle publish; stamps `PublishedByAppUserId` + `DatePublished` |
+| `PUT /{id}` | Org + Update perm | Metadata only (description, sortOrder) |
+| `DELETE /{id}` | Org + Delete perm | Writes `OrganizationFileDeleteLog` snapshot first, then deletes storage + DB row |
+
+### `OrganizationAddressMapConfigController` — `api/organizations/{orgId}/addresses/{addressId}/map-config`
+
+| Endpoint | Auth | Description |
+|---|---|---|
+| `GET /` | Org + OrganizationAddress-Read perm | Load config |
+| `PUT /` | Org + OrganizationAddress-Update perm | Upsert (creates or replaces) |
+| `DELETE /` | Org + OrganizationAddress-Update perm | Remove config (resets to defaults) |

@@ -16,7 +16,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [ApiController]
 [Authorize]
 [Route("api/upload-files/{fileId:guid}/audio-config")]
-public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper) : BenControllerBase
+public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper, IAuditLogService auditLog) : BenControllerBase
 {
     // ── GET /api/upload-files/{fileId}/audio-config ───────────────────────────
 
@@ -44,6 +44,9 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper) 
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
 
+        var existingBefore = await db.UploadFileAudioConfigs.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.UploadFileId == fileId);
+
         var existing = await db.UploadFileAudioConfigs
             .FirstOrDefaultAsync(c => c.UploadFileId == fileId);
 
@@ -67,6 +70,11 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper) 
         Apply(request, existing);
         await db.SaveChangesAsync();
 
+        if (existingBefore is null)
+            _ = TryAuditAsync(auditLog.LogCreateAsync(nameof(UploadFileAudioConfig), existing.Id, existing, userId, AppSources.WebApi, CancellationToken.None));
+        else
+            _ = TryAuditAsync(auditLog.LogUpdateAsync(nameof(UploadFileAudioConfig), existing.Id, existingBefore, existing, userId, AppSources.WebApi, CancellationToken.None));
+
         return Ok(mapper.Map<UploadFileAudioConfigRecord>(existing));
     }
 
@@ -83,6 +91,7 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper) 
 
         db.UploadFileAudioConfigs.Remove(entity);
         await db.SaveChangesAsync();
+        _ = TryAuditAsync(auditLog.LogDeleteAsync(nameof(UploadFileAudioConfig), entity.Id, entity, GetCurrentUserId(), AppSources.WebApi, CancellationToken.None));
 
         return NoContent();
     }

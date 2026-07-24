@@ -1,0 +1,314 @@
+@page "/organizations/{OrgId:guid}/calendar"
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+<PageTitle>Calendar</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <h3 class="mb-0">Organization Calendar</h3>
+    </div>
+
+    @if (_error is not null) { <div class="alert alert-danger mb-3">@_error</div> }
+
+    @if (_appointments is null)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading calendar…" />
+    }
+    else
+    {
+        @* TelerikScheduler with built-in edit form intercepted for custom fields *@
+        <TelerikScheduler Data="@_appointments"
+                          @bind-Date="@_schedulerDate"
+                          @bind-View="@_currentView"
+                          Height="700px"
+                          AllowCreate="true"
+                          AllowUpdate="true"
+                          AllowDelete="true"
+                          OnEdit="@OnSchedulerEdit"
+                          OnDelete="@OnSchedulerDelete">
+            <SchedulerViews>
+                <SchedulerDayView StartTime="@_dayStart" EndTime="@_dayEnd" />
+                <SchedulerWeekView StartTime="@_dayStart" EndTime="@_dayEnd" />
+                <SchedulerMonthView />
+                <SchedulerMultiDayView NumberOfDays="3" StartTime="@_dayStart" EndTime="@_dayEnd" />
+            </SchedulerViews>
+        </TelerikScheduler>
+    }
+</div>
+
+@* ── Custom event edit dialog (intercepts OnEdit) ─────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showEventDialog"
+               Title="@(_isNewEvent ? "New Event" : "Edit Event")"
+               Width="580px">
+    <DialogContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
+                <TelerikTextBox @bind-Value="@_form.Title" Width="100%" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Start</label>
+                <TelerikDateTimePicker @bind-Value="@_form.Start" Width="100%" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">End</label>
+                <TelerikDateTimePicker @bind-Value="@_form.End" Width="100%" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Event Type</label>
+                <TelerikDropDownList Data="@_eventTypeOptions"
+                                     @bind-Value="@_form.EventTypeId"
+                                     TextField="@nameof(EventTypeOption.Label)"
+                                     ValueField="@nameof(EventTypeOption.Value)"
+                                     Width="100%" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Location (optional)</label>
+                <TelerikTextBox @bind-Value="@_form.Location" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Description (optional)</label>
+                <TelerikTextArea @bind-Value="@_form.Description" Rows="3" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Recurrence Rule (RRULE, optional)</label>
+                <TelerikTextBox @bind-Value="@_form.RecurrenceRule" Width="100%"
+                                Placeholder="e.g. FREQ=WEEKLY;BYDAY=TU" />
+                <div class="form-text">Leave blank for a one-time event. Uses iCal RFC5545 format.</div>
+            </div>
+            <div class="col-12 d-flex gap-4">
+                <div class="d-flex align-items-center gap-2">
+                    <TelerikCheckBox @bind-Value="@_form.IsAllDay" Id="ev-allday" />
+                    <label for="ev-allday" class="form-label mb-0">All Day</label>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <TelerikCheckBox @bind-Value="@_form.IsPublic" Id="ev-public" />
+                    <label for="ev-public" class="form-label mb-0">Public</label>
+                </div>
+            </div>
+        </div>
+        @if (_dialogError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
+        }
+    </DialogContent>
+    <DialogButtons>
+        @if (!_isNewEvent)
+        {
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           Icon="@SvgIcon.Trash"
+                           OnClick="DeleteFromDialog"
+                           Enabled="@(!_isBusy)">Delete</TelerikButton>
+        }
+        <TelerikButton OnClick="@(() => _showEventDialog = false)">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Icon="@SvgIcon.Save"
+                       OnClick="SaveEvent"
+                       Enabled="@(!_isBusy && !string.IsNullOrWhiteSpace(_form.Title))">
+            @(_isBusy ? "Saving…" : "Save")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private List<OrgCalendarAppointment>? _appointments;
+    private List<OrgCalendarEventRecord> _events = [];
+    private List<OrgCalendarEventTypeRecord> _eventTypes = [];
+
+    private SchedulerView _currentView = SchedulerView.Week;
+    private DateTime _schedulerDate   = DateTime.Today;
+    private DateTime _dayStart        = new DateTime(2000, 1, 1, 7, 0, 0);
+    private DateTime _dayEnd          = new DateTime(2000, 1, 1, 22, 0, 0);
+
+    private string? _error;
+    private bool _isBusy;
+    private bool _showEventDialog;
+    private bool _isNewEvent;
+    private OrgCalendarEventRecord? _editingEvent;
+    private string? _dialogError;
+    private EventFormModel _form = new();
+    private List<EventTypeOption> _eventTypeOptions = [new(null, "(No type)")];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            _eventTypes = (await AdminClient.GetCalendarEventTypesAsync(OrgId)).ToList();
+            _eventTypeOptions = [new(null, "(No type)"),
+                .. _eventTypes.Select(t => new EventTypeOption(t.Id, t.Name))];
+            await LoadEventsAsync();
+        }
+        catch { _error = "Failed to load calendar."; }
+        StateHasChanged();
+    }
+
+    private async Task LoadEventsAsync()
+    {
+        _events = (await AdminClient.GetCalendarEventsAsync(OrgId)).ToList();
+        _appointments = _events.Select(ToAppointment).ToList();
+    }
+
+    private OrgCalendarAppointment ToAppointment(OrgCalendarEventRecord e) => new()
+    {
+        Id                   = e.Id,
+        Title                = e.Title,
+        Description          = e.Description,
+        Start                = e.StartDateTime,
+        End                  = e.EndDateTime,
+        IsAllDay             = e.IsAllDay,
+        RecurrenceRule       = e.RecurrenceRule,
+        RecurrenceExceptions = null,
+        RecurrenceId         = null,
+    };
+
+    // ── Scheduler event handlers (correct API from docs) ──────────────────────
+
+    /// <summary>
+    /// Intercept OnEdit to cancel the built-in form and show our custom dialog.
+    /// Fires for both create (args.IsNew = true) and update (args.IsNew = false).
+    /// </summary>
+    private void OnSchedulerEdit(SchedulerEditEventArgs args)
+    {
+        args.IsCancelled = true; // prevent built-in edit form
+
+        _isNewEvent    = args.IsNew;
+        _editingEvent  = args.IsNew ? null : _events.FirstOrDefault(e => e.Id == (Guid)args.Item.GetType().GetProperty("Id")!.GetValue(args.Item)!);
+        _dialogError   = null;
+
+        if (args.IsNew)
+        {
+            _form = new EventFormModel
+            {
+                Start    = args.Start,
+                End      = args.Start.AddHours(1),
+                IsAllDay = args.IsAllDay,
+            };
+        }
+        else if (_editingEvent is not null)
+        {
+            _form = new EventFormModel
+            {
+                Title          = _editingEvent.Title,
+                Description    = _editingEvent.Description ?? "",
+                Location       = _editingEvent.Location ?? "",
+                Start          = _editingEvent.StartDateTime,
+                End            = _editingEvent.EndDateTime,
+                IsAllDay       = _editingEvent.IsAllDay,
+                IsPublic       = _editingEvent.IsPublic,
+                EventTypeId    = _editingEvent.EventTypeId,
+                RecurrenceRule = _editingEvent.RecurrenceRule ?? "",
+            };
+        }
+        else
+        {
+            _form = new EventFormModel { Start = DateTime.Now, End = DateTime.Now.AddHours(1) };
+        }
+
+        _showEventDialog = true;
+    }
+
+    /// <summary>OnDelete fires when the user clicks the ✕ on an appointment.</summary>
+    private async Task OnSchedulerDelete(SchedulerDeleteEventArgs args)
+    {
+        var appt = args.Item as OrgCalendarAppointment;
+        if (appt is null) return;
+        try
+        {
+            await AdminClient.DeleteCalendarEventAsync(OrgId, appt.Id);
+            await LoadEventsAsync();
+        }
+        catch { _error = "Delete failed."; }
+    }
+
+    // ── Custom dialog save / delete ───────────────────────────────────────────
+
+    private async Task SaveEvent()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Title)) { _dialogError = "Title is required."; return; }
+        _isBusy = true; _dialogError = null;
+        try
+        {
+            var req = new UpsertCalendarEventRequest(
+                Title:          _form.Title.Trim(),
+                Description:    string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim(),
+                Location:       string.IsNullOrWhiteSpace(_form.Location) ? null : _form.Location.Trim(),
+                StartDateTime:  _form.Start,
+                EndDateTime:    _form.End,
+                IsAllDay:       _form.IsAllDay,
+                IsPublic:       _form.IsPublic,
+                EventTypeId:    _form.EventTypeId,
+                CaseId:         _editingEvent?.CaseId,
+                RecurrenceRule: string.IsNullOrWhiteSpace(_form.RecurrenceRule) ? null : _form.RecurrenceRule.Trim());
+
+            OrgCalendarEventRecord? result;
+            if (_isNewEvent || _editingEvent is null)
+                result = await AdminClient.CreateCalendarEventAsync(OrgId, req);
+            else
+                result = await AdminClient.UpdateCalendarEventAsync(OrgId, _editingEvent.Id, req);
+
+            if (result is null) { _dialogError = "Save failed."; }
+            else { _showEventDialog = false; await LoadEventsAsync(); }
+        }
+        catch (Exception ex) { _dialogError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private async Task DeleteFromDialog()
+    {
+        if (_editingEvent is null) return;
+        _isBusy = true;
+        try
+        {
+            await AdminClient.DeleteCalendarEventAsync(OrgId, _editingEvent.Id);
+            _showEventDialog = false;
+            await LoadEventsAsync();
+        }
+        catch { _error = "Delete failed."; }
+        finally { _isBusy = false; }
+    }
+
+    // ── Appointment DTO — uses the exact default field names from Telerik docs ──
+
+    /// <summary>
+    /// Appointment model using Telerik Scheduler's default expected property names:
+    /// Id, Title, Description, Start, End, IsAllDay, RecurrenceRule, RecurrenceExceptions, RecurrenceId.
+    /// </summary>
+    private class OrgCalendarAppointment
+    {
+        public Guid            Id                   { get; set; }
+        public string          Title                { get; set; } = "";
+        public string?         Description          { get; set; }
+        public DateTime        Start                { get; set; }
+        public DateTime        End                  { get; set; }
+        public bool            IsAllDay             { get; set; }
+        public string?         RecurrenceRule       { get; set; }
+        public List<DateTime>? RecurrenceExceptions { get; set; }
+        public Guid?           RecurrenceId         { get; set; }
+
+        public OrgCalendarAppointment() { Id = Guid.NewGuid(); }
+    }
+
+    private class EventFormModel
+    {
+        public string   Title          { get; set; } = "";
+        public string   Description    { get; set; } = "";
+        public string   Location       { get; set; } = "";
+        public DateTime Start          { get; set; } = DateTime.Now;
+        public DateTime End            { get; set; } = DateTime.Now.AddHours(1);
+        public bool     IsAllDay       { get; set; }
+        public bool     IsPublic       { get; set; }
+        public Guid?    EventTypeId    { get; set; }
+        public string   RecurrenceRule { get; set; } = "";
+    }
+
+    private record EventTypeOption(Guid? Value, string Label);
+}
+
+@using Ben.Data.Common.Enums

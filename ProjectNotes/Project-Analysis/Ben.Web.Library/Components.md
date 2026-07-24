@@ -682,3 +682,154 @@ Key behaviour changes from original implementation:
   `seeking` asynchronously; `skipNextSeek` flag absorbs that event so the `timeupdate` end-monitor survives.
 - **Child clip overlay**: Saved clips overlaid as green locked regions; shown as `AudioFilePreview` below.
 - **Resizable**: Full-view player has `Resizable="true"` — bottom edge can be dragged.
+
+---
+
+## Icon Picker Components (`Manage/Icon/` folder) *(added 2026-07-22)*
+
+### `IconPickerData.cs`
+
+Static data class with three collections:
+- `TelerikIcons` (lazy-init via reflection on `SvgIcon`, ~400+ entries) — yields `TelerikIconEntry(Key, DisplayName)` where `Key` is the PascalCase property name (e.g. `"Home"`)
+- `BootstrapIcons` — `IEnumerable<string>` of ~200 `bi-*` class names
+- `FontAwesomeIcons` — `IEnumerable<string>` of ~300 `fas fa-*` names
+
+Icon class conventions used throughout the app:
+- `"t:Home"` → Telerik SvgIcon (prefix `t:`, then PascalCase property name)
+- `"bi bi-calendar"` → Bootstrap Icons
+- `"fas fa-star"` → Font Awesome
+
+**Helper:** `IconPickerDialog.ResolveTelerikIcon(string? iconClass)` static method converts a `"t:PropertyName"` string to the corresponding `ISvgIcon` via reflection.
+
+---
+
+### `IconPickerDialog.razor`
+
+A position-fixed overlay panel (NOT a `TelerikDialog` — avoids Telerik portal `ShouldRender=false` bug).
+
+**Architecture:** Rendered with `@if (Visible)` directly in the parent component's render tree so `StateHasChanged` updates flow normally.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `Visible` | `bool` | Shows/hides the overlay |
+| `VisibleChanged` | `EventCallback<bool>` | Two-way bind support |
+| `OnIconSelected` | `EventCallback<string>` | Fires with the chosen icon class string |
+
+**Internals:**
+- `TelerikTabStrip` with `@bind-ActiveTabId` (string IDs: `"telerik"`, `"bootstrap"`, `"fontawesome"`) — correct Telerik API; `ActiveTabIndex` (int) does not exist
+- Lazy per-tab rendering (`@if (_activeTabId == "telerik")`) to avoid SignalR overload from ~900 simultaneous components
+- Search text box filters icons by display name / class string
+- Each tile: click `async (e) => await SelectIconAsync(key)` to fire `OnIconSelected` and close
+
+---
+
+### `IconClassPicker.razor`
+
+Reusable self-contained component that provides a three-state icon field. Used wherever an `IconClass` string needs to be edited.
+
+**Key design decision:** The component manages its own private state and calls its own `StateHasChanged()`. This bypasses the `TelerikDialog.ShouldRender()=false` issue that prevents portal content from re-rendering when `Visible` stays `true`.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `Value` | `string?` | Current icon class |
+| `ValueChanged` | `EventCallback<string?>` | Fires on any change — supports `@bind-Value` |
+
+**Three states:**
+
+| State | Condition | Renders |
+|---|---|---|
+| Empty | `Value` is null/empty | `[Browse Icons]` button |
+| Preview | `Value` is set, not editing | Icon preview + class label + `[Browse]` `[✏]` `[✕]` |
+| Editing | User clicked ✏ | Textbox + `[✓]` `[✕]` |
+
+**Used in:** `AdminLookupTypes.razor`, `AdminUserDetail.razor` (new type dialog), `AdminFileTypes.razor`
+
+---
+
+## Address Map Components (`Manage/Maps/` folder) *(added 2026-07-22)*
+
+### `AddressMapOptions.cs`
+
+Contains three types:
+
+**`AddressMapConfig` record** — mirrors `OrganizationAddressMapConfig` entity:
+
+| Property | Type | Description |
+|---|---|---|
+| `IsOnMap` | `bool` | Whether this address appears on the map |
+| `ShowMarker` | `bool` | Render map marker |
+| `ShowRegion` | `bool` | Render filled circle region |
+| `RegionRadiusMiles` | `double` | Radius in miles |
+| `MarkerColor` | `string` | Hex color for marker |
+| `MarkerIconKey` | `string?` | Telerik SvgIcon property name (from `AddressMapIconRegistry`) |
+| `RegionFillColor` | `string` | Hex color |
+| `RegionFillOpacity` | `double` | 0–1 |
+| `RegionStrokeColor` | `string` | Hex color |
+| `RegionStrokeOpacity` | `double` | 0–1 |
+| `RegionStrokeWidth` | `int` | Pixels |
+
+**`AddressMapIconRegistry`** — dictionary of 8 Telerik SvgIcon names to SVG path strings used for marker template rendering (MapMarker, MapMarkerTarget, Pin, PinSolid, Home, Globe, Star, Heart).
+
+**`MapGeoJsonHelper`** — static helpers:
+- `ComputeCircleGeoJson(lat, lng, radiusMiles, int points=64)` → GeoJSON `Feature` polygon string
+- `HaversineDistanceMiles(lat1, lng1, lat2, lng2)` → `double`
+- `ZoomForRadius(double radiusMiles)` → recommended TelerikMap zoom level (int)
+
+---
+
+### `AddressMapPlayer.razor`
+
+Interactive map component wrapping `TelerikMap` with Tile (OpenStreetMap), Shape (GeoJSON polygon region), and Marker layers.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `Latitude` | `double` | Center latitude |
+| `Longitude` | `double` | Center longitude |
+| `Title` | `string?` | Marker tooltip label |
+| `Config` | `AddressMapConfig` | Display and appearance config |
+| `ConfigChanged` | `EventCallback<AddressMapConfig>` | Two-way bind for config edits |
+| `ShowConfigPanel` | `bool` | Shows edit form below map |
+| `ReadOnly` | `bool` | Hides all edit controls |
+| `Height` | `string` | CSS height (default `"400px"`) |
+| `Zoom` | `int` | Initial zoom (default computed from radius) |
+
+**Config panel controls:**
+- `TelerikColorPicker` for marker color, region fill, region stroke
+- Icon dropdown (8 choices with `TelerikSvgIcon` preview)
+- `TelerikSlider` for region radius (0.1–50 miles)
+- Click anywhere on the map (`OnClick(MapClickEventArgs)`) sets the radius by computing Haversine distance from center to clicked point
+
+**JS module** (`AddressMapPlayer.razor.js`): registers global `addressMapTileTemplate` and `addressMapMarkerTemplate` functions for the TelerikMap template system.
+
+---
+
+## Organization Membership + Files Components *(added 2026-07-22)*
+
+### `OrganizationMembers.razor`
+
+**Route:** `/organizations/{OrgId:guid}/members`
+
+Member list grid with inline `OrganizationMembershipRequests` embedded below it. Supports role display, add/remove member, view pending applications.
+
+---
+
+### `OrganizationMembershipRequests.razor`
+
+**Route:** *(embedded — no standalone route)*
+
+Embedded in `OrganizationMembers`. Two grids: Pending (Accept / Deny with optional note dialog) and Resolved (history). Accept auto-creates `OrganizationUserMembership` and sends a `UserMessage` notification.
+
+---
+
+### `OrganizationFiles.razor`
+
+**Route:** `/organizations/{OrgId:guid}/files`
+
+Grid of org-owned files with:
+- Publish status column (Published by + date when approved)
+- Publish / Unpublish button (requires Update permission)
+- Upload dialog (direct to org file storage path `orgs/{orgId}/`)
+- "Share from my files" dialog — copies a user's accessible file; optional "Publish immediately" checkbox if caller has Update permission
+- Edit metadata dialog (description, sort order — IsPublic is set at publish time)
+- Delete with confirmation (server writes `OrganizationFileDeleteLog` before deleting)
+- Expandable delete log panel at bottom of page

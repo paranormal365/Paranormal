@@ -40,13 +40,5 @@ namespace Ben.Service.RepositoryService.Tests
  Assert.NotNull(first);
  Assert.Same(first, second);
  }
-
- [Fact]
- public async Task SaveChangesAsync_Throws_NotImplemented()
- {
- var factory = CreateFactory();
- var manager = new RepositoryManager(factory);
- await Assert.ThrowsAsync<NotImplementedException>(() => manager.SaveChangesAsync(CancellationToken.None));
- }
  }
 }

@@ -1,0 +1,418 @@
+@namespace Ben.Web.Library.Organization
+@using Ben.Web.Library.Manage.Maps
+@using Ben.Web.Library.Shared
+
+@inject IBenAdminClient AdminClient
+@inject IJSRuntime JS
+
+@if (_loading)
+{
+    <TelerikLoaderContainer Visible="true" Text="Loading addresses…" />
+}
+else
+{
+    @if (_errorMessage is not null)
+    {
+        <div class="alert alert-danger mb-3">@_errorMessage</div>
+    }
+
+    @* ── Toolbar ───────────────────────────────────────────────────────────── *@
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0 fw-semibold">Addresses</h6>
+        @if (!_showForm)
+        {
+            <TelerikButton Icon="@SvgIcon.Plus"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           OnClick="BeginCreate">
+                Add Address
+            </TelerikButton>
+        }
+    </div>
+
+    @* ── Create / Edit form ────────────────────────────────────────────────── *@
+    @if (_showForm)
+    {
+        <div class="card mb-4 border-primary">
+            <div class="card-body">
+                <h6 class="card-title mb-3">@(_editId.HasValue ? "Edit Address" : "New Address")</h6>
+
+                <div class="row g-3">
+                    @* Address type *@
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Type <span class="text-danger">*</span></label>
+                        <TelerikDropDownList Data="@_addressTypes"
+                                             @bind-Value="@_formAddressTypeId"
+                                             TextField="@nameof(AddressTypeOption.Name)"
+                                             ValueField="@nameof(AddressTypeOption.Id)"
+                                             Width="100%" />
+                    </div>
+
+                    @* Street address, City/State/Zip, Country, map preview, and
+                       "Use my location" button are all inside AddressFieldsWithMap. *@
+                    <div class="col-12">
+                        <AddressFieldsWithMap @ref="_addrFields" State="@_addrState" />
+                    </div>
+
+                    @* Visibility & display (replaces old IsPublic) *@
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Who can see this address</label>
+                        <TelerikDropDownList Data="@_visibilityOptions" @bind-Value="@_formVisibility"
+                                             TextField="Label" ValueField="Value" Width="100%" />
+                    </div>
+                    @if (_formVisibility == OrganizationAddressVisibility.SpecificMembers && _editId.HasValue)
+                    {
+                        <div class="col-12 mt-1">
+                            <label class="form-label fw-semibold small">Specific member access</label>
+                            <div class="border rounded p-2" style="max-height:160px; overflow-y:auto;">
+                                @if (_memberAccessList.Any())
+                                {
+                                    @foreach (var item in _memberAccessList)
+                                    {
+                                        <div class="d-flex justify-content-between align-items-center py-1 border-bottom small">
+                                            <span class="font-monospace text-secondary">@item.OrganizationUserMembershipId.ToString()[..8]…</span>
+                                            <TelerikButton Icon="@SvgIcon.Trash"
+                                                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                                           Size="@ThemeConstants.Button.Size.Small"
+                                                           OnClick="@(async () => await RemoveMemberAccessAsync(item.Id))" />
+                                        </div>
+                                    }
+                                }
+                                else { <span class="text-muted small fst-italic">No members added yet.</span> }
+                            </div>
+                            <div class="d-flex gap-2 mt-2">
+                                <TelerikDropDownList Data="@_orgMembers"
+                                                     @bind-Value="@_selectedMembershipId"
+                                                     TextField="Display" ValueField="MembershipId"
+                                                     DefaultText="Select a member…"
+                                                     Width="100%" />
+                                <TelerikButton Icon="@SvgIcon.Plus"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                               OnClick="@AddMemberAccessAsync"
+                                               Enabled="@(_selectedMembershipId != Guid.Empty)">
+                                    Add
+                                </TelerikButton>
+                            </div>
+                        </div>
+                    }
+                    <div class="col-sm-6">
+                        <label class="form-label">Public display</label>
+                        <TelerikDropDownList Data="@_displayModeOptions" @bind-Value="@_formPublicDisplayMode"
+                                             TextField="Label" ValueField="Value" Width="100%" />
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label">Member display</label>
+                        <TelerikDropDownList Data="@_displayModeOptions" @bind-Value="@_formMemberDisplayMode"
+                                             TextField="Label" ValueField="Value" Width="100%" />
+                    </div>
+                    <div class="col-12 d-flex align-items-center gap-2">
+                        <TelerikCheckBox @bind-Value="@_formIsSearchable" Id="addr-search" />
+                        <label for="addr-search">Include in proximity search</label>
+                    </div>
+                    @if (_formIsSearchable)
+                    {
+                        <div class="col-sm-6">
+                            <label class="form-label">Search visibility</label>
+                            <TelerikDropDownList Data="@_searchVisibilityOptions" @bind-Value="@_formSearchVisibility"
+                                                 TextField="Label" ValueField="Value" Width="100%" />
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label">Max search distance (miles)</label>
+                            <TelerikNumericTextBox @bind-Value="@_formSearchRadiusMiles"
+                                                   Min="0.1" Max="100" Width="100%" Placeholder="No limit" />
+                        </div>
+                    }
+                    <div class="col-sm-6">
+                        <label class="form-label">Sort Order</label>
+                        <TelerikNumericTextBox @bind-Value="@_formSortOrder" Width="100%" />
+                    </div>
+
+                    @* Buttons *@
+                    <div class="col-12 d-flex gap-2 mt-2">
+                        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                       Icon="@SvgIcon.Save"
+                                       OnClick="SaveAsync"
+                                       Enabled="@(!_saving)">
+                            @(_saving ? "Saving…" : "Save")
+                        </TelerikButton>
+                        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       OnClick="CancelForm">
+                            Cancel
+                        </TelerikButton>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ── Address list ──────────────────────────────────────────────────────── *@
+    @if (_addresses.Any())
+    {
+        <TelerikGrid Data="@_addresses" Pageable="false" Sortable="true" Class="mb-2">
+            <GridColumns>
+                <GridColumn Title="Address" Field="@nameof(OrganizationAddressRecord.StreetAddress1)">
+                    <Template>
+                        @{ var a = (OrganizationAddressRecord)context; }
+                        <div>
+                            <div class="fw-semibold">@a.StreetAddress1@(a.StreetAddress2 is not null ? ", " + a.StreetAddress2 : "")</div>
+                            <div class="text-secondary small">@a.City, @a.State @a.ZipCode — @a.Country</div>
+                        </div>
+                    </Template>
+                </GridColumn>
+                <GridColumn Field="@nameof(OrganizationAddressRecord.Visibility)" Title="Visibility" Width="120px">
+                    <Template>
+                        @{ var av = (OrganizationAddressRecord)context; }
+                        <span class="badge @(av.Visibility == OrganizationAddressVisibility.Public ? "bg-success" : av.Visibility == OrganizationAddressVisibility.MembersOnly ? "bg-info text-dark" : "bg-secondary")">
+                            @av.Visibility
+                        </span>
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="" Width="100px">
+                    <Template>
+                        @{ var a2 = (OrganizationAddressRecord)context; }
+                        <div class="d-flex gap-1">
+                            <TelerikButton Icon="@SvgIcon.Pencil"
+                                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                           Size="@ThemeConstants.Button.Size.Small"
+                                           OnClick="@(async () => await BeginEdit(a2))" />
+                            <TelerikButton Icon="@SvgIcon.Trash"
+                                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                           Size="@ThemeConstants.Button.Size.Small"
+                                           OnClick="@(() => ConfirmDeleteAsync(a2.Id))" />
+                        </div>
+                    </Template>
+                </GridColumn>
+            </GridColumns>
+        </TelerikGrid>
+    }
+    else if (!_showForm)
+    {
+        <div class="text-muted small fst-italic">No addresses added yet.</div>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    // ── State ─────────────────────────────────────────────────────────────────
+
+    private IReadOnlyList<OrganizationAddressRecord> _addresses = [];
+    private IReadOnlyList<AddressTypeOption>         _addressTypes = [];
+    private AddressFieldsWithMap?                    _addrFields;
+    private AddressFieldsState                       _addrState = new();
+    private bool    _loading  = true;
+    private bool    _showForm = false;
+    private bool    _saving   = false;
+    private string? _errorMessage;
+    private Guid?   _editId;
+
+    // Address form state — text fields live in _addrState; meta fields below
+    private Guid  _formAddressTypeId;
+    private int   _formSortOrder;
+
+    // Visibility & display
+    private OrganizationAddressVisibility  _formVisibility        = OrganizationAddressVisibility.Private;
+    private OrganizationAddressDisplayMode _formPublicDisplayMode = OrganizationAddressDisplayMode.Hidden;
+    private OrganizationAddressDisplayMode _formMemberDisplayMode = OrganizationAddressDisplayMode.FullAddressAndMap;
+
+    // Searchability
+    private bool                           _formIsSearchable;
+    private OrganizationAddressVisibility  _formSearchVisibility  = OrganizationAddressVisibility.Public;
+    private double?                        _formSearchRadiusMiles;
+
+    private static readonly IReadOnlyList<LabelValue<OrganizationAddressVisibility>> _visibilityOptions = [
+        new("Public — anyone",       OrganizationAddressVisibility.Public),
+        new("Members only",          OrganizationAddressVisibility.MembersOnly),
+        new("Specific members",      OrganizationAddressVisibility.SpecificMembers),
+        new("Private (admin only)",  OrganizationAddressVisibility.Private),
+    ];
+    private static readonly IReadOnlyList<LabelValue<OrganizationAddressDisplayMode>> _displayModeOptions = [
+        new("Full address + map",  OrganizationAddressDisplayMode.FullAddressAndMap),
+        new("Full address only",   OrganizationAddressDisplayMode.FullAddressOnly),
+        new("Map pin only",        OrganizationAddressDisplayMode.MapPinOnly),
+        new("Region circle only",  OrganizationAddressDisplayMode.RegionOnly),
+        new("Hidden",              OrganizationAddressDisplayMode.Hidden),
+    ];
+    private static readonly IReadOnlyList<LabelValue<OrganizationAddressVisibility>> _searchVisibilityOptions = [
+        new("Public search",   OrganizationAddressVisibility.Public),
+        new("Members only",    OrganizationAddressVisibility.MembersOnly),
+    ];
+
+    private sealed record LabelValue<T>(string Label, T Value);
+
+    // ── SpecificMembers access list state ─────────────────────────────────────
+    private IReadOnlyList<OrganizationAddressMemberAccessRecord> _memberAccessList = [];
+    private IReadOnlyList<OrgMemberOption> _orgMembers = [];
+    private Guid _selectedMembershipId;
+
+    private sealed record OrgMemberOption(Guid MembershipId, string Display);
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        await Task.WhenAll(LoadAddressesAsync(), LoadAddressTypesAsync());
+        _loading = false;
+    }
+
+    private async Task LoadAddressesAsync()
+        => _addresses = await AdminClient.GetOrgAddressesAsync(OrgId);
+
+    private async Task LoadAddressTypesAsync()
+    {
+        var types = await AdminClient.GetOrgAddressTypesAsync();
+        _addressTypes = types.Where(t => t.IsActive)
+                             .OrderBy(t => t.SortOrder)
+                             .Select(t => new AddressTypeOption(t.Id, t.Name))
+                             .ToList();
+    }
+
+    // ── SpecificMembers helper methods ────────────────────────────────────────
+
+    private async Task LoadMemberAccessAsync()
+    {
+        if (_editId is null) { _memberAccessList = []; return; }
+        _memberAccessList = await AdminClient.GetAddressMemberAccessAsync(OrgId, _editId.Value);
+    }
+
+    private async Task LoadOrgMembersAsync()
+    {
+        var members = await AdminClient.GetOrganizationMembersAsync(OrgId);
+        _orgMembers = members.Select(m => new OrgMemberOption(m.MembershipId, $"{m.Role} — {m.AppUserId.ToString()[..8]}…")).ToList();
+    }
+
+    private async Task AddMemberAccessAsync()
+    {
+        if (_editId is null || _selectedMembershipId == Guid.Empty) return;
+        await AdminClient.AddAddressMemberAccessAsync(OrgId, _editId.Value, _selectedMembershipId);
+        await LoadMemberAccessAsync();
+        _selectedMembershipId = Guid.Empty;
+    }
+
+    private async Task RemoveMemberAccessAsync(Guid accessId)
+    {
+        if (_editId is null) return;
+        await AdminClient.RemoveAddressMemberAccessAsync(OrgId, _editId.Value, accessId);
+        await LoadMemberAccessAsync();
+    }
+
+    // ── Form management ───────────────────────────────────────────────────────
+
+    private async Task BeginCreate()
+    {
+        await LoadAddressTypesAsync();
+        _editId             = null;
+        _addrState          = new AddressFieldsState { Country = "US" };
+        _formAddressTypeId  = _addressTypes.FirstOrDefault()?.Id ?? Guid.Empty;
+        _formVisibility        = OrganizationAddressVisibility.Private;
+        _formPublicDisplayMode = OrganizationAddressDisplayMode.Hidden;
+        _formMemberDisplayMode = OrganizationAddressDisplayMode.FullAddressAndMap;
+        _formIsSearchable      = false;
+        _formSearchVisibility  = OrganizationAddressVisibility.Public;
+        _formSearchRadiusMiles = null;
+        _formSortOrder      = 0;
+        _showForm           = true;
+        _errorMessage       = null;
+        _memberAccessList   = [];
+        _selectedMembershipId = Guid.Empty;
+        _addrFields?.ResetPreview();   // clear previous entry's pin
+    }
+
+    private async Task BeginEdit(OrganizationAddressRecord address)
+    {
+        await LoadAddressTypesAsync();
+        _editId            = address.Id;
+        _addrState         = new AddressFieldsState
+        {
+            StreetAddress1 = address.StreetAddress1,
+            StreetAddress2 = address.StreetAddress2,
+            City           = address.City,
+            State          = address.State,
+            ZipCode        = address.ZipCode,
+            Country        = address.Country,
+            Latitude       = address.Latitude,    // carried into component so map shows existing pin
+            Longitude      = address.Longitude
+        };
+        _formAddressTypeId      = address.OrganizationAddressTypeId;
+        _formVisibility        = address.Visibility;
+        _formPublicDisplayMode = address.PublicDisplayMode;
+        _formMemberDisplayMode = address.MemberDisplayMode;
+        _formIsSearchable      = address.IsSearchable;
+        _formSearchVisibility  = address.SearchVisibility;
+        _formSearchRadiusMiles = address.SearchRadiusMiles;
+        _formSortOrder         = address.SortOrder;
+        _showForm          = true;
+        _errorMessage      = null;
+
+        // Restore existing pin if available
+        if (_addrFields is not null && address.Latitude.HasValue && address.Longitude.HasValue)
+            _addrFields.InitPreview((double)address.Latitude.Value, (double)address.Longitude.Value);
+
+        await Task.WhenAll(LoadMemberAccessAsync(), LoadOrgMembersAsync());
+    }
+
+    private void CancelForm()
+    {
+        _showForm = false;
+        _editId   = null;
+    }
+
+    // ── Save / Delete ─────────────────────────────────────────────────────────
+
+    private async Task SaveAsync()
+    {
+        _errorMessage = null;
+
+        if (_formAddressTypeId == Guid.Empty)
+        {
+            _errorMessage = "Address type is required.";
+            return;
+        }
+        if (_addrFields is not null && !_addrFields.IsValid)
+        {
+            _errorMessage = _addrFields.ValidationMessage;
+            return;
+        }
+
+        _saving = true;
+        StateHasChanged();
+
+        var request = new OrgAddressUpsertRequest(
+            _formAddressTypeId,
+            _addrState.StreetAddress1.Trim(),
+            _addrState.StreetAddress2?.Trim(),
+            _addrState.City.Trim(),
+            _addrState.State.Trim(),
+            _addrState.ZipCode.Trim(),
+            _addrState.Country.Trim(),
+            _formSortOrder,
+            _formVisibility,
+            _formPublicDisplayMode,
+            _formMemberDisplayMode,
+            _formIsSearchable,
+            _formSearchVisibility,
+            _formSearchRadiusMiles,
+            _addrState.Latitude,
+            _addrState.Longitude);
+
+        var saved = _editId.HasValue
+            ? await AdminClient.UpdateOrgAddressAsync(OrgId, _editId.Value, request)
+            : await AdminClient.CreateOrgAddressAsync(OrgId, request);
+
+        _saving = false;
+
+        if (saved is not null) { await LoadAddressesAsync(); CancelForm(); }
+        else _errorMessage = "Save failed. You may not have permission to manage addresses.";
+    }
+
+    private async Task ConfirmDeleteAsync(Guid addressId)
+    {
+        var ok = await AdminClient.DeleteOrgAddressAsync(OrgId, addressId);
+        if (ok) await LoadAddressesAsync();
+        else    _errorMessage = "Delete failed.";
+    }
+
+    private sealed record AddressTypeOption(Guid Id, string Name);
+}

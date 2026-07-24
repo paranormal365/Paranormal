@@ -153,3 +153,81 @@ body[data-bs-theme="dark"] .k-drawer {
     #copyright {
         padding: .5em 0;
     }
+
+/* ── Icon Picker Dialog ───────────────────────────────────────────────────── */
+/* Global styles needed because TelerikDialog renders into a portal outside the
+   component scope, so scoped CSS attributes do not reach the icon gallery. */
+.icon-picker-gallery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 2px;
+    max-height: 360px;
+    overflow-y: auto;
+}
+.icon-picker-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 78px;
+    min-height: 72px;
+    border: 1px solid var(--kendo-color-border, #e8e8e8);
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+    padding: 6px 4px 4px;
+    gap: 4px;
+    transition: background 0.12s, border-color 0.12s, transform 0.1s;
+    font-size: 0.58rem;
+    color: var(--kendo-color-on-base, #333);
+    overflow: hidden;
+}
+.icon-picker-tile:hover,
+.icon-picker-tile:focus {
+    background: var(--kendo-color-base-hover, #f0f4ff);
+    border-color: var(--kendo-color-primary, #3b82f6);
+    outline: none;
+    transform: scale(1.06);
+}
+.icon-picker-tile span {
+    display: block;
+    width: 100%;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.icon-picker-tile i { font-size: 1.35rem; line-height: 1; color: var(--kendo-color-primary, #3b82f6); }
+.icon-picker-search { margin-bottom: 10px; }
+.icon-picker-empty { padding: 20px; text-align: center; color: var(--kendo-color-subtle-text, #888); font-style: italic; }
+
+/* ── Icon Picker Overlay (non-portal fixed overlay) ─────────────────────── */
+.icon-picker-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10500;
+    background: rgba(0, 0, 0, 0.4);
+}
+.icon-picker-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10501;
+    width: min(880px, 96vw);
+    max-height: 88vh;
+    background: var(--kendo-color-base, #fff);
+    border: 1px solid var(--kendo-color-border, #e8e8e8);
+    border-radius: 8px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.icon-picker-panel-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--kendo-color-border, #e8e8e8);
+    background: var(--kendo-color-surface, #f5f5f5);
+    flex-shrink: 0;
+}

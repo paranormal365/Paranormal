@@ -1,0 +1,366 @@
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+<div>
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <span class="fw-semibold">Timeline Entries (@(_entries?.Count ?? 0))</span>
+        <TelerikButton Icon="@SvgIcon.Plus"
+                       Size="@ThemeConstants.Button.Size.Small"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       OnClick="OpenAddDialog">Add Entry</TelerikButton>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_entries is null)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading timeline…" />
+    }
+    else if (_entries.Count == 0)
+    {
+        <p class="text-secondary">No entries yet. Add the first timeline entry above.</p>
+    }
+    else
+    {
+        @* ── Entry type filter chips ────────────────────────────────────── *@
+        <div class="d-flex gap-2 flex-wrap mb-3">
+            @foreach (var type in _typeFilters)
+            {
+                var t = type;
+                var isActive = _typeFilter == t;
+                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                               FillMode="@(isActive ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Outline)"
+                               ThemeColor="@(isActive ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                               OnClick="@(() => _typeFilter = t)">
+                    @(t is null ? "All" : EntryTypeLabel(t.Value))
+                </TelerikButton>
+            }
+        </div>
+
+        <div class="timeline d-flex flex-column gap-3">
+            @foreach (var entry in FilteredEntries)
+            {
+                var e = entry;
+                <div class="card @(!e.IsPublic ? "border-0 bg-light" : "")">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start justify-content-between gap-2">
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                                    <span class="badge @EntryTypeBadgeClass(e.EntryType)">
+                                        @EntryTypeLabel(e.EntryType)
+                                    </span>
+                                    @if (!e.IsPublic)
+                                    {
+                                        <span class="badge bg-secondary">Private</span>
+                                    }
+                                    @if (e.EventDateTime.HasValue)
+                                    {
+                                        <small class="text-secondary">
+                                            @e.EventDateTime.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                                        </small>
+                                    }
+                                    @if (!string.IsNullOrEmpty(e.AuthorDisplayName))
+                                    {
+                                        <small class="text-secondary">— @e.AuthorDisplayName</small>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrEmpty(e.Title))
+                                {
+                                    <strong>@e.Title</strong>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(e.Body))
+                                {
+                                    <div class="mt-1 small">@((MarkupString)e.Body)</div>
+                                }
+                                @if (e.ExperienceTypeIds.Count > 0)
+                                {
+                                    <div class="mt-1 d-flex gap-1 flex-wrap">
+                                        @foreach (var typeId in e.ExperienceTypeIds)
+                                        {
+                                            <span class="badge bg-light text-dark border" style="font-size:0.7rem;">
+                                                @(_expTypeNames.GetValueOrDefault(typeId, typeId.ToString()[..8]))
+                                            </span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                            <div class="d-flex gap-1 flex-shrink-0">
+                                <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                               Size="@ThemeConstants.Button.Size.Small"
+                                               Icon="@SvgIcon.Pencil" Title="Edit"
+                                               OnClick="@(() => OpenEditDialog(e))" />
+                                <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                               Size="@ThemeConstants.Button.Size.Small"
+                                               Icon="@SvgIcon.Trash" Title="Delete"
+                                               OnClick="@(() => ConfirmDelete(e))" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@* ── Add / Edit entry dialog ──────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showDialog"
+               Title="@(_editEntry is null ? "Add Timeline Entry" : "Edit Timeline Entry")"
+               Width="620px">
+    <DialogContent>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Type</label>
+                <TelerikDropDownList Data="@_entryTypeOptions"
+                                     @bind-Value="@_form.EntryType"
+                                     TextField="@nameof(EntryTypeOption.Label)"
+                                     ValueField="@nameof(EntryTypeOption.Value)"
+                                     Width="100%" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Event Date/Time (optional)</label>
+                <TelerikDateTimePicker @bind-Value="@_form.EventDateTime" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Title (optional)</label>
+                <TelerikTextBox @bind-Value="@_form.Title" Width="100%"
+                                Placeholder="Brief summary of the event" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Description</label>
+                <TelerikEditor @bind-Value="@_form.Body" Height="180px"
+                               Tools="@_editorTools" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Experience Types (optional)</label>
+                <div class="d-flex flex-wrap gap-2 p-2 border rounded" style="max-height:160px;overflow-y:auto;">
+                    @foreach (var cat in _taxonomy)
+                    {
+                        <div class="w-100 fw-semibold text-secondary small @cat.Category.ColorClass">
+                            @cat.Category.Name
+                        </div>
+                        @foreach (var t in cat.Types)
+                        {
+                            var typeId = t.Id;
+                            var isSelected = _form.ExperienceTypeIds.Contains(typeId);
+                            <div class="d-flex align-items-center gap-1 border rounded px-2 py-1"
+                                 style="cursor:pointer;font-size:0.82rem;"
+                                 @onclick="@(() => ToggleType(typeId))">
+                                <TelerikCheckBox Value="@isSelected" Enabled="false" />
+                                @t.Name
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+            <div class="col-12 d-flex align-items-center gap-2">
+                <TelerikCheckBox @bind-Value="@_form.IsPublic" Id="entry-public" />
+                <label for="entry-public" class="form-label mb-0">Visible on public case page</label>
+            </div>
+        </div>
+        @if (_dialogError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="CloseDialog">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Icon="@SvgIcon.Save"
+                       OnClick="SaveEntry"
+                       Enabled="@(!_isBusy)">
+            @(_isBusy ? "Saving…" : "Save")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Delete confirm ───────────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showDeleteConfirm" Title="Delete Entry" Width="380px">
+    <DialogContent>
+        <p>Delete this timeline entry? This cannot be undone.</p>
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="@(() => _showDeleteConfirm = false)">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                       OnClick="ExecuteDelete"
+                       Enabled="@(!_isBusy)">
+            @(_isBusy ? "Deleting…" : "Delete")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@code {
+    [Parameter] public Guid OrgId  { get; set; }
+    [Parameter] public Guid CaseId { get; set; }
+
+    private List<CaseTimelineEntryRecord>? _entries;
+    private string? _error;
+    private bool _isBusy;
+    private CaseTimelineEntryType? _typeFilter;
+
+    // Taxonomy for experience type picker
+    private List<ExperienceCategoryWithTypesResponse> _taxonomy = [];
+    private Dictionary<Guid, string> _expTypeNames = new();
+
+    // Dialog state
+    private bool _showDialog;
+    private bool _showDeleteConfirm;
+    private CaseTimelineEntryRecord? _editEntry;
+    private CaseTimelineEntryRecord? _pendingDelete;
+    private string? _dialogError;
+    private EntryFormModel _form = new();
+
+    private static readonly CaseTimelineEntryType?[] _typeFilters =
+        [null, CaseTimelineEntryType.ClientReport, CaseTimelineEntryType.InvestigatorNote,
+         CaseTimelineEntryType.Evidence, CaseTimelineEntryType.ResearchNote];
+
+    private static readonly List<EntryTypeOption> _entryTypeOptions = Enum
+        .GetValues<CaseTimelineEntryType>()
+        .Select(t => new EntryTypeOption(t, EntryTypeLabel(t)))
+        .ToList();
+
+    private static readonly List<Telerik.Blazor.Components.IEditorTool> _editorTools =
+    [
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.Bold(),
+            new Telerik.Blazor.Components.Editor.Italic(),
+            new Telerik.Blazor.Components.Editor.Underline()),
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.UnorderedList(),
+            new Telerik.Blazor.Components.Editor.OrderedList()),
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.Undo(),
+            new Telerik.Blazor.Components.Editor.Redo()),
+    ];
+
+    private IEnumerable<CaseTimelineEntryRecord> FilteredEntries =>
+        _typeFilter is null ? _entries! : _entries!.Where(e => e.EntryType == _typeFilter);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+        _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).ToList();
+        _expTypeNames = _taxonomy
+            .SelectMany(c => c.Types)
+            .ToDictionary(t => t.Id, t => t.Name);
+    }
+
+    private async Task LoadAsync()
+    {
+        try { _entries = (await AdminClient.GetCaseTimelineAsync(OrgId, CaseId)).ToList(); }
+        catch { _error = "Failed to load timeline."; }
+    }
+
+    private void OpenAddDialog()
+    {
+        _editEntry = null;
+        _form      = new();
+        _dialogError = null;
+        _showDialog  = true;
+    }
+
+    private void OpenEditDialog(CaseTimelineEntryRecord entry)
+    {
+        _editEntry   = entry;
+        _form        = new EntryFormModel
+        {
+            EntryType          = entry.EntryType,
+            EventDateTime      = entry.EventDateTime,
+            Title              = entry.Title ?? "",
+            Body               = entry.Body ?? "",
+            IsPublic           = entry.IsPublic,
+            ExperienceTypeIds  = entry.ExperienceTypeIds.ToHashSet(),
+        };
+        _dialogError = null;
+        _showDialog  = true;
+    }
+
+    private void CloseDialog() => _showDialog = false;
+
+    private void ToggleType(Guid typeId)
+    {
+        if (!_form.ExperienceTypeIds.Remove(typeId))
+            _form.ExperienceTypeIds.Add(typeId);
+    }
+
+    private async Task SaveEntry()
+    {
+        _isBusy = true; _dialogError = null;
+        try
+        {
+            var req = new UpsertTimelineEntryRequest(
+                EntryType:         _form.EntryType,
+                EventDateTime:     _form.EventDateTime,
+                Title:             string.IsNullOrWhiteSpace(_form.Title) ? null : _form.Title.Trim(),
+                Body:              string.IsNullOrWhiteSpace(_form.Body) ? null : _form.Body.Trim(),
+                IsPublic:          _form.IsPublic,
+                ExperienceTypeIds: _form.ExperienceTypeIds.ToList());
+
+            CaseTimelineEntryRecord? result;
+            if (_editEntry is null)
+                result = await AdminClient.AddCaseTimelineEntryAsync(OrgId, CaseId, req);
+            else
+                result = await AdminClient.UpdateCaseTimelineEntryAsync(OrgId, CaseId, _editEntry.Id, req);
+
+            if (result is null) { _dialogError = "Save failed."; }
+            else { CloseDialog(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _dialogError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private void ConfirmDelete(CaseTimelineEntryRecord entry)
+    {
+        _pendingDelete     = entry;
+        _showDeleteConfirm = true;
+    }
+
+    private async Task ExecuteDelete()
+    {
+        if (_pendingDelete is null) return;
+        _isBusy = true;
+        try
+        {
+            await AdminClient.DeleteCaseTimelineEntryAsync(OrgId, CaseId, _pendingDelete.Id);
+            _showDeleteConfirm = false;
+            await LoadAsync();
+        }
+        catch { _error = "Delete failed."; }
+        finally { _isBusy = false; }
+    }
+
+    internal static string EntryTypeLabel(CaseTimelineEntryType t) => t switch
+    {
+        CaseTimelineEntryType.ClientReport     => "Client Report",
+        CaseTimelineEntryType.InvestigatorNote => "Investigator Note",
+        CaseTimelineEntryType.Evidence         => "Evidence",
+        CaseTimelineEntryType.ResearchNote     => "Research",
+        _                                      => t.ToString(),
+    };
+
+    private static string EntryTypeBadgeClass(CaseTimelineEntryType t) => t switch
+    {
+        CaseTimelineEntryType.ClientReport     => "bg-warning text-dark",
+        CaseTimelineEntryType.InvestigatorNote => "bg-primary",
+        CaseTimelineEntryType.Evidence         => "bg-danger",
+        CaseTimelineEntryType.ResearchNote     => "bg-success",
+        _                                      => "bg-secondary",
+    };
+
+    private class EntryFormModel
+    {
+        public CaseTimelineEntryType EntryType     { get; set; } = CaseTimelineEntryType.InvestigatorNote;
+        public DateTime?             EventDateTime { get; set; }
+        public string                Title         { get; set; } = "";
+        public string                Body          { get; set; } = "";
+        public bool                  IsPublic      { get; set; }
+        public HashSet<Guid>         ExperienceTypeIds { get; set; } = new();
+    }
+
+    private record EntryTypeOption(CaseTimelineEntryType Value, string Label);
+}

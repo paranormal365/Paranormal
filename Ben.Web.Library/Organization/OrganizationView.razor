@@ -1,5 +1,6 @@
 @page "/organizations/{OrgId:guid}"
 
+@using Ben.Web.Library.Organization.Roles
 @inject IBenAdminClient AdminClient
 @inject IBenUserState   UserState
 @inject NavigationManager NavManager
@@ -83,28 +84,50 @@
     }
     else
     {
-        @* ── Read-only view ───────────────────────────────────────────────── *@
-        <dl class="row g-2">
-            <dt class="col-sm-3 text-secondary small">Name</dt>
-            <dd class="col-sm-9 fw-semibold mb-0">@_org.Name</dd>
+        @* ── Read-only tabbed view ─────────────────────────────────────────── *@
+        <TelerikTabStrip>
+            <TabStripTab Title="Details">
+                <dl class="row g-2">
+                    <dt class="col-sm-3 text-secondary small">Name</dt>
+                    <dd class="col-sm-9 fw-semibold mb-0">@_org.Name</dd>
 
-            <dt class="col-sm-3 text-secondary small">URL Name</dt>
-            <dd class="col-sm-9 mb-0">
-                <code>@_org.UrlName</code>
-            </dd>
+                    <dt class="col-sm-3 text-secondary small">URL Name</dt>
+                    <dd class="col-sm-9 mb-0">
+                        <code>@_org.UrlName</code>
+                    </dd>
 
-            <dt class="col-sm-3 text-secondary small">ID</dt>
-            <dd class="col-sm-9 mb-0 font-monospace small text-secondary">@_org.Id</dd>
+                    <dt class="col-sm-3 text-secondary small">ID</dt>
+                    <dd class="col-sm-9 mb-0 font-monospace small text-secondary">@_org.Id</dd>
 
-            <dt class="col-sm-3 text-secondary small">Created</dt>
-            <dd class="col-sm-9 mb-0 small">@_org.DateCreated.ToString("yyyy-MM-dd HH:mm") UTC</dd>
+                    <dt class="col-sm-3 text-secondary small">Created</dt>
+                    <dd class="col-sm-9 mb-0 small">@_org.DateCreated.ToString("yyyy-MM-dd HH:mm") UTC</dd>
 
-            @if (_org.DateUpdated.HasValue)
+                    @if (_org.DateUpdated.HasValue)
+                    {
+                        <dt class="col-sm-3 text-secondary small">Updated</dt>
+                        <dd class="col-sm-9 mb-0 small">@_org.DateUpdated.Value.ToString("yyyy-MM-dd HH:mm") UTC</dd>
+                    }
+                </dl>
+            </TabStripTab>
+            @if (_canManageRoles)
             {
-                <dt class="col-sm-3 text-secondary small">Updated</dt>
-                <dd class="col-sm-9 mb-0 small">@_org.DateUpdated.Value.ToString("yyyy-MM-dd HH:mm") UTC</dd>
+                <TabStripTab Title="Roles">
+                    <OrgRolesManager OrgId="@OrgId" />
+                </TabStripTab>
             }
-        </dl>
+            @if (_canManageRoles)
+            {
+                <TabStripTab Title="Addresses">
+                    <OrgAddressManager OrgId="@OrgId" />
+                </TabStripTab>
+            }
+            @if (_canManageRoles)
+            {
+                <TabStripTab Title="Settings">
+                    <OrgSettingsManager OrgId="@OrgId" />
+                </TabStripTab>
+            }
+        </TelerikTabStrip>
     }
 </div>
 
@@ -118,6 +141,7 @@
 
     private OrganizationAdminRecord? _org;
     private bool   _canEdit;
+    private bool   _canManageRoles;
     private bool   _loading   = true;
     private bool   _editMode;
     private bool   _isSaving;
@@ -159,6 +183,7 @@
 
             var listItem = listTask.Result.FirstOrDefault(o => o.Id == OrgId);
             _canEdit = UserState.IsSuperAdmin || (listItem?.CanEdit ?? false);
+            _canManageRoles = UserState.IsSuperAdmin || (listItem?.CanEdit ?? false);
         }
         catch
         {

@@ -13,11 +13,17 @@ namespace Ben.Data.WebApi.Controllers.Cms;
 [Route("api/organizations/{orgId:guid}/pages/{pageId:guid}/permissions")]
 public sealed class CmsPagePermissionController : OrgCmsControllerBase
 {
+    private readonly IAuditLogService _auditLog;
+
     public CmsPagePermissionController(
         IDbContextFactory<BenDataContext> dbFactory,
         IMapper mapper,
-        IOrganizationSecurityService security)
-        : base(dbFactory, mapper, security) { }
+        IOrganizationSecurityService security,
+        IAuditLogService auditLog)
+        : base(dbFactory, mapper, security)
+    {
+        _auditLog = auditLog;
+    }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CmsPagePermissionRecord>>> GetAll(
@@ -70,6 +76,7 @@ public sealed class CmsPagePermissionController : OrgCmsControllerBase
 
         db.CmsPagePermissions.Add(perm);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CmsPagePermission), perm.Id, perm, userId.Value, AppSources.WebApi, ct));
         return CreatedAtAction(nameof(GetAll), new { orgId, pageId },
             Mapper.Map<CmsPagePermissionRecord>(perm));
     }
@@ -88,15 +95,18 @@ public sealed class CmsPagePermissionController : OrgCmsControllerBase
             return BadRequest("At least one action must be specified. Use DELETE to remove a permission.");
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var before = await db.CmsPagePermissions.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == permissionId && p.OrganizationPageId == pageId, ct);
+        if (before is null) return NotFound();
         var perm = await db.CmsPagePermissions
             .FirstOrDefaultAsync(p => p.Id == permissionId && p.OrganizationPageId == pageId, ct);
-        if (perm is null) return NotFound();
 
-        perm.Actions            = request.Actions;
+        perm!.Actions            = request.Actions;
         perm.DateUpdated        = DateTime.UtcNow;
         perm.UpdatedByAppUserId = userId.Value;
 
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(CmsPagePermission), permissionId, before, perm!, userId.Value, AppSources.WebApi, ct));
         return Ok(Mapper.Map<CmsPagePermissionRecord>(perm));
     }
 
@@ -116,6 +126,7 @@ public sealed class CmsPagePermissionController : OrgCmsControllerBase
 
         db.CmsPagePermissions.Remove(perm);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(CmsPagePermission), permissionId, perm, userId.Value, AppSources.WebApi, ct));
         return NoContent();
     }
 }

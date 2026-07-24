@@ -51,7 +51,30 @@
             <GridColumns>
                 <GridColumn Field="@nameof(LookupTypeAdminRecord.Name)" Title="Name" />
                 <GridColumn Field="@nameof(LookupTypeAdminRecord.Description)" Title="Description" />
-                <GridColumn Field="@nameof(LookupTypeAdminRecord.IconClass)" Title="Icon" Width="110px" />
+                <GridColumn Field="@nameof(LookupTypeAdminRecord.IconClass)" Title="Icon" Width="110px">
+                    <Template>
+                        @{ var row = (LookupTypeAdminRecord)context; }
+                        @if (!string.IsNullOrWhiteSpace(row.IconClass))
+                        {
+                            @if (row.IconClass.StartsWith("t:"))
+                            {
+                                var ico = IconPickerDialog.ResolveTelerikIcon(row.IconClass);
+                                @if (ico is not null)
+                                {
+                                    <span title="@row.IconClass">
+                                        <TelerikSvgIcon Icon="@ico" />
+                                    </span>
+                                }
+                            }
+                            else
+                            {
+                                <span title="@row.IconClass">
+                                    <i class="@row.IconClass" style="font-size:1.1rem;"></i>
+                                </span>
+                            }
+                        }
+                    </Template>
+                </GridColumn>
                 <GridColumn Field="@nameof(LookupTypeAdminRecord.SortOrder)" Title="Sort" Width="70px" />
                 <GridColumn Field="@nameof(LookupTypeAdminRecord.IsActive)" Title="Active" Width="80px">
                     <Template>
@@ -103,8 +126,8 @@
                 <TelerikTextBox @bind-Value="@_form.Description" Width="100%" />
             </div>
             <div class="col-md-6">
-                <label class="form-label">Icon Class</label>
-                <TelerikTextBox @bind-Value="@_form.IconClass" Width="100%" />
+                <label class="form-label">Icon <span class="text-secondary small">(optional)</span></label>
+                <IconClassPicker @bind-Value="@_form.IconClass" />
             </div>
             <div class="col-md-6">
                 <label class="form-label">Color Class</label>
@@ -141,7 +164,7 @@
     </DialogButtons>
 </TelerikDialog>
 
-@* ── Delete confirm dialog ── *@
+@* ── Delete confirm dialog ────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showDeleteDialog"
                Title="Confirm Delete"
                Width="400px">
@@ -155,7 +178,6 @@
                        OnClick="@(() => _showDeleteDialog = false)">Cancel</TelerikButton>
     </DialogButtons>
 </TelerikDialog>
-
 @code {
 
     // ── Family catalog ────────────────────────────────────────────────────────
@@ -196,7 +218,7 @@
     private bool _showDeleteDialog;
     private LookupTypeAdminRecord? _deletingItem;
 
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    // ── Lifecycle ────────────────────────────────────────────────────────────────
 
     protected override void OnInitialized()
     {
@@ -242,9 +264,9 @@
     private void OpenCreate()
     {
         _editingItem = null;
-        _form = new FormModel { IsActive = true, SortOrder = 0 };
+        _form        = new FormModel { IsActive = true, SortOrder = 0 };
         _dialogError = null;
-        _showDialog = true;
+        _showDialog  = true;
     }
 
     private void OpenEdit(LookupTypeAdminRecord item)

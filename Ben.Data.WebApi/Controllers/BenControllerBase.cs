@@ -46,4 +46,14 @@ public abstract class BenControllerBase : ControllerBase
         var id = GetCurrentUserId();
         return id == Guid.Empty ? null : id;
     }
+
+    /// <summary>
+    /// Fires an audit log task and silently swallows any exception so that an
+    /// audit failure never surfaces to the caller.
+    /// </summary>
+    protected static async Task TryAuditAsync(Task auditTask)
+    {
+        try { await auditTask; }
+        catch { /* audit failure must not surface to the caller */ }
+    }
 }

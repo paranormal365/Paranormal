@@ -50,7 +50,7 @@
                 <GridColumn Field="@nameof(OrganizationListItemResponse.UrlName)" Title="URL Name" Width="180px" />
                 <GridColumn Field="@nameof(OrganizationListItemResponse.DateCreated)" Title="Created"
                             DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
-                <GridColumn Title="Actions" Width="240px">
+                <GridColumn Title="Actions" Width="340px">
                     <Template>
                         @{
                             var org = (OrganizationListItemResponse)context;
@@ -61,8 +61,38 @@
                                        OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/cms"))">
                             CMS
                         </TelerikButton>
+                        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Icon="@SvgIcon.GridLayout"
+                                       OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/cases"))">
+                            Cases
+                        </TelerikButton>
+                        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Icon="@SvgIcon.Calendar"
+                                       OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/calendar"))">
+                            Calendar
+                        </TelerikButton>
+                        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Icon="@SvgIcon.Envelope"
+                                       OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/messages"))">
+                            Messages
+                        </TelerikButton>
                         @if (org.CanEdit)
                         {
+                            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                           Size="@ThemeConstants.Button.Size.Small"
+                                           Icon="@SvgIcon.Gear"
+                                           OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/client-settings"))">
+                                Clients
+                            </TelerikButton>
+                            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                           Size="@ThemeConstants.Button.Size.Small"
+                                           Icon="@SvgIcon.Comment"
+                                           OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/membership-questions"))">
+                                Q&amp;A
+                            </TelerikButton>
                             <TelerikButton Icon="@SvgIcon.Pencil"
                                            FillMode="@ThemeConstants.Button.FillMode.Flat"
                                            Size="@ThemeConstants.Button.Size.Small"

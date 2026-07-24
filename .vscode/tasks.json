@@ -20,6 +20,31 @@
 
     // ── Step 2: Start WebApi (background) then WebApp (foreground) ─────────
     {
+      "label": "start-web-app",
+      "type": "shell",
+      "command": "bash scripts/start-webapp-with-api.sh",
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "presentation": {
+        "label": "WebApp",
+        "panel": "dedicated",
+        "reveal": "always",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": [
+        {
+          "pattern": { "regexp": "^$" },
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": "\\[startup\\]",
+            "endsPattern": "Now listening on: http"
+          }
+        }
+      ]
+    },
+
+    {
       "label": "start-full-stack",
       "type": "shell",
       "command": "bash scripts/start-webapp-with-api.sh",

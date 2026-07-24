@@ -60,7 +60,7 @@ public class AdminUploadFileTypeControllerTests
 
     private static AdminUploadFileTypeController Build(IDbContextFactory<BenDataContext> factory)
     {
-        var ctrl = new AdminUploadFileTypeController(factory, CreateMapper());
+        var ctrl = new AdminUploadFileTypeController(factory, CreateMapper(), new Mock<IAuditLogService>().Object);
         ctrl.ControllerContext = new ControllerContext
             { HttpContext = new DefaultHttpContext() };
         return ctrl;

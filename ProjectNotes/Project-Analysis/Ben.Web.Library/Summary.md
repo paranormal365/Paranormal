@@ -37,7 +37,9 @@ Library pages are discovered in the WebApp via:
 |---|---|
 | `SuperAdmin/` | `AdminSidePanel`, `AdminFileTypes`, `AdminRoles` |
 | `User/` | `AdminUsers`, `AdminUserCreate`, `AdminUserDetail`, `UserMediaPreview` |
-| `Organization/` | `OrganizationList`, `OrganizationCreateEdit`, `OrganizationView` |
+| `Organization/` | `OrganizationList`, `OrganizationCreateEdit`, `OrganizationView`, `OrganizationMembers` *(2026-07-22)*, `OrganizationMembershipRequests` *(2026-07-22)*, `OrganizationFiles` *(2026-07-22)* |
 | `Organization/Cms/` | `OrgCmsEditor`, `OrgCmsPageEdit`, `CmsSectionEditor`, `CmsFileThumbnail` |
 | `Manage/` | `UploadFileVoteBar` |
 | `Manage/Audio/` | `WaveSurferPlayer` (WaveSurfer.js v7.12.11 wrapper), `WaveSurferOptions.cs` (config records), `AudioFilePreview` (compact + full-view modal with regions, spectrogram, clip, child-clips), `WsRegionExplorer` (region audio + notes + sub-regions), `AudioFormatUtils` |
+| `Manage/Icon/` *(added 2026-07-22)* | `IconPickerData.cs` (Telerik ~400 icons, Bootstrap ~200, Font Awesome ~300), `IconPickerDialog.razor` (position:fixed 3-tab overlay), `IconClassPicker.razor` (reusable self-contained icon field with Browse/Edit/Clear states) |
+| `Manage/Maps/` *(added 2026-07-22)* | `AddressMapOptions.cs` (`AddressMapConfig` record, `AddressMapIconRegistry`, `MapGeoJsonHelper`), `AddressMapPlayer.razor.js`, `AddressMapPlayer.razor` (`TelerikMap` Tile+Shape+Marker with interactive config form) |

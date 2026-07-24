@@ -7,6 +7,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Text.Json.Serialization;
 using Ben.Data.Common.Interfaces;
+using Ben.Data.Common.Enums;
 
 namespace Ben.Data.Source.Entities
 {
@@ -18,5 +19,15 @@ namespace Ben.Data.Source.Entities
         // Internal geocoding reference data; not intended for public API/UI contracts.
         public string? GeocodingResponseJson { get; set; }
         public string? GeocodingResultType { get; set; }
+
+        // Visibility & display configuration
+        public OrganizationAddressVisibility Visibility { get; set; } = OrganizationAddressVisibility.Private;
+        public OrganizationAddressDisplayMode PublicDisplayMode { get; set; } = OrganizationAddressDisplayMode.Hidden;
+        public OrganizationAddressDisplayMode MemberDisplayMode { get; set; } = OrganizationAddressDisplayMode.FullAddressAndMap;
+
+        // Proximity search
+        public bool IsSearchable { get; set; }
+        public OrganizationAddressVisibility SearchVisibility { get; set; } = OrganizationAddressVisibility.Public;
+        public double? SearchRadiusMiles { get; set; }
     }
 }

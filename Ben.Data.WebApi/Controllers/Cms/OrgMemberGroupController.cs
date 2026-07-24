@@ -13,11 +13,17 @@ namespace Ben.Data.WebApi.Controllers.Cms;
 [Route("api/organizations/{orgId:guid}/groups")]
 public sealed class OrgMemberGroupController : OrgCmsControllerBase
 {
+    private readonly IAuditLogService _auditLog;
+
     public OrgMemberGroupController(
         IDbContextFactory<BenDataContext> dbFactory,
         IMapper mapper,
-        IOrganizationSecurityService security)
-        : base(dbFactory, mapper, security) { }
+        IOrganizationSecurityService security,
+        IAuditLogService auditLog)
+        : base(dbFactory, mapper, security)
+    {
+        _auditLog = auditLog;
+    }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<OrgMemberGroupRecord>>> GetAll(
@@ -62,6 +68,7 @@ public sealed class OrgMemberGroupController : OrgCmsControllerBase
 
         db.OrgMemberGroups.Add(group);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrgMemberGroup), group.Id, group, userId.Value, AppSources.WebApi, ct));
         return CreatedAtAction(nameof(GetAll), new { orgId }, Mapper.Map<OrgMemberGroupRecord>(group));
     }
 
@@ -77,11 +84,13 @@ public sealed class OrgMemberGroupController : OrgCmsControllerBase
         if (string.IsNullOrWhiteSpace(request.Name)) return BadRequest("Name is required.");
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var before = await db.OrgMemberGroups.AsNoTracking()
+            .FirstOrDefaultAsync(g => g.Id == groupId && g.OrganizationId == orgId, ct);
+        if (before is null) return NotFound();
         var group = await db.OrgMemberGroups
             .FirstOrDefaultAsync(g => g.Id == groupId && g.OrganizationId == orgId, ct);
-        if (group is null) return NotFound();
 
-        group.Name               = request.Name.Trim();
+        group!.Name               = request.Name.Trim();
         group.Description        = request.Description?.Trim();
         group.IsActive           = request.IsActive;
         group.SortOrder          = request.SortOrder;
@@ -89,6 +98,7 @@ public sealed class OrgMemberGroupController : OrgCmsControllerBase
         group.UpdatedByAppUserId = userId.Value;
 
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrgMemberGroup), groupId, before, group!, userId.Value, AppSources.WebApi, ct));
         return Ok(Mapper.Map<OrgMemberGroupRecord>(group));
     }
 
@@ -108,6 +118,7 @@ public sealed class OrgMemberGroupController : OrgCmsControllerBase
 
         db.OrgMemberGroups.Remove(group);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrgMemberGroup), groupId, group, userId.Value, AppSources.WebApi, ct));
         return NoContent();
     }
 
@@ -168,6 +179,7 @@ public sealed class OrgMemberGroupController : OrgCmsControllerBase
 
         db.OrgMemberGroupMemberships.Add(membership);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrgMemberGroupMembership), membership.Id, membership, userId.Value, AppSources.WebApi, ct));
         return CreatedAtAction(nameof(GetMembers), new { orgId, groupId },
             Mapper.Map<OrgMemberGroupMembershipRecord>(membership));
     }
@@ -188,6 +200,7 @@ public sealed class OrgMemberGroupController : OrgCmsControllerBase
 
         db.OrgMemberGroupMemberships.Remove(gm);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrgMemberGroupMembership), membershipId, gm, userId.Value, AppSources.WebApi, ct));
         return NoContent();
     }
 }

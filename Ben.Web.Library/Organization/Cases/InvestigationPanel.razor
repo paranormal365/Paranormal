@@ -1,0 +1,248 @@
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@* Embedded panel showing investigations for a case — used in CaseDetail.razor *@
+
+<div>
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <span class="fw-semibold">Investigations (@(_investigations?.Count ?? 0))</span>
+        <TelerikButton Icon="@SvgIcon.Plus"
+                       Size="@ThemeConstants.Button.Size.Small"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       OnClick="OpenAdd">Schedule Investigation</TelerikButton>
+    </div>
+
+    @if (_error is not null) { <div class="alert alert-danger">@_error</div> }
+
+    @if (_investigations is null)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading investigations…" />
+    }
+    else if (_investigations.Count == 0)
+    {
+        <p class="text-secondary">No investigations scheduled yet.</p>
+    }
+    else
+    {
+        <div class="d-flex flex-column gap-2">
+            @foreach (var inv in _investigations.OrderBy(i => i.ScheduledDateTime))
+            {
+                var i = inv;
+                <div class="card">
+                    <div class="card-body d-flex align-items-start justify-content-between gap-3">
+                        <div>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="badge @StatusBadge(i.Status)">@StatusLabel(i.Status)</span>
+                                <strong>@i.Title</strong>
+                                <span class="badge bg-secondary" style="font-size:0.7rem;">
+                                    @i.AttendeeCount attendee@(i.AttendeeCount == 1 ? "" : "s")
+                                </span>
+                            </div>
+                            <div class="text-secondary small">
+                                @i.ScheduledDateTime.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                                @if (i.EndDateTime.HasValue)
+                                { <span> – @i.EndDateTime.Value.ToLocalTime().ToString("h:mm tt")</span> }
+                                @if (!string.IsNullOrEmpty(i.Location))
+                                { <span> · @i.Location</span> }
+                            </div>
+                        </div>
+                        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                       Icon="@SvgIcon.Pencil"
+                                       OnClick="@(() => OpenEdit(i))">Edit</TelerikButton>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@* ── Add / Edit dialog ─────────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showDialog"
+               Title="@(_editInv is null ? "Schedule Investigation" : "Edit Investigation")"
+               Width="580px">
+    <DialogContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
+                <TelerikTextBox @bind-Value="@_form.Title" Width="100%"
+                                Placeholder="Night Investigation #1" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Scheduled Date & Time</label>
+                <TelerikDateTimePicker @bind-Value="@_form.ScheduledDateTime" Width="100%" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">End Time (optional)</label>
+                <TelerikDateTimePicker @bind-Value="@_form.EndDateTime" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Location within property (optional)</label>
+                <TelerikTextBox @bind-Value="@_form.Location" Width="100%"
+                                Placeholder="e.g. Basement, Attic" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Status</label>
+                <TelerikDropDownList Data="@_statusOptions"
+                                     @bind-Value="@_form.Status"
+                                     TextField="@nameof(StatusOption.Label)"
+                                     ValueField="@nameof(StatusOption.Value)"
+                                     Width="100%" />
+            </div>
+            @if (_editInv is not null)
+            {
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Post-Investigation Notes</label>
+                    <TelerikTextArea @bind-Value="@_form.Notes" Rows="4" Width="100%"
+                                     Placeholder="Summary of findings…" />
+                </div>
+            }
+        </div>
+        @if (_dialogError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
+        }
+    </DialogContent>
+    <DialogButtons>
+        @if (_editInv is not null)
+        {
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           Icon="@SvgIcon.Trash"
+                           OnClick="DeleteInvestigation"
+                           Enabled="@(!_isBusy)">Delete</TelerikButton>
+        }
+        <TelerikButton OnClick="@(() => _showDialog = false)">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Icon="@SvgIcon.Save"
+                       OnClick="Save"
+                       Enabled="@(!_isBusy && !string.IsNullOrWhiteSpace(_form.Title))">
+            @(_isBusy ? "Saving…" : "Save")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@code {
+    [Parameter] public Guid OrgId  { get; set; }
+    [Parameter] public Guid CaseId { get; set; }
+
+    private List<InvestigationRecord>? _investigations;
+    private string? _error;
+    private bool _isBusy;
+    private bool _showDialog;
+    private InvestigationRecord? _editInv;
+    private string? _dialogError;
+    private InvForm _form = new();
+
+    private static readonly List<StatusOption> _statusOptions = Enum
+        .GetValues<InvestigationStatus>()
+        .Select(s => new StatusOption(s, StatusLabel(s)))
+        .ToList();
+
+    protected override async Task OnParametersSetAsync()
+        => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try { _investigations = (await AdminClient.GetInvestigationsAsync(OrgId, CaseId)).ToList(); }
+        catch { _error = "Failed to load investigations."; }
+    }
+
+    private void OpenAdd()
+    {
+        _editInv = null;
+        _form = new InvForm { ScheduledDateTime = DateTime.Now.AddDays(7) };
+        _dialogError = null;
+        _showDialog = true;
+    }
+
+    private void OpenEdit(InvestigationRecord inv)
+    {
+        _editInv = inv;
+        _form = new InvForm
+        {
+            Title             = inv.Title,
+            Location          = inv.Location ?? "",
+            ScheduledDateTime = inv.ScheduledDateTime,
+            EndDateTime       = inv.EndDateTime,
+            Status            = inv.Status,
+            Notes             = inv.Notes ?? "",
+        };
+        _dialogError = null;
+        _showDialog = true;
+    }
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Title)) { _dialogError = "Title is required."; return; }
+        _isBusy = true; _dialogError = null;
+        try
+        {
+            var req = new UpsertInvestigationRequest(
+                Title:             _form.Title.Trim(),
+                Description:       null,
+                Location:          string.IsNullOrWhiteSpace(_form.Location) ? null : _form.Location.Trim(),
+                ScheduledDateTime: _form.ScheduledDateTime,
+                EndDateTime:       _form.EndDateTime,
+                Status:            _form.Status,
+                Notes:             string.IsNullOrWhiteSpace(_form.Notes) ? null : _form.Notes.Trim(),
+                OrgCalendarEventId: null);
+
+            InvestigationRecord? result;
+            if (_editInv is null)
+                result = await AdminClient.CreateInvestigationAsync(OrgId, CaseId, req);
+            else
+                result = await AdminClient.UpdateInvestigationAsync(OrgId, CaseId, _editInv.Id, req);
+
+            if (result is null) { _dialogError = "Save failed."; }
+            else { _showDialog = false; await LoadAsync(); }
+        }
+        catch (Exception ex) { _dialogError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private async Task DeleteInvestigation()
+    {
+        if (_editInv is null) return;
+        _isBusy = true;
+        try
+        {
+            await AdminClient.DeleteInvestigationAsync(OrgId, CaseId, _editInv.Id);
+            _showDialog = false;
+            await LoadAsync();
+        }
+        catch { _error = "Delete failed."; }
+        finally { _isBusy = false; }
+    }
+
+    internal static string StatusLabel(InvestigationStatus s) => s switch
+    {
+        InvestigationStatus.Scheduled  => "Scheduled",
+        InvestigationStatus.InProgress => "In Progress",
+        InvestigationStatus.Completed  => "Completed",
+        InvestigationStatus.Cancelled  => "Cancelled",
+        _                              => s.ToString(),
+    };
+
+    private static string StatusBadge(InvestigationStatus s) => s switch
+    {
+        InvestigationStatus.Scheduled  => "bg-primary",
+        InvestigationStatus.InProgress => "bg-warning text-dark",
+        InvestigationStatus.Completed  => "bg-success",
+        InvestigationStatus.Cancelled  => "bg-secondary",
+        _                              => "bg-secondary",
+    };
+
+    private class InvForm
+    {
+        public string            Title             { get; set; } = "";
+        public string            Location          { get; set; } = "";
+        public DateTime          ScheduledDateTime { get; set; } = DateTime.Now.AddDays(7);
+        public DateTime?         EndDateTime       { get; set; }
+        public InvestigationStatus Status          { get; set; } = InvestigationStatus.Scheduled;
+        public string            Notes             { get; set; } = "";
+    }
+
+    private record StatusOption(InvestigationStatus Value, string Label);
+}

@@ -1,0 +1,151 @@
+using Ben.Data.Common.Enums;
+using Ben.Data.Source.Context;
+using Ben.Data.Source.Entities;
+using Ben.Service.Models.Admin;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace Ben.Data.WebApi.Controllers.Admin;
+
+[Route("api/admin/audit-logs")]
+[Authorize(Policy = RoleNames.SuperAdmin)]
+public sealed class AdminAuditLogController : BenControllerBase
+{
+    private readonly IDbContextFactory<BenDataContext> _db;
+
+    public AdminAuditLogController(IDbContextFactory<BenDataContext> db) => _db = db;
+
+    // ── GET /api/admin/audit-logs ─────────────────────────────────────────────
+
+    [HttpGet]
+    public async Task<ActionResult<AuditLogPagedResponse>> GetAll(
+        [FromQuery] int      page       = 1,
+        [FromQuery] int      pageSize   = 50,
+        [FromQuery] string?  entityType = null,
+        [FromQuery] int?     action     = null,
+        [FromQuery] Guid?    userId     = null,
+        [FromQuery] DateTime? dateFrom  = null,
+        [FromQuery] DateTime? dateTo    = null,
+        CancellationToken ct = default)
+    {
+        var validPageSize = Math.Clamp(pageSize, 1, 200);
+        var validPage     = Math.Max(page, 1);
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        IQueryable<AuditLog> query = db.AuditLogs.AsNoTracking()
+            .OrderByDescending(l => l.OccurredAt);
+
+        if (!string.IsNullOrWhiteSpace(entityType))
+            query = query.Where(l => l.EntityType == entityType);
+        if (action.HasValue && Enum.IsDefined(typeof(AuditAction), action.Value))
+            query = query.Where(l => l.Action == (AuditAction)action.Value);
+        if (userId.HasValue)
+            query = query.Where(l => l.UserId == userId.Value);
+        if (dateFrom.HasValue)
+            query = query.Where(l => l.OccurredAt >= dateFrom.Value);
+        if (dateTo.HasValue)
+            query = query.Where(l => l.OccurredAt <= dateTo.Value);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .Skip((validPage - 1) * validPageSize)
+            .Take(validPageSize)
+            .ToListAsync(ct);
+
+        var records = items.Select(ToRecord).ToList();
+        return Ok(new AuditLogPagedResponse(records, total));
+    }
+
+    // ── GET /api/admin/audit-logs/entity-types ────────────────────────────────
+
+    /// <summary>Returns distinct entity type names for use in the filter dropdown.</summary>
+    [HttpGet("entity-types")]
+    public async Task<ActionResult<IReadOnlyList<string>>> GetEntityTypes(CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var types = await db.AuditLogs.AsNoTracking()
+            .Select(l => l.EntityType)
+            .Distinct()
+            .OrderBy(t => t)
+            .ToListAsync(ct);
+        return Ok(types);
+    }
+
+    // ── POST /api/admin/audit-logs/send-message ───────────────────────────────
+
+    [HttpPost("send-message")]
+    public async Task<IActionResult> SendMessage(
+        [FromBody] SendAuditLogMessageRequest request, CancellationToken ct)
+    {
+        if (request.RecipientUserIds is null || request.RecipientUserIds.Count == 0)
+            return BadRequest("At least one recipient is required.");
+
+        var senderId = GetCurrentUserId();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // Find or create a "System Notification" message type
+        var msgType = await db.UserMessageTypes
+            .FirstOrDefaultAsync(t => t.Name == "System Notification" && t.IsActive, ct);
+
+        if (msgType is null)
+        {
+            msgType = new UserMessageType
+            {
+                Id                 = Guid.NewGuid(),
+                Name               = "System Notification",
+                Description        = "Automatically generated system messages",
+                IsActive           = true,
+                IsPublic           = false,
+                SortOrder          = 999,
+                DateCreated        = DateTime.UtcNow,
+                CreatedByAppUserId = senderId
+            };
+            db.UserMessageTypes.Add(msgType);
+            await db.SaveChangesAsync(ct);
+        }
+
+        var message = new UserMessage
+        {
+            Id                 = Guid.NewGuid(),
+            UserMessageTypeId  = msgType.Id,
+            MessageSubject     = request.Subject,
+            MessageBody        = request.Body,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = senderId
+        };
+        db.UserMessages.Add(message);
+
+        foreach (var recipientId in request.RecipientUserIds.Distinct())
+        {
+            // Verify the recipient exists
+            if (!await db.AppUsers.AnyAsync(u => u.Id == recipientId, ct)) continue;
+
+            db.UserMessageTos.Add(new UserMessageTo
+            {
+                Id           = Guid.NewGuid(),
+                MessageId    = message.Id,
+                ToAppUserId  = recipientId,
+                LastReadCount = 0
+            });
+        }
+
+        await db.SaveChangesAsync(ct);
+        return Ok();
+    }
+
+    // ── Helper ────────────────────────────────────────────────────────────────
+
+    private static AuditLogRecord ToRecord(AuditLog l) => new()
+    {
+        Id          = l.Id,
+        UserId      = l.UserId,
+        Action      = l.Action,
+        EntityType  = l.EntityType,
+        EntityId    = l.EntityId,
+        Source      = l.Source,
+        OccurredAt  = l.OccurredAt,
+        ChangesJson = l.ChangesJson
+    };
+}

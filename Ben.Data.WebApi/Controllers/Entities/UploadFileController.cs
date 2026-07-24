@@ -24,15 +24,18 @@ public sealed class UploadFileController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;
     private readonly IFileStorageService _fileStorage;
+    private readonly IAuditLogService _auditLog;
 
     public UploadFileController(
         IDbContextFactory<BenDataContext> dbContextFactory,
         IMapper mapper,
-        IFileStorageService fileStorage)
+        IFileStorageService fileStorage,
+        IAuditLogService auditLog)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
         _fileStorage = fileStorage;
+        _auditLog = auditLog;
     }
 
     [HttpGet]
@@ -56,12 +59,17 @@ public sealed class UploadFileController : BenControllerBase
     }
 
     [HttpGet("{id:guid}/download")]
+    [AllowAnonymous]
     public async Task<IActionResult> Download(Guid id, CancellationToken cancellationToken)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var entity = await db.UploadFiles.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
         if (entity is null) return NotFound();
+
+        // Public files are served to anyone; private files require authentication.
+        if (!entity.IsPublic && !(User.Identity?.IsAuthenticated ?? false))
+            return Unauthorized();
 
         // Prefer disk; fall back to FileData for rows not yet migrated
         if (!string.IsNullOrEmpty(entity.StoragePath))
@@ -154,6 +162,7 @@ public sealed class UploadFileController : BenControllerBase
 
         db.UploadFiles.Add(entity);
         await db.SaveChangesAsync(cancellationToken);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), entity.Id, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
 
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, _mapper.Map<UploadFileRecord>(entity));
     }
@@ -165,10 +174,11 @@ public sealed class UploadFileController : BenControllerBase
         CancellationToken cancellationToken)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var before = await db.UploadFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+        if (before is null) return NotFound();
         var entity = await db.UploadFiles.FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
-        if (entity is null) return NotFound();
 
-        entity.UploadFileTypeId = request.UploadFileTypeId;
+        entity!.UploadFileTypeId = request.UploadFileTypeId;
         entity.Description = request.Description;
         entity.IsPublic = request.IsPublic;
         entity.SortOrder = request.SortOrder;
@@ -176,6 +186,7 @@ public sealed class UploadFileController : BenControllerBase
         entity.UpdatedByAppUserId = request.UpdatedByAppUserId;
 
         await db.SaveChangesAsync(cancellationToken);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFile), id, before, entity!, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
         return Ok(_mapper.Map<UploadFileRecord>(entity));
     }
 
@@ -188,6 +199,7 @@ public sealed class UploadFileController : BenControllerBase
 
         db.UploadFiles.Remove(entity);
         await db.SaveChangesAsync(cancellationToken);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFile), id, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
 
         // Delete from disk after the DB record is gone
         if (!string.IsNullOrEmpty(entity.StoragePath))

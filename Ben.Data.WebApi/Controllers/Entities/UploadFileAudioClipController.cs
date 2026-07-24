@@ -24,15 +24,18 @@ public sealed class UploadFileAudioClipController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;
     private readonly IFileStorageService _fileStorage;
+    private readonly IAuditLogService _auditLog;
 
     public UploadFileAudioClipController(
         IDbContextFactory<BenDataContext> dbContextFactory,
         IMapper mapper,
-        IFileStorageService fileStorage)
+        IFileStorageService fileStorage,
+        IAuditLogService auditLog)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
         _fileStorage = fileStorage;
+        _auditLog = auditLog;
     }
 
     /// <summary>
@@ -143,6 +146,7 @@ public sealed class UploadFileAudioClipController : BenControllerBase
 
         db.UploadFiles.Add(entity);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), entity.Id, entity, userId, AppSources.WebApi, ct));
 
         return CreatedAtAction("GetById", "UploadFile", new { id = entity.Id },
             _mapper.Map<UploadFileRecord>(entity));

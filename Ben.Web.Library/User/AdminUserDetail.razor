@@ -6,8 +6,13 @@
 
 @using System.Text.Json
 @using Ben.Web.Library.Manage.Audio
+@using Ben.Web.Library.Shared
+@using Ben.Web.Library.Manage.Maps
 
 <PageTitle>SuperAdmin — User Detail</PageTitle>
+
+<AddressMapModal @ref="_mapModal" />
+<DirectionsMapModal @ref="_directionsModal" />
 
 @if (_detail is null)
 {
@@ -100,9 +105,13 @@ else
                         <GridColumn Field="@nameof(UserAddressAdminRecord.State)" Title="State" Width="80px" />
                         <GridColumn Field="@nameof(UserAddressAdminRecord.ZipCode)" Title="Zip" Width="90px" />
                         <GridColumn Field="@nameof(UserAddressAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridCommandColumn Width="130px">
+                        <GridCommandColumn Width="220px">
                             <GridCommandButton Icon="@SvgIcon.Pencil"
                                 OnClick="@((GridCommandEventArgs e) => OpenSubDialog("address", e.Items.First()))">Edit</GridCommandButton>
+                            <GridCommandButton Icon="@SvgIcon.MapMarker"
+                                OnClick="@((GridCommandEventArgs e) => OpenAddressMap((UserAddressAdminRecord)e.Items.First()))">Map</GridCommandButton>
+                            <GridCommandButton Icon="@SvgIcon.Directions"
+                                OnClick="@((GridCommandEventArgs e) => OpenDirections((UserAddressAdminRecord)e.Items.First()))">Directions</GridCommandButton>
                             <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                 OnClick="@((GridCommandEventArgs e) => DeleteAddress((UserAddressAdminRecord)e.Items.First()))"></GridCommandButton>
                         </GridCommandColumn>
@@ -277,28 +286,7 @@ else
                     </div>
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Street 1 <span class="text-danger">*</span></label>
-                    <TelerikTextBox @bind-Value="@_addr.StreetAddress1" Width="100%" />
-                </div>
-                <div class="col-12">
-                    <label class="form-label fw-semibold">Street 2</label>
-                    <TelerikTextBox @bind-Value="@_addr.StreetAddress2" Width="100%" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">City <span class="text-danger">*</span></label>
-                    <TelerikTextBox @bind-Value="@_addr.City" Width="100%" />
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label fw-semibold">State</label>
-                    <TelerikTextBox @bind-Value="@_addr.State" Width="100%" />
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label fw-semibold">Zip</label>
-                    <TelerikTextBox @bind-Value="@_addr.ZipCode" Width="100%" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Country</label>
-                    <TelerikTextBox @bind-Value="@_addr.Country" Width="100%" />
+                    <AddressFieldsWithMap @ref="_addrFields" State="@_addrState" />
                 </div>
                 <div class="col-md-6 d-flex align-items-center gap-2">
                     <TelerikCheckBox @bind-Value="@_addr.IsPublic" Id="addr-pub" />
@@ -445,10 +433,42 @@ else
 @* ── Add New Type mini-dialog ─────────────────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showAddTypeDialog"
                Title="@($"New {_addTypeFor} Type")"
-               Width="380px">
+               Width="500px">
     <DialogContent>
-        <label class="form-label fw-semibold">Type Name <span class="text-danger">*</span></label>
-        <TelerikTextBox @bind-Value="@_newTypeName" Width="100%" />
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+                <TelerikTextBox @bind-Value="@_newTypeName" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Description</label>
+                <TelerikTextBox @bind-Value="@_newTypeDescription" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Icon</label>
+                <IconClassPicker @bind-Value="@_newTypeIconClass" />
+                <small class="text-secondary">Browse to pick from Telerik, Bootstrap, or Font Awesome icons.</small>
+            </div>
+            @* Color Class *@
+            <div class="col-12">
+                <label class="form-label fw-semibold">Color Class <span class="text-secondary small">(CSS class, optional)</span></label>
+                <TelerikTextBox @bind-Value="@_newTypeColorClass"
+                                PlaceHolder="e.g. text-primary or text-danger"
+                                Width="100%" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Sort Order</label>
+                <TelerikNumericTextBox @bind-Value="@_newTypeSortOrder" Min="0" Width="100%" />
+            </div>
+            <div class="col-md-4 d-flex align-items-center gap-2 pt-4">
+                <TelerikCheckBox @bind-Value="@_newTypeIsActive" Id="newtype-act" />
+                <label for="newtype-act" class="form-label mb-0">Active</label>
+            </div>
+            <div class="col-md-4 d-flex align-items-center gap-2 pt-4">
+                <TelerikCheckBox @bind-Value="@_newTypeIsPublic" Id="newtype-pub" />
+                <label for="newtype-pub" class="form-label mb-0">Public</label>
+            </div>
+        </div>
         @if (_typeError is not null) { <div class="alert alert-danger mt-2 mb-0">@_typeError</div> }
     </DialogContent>
     <DialogButtons>
@@ -457,6 +477,7 @@ else
                        Enabled="@(!_isSaving)">Save</TelerikButton>
     </DialogButtons>
 </TelerikDialog>
+
 
 @* ── Upload File dialog ───────────────────────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showUploadDialog"
@@ -546,7 +567,11 @@ else
     private Guid _editingSubId;
 
     // Per-type form models
-    private AddrForm  _addr = new();
+    private AddrForm  _addr      = new();
+    private AddressMapModal?       _mapModal;
+    private DirectionsMapModal?    _directionsModal;
+    private AddressFieldsWithMap? _addrFields;
+    private AddressFieldsState    _addrState = new();
     private EmlForm   _eml  = new();
     private PhnForm   _phn  = new();
     private LnkForm   _lnk  = new();
@@ -555,7 +580,13 @@ else
     // Add type mini-dialog
     private bool _showAddTypeDialog;
     private string _addTypeFor = "";
-    private string _newTypeName = "";
+    private string _newTypeName        = "";
+    private string _newTypeDescription = "";
+    private string _newTypeIconClass   = "";
+    private string _newTypeColorClass  = "";
+    private bool   _newTypeIsActive    = true;
+    private bool   _newTypeIsPublic;
+    private int    _newTypeSortOrder;
     private string? _typeError;
 
     protected override void OnInitialized()
@@ -652,6 +683,19 @@ else
                     StreetAddress2 = a.StreetAddress2, City = a.City, State = a.State,
                     ZipCode = a.ZipCode, Country = a.Country, IsPublic = a.IsPublic
                 };
+                _addrState = new AddressFieldsState
+                {
+                    StreetAddress1 = _addr.StreetAddress1 ?? "",
+                    StreetAddress2 = _addr.StreetAddress2,
+                    City           = _addr.City ?? "",
+                    State          = _addr.State ?? "",
+                    ZipCode        = _addr.ZipCode ?? "",
+                    Country        = _addr.Country ?? "US",
+                    Latitude       = a?.Latitude,     // carried into component so map shows existing pin
+                    Longitude      = a?.Longitude
+                };
+                if (a is null)
+                    _addrFields?.ResetPreview();   // new address — clear previous pin
                 if (a is not null) _editingSubId = a.Id;
                 break;
             case "email":
@@ -710,8 +754,15 @@ else
         switch (_subEntityType)
         {
             case "address":
-                var areq = new UserAddressUpsertRequest(_addr.TypeId, _addr.StreetAddress1 ?? "", _addr.StreetAddress2,
-                    _addr.City ?? "", _addr.State ?? "", _addr.ZipCode ?? "", _addr.Country ?? "US", _addr.IsPublic);
+                if (_addrFields is not null && !_addrFields.IsValid)
+                {
+                    _subError = _addrFields.ValidationMessage;
+                    _isSaving = false;
+                    return;
+                }
+                var areq = new UserAddressUpsertRequest(_addr.TypeId, _addrState.StreetAddress1, _addrState.StreetAddress2,
+                    _addrState.City, _addrState.State, _addrState.ZipCode, _addrState.Country, _addr.IsPublic,
+                    Latitude: _addrState.Latitude, Longitude: _addrState.Longitude);
                 ok = _editingSubId == Guid.Empty
                     ? await AdminClient.CreateUserAddressAsync(UserId, actor, areq)
                     : await AdminClient.UpdateUserAddressAsync(_editingSubId, UserId, actor, areq);
@@ -750,6 +801,24 @@ else
     // ── Delete helpers ────────────────────────────────────────────────────────
 
     private async Task DeleteAddress(UserAddressAdminRecord r) { if (await AdminClient.DeleteUserAddressAsync(r.Id)) await Reload(); else _errorMessage = "Delete failed."; }
+
+    private void OpenAddressMap(UserAddressAdminRecord r)
+    {
+        var parts = new[] { r.StreetAddress1, r.StreetAddress2, r.City, r.State, r.ZipCode, r.Country }
+                        .Where(s => !string.IsNullOrWhiteSpace(s));
+        var title = string.Join(", ", parts);
+        _mapModal?.Show(title,
+            r.Latitude  is not null ? (double)r.Latitude  : null,
+            r.Longitude is not null ? (double)r.Longitude : null);
+    }
+
+    private void OpenDirections(UserAddressAdminRecord r)
+    {
+        if (!r.Latitude.HasValue || !r.Longitude.HasValue) return;
+        var parts = new[] { r.StreetAddress1, r.StreetAddress2, r.City, r.State, r.ZipCode, r.Country }
+                        .Where(s => !string.IsNullOrWhiteSpace(s));
+        _directionsModal?.Show(string.Join(", ", parts), (double)r.Latitude.Value, (double)r.Longitude.Value);
+    }
     private async Task DeleteEmail(UserEmailAdminRecord r)     { if (await AdminClient.DeleteUserEmailAsync(r.Id))   await Reload(); else _errorMessage = "Delete failed."; }
     private async Task DeletePhone(UserPhoneAdminRecord r)     { if (await AdminClient.DeleteUserPhoneAsync(r.Id))   await Reload(); else _errorMessage = "Delete failed."; }
     private async Task DeleteLink(UserLinkAdminRecord r)       { if (await AdminClient.DeleteUserLinkAsync(r.Id))    await Reload(); else _errorMessage = "Delete failed."; }
@@ -838,8 +907,16 @@ else
 
     private void OpenAddTypeDialog(string entityType)
     {
-        _addTypeFor = entityType; _newTypeName = ""; _typeError = null;
-        _showAddTypeDialog = true;
+        _addTypeFor          = entityType;
+        _newTypeName         = "";
+        _newTypeDescription  = "";
+        _newTypeIconClass    = "";
+        _newTypeColorClass   = "";
+        _newTypeIsActive     = true;
+        _newTypeIsPublic     = false;
+        _newTypeSortOrder    = 0;
+        _typeError           = null;
+        _showAddTypeDialog   = true;
     }
 
     private async Task SaveNewType()
@@ -848,27 +925,47 @@ else
         _isSaving = true;
         bool ok = _addTypeFor switch
         {
-            "address" => await AdminClient.CreateUserAddressTypeAsync(_newTypeName.Trim()),
-            "email"   => await AdminClient.CreateUserEmailTypeAsync(_newTypeName.Trim()),
-            "phone"   => await AdminClient.CreateUserPhoneTypeAsync(_newTypeName.Trim()),
-            "link"    => await AdminClient.CreateUserLinkTypeAsync(_newTypeName.Trim()),
-            "note"    => await AdminClient.CreateUserNoteTypeAsync(_newTypeName.Trim()),
+            "address" => await AdminClient.CreateUserAddressTypeAsync(_newTypeName.Trim(), _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder, _newTypeIconClass?.Trim(), _newTypeColorClass?.Trim()),
+            "email"   => await AdminClient.CreateUserEmailTypeAsync(_newTypeName.Trim(),   _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder, _newTypeIconClass?.Trim(), _newTypeColorClass?.Trim()),
+            "phone"   => await AdminClient.CreateUserPhoneTypeAsync(_newTypeName.Trim(),   _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder, _newTypeIconClass?.Trim(), _newTypeColorClass?.Trim()),
+            "link"    => await AdminClient.CreateUserLinkTypeAsync(_newTypeName.Trim(),    _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder, _newTypeIconClass?.Trim(), _newTypeColorClass?.Trim()),
+            "note"    => await AdminClient.CreateUserNoteTypeAsync(_newTypeName.Trim(),    _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder, _newTypeIconClass?.Trim(), _newTypeColorClass?.Trim()),
             _ => false
         };
         if (ok)
         {
-            // Reload the relevant type list
+            // Reload the relevant type list and auto-select the new type in the form
             switch (_addTypeFor)
             {
-                case "address": _addressTypes = await AdminClient.GetUserAddressTypesAsync(); break;
-                case "email":   _emailTypes   = await AdminClient.GetUserEmailTypesAsync(); break;
-                case "phone":   _phoneTypes   = await AdminClient.GetUserPhoneTypesAsync(); break;
-                case "link":    _linkTypes    = await AdminClient.GetUserLinkTypesAsync(); break;
-                case "note":    _noteTypes    = await AdminClient.GetUserNoteTypesAsync(); break;
+                case "address":
+                    _addressTypes = await AdminClient.GetUserAddressTypesAsync();
+                    var newAddr = _addressTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
+                    if (newAddr is not null) _addr.TypeId = newAddr.Id;
+                    break;
+                case "email":
+                    _emailTypes = await AdminClient.GetUserEmailTypesAsync();
+                    var newEml = _emailTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
+                    if (newEml is not null) _eml.TypeId = newEml.Id;
+                    break;
+                case "phone":
+                    _phoneTypes = await AdminClient.GetUserPhoneTypesAsync();
+                    var newPhn = _phoneTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
+                    if (newPhn is not null) _phn.TypeId = newPhn.Id;
+                    break;
+                case "link":
+                    _linkTypes = await AdminClient.GetUserLinkTypesAsync();
+                    var newLnk = _linkTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
+                    if (newLnk is not null) _lnk.TypeId = newLnk.Id;
+                    break;
+                case "note":
+                    _noteTypes = await AdminClient.GetUserNoteTypesAsync();
+                    var newNte = _noteTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
+                    if (newNte is not null) _nte.TypeId = newNte.Id;
+                    break;
             }
             _showAddTypeDialog = false;
         }
-        else _typeError = "Failed to create type.";
+        else _typeError = "Failed to create type. Check that the name is unique.";
         _isSaving = false;
     }
 

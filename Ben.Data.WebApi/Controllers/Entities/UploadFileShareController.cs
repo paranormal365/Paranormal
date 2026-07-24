@@ -16,11 +16,13 @@ public sealed class UploadFileShareController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;
+    private readonly IAuditLogService _auditLog;
 
-    public UploadFileShareController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper)
+    public UploadFileShareController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper, IAuditLogService auditLog)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
+        _auditLog = auditLog;
     }
 
     /// <summary>List all active shares for a specific file.</summary>
@@ -66,6 +68,9 @@ public sealed class UploadFileShareController : BenControllerBase
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
         // Check if already shared (reactivate if soft-deleted)
+        var shareBefore = await db.UploadFileOrganizationShares.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.UploadFileId == fileId && s.OrganizationId == request.OrganizationId, cancellationToken);
+
         var existing = await db.UploadFileOrganizationShares
             .FirstOrDefaultAsync(s => s.UploadFileId == fileId && s.OrganizationId == request.OrganizationId, cancellationToken);
 
@@ -78,6 +83,7 @@ public sealed class UploadFileShareController : BenControllerBase
             existing.DateUpdated = DateTime.UtcNow;
             existing.UpdatedByAppUserId = request.SharedByAppUserId;
             await db.SaveChangesAsync(cancellationToken);
+            _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileOrganizationShare), existing.Id, shareBefore!, existing, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
             return Ok(_mapper.Map<UploadFileOrganizationShareRecord>(existing));
         }
 
@@ -95,6 +101,7 @@ public sealed class UploadFileShareController : BenControllerBase
 
         db.UploadFileOrganizationShares.Add(share);
         await db.SaveChangesAsync(cancellationToken);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileOrganizationShare), share.Id, share, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
         return CreatedAtAction(nameof(GetSharesForFile), new { fileId }, _mapper.Map<UploadFileOrganizationShareRecord>(share));
     }
 
@@ -106,6 +113,7 @@ public sealed class UploadFileShareController : BenControllerBase
         CancellationToken cancellationToken)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var shareBefore = await db.UploadFileOrganizationShares.AsNoTracking().FirstOrDefaultAsync(s => s.Id == shareId, cancellationToken);
         var share = await db.UploadFileOrganizationShares.FirstOrDefaultAsync(s => s.Id == shareId, cancellationToken);
         if (share is null) return NotFound();
 
@@ -113,6 +121,7 @@ public sealed class UploadFileShareController : BenControllerBase
         share.DateUpdated = DateTime.UtcNow;
         share.UpdatedByAppUserId = request.UpdatedByAppUserId;
         await db.SaveChangesAsync(cancellationToken);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileOrganizationShare), shareId, shareBefore!, share, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
         return Ok(_mapper.Map<UploadFileOrganizationShareRecord>(share));
     }
 
@@ -121,6 +130,7 @@ public sealed class UploadFileShareController : BenControllerBase
     public async Task<IActionResult> RemoveShare(Guid shareId, [FromQuery] Guid removedByAppUserId, CancellationToken cancellationToken)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var shareBefore = await db.UploadFileOrganizationShares.AsNoTracking().FirstOrDefaultAsync(s => s.Id == shareId, cancellationToken);
         var share = await db.UploadFileOrganizationShares.FirstOrDefaultAsync(s => s.Id == shareId, cancellationToken);
         if (share is null) return NotFound();
 
@@ -130,6 +140,7 @@ public sealed class UploadFileShareController : BenControllerBase
         share.DateUpdated = DateTime.UtcNow;
         share.UpdatedByAppUserId = removedByAppUserId;
         await db.SaveChangesAsync(cancellationToken);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileOrganizationShare), shareId, shareBefore!, share, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
         return NoContent();
     }
 }

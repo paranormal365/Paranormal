@@ -1,0 +1,454 @@
+@*
+  OrganizationFiles.razor  (/organizations/{OrgId:guid}/files)
+  ─────────────────────────────────────────────────────────────
+  Manages files owned by an organization.
+  • Members with Create permission can upload new files or share user files.
+  • When sharing a user file, members with Update permission are offered "Publish immediately".
+  • Members with Update permission can separately approve/revoke public access (Publish).
+  • Members with Delete permission can delete files; each deletion writes an audit log.
+  • The delete log tab is visible to members with Delete permission.
+*@
+
+@page "/organizations/{OrgId:guid}/files"
+@namespace Ben.Web.Library.Organization
+@inject IBenAdminClient AdminClient
+
+<div class="container-fluid py-3">
+    @if (_loading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <span class="spinner-border text-primary" role="status"></span>
+        </div>
+    }
+    else
+    {
+        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+            <h4 class="mb-0">Files — @_orgName</h4>
+            <div class="d-flex gap-2 flex-wrap">
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               OnClick="@(() => _showUploadDialog = true)">⬆ Upload</TelerikButton>
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                               FillMode="@ThemeConstants.Button.FillMode.Outline"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               OnClick="@(() => _showCopyDialog = true)">📋 Share from User</TelerikButton>
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                               FillMode="@ThemeConstants.Button.FillMode.Outline"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               OnClick="@(() => _showDeleteLog = !_showDeleteLog)">
+                    🗒 @(_showDeleteLog ? "Hide" : "Show") Delete Log
+                </TelerikButton>
+                <a href="/organizations" class="btn btn-sm btn-outline-secondary">← Organizations</a>
+            </div>
+        </div>
+
+        @if (_error is not null) { <div class="alert alert-danger">@_error</div> }
+
+        @* ── Files grid ──────────────────────────────────────────────────── *@
+        <TelerikGrid Data="@_files" Pageable="true" PageSize="20" Sortable="true" Class="mb-4">
+            <GridColumns>
+                <GridColumn Field="@nameof(OrganizationFileRecord.FileName)" Title="File Name" />
+                <GridColumn Field="@nameof(OrganizationFileRecord.FileTypeName)" Title="Type" Width="110px" />
+                <GridColumn Title="Size" Width="85px">
+                    <Template>@FormatSize(((OrganizationFileRecord)context).FileSize)</Template>
+                </GridColumn>
+                <GridColumn Title="Public" Width="100px">
+                    <Template>
+                        @{ var f = (OrganizationFileRecord)context; }
+                        @if (f.IsPublic)
+                        {
+                            <span class="badge bg-success">✓ Public</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Private</span>
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Approved by" Width="130px">
+                    <Template>
+                        @{ var fa = (OrganizationFileRecord)context; }
+                        @if (fa.DatePublished.HasValue)
+                        {
+                            <span class="small text-success" title="@fa.DatePublished.Value.ToString("g")">
+                                @fa.PublishedByDisplayName<br/>
+                                <em class="text-secondary">@fa.DatePublished.Value.ToString("d")</em>
+                            </span>
+                        }
+                        else { <span class="text-secondary small">—</span> }
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Source" Width="70px">
+                    <Template>
+                        @((OrganizationFileRecord)context).SourceUploadFileId.HasValue ? "📋 Copy" : "⬆ Upload"
+                    </Template>
+                </GridColumn>
+                <GridColumn Field="@nameof(OrganizationFileRecord.Description)" Title="Description" />
+                <GridCommandColumn Width="200px">
+                    <GridCommandButton OnClick="@(e => OpenPublish((OrganizationFileRecord)e.Items.First()))"
+                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
+                                       Size="@ThemeConstants.Button.Size.Small">
+                        @(((OrganizationFileRecord)context).IsPublic ? "Unpublish" : "Publish")
+                    </GridCommandButton>
+                    <GridCommandButton OnClick="@(e => OpenEdit((OrganizationFileRecord)e.Items.First()))"
+                                       Size="@ThemeConstants.Button.Size.Small" Class="ms-1">Edit</GridCommandButton>
+                    <GridCommandButton OnClick="@(e => ConfirmDelete((OrganizationFileRecord)e.Items.First()))"
+                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                       Size="@ThemeConstants.Button.Size.Small" Class="ms-1">Delete</GridCommandButton>
+                </GridCommandColumn>
+            </GridColumns>
+        </TelerikGrid>
+
+        @* ── Delete log (expandable) ─────────────────────────────────────── *@
+        @if (_showDeleteLog)
+        {
+            <div class="card border-secondary mb-4">
+                <div class="card-header small fw-semibold text-secondary text-uppercase">File Deletion Audit Log</div>
+                <div class="card-body p-0">
+                    @if (_deleteLogs.Count == 0)
+                    {
+                        <p class="text-secondary small p-3 mb-0">No files have been deleted yet.</p>
+                    }
+                    else
+                    {
+                        <TelerikGrid Data="@_deleteLogs" Pageable="true" PageSize="10">
+                            <GridColumns>
+                                <GridColumn Field="@nameof(OrganizationFileDeleteLogRecord.FileName)" Title="File" />
+                                <GridColumn Field="@nameof(OrganizationFileDeleteLogRecord.ContentType)" Title="Type" Width="110px" />
+                                <GridColumn Title="Size" Width="80px">
+                                    <Template>@FormatSize(((OrganizationFileDeleteLogRecord)context).FileSize)</Template>
+                                </GridColumn>
+                                <GridColumn Title="Was Public" Width="90px">
+                                    <Template>
+                                        @{ var dl = (OrganizationFileDeleteLogRecord)context; }
+                                        @(dl.WasPublic ? "✓ Yes" : "No")
+                                    </Template>
+                                </GridColumn>
+                                <GridColumn Title="Approved by" Width="120px">
+                                    <Template>
+                                        @{ var dla = (OrganizationFileDeleteLogRecord)context; }
+                                        @(dla.WasPublishedByDisplayName ?? "—")
+                                    </Template>
+                                </GridColumn>
+                                <GridColumn Field="@nameof(OrganizationFileDeleteLogRecord.DeletedByDisplayName)" Title="Deleted By" Width="130px" />
+                                <GridColumn Field="@nameof(OrganizationFileDeleteLogRecord.DateDeleted)" Title="Deleted" DisplayFormat="{0:g}" Width="130px" />
+                            </GridColumns>
+                        </TelerikGrid>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@* ── Upload dialog ──────────────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showUploadDialog" Title="Upload Organization File" Width="520px">
+    <DialogContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">File <span class="text-danger">*</span></label>
+                <InputFile OnChange="OnFileSelected" class="form-control" accept="*/*" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">File Type <span class="text-danger">*</span></label>
+                <TelerikDropDownList Data="@_fileTypes" @bind-Value="@_uploadTypeId"
+                                     TextField="@nameof(UploadFileTypeRecord.Name)"
+                                     ValueField="@nameof(UploadFileTypeRecord.Id)"
+                                     DefaultText="— select —" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Description</label>
+                <TelerikTextBox @bind-Value="@_uploadDescription" Width="100%" />
+            </div>
+            <div class="col-12 d-flex align-items-center gap-2">
+                <TelerikCheckBox @bind-Value="@_uploadIsPublic" Id="orgfile-pub" />
+                <label for="orgfile-pub" class="form-label mb-0">Mark as Public immediately</label>
+            </div>
+        </div>
+        @if (_uploadError is not null) { <div class="alert alert-danger mt-3 mb-0 py-2 small">@_uploadError</div> }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="@(() => { _showUploadDialog = false; _uploadError = null; })">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Enabled="@(!_uploading && _selectedFile is not null && _uploadTypeId != Guid.Empty)"
+                       OnClick="UploadAsync">@(_uploading ? "Uploading…" : "Upload")</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Share from user file dialog ────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showCopyDialog" Title="Share User File to Organization" Width="500px">
+    <DialogContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">User File ID (Guid)</label>
+                <TelerikTextBox @bind-Value="@_copySourceId" PlaceHolder="Paste the UploadFile ID..." Width="100%" />
+                <small class="text-secondary">The file must be public or shared with this organization.</small>
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Description <span class="text-secondary small">(blank = keep original)</span></label>
+                <TelerikTextBox @bind-Value="@_copyDescription" Width="100%" />
+            </div>
+            <div class="col-12 p-2 rounded" style="background:var(--kendo-color-surface,#f5f5f5)">
+                <p class="small text-secondary mb-1">
+                    <strong>Note:</strong> Shared files are <em>private by default</em>.
+                    A member with publish permission must approve the file before it becomes public.
+                </p>
+                <div class="d-flex align-items-center gap-2">
+                    <TelerikCheckBox @bind-Value="@_copyPublishNow" Id="orgcopy-pub" />
+                    <label for="orgcopy-pub" class="form-label mb-0 small">
+                        Publish immediately
+                        @if (!_copyCanPublish)
+                        {
+                            <span class="text-muted ms-1">(requires Publish permission)</span>
+                        }
+                    </label>
+                </div>
+            </div>
+        </div>
+        @if (_copyError is not null) { <div class="alert alert-danger mt-3 mb-0 py-2 small">@_copyError</div> }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="@(() => { _showCopyDialog = false; _copyError = null; })">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Enabled="@(!_copying)"
+                       OnClick="CopyAsync">@(_copying ? "Sharing…" : "Share to Org")</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Publish / unpublish dialog ─────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showPublishDialog" Title="@(_publishTarget?.IsPublic == true ? "Unpublish File" : "Publish File")" Width="400px">
+    <DialogContent>
+        <p>
+            @if (_publishTarget?.IsPublic == true)
+            {
+                <text>Revoke public access for <strong>@_publishTarget?.FileName</strong>?
+                The file will no longer be visible to the public.</text>
+            }
+            else
+            {
+                <text>Make <strong>@_publishTarget?.FileName</strong> publicly accessible?
+                This will be logged with your name and the current date/time.</text>
+            }
+        </p>
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="@(() => _showPublishDialog = false)">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@(_publishTarget?.IsPublic == true ? ThemeConstants.Button.ThemeColor.Warning : ThemeConstants.Button.ThemeColor.Success)"
+                       OnClick="ConfirmPublishAsync">
+            @(_publishTarget?.IsPublic == true ? "Unpublish" : "Approve & Publish")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Edit metadata dialog ────────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showEditDialog" Title="Edit File Metadata" Width="420px">
+    <DialogContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Description</label>
+                <TelerikTextBox @bind-Value="@_editDescription" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Sort Order</label>
+                <TelerikNumericTextBox @bind-Value="@_editSortOrder" Min="0" Width="100%" />
+            </div>
+        </div>
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="@(() => _showEditDialog = false)">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" OnClick="SaveEditAsync">Save</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Delete confirm ──────────────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showDeleteDialog" Title="Delete File" Width="400px">
+    <DialogContent>
+        <p>Delete <strong>@_pendingDelete?.FileName</strong>? (@FormatSize(_pendingDelete?.FileSize ?? 0))</p>
+        <p class="small text-secondary mb-0">This action is permanent. An audit record will be saved before deletion.</p>
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="@(() => _showDeleteDialog = false)">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error" OnClick="DeleteAsync">Delete</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+<TelerikNotification @ref="_toast" HorizontalPosition="@NotificationHorizontalPosition.Right"
+                     VerticalPosition="@NotificationVerticalPosition.Top" />
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private bool   _loading = true;
+    private string? _error;
+    private string  _orgName = string.Empty;
+    private List<OrganizationFileRecord>          _files      = [];
+    private List<OrganizationFileDeleteLogRecord> _deleteLogs = [];
+    private IReadOnlyList<UploadFileTypeRecord>   _fileTypes  = [];
+    private bool _showDeleteLog;
+
+    // Upload
+    private bool _showUploadDialog;
+    private IBrowserFile? _selectedFile;
+    private Guid   _uploadTypeId;
+    private string _uploadDescription = string.Empty;
+    private bool   _uploadIsPublic;
+    private bool   _uploading;
+    private string? _uploadError;
+
+    // Copy/Share
+    private bool   _showCopyDialog;
+    private string _copySourceId    = string.Empty;
+    private string _copyDescription = string.Empty;
+    private bool   _copyPublishNow;
+    private bool   _copyCanPublish;   // determined by API response
+    private bool   _copying;
+    private string? _copyError;
+
+    // Publish
+    private bool _showPublishDialog;
+    private OrganizationFileRecord? _publishTarget;
+
+    // Edit
+    private bool   _showEditDialog;
+    private OrganizationFileRecord? _editingFile;
+    private string _editDescription = string.Empty;
+    private int    _editSortOrder;
+
+    // Delete
+    private bool _showDeleteDialog;
+    private OrganizationFileRecord? _pendingDelete;
+
+    private TelerikNotification? _toast;
+
+    protected override async Task OnParametersSetAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _files      = (await AdminClient.GetOrgFilesAsync(OrgId)).ToList();
+            _deleteLogs = (await AdminClient.GetOrgFileDeleteLogAsync(OrgId)).ToList();
+            _fileTypes  = await AdminClient.GetPublicFileTypesAsync();
+            var orgs    = await AdminClient.GetOrganizationsAsync();
+            _orgName    = orgs.FirstOrDefault(o => o.Id == OrgId)?.Name ?? OrgId.ToString();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs e) => _selectedFile = e.File;
+
+    private async Task UploadAsync()
+    {
+        if (_selectedFile is null || _uploadTypeId == Guid.Empty) return;
+        _uploading = true; _uploadError = null;
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            content.Add(new StreamContent(_selectedFile.OpenReadStream(200 * 1024 * 1024)), "File", _selectedFile.Name);
+            content.Add(new StringContent(_uploadTypeId.ToString()), "UploadFileTypeId");
+            content.Add(new StringContent(_uploadDescription), "Description");
+            content.Add(new StringContent(_uploadIsPublic.ToString()), "IsPublic");
+            content.Add(new StringContent("0"), "SortOrder");
+            var result = await AdminClient.UploadOrgFileAsync(OrgId, content);
+            if (result is not null)
+            {
+                _showUploadDialog = false;
+                _selectedFile     = null;
+                _uploadDescription = string.Empty;
+                await ReloadAsync();
+                _toast?.Show(new NotificationModel { Text = "File uploaded.", ThemeColor = ThemeConstants.Notification.ThemeColor.Success, CloseAfter = 3000 });
+            }
+            else { _uploadError = "Upload failed."; }
+        }
+        catch (Exception ex) { _uploadError = ex.Message; }
+        finally { _uploading = false; }
+    }
+
+    private async Task CopyAsync()
+    {
+        if (!Guid.TryParse(_copySourceId.Trim(), out var sourceId)) { _copyError = "Enter a valid GUID."; return; }
+        _copying = true; _copyError = null;
+        try
+        {
+            var result = await AdminClient.CopyFileFromUserAsync(OrgId, sourceId, _copyDescription, _copyPublishNow);
+            if (result is not null)
+            {
+                _copyCanPublish = result.CanPublishImmediately;
+                _showCopyDialog  = false;
+                _copySourceId    = string.Empty;
+                _copyDescription = string.Empty;
+                _copyPublishNow  = false;
+                await ReloadAsync();
+                var msg = result.PublishedImmediately ? "File shared and published." : "File shared (pending approval to publish).";
+                _toast?.Show(new NotificationModel { Text = msg, ThemeColor = ThemeConstants.Notification.ThemeColor.Success, CloseAfter = 4000 });
+            }
+            else { _copyError = "Share failed — ensure the file is public or shared with this organization."; }
+        }
+        catch (Exception ex) { _copyError = ex.Message; }
+        finally { _copying = false; }
+    }
+
+    private void OpenPublish(OrganizationFileRecord f) { _publishTarget = f; _showPublishDialog = true; }
+
+    private async Task ConfirmPublishAsync()
+    {
+        if (_publishTarget is null) return;
+        var newState = !_publishTarget.IsPublic;
+        var result   = await AdminClient.PublishOrgFileAsync(OrgId, _publishTarget.Id, newState);
+        _showPublishDialog = false;
+        if (result is not null)
+        {
+            await ReloadAsync();
+            var msg = newState ? $"✓ {result.FileName} is now public." : $"{result.FileName} set to private.";
+            _toast?.Show(new NotificationModel { Text = msg, ThemeColor = ThemeConstants.Notification.ThemeColor.Success, CloseAfter = 3000 });
+        }
+    }
+
+    private void OpenEdit(OrganizationFileRecord f)
+    {
+        _editingFile     = f;
+        _editDescription = f.Description ?? string.Empty;
+        _editSortOrder   = f.SortOrder;
+        _showEditDialog  = true;
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (_editingFile is null) return;
+        var result = await AdminClient.UpdateOrgFileAsync(OrgId, _editingFile.Id, _editDescription, _editSortOrder);
+        _showEditDialog = false;
+        if (result is not null)
+        {
+            await ReloadAsync();
+            _toast?.Show(new NotificationModel { Text = "Saved.", ThemeColor = ThemeConstants.Notification.ThemeColor.Success, CloseAfter = 3000 });
+        }
+    }
+
+    private void ConfirmDelete(OrganizationFileRecord f) { _pendingDelete = f; _showDeleteDialog = true; }
+
+    private async Task DeleteAsync()
+    {
+        if (_pendingDelete is null) return;
+        var ok = await AdminClient.DeleteOrgFileAsync(OrgId, _pendingDelete.Id);
+        _showDeleteDialog = false;
+        if (ok)
+        {
+            await ReloadAsync();
+            _toast?.Show(new NotificationModel { Text = "Deleted. Audit record saved.", ThemeColor = ThemeConstants.Notification.ThemeColor.Error, CloseAfter = 4000 });
+        }
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024):F2} MB";
+    }
+}

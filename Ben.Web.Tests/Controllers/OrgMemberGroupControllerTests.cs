@@ -51,7 +51,7 @@ public class OrgMemberGroupControllerTests
         Mock<IOrganizationSecurityService>? security = null)
     {
         security ??= GrantAll();
-        var ctrl = new OrgMemberGroupController(factory, CreateMapperMock().Object, security.Object);
+        var ctrl = new OrgMemberGroupController(factory, CreateMapperMock().Object, security.Object, new Mock<IAuditLogService>().Object);
         ctrl.ControllerContext = new ControllerContext
             { HttpContext = new DefaultHttpContext { User = principal ?? Anonymous() } };
         return ctrl;

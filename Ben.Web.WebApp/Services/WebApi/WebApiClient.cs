@@ -39,6 +39,14 @@ public sealed class WebApiClient : IWebApiClient
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
     }
 
+    public async Task<TResponse?> GetAnonymousAsync<TResponse>(string relativeUrl, CancellationToken token = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, relativeUrl);
+        using var response = await _httpClient.SendAsync(req, token);
+        if (!response.IsSuccessStatusCode) return default;
+        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
+    }
+
     public async Task<TResponse?> PostAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Post, relativeUrl);
@@ -149,6 +157,15 @@ public sealed class WebApiClient : IWebApiClient
         using var response = await _httpClient.SendAsync(req, token);
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<UploadFileRecord>(cancellationToken: token);
+    }
+
+    public async Task<TResponse?> PostMultipartAsync<TResponse>(string relativeUrl, MultipartFormDataContent content, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Post, relativeUrl);
+        req.Content = content;
+        using var response = await _httpClient.SendAsync(req, token);
+        if (!response.IsSuccessStatusCode) return default;
+        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
     }
 
     public Task<UploadFileRecord?> UpdateUploadFileAsync(Guid id, UpdateUploadFileRequest request, CancellationToken token = default)

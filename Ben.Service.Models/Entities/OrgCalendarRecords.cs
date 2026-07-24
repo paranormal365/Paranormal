@@ -1,0 +1,55 @@
+using Ben.Data.Common.Enums;
+
+namespace Ben.Service.Models.Entities;
+
+public record OrgCalendarEventTypeRecord
+{
+    public Guid Id { get; init; }
+    public Guid OrganizationId { get; init; }
+    public required string Name { get; init; }
+    public string? ColorClass { get; init; }
+    public string? IconClass { get; init; }
+    public int SortOrder { get; init; }
+    public bool IsActive { get; init; }
+    public DateTime DateCreated { get; init; }
+    public DateTime? DateUpdated { get; init; }
+    public Guid CreatedByAppUserId { get; init; }
+    public Guid? UpdatedByAppUserId { get; init; }
+}
+
+public record OrgCalendarEventRecord
+{
+    public Guid Id { get; init; }
+    public Guid OrganizationId { get; init; }
+    public Guid? EventTypeId { get; init; }
+    public string? EventTypeName { get; init; }
+    public string? EventTypeColor { get; init; }
+    public Guid? CaseId { get; init; }
+    public string? CaseReference { get; init; }
+    public required string Title { get; init; }
+    public string? Description { get; init; }
+    public string? Location { get; init; }
+    public DateTime StartDateTime { get; init; }
+    public DateTime EndDateTime { get; init; }
+    public bool IsAllDay { get; init; }
+    public bool IsPublic { get; init; }
+    public string? RecurrenceRule { get; init; }
+    public int AttendeeCount { get; init; }
+    public DateTime DateCreated { get; init; }
+    public DateTime? DateUpdated { get; init; }
+    public Guid CreatedByAppUserId { get; init; }
+    public Guid? UpdatedByAppUserId { get; init; }
+}
+
+public record OrgCalendarEventAttendeeRecord
+{
+    public Guid Id { get; init; }
+    public Guid OrgCalendarEventId { get; init; }
+    public Guid AppUserId { get; init; }
+    public string? DisplayName { get; init; }
+    public RsvpStatus RsvpStatus { get; init; }
+    public string? AssignedTask { get; init; }
+    public DateTime? DateRsvp { get; init; }
+    public DateTime DateCreated { get; init; }
+    public Guid CreatedByAppUserId { get; init; }
+}

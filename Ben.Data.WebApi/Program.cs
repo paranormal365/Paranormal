@@ -191,6 +191,11 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
+// Initialise geocod.io — API key stored in Geocodio:ApiKey in appsettings
+Ben.Service.RepositoryService.Services.AddressGeocodingService.Configure(
+    builder.Configuration["Geocodio:ApiKey"] ?? string.Empty,
+    builder.Configuration["Geocodio:BaseUrl"]);
+
 app.UseExceptionHandler(handler =>
 {
     handler.Run(async context =>
@@ -234,6 +239,7 @@ app.MapIdentityApi<AppUser>();
 await Ben.Data.WebApi.SeedData.SuperAdminSeeder.SeedAsync(app.Services, app.Configuration);
 await Ben.Data.WebApi.SeedData.OrganizationSeeder.SeedAsync(app.Services, app.Configuration);
 await Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.SeedAsync(app.Services, app.Configuration);
+await Ben.Data.WebApi.SeedData.ExperienceTaxonomySeeder.SeedAsync(app.Services, app.Configuration);
 
 app.Run();
 

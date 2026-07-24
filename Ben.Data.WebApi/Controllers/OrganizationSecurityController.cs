@@ -1,21 +1,19 @@
 using Ben.Data.Common.Enums;
+using Ben.Data.Source.Context;
 using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.WebApi.Controllers;
 
 [ApiController]
 [Authorize]
 [Route("api/organizations/{organizationId:guid}/security")]
-public class OrganizationSecurityController : BenControllerBase
+public class OrganizationSecurityController(IOrganizationSecurityService organizationSecurityService,
+    IDbContextFactory<BenDataContext> dbFactory) : BenControllerBase
 {
-    private readonly IOrganizationSecurityService _organizationSecurityService;
-
-    public OrganizationSecurityController(IOrganizationSecurityService organizationSecurityService)
-    {
-        _organizationSecurityService = organizationSecurityService;
-    }
+    private readonly IOrganizationSecurityService _organizationSecurityService = organizationSecurityService;
 
     [HttpGet("my-access")]
     public async Task<ActionResult<bool>> CheckMyAccess(
@@ -61,15 +59,24 @@ public class OrganizationSecurityController : BenControllerBase
         var actingUserId = GetCurrentUserIdOrThrow();
         var members = await _organizationSecurityService.GetOrganizationUsersAsync(organizationId, actingUserId, cancellationToken);
 
+        // Fetch display names in one query
+        var userIds = members.Select(m => m.AppUserId).ToHashSet();
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        var names = await db.AppUsers
+            .Where(u => userIds.Contains(u.Id))
+            .Select(u => new { u.Id, Label = u.DisplayName ?? u.Email ?? u.UserName ?? u.Id.ToString() })
+            .ToDictionaryAsync(u => u.Id, u => u.Label, cancellationToken);
+
         return Ok(members.Select(m => new OrganizationUserMembershipResponse
         {
-            MembershipId = m.Id,
+            MembershipId   = m.Id,
             OrganizationId = m.OrganizationId,
-            AppUserId = m.AppUserId,
-            Role = m.Role,
-            IsActive = m.IsActive,
-            DateCreated = m.DateCreated,
-            DateUpdated = m.DateUpdated
+            AppUserId      = m.AppUserId,
+            DisplayName    = names.GetValueOrDefault(m.AppUserId),
+            Role           = m.Role,
+            IsActive       = m.IsActive,
+            DateCreated    = m.DateCreated,
+            DateUpdated    = m.DateUpdated
         }));
     }
 
@@ -172,6 +179,7 @@ public class OrganizationSecurityController : BenControllerBase
         public Guid MembershipId { get; set; }
         public Guid OrganizationId { get; set; }
         public Guid AppUserId { get; set; }
+        public string? DisplayName { get; set; }
         public OrganizationMemberRole Role { get; set; }
         public bool IsActive { get; set; }
         public DateTime DateCreated { get; set; }

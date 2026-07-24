@@ -1,0 +1,172 @@
+@*
+  IconPickerDialog.razor
+  ──────────────────────
+  Renders as a position:fixed overlay panel (NOT a TelerikDialog portal).
+  This ensures the component lives directly in the parent's render tree so
+  StateHasChanged() propagates normally — no portal ShouldRender() blocking.
+*@
+
+@namespace Ben.Web.Library.Manage.Icon
+
+@if (Visible)
+{
+    @* Backdrop — click to close *@
+    <div class="icon-picker-backdrop" @onclick="CloseAsync"></div>
+
+    @* Panel *@
+    <div class="icon-picker-panel">
+
+        @* Header *@
+        <div class="icon-picker-panel-header d-flex align-items-center justify-content-between">
+            <strong>Pick an Icon</strong>
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Icon="@SvgIcon.X"
+                           OnClick="CloseAsync" />
+        </div>
+
+        @* Search *@
+        <div class="icon-picker-search px-3 pt-2 d-flex align-items-center gap-2">
+            <TelerikTextBox Value="@_search"
+                            ValueChanged="@((string v) => _search = v)"
+                            PlaceHolder="Search icons by name…"
+                            Width="100%" />
+            @if (!string.IsNullOrEmpty(_search))
+            {
+                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               Icon="@SvgIcon.X"
+                               OnClick="@(() => _search = string.Empty)" />
+            }
+        </div>
+
+        @* Tabs — only active tab renders its gallery (lazy) *@
+        <div class="flex-grow-1 overflow-hidden">
+            <TelerikTabStrip @bind-ActiveTabId="@_activeTabId">
+
+                <TabStripTab Id="telerik" Title="Telerik Icons">
+                    @if (_activeTabId == "telerik")
+                    {
+                        var list = FilteredTelerik.ToList();
+                        if (list.Count == 0) { <div class="icon-picker-empty">No icons match "@_search"</div> }
+                        else
+                        {
+                            <div class="icon-picker-gallery">
+                                @foreach (var icon in list)
+                                {
+                                    var k = $"t:{icon.Name}";
+                                    <button type="button" class="icon-picker-tile" title="@icon.Name"
+                                            @onclick="@(async (e) => await SelectIconAsync(k))">
+                                        <TelerikSvgIcon Icon="@icon.Icon" Size="@ThemeConstants.SvgIcon.Size.Large" />
+                                        <span>@icon.Name</span>
+                                    </button>
+                                }
+                            </div>
+                        }
+                    }
+                </TabStripTab>
+
+                <TabStripTab Id="bootstrap" Title="Bootstrap Icons">
+                    @if (_activeTabId == "bootstrap")
+                    {
+                        var list = FilteredBootstrap.ToList();
+                        if (list.Count == 0) { <div class="icon-picker-empty">No icons match "@_search"</div> }
+                        else
+                        {
+                            <div class="icon-picker-gallery">
+                                @foreach (var name in list)
+                                {
+                                    var cls = $"bi bi-{name}";
+                                    <button type="button" class="icon-picker-tile" title="@cls"
+                                            @onclick="@(async (e) => await SelectIconAsync(cls))">
+                                        <i class="bi bi-@name"></i>
+                                        <span>@name</span>
+                                    </button>
+                                }
+                            </div>
+                        }
+                    }
+                </TabStripTab>
+
+                <TabStripTab Id="fontawesome" Title="Font Awesome">
+                    @if (_activeTabId == "fontawesome")
+                    {
+                        var list = FilteredFontAwesome.ToList();
+                        if (list.Count == 0) { <div class="icon-picker-empty">No icons match "@_search"</div> }
+                        else
+                        {
+                            <div class="icon-picker-gallery">
+                                @foreach (var name in list)
+                                {
+                                    var cls = $"fas fa-{name}";
+                                    <button type="button" class="icon-picker-tile" title="@cls"
+                                            @onclick="@(async (e) => await SelectIconAsync(cls))">
+                                        <i class="fas fa-@name"></i>
+                                        <span>@name</span>
+                                    </button>
+                                }
+                            </div>
+                        }
+                    }
+                </TabStripTab>
+
+            </TelerikTabStrip>
+        </div>
+
+    </div>
+}
+
+@code {
+
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    /// <summary>
+    /// Fires when the user clicks an icon.
+    ///   Telerik   → "t:PropertyName"   e.g. "t:Home"
+    ///   Bootstrap → "bi bi-house"
+    ///   FA        → "fas fa-home"
+    /// </summary>
+    [Parameter] public EventCallback<string> OnIconSelected { get; set; }
+
+    private string _search      = string.Empty;
+    private string _activeTabId = "telerik";
+
+    private IEnumerable<TelerikIconEntry> FilteredTelerik =>
+        string.IsNullOrWhiteSpace(_search)
+            ? IconPickerData.TelerikIcons
+            : IconPickerData.TelerikIcons.Where(i => i.Name.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<string> FilteredBootstrap =>
+        string.IsNullOrWhiteSpace(_search)
+            ? IconPickerData.BootstrapIcons
+            : IconPickerData.BootstrapIcons.Where(n => n.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<string> FilteredFontAwesome =>
+        string.IsNullOrWhiteSpace(_search)
+            ? IconPickerData.FontAwesomeIcons
+            : IconPickerData.FontAwesomeIcons.Where(n => n.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private async Task SelectIconAsync(string iconClass)
+    {
+        if (OnIconSelected.HasDelegate)
+            await OnIconSelected.InvokeAsync(iconClass);
+        await CloseAsync();
+    }
+
+    private async Task CloseAsync()
+    {
+        _search      = string.Empty;
+        _activeTabId = "telerik";
+        if (VisibleChanged.HasDelegate)
+            await VisibleChanged.InvokeAsync(false);
+    }
+
+    /// <summary>Converts "t:PropertyName" → ISvgIcon for inline preview rendering.</summary>
+    public static ISvgIcon? ResolveTelerikIcon(string? iconClass)
+    {
+        if (iconClass is null || !iconClass.StartsWith("t:")) return null;
+        return typeof(Telerik.SvgIcons.SvgIcon)
+            .GetProperty(iconClass[2..], System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            ?.GetValue(null) as ISvgIcon;
+    }
+}

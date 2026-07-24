@@ -620,18 +620,25 @@
 
     private async Task LoadAsync()
     {
-        // Get org name from the pages list (or first page's org)
-        _pages = await AdminClient.GetCmsPagesAsync(OrgId);
-        _logos = await AdminClient.GetOrgLogosAsync(OrgId);
-        _groups = await AdminClient.GetGroupsAsync(OrgId);
+        try
+        {
+            // Get org name from the pages list (or first page's org)
+            _pages = await AdminClient.GetCmsPagesAsync(OrgId);
+            _logos = await AdminClient.GetOrgLogosAsync(OrgId);
+            _groups = await AdminClient.GetGroupsAsync(OrgId);
 
-        // Pre-load org membership + user list for member management
-        _orgMemberships = await AdminClient.GetOrganizationMembersAsync(OrgId);
-        _orgUsers = await AdminClient.GetAllUsersAsync();
+            // Pre-load org membership + user list for member management
+            _orgMemberships = await AdminClient.GetOrganizationMembersAsync(OrgId);
+            _orgUsers = await AdminClient.GetAllUsersAsync();
 
-        // Try to get org name
-        var org = await AdminClient.GetOrganizationAsync(OrgId);
-        _orgName = org?.Name;
+            // Try to get org name
+            var org = await AdminClient.GetOrganizationAsync(OrgId);
+            _orgName = org?.Name;
+        }
+        catch
+        {
+            // Partial load failures are non-fatal — UI renders with whatever data arrived
+        }
     }
 
     // ── Parent page dropdown ──────────────────────────────────────────────────
@@ -891,11 +898,28 @@
         }
         _isBusy = true;
         _logoError = null;
-        var result = await AdminClient.CreateOrgLogoAsync(OrgId, new CmsCreateLogoRequest(
-            _selectedLogoFileId.Value, _logoAltText?.Trim(), _logoIsActive, (_logos?.Count ?? 0) + 1));
-        _isBusy = false;
-        if (result is null) { _logoError = "Failed to add logo. Ensure the file exists."; }
-        else { CloseLogoDialog(); await LoadAsync(); }
+        try
+        {
+            var result = await AdminClient.CreateOrgLogoAsync(OrgId, new CmsCreateLogoRequest(
+                _selectedLogoFileId.Value, _logoAltText?.Trim(), _logoIsActive, (_logos?.Count ?? 0) + 1));
+            if (result is null)
+            {
+                _logoError = "Failed to add logo. The file may not exist, or you may not have permission.";
+            }
+            else
+            {
+                CloseLogoDialog();
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logoError = $"An error occurred while saving the logo: {ex.Message}";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
     }
 
     private async Task SetLogoActive(OrganizationLogoRecord logo)

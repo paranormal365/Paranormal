@@ -102,6 +102,38 @@ internal static class OrganizationSeeder
 
         await db.SaveChangesAsync();
         Console.WriteLine($"[OrganizationSeeder] Organization seed complete — org: '{orgName}', members: {seededUsers.Count(u => u.IsMember) + 1}.");
+
+        // ── Seed UserMessageType for membership responses ────────────────────
+        await EnsureMembershipResponseMessageType(db, owner.Id);
+    }
+
+    /// <summary>
+    /// Fixed ID for the "Organization Membership Response" UserMessageType.
+    /// Controllers that create the response message reference this constant.
+    /// </summary>
+    internal static readonly Guid MembershipResponseMessageTypeId =
+        new("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+
+    private static async Task EnsureMembershipResponseMessageType(BenDataContext db, Guid createdByUserId)
+    {
+        if (await db.UserMessageTypes.AnyAsync(t => t.Id == MembershipResponseMessageTypeId))
+            return;
+
+        db.UserMessageTypes.Add(new UserMessageType
+        {
+            Id                 = MembershipResponseMessageTypeId,
+            Name               = "Organization Membership Response",
+            Description        = "System-generated message sent to users when their organization membership application is accepted or denied.",
+            IconClass          = "fa-building",
+            ColorClass         = "text-info",
+            IsActive           = true,
+            IsPublic           = false,
+            SortOrder          = 100,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = createdByUserId,
+        });
+        await db.SaveChangesAsync();
+        Console.WriteLine("[OrganizationSeeder] Seeded 'Organization Membership Response' UserMessageType.");
     }
 
     private static async Task EnsureMembership(

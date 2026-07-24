@@ -24,11 +24,13 @@ public sealed class UploadFileVoteController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;
+    private readonly IAuditLogService _auditLog;
 
-    public UploadFileVoteController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper)
+    public UploadFileVoteController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper, IAuditLogService auditLog)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
+        _auditLog = auditLog;
     }
 
     /// <summary>Returns the aggregated vote summary for a file, including the caller's vote if present.</summary>
@@ -66,6 +68,9 @@ public sealed class UploadFileVoteController : BenControllerBase
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
+        var voteBefore = await db.UploadFileVotes.AsNoTracking()
+            .FirstOrDefaultAsync(v => v.UploadFileId == fileId && v.AppUserId == userId, ct);
+
         var existing = await db.UploadFileVotes
             .FirstOrDefaultAsync(v => v.UploadFileId == fileId && v.AppUserId == userId, ct);
 
@@ -74,6 +79,7 @@ public sealed class UploadFileVoteController : BenControllerBase
             existing.Score       = request.Score;
             existing.DateUpdated = DateTime.UtcNow;
             await db.SaveChangesAsync(ct);
+            _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileVote), existing.Id, voteBefore!, existing, userId, AppSources.WebApi, ct));
             return Ok(_mapper.Map<UploadFileVoteRecord>(existing));
         }
 
@@ -91,6 +97,7 @@ public sealed class UploadFileVoteController : BenControllerBase
         };
         db.UploadFileVotes.Add(vote);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileVote), vote.Id, vote, userId, AppSources.WebApi, ct));
 
         return CreatedAtAction(nameof(GetSummary), new { fileId },
             _mapper.Map<UploadFileVoteRecord>(vote));
@@ -112,6 +119,7 @@ public sealed class UploadFileVoteController : BenControllerBase
         {
             db.UploadFileVotes.Remove(vote);
             await db.SaveChangesAsync(ct);
+            _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFileVote), vote.Id, vote, userId, AppSources.WebApi, ct));
         }
 
         return NoContent();
