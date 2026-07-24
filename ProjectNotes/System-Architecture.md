@@ -17,7 +17,7 @@ IsHaunted is a full-stack .NET web platform for paranormal investigation organiz
 |---|---|
 | **Backend API** | ASP.NET Core 10, EF Core 10, SQL Server |
 | **Frontend** | Blazor Server (ASP.NET Core 10) |
-| **UI Components** | Telerik UI for Blazor 14.0.0 |
+| **UI Components** | Telerik UI for Blazor 14.1.0 |
 | **Authentication** | ASP.NET Core Identity (opaque bearer tokens) + Microsoft Entra OIDC |
 | **Database** | SQL Server — `IsHauntedDb` on 192.168.1.71:1433 (dev) |
 | **File Storage** | Local disk via `LocalFileStorageService` (`.uploads/` folder) |
