@@ -11,6 +11,12 @@ namespace Ben.Data.Source.Entities
         /// <summary>When true, registered users may submit membership applications to join this organization.</summary>
         public bool IsAcceptingApplications { get; set; }
 
+        /// <summary>When true, the public can submit investigation requests to this organization.</summary>
+        public bool IsAcceptingClients { get; set; }
+
+        /// <summary>When true, the org will also consider client requests outside their configured operating area.</summary>
+        public bool AcceptsClientsOutsideRange { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }
@@ -18,6 +24,7 @@ namespace Ben.Data.Source.Entities
 
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
+        public virtual OrganizationAreaOfOperation? AreaOfOperation { get; set; }
         public virtual ICollection<OrganizationAddress> OrganizationAddresses { get; set; } = new List<OrganizationAddress>();
         public virtual ICollection<OrganizationEmail> OrganizationEmails { get; set; } = new List<OrganizationEmail>();
         public virtual ICollection<OrganizationPhone> OrganizationPhones { get; set; } = new List<OrganizationPhone>();

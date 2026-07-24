@@ -200,6 +200,28 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/logos/{logoId}", token);
 
+    // ── Organization Area of Operation ────────────────────────────────────────
+
+    public Task<OrganizationAreaOfOperationRecord?> GetOrgAreaOfOperationAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetAsync<OrganizationAreaOfOperationRecord>($"/api/organizations/{orgId}/area-of-operation", token);
+
+    public Task<OrganizationAreaOfOperationRecord?> UpsertOrgAreaOfOperationAsync(Guid orgId, UpsertAreaOfOperationRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertAreaOfOperationRequest, OrganizationAreaOfOperationRecord>($"/api/organizations/{orgId}/area-of-operation", request, token);
+
+    public Task<bool> DeleteOrgAreaOfOperationAsync(Guid orgId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/area-of-operation", token);
+
+    public Task<bool> UpdateClientAcceptanceAsync(Guid orgId, bool isAcceptingClients, bool acceptsClientsOutsideRange, CancellationToken token = default)
+        => _api.PutVoidAsync($"/api/organizations/{orgId}/area-of-operation/acceptance",
+               new { IsAcceptingClients = isAcceptingClients, AcceptsClientsOutsideRange = acceptsClientsOutsideRange }, token);
+
+    public async Task<IReadOnlyList<OrgSearchResult>> SearchOrganizationsAsync(double lat, double lon, int maxResults = 20, CancellationToken token = default)
+    {
+        var result = await _api.GetAnonymousAsync<IReadOnlyList<OrgSearchResult>>(
+            $"/api/public/organizations/search?lat={lat.ToString(System.Globalization.CultureInfo.InvariantCulture)}&lon={lon.ToString(System.Globalization.CultureInfo.InvariantCulture)}&maxResults={maxResults}", token);
+        return result ?? [];
+    }
+
     // ── Organization Addresses ────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<OrganizationAddressRecord>> GetOrgAddressesAsync(Guid orgId, CancellationToken token = default)
@@ -569,6 +591,50 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/upload-files/{id}", token);
+
+    // ── Experience Taxonomy ───────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<ExperienceCategoryWithTypesResponse>> GetExperienceTaxonomyAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<ExperienceCategoryWithTypesResponse>>("/api/experience-categories/with-types", token);
+        return result ?? [];
+    }
+
+    public async Task<IReadOnlyList<ExperienceCategoryRecord>> GetAllExperienceCategoriesAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<ExperienceCategoryRecord>>("/api/admin/experience-categories", token);
+        return result ?? [];
+    }
+
+    public async Task<IReadOnlyList<ExperienceTypeRecord>> GetAllExperienceTypesAsync(Guid categoryId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<ExperienceTypeRecord>>($"/api/admin/experience-categories/{categoryId}/types", token);
+        return result ?? [];
+    }
+
+    public Task<ExperienceCategoryRecord?> CreateExperienceCategoryAsync(UpsertExperienceCategoryRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertExperienceCategoryRequest, ExperienceCategoryRecord>("/api/admin/experience-categories", request, token);
+
+    public Task<ExperienceCategoryRecord?> UpdateExperienceCategoryAsync(Guid id, UpsertExperienceCategoryRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertExperienceCategoryRequest, ExperienceCategoryRecord>($"/api/admin/experience-categories/{id}", request, token);
+
+    public Task<bool> DeleteExperienceCategoryAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/admin/experience-categories/{id}", token);
+
+    public Task<ExperienceCategoryRecord?> ApproveExperienceCategoryAsync(Guid id, CancellationToken token = default)
+        => _api.PutAsync<object, ExperienceCategoryRecord>($"/api/admin/experience-categories/{id}/approve", new { }, token);
+
+    public Task<ExperienceTypeRecord?> CreateExperienceTypeAsync(Guid categoryId, UpsertExperienceTypeRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertExperienceTypeRequest, ExperienceTypeRecord>($"/api/admin/experience-categories/{categoryId}/types", request, token);
+
+    public Task<ExperienceTypeRecord?> UpdateExperienceTypeAsync(Guid categoryId, Guid id, UpsertExperienceTypeRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertExperienceTypeRequest, ExperienceTypeRecord>($"/api/admin/experience-categories/{categoryId}/types/{id}", request, token);
+
+    public Task<bool> DeleteExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/admin/experience-categories/{categoryId}/types/{id}", token);
+
+    public Task<ExperienceTypeRecord?> ApproveExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default)
+        => _api.PutAsync<object, ExperienceTypeRecord>($"/api/admin/experience-categories/{categoryId}/types/{id}/approve", new { }, token);
 
     // ── CMS File Library ──────────────────────────────────────────────────────
 

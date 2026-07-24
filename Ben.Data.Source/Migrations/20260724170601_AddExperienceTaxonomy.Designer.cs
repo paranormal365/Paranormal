@@ -4,6 +4,7 @@ using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Ben.Data.Source.Migrations
 {
     [DbContext(typeof(BenDataContext))]
-    partial class BenDataContextModelSnapshot : ModelSnapshot
+    [Migration("20260724170601_AddExperienceTaxonomy")]
+    partial class AddExperienceTaxonomy
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -435,9 +438,6 @@ namespace Ben.Data.Source.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<bool>("AcceptsClientsOutsideRange")
-                        .HasColumnType("bit");
-
                     b.Property<Guid>("CreatedByAppUserId")
                         .HasColumnType("uniqueidentifier");
 
@@ -448,9 +448,6 @@ namespace Ben.Data.Source.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<bool>("IsAcceptingApplications")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsAcceptingClients")
                         .HasColumnType("bit");
 
                     b.Property<string>("Name")
@@ -760,55 +757,6 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("UpdatedByAppUserId");
 
                     b.ToTable("OrganizationAddressTypes");
-                });
-
-            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationAreaOfOperation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<decimal>("CenterLatitude")
-                        .HasPrecision(18, 10)
-                        .HasColumnType("decimal(18,10)");
-
-                    b.Property<decimal>("CenterLongitude")
-                        .HasPrecision(18, 10)
-                        .HasColumnType("decimal(18,10)");
-
-                    b.Property<Guid>("CreatedByAppUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("DateCreated")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("DateUpdated")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DisplayLabel")
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<Guid>("OrganizationId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<decimal>("RadiusMiles")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<Guid?>("UpdatedByAppUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedByAppUserId");
-
-                    b.HasIndex("OrganizationId")
-                        .IsUnique();
-
-                    b.HasIndex("UpdatedByAppUserId");
-
-                    b.ToTable("OrganizationAreaOfOperations");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationEmail", b =>
@@ -3325,32 +3273,6 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UpdatedByAppUser");
                 });
 
-            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationAreaOfOperation", b =>
-                {
-                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByAppUserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
-                        .WithOne("AreaOfOperation")
-                        .HasForeignKey("Ben.Data.Source.Entities.OrganizationAreaOfOperation", "OrganizationId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
-                        .WithMany()
-                        .HasForeignKey("UpdatedByAppUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.Navigation("CreatedByAppUser");
-
-                    b.Navigation("Organization");
-
-                    b.Navigation("UpdatedByAppUser");
-                });
-
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationEmail", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
@@ -4474,8 +4396,6 @@ namespace Ben.Data.Source.Migrations
 
             modelBuilder.Entity("Ben.Data.Source.Entities.Organization", b =>
                 {
-                    b.Navigation("AreaOfOperation");
-
                     b.Navigation("MemberGroups");
 
                     b.Navigation("MembershipRequests");

@@ -1,0 +1,337 @@
+@page "/organizations/{OrgId:guid}/client-settings"
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@using Ben.Web.Library.Manage.Maps
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+<PageTitle>Client Settings — @(_orgName ?? "Organization")</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:860px;">
+    <h3 class="mb-4">Client Settings — @(_orgName ?? OrgId.ToString())</h3>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (!_loaded)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading settings…" />
+    }
+    else
+    {
+        @* ── Case Acceptance ────────────────────────────────────────────────── *@
+        <div class="card mb-4">
+            <div class="card-header fw-semibold">Case Acceptance</div>
+            <div class="card-body">
+                <div class="d-flex flex-column gap-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <TelerikSwitch @bind-Value="@_isAcceptingClients"
+                                       OnLabel="Accepting Clients"
+                                       OffLabel="Not Accepting Clients"
+                                       Width="220px" />
+                        <span class="text-secondary small">
+                            @(_isAcceptingClients
+                                ? "Your organization will appear in client search results."
+                                : "Your organization is hidden from client search results.")
+                        </span>
+                    </div>
+                    @if (_isAcceptingClients)
+                    {
+                        <div class="d-flex align-items-center gap-3">
+                            <TelerikCheckBox @bind-Value="@_acceptsOutsideRange" Id="outside-range" />
+                            <label for="outside-range" class="form-label mb-0">
+                                Accept clients outside our operating area
+                                <span class="text-secondary small d-block">
+                                    Your org will appear in results for clients beyond your radius, sorted below in-range orgs.
+                                </span>
+                            </label>
+                        </div>
+                    }
+                    <div>
+                        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                       Enabled="@(!_isBusy)"
+                                       OnClick="SaveAcceptance">
+                            @(_isBusy ? "Saving…" : "Save Acceptance Settings")
+                        </TelerikButton>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* ── Area of Operation ───────────────────────────────────────────────── *@
+        <div class="card mb-4">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <span class="fw-semibold">Area of Operation</span>
+                @if (_area is not null)
+                {
+                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                   Icon="@SvgIcon.Pencil"
+                                   OnClick="OpenEditArea">Edit</TelerikButton>
+                }
+            </div>
+            <div class="card-body">
+                @if (_area is null)
+                {
+                    <p class="text-secondary mb-3">
+                        No operating area configured. Set a center location and radius so clients can find you.
+                    </p>
+                    <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                   Icon="@SvgIcon.Plus"
+                                   OnClick="OpenEditArea">
+                        Set Operating Area
+                    </TelerikButton>
+                }
+                else
+                {
+                    <div class="d-flex align-items-start gap-4">
+                        <div>
+                            <div class="mb-1">
+                                <strong>@_area.DisplayLabel</strong>
+                            </div>
+                            <div class="text-secondary small">
+                                Radius: @_area.RadiusMiles mi
+                            </div>
+                        </div>
+                        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                       Icon="@SvgIcon.Trash"
+                                       OnClick="ConfirmDeleteArea">Remove</TelerikButton>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@* ── Edit Area dialog ────────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showAreaDialog"
+               Title="@(_area is null ? "Set Operating Area" : "Edit Operating Area")"
+               Width="620px">
+    <DialogContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">
+                    Center Location
+                    <span class="text-secondary fw-normal small ms-1">— use a city or town center, not a personal address</span>
+                </label>
+                <div class="input-group">
+                    <TelerikTextBox @bind-Value="@_locationQuery"
+                                    Width="100%"
+                                    Placeholder="e.g. Nashville, TN" />
+                    <TelerikButton OnClick="GeocodeLookup"
+                                   Enabled="@(!_isBusy && !string.IsNullOrWhiteSpace(_locationQuery))">
+                        Look Up
+                    </TelerikButton>
+                </div>
+                @if (_geocodeError is not null)
+                {
+                    <div class="text-danger small mt-1">@_geocodeError</div>
+                }
+                @if (_geocodedLat.HasValue)
+                {
+                    <div class="text-success small mt-1">
+                        ✓ Location found — coordinates saved privately.
+                    </div>
+                }
+            </div>
+            <div class="col-8">
+                <label class="form-label fw-semibold">Radius (miles)</label>
+                <TelerikSlider @bind-Value="@_radiusMiles"
+                               Min="5m" Max="200m" Step="5m"
+                               Width="100%" />
+                <div class="text-secondary small mt-1">@_radiusMiles miles</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Public Display Label</label>
+                <TelerikTextBox @bind-Value="@_displayLabel" Width="100%"
+                                Placeholder="e.g. Within 30 miles of Nashville, TN" />
+                <div class="form-text">This is what clients see — do not include your exact address.</div>
+            </div>
+        </div>
+        @if (_dialogError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="@(() => _showAreaDialog = false)">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Icon="@SvgIcon.Save"
+                       OnClick="SaveArea"
+                       Enabled="@(!_isBusy && _geocodedLat.HasValue)">
+            @(_isBusy ? "Saving…" : "Save")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Delete confirm ───────────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showDeleteConfirm" Title="Remove Operating Area" Width="400px">
+    <DialogContent>
+        <p>Remove the operating area configuration? Your organization will no longer appear in client proximity searches.</p>
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="@(() => _showDeleteConfirm = false)">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                       OnClick="DeleteArea"
+                       Enabled="@(!_isBusy)">
+            @(_isBusy ? "Removing…" : "Remove")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private string? _orgName;
+    private bool _loaded;
+    private string? _error;
+    private bool _isBusy;
+
+    // Acceptance state
+    private bool _isAcceptingClients;
+    private bool _acceptsOutsideRange;
+
+    // Area of operation
+    private OrganizationAreaOfOperationRecord? _area;
+    private bool _showAreaDialog;
+    private bool _showDeleteConfirm;
+
+    // Area dialog form
+    private string _locationQuery = "";
+    private decimal? _geocodedLat;
+    private decimal? _geocodedLon;
+    private decimal _radiusMiles = 30;
+    private string _displayLabel = "";
+    private string? _geocodeError;
+    private string? _dialogError;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var org = await AdminClient.GetOrganizationAsync(OrgId);
+            _orgName             = org?.Name;
+            _isAcceptingClients  = org?.IsAcceptingClients ?? false;
+            _acceptsOutsideRange = org?.AcceptsClientsOutsideRange ?? false;
+
+            try { _area = await AdminClient.GetOrgAreaOfOperationAsync(OrgId); }
+            catch { _area = null; }
+
+            _loaded = true;
+        }
+        catch { _error = "Failed to load settings."; _loaded = true; }
+    }
+
+    // ── Acceptance ────────────────────────────────────────────────────────────
+    private async Task SaveAcceptance()
+    {
+        _isBusy = true;
+        try
+        {
+            await AdminClient.UpdateClientAcceptanceAsync(OrgId, _isAcceptingClients, _acceptsOutsideRange);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    // ── Area of Operation ─────────────────────────────────────────────────────
+    private void OpenEditArea()
+    {
+        if (_area is not null)
+        {
+            _geocodedLat    = _area.CenterLatitude;
+            _geocodedLon    = _area.CenterLongitude;
+            _radiusMiles    = _area.RadiusMiles;
+            _displayLabel   = _area.DisplayLabel ?? "";
+            _locationQuery  = "";
+        }
+        else
+        {
+            _geocodedLat   = null;
+            _geocodedLon   = null;
+            _radiusMiles   = 30;
+            _displayLabel  = "";
+            _locationQuery = "";
+        }
+        _geocodeError = null;
+        _dialogError  = null;
+        _showAreaDialog = true;
+    }
+
+    private async Task GeocodeLookup()
+    {
+        if (string.IsNullOrWhiteSpace(_locationQuery)) return;
+        _isBusy = true; _geocodeError = null; _geocodedLat = null; _geocodedLon = null;
+        try
+        {
+            var result = await AdminClient.SearchGeocodingAsync(_locationQuery);
+            if (result is null)
+            {
+                _geocodeError = "Location not found. Try a city and state (e.g. Nashville, TN).";
+            }
+            else
+            {
+                _geocodedLat = (decimal)result.Latitude;
+                _geocodedLon = (decimal)result.Longitude;
+                // Auto-suggest a display label if blank
+                if (string.IsNullOrWhiteSpace(_displayLabel))
+                    _displayLabel = $"Within {_radiusMiles} miles of {_locationQuery.Trim()}";
+            }
+        }
+        catch { _geocodeError = "Geocoding failed. Please try again."; }
+        finally { _isBusy = false; }
+    }
+
+    private async Task SaveArea()
+    {
+        if (!_geocodedLat.HasValue || !_geocodedLon.HasValue)
+        {
+            _dialogError = "Please look up a location first.";
+            return;
+        }
+        if (_radiusMiles < 1) { _dialogError = "Radius must be at least 1 mile."; return; }
+
+        _isBusy = true; _dialogError = null;
+        try
+        {
+            var req = new UpsertAreaOfOperationRequest(
+                RadiusMiles:              _radiusMiles,
+                CenterLatitude:           _geocodedLat!.Value,
+                CenterLongitude:          _geocodedLon!.Value,
+                DisplayLabel:             string.IsNullOrWhiteSpace(_displayLabel) ? null : _displayLabel.Trim(),
+                IsAcceptingClients:       _isAcceptingClients,
+                AcceptsClientsOutsideRange: _acceptsOutsideRange);
+
+            var result = await AdminClient.UpsertOrgAreaOfOperationAsync(OrgId, req);
+            if (result is null) { _dialogError = "Save failed."; }
+            else { _area = result; _showAreaDialog = false; }
+        }
+        catch (Exception ex) { _dialogError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private void ConfirmDeleteArea() => _showDeleteConfirm = true;
+
+    private async Task DeleteArea()
+    {
+        _isBusy = true;
+        try
+        {
+            await AdminClient.DeleteOrgAreaOfOperationAsync(OrgId);
+            _area = null;
+            _showDeleteConfirm = false;
+        }
+        catch { _error = "Failed to remove operating area."; }
+        finally { _isBusy = false; }
+    }
+}

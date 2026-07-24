@@ -184,6 +184,19 @@ public interface IBenAdminClient
     Task<OrganizationLogoRecord?> UpdateOrgLogoAsync(Guid orgId, Guid logoId, CmsUpdateLogoRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default);
 
+    // ── Organization Area of Operation ────────────────────────────────────────
+
+    Task<OrganizationAreaOfOperationRecord?> GetOrgAreaOfOperationAsync(Guid orgId, CancellationToken token = default);
+    Task<OrganizationAreaOfOperationRecord?> UpsertOrgAreaOfOperationAsync(Guid orgId, UpsertAreaOfOperationRequest request, CancellationToken token = default);
+    Task<bool> DeleteOrgAreaOfOperationAsync(Guid orgId, CancellationToken token = default);
+    Task<bool> UpdateClientAcceptanceAsync(Guid orgId, bool isAcceptingClients, bool acceptsClientsOutsideRange, CancellationToken token = default);
+
+    /// <summary>
+    /// Public search — no auth required. Returns orgs ordered by proximity.
+    /// Center coordinates are NOT included in results.
+    /// </summary>
+    Task<IReadOnlyList<OrgSearchResult>> SearchOrganizationsAsync(double lat, double lon, int maxResults = 20, CancellationToken token = default);
+
     // ── Organization Addresses ────────────────────────────────────────────────
 
     Task<IReadOnlyList<OrganizationAddressRecord>> GetOrgAddressesAsync(Guid orgId, CancellationToken token = default);
@@ -323,6 +336,27 @@ public interface IBenAdminClient
     Task<bool> DeleteUserNoteAsync(Guid id, CancellationToken token = default);
 
     Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default);
+
+    // ── Experience Taxonomy ───────────────────────────────────────────────────
+
+    /// <summary>Returns all approved, active categories with their types (public — no auth).</summary>
+    Task<IReadOnlyList<ExperienceCategoryWithTypesResponse>> GetExperienceTaxonomyAsync(CancellationToken token = default);
+
+    /// <summary>SuperAdmin: all categories including pending/inactive.</summary>
+    Task<IReadOnlyList<ExperienceCategoryRecord>> GetAllExperienceCategoriesAsync(CancellationToken token = default);
+
+    /// <summary>SuperAdmin: all types for a category including pending/inactive.</summary>
+    Task<IReadOnlyList<ExperienceTypeRecord>> GetAllExperienceTypesAsync(Guid categoryId, CancellationToken token = default);
+
+    Task<ExperienceCategoryRecord?> CreateExperienceCategoryAsync(UpsertExperienceCategoryRequest request, CancellationToken token = default);
+    Task<ExperienceCategoryRecord?> UpdateExperienceCategoryAsync(Guid id, UpsertExperienceCategoryRequest request, CancellationToken token = default);
+    Task<bool> DeleteExperienceCategoryAsync(Guid id, CancellationToken token = default);
+    Task<ExperienceCategoryRecord?> ApproveExperienceCategoryAsync(Guid id, CancellationToken token = default);
+
+    Task<ExperienceTypeRecord?> CreateExperienceTypeAsync(Guid categoryId, UpsertExperienceTypeRequest request, CancellationToken token = default);
+    Task<ExperienceTypeRecord?> UpdateExperienceTypeAsync(Guid categoryId, Guid id, UpsertExperienceTypeRequest request, CancellationToken token = default);
+    Task<bool> DeleteExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default);
+    Task<ExperienceTypeRecord?> ApproveExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default);
 
     // ── CMS File Library ──────────────────────────────────────────────────────
 
@@ -693,3 +727,46 @@ public sealed record RouteStep(string Instruction, double DistanceMiles, double 
 public sealed record OrgSettingsResponse(bool ShowAddressMap, bool ShowAddressDirections);
 public sealed record OrgSettingsRequest(bool ShowAddressMap, bool ShowAddressDirections);
 public sealed record AddAddressMemberAccessRequest(Guid OrganizationUserMembershipId);
+
+// ── Experience Taxonomy request records ──────────────────────────────────────
+public sealed record UpsertExperienceCategoryRequest(
+    string Name,
+    string? Description,
+    string? IconClass,
+    string? ColorClass,
+    int SortOrder,
+    bool IsActive);
+
+public sealed record UpsertExperienceTypeRequest(
+    string Name,
+    string? Description,
+    string? IconClass,
+    int SortOrder,
+    bool IsActive);
+
+public sealed record ExperienceCategoryWithTypesResponse(
+    ExperienceCategoryRecord Category,
+    IReadOnlyList<ExperienceTypeRecord> Types);
+
+// ── Area of operation / org discovery records ─────────────────────────────────
+public sealed record UpsertAreaOfOperationRequest(
+    decimal RadiusMiles,
+    decimal CenterLatitude,
+    decimal CenterLongitude,
+    string? DisplayLabel,
+    bool IsAcceptingClients,
+    bool AcceptsClientsOutsideRange);
+
+/// <summary>
+/// Public search result — center coordinates intentionally omitted for privacy.
+/// </summary>
+public sealed record OrgSearchResult(
+    Guid OrganizationId,
+    string Name,
+    string UrlName,
+    string? DisplayLabel,
+    double RadiusMiles,
+    double DistanceFromSearchMiles,
+    bool IsWithinRange,
+    bool AcceptsClientsOutsideRange,
+    Guid? ActiveLogoFileId);

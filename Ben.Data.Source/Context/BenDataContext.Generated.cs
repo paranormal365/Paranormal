@@ -43,6 +43,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrganizationRoleMembership> OrganizationRoleMemberships { get; set; }
         public virtual DbSet<CmsSection> CmsSections { get; set; }
         public virtual DbSet<CmsPagePermission> CmsPagePermissions { get; set; }
+        public virtual DbSet<ExperienceCategory> ExperienceCategories { get; set; }
+        public virtual DbSet<ExperienceType> ExperienceTypes { get; set; }
+        public virtual DbSet<OrganizationAreaOfOperation> OrganizationAreaOfOperations { get; set; }
         public virtual DbSet<OrganizationUserMembership> OrganizationUserMemberships { get; set; }
         public virtual DbSet<OrganizationAccessGrant> OrganizationAccessGrants { get; set; }
         public virtual DbSet<OrganizationMembershipRequest> OrganizationMembershipRequests { get; set; }
@@ -770,6 +773,58 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<OrganizationAddressMemberAccess>()
                 .HasIndex(e => new { e.OrganizationAddressId, e.OrganizationUserMembershipId }).IsUnique();
+
+            // ── ExperienceCategory ───────────────────────────────────────────
+            modelBuilder.Entity<ExperienceCategory>()
+                .HasOne(e => e.ProposedByOrganization).WithMany()
+                .HasForeignKey(e => e.ProposedByOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ExperienceCategory>()
+                .HasOne(e => e.ApprovedByAppUser).WithMany()
+                .HasForeignKey(e => e.ApprovedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ExperienceCategory>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ExperienceCategory>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── ExperienceType ───────────────────────────────────────────────
+            modelBuilder.Entity<ExperienceType>()
+                .HasOne(e => e.ExperienceCategory).WithMany(e => e.ExperienceTypes)
+                .HasForeignKey(e => e.ExperienceCategoryId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ExperienceType>()
+                .HasOne(e => e.ProposedByOrganization).WithMany()
+                .HasForeignKey(e => e.ProposedByOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ExperienceType>()
+                .HasOne(e => e.ApprovedByAppUser).WithMany()
+                .HasForeignKey(e => e.ApprovedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ExperienceType>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ExperienceType>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── OrganizationAreaOfOperation ──────────────────────────────────
+            modelBuilder.Entity<OrganizationAreaOfOperation>()
+                .HasOne(e => e.Organization).WithOne(e => e.AreaOfOperation)
+                .HasForeignKey<OrganizationAreaOfOperation>(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrganizationAreaOfOperation>()
+                .HasIndex(e => e.OrganizationId).IsUnique();
+            modelBuilder.Entity<OrganizationAreaOfOperation>()
+                .Property(e => e.CenterLatitude).HasPrecision(18, 10);
+            modelBuilder.Entity<OrganizationAreaOfOperation>()
+                .Property(e => e.CenterLongitude).HasPrecision(18, 10);
+            modelBuilder.Entity<OrganizationAreaOfOperation>()
+                .Property(e => e.RadiusMiles).HasPrecision(10, 2);
+            modelBuilder.Entity<OrganizationAreaOfOperation>()
+                .Property(e => e.DisplayLabel).HasMaxLength(256);
+            modelBuilder.Entity<OrganizationAreaOfOperation>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationAreaOfOperation>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
         }
     }
 }
