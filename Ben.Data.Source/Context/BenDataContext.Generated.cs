@@ -61,6 +61,10 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<ClientRequest> ClientRequests { get; set; }
         public virtual DbSet<ClientRequestOrganization> ClientRequestOrganizations { get; set; }
         public virtual DbSet<ClientRequestFile> ClientRequestFiles { get; set; }
+        public virtual DbSet<Case> Cases { get; set; }
+        public virtual DbSet<CaseTimelineEntry> CaseTimelineEntries { get; set; }
+        public virtual DbSet<CaseTimelineEntryExperienceType> CaseTimelineEntryExperienceTypes { get; set; }
+        public virtual DbSet<CaseTimelineEntryFile> CaseTimelineEntryFiles { get; set; }
         public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
         public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
         public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
@@ -890,6 +894,89 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<ClientRequestFile>()
                 .HasIndex(e => new { e.ClientRequestId, e.UploadFileId }).IsUnique();
+
+            // ── Case ──────────────────────────────────────────────────────────
+            modelBuilder.Entity<Case>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Case>()
+                .HasOne(e => e.ClientRequest).WithMany()
+                .HasForeignKey(e => e.ClientRequestId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Case>()
+                .HasOne(e => e.CaseManagerAppUser).WithMany()
+                .HasForeignKey(e => e.CaseManagerAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Case>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Case>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Case>()
+                .Property(e => e.Description).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<Case>()
+                .Property(e => e.Latitude).HasPrecision(18, 10);
+            modelBuilder.Entity<Case>()
+                .Property(e => e.Longitude).HasPrecision(18, 10);
+            modelBuilder.Entity<Case>()
+                .Property(e => e.Title).HasMaxLength(256);
+            modelBuilder.Entity<Case>()
+                .Property(e => e.PublicPseudonym).HasMaxLength(128);
+            modelBuilder.Entity<Case>()
+                .Property(e => e.StreetAddress1).HasMaxLength(256);
+            modelBuilder.Entity<Case>()
+                .Property(e => e.City).HasMaxLength(128);
+            modelBuilder.Entity<Case>()
+                .Property(e => e.State).HasMaxLength(64);
+            modelBuilder.Entity<Case>()
+                .Property(e => e.ZipCode).HasMaxLength(20);
+            modelBuilder.Entity<Case>()
+                .HasIndex(e => new { e.OrganizationId, e.CaseYear, e.OrgCaseNumber }).IsUnique();
+
+            // ── OrganizationPage.CaseId ───────────────────────────────────────
+            modelBuilder.Entity<OrganizationPage>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+
+            // ── CaseTimelineEntry ─────────────────────────────────────────────
+            modelBuilder.Entity<CaseTimelineEntry>()
+                .HasOne(e => e.Case).WithMany(e => e.TimelineEntries)
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CaseTimelineEntry>()
+                .HasOne(e => e.AuthorAppUser).WithMany()
+                .HasForeignKey(e => e.AuthorAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseTimelineEntry>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseTimelineEntry>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseTimelineEntry>()
+                .Property(e => e.Body).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<CaseTimelineEntry>()
+                .Property(e => e.Title).HasMaxLength(256);
+
+            // ── CaseTimelineEntryExperienceType ───────────────────────────────
+            modelBuilder.Entity<CaseTimelineEntryExperienceType>()
+                .HasKey(e => new { e.CaseTimelineEntryId, e.ExperienceTypeId });
+            modelBuilder.Entity<CaseTimelineEntryExperienceType>()
+                .HasOne(e => e.CaseTimelineEntry).WithMany(e => e.ExperienceTypes)
+                .HasForeignKey(e => e.CaseTimelineEntryId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CaseTimelineEntryExperienceType>()
+                .HasOne(e => e.ExperienceType).WithMany()
+                .HasForeignKey(e => e.ExperienceTypeId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── CaseTimelineEntryFile ─────────────────────────────────────────
+            modelBuilder.Entity<CaseTimelineEntryFile>()
+                .HasOne(e => e.CaseTimelineEntry).WithMany(e => e.Files)
+                .HasForeignKey(e => e.CaseTimelineEntryId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CaseTimelineEntryFile>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseTimelineEntryFile>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseTimelineEntryFile>()
+                .HasIndex(e => new { e.CaseTimelineEntryId, e.UploadFileId }).IsUnique();
         }
     }
 }

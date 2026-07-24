@@ -592,6 +592,42 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/upload-files/{id}", token);
 
+    // ── Cases ─────────────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<CaseRecord>> GetOrgCasesAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<CaseRecord>>($"/api/organizations/{orgId}/cases", token);
+        return result ?? [];
+    }
+
+    public Task<CaseRecord?> GetOrgCaseAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+        => _api.GetAsync<CaseRecord>($"/api/organizations/{orgId}/cases/{caseId}", token);
+
+    public Task<CaseRecord?> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default)
+        => _api.PostAsync<CreateCaseRequest, CaseRecord>($"/api/organizations/{orgId}/cases", request, token);
+
+    public Task<CaseRecord?> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default)
+        => _api.PostAsync<AcceptClientRequestAsCaseRequest, CaseRecord>(
+               $"/api/organizations/{orgId}/cases/accept-client-request/{clientRequestId}", request, token);
+
+    public Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpdateCaseRequest, CaseRecord>($"/api/organizations/{orgId}/cases/{caseId}", request, token);
+
+    public async Task<IReadOnlyList<CaseTimelineEntryRecord>> GetCaseTimelineAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<CaseTimelineEntryRecord>>($"/api/organizations/{orgId}/cases/{caseId}/timeline", token);
+        return result ?? [];
+    }
+
+    public Task<CaseTimelineEntryRecord?> AddCaseTimelineEntryAsync(Guid orgId, Guid caseId, UpsertTimelineEntryRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertTimelineEntryRequest, CaseTimelineEntryRecord>($"/api/organizations/{orgId}/cases/{caseId}/timeline", request, token);
+
+    public Task<CaseTimelineEntryRecord?> UpdateCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, UpsertTimelineEntryRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertTimelineEntryRequest, CaseTimelineEntryRecord>($"/api/organizations/{orgId}/cases/{caseId}/timeline/{entryId}", request, token);
+
+    public Task<bool> DeleteCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/cases/{caseId}/timeline/{entryId}", token);
+
     // ── Client Requests ───────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<ClientRequestRecord>> GetMyClientRequestsAsync(CancellationToken token = default)

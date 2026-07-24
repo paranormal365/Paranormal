@@ -4,6 +4,7 @@ using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Ben.Data.Source.Migrations
 {
     [DbContext(typeof(BenDataContext))]
-    partial class BenDataContextModelSnapshot : ModelSnapshot
+    [Migration("20260724175402_AddCaseManagement")]
+    partial class AddCaseManagement
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -148,9 +151,6 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid?>("CaseManagerAppUserId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<int>("CaseYear")
-                        .HasColumnType("int");
-
                     b.Property<string>("City")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
@@ -189,9 +189,6 @@ namespace Ben.Data.Source.Migrations
                     b.Property<decimal?>("Longitude")
                         .HasPrecision(18, 10)
                         .HasColumnType("decimal(18,10)");
-
-                    b.Property<int>("OrgCaseNumber")
-                        .HasColumnType("int");
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
@@ -233,10 +230,9 @@ namespace Ben.Data.Source.Migrations
 
                     b.HasIndex("CreatedByAppUserId");
 
-                    b.HasIndex("UpdatedByAppUserId");
+                    b.HasIndex("OrganizationId");
 
-                    b.HasIndex("OrganizationId", "CaseYear", "OrgCaseNumber")
-                        .IsUnique();
+                    b.HasIndex("UpdatedByAppUserId");
 
                     b.ToTable("Cases");
                 });

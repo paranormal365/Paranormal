@@ -337,6 +337,18 @@ public interface IBenAdminClient
 
     Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default);
 
+    // ── Cases ─────────────────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<CaseRecord>> GetOrgCasesAsync(Guid orgId, CancellationToken token = default);
+    Task<CaseRecord?> GetOrgCaseAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<CaseRecord?> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default);
+    Task<CaseRecord?> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default);
+    Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default);
+    Task<IReadOnlyList<CaseTimelineEntryRecord>> GetCaseTimelineAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<CaseTimelineEntryRecord?> AddCaseTimelineEntryAsync(Guid orgId, Guid caseId, UpsertTimelineEntryRequest request, CancellationToken token = default);
+    Task<CaseTimelineEntryRecord?> UpdateCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, UpsertTimelineEntryRequest request, CancellationToken token = default);
+    Task<bool> DeleteCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
+
     // ── Client Requests ───────────────────────────────────────────────────────
 
     Task<IReadOnlyList<ClientRequestRecord>> GetMyClientRequestsAsync(CancellationToken token = default);
@@ -780,6 +792,39 @@ public sealed record OrgSearchResult(
     bool IsWithinRange,
     bool AcceptsClientsOutsideRange,
     Guid? ActiveLogoFileId);
+
+// ── Case request records ──────────────────────────────────────────────────────
+public sealed record CreateCaseRequest(
+    string Title,
+    string? Description,
+    string StreetAddress1,
+    string? StreetAddress2,
+    string City,
+    string State,
+    string ZipCode,
+    string? Country,
+    decimal? Latitude,
+    decimal? Longitude);
+
+public sealed record AcceptClientRequestAsCaseRequest(
+    string? Title,
+    Guid? CaseManagerAppUserId);
+
+public sealed record UpdateCaseRequest(
+    string? Title,
+    string? Description,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    string? PublicPseudonym,
+    bool IsPublic,
+    Guid? CaseManagerAppUserId);
+
+public sealed record UpsertTimelineEntryRequest(
+    Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,
+    DateTime? EventDateTime,
+    string? Title,
+    string? Body,
+    bool IsPublic,
+    IList<Guid> ExperienceTypeIds);
 
 // ── Client Request request records ────────────────────────────────────────────
 public sealed record UpsertClientRequestRequest(
