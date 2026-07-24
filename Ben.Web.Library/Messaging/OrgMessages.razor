@@ -1,0 +1,233 @@
+@page "/organizations/{OrgId:guid}/messages"
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+<PageTitle>Messages</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:900px;">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h3 class="mb-0">Messages</h3>
+        <TelerikButton Icon="@SvgIcon.Pencil"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       OnClick="OpenCompose">Compose</TelerikButton>
+    </div>
+
+    @* ── Tab strip: Inbox / Sent ──────────────────────────────────────────── *@
+    <TelerikTabStrip ActiveTabIndex="@_tabIndex"
+                     ActiveTabIndexChanged="@((int i) => { _tabIndex = i; _ = LoadActiveTabAsync(); })">
+
+        <TabStripTab Title="Inbox">
+            <MessageList Messages="@_inbox" OnOpen="OpenMessage" />
+        </TabStripTab>
+
+        <TabStripTab Title="Sent">
+            <MessageList Messages="@_sent" OnOpen="OpenMessage" />
+        </TabStripTab>
+
+    </TelerikTabStrip>
+</div>
+
+@* ── Message view dialog ──────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showMessage" Title="@(_openMessage?.Subject ?? "Message")" Width="680px">
+    <DialogContent>
+        @if (_openMessage is not null)
+        {
+            <div class="mb-2 d-flex align-items-center gap-2 text-secondary small">
+                <strong>From:</strong> @(_openMessage.AuthorDisplayName ?? "Unknown")
+                <span>·</span>
+                @_openMessage.DateCreated.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                @if (_openMessage.IsEncrypted)
+                {
+                    <span class="badge bg-secondary ms-1">🔒 Encrypted</span>
+                }
+                <span class="ms-auto text-secondary">
+                    @_openMessage.ViewCount views
+                </span>
+            </div>
+            <div class="border-top pt-3">
+                @((MarkupString)_openMessage.Body)
+            </div>
+            @if (_openMessage.ReplyCount > 0)
+            {
+                <div class="mt-3 text-secondary small">@_openMessage.ReplyCount replies</div>
+            }
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="@(() => _showMessage = false)">Close</TelerikButton>
+        <TelerikButton Icon="@SvgIcon.ArrowRotateCcw"
+                       OnClick="OpenReply">Reply</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Compose / Reply dialog ───────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showCompose"
+               Title="@(_replyTo is not null ? "Reply" : "New Message")"
+               Width="640px">
+    <DialogContent>
+        <div class="row g-3">
+            @if (_replyTo is null)
+            {
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Channel</label>
+                    <TelerikDropDownList Data="@_channelOptions"
+                                         @bind-Value="@_composeChannel"
+                                         TextField="@nameof(ChannelOption.Label)"
+                                         ValueField="@nameof(ChannelOption.Value)"
+                                         Width="100%" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Subject (optional)</label>
+                    <TelerikTextBox @bind-Value="@_composeSubject" Width="100%" />
+                </div>
+            }
+            else
+            {
+                <div class="col-12 text-secondary small">
+                    Replying to: <strong>@(_replyTo.Subject ?? "message")</strong> from @_replyTo.AuthorDisplayName
+                </div>
+            }
+            <div class="col-12">
+                <label class="form-label fw-semibold">Message <span class="text-danger">*</span></label>
+                <TelerikEditor @bind-Value="@_composeBody" Height="200px"
+                               Tools="@_editorTools" />
+            </div>
+            <div class="col-12 d-flex align-items-center gap-2">
+                <TelerikCheckBox @bind-Value="@_composeEncrypted" Id="encrypted" />
+                <label for="encrypted" class="form-label mb-0">Mark as encrypted / private</label>
+            </div>
+        </div>
+        @if (_composeError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_composeError</div>
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="@(() => _showCompose = false)">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Icon="@SvgIcon.Envelope"
+                       OnClick="Send"
+                       Enabled="@(!_isBusy && !string.IsNullOrWhiteSpace(_composeBody))">
+            @(_isBusy ? "Sending…" : "Send")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private int _tabIndex;
+    private List<OrgMessageRecord>? _inbox;
+    private List<OrgMessageRecord>? _sent;
+
+    // View
+    private bool _showMessage;
+    private OrgMessageRecord? _openMessage;
+
+    // Compose
+    private bool _showCompose;
+    private OrgMessageRecord? _replyTo;
+    private OrgMessageChannel _composeChannel = OrgMessageChannel.OrgBroadcast;
+    private string _composeSubject = "";
+    private string _composeBody    = "";
+    private bool _composeEncrypted;
+    private string? _composeError;
+    private bool _isBusy;
+
+    private static readonly List<ChannelOption> _channelOptions =
+    [
+        new(OrgMessageChannel.OrgBroadcast,  "Org Broadcast — all members"),
+        new(OrgMessageChannel.DirectMessage, "Direct Message"),
+        new(OrgMessageChannel.CaseTeam,      "Case Team"),
+        new(OrgMessageChannel.PublicFeed,    "Public Feed"),
+    ];
+
+    private static readonly List<Telerik.Blazor.Components.IEditorTool> _editorTools =
+    [
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.Bold(),
+            new Telerik.Blazor.Components.Editor.Italic()),
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.UnorderedList(),
+            new Telerik.Blazor.Components.Editor.OrderedList()),
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.Undo(),
+            new Telerik.Blazor.Components.Editor.Redo()),
+    ];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadActiveTabAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadActiveTabAsync()
+    {
+        try
+        {
+            if (_tabIndex == 0)
+                _inbox = (await AdminClient.GetOrgInboxAsync(OrgId)).ToList();
+            else
+                _sent = (await AdminClient.GetOrgSentAsync(OrgId)).ToList();
+        }
+        catch { }
+        StateHasChanged();
+    }
+
+    private async Task OpenMessage(OrgMessageRecord msg)
+    {
+        _openMessage = await AdminClient.GetOrgMessageAsync(OrgId, msg.Id) ?? msg;
+        _showMessage = true;
+        await LoadActiveTabAsync(); // refresh read state
+    }
+
+    private void OpenCompose()
+    {
+        _replyTo         = null;
+        _composeChannel  = OrgMessageChannel.OrgBroadcast;
+        _composeSubject  = "";
+        _composeBody     = "";
+        _composeEncrypted = false;
+        _composeError    = null;
+        _showCompose     = true;
+    }
+
+    private void OpenReply()
+    {
+        _replyTo        = _openMessage;
+        _composeBody    = "";
+        _composeEncrypted = _openMessage?.IsEncrypted ?? false;
+        _composeError   = null;
+        _showMessage    = false;
+        _showCompose    = true;
+    }
+
+    private async Task Send()
+    {
+        if (string.IsNullOrWhiteSpace(_composeBody)) return;
+        _isBusy = true; _composeError = null;
+        try
+        {
+            var req = new SendOrgMessageRequest(
+                ChannelType:       _replyTo is null ? _composeChannel : _replyTo.ChannelType,
+                Subject:           string.IsNullOrWhiteSpace(_composeSubject) ? null : _composeSubject.Trim(),
+                Body:              _composeBody.Trim(),
+                IsEncrypted:       _composeEncrypted,
+                ParentMessageId:   _replyTo?.Id,
+                CaseId:            _replyTo?.CaseId,
+                RecipientUserIds:  []);
+
+            var result = await AdminClient.SendOrgMessageAsync(OrgId, req);
+            if (result is null) { _composeError = "Send failed. Please try again."; }
+            else { _showCompose = false; await LoadActiveTabAsync(); }
+        }
+        catch (Exception ex) { _composeError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private record ChannelOption(OrgMessageChannel Value, string Label);
+}

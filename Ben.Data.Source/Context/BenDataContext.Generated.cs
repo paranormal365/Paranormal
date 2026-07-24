@@ -68,6 +68,12 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<CaseTimelineEntry> CaseTimelineEntries { get; set; }
         public virtual DbSet<CaseTimelineEntryExperienceType> CaseTimelineEntryExperienceTypes { get; set; }
         public virtual DbSet<CaseTimelineEntryFile> CaseTimelineEntryFiles { get; set; }
+        public virtual DbSet<OrgMessage> OrgMessages { get; set; }
+        public virtual DbSet<OrgMessageRecipient> OrgMessageRecipients { get; set; }
+        public virtual DbSet<OrgMessageView> OrgMessageViews { get; set; }
+        public virtual DbSet<OrgCalendarEventType> OrgCalendarEventTypes { get; set; }
+        public virtual DbSet<OrgCalendarEvent> OrgCalendarEvents { get; set; }
+        public virtual DbSet<OrgCalendarEventAttendee> OrgCalendarEventAttendees { get; set; }
         public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
         public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
         public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
@@ -1025,6 +1031,103 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<CaseTimelineEntryFile>()
                 .HasIndex(e => new { e.CaseTimelineEntryId, e.UploadFileId }).IsUnique();
+
+            // ── OrgMessage ────────────────────────────────────────────────────
+            modelBuilder.Entity<OrgMessage>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgMessage>()
+                .HasOne(e => e.AuthorAppUser).WithMany()
+                .HasForeignKey(e => e.AuthorAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgMessage>()
+                .HasOne(e => e.ParentMessage).WithMany(e => e.Replies)
+                .HasForeignKey(e => e.ParentMessageId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgMessage>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgMessage>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgMessage>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgMessage>()
+                .Property(e => e.Body).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<OrgMessage>()
+                .Property(e => e.Subject).HasMaxLength(256);
+
+            // ── OrgMessageRecipient ───────────────────────────────────────────
+            modelBuilder.Entity<OrgMessageRecipient>()
+                .HasOne(e => e.OrgMessage).WithMany(e => e.Recipients)
+                .HasForeignKey(e => e.OrgMessageId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrgMessageRecipient>()
+                .HasOne(e => e.RecipientAppUser).WithMany()
+                .HasForeignKey(e => e.RecipientAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgMessageRecipient>()
+                .HasIndex(e => new { e.OrgMessageId, e.RecipientAppUserId }).IsUnique();
+
+            // ── OrgMessageView ────────────────────────────────────────────────
+            modelBuilder.Entity<OrgMessageView>()
+                .HasKey(e => new { e.OrgMessageId, e.ViewerAppUserId });
+            modelBuilder.Entity<OrgMessageView>()
+                .HasOne(e => e.OrgMessage).WithMany(e => e.Views)
+                .HasForeignKey(e => e.OrgMessageId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrgMessageView>()
+                .HasOne(e => e.ViewerAppUser).WithMany()
+                .HasForeignKey(e => e.ViewerAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── OrgCalendarEventType ──────────────────────────────────────────
+            modelBuilder.Entity<OrgCalendarEventType>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgCalendarEventType>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgCalendarEventType>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgCalendarEventType>()
+                .Property(e => e.Name).HasMaxLength(128);
+
+            // ── OrgCalendarEvent ──────────────────────────────────────────────
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .HasOne(e => e.EventType).WithMany()
+                .HasForeignKey(e => e.EventTypeId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .Property(e => e.Title).HasMaxLength(256);
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .Property(e => e.Description).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .Property(e => e.Location).HasMaxLength(512);
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .Property(e => e.RecurrenceRule).HasMaxLength(512);
+
+            // ── OrgCalendarEventAttendee ──────────────────────────────────────
+            modelBuilder.Entity<OrgCalendarEventAttendee>()
+                .HasOne(e => e.OrgCalendarEvent).WithMany(e => e.Attendees)
+                .HasForeignKey(e => e.OrgCalendarEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrgCalendarEventAttendee>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgCalendarEventAttendee>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgCalendarEventAttendee>()
+                .Property(e => e.AssignedTask).HasMaxLength(512);
+            modelBuilder.Entity<OrgCalendarEventAttendee>()
+                .HasIndex(e => new { e.OrgCalendarEventId, e.AppUserId }).IsUnique();
         }
     }
 }

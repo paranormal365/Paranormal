@@ -348,6 +348,31 @@ public interface IBenAdminClient
 
     Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default);
 
+    // ── Messaging ─────────────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<OrgMessageRecord>> GetOrgInboxAsync(Guid orgId, CancellationToken token = default);
+    Task<IReadOnlyList<OrgMessageRecord>> GetOrgSentAsync(Guid orgId, CancellationToken token = default);
+    Task<OrgMessageRecord?> GetOrgMessageAsync(Guid orgId, Guid messageId, CancellationToken token = default);
+    Task<OrgMessageRecord?> SendOrgMessageAsync(Guid orgId, SendOrgMessageRequest request, CancellationToken token = default);
+
+    // ── Calendar ──────────────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default);
+    Task<OrgCalendarEventTypeRecord?> CreateCalendarEventTypeAsync(Guid orgId, UpsertCalendarEventTypeRequest request, CancellationToken token = default);
+    Task<OrgCalendarEventTypeRecord?> UpdateCalendarEventTypeAsync(Guid orgId, Guid id, UpsertCalendarEventTypeRequest request, CancellationToken token = default);
+    Task<bool> DeleteCalendarEventTypeAsync(Guid orgId, Guid id, CancellationToken token = default);
+
+    Task<IReadOnlyList<OrgCalendarEventRecord>> GetCalendarEventsAsync(Guid orgId, DateTime? from = null, DateTime? to = null, CancellationToken token = default);
+    Task<OrgCalendarEventRecord?> GetCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+    Task<OrgCalendarEventRecord?> CreateCalendarEventAsync(Guid orgId, UpsertCalendarEventRequest request, CancellationToken token = default);
+    Task<OrgCalendarEventRecord?> UpdateCalendarEventAsync(Guid orgId, Guid eventId, UpsertCalendarEventRequest request, CancellationToken token = default);
+    Task<bool> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+
+    Task<IReadOnlyList<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+    Task<OrgCalendarEventAttendeeRecord?> AddCalendarAttendeeAsync(Guid orgId, Guid eventId, AddAttendeeRequest request, CancellationToken token = default);
+    Task<OrgCalendarEventAttendeeRecord?> RsvpCalendarEventAsync(Guid orgId, Guid eventId, Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus status, CancellationToken token = default);
+    Task<bool> RemoveCalendarAttendeeAsync(Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default);
+
     // ── Cases ─────────────────────────────────────────────────────────────────
 
     Task<IReadOnlyList<CaseRecord>> GetOrgCasesAsync(Guid orgId, CancellationToken token = default);
@@ -803,6 +828,37 @@ public sealed record OrgSearchResult(
     bool IsWithinRange,
     bool AcceptsClientsOutsideRange,
     Guid? ActiveLogoFileId);
+
+// ── Phase 4: Messaging + Calendar request records ─────────────────────────────
+public sealed record SendOrgMessageRequest(
+    Ben.Data.Common.Enums.OrgMessageChannel ChannelType,
+    string? Subject,
+    string Body,
+    bool IsEncrypted,
+    Guid? ParentMessageId,
+    Guid? CaseId,
+    IList<Guid> RecipientUserIds);
+
+public sealed record UpsertCalendarEventTypeRequest(
+    string Name,
+    string? ColorClass,
+    string? IconClass,
+    int SortOrder,
+    bool IsActive);
+
+public sealed record UpsertCalendarEventRequest(
+    string Title,
+    string? Description,
+    string? Location,
+    DateTime StartDateTime,
+    DateTime EndDateTime,
+    bool IsAllDay,
+    bool IsPublic,
+    Guid? EventTypeId,
+    Guid? CaseId,
+    string? RecurrenceRule);
+
+public sealed record AddAttendeeRequest(Guid AppUserId, string? AssignedTask);
 
 // ── Membership Phase 3 request records ────────────────────────────────────────
 public sealed record UpsertMembershipQuestionRequest(

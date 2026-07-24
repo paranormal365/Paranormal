@@ -628,6 +628,81 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/upload-files/{id}", token);
 
+    // ── Messaging ─────────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<OrgMessageRecord>> GetOrgInboxAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrgMessageRecord>>($"/api/organizations/{orgId}/messages/inbox", token);
+        return result ?? [];
+    }
+
+    public async Task<IReadOnlyList<OrgMessageRecord>> GetOrgSentAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrgMessageRecord>>($"/api/organizations/{orgId}/messages/sent", token);
+        return result ?? [];
+    }
+
+    public Task<OrgMessageRecord?> GetOrgMessageAsync(Guid orgId, Guid messageId, CancellationToken token = default)
+        => _api.GetAsync<OrgMessageRecord>($"/api/organizations/{orgId}/messages/{messageId}", token);
+
+    public Task<OrgMessageRecord?> SendOrgMessageAsync(Guid orgId, SendOrgMessageRequest request, CancellationToken token = default)
+        => _api.PostAsync<SendOrgMessageRequest, OrgMessageRecord>($"/api/organizations/{orgId}/messages", request, token);
+
+    // ── Calendar ──────────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrgCalendarEventTypeRecord>>($"/api/organizations/{orgId}/calendar-event-types", token);
+        return result ?? [];
+    }
+
+    public Task<OrgCalendarEventTypeRecord?> CreateCalendarEventTypeAsync(Guid orgId, UpsertCalendarEventTypeRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertCalendarEventTypeRequest, OrgCalendarEventTypeRecord>($"/api/organizations/{orgId}/calendar-event-types", request, token);
+
+    public Task<OrgCalendarEventTypeRecord?> UpdateCalendarEventTypeAsync(Guid orgId, Guid id, UpsertCalendarEventTypeRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertCalendarEventTypeRequest, OrgCalendarEventTypeRecord>($"/api/organizations/{orgId}/calendar-event-types/{id}", request, token);
+
+    public Task<bool> DeleteCalendarEventTypeAsync(Guid orgId, Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/calendar-event-types/{id}", token);
+
+    public async Task<IReadOnlyList<OrgCalendarEventRecord>> GetCalendarEventsAsync(Guid orgId, DateTime? from = null, DateTime? to = null, CancellationToken token = default)
+    {
+        var qs = string.Empty;
+        if (from.HasValue) qs += $"?from={Uri.EscapeDataString(from.Value.ToString("o"))}";
+        if (to.HasValue)   qs += (qs.Length > 0 ? "&" : "?") + $"to={Uri.EscapeDataString(to.Value.ToString("o"))}";
+        var result = await _api.GetAsync<IReadOnlyList<OrgCalendarEventRecord>>($"/api/organizations/{orgId}/calendar{qs}", token);
+        return result ?? [];
+    }
+
+    public Task<OrgCalendarEventRecord?> GetCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetAsync<OrgCalendarEventRecord>($"/api/organizations/{orgId}/calendar/{eventId}", token);
+
+    public Task<OrgCalendarEventRecord?> CreateCalendarEventAsync(Guid orgId, UpsertCalendarEventRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertCalendarEventRequest, OrgCalendarEventRecord>($"/api/organizations/{orgId}/calendar", request, token);
+
+    public Task<OrgCalendarEventRecord?> UpdateCalendarEventAsync(Guid orgId, Guid eventId, UpsertCalendarEventRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertCalendarEventRequest, OrgCalendarEventRecord>($"/api/organizations/{orgId}/calendar/{eventId}", request, token);
+
+    public Task<bool> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/calendar/{eventId}", token);
+
+    public async Task<IReadOnlyList<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrgCalendarEventAttendeeRecord>>($"/api/organizations/{orgId}/calendar/{eventId}/attendees", token);
+        return result ?? [];
+    }
+
+    public Task<OrgCalendarEventAttendeeRecord?> AddCalendarAttendeeAsync(Guid orgId, Guid eventId, AddAttendeeRequest request, CancellationToken token = default)
+        => _api.PostAsync<AddAttendeeRequest, OrgCalendarEventAttendeeRecord>($"/api/organizations/{orgId}/calendar/{eventId}/attendees", request, token);
+
+    public Task<OrgCalendarEventAttendeeRecord?> RsvpCalendarEventAsync(Guid orgId, Guid eventId, Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus status, CancellationToken token = default)
+        => _api.PutAsync<object, OrgCalendarEventAttendeeRecord>(
+               $"/api/organizations/{orgId}/calendar/{eventId}/attendees/{attendeeId}/rsvp",
+               new { RsvpStatus = status }, token);
+
+    public Task<bool> RemoveCalendarAttendeeAsync(Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/calendar/{eventId}/attendees/{attendeeId}", token);
+
     // ── Cases ─────────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<CaseRecord>> GetOrgCasesAsync(Guid orgId, CancellationToken token = default)
