@@ -48,12 +48,56 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "Ben API",
+        Title   = "Ben API",
         Version = "v1",
-        Description = "API for the Ben application"
+        Description = """
+            REST API for the Ben application.
+
+            **Authentication**
+            Most endpoints require a Bearer token obtained from `POST /login`
+            (ASP.NET Core Identity). After login, call `GET /api/me` to resolve
+            the user's role (IsSuperAdmin). Entra (Azure AD) tokens are also
+            accepted — the `app_user_id` claim is injected by `EntraClaimsTransformation`.
+
+            **SuperAdmin**
+            All `/api/admin/*` routes require the `SuperAdmin` role.
+            Other routes enforce org-level membership via `OrganizationSecurityAuthorize`.
+
+            **File storage**
+            Uploaded files are stored on the local filesystem under the configured
+            `FileStorage:RootPath`. The `FileData` blob column is being phased out;
+            `FileMigrationService` migrates any remaining blobs on startup.
+            """
     });
 
     options.SchemaFilter<CircularReferenceSchemaFilter>();
+
+    // Include XML doc comments from the compiled documentation file
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = System.IO.Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (System.IO.File.Exists(xmlPath))
+        options.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
+
+    // Bearer token security scheme
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name         = "Authorization",
+        Type         = SecuritySchemeType.Http,
+        Scheme       = "bearer",
+        BearerFormat = "opaque",
+        In           = ParameterLocation.Header,
+        Description  = "Enter the bearer token returned by POST /login"
+    });
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
+            []
+        }
+    });
 });
 
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -71,6 +115,8 @@ builder.Services.AddScoped<IRepositoryManager, RepositoryManager>();
 builder.Services.AddScoped<Ben.Service.Security.Services.IOrganizationSecurityService, Ben.Service.Security.Services.OrganizationSecurityService>();
 builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService, Ben.Service.RepositoryService.Services.OrganizationSecurityService>();
 builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService, Ben.Service.RepositoryService.Services.AuditLogService>();
+builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IFileStorageService, Ben.Data.WebApi.Services.LocalFileStorageService>();
+builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>();
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);
 builder.Services.AddTransient<Microsoft.AspNetCore.Authentication.IClaimsTransformation, Ben.Data.WebApi.Services.EntraClaimsTransformation>();
 
@@ -145,6 +191,11 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
+// Initialise geocod.io — API key stored in Geocodio:ApiKey in appsettings
+Ben.Service.RepositoryService.Services.AddressGeocodingService.Configure(
+    builder.Configuration["Geocodio:ApiKey"] ?? string.Empty,
+    builder.Configuration["Geocodio:BaseUrl"]);
+
 app.UseExceptionHandler(handler =>
 {
     handler.Run(async context =>
@@ -188,6 +239,7 @@ app.MapIdentityApi<AppUser>();
 await Ben.Data.WebApi.SeedData.SuperAdminSeeder.SeedAsync(app.Services, app.Configuration);
 await Ben.Data.WebApi.SeedData.OrganizationSeeder.SeedAsync(app.Services, app.Configuration);
 await Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.SeedAsync(app.Services, app.Configuration);
+await Ben.Data.WebApi.SeedData.ExperienceTaxonomySeeder.SeedAsync(app.Services, app.Configuration);
 
 app.Run();
 

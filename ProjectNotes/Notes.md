@@ -1274,6 +1274,153 @@ Key behaviors:
 - `ResizeObserver` on the wrapper `<div>` debounces (50 ms) and calls `ws.setOptions({ height: 'auto' })` when the user drag-resizes
 - `destroy(containerId)` disconnects `ResizeObserver` and calls `ws.destroy()`
 
+### `Resizable` parameter (added 2026-07-19)
+
+`[Parameter] public bool Resizable { get; set; }` — defaults to `false`.  
+When `true`, adds `resize: vertical; overflow: hidden;` to the outer container so the user can drag the bottom edge to resize.  
+Previously hard-coded on; now opt-in.
+
+### Region Context Menu (added 2026-07-19)
+
+When the Regions plugin is enabled, right-clicking a region fires `OnRegionContextMenu` (`EventCallback<WsRegionContextMenuArgs>`).  
+`WsRegionContextMenuArgs` carries `RegionId`, `Start`, `End`, `Label`, `ClientX`, `ClientY`.  
+`WsRegionData` now includes a `Label` property (mapped from the region's `content` field in WaveSurfer JS).
+
+```csharp
+<WaveSurferPlayer Config="@_config"
+                  OnRegionContextMenu="@OnRightClick"
+                  Resizable="true" />
+
+private async Task OnRightClick(WsRegionContextMenuArgs args)
+{
+    // Show Telerik context menu at args.ClientX / args.ClientY
+    await _menu.ShowAsync(args.ClientX, args.ClientY);
+}
+```
+
+`UpdateRegionLabelAsync(regionId, label)` updates a region's label in-place without recreating it.
+
+---
+
+## AudioFilePreview Component
+
+**File:** `Ben.Web.Library/Manage/Audio/AudioFilePreview.razor`
+
+Compact waveform preview used in the AdminUserDetail Files grid.
+- Compact 80 px WaveSurfer waveform (no controls); click to play/pause, right-click for context menu
+- Context menu: Play / Pause / Rewind / Open Full View
+- Full-view `TelerikWindow` (92 vw × 88 vh) with full WaveSurfer player (Timeline, Hover, Zoom, Spectrogram, Regions)
+
+### Region Explorer integration (2026-07-19)
+
+When the full-view player has regions enabled, right-clicking a region shows a context menu:
+
+| Item | Action |
+|---|---|
+| Play Region | Plays only the selected region |
+| Explore Region | Opens `WsRegionExplorer` for that region |
+| Edit Label | Inline label rename dialog |
+| Delete Region | Removes the region from the waveform |
+
+After opening, the full-view modal also shows **child-clip chips** — a green badge strip listing all clips that were previously saved from this file. Clicking a chip reopens the explorer for that clip.
+
+---
+
+## WsRegionExplorer Component
+
+**File:** `Ben.Web.Library/Manage/Audio/WsRegionExplorer.razor`
+
+Full-featured modal explorer for a selected audio region.
+
+### Features
+
+| Feature | Description |
+|---|---|
+| Locked focus region | The selected region is overlaid as a non-draggable, non-resizable region (blue tint) |
+| Play Region button | Plays only the focus region via WaveSurfer `region.play()` |
+| Speed control | Range slider 0.25× – 3.0× with live `setPlaybackRate` |
+| Sub-region exploration | Right-click any user-drawn region inside the explorer → nested `WsRegionExplorer` |
+| Save Region as WAV | Clips the audio server-side (NAudio) and saves as a new `UploadFile` |
+| Region Notes | Add rich-text notes (TelerikEditor) to the region — overall or point-in-time |
+
+### Parameters
+
+```csharp
+[Parameter, EditorRequired] public Guid         FileId      { get; set; }
+[Parameter, EditorRequired] public string       FileName    { get; set; }
+[Parameter, EditorRequired] public string       ContentType { get; set; }
+[Parameter]                 public long         FileSize    { get; set; }
+[Parameter, EditorRequired] public WsRegionData? Region     { get; set; }
+[Parameter] public bool              Visible        { get; set; }
+[Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+[Parameter] public EventCallback<UploadFileRecord> OnClipSaved { get; set; }
+```
+
+`OnClipSaved` is fired after a successful save so the parent can refresh its child-clip overlay.
+
+---
+
+## Region Notes — `UploadFileRegionNote`
+
+**Table:** `UploadFileRegionNotes` (migration `AddUploadFileRegionNotesAndParentClip`)
+
+A time-annotated rich-text note attached to an audio region.
+
+| Column | Type | Description |
+|---|---|---|
+| `UploadFileId` | `Guid` | Parent file (CASCADE delete) |
+| `RegionStart` | `double` | Region start time in seconds (absolute within the audio file) |
+| `RegionEnd` | `double` | Region end time in seconds |
+| `RegionLabel` | `string?` | Optional label from the WaveSurfer region |
+| `TimeOffset` | `double?` | Absolute time in file for point-in-time notes; `null` = whole-region note |
+| `NoteHtml` | `nvarchar(max)` | Rich-text body from TelerikEditor |
+| `IsPublic` | `bool` | Visibility flag |
+| Audit cols | — | `DateCreated`, `DateUpdated?`, `CreatedByAppUserId`, `UpdatedByAppUserId?` |
+
+**API:**
+```
+GET    /api/upload-files/{fileId}/region-notes
+POST   /api/upload-files/{fileId}/region-notes         ← CreateRegionNoteRequest
+PUT    /api/upload-files/{fileId}/region-notes/{id}    ← UpdateRegionNoteRequest
+DELETE /api/upload-files/{fileId}/region-notes/{id}
+```
+
+---
+
+## Audio Clip / Child Files
+
+When a region is saved as a new file, the clipped `UploadFile` stores a back-reference to its parent:
+
+| Column | Type | Description |
+|---|---|---|
+| `ParentFileId` | `Guid?` | Source file (NoAction delete — child survives parent deletion) |
+| `RegionStart` | `double?` | Start time in the parent file (seconds) |
+| `RegionEnd` | `double?` | End time in the parent file (seconds) |
+
+**API:**
+```
+POST /api/upload-files/{fileId}/clip            ← ClipAudioRequest (saves new UploadFile)
+GET  /api/upload-files/{fileId}/clip/preview    ← ?start=&end= (bytes only, no DB write)
+GET  /api/upload-files/{fileId}/clips           → UploadFileRecord[] ordered by RegionStart
+```
+
+The **preview** endpoint returns clipped WAV bytes (WAV/MP3 → WAV) without creating an `UploadFile` record. Used by `WsRegionExplorer` to stream just the region's audio on open.
+
+### Audio clipping (NAudio)
+
+`AudioClipper` static class in `Ben.Data.WebApi`. Supported input formats: **WAV**, **MP3**. Output is always WAV (PCM, lossless).
+
+```csharp
+public record ClipAudioRequest(
+    double  Start,
+    double  End,
+    string? Label,
+    bool    IsPublic,
+    Guid    UploadFileTypeId);
+```
+
+Unsupported formats return HTTP 400 with a descriptive message. The clip is persisted as a new `UploadFile` with `ParentFileId`, `RegionStart`, and `RegionEnd` set.
+
 ---
 Telerik Nuget Key: [REDACTED — was exposed in git history; retrieve current key from telerik.com → Your Account → Downloads → License Keys]
 

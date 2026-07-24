@@ -7,7 +7,9 @@ namespace Ben.Web.WebApp.Services.WebApi;
 public interface IWebApiClient
 {
     Task<TResponse?> GetAsync<TResponse>(string relativeUrl, CancellationToken token = default);
+    Task<TResponse?> GetAnonymousAsync<TResponse>(string relativeUrl, CancellationToken token = default);
     Task<TResponse?> PostAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);
+    Task<TResponse?> PostMultipartAsync<TResponse>(string relativeUrl, MultipartFormDataContent content, CancellationToken token = default);
     Task<TResponse?> PutAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> PutVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> DeleteAsync(string relativeUrl, CancellationToken token = default);
@@ -36,6 +38,22 @@ public interface IWebApiClient
     Task<UploadFileAudioConfigRecord?> GetAudioConfigAsync(Guid fileId, CancellationToken token = default);
     Task<UploadFileAudioConfigRecord?> UpsertAudioConfigAsync(Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default);
     Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default);
+
+    // Upload File — Region Notes
+    Task<IReadOnlyList<UploadFileRegionNoteRecord>> GetRegionNotesAsync(Guid fileId, CancellationToken token = default);
+    Task<UploadFileRegionNoteRecord?> CreateRegionNoteAsync(Guid fileId, CreateRegionNoteRequest request, CancellationToken token = default);
+    Task<UploadFileRegionNoteRecord?> UpdateRegionNoteAsync(Guid fileId, Guid noteId, UpdateRegionNoteRequest request, CancellationToken token = default);
+    Task<bool> DeleteRegionNoteAsync(Guid fileId, Guid noteId, CancellationToken token = default);
+
+    // Upload File — Audio Clip
+    Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default);
+    Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default);
+    Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default);
+
+    // Upload File — Votes
+    Task<UploadFileVoteSummary?> GetVoteSummaryAsync(Guid fileId, CancellationToken token = default);
+    Task<UploadFileVoteRecord?> UpsertMyVoteAsync(Guid fileId, int score, CancellationToken token = default);
+    Task<bool> RemoveMyVoteAsync(Guid fileId, CancellationToken token = default);
 
     // Upload File — Org Sharing
     Task<IReadOnlyList<UploadFileOrgShareResponse>> GetFileOrgSharesAsync(Guid fileId, CancellationToken token = default);

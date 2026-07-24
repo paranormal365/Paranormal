@@ -15,7 +15,7 @@ namespace Ben.Data.WebApi.Controllers.Cms;
 /// </summary>
 [ApiController]
 [Authorize]
-public abstract class OrgCmsControllerBase : ControllerBase
+public abstract class OrgCmsControllerBase : BenControllerBase
 {
     protected readonly IDbContextFactory<BenDataContext> DbFactory;
     protected readonly IMapper Mapper;
@@ -31,7 +31,7 @@ public abstract class OrgCmsControllerBase : ControllerBase
         Security  = security;
     }
 
-    protected Guid? GetCurrentUserId()
+    protected new Guid? GetCurrentUserId()
     {
         var value = User.FindFirstValue(Services.EntraClaimsTransformation.AppUserIdClaimType)
                     ?? User.FindFirstValue(ClaimTypes.NameIdentifier);

@@ -2,6 +2,7 @@ using AutoMapper;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Service.Models.Admin;
+using Ben.Service.RepositoryService.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ben.Data.WebApi.Controllers.Admin;
@@ -12,5 +13,28 @@ public sealed class AdminOrganizationAddressController : AdminEntityControllerBa
     public AdminOrganizationAddressController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper, IAuditLogService auditLog)
         : base(dbContextFactory, mapper, auditLog)
     {
+    }
+
+    public override async Task<ActionResult<OrganizationAddressAdminRecord>> Create([FromBody] OrganizationAddress entity, CancellationToken cancellationToken)
+    {
+        await ApplyGeocodingAsync(entity, cancellationToken);
+        return await base.Create(entity, cancellationToken);
+    }
+
+    public override async Task<ActionResult<OrganizationAddressAdminRecord>> Update(Guid id, [FromBody] OrganizationAddress entity, CancellationToken cancellationToken)
+    {
+        await ApplyGeocodingAsync(entity, cancellationToken);
+        return await base.Update(id, entity, cancellationToken);
+    }
+
+    private static async Task ApplyGeocodingAsync(OrganizationAddress entity, CancellationToken cancellationToken)
+    {
+        var result = await AddressGeocodingService.TryResolveCoordinatesAsync(
+            entity.StreetAddress1, entity.StreetAddress2,
+            entity.City, entity.State, entity.ZipCode, entity.Country, cancellationToken);
+        entity.Latitude              = result.Latitude;
+        entity.Longitude             = result.Longitude;
+        entity.GeocodingResponseJson = result.RawResponseJson;
+        entity.GeocodingResultType   = result.ResultType;
     }
 }

@@ -1,4 +1,5 @@
 using AutoMapper;
+using System.Security.Claims;
 using Ben.Data.Common.Helpers;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
@@ -40,7 +41,18 @@ public class UploadFileControllerTests
                 StoredFileName = "stored.txt",
                 ContentType = "text/plain"
             });
-        return new UploadFileController(factory, mapperMock.Object);
+        var ctrl = new UploadFileController(factory, mapperMock.Object,
+            new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object,
+            new Moq.Mock<IAuditLogService>().Object);
+        ctrl.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(
+                    [new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString())], "Bearer"))
+            }
+        };
+        return ctrl;
     }
 
     private static IFormFile MakeFile(string fileName, long size = 256)

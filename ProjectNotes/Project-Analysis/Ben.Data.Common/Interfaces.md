@@ -59,3 +59,39 @@ Provides a single interface constraint for any code that needs to read or write 
 
 - Used as a generic constraint in `AuditChangeTracker` and any future generic save-interceptors.
 - 28 entity stubs in `Ben.Data.Source/Entities/` declare `public partial class X : IAuditableEntity`.
+
+
+---
+
+## `IFileStorageService`
+
+**Namespace:** `Ben.Data.Common.Interfaces`  
+**File:** [`Ben.Data.Common/Interfaces/IFileStorageService.cs`](../../../Ben.Data.Common/Interfaces/IFileStorageService.cs)  
+**Type:** Interface  
+**Added:** 2026-07-21
+
+### Summary
+
+Abstracts binary file storage so the application can swap providers (local filesystem → Azure Blob / S3) without changing controllers. Registered as a singleton in the WebApi DI container.
+
+### Methods
+
+| Method | Returns | Description |
+|---|---|---|
+| `WriteAsync(relativePath, data, ct)` | `Task` | Writes stream to storage at the relative path. Creates intermediate directories as needed. |
+| `OpenReadAsync(relativePath, ct)` | `Task<Stream>` | Opens a read stream for the file. Throws `FileNotFoundException` if absent. |
+| `DeleteAsync(relativePath, ct)` | `Task` | Deletes the file. No-op if absent. |
+| `Exists(relativePath)` | `bool` | Returns `true` if the file exists at the path. |
+| `UserFilePath(userId, storedFileName)` | `string` | Builds the canonical relative path: `"users/{userId}/{storedFileName}"`. |
+
+### Implementation
+
+- **Dev/production:** `Ben.Data.WebApi.Services.LocalFileStorageService` — writes to the path configured in `FileStorage:RootPath` (e.g. `/Users/ben/Source/Ben/.uploads` in dev).
+- Storage is keyed by `StoredFileName` (a GUID-based name) not the display `FileName`, so renames never conflict.
+
+### Future Swap
+
+```json
+"FileStorage": { "Provider": "AzureBlob", "ConnectionString": "...", "Container": "ben-uploads" }
+```
+Swap the DI registration in `Program.cs`; no controller code changes required.

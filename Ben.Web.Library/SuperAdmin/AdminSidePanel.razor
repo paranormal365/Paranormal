@@ -38,6 +38,20 @@
             <TelerikSvgIcon Icon="@SvgIcon.FileConfig" />
             <span>File Types</span>
         </a>
+        <a class="admin-panel-link" href="/admin/lookup-types" @onclick="Close" @onclick:preventDefault="false">
+            <TelerikSvgIcon Icon="@SvgIcon.ListUnordered" />
+            <span>Lookup Types</span>
+        </a>
+        <a class="admin-panel-link" href="/admin/experience-taxonomy" @onclick="Close" @onclick:preventDefault="false">
+            <TelerikSvgIcon Icon="@SvgIcon.LayoutStacked" />
+            <span>Experience Taxonomy</span>
+        </a>
+
+        <div class="admin-panel-section-label">System</div>
+        <a class="admin-panel-link" href="/admin/audit-log" @onclick="Close" @onclick:preventDefault="false">
+            <TelerikSvgIcon Icon="@SvgIcon.LayoutStacked" />
+            <span>Audit Log</span>
+        </a>
 
     </nav>
 </div>

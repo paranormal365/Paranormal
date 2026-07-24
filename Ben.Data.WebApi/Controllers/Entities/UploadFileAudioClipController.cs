@@ -1,0 +1,229 @@
+using AutoMapper;
+using Ben.Data.Common.Interfaces;
+using Ben.Data.Source.Context;
+using Ben.Data.Source.Entities;
+using Ben.Service.Models.Entities;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using NAudio.Wave;
+
+namespace Ben.Data.WebApi.Controllers.Entities;
+
+/// <summary>
+/// Clips audio from an existing UploadFile to a time range.
+/// Supports WAV and MP3 source formats; always outputs WAV (PCM, lossless).
+/// Use <c>GET preview</c> for an in-browser preview without saving;
+/// <c>POST</c> persists the clip as a new UploadFile record on disk.
+/// </summary>
+[ApiController]
+[Route("api/upload-files/{fileId:guid}/clip")]
+[Authorize]
+public sealed class UploadFileAudioClipController : BenControllerBase
+{
+    private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
+    private readonly IMapper _mapper;
+    private readonly IFileStorageService _fileStorage;
+    private readonly IAuditLogService _auditLog;
+
+    public UploadFileAudioClipController(
+        IDbContextFactory<BenDataContext> dbContextFactory,
+        IMapper mapper,
+        IFileStorageService fileStorage,
+        IAuditLogService auditLog)
+    {
+        _dbContextFactory = dbContextFactory;
+        _mapper = mapper;
+        _fileStorage = fileStorage;
+        _auditLog = auditLog;
+    }
+
+    /// <summary>
+    /// Returns clipped audio bytes for a time range without persisting to the database.
+    /// Supports WAV and MP3 sources; always outputs WAV.
+    /// </summary>
+    [HttpGet("preview")]
+    public async Task<IActionResult> ClipPreview(
+        Guid fileId,
+        [FromQuery] double start,
+        [FromQuery] double end,
+        CancellationToken ct)
+    {
+        if (end <= start) return BadRequest("end must be greater than start.");
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var source = await db.UploadFiles.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == fileId, ct);
+        if (source is null) return NotFound();
+
+        try
+        {
+            Stream sourceStream = await OpenSourceStreamAsync(source, ct);
+            await using (sourceStream)
+            {
+                var (bytes, contentType, _) = AudioClipper.Clip(sourceStream, source.ContentType, start, end);
+                return File(bytes, contentType);
+            }
+        }
+        catch (NotSupportedException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    [HttpPost]
+    public async Task<ActionResult<UploadFileRecord>> Clip(
+        Guid fileId,
+        [FromBody] ClipAudioRequest request,
+        CancellationToken ct)
+    {
+        if (request.End <= request.Start)
+            return BadRequest("End must be greater than Start.");
+
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+
+        var source = await db.UploadFiles.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == fileId, ct);
+        if (source is null) return NotFound("Source file not found.");
+
+        if (!await db.UploadFileTypes.AnyAsync(t => t.Id == request.UploadFileTypeId, ct))
+            return BadRequest("Upload file type not found.");
+
+        byte[] clippedBytes;
+        string outContentType;
+        string outExtension;
+        try
+        {
+            Stream sourceStream = await OpenSourceStreamAsync(source, ct);
+            await using (sourceStream)
+            {
+                (clippedBytes, outContentType, outExtension) =
+                    AudioClipper.Clip(sourceStream, source.ContentType, request.Start, request.End);
+            }
+        }
+        catch (NotSupportedException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+
+        var baseName = System.IO.Path.GetFileNameWithoutExtension(source.FileName);
+        var start    = TimeSpan.FromSeconds(request.Start);
+        var end      = TimeSpan.FromSeconds(request.End);
+        var newName  = $"{baseName}_clip_{start:mm\\mss\\s}-{end:mm\\mss\\s}{outExtension}";
+        if (!string.IsNullOrWhiteSpace(request.Label))
+            newName = $"{request.Label}{outExtension}";
+
+        var entity = new UploadFile
+        {
+            Id                 = Guid.NewGuid(),
+            UploadFileTypeId   = request.UploadFileTypeId,
+            AppUserId          = userId,
+            FileName           = newName,
+            StoredFileName     = $"{Guid.NewGuid()}{outExtension}",
+            ContentType        = outContentType,
+            FileSize           = clippedBytes.Length,
+            FileData           = null,  // written to disk below
+            Description        = string.IsNullOrWhiteSpace(request.Label)
+                ? $"Clip of '{source.FileName}' [{start.Minutes:D2}m{start.Seconds:D2}s-{end.Minutes:D2}m{end.Seconds:D2}s]"
+                : request.Label,
+            IsPublic           = request.IsPublic,
+            SortOrder          = 0,
+            ParentFileId       = fileId,
+            RegionStart        = request.Start,
+            RegionEnd          = request.End,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        };
+
+        // Write clip to disk before committing the DB record
+        var relativePath = _fileStorage.UserFilePath(userId, entity.StoredFileName);
+        using (var ms = new MemoryStream(clippedBytes))
+            await _fileStorage.WriteAsync(relativePath, ms, ct);
+        entity.StoragePath = relativePath;
+
+        db.UploadFiles.Add(entity);
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), entity.Id, entity, userId, AppSources.WebApi, ct));
+
+        return CreatedAtAction("GetById", "UploadFile", new { id = entity.Id },
+            _mapper.Map<UploadFileRecord>(entity));
+    }
+
+    /// <summary>
+    /// Opens the source audio as a stream: from disk if StoragePath is set,
+    /// otherwise falls back to FileData bytes (legacy rows awaiting migration).
+    /// </summary>
+    private async Task<Stream> OpenSourceStreamAsync(UploadFile file, CancellationToken ct)
+    {
+        if (!string.IsNullOrEmpty(file.StoragePath))
+            return await _fileStorage.OpenReadAsync(file.StoragePath, ct);
+        if (file.FileData is not null)
+            return new MemoryStream(file.FileData);
+        throw new InvalidOperationException($"File {file.Id} has no StoragePath and no FileData.");
+    }
+}
+
+// ── Audio clipping helper ────────────────────────────────────────────────────
+
+internal static class AudioClipper
+{
+    /// <summary>
+    /// Clips <paramref name="sourceStream"/> to [<paramref name="startSeconds"/>, <paramref name="endSeconds"/>].
+    /// Returns the clipped PCM bytes as WAV together with its content-type and file extension.
+    /// </summary>
+    /// <exception cref="NotSupportedException">Thrown when the source format cannot be decoded by NAudio.</exception>
+    public static (byte[] Bytes, string ContentType, string Extension) Clip(
+        Stream sourceStream, string sourceContentType, double startSeconds, double endSeconds)
+    {
+        WaveStream waveStream;
+        if (sourceContentType.Contains("wav", StringComparison.OrdinalIgnoreCase))
+        {
+            waveStream = new WaveFileReader(sourceStream);
+        }
+        else if (sourceContentType.Contains("mp3", StringComparison.OrdinalIgnoreCase) ||
+                 sourceContentType.Contains("mpeg", StringComparison.OrdinalIgnoreCase))
+        {
+            waveStream = new Mp3FileReader(sourceStream);
+        }
+        else
+        {
+            throw new NotSupportedException(
+                $"Audio clipping is supported for WAV and MP3. " +
+                $"Received content-type: '{sourceContentType}'. " +
+                "For other formats, use the Download endpoint and clip locally.");
+        }
+
+        using (waveStream)
+        {
+            var startOffset = TimeSpan.FromSeconds(startSeconds);
+            var endOffset   = TimeSpan.FromSeconds(endSeconds);
+
+            // Clamp to actual duration
+            if (startOffset < TimeSpan.Zero) startOffset = TimeSpan.Zero;
+            if (endOffset > waveStream.TotalTime) endOffset = waveStream.TotalTime;
+
+            waveStream.CurrentTime = startOffset;
+
+            using var outputStream = new MemoryStream();
+            using var writer       = new WaveFileWriter(outputStream, waveStream.WaveFormat);
+
+            var buffer = new byte[waveStream.WaveFormat.AverageBytesPerSecond];
+            while (waveStream.CurrentTime < endOffset)
+            {
+                var remaining    = (endOffset - waveStream.CurrentTime).TotalSeconds;
+                var maxBytes     = (int)(waveStream.WaveFormat.AverageBytesPerSecond * remaining);
+                var toRead       = Math.Min(buffer.Length, maxBytes);
+                if (toRead <= 0) break;
+
+                var bytesRead = waveStream.Read(buffer, 0, toRead);
+                if (bytesRead == 0) break;
+                writer.Write(buffer, 0, bytesRead);
+            }
+            writer.Flush();
+            return (outputStream.ToArray(), "audio/wav", ".wav");
+        }
+    }
+}

@@ -219,3 +219,72 @@ await AdminClient.UpsertAudioConfigAsync(fileId, new UpsertAudioConfigRequest
 // 3. Reset to defaults
 await AdminClient.DeleteAudioConfigAsync(fileId);
 ```
+
+---
+
+### New `IBenAdminClient` methods (added 2026-07-18/19)
+
+#### Audio Config
+| Method | Returns | Description |
+|---|---|---|
+| `GetAudioConfigAsync(fileId)` | `UploadFileAudioConfigRecord?` | Saved WaveSurfer config for a file |
+| `UpsertAudioConfigAsync(fileId, request)` | `UploadFileAudioConfigRecord?` | Create or replace |
+| `DeleteAudioConfigAsync(fileId)` | `bool` | Remove saved config |
+
+#### Region Notes
+| Method | Returns | Description |
+|---|---|---|
+| `GetRegionNotesAsync(fileId)` | `IReadOnlyList<UploadFileRegionNoteRecord>` | All notes ordered by region start / time offset |
+| `CreateRegionNoteAsync(fileId, request)` | `UploadFileRegionNoteRecord?` | Create note |
+| `UpdateRegionNoteAsync(fileId, noteId, request)` | `UploadFileRegionNoteRecord?` | Update |
+| `DeleteRegionNoteAsync(fileId, noteId)` | `bool` | Delete |
+
+#### Audio Clip
+| Method | Returns | Description |
+|---|---|---|
+| `ClipAudioAsync(fileId, request)` | `UploadFileRecord?` | Server-clip WAV/MP3 → WAV, saves as new `UploadFile` with parent tracking |
+| `GetClipPreviewAsync(fileId, start, end)` | `(byte[] Data, string ContentType)?` | Clip bytes only — no DB record created. Used by `WsRegionExplorer` |
+| `GetChildClipsAsync(fileId)` | `IReadOnlyList<UploadFileRecord>` | All child clips ordered by `RegionStart` |
+
+#### Votes
+| Method | Returns | Description |
+|---|---|---|
+| `GetVoteSummaryAsync(fileId)` | `UploadFileVoteSummary?` | Aggregated counts + calling user's score |
+| `UpsertMyVoteAsync(fileId, score)` | `UploadFileVoteRecord?` | Create or update vote (score: 1 upvote / -1 downvote) |
+| `RemoveMyVoteAsync(fileId)` | `bool` | Remove vote; no-op if none exists |
+
+### Organization Membership Request Methods *(added 2026-07-22)*
+
+| Method | Returns | Description |
+|---|---|---|
+| `GetMembershipRequestsAsync(orgId, token)` | `IReadOnlyList<OrganizationMembershipRequestRecord>` | All requests for an org (requires Org membership/admin). |
+| `GetMyMembershipRequestAsync(orgId, token)` | `OrganizationMembershipRequestRecord?` | The calling user's pending application. |
+| `ApplyForMembershipAsync(orgId, message, token)` | `OrganizationMembershipRequestRecord?` | Submit an application (fails if `IsAcceptingApplications=false` or duplicate pending). |
+| `RespondToMembershipRequestAsync(orgId, requestId, status, note, token)` | `bool` | Accept or deny. Accept auto-creates membership + sends `UserMessage` notification. |
+| `WithdrawMembershipRequestAsync(orgId, requestId, token)` | `bool` | Applicant withdraws their own pending request. |
+
+### Organization File Methods *(added 2026-07-22)*
+
+| Method | Returns | Description |
+|---|---|---|
+| `GetOrgFilesAsync(orgId, token)` | `IReadOnlyList<OrganizationFileRecord>` | All files for an org. |
+| `GetOrgFileDeleteLogAsync(orgId, token)` | `IReadOnlyList<OrganizationFileDeleteLogRecord>` | Immutable delete audit snapshots. |
+| `UploadOrgFileAsync(orgId, content, token)` | `OrganizationFileRecord?` | Direct upload to `orgs/{orgId}/` storage path. |
+| `CopyFileFromUserAsync(orgId, userFileId, publishImmediately, token)` | `OrgFileCopyClientResult?` | Copies an accessible user file to org storage; `CanPublishImmediately` signals whether caller has Update perm. |
+| `PublishOrgFileAsync(orgId, fileId, isPublished, token)` | `OrganizationFileRecord?` | Toggle publish with audit timestamp + who approved. |
+| `UpdateOrgFileAsync(orgId, fileId, description, sortOrder, token)` | `OrganizationFileRecord?` | Metadata-only update (description + sort order). `IsPublic` is controlled via publish, not here. |
+| `DeleteOrgFileAsync(orgId, fileId, token)` | `bool` | Server writes `OrganizationFileDeleteLog` snapshot before deleting. |
+
+### Address Map Config Methods *(added 2026-07-22)*
+
+| Method | Returns | Description |
+|---|---|---|
+| `GetOrgAddressMapConfigAsync(orgId, addressId, token)` | `AddressMapConfigRecord?` | Load current map config for an address. |
+| `UpsertOrgAddressMapConfigAsync(orgId, addressId, config, token)` | `AddressMapConfigRecord?` | Create or replace the config (single PUT). |
+| `DeleteOrgAddressMapConfigAsync(orgId, addressId, token)` | `bool` | Remove the map config (resets to defaults). |
+
+### `IWebApiClient` additions *(added 2026-07-22)*
+
+| Method | Description |
+|---|---|
+| `PostMultipartAsync<TResponse>(url, content, token)` | Sends a `MultipartFormDataContent` POST and deserializes the response. Used for org file upload. |

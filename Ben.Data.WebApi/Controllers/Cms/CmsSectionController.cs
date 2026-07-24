@@ -13,11 +13,17 @@ namespace Ben.Data.WebApi.Controllers.Cms;
 [Route("api/organizations/{orgId:guid}/pages/{pageId:guid}/sections")]
 public sealed class CmsSectionController : OrgCmsControllerBase
 {
+    private readonly IAuditLogService _auditLog;
+
     public CmsSectionController(
         IDbContextFactory<BenDataContext> dbFactory,
         IMapper mapper,
-        IOrganizationSecurityService security)
-        : base(dbFactory, mapper, security) { }
+        IOrganizationSecurityService security,
+        IAuditLogService auditLog)
+        : base(dbFactory, mapper, security)
+    {
+        _auditLog = auditLog;
+    }
 
     // ── GET all sections for a page ──────────────────────────────────────────
 
@@ -72,6 +78,7 @@ public sealed class CmsSectionController : OrgCmsControllerBase
 
         db.CmsSections.Add(section);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CmsSection), section.Id, section, userId.Value, AppSources.WebApi, ct));
 
         return CreatedAtAction(nameof(GetAll), new { orgId, pageId },
             Mapper.Map<CmsSectionRecord>(section));
@@ -90,17 +97,20 @@ public sealed class CmsSectionController : OrgCmsControllerBase
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var before = await db.CmsSections.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == sectionId && s.OrganizationPageId == pageId, ct);
+        if (before is null) return NotFound();
         var section = await db.CmsSections
             .FirstOrDefaultAsync(s => s.Id == sectionId && s.OrganizationPageId == pageId, ct);
-        if (section is null) return NotFound();
 
-        section.Title              = request.Title?.Trim();
+        section!.Title              = request.Title?.Trim();
         section.ContentJson        = string.IsNullOrWhiteSpace(request.ContentJson) ? "{}" : request.ContentJson;
         section.IsActive           = request.IsActive;
         section.DateUpdated        = DateTime.UtcNow;
         section.UpdatedByAppUserId = userId.Value;
 
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(CmsSection), sectionId, before, section!, userId.Value, AppSources.WebApi, ct));
         return Ok(Mapper.Map<CmsSectionRecord>(section));
     }
 
@@ -128,6 +138,7 @@ public sealed class CmsSectionController : OrgCmsControllerBase
         }
 
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync("CmsSectionReorder", pageId, new { }, request, userId.Value, AppSources.WebApi, ct));
         return NoContent();
     }
 
@@ -149,6 +160,7 @@ public sealed class CmsSectionController : OrgCmsControllerBase
 
         db.CmsSections.Remove(section);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(CmsSection), sectionId, section, userId.Value, AppSources.WebApi, ct));
         return NoContent();
     }
 }

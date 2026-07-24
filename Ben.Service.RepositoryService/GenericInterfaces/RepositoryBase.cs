@@ -55,48 +55,6 @@ public abstract class RepositoryBase<T> : IRepositoryBase<T> where T : class, II
 
     }
 
-    private T? GetById(BenDataContext dbContext, Guid id)
-    {
-        if (null != dbContext && id != Guid.Empty)
-        {
-            return dbContext.Set<T>().FirstOrDefault(e => e.Id == id);
-        }
-        return null;
-    }
-
-
-    public virtual void Create(T item)
-    {
-        using var dbContext = _dbContextFactory.CreateDbContext();
-        try
-        {
-            dbContext.Set<T>().Add(item);
-        }
-        catch (Exception ex)
-        {
-            LogError(ex, nameof(Create));
-            throw;
-        }
-    }
-
-    public void Delete(Guid id)
-    {
-        using var dbContext = _dbContextFactory.CreateDbContext();
-        try
-        {
-            var entity = GetById(dbContext, id);
-            if (entity != null)
-            {
-                dbContext.Set<T>().Remove(entity);
-            }
-        }
-        catch (Exception ex)
-        {
-            LogError(ex, nameof(Delete));
-            throw;
-        }
-    }
-
     public async Task<IEnumerable<T>> FindListAsync(Expression<Func<T, bool>> expressionPredicate, bool trackChanges = true, CancellationToken token = default)
     {
         using var dbContext = await _dbContextFactory.CreateDbContextAsync(token);
@@ -125,6 +83,7 @@ public abstract class RepositoryBase<T> : IRepositoryBase<T> where T : class, II
                 : dbContext.Set<T>().AsNoTracking();
 
             query = ApplyIncludes(query, includes);
+            query = query.Where(expressionPredicate);
             return await query.ToListAsync(token);
         }
         catch (Exception ex)
@@ -330,20 +289,6 @@ public abstract class RepositoryBase<T> : IRepositoryBase<T> where T : class, II
         catch (Exception ex)
         {
             LogError(ex, nameof(GetByIdAsync));
-            throw;
-        }
-    }
-
-    public virtual void Update(T item)
-    {
-        using var dbContext = _dbContextFactory.CreateDbContext();
-        try
-        {
-            dbContext.Set<T>().Update(item);
-        }
-        catch (Exception ex)
-        {
-            LogError(ex, nameof(Update));
             throw;
         }
     }

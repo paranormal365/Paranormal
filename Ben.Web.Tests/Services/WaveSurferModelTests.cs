@@ -367,4 +367,50 @@ public class WaveSurferModelTests
         var cfg = MakeRecord().ToWsConfig(null);
         Assert.Null(cfg.Source);
     }
+
+    // ── WsRegionData.Label ────────────────────────────────────────────────────
+
+    [Fact]
+    public void WsRegionData_Label_DefaultsToNull()
+    {
+        var r = new WsRegionData { Id = "r1", Start = 0, End = 5 };
+        Assert.Null(r.Label);
+    }
+
+    [Fact]
+    public void WsRegionData_Label_CanBeSet()
+    {
+        var r = new WsRegionData { Id = "r1", Start = 0, End = 5, Label = "Verse" };
+        Assert.Equal("Verse", r.Label);
+    }
+
+    // ── WsRegionContextMenuArgs ───────────────────────────────────────────────
+
+    [Fact]
+    public void WsRegionContextMenuArgs_Properties_AreReadable()
+    {
+        var args = new WsRegionContextMenuArgs
+        {
+            RegionId = "r1",
+            Start    = 10.5,
+            End      = 20.0,
+            Label    = "Chorus",
+            ClientX  = 400,
+            ClientY  = 250,
+        };
+
+        Assert.Equal("r1",     args.RegionId);
+        Assert.Equal(10.5,     args.Start);
+        Assert.Equal(20.0,     args.End);
+        Assert.Equal("Chorus", args.Label);
+        Assert.Equal(400,      args.ClientX);
+        Assert.Equal(250,      args.ClientY);
+    }
+
+    [Fact]
+    public void WsRegionContextMenuArgs_Label_CanBeNull()
+    {
+        var args = new WsRegionContextMenuArgs { RegionId = "r1", Start = 0, End = 5, Label = null };
+        Assert.Null(args.Label);
+    }
 }

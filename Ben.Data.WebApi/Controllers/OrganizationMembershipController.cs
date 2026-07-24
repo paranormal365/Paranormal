@@ -1,7 +1,6 @@
 using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace Ben.Data.WebApi.Controllers;
 
@@ -16,7 +15,7 @@ namespace Ben.Data.WebApi.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/security/organizations")]
-public class OrganizationMembershipController : ControllerBase
+public class OrganizationMembershipController : BenControllerBase
 {
     private readonly IOrganizationSecurityService _organizationSecurityService;
 
@@ -39,7 +38,7 @@ public class OrganizationMembershipController : ControllerBase
         [FromQuery] int take = 25,
         CancellationToken cancellationToken = default)
     {
-        var actingUserId = GetCurrentUserId();
+        var actingUserId = GetCurrentUserIdOrThrow();
         var users = await _organizationSecurityService.SearchUsersAsync(actingUserId, q, skip, take, cancellationToken);
 
         return Ok(users.Select(u => new UserSearchResultResponse
@@ -57,7 +56,7 @@ public class OrganizationMembershipController : ControllerBase
     [HttpGet("mine")]
     public async Task<ActionResult<IEnumerable<OrganizationSummaryResponse>>> GetMyOrganizations(CancellationToken cancellationToken)
     {
-        var appUserId = GetCurrentUserId();
+        var appUserId = GetCurrentUserIdOrThrow();
         var organizations = await _organizationSecurityService.GetOrganizationsForUserAsync(appUserId, cancellationToken);
 
         return Ok(organizations.Select(o => new OrganizationSummaryResponse
@@ -79,7 +78,7 @@ public class OrganizationMembershipController : ControllerBase
         [FromBody] RegisterOrganizationRequest request,
         CancellationToken cancellationToken)
     {
-        var appUserId = GetCurrentUserId();
+        var appUserId = GetCurrentUserIdOrThrow();
         var organization = await _organizationSecurityService.RegisterOrganizationAsync(appUserId, request.Name, request.UrlName, cancellationToken);
 
         return CreatedAtAction(
@@ -93,21 +92,6 @@ public class OrganizationMembershipController : ControllerBase
                 DateCreated = organization.DateCreated,
                 CreatedByAppUserId = organization.CreatedByAppUserId
             });
-    }
-
-    /// <summary>Extracts the authenticated user's <see cref="Guid"/> from the JWT/identity claims.</summary>
-    /// <exception cref="UnauthorizedAccessException">Thrown when the user ID claim is absent or not a valid <see cref="Guid"/>.</exception>
-    private Guid GetCurrentUserId()
-    {
-        var value = User.FindFirstValue(Ben.Data.WebApi.Services.EntraClaimsTransformation.AppUserIdClaimType)
-                    ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!Guid.TryParse(value, out var appUserId))
-        {
-            throw new UnauthorizedAccessException("Authenticated user id claim is missing or invalid.");
-        }
-
-        return appUserId;
     }
 
     /// <summary>Request body for <see cref="RegisterOrganization"/>.</summary>

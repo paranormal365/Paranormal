@@ -195,3 +195,102 @@ Grants per-page CMS actions to a specific org member OR a member group.
 | Audit columns | — | |
 
 **Constraint (enforced in service):** at least one of `AppUserId` or `OrgMemberGroupId` must be non-null.
+
+---
+
+## Organization Participation Entities *(added 2026-07-22)*
+
+### `OrganizationMembershipRequest`
+
+**Table:** `OrganizationMembershipRequests`  
+**Implements:** `IAuditableEntity`
+
+Tracks a user's application to join an organization.
+
+| Property | Type | Description |
+|---|---|---|
+| `OrganizationId` | `Guid` | FK → `Organization` (Cascade) |
+| `AppUserId` | `Guid` | FK → `AppUser` (NoAction) |
+| `RequestMessage` | `string?` | Optional message from the applicant |
+| `Status` | `OrganizationMembershipRequestStatus` | `Pending=0, Accepted=1, Denied=2, Withdrawn=3` |
+| Audit columns | — | |
+
+**Index:** `(OrganizationId, AppUserId)`.  
+**Prerequisite:** `Organization.IsAcceptingApplications = true` (added to `Organization` entity 2026-07-22). Server enforces no duplicate `Pending` requests.
+
+---
+
+### `OrganizationFile`
+
+**Table:** `OrganizationFiles`  
+**Implements:** `IAuditableEntity`
+
+An organization-owned file, either uploaded directly or copied from a user's upload.
+
+| Property | Type | Description |
+|---|---|---|
+| `OrganizationId` | `Guid` | FK → `Organization` (Cascade) |
+| `UploadFileTypeId` | `Guid` | FK → `UploadFileType` (NoAction) |
+| `OriginalFileName` | `string` | Display name |
+| `StoredFileName` | `string` | Unique UUID-based filename on disk |
+| `FileSizeBytes` | `long` | |
+| `IsPublic` | `bool` | Visible to non-members |
+| `Description` | `string?` | |
+| `SortOrder` | `int` | |
+| `SourceUploadFileId` | `Guid?` | FK → `UploadFile` (NoAction) — set when copied from a user file |
+| `PublishedByAppUserId` | `Guid?` | FK → `AppUser` (NoAction) — who approved publication |
+| `DatePublished` | `DateTime?` | UTC timestamp of publication approval |
+| Audit columns | — | |
+
+**Storage path:** `orgs/{orgId}/{storedFileName}` (via `IFileStorageService.OrgFilePath`)
+
+---
+
+### `OrganizationFileDeleteLog`
+
+**Table:** `OrganizationFileDeleteLogs`  
+**Implements:** `IIDStd` (create-only, no update/audit FKs)
+
+Immutable audit snapshot written **before** the file is deleted (same pattern as `AuditLog`). No FKs — survives beyond the referenced records.
+
+| Property | Type | Description |
+|---|---|---|
+| `OrganizationId` | `Guid` | Stored value only (no FK) |
+| `OrganizationName` | `string` | Snapshot of org name |
+| `OriginalFileName` | `string` | |
+| `StoredFileName` | `string` | |
+| `FileSizeBytes` | `long` | |
+| `WasPublic` | `bool` | |
+| `WasPublished` | `bool` | |
+| `PublishedByDisplayName` | `string?` | Snapshot of approver display name |
+| `DatePublished` | `DateTime?` | |
+| `DeletedByAppUserId` | `Guid` | |
+| `DeletedByDisplayName` | `string` | Snapshot |
+| `DateDeleted` | `DateTime` | UTC timestamp |
+
+---
+
+### `OrganizationAddressMapConfig`
+
+**Table:** `OrganizationAddressMapConfigs`  
+**Implements:** `IAuditableEntity`
+
+1-to-1 optional config for an `OrganizationAddress` controlling how it appears on the map.
+
+| Property | Type | Description |
+|---|---|---|
+| `OrganizationAddressId` | `Guid` | FK → `OrganizationAddress` (Cascade). Unique index. |
+| `IsOnMap` | `bool` | Master toggle |
+| `ShowMarker` | `bool` | Render a map marker pin |
+| `ShowRegion` | `bool` | Render a filled circle region |
+| `RegionRadiusMiles` | `double` | Radius of the region in miles |
+| `MarkerColor` | `string` | Hex color |
+| `MarkerIconKey` | `string?` | Telerik SvgIcon property name for the marker icon |
+| `RegionFillColor` | `string` | |
+| `RegionFillOpacity` | `double` | 0–1 |
+| `RegionStrokeColor` | `string` | |
+| `RegionStrokeOpacity` | `double` | 0–1 |
+| `RegionStrokeWidth` | `int` | Pixels |
+| Audit columns | — | |
+
+**Navigation:** `OrganizationAddress.MapConfig` (added to `OrganizationAddress.Generated.cs`)

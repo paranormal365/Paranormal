@@ -5,9 +5,14 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Ben.Data.WebApi.Controllers;
 
+/// <summary>
+/// Handles Microsoft Entra (Azure AD) account registration and linking.
+/// Called from the Blazor WebApp after the OIDC callback to either create a new
+/// local account or link the Entra identity to an existing local account.
+/// </summary>
 [ApiController]
 [Route("api/auth/entra")]
-public sealed class EntraAuthController : ControllerBase
+public sealed class EntraAuthController : BenControllerBase
 {
     private readonly UserManager<AppUser> _userManager;
 

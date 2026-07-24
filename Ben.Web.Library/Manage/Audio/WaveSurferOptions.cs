@@ -373,6 +373,10 @@ public class WsPluginConfig
     [JsonPropertyName("regions")]
     public bool Regions { get; set; }
 
+    /// <summary>When true, the user can draw new regions by clicking and dragging on the waveform.</summary>
+    [JsonPropertyName("regionsDragToCreate")]
+    public bool RegionsDragToCreate { get; set; }
+
     [JsonPropertyName("hover")]
     public bool Hover { get; set; }
 
@@ -431,6 +435,31 @@ public class WsRegionData
 
     [JsonPropertyName("color")]
     public string? Color { get; set; }
+
+    [JsonPropertyName("label")]
+    public string? Label { get; set; }
+}
+
+/// <summary>Payload delivered when the user right-clicks a WaveSurfer region.</summary>
+public class WsRegionContextMenuArgs
+{
+    [JsonPropertyName("id")]
+    public string RegionId { get; set; } = string.Empty;
+
+    [JsonPropertyName("start")]
+    public double Start { get; set; }
+
+    [JsonPropertyName("end")]
+    public double End { get; set; }
+
+    [JsonPropertyName("label")]
+    public string? Label { get; set; }
+
+    [JsonPropertyName("clientX")]
+    public double ClientX { get; set; }
+
+    [JsonPropertyName("clientY")]
+    public double ClientY { get; set; }
 }
 
 /// <summary>Parameters for adding a new region. PascalCase of WaveSurfer JS <c>RegionParams</c>.</summary>
@@ -475,6 +504,13 @@ public class WsEnvelopePoint
 
     [JsonPropertyName("volume")]
     public double Volume { get; set; }
+}
+
+/// <summary>Coordinates payload used by the spectrogram context-menu callback.</summary>
+public class WsPointArgs
+{
+    [JsonPropertyName("clientX")] public double ClientX { get; set; }
+    [JsonPropertyName("clientY")] public double ClientY { get; set; }
 }
 
 // ── Aggregated Config ─────────────────────────────────────────────────────────

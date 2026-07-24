@@ -1,0 +1,686 @@
+@*
+  AudioFilePreview.razor
+  ──────────────────────
+  Compact waveform player used in the Files tab of AdminUserDetail.
+
+  • Fetches audio bytes on first render and shows an 80 px WaveSurfer waveform.
+  • Shows a ▶ overlay when paused; clicking anywhere on the waveform toggles play/pause.
+  • Right-clicking shows a TelerikContextMenu: Play, Pause, Rewind, Open Full View.
+  • "Open Full View" opens a TelerikWindow with file info + full-featured WaveSurfer
+    (Timeline, Hover, Zoom, Spectrogram, Regions, built-in controls).
+*@
+
+@namespace Ben.Web.Library.Manage.Audio
+@inject IBenAdminClient AdminClient
+
+@if (_loading)
+{
+    <div style="height:80px;display:flex;align-items:center;justify-content:center;">
+        <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
+    </div>
+}
+else if (_source is null)
+{
+    <span class="badge bg-secondary text-truncate" style="max-width:120px;" title="@FileName">@FileName</span>
+}
+else
+{
+    @* ── Compact waveform — click to play/pause, right-click for menu ── *@
+    <div id="@_wrapperId"
+         style="position:relative;cursor:pointer;border-radius:4px;overflow:hidden;"
+         @onclick="TogglePlayAsync"
+         @oncontextmenu="ShowContextMenuAsync"
+         @oncontextmenu:preventDefault="true"
+         title="@(!_playing ? "Click to play" : "Click to pause")">
+
+        @* Play icon overlay — shown when paused and waveform is ready *@
+        @if (!_playing && _ready)
+        {
+            <div style="position:absolute;inset:0;display:flex;align-items:center;
+                        justify-content:center;z-index:2;pointer-events:none;
+                        background:rgba(0,0,0,.18);border-radius:4px;">
+                <span style="font-size:1.6rem;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.7);">▶</span>
+            </div>
+        }
+
+        <WaveSurferPlayer @ref="_player"
+                          Config="@_compactConfig"
+                          OnReady="@(() => { _ready = true; StateHasChanged(); })"
+                          OnPlay="@(() => { _playing = true; StateHasChanged(); })"
+                          OnPause="@(() => { _playing = false; StateHasChanged(); })"
+                          OnFinish="@(() => { _playing = false; StateHasChanged(); })"
+                          OnTimeUpdate="@(t => _currentTime = t)" />
+    </div>
+}
+
+@* ── Context menu ────────────────────────────────────────────────────────── *@
+<TelerikContextMenu @ref="_contextMenu"
+                    Data="@_menuItems"
+                    TextField="@nameof(AudioContextMenuItem.Text)"
+                    OnClick="@(async (AudioContextMenuItem item) => await OnMenuClickAsync(item))">
+</TelerikContextMenu>
+
+@* ── Full-view window ────────────────────────────────────────────────────── *@
+<TelerikWindow Visible="@_showModal"
+               VisibleChanged="@OnModalVisibleChanged"
+               Width="92vw"
+               Height="92vh"
+               Modal="true">
+    <WindowTitle>@FileName</WindowTitle>
+    <WindowActions>
+        <WindowAction Name="Close" />
+    </WindowActions>
+    <WindowContent>
+        @if (_showModal && _source is not null)
+        {
+            <div class="d-flex flex-column h-100" style="overflow:hidden;">
+
+                @* Info bar *@
+                <div class="d-flex flex-wrap gap-4 mb-2 p-2 rounded flex-shrink-0"
+                     style="background:var(--kendo-color-surface,#f5f5f5);font-size:.875rem;">
+                    <span><strong>Size:</strong>@(" ")@FormatSize(FileSize)</span>
+                    <span><strong>Type:</strong>@(" ")@ContentType</span>
+                    <span><strong>Duration:</strong>@(" ")@FormatTime(_modalDuration)</span>
+                    <span><strong>Position:</strong>@(" ")@FormatTime(_modalTime)</span>
+                    <span class="ms-auto d-flex align-items-center gap-2">
+                        @* Timeline toggle *@
+                        <TelerikButton ThemeColor="@(_timelineEnabled ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Enabled="@_modalReady"
+                                       OnClick="ToggleTimelineAsync">
+                            🕐 @(_timelineEnabled ? "Hide Timeline" : "Show Timeline")
+                        </TelerikButton>
+                        @* Clear user-drawn regions *@
+                        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Enabled="@_modalReady"
+                                       OnClick="ClearUserRegionsAsync">
+                            🗑 Clear Regions
+                        </TelerikButton>
+                        @* Spectrogram toggle *@
+                        <TelerikButton ThemeColor="@(_spectrogramEnabled ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Enabled="@_modalReady"
+                                       OnClick="ToggleSpectrogramAsync">
+                            📊 @(_spectrogramEnabled ? "Hide Spectrogram" : "Show Spectrogram")
+                        </TelerikButton>
+                        @* Spectrogram resolution — only shown when spectrogram is active *@
+                        @if (_spectrogramEnabled)
+                        {
+                            <TelerikDropDownList Data="@_resolutionOptions"
+                                                 Value="@_spectrogramFftSamples"
+                                                 ValueChanged="@((int v) => _ = OnSpectrogramResolutionChangedAsync(v))"
+                                                 TextField="@nameof(SpectrogramResolutionOption.Label)"
+                                                 ValueField="@nameof(SpectrogramResolutionOption.Value)"
+                                                 Width="155px"
+                                                 Size="@ThemeConstants.DropDownList.Size.Small"
+                                                 Enabled="@_modalReady" />
+                        }
+                        <span class="small text-secondary fst-italic">
+                            Click &amp; drag to mark a region &mdash; right-click to play, save, or edit
+                        </span>
+                    </span>
+                </div>
+
+                @* Full WaveSurfer player *@
+                <div class="flex-shrink-0">
+                    <WaveSurferPlayer @ref="_modalPlayer"
+                                      Config="@_fullConfig"
+                                      Resizable="true"
+                                      OnReady="@OnModalReadyAsync"
+                                      OnTimeUpdate="@(t => { _modalTime = t; StateHasChanged(); })"
+                                      OnFinish="@(() => { _modalTime = 0; StateHasChanged(); })"
+                                      OnRegionContextMenu="@OnRegionRightClick"
+                                      OnRegionCreated="@OnModalRegionCreated"
+                                      OnSpectrogramReady="@(() => StateHasChanged())"
+                                      OnSpectrogramContextMenu="@OnSpectrogramContextMenuFired" />
+                </div>
+
+                @* Child clips section *@
+                @if (_childClips.Any())
+                {
+                    <div class="mt-3 flex-shrink-0" style="overflow-y:auto;max-height:40vh;">
+                        <h6 class="mb-2 text-secondary small fw-semibold text-uppercase letter-spacing-1">
+                            Saved Clips (@_childClips.Count)
+                        </h6>
+                        @foreach (var clip in _childClips)
+                        {
+                            <div class="mb-2 p-2 rounded"
+                                 style="background:var(--kendo-color-surface,#f5f5f5);">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="badge bg-success bg-opacity-75 small">
+                                        @FormatTime(clip.RegionStart ?? 0)–@FormatTime(clip.RegionEnd ?? 0)
+                                    </span>
+                                    <span class="small fw-semibold">
+                                        @(string.IsNullOrWhiteSpace(clip.Description) ? clip.FileName : clip.Description)
+                                    </span>
+                                    <span class="small text-secondary ms-auto">
+                                        @FormatSize(clip.FileSize)
+                                    </span>
+                                </div>
+                                <AudioFilePreview FileId="@clip.Id"
+                                                  FileName="@clip.FileName"
+                                                  ContentType="@clip.ContentType"
+                                                  FileSize="@clip.FileSize" />
+                            </div>
+                        }
+                    </div>
+                }
+
+            </div>
+        }
+    </WindowContent>
+</TelerikWindow>
+
+@* ── Spectrogram context menu (right-click on spectrogram canvas) ───── *@
+<TelerikContextMenu @ref="_spectrogramMenu"
+                    Data="@_spectrogramMenuItems"
+                    TextField="@nameof(SpectrogramMenuItem.Text)"
+                    OnClick="@(async (SpectrogramMenuItem item) => await OnSpectrogramMenuClickAsync(item))">
+</TelerikContextMenu>
+
+@* ── Region context menu (right-click in full-view player) ───────────── *@
+<TelerikContextMenu @ref="_regionMenu"
+                    Data="@_regionMenuItems"
+                    TextField="@nameof(RegionContextMenuItem.Text)"
+                    OnClick="@(async (RegionContextMenuItem item) => await OnRegionMenuClickAsync(item))">
+</TelerikContextMenu>
+
+@* ── Region label edit dialog ────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showEditLabelDialog" Title="Edit Region Label" Width="360px">
+    <DialogContent>
+        <label class="form-label fw-semibold">Label</label>
+        <TelerikTextBox @bind-Value="@_editLabelText" Width="100%" />
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="@(() => _showEditLabelDialog = false)">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       OnClick="SaveRegionLabelAsync">Save</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Save region as clip dialog ──────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showSaveClipDialog"
+               Title="Create Audio File from Region"
+               Width="460px">
+    <DialogContent>
+        @if (_newUserRegion is not null)
+        {
+            <p class="text-secondary small mb-3">
+                Clipping <strong>@FormatTime(_newUserRegion.Start)</strong>
+                &ndash; <strong>@FormatTime(_newUserRegion.End)</strong>
+                from <em>@FileName</em>. Output will be saved as WAV.
+            </p>
+        }
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Label / Description</label>
+                <TelerikTextBox @bind-Value="@_saveClipLabel"
+                                PlaceHolder="Optional — auto-generated if blank"
+                                Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">File Type <span class="text-danger">*</span></label>
+                <TelerikDropDownList Data="@_fileTypes"
+                                     @bind-Value="@_saveClipTypeId"
+                                     TextField="@nameof(UploadFileTypeRecord.Name)"
+                                     ValueField="@nameof(UploadFileTypeRecord.Id)"
+                                     DefaultText="— select —"
+                                     Width="100%" />
+            </div>
+            <div class="col-12 d-flex align-items-center gap-2">
+                <TelerikCheckBox @bind-Value="@_saveClipIsPublic" Id="clip-pub-afp" />
+                <label for="clip-pub-afp" class="form-label mb-0">Public</label>
+            </div>
+        </div>
+        @if (_saveClipError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0 py-2 small">@_saveClipError</div>
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="@(() => { _showSaveClipDialog = false; _saveClipError = null; })">
+            Cancel
+        </TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Icon="@SvgIcon.Save"
+                       Enabled="@(!_isSavingClip && _saveClipTypeId != Guid.Empty)"
+                       OnClick="SaveClipAsync">
+            @(_isSavingClip ? "Saving…" : "Save as WAV")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+@* ── Toast notifications ────────────────────────────────────────────── *@
+<TelerikNotification @ref="_toast"
+                     HorizontalPosition="@NotificationHorizontalPosition.Right"
+                     VerticalPosition="@NotificationVerticalPosition.Top" />
+
+@code {
+    // ── Parameters ────────────────────────────────────────────────────────────
+
+    [Parameter, EditorRequired] public Guid   FileId      { get; set; }
+    [Parameter, EditorRequired] public string FileName    { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string ContentType { get; set; } = string.Empty;
+    [Parameter]                 public long   FileSize    { get; set; }
+
+    // ── State ─────────────────────────────────────────────────────────────────
+
+    private WsAudioSource? _source;
+    private bool   _loading = true;
+    private bool   _ready;
+    private bool   _playing;
+    private double _currentTime;
+    private double _modalTime;
+    private double _modalDuration;
+    private bool   _showModal;
+    private bool   _modalReady;
+    private IReadOnlyList<UploadFileRecord> _childClips = [];
+
+    // ── Timeline + Spectrogram state ───────────────────────────────────
+
+    private bool   _timelineEnabled  = true;
+    private bool   _spectrogramEnabled;
+    private bool   _spectrogramLabels = true;   // show frequency labels by default
+    private int    _spectrogramFftSamples = 512;
+    private TelerikContextMenu<SpectrogramMenuItem>? _spectrogramMenu;
+
+    private static readonly List<SpectrogramMenuItem> _spectrogramMenuItems =
+    [
+        new("labels", "🔤  Toggle Labels"),
+    ];
+
+    private record SpectrogramResolutionOption(int Value, string Label);
+    private static readonly List<SpectrogramResolutionOption> _resolutionOptions =
+    [
+        new(128,  "128 – Coarse"),
+        new(256,  "256 – Low"),
+        new(512,  "512 – Standard"),
+        new(1024, "1024 – High"),
+        new(2048, "2048 – Fine"),
+        new(4096, "4096 – Ultra"),
+    ];
+
+    // ── Region creation workflow ──────────────────────────────────────────────
+
+    /// <summary>IDs of regions added programmatically (overlays, focus regions) — not user-drawn.</summary>
+    private readonly HashSet<string> _programmaticRegionIds = [];
+
+    /// <summary>Region currently being acted on (set from right-click args when saving/clipping).</summary>
+    private WsRegionData? _newUserRegion;
+
+    private bool   _showSaveClipDialog;      // save-as-clip form
+    private bool   _isSavingClip;
+    private string? _saveClipError;
+    private string  _saveClipLabel    = string.Empty;
+    private Guid    _saveClipTypeId;
+    private bool    _saveClipIsPublic;
+    private IReadOnlyList<UploadFileTypeRecord> _fileTypes = [];
+
+    private WaveSurferPlayer?                          _player;
+    private WaveSurferPlayer?                          _modalPlayer;
+    private TelerikContextMenu<AudioContextMenuItem>?  _contextMenu;
+    private TelerikNotification?                       _toast;
+
+    // ── Region context menu state ──────────────────────────────────────────────
+
+    private TelerikContextMenu<RegionContextMenuItem>? _regionMenu;
+    private WsRegionContextMenuArgs? _pendingRegion;
+    private bool   _showEditLabelDialog;
+    private string _editLabelText = string.Empty;
+
+    private static readonly List<RegionContextMenuItem> _regionMenuItems =
+    [
+        new("play",    "▶  Play Region"),
+        new("save",    "🎵  Create Audio File from Region"),
+        new("label",   "✏  Edit Label"),
+        new("delete",  "🗑  Delete Region"),
+    ];
+
+    private readonly string _wrapperId = $"afp-{Guid.NewGuid():N}";
+
+    // ── Context menu items ────────────────────────────────────────────────────
+
+    private static readonly List<AudioContextMenuItem> _menuItems =
+    [
+        new("play",     "▶  Play"),
+        new("pause",    "⏸  Pause"),
+        new("rewind",   "⏮  Rewind"),
+        new("fullview", "⤢  Open Full View"),
+    ];
+
+    // ── WsConfig objects ──────────────────────────────────────────────────────
+
+    private WsConfig _compactConfig => new()
+    {
+        Source  = _source,
+        Options = new WsOptions { Interact = false, Normalize = true },
+        Plugins = new WsPluginConfig { Hover = true },
+        InitialHeight = "80px",
+        MinHeight     = "80px",
+        MaxHeight     = "80px",
+        ShowControls  = false,
+    };
+
+    private WsConfig _fullConfig => new()
+    {
+        Source  = _source,
+        Options = new WsOptions { Normalize = true },
+        Plugins = new WsPluginConfig
+        {
+            Hover               = true,
+            Timeline            = true,
+            Zoom                = true,
+            Spectrogram         = false,   // built-in plugin disabled; toggle button uses custom canvas
+            Regions             = true,
+            RegionsDragToCreate = true,
+        },
+        InitialHeight = "280px",
+        MinHeight     = "120px",
+        MaxHeight     = "600px",
+        ShowControls  = true,
+    };
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            var result = await AdminClient.GetFileDataAsync(FileId);
+            if (result is not null)
+                _source = WsAudioSource.FromBytes(result.Value.Data, result.Value.ContentType);
+        }
+        catch { /* silently fail — component shows filename badge as fallback */ }
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    // ── Player event handlers ─────────────────────────────────────────────────
+
+    private async Task OnModalReadyAsync()
+    {
+        _modalDuration = _modalPlayer?.Duration ?? 0;
+        _modalReady    = true;
+        StateHasChanged();
+
+        // Load file types for the save-clip dialog and overlay child clips in parallel
+        try
+        {
+            _fileTypes = await AdminClient.GetPublicFileTypesAsync();
+            if (_fileTypes.Any() && _saveClipTypeId == Guid.Empty)
+                _saveClipTypeId = _fileTypes[0].Id;
+        }
+        catch { /* non-critical */ }
+
+        await OverlayChildClipRegionsAsync();
+    }
+
+    private async Task OverlayChildClipRegionsAsync()
+    {
+        if (_modalPlayer is null) return;
+        try
+        {
+            _childClips = await AdminClient.GetChildClipsAsync(FileId);
+            foreach (var clip in _childClips)
+            {
+                if (clip.RegionStart is null || clip.RegionEnd is null) continue;
+                var id = clip.Id.ToString();
+                _programmaticRegionIds.Add(id);  // mark as programmatic so it doesn't trigger the confirm dialog
+                await _modalPlayer.AddRegionAsync(new WsRegionParams
+                {
+                    Id      = id,
+                    Start   = clip.RegionStart.Value,
+                    End     = clip.RegionEnd.Value,
+                    Color   = "rgba(16,185,129,0.20)",
+                    Drag    = false,
+                    Resize  = false,
+                    Content = clip.Description ?? clip.FileName,
+                });
+            }
+            StateHasChanged();
+        }
+        catch { /* silently ignore */ }
+    }
+
+    // ── New region drawn by user ──────────────────────────────────────────────
+
+    private async Task OnModalRegionCreated(WsRegionData r)
+    {
+        // Silently ignore programmatically added overlay regions.
+        if (_programmaticRegionIds.Contains(r.Id)) return;
+
+        // Only one user-drawn region is allowed at a time.
+        // Remove every other user-drawn region, keeping the new one + saved overlays.
+        if (_modalPlayer is not null)
+            await _modalPlayer.ClearUserRegionsAsync(
+                _programmaticRegionIds.Append(r.Id));
+    }
+
+    private async Task SaveClipAsync()
+    {
+        if (_newUserRegion is null || _saveClipTypeId == Guid.Empty) return;
+
+        _isSavingClip = true;
+        _saveClipError = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await AdminClient.ClipAudioAsync(FileId, new ClipAudioRequest(
+                _newUserRegion.Start, _newUserRegion.End,
+                string.IsNullOrWhiteSpace(_saveClipLabel) ? null : _saveClipLabel.Trim(),
+                _saveClipIsPublic, _saveClipTypeId));
+
+            if (result is not null)
+            {
+                _showSaveClipDialog  = false;
+                _saveClipLabel       = string.Empty;
+                _saveClipError       = null;
+
+                // Remove the user-drawn region — replaced by the persisted overlay
+                if (_newUserRegion is not null && _modalPlayer is not null)
+                    await _modalPlayer.RemoveRegionAsync(_newUserRegion.Id);
+                _newUserRegion = null;
+
+                // Refresh child clips and overlay the newly saved one
+                await OverlayChildClipRegionsAsync();
+                Notify($"Saved \"{result.FileName}\"", "success");
+            }
+            else
+            {
+                Notify("Save failed — only WAV and MP3 sources can be clipped.", "error");
+                _saveClipError = "Only WAV and MP3 sources can be clipped.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _saveClipError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _isSavingClip = false;
+        }
+    }
+
+    // ── Modal + explorer visibility handlers ──────────────────────────────────
+
+    private void OnModalVisibleChanged(bool visible)
+    {
+        _showModal = visible;
+        if (!visible)
+        {
+            _timelineEnabled    = true;
+            _spectrogramEnabled = false;
+            _spectrogramLabels  = false;
+            _modalReady         = false;
+        }
+    }
+
+    // ── Waveform click → toggle play/pause ────────────────────────────────────
+
+    private async Task TogglePlayAsync()
+    {
+        if (_player is null) return;
+        await _player.PlayPauseAsync();
+    }
+
+    // ── Context menu ──────────────────────────────────────────────────────────
+
+    private async Task ShowContextMenuAsync(MouseEventArgs e)
+    {
+        if (_contextMenu is null) return;
+        await _contextMenu.ShowAsync(e.ClientX, e.ClientY);
+    }
+
+    private async Task OnMenuClickAsync(AudioContextMenuItem item)
+    {
+        switch (item.Action)
+        {
+            case "play":
+                if (_player is not null) await _player.PlayAsync();
+                break;
+            case "pause":
+                if (_player is not null) await _player.PauseAsync();
+                break;
+            case "rewind":
+                if (_player is not null) await _player.StopAsync();
+                _currentTime = 0;
+                break;
+            case "fullview":
+                if (_playing && _player is not null)
+                    await _player.PauseAsync();
+                _modalTime  = 0;
+                _modalDuration = 0;
+                _showModal  = true;
+                StateHasChanged();
+                break;
+        }
+    }
+
+    // ── Formatting helpers (delegated to AudioFormatUtils) ────────────────────
+
+    private static string FormatTime(double seconds) => AudioFormatUtils.FormatTime(seconds);
+    private static string FormatSize(long bytes)      => AudioFormatUtils.FormatSize(bytes);
+
+    private void Notify(string message, string themeColor = "warning") =>
+        _toast?.Show(new NotificationModel { Text = message, ThemeColor = themeColor, CloseAfter = 4000 });
+
+    // ── Spectrogram toggle + context menu ─────────────────────────────────────
+
+    private async Task ClearUserRegionsAsync()
+    {
+        if (_modalPlayer is null) return;
+        await _modalPlayer.ClearUserRegionsAsync(_programmaticRegionIds);
+    }
+
+    private async Task ToggleTimelineAsync()
+    {
+        _timelineEnabled = !_timelineEnabled;
+        if (_modalPlayer is null) return;
+        await _modalPlayer.ToggleTimelineAsync(_timelineEnabled);
+    }
+
+    private async Task ToggleSpectrogramAsync()
+    {
+        _spectrogramEnabled = !_spectrogramEnabled;
+        if (_modalPlayer is null) return;
+        await _modalPlayer.ToggleSpectrogramAsync(_spectrogramEnabled, _spectrogramLabels, _spectrogramFftSamples);
+    }
+
+    private async Task OnSpectrogramResolutionChangedAsync(int fftSamples)
+    {
+        _spectrogramFftSamples = fftSamples;
+        if (_spectrogramEnabled && _modalPlayer is not null)
+            await _modalPlayer.SetSpectrogramResolutionAsync(_spectrogramFftSamples, _spectrogramLabels);
+    }
+
+    private async Task OnSpectrogramContextMenuFired(WsPointArgs args)
+    {
+        if (_spectrogramMenu is not null)
+            await _spectrogramMenu.ShowAsync(args.ClientX, args.ClientY);
+    }
+
+    private async Task OnSpectrogramMenuClickAsync(SpectrogramMenuItem item)
+    {
+        if (item.Action == "labels")
+        {
+            _spectrogramLabels = !_spectrogramLabels;
+            if (_modalPlayer is not null)
+                await _modalPlayer.UpdateSpectrogramLabelsAsync(_spectrogramLabels);
+        }
+    }
+
+    // ── Region right-click (full-view modal player) ───────────────────────────
+
+    private async Task OnRegionRightClick(WsRegionContextMenuArgs args)
+    {
+        _pendingRegion = args;
+        if (_regionMenu is not null)
+            await _regionMenu.ShowAsync(args.ClientX, args.ClientY);
+    }
+
+    private async Task OnRegionMenuClickAsync(RegionContextMenuItem item)
+    {
+        if (_pendingRegion is null) return;
+        switch (item.Action)
+        {
+            case "play":
+                if (_modalPlayer is not null) await _modalPlayer.PlayRegionAsync(_pendingRegion.RegionId);
+                break;
+            case "label":
+                _editLabelText       = _pendingRegion.Label ?? string.Empty;
+                _showEditLabelDialog = true;
+                break;
+            case "save":
+                // Use the right-clicked region's current position for clipping
+                _newUserRegion = new WsRegionData
+                {
+                    Id    = _pendingRegion.RegionId,
+                    Start = _pendingRegion.Start,
+                    End   = _pendingRegion.End,
+                    Label = _pendingRegion.Label,
+                };
+                _showSaveClipDialog = true;
+                StateHasChanged();
+                break;
+            case "delete":
+                if (_modalPlayer is not null)
+                {
+                    await _modalPlayer.RemoveRegionAsync(_pendingRegion.RegionId);
+                    if (_newUserRegion?.Id == _pendingRegion.RegionId)
+                        _newUserRegion = null;
+                }
+                break;
+        }
+    }
+
+    private async Task SaveRegionLabelAsync()
+    {
+        if (_pendingRegion is null || _modalPlayer is null) return;
+        await _modalPlayer.UpdateRegionLabelAsync(_pendingRegion.RegionId, _editLabelText);
+        _pendingRegion = new WsRegionContextMenuArgs
+        {
+            RegionId = _pendingRegion.RegionId,
+            Start    = _pendingRegion.Start,
+            End      = _pendingRegion.End,
+            Label    = _editLabelText,
+            ClientX  = _pendingRegion.ClientX,
+            ClientY  = _pendingRegion.ClientY,
+        };
+        _showEditLabelDialog = false;
+    }
+
+    // ── Menu item records ─────────────────────────────────────────────────────
+
+    private sealed record AudioContextMenuItem(string Action, string Text);
+    private sealed record RegionContextMenuItem(string Action, string Text);
+    private sealed record SpectrogramMenuItem(string Action, string Text);
+}

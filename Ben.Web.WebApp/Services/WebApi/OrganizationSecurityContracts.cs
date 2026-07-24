@@ -54,6 +54,7 @@ public sealed class OrganizationUserMembershipResponse
     public Guid MembershipId { get; set; }
     public Guid OrganizationId { get; set; }
     public Guid AppUserId { get; set; }
+    public string? DisplayName { get; set; }
     public OrganizationMemberRole Role { get; set; }
     public bool IsActive { get; set; }
     public DateTime DateCreated { get; set; }

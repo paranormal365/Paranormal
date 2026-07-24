@@ -139,6 +139,424 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("AuditLogs", (string)null);
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.Case", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CaseManagerAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CaseYear")
+                        .HasColumnType("int");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<Guid?>("ClientRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Country")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DateCaseClosed")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DateCaseOpened")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("Latitude")
+                        .HasPrecision(18, 10)
+                        .HasColumnType("decimal(18,10)");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasPrecision(18, 10)
+                        .HasColumnType("decimal(18,10)");
+
+                    b.Property<int>("OrgCaseNumber")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PublicPseudonym")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("State")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StreetAddress1")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("StreetAddress2")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ZipCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CaseManagerAppUserId");
+
+                    b.HasIndex("ClientRequestId");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("OrganizationId", "CaseYear", "OrgCaseNumber")
+                        .IsUnique();
+
+                    b.ToTable("Cases");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.CaseTimelineEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AuthorAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Body")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("EntryType")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EventDateTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorAppUserId");
+
+                    b.HasIndex("CaseId");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("CaseTimelineEntries");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.CaseTimelineEntryExperienceType", b =>
+                {
+                    b.Property<Guid>("CaseTimelineEntryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ExperienceTypeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("CaseTimelineEntryId", "ExperienceTypeId");
+
+                    b.HasIndex("ExperienceTypeId");
+
+                    b.ToTable("CaseTimelineEntryExperienceTypes");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.CaseTimelineEntryFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CaseTimelineEntryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("UploadFileId");
+
+                    b.HasIndex("CaseTimelineEntryId", "UploadFileId")
+                        .IsUnique();
+
+                    b.ToTable("CaseTimelineEntryFiles");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.CaseTransferLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateProposed")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateResponded")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("FromOrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ProposedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid?>("RespondedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ToOrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TransferReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CaseId");
+
+                    b.HasIndex("FromOrganizationId");
+
+                    b.HasIndex("ProposedByAppUserId");
+
+                    b.HasIndex("RespondedByAppUserId");
+
+                    b.HasIndex("ToOrganizationId");
+
+                    b.ToTable("CaseTransferLogs");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.ClientRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("BirthYear")
+                        .HasColumnType("int");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("Country")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Gender")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("Latitude")
+                        .HasPrecision(18, 10)
+                        .HasColumnType("decimal(18,10)");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasPrecision(18, 10)
+                        .HasColumnType("decimal(18,10)");
+
+                    b.Property<string>("State")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StreetAddress1")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("StreetAddress2")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ZipCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppUserId");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("ClientRequests");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.ClientRequestFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ClientRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("UploadFileId");
+
+                    b.HasIndex("ClientRequestId", "UploadFileId")
+                        .IsUnique();
+
+                    b.ToTable("ClientRequestFiles");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.ClientRequestOrganization", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ClientRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateApplied")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateResponded")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("RespondedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("RespondedByAppUserId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("ClientRequestId", "OrganizationId")
+                        .IsUnique();
+
+                    b.ToTable("ClientRequestOrganizations");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.CmsPagePermission", b =>
                 {
                     b.Property<Guid>("Id")
@@ -231,6 +649,459 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("CmsSections");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvidenceVote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("DateVoted")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsPublicVoter")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("UploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("VoteType")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("VoterAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("VoterOrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VoterAppUserId");
+
+                    b.HasIndex("VoterOrganizationId");
+
+                    b.HasIndex("UploadFileId", "VoterAppUserId")
+                        .IsUnique();
+
+                    b.ToTable("EvidenceVotes");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.ExperienceCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ApprovedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ColorClass")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DateApproved")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("IconClass")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsApproved")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("ProposedByOrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedByAppUserId");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("ProposedByOrganizationId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("ExperienceCategories");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.ExperienceType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ApprovedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DateApproved")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("ExperienceCategoryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("IconClass")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsApproved")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("ProposedByOrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedByAppUserId");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("ExperienceCategoryId");
+
+                    b.HasIndex("ProposedByOrganizationId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("ExperienceTypes");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.Investigation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("EndDateTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("OrgCalendarEventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ScheduledDateTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CaseId");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrgCalendarEventId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("Investigations");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.InvestigationAttendee", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AssignedRole")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool?>("DidAttend")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("InvestigationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppUserId");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("InvestigationId", "AppUserId")
+                        .IsUnique();
+
+                    b.ToTable("InvestigationAttendees");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.MembershipReviewVote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("DateVoted")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrganizationMembershipRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("VoteType")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("VoterAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VoterAppUserId");
+
+                    b.HasIndex("OrganizationMembershipRequestId", "VoterAppUserId")
+                        .IsUnique();
+
+                    b.ToTable("MembershipReviewVotes");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgCalendarEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CaseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("EndDateTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("EventTypeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsAllDay")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RecurrenceRule")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<DateTime>("StartDateTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CaseId");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("EventTypeId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("OrgCalendarEvents");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgCalendarEventAttendee", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AssignedTask")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateRsvp")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrgCalendarEventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("RsvpStatus")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppUserId");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrgCalendarEventId", "AppUserId")
+                        .IsUnique();
+
+                    b.ToTable("OrgCalendarEventAttendees");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgCalendarEventType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ColorClass")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("IconClass")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("OrgCalendarEventTypes");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.OrgMemberGroup", b =>
                 {
                     b.Property<Guid>("Id")
@@ -305,11 +1176,24 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("OrgMemberGroupMemberships");
                 });
 
-            modelBuilder.Entity("Ben.Data.Source.Entities.Organization", b =>
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessage", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AuthorAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("CaseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ChannelType")
+                        .HasColumnType("int");
 
                     b.Property<Guid>("CreatedByAppUserId")
                         .HasColumnType("uniqueidentifier");
@@ -320,8 +1204,123 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime?>("DateUpdated")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("IsEncrypted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ParentMessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ViewCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorAppUserId");
+
+                    b.HasIndex("CaseId");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("ParentMessageId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("OrgMessages");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessageRecipient", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateRead")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrgMessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("RecipientAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecipientAppUserId");
+
+                    b.HasIndex("OrgMessageId", "RecipientAppUserId")
+                        .IsUnique();
+
+                    b.ToTable("OrgMessageRecipients");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessageView", b =>
+                {
+                    b.Property<Guid>("OrgMessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ViewerAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateViewed")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("OrgMessageId", "ViewerAppUserId");
+
+                    b.HasIndex("ViewerAppUserId");
+
+                    b.ToTable("OrgMessageViews");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.Organization", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("AcceptsClientsOutsideRange")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsAcceptingApplications")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsAcceptingClients")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Name")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("ShowAddressDirections")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ShowAddressMap")
+                        .HasColumnType("bit");
 
                     b.Property<Guid?>("UpdatedByAppUserId")
                         .HasColumnType("uniqueidentifier");
@@ -409,20 +1408,34 @@ namespace Ben.Data.Source.Migrations
                     b.Property<string>("GeocodingResultType")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("IsPublic")
+                    b.Property<bool>("IsSearchable")
                         .HasColumnType("bit");
 
                     b.Property<decimal?>("Latitude")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 10)
+                        .HasColumnType("decimal(18,10)");
 
                     b.Property<decimal?>("Longitude")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 10)
+                        .HasColumnType("decimal(18,10)");
+
+                    b.Property<int>("MemberDisplayMode")
+                        .HasColumnType("int");
 
                     b.Property<Guid>("OrganizationAddressTypeId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("PublicDisplayMode")
+                        .HasColumnType("int");
+
+                    b.Property<double?>("SearchRadiusMiles")
+                        .HasColumnType("float");
+
+                    b.Property<int>("SearchVisibility")
+                        .HasColumnType("int");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
@@ -439,6 +1452,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid?>("UpdatedByAppUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int>("Visibility")
+                        .HasColumnType("int");
+
                     b.Property<string>("ZipCode")
                         .HasColumnType("nvarchar(max)");
 
@@ -453,6 +1469,109 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("UpdatedByAppUserId");
 
                     b.ToTable("OrganizationAddresses");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationAddressMapConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsOnMap")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MarkerColor")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("MarkerIconKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid>("OrganizationAddressId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RegionFillColor")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<double>("RegionFillOpacity")
+                        .HasColumnType("float");
+
+                    b.Property<double>("RegionRadiusMiles")
+                        .HasColumnType("float");
+
+                    b.Property<string>("RegionStrokeColor")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<double>("RegionStrokeOpacity")
+                        .HasColumnType("float");
+
+                    b.Property<double>("RegionStrokeWidth")
+                        .HasColumnType("float");
+
+                    b.Property<bool>("ShowMarker")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ShowRegion")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationAddressId")
+                        .IsUnique();
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("OrganizationAddressMapConfigs", (string)null);
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationAddressMemberAccess", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrganizationAddressId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrganizationUserMembershipId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationUserMembershipId");
+
+                    b.HasIndex("OrganizationAddressId", "OrganizationUserMembershipId")
+                        .IsUnique();
+
+                    b.ToTable("OrganizationAddressMemberAccesses");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationAddressType", b =>
@@ -501,6 +1620,55 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("UpdatedByAppUserId");
 
                     b.ToTable("OrganizationAddressTypes");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationAreaOfOperation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("CenterLatitude")
+                        .HasPrecision(18, 10)
+                        .HasColumnType("decimal(18,10)");
+
+                    b.Property<decimal>("CenterLongitude")
+                        .HasPrecision(18, 10)
+                        .HasColumnType("decimal(18,10)");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DisplayLabel")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("RadiusMiles")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationId")
+                        .IsUnique();
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("OrganizationAreaOfOperations");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationEmail", b =>
@@ -613,6 +1781,154 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("UpdatedByAppUserId");
 
                     b.ToTable("OrganizationEmailTypes");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ContentType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DatePublished")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<byte[]>("FileData")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("FileName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("PublishedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("SourceUploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("StoragePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("StoredFileName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UploadFileTypeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("PublishedByAppUserId");
+
+                    b.HasIndex("SourceUploadFileId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("UploadFileTypeId");
+
+                    b.ToTable("OrganizationFiles", (string)null);
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationFileDeleteLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime>("DateDeleted")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("DeletedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletedByDisplayName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("OrganizationName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid>("OriginalFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SourceUploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("StoragePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("WasDatePublished")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("WasPublic")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("WasPublishedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("WasPublishedByDisplayName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeletedByAppUserId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.ToTable("OrganizationFileDeleteLogs", (string)null);
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationLink", b =>
@@ -769,6 +2085,150 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("OrganizationLogos");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationMembershipAnswer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AnswerText")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrganizationMembershipQuestionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrganizationMembershipRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationMembershipQuestionId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("OrganizationMembershipRequestId", "OrganizationMembershipQuestionId")
+                        .IsUnique();
+
+                    b.ToTable("OrganizationMembershipAnswers");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationMembershipQuestion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("QuestionText")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("OrganizationMembershipQuestions");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationMembershipRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool?>("CanReapply")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DenialReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("IsUnderReview")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RequestMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("VoteDeadline")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppUserId");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("OrganizationId", "AppUserId");
+
+                    b.ToTable("OrganizationMembershipRequests", (string)null);
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationNote", b =>
                 {
                     b.Property<Guid>("Id")
@@ -880,6 +2340,9 @@ namespace Ben.Data.Source.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("CaseId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("CreatedByAppUserId")
                         .HasColumnType("uniqueidentifier");
 
@@ -920,6 +2383,8 @@ namespace Ben.Data.Source.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CaseId");
 
                     b.HasIndex("CreatedByAppUserId");
 
@@ -1041,6 +2506,111 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("OrganizationPhoneTypes");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationRole", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("OrganizationRoles");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationRoleMembership", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrganizationRoleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrganizationUserMembershipId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationUserMembershipId");
+
+                    b.HasIndex("OrganizationRoleId", "OrganizationUserMembershipId")
+                        .IsUnique();
+
+                    b.ToTable("OrganizationRoleMemberships");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationRolePermission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Actions")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrganizationRoleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("TableName")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationRoleId", "TableName")
+                        .IsUnique();
+
+                    b.ToTable("OrganizationRolePermissions");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationUserMembership", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1121,8 +2691,21 @@ namespace Ben.Data.Source.Migrations
                     b.Property<bool>("IsPublic")
                         .HasColumnType("bit");
 
+                    b.Property<Guid?>("ParentFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double?>("RegionEnd")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("RegionStart")
+                        .HasColumnType("float");
+
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
+
+                    b.Property<string>("StoragePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("StoredFileName")
                         .HasColumnType("nvarchar(max)");
@@ -1138,6 +2721,8 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("AppUserId");
 
                     b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("ParentFileId");
 
                     b.HasIndex("UpdatedByAppUserId");
 
@@ -1403,6 +2988,56 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("UploadFilePermissionRequests");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.UploadFileRegionNote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("NoteHtml")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<double>("RegionEnd")
+                        .HasColumnType("float");
+
+                    b.Property<string>("RegionLabel")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<double>("RegionStart")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("TimeOffset")
+                        .HasColumnType("float");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("UploadFileId");
+
+                    b.ToTable("UploadFileRegionNotes");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.UploadFileType", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1483,6 +3118,37 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("UploadFileTypeExtensions");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.UploadFileVote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("UploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppUserId");
+
+                    b.HasIndex("UploadFileId", "AppUserId")
+                        .IsUnique();
+
+                    b.ToTable("UploadFileVotes");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.UserAddress", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1517,10 +3183,12 @@ namespace Ben.Data.Source.Migrations
                         .HasColumnType("bit");
 
                     b.Property<decimal?>("Latitude")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 10)
+                        .HasColumnType("decimal(18,10)");
 
                     b.Property<decimal?>("Longitude")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 10)
+                        .HasColumnType("decimal(18,10)");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
@@ -2282,6 +3950,269 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.Case", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CaseManagerAppUser")
+                        .WithMany()
+                        .HasForeignKey("CaseManagerAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.ClientRequest", "ClientRequest")
+                        .WithMany()
+                        .HasForeignKey("ClientRequestId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CaseManagerAppUser");
+
+                    b.Navigation("ClientRequest");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.CaseTimelineEntry", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AuthorAppUser")
+                        .WithMany()
+                        .HasForeignKey("AuthorAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Case", "Case")
+                        .WithMany("TimelineEntries")
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("AuthorAppUser");
+
+                    b.Navigation("Case");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.CaseTimelineEntryExperienceType", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.CaseTimelineEntry", "CaseTimelineEntry")
+                        .WithMany("ExperienceTypes")
+                        .HasForeignKey("CaseTimelineEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.ExperienceType", "ExperienceType")
+                        .WithMany()
+                        .HasForeignKey("ExperienceTypeId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("CaseTimelineEntry");
+
+                    b.Navigation("ExperienceType");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.CaseTimelineEntryFile", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.CaseTimelineEntry", "CaseTimelineEntry")
+                        .WithMany("Files")
+                        .HasForeignKey("CaseTimelineEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "UploadFile")
+                        .WithMany()
+                        .HasForeignKey("UploadFileId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("CaseTimelineEntry");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("UploadFile");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.CaseTransferLog", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.Case", "Case")
+                        .WithMany()
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "FromOrganization")
+                        .WithMany()
+                        .HasForeignKey("FromOrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "ProposedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("ProposedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "RespondedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("RespondedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "ToOrganization")
+                        .WithMany()
+                        .HasForeignKey("ToOrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Case");
+
+                    b.Navigation("FromOrganization");
+
+                    b.Navigation("ProposedByAppUser");
+
+                    b.Navigation("RespondedByAppUser");
+
+                    b.Navigation("ToOrganization");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.ClientRequest", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
+                        .WithMany()
+                        .HasForeignKey("AppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("AppUser");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.ClientRequestFile", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.ClientRequest", "ClientRequest")
+                        .WithMany("Files")
+                        .HasForeignKey("ClientRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "UploadFile")
+                        .WithMany()
+                        .HasForeignKey("UploadFileId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("ClientRequest");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("UpdatedByAppUser");
+
+                    b.Navigation("UploadFile");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.ClientRequestOrganization", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.ClientRequest", "ClientRequest")
+                        .WithMany("OrganizationApplications")
+                        .HasForeignKey("ClientRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "RespondedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("RespondedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("ClientRequest");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("RespondedByAppUser");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.CmsPagePermission", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
@@ -2348,6 +4279,276 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UpdatedByAppUser");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvidenceVote", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "UploadFile")
+                        .WithMany()
+                        .HasForeignKey("UploadFileId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "VoterAppUser")
+                        .WithMany()
+                        .HasForeignKey("VoterAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "VoterOrganization")
+                        .WithMany()
+                        .HasForeignKey("VoterOrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("UploadFile");
+
+                    b.Navigation("VoterAppUser");
+
+                    b.Navigation("VoterOrganization");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.ExperienceCategory", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "ApprovedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("ApprovedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "ProposedByOrganization")
+                        .WithMany()
+                        .HasForeignKey("ProposedByOrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("ApprovedByAppUser");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("ProposedByOrganization");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.ExperienceType", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "ApprovedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("ApprovedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.ExperienceCategory", "ExperienceCategory")
+                        .WithMany("ExperienceTypes")
+                        .HasForeignKey("ExperienceCategoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "ProposedByOrganization")
+                        .WithMany()
+                        .HasForeignKey("ProposedByOrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("ApprovedByAppUser");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("ExperienceCategory");
+
+                    b.Navigation("ProposedByOrganization");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.Investigation", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.Case", "Case")
+                        .WithMany()
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrgCalendarEvent", "OrgCalendarEvent")
+                        .WithMany()
+                        .HasForeignKey("OrgCalendarEventId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Case");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("OrgCalendarEvent");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.InvestigationAttendee", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
+                        .WithMany()
+                        .HasForeignKey("AppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Investigation", "Investigation")
+                        .WithMany("Attendees")
+                        .HasForeignKey("InvestigationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AppUser");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("Investigation");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.MembershipReviewVote", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.OrganizationMembershipRequest", "MembershipRequest")
+                        .WithMany("ReviewVotes")
+                        .HasForeignKey("OrganizationMembershipRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "VoterAppUser")
+                        .WithMany()
+                        .HasForeignKey("VoterAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("MembershipRequest");
+
+                    b.Navigation("VoterAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgCalendarEvent", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.Case", "Case")
+                        .WithMany()
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrgCalendarEventType", "EventType")
+                        .WithMany()
+                        .HasForeignKey("EventTypeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Case");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("EventType");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgCalendarEventAttendee", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
+                        .WithMany()
+                        .HasForeignKey("AppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrgCalendarEvent", "OrgCalendarEvent")
+                        .WithMany("Attendees")
+                        .HasForeignKey("OrgCalendarEventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AppUser");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("OrgCalendarEvent");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgCalendarEventType", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.OrgMemberGroup", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
@@ -2399,6 +4600,91 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("OrgMemberGroup");
 
                     b.Navigation("OrganizationUserMembership");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessage", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AuthorAppUser")
+                        .WithMany()
+                        .HasForeignKey("AuthorAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Case", "Case")
+                        .WithMany()
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.OrgMessage", "ParentMessage")
+                        .WithMany("Replies")
+                        .HasForeignKey("ParentMessageId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("AuthorAppUser");
+
+                    b.Navigation("Case");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("ParentMessage");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessageRecipient", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.OrgMessage", "OrgMessage")
+                        .WithMany("Recipients")
+                        .HasForeignKey("OrgMessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "RecipientAppUser")
+                        .WithMany()
+                        .HasForeignKey("RecipientAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("OrgMessage");
+
+                    b.Navigation("RecipientAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessageView", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.OrgMessage", "OrgMessage")
+                        .WithMany("Views")
+                        .HasForeignKey("OrgMessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "ViewerAppUser")
+                        .WithMany()
+                        .HasForeignKey("ViewerAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("OrgMessage");
+
+                    b.Navigation("ViewerAppUser");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.Organization", b =>
@@ -2479,6 +4765,59 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UpdatedByAppUser");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationAddressMapConfig", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrganizationAddress", "OrganizationAddress")
+                        .WithOne("MapConfig")
+                        .HasForeignKey("Ben.Data.Source.Entities.OrganizationAddressMapConfig", "OrganizationAddressId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("OrganizationAddress");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationAddressMemberAccess", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrganizationAddress", "OrganizationAddress")
+                        .WithMany()
+                        .HasForeignKey("OrganizationAddressId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrganizationUserMembership", "OrganizationUserMembership")
+                        .WithMany()
+                        .HasForeignKey("OrganizationUserMembershipId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("OrganizationAddress");
+
+                    b.Navigation("OrganizationUserMembership");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationAddressType", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
@@ -2493,6 +4832,32 @@ namespace Ben.Data.Source.Migrations
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationAreaOfOperation", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithOne("AreaOfOperation")
+                        .HasForeignKey("Ben.Data.Source.Entities.OrganizationAreaOfOperation", "OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("Organization");
 
                     b.Navigation("UpdatedByAppUser");
                 });
@@ -2547,6 +4912,54 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("CreatedByAppUser");
 
                     b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationFile", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany("OrganizationFiles")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "PublishedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("PublishedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "SourceUploadFile")
+                        .WithMany()
+                        .HasForeignKey("SourceUploadFileId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.UploadFileType", "UploadFileType")
+                        .WithMany()
+                        .HasForeignKey("UploadFileTypeId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("PublishedByAppUser");
+
+                    b.Navigation("SourceUploadFile");
+
+                    b.Navigation("UpdatedByAppUser");
+
+                    b.Navigation("UploadFileType");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationLink", b =>
@@ -2640,6 +5053,100 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UploadFile");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationMembershipAnswer", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrganizationMembershipQuestion", "Question")
+                        .WithMany()
+                        .HasForeignKey("OrganizationMembershipQuestionId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrganizationMembershipRequest", "MembershipRequest")
+                        .WithMany("Answers")
+                        .HasForeignKey("OrganizationMembershipRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("MembershipRequest");
+
+                    b.Navigation("Question");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationMembershipQuestion", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationMembershipRequest", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "Applicant")
+                        .WithMany()
+                        .HasForeignKey("AppUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany("MembershipRequests")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Applicant");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationNote", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
@@ -2701,6 +5208,11 @@ namespace Ben.Data.Source.Migrations
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationPage", b =>
                 {
+                    b.HasOne("Ben.Data.Source.Entities.Case", "Case")
+                        .WithMany()
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
                         .WithMany()
                         .HasForeignKey("CreatedByAppUserId")
@@ -2722,6 +5234,8 @@ namespace Ben.Data.Source.Migrations
                         .WithMany()
                         .HasForeignKey("UpdatedByAppUserId")
                         .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Case");
 
                     b.Navigation("CreatedByAppUser");
 
@@ -2784,6 +5298,78 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UpdatedByAppUser");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationRole", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationRoleMembership", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrganizationRole", "OrganizationRole")
+                        .WithMany("Members")
+                        .HasForeignKey("OrganizationRoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrganizationUserMembership", "OrganizationUserMembership")
+                        .WithMany()
+                        .HasForeignKey("OrganizationUserMembershipId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("OrganizationRole");
+
+                    b.Navigation("OrganizationUserMembership");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationRolePermission", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.OrganizationRole", "OrganizationRole")
+                        .WithMany("Permissions")
+                        .HasForeignKey("OrganizationRoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("OrganizationRole");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationUserMembership", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", null)
@@ -2824,6 +5410,11 @@ namespace Ben.Data.Source.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "ParentFile")
+                        .WithMany("ChildClips")
+                        .HasForeignKey("ParentFileId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
                         .WithMany()
                         .HasForeignKey("UpdatedByAppUserId")
@@ -2838,6 +5429,8 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("AppUser");
 
                     b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("ParentFile");
 
                     b.Navigation("UpdatedByAppUser");
 
@@ -2967,6 +5560,32 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UploadFile");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.UploadFileRegionNote", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "UploadFile")
+                        .WithMany("RegionNotes")
+                        .HasForeignKey("UploadFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("UpdatedByAppUser");
+
+                    b.Navigation("UploadFile");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.UploadFileType", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
@@ -3002,6 +5621,25 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("CreatedByAppUser");
 
                     b.Navigation("UploadFileType");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.UploadFileVote", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
+                        .WithMany()
+                        .HasForeignKey("AppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "UploadFile")
+                        .WithMany("Votes")
+                        .HasForeignKey("UploadFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AppUser");
+
+                    b.Navigation("UploadFile");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.UserAddress", b =>
@@ -3402,18 +6040,67 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UserPhones");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.Case", b =>
+                {
+                    b.Navigation("TimelineEntries");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.CaseTimelineEntry", b =>
+                {
+                    b.Navigation("ExperienceTypes");
+
+                    b.Navigation("Files");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.ClientRequest", b =>
+                {
+                    b.Navigation("Files");
+
+                    b.Navigation("OrganizationApplications");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.ExperienceCategory", b =>
+                {
+                    b.Navigation("ExperienceTypes");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.Investigation", b =>
+                {
+                    b.Navigation("Attendees");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgCalendarEvent", b =>
+                {
+                    b.Navigation("Attendees");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.OrgMemberGroup", b =>
                 {
                     b.Navigation("Members");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrgMessage", b =>
+                {
+                    b.Navigation("Recipients");
+
+                    b.Navigation("Replies");
+
+                    b.Navigation("Views");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.Organization", b =>
                 {
+                    b.Navigation("AreaOfOperation");
+
                     b.Navigation("MemberGroups");
+
+                    b.Navigation("MembershipRequests");
 
                     b.Navigation("OrganizationAddresses");
 
                     b.Navigation("OrganizationEmails");
+
+                    b.Navigation("OrganizationFiles");
 
                     b.Navigation("OrganizationLinks");
 
@@ -3424,6 +6111,11 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("OrganizationPages");
 
                     b.Navigation("OrganizationPhones");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationAddress", b =>
+                {
+                    b.Navigation("MapConfig");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationAddressType", b =>
@@ -3439,6 +6131,13 @@ namespace Ben.Data.Source.Migrations
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationLinkType", b =>
                 {
                     b.Navigation("OrganizationLinks");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationMembershipRequest", b =>
+                {
+                    b.Navigation("Answers");
+
+                    b.Navigation("ReviewVotes");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationNote", b =>
@@ -3465,13 +6164,26 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("OrganizationPhones");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationRole", b =>
+                {
+                    b.Navigation("Members");
+
+                    b.Navigation("Permissions");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.UploadFile", b =>
                 {
                     b.Navigation("AudioConfig");
 
+                    b.Navigation("ChildClips");
+
                     b.Navigation("OrganizationShares");
 
                     b.Navigation("PermissionRequests");
+
+                    b.Navigation("RegionNotes");
+
+                    b.Navigation("Votes");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.UploadFileType", b =>

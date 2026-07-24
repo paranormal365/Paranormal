@@ -39,6 +39,14 @@ public sealed class WebApiClient : IWebApiClient
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
     }
 
+    public async Task<TResponse?> GetAnonymousAsync<TResponse>(string relativeUrl, CancellationToken token = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, relativeUrl);
+        using var response = await _httpClient.SendAsync(req, token);
+        if (!response.IsSuccessStatusCode) return default;
+        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
+    }
+
     public async Task<TResponse?> PostAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Post, relativeUrl);
@@ -151,6 +159,15 @@ public sealed class WebApiClient : IWebApiClient
         return await response.Content.ReadFromJsonAsync<UploadFileRecord>(cancellationToken: token);
     }
 
+    public async Task<TResponse?> PostMultipartAsync<TResponse>(string relativeUrl, MultipartFormDataContent content, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Post, relativeUrl);
+        req.Content = content;
+        using var response = await _httpClient.SendAsync(req, token);
+        if (!response.IsSuccessStatusCode) return default;
+        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
+    }
+
     public Task<UploadFileRecord?> UpdateUploadFileAsync(Guid id, UpdateUploadFileRequest request, CancellationToken token = default)
         => PutAsync<UpdateUploadFileRequest, UploadFileRecord>($"/api/upload-files/{id}", request, token);
 
@@ -177,6 +194,54 @@ public sealed class WebApiClient : IWebApiClient
 
     public Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default)
         => DeleteAsync($"/api/upload-files/{fileId}/audio-config", token);
+
+    // ── Region Notes ──────────────────────────────────────────────────────────
+    public async Task<IReadOnlyList<UploadFileRegionNoteRecord>> GetRegionNotesAsync(Guid fileId, CancellationToken token = default)
+    {
+        var result = await GetAsync<List<UploadFileRegionNoteRecord>>($"/api/upload-files/{fileId}/region-notes", token);
+        return result ?? [];
+    }
+
+    public Task<UploadFileRegionNoteRecord?> CreateRegionNoteAsync(Guid fileId, CreateRegionNoteRequest request, CancellationToken token = default)
+        => PostAsync<CreateRegionNoteRequest, UploadFileRegionNoteRecord>($"/api/upload-files/{fileId}/region-notes", request, token);
+
+    public Task<UploadFileRegionNoteRecord?> UpdateRegionNoteAsync(Guid fileId, Guid noteId, UpdateRegionNoteRequest request, CancellationToken token = default)
+        => PutAsync<UpdateRegionNoteRequest, UploadFileRegionNoteRecord>($"/api/upload-files/{fileId}/region-notes/{noteId}", request, token);
+
+    public Task<bool> DeleteRegionNoteAsync(Guid fileId, Guid noteId, CancellationToken token = default)
+        => DeleteAsync($"/api/upload-files/{fileId}/region-notes/{noteId}", token);
+
+    // ── Audio Clip ────────────────────────────────────────────────────────────
+    public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)
+        => PostAsync<ClipAudioRequest, UploadFileRecord>($"/api/upload-files/{fileId}/clip", request, token);
+
+    public async Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
+    {
+        var result = await GetAsync<List<UploadFileRecord>>($"/api/upload-files/{fileId}/clips", token);
+        return result ?? [];
+    }
+
+    public async Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Get,
+            $"/api/upload-files/{fileId}/clip/preview?start={start.ToString(System.Globalization.CultureInfo.InvariantCulture)}&end={end.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+        using var response = await _httpClient.SendAsync(req, token);
+        if (!response.IsSuccessStatusCode) return null;
+        var data        = await response.Content.ReadAsByteArrayAsync(token);
+        var contentType = response.Content.Headers.ContentType?.ToString() ?? "audio/wav";
+        return (data, contentType);
+    }
+
+    // ── Votes ──────────────────────────────────────────────────
+    public Task<UploadFileVoteSummary?> GetVoteSummaryAsync(Guid fileId, CancellationToken token = default)
+        => GetAsync<UploadFileVoteSummary>($"/api/upload-files/{fileId}/votes", token);
+
+    public Task<UploadFileVoteRecord?> UpsertMyVoteAsync(Guid fileId, int score, CancellationToken token = default)
+        => PutAsync<UpsertVoteRequest, UploadFileVoteRecord>(
+                $"/api/upload-files/{fileId}/votes/my-vote", new UpsertVoteRequest(score), token);
+
+    public Task<bool> RemoveMyVoteAsync(Guid fileId, CancellationToken token = default)
+        => DeleteAsync($"/api/upload-files/{fileId}/votes/my-vote", token);
 
     // ── Org Sharing ──────────────────────────────────────────────────────────
     public async Task<IReadOnlyList<UploadFileOrgShareResponse>> GetFileOrgSharesAsync(Guid fileId, CancellationToken token = default)

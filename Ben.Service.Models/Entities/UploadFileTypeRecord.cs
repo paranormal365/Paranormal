@@ -11,6 +11,7 @@ public record UploadFileTypeRecord
     public bool IsPublic { get; init; }
     public int SortOrder { get; init; }
     public bool AllowAllExtensions { get; init; }
+    public IReadOnlyList<string> AllowedPatterns { get; init; } = [];
     public DateTime DateCreated { get; init; }
     public DateTime? DateUpdated { get; init; }
     public Guid CreatedByAppUserId { get; init; }

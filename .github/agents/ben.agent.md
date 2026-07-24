@@ -1,6 +1,6 @@
 ---
 description: "Ben solution expert. Use when working on the Ben full-stack .NET solution: adding entities, migrations, API controllers, Blazor pages, Telerik UI components, auth flows, organization security, file upload features, SuperAdmin CRUD, tests, or any task in the Ben.slnx workspace."
-name: "Ben"
+name: "MiniMe"
 tools: [read, edit, search, execute]
 ---
 

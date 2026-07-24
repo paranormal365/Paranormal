@@ -11,15 +11,17 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [ApiController]
 [Authorize(Policy = RoleNames.SuperAdmin)]
 [Route("api/admin/upload-file-types")]
-public sealed class AdminUploadFileTypeController : ControllerBase
+public sealed class AdminUploadFileTypeController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;
+    private readonly IAuditLogService _auditLog;
 
-    public AdminUploadFileTypeController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper)
+    public AdminUploadFileTypeController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper, IAuditLogService auditLog)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
+        _auditLog = auditLog;
     }
 
     [HttpGet]
@@ -84,6 +86,7 @@ public sealed class AdminUploadFileTypeController : ControllerBase
 
         db.UploadFileTypes.Add(entity);
         await db.SaveChangesAsync(cancellationToken);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileType), entity.Id, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
 
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, _mapper.Map<UploadFileTypeRecord>(entity));
     }
@@ -96,11 +99,11 @@ public sealed class AdminUploadFileTypeController : ControllerBase
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
+        var before = await db.UploadFileTypes.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+        if (before is null) return NotFound();
         var entity = await db.UploadFileTypes.FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
-        if (entity is null)
-            return NotFound();
 
-        entity.Name = request.Name;
+        entity!.Name = request.Name;
         entity.Description = request.Description;
         entity.IconClass = request.IconClass;
         entity.ColorClass = request.ColorClass;
@@ -112,6 +115,7 @@ public sealed class AdminUploadFileTypeController : ControllerBase
         entity.UpdatedByAppUserId = request.UpdatedByAppUserId;
 
         await db.SaveChangesAsync(cancellationToken);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileType), id, before, entity!, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
 
         return Ok(_mapper.Map<UploadFileTypeRecord>(entity));
     }
@@ -126,6 +130,7 @@ public sealed class AdminUploadFileTypeController : ControllerBase
 
         db.UploadFileTypes.Remove(entity);
         await db.SaveChangesAsync(cancellationToken);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFileType), id, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
         return NoContent();
     }
 }

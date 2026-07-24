@@ -51,6 +51,12 @@ public interface IBenAdminClient
     /// <summary>Deletes a role. Will fail if any users are still assigned to it.</summary>
     Task<bool> DeleteRoleAsync(Guid roleId, CancellationToken token = default);
 
+    // ── Audit Log ─────────────────────────────────────────────────────────────
+
+    Task<AuditLogPagedResponse?> GetAuditLogsAsync(int page = 1, int pageSize = 50, string? entityType = null, int? action = null, Guid? userId = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken token = default);
+    Task<IReadOnlyList<string>> GetAuditLogEntityTypesAsync(CancellationToken token = default);
+    Task<bool> SendAuditLogMessageAsync(SendAuditLogMessageRequest request, CancellationToken token = default);
+
     // ── Users ─────────────────────────────────────────────────────────────────
 
     /// <summary>Returns a lightweight list of all application users.</summary>
@@ -140,6 +146,22 @@ public interface IBenAdminClient
     /// <returns><c>true</c> if deletion succeeded; <c>false</c> otherwise.</returns>
     Task<bool> DeleteFileTypeExtensionAsync(Guid id, CancellationToken token = default);
 
+    // ── Generic Lookup Types ──────────────────────────────────────────────────
+    // Covers UserAddressType, UserEmailType, UserPhoneType, UserLinkType, UserNoteType,
+    // UserMessageType, and the five Org equivalents — all share the same schema.
+
+    /// <summary>Returns all rows for a lookup-type table at the given admin API route.</summary>
+    Task<IReadOnlyList<LookupTypeAdminRecord>> GetLookupTypesAsync(string route, CancellationToken token = default);
+
+    /// <summary>Creates a new row in a lookup-type table.</summary>
+    Task<LookupTypeAdminRecord?> CreateLookupTypeAsync(string route, LookupTypeUpsertRequest request, CancellationToken token = default);
+
+    /// <summary>Updates an existing row in a lookup-type table.</summary>
+    Task<LookupTypeAdminRecord?> UpdateLookupTypeAsync(string route, Guid id, LookupTypeUpsertRequest request, CancellationToken token = default);
+
+    /// <summary>Deletes a row from a lookup-type table.</summary>
+    Task<bool> DeleteLookupTypeAsync(string route, Guid id, CancellationToken token = default);
+
     // ── CMS Pages ─────────────────────────────────────────────────────────────
 
     Task<IReadOnlyList<CmsPageListItem>> GetCmsPagesAsync(Guid orgId, CancellationToken token = default);
@@ -162,6 +184,131 @@ public interface IBenAdminClient
     Task<OrganizationLogoRecord?> UpdateOrgLogoAsync(Guid orgId, Guid logoId, CmsUpdateLogoRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default);
 
+    // ── Organization Area of Operation ────────────────────────────────────────
+
+    Task<OrganizationAreaOfOperationRecord?> GetOrgAreaOfOperationAsync(Guid orgId, CancellationToken token = default);
+    Task<OrganizationAreaOfOperationRecord?> UpsertOrgAreaOfOperationAsync(Guid orgId, UpsertAreaOfOperationRequest request, CancellationToken token = default);
+    Task<bool> DeleteOrgAreaOfOperationAsync(Guid orgId, CancellationToken token = default);
+    Task<bool> UpdateClientAcceptanceAsync(Guid orgId, bool isAcceptingClients, bool acceptsClientsOutsideRange, CancellationToken token = default);
+
+    /// <summary>
+    /// Public search — no auth required. Returns orgs ordered by proximity.
+    /// Center coordinates are NOT included in results.
+    /// </summary>
+    Task<IReadOnlyList<OrgSearchResult>> SearchOrganizationsAsync(double lat, double lon, int maxResults = 20, CancellationToken token = default);
+
+    // ── Organization Addresses ────────────────────────────────────────────────
+
+    Task<IReadOnlyList<OrganizationAddressRecord>> GetOrgAddressesAsync(Guid orgId, CancellationToken token = default);
+    Task<IReadOnlyList<OrganizationAddressTypeRecord>> GetOrgAddressTypesAsync(CancellationToken token = default);
+    Task<OrganizationAddressRecord?> CreateOrgAddressAsync(Guid orgId, OrgAddressUpsertRequest request, CancellationToken token = default);
+    Task<OrganizationAddressRecord?> UpdateOrgAddressAsync(Guid orgId, Guid addressId, OrgAddressUpsertRequest request, CancellationToken token = default);
+    Task<bool> DeleteOrgAddressAsync(Guid orgId, Guid addressId, CancellationToken token = default);
+    Task<GeocodingPreviewResponse?> PreviewGeocodingAsync(string streetAddress1, string? streetAddress2, string city, string state, string zipCode, string country, CancellationToken token = default);
+    Task<GeocodingPreviewResponse?> SearchGeocodingAsync(string query, CancellationToken token = default);
+    Task<ReverseGeocodingResponse?> ReverseGeocodeAsync(double latitude, double longitude, CancellationToken token = default);
+
+    // ── Public Org Pages (no auth required) ──────────────────────────────────
+
+    Task<OrgPublicHomeResponse?> GetPublicOrgAsync(string urlName, CancellationToken token = default);
+    Task<OrgPublicPageResponse?> GetPublicOrgPageAsync(string urlName, string pageSlug, CancellationToken token = default);
+    string GetFileDownloadUrl(Guid uploadFileId);
+
+    // ── Organization Address Map Config ───────────────────────────────────────
+
+    /// <summary>Returns the map display config for an organization address, or null if not configured.</summary>
+    Task<AddressMapConfigRecord?> GetOrgAddressMapConfigAsync(Guid orgId, Guid addressId, CancellationToken token = default);
+
+    /// <summary>Saves (upserts) the map display config for an organization address.</summary>
+    Task<AddressMapConfigRecord?> UpsertOrgAddressMapConfigAsync(Guid orgId, Guid addressId, AddressMapConfigRecord config, CancellationToken token = default);
+
+    /// <summary>Removes the map config for an organization address (resets to "not on map").</summary>
+    Task<bool> DeleteOrgAddressMapConfigAsync(Guid orgId, Guid addressId, CancellationToken token = default);
+
+    // ── Org Member Groups ─────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default);
+    Task<IReadOnlyList<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default);
+
+    // ── Membership Requests ───────────────────────────────────────────────────
+
+    /// <summary>Returns all membership requests for the organization (requires MembershipRequests-Read permission).</summary>
+    Task<IReadOnlyList<OrganizationMembershipRequestRecord>> GetMembershipRequestsAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>Returns the current user's membership request for the organization, or null if none exists.</summary>
+    Task<OrganizationMembershipRequestRecord?> GetMyMembershipRequestAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>Submits a membership application to the organization.</summary>
+    Task<OrganizationMembershipRequestRecord?> ApplyForMembershipAsync(Guid orgId, string? message, CancellationToken token = default);
+
+    /// <summary>Accepts or denies a pending membership application (requires MembershipRequests-Update permission).</summary>
+    Task<OrganizationMembershipRequestRecord?> RespondToMembershipRequestAsync(Guid orgId, Guid requestId, OrganizationMembershipRequestStatus status, string? responseNote, bool? canReapply = null, string? denialReason = null, CancellationToken token = default);
+
+    /// <summary>Withdraws the applicant's own pending request.</summary>
+    Task<bool> WithdrawMembershipRequestAsync(Guid orgId, Guid requestId, CancellationToken token = default);
+
+    // ── Membership Questions (Phase 3) ────────────────────────────────────────
+    Task<IReadOnlyList<OrganizationMembershipQuestionRecord>> GetMembershipQuestionsAsync(Guid orgId, CancellationToken token = default);
+    Task<OrganizationMembershipQuestionRecord?> CreateMembershipQuestionAsync(Guid orgId, UpsertMembershipQuestionRequest request, CancellationToken token = default);
+    Task<OrganizationMembershipQuestionRecord?> UpdateMembershipQuestionAsync(Guid orgId, Guid id, UpsertMembershipQuestionRequest request, CancellationToken token = default);
+    Task<bool> DeleteMembershipQuestionAsync(Guid orgId, Guid id, CancellationToken token = default);
+
+    // ── Membership Voting (Phase 3) ───────────────────────────────────────────
+    Task<OrganizationMembershipRequestRecord?> OpenMembershipVoteAsync(Guid orgId, Guid requestId, DateTime voteDeadline, CancellationToken token = default);
+    Task<MembershipReviewVoteRecord?> CastMembershipVoteAsync(Guid orgId, Guid requestId, Ben.Data.Common.Enums.MembershipVoteType voteType, string? comment, CancellationToken token = default);
+    Task<IReadOnlyList<MembershipReviewVoteRecord>> GetMembershipVotesAsync(Guid orgId, Guid requestId, CancellationToken token = default);
+
+    // ── Organization Files ────────────────────────────────────────────────────
+
+    /// <summary>Returns all files owned by the organization.</summary>
+    Task<IReadOnlyList<OrganizationFileRecord>> GetOrgFilesAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>Returns the deletion audit log for organization files.</summary>
+    Task<IReadOnlyList<OrganizationFileDeleteLogRecord>> GetOrgFileDeleteLogAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>Uploads a new file to the organization's file library.</summary>
+    Task<OrganizationFileRecord?> UploadOrgFileAsync(Guid orgId, MultipartFormDataContent content, CancellationToken token = default);
+
+    /// <summary>
+    /// Copies a user's public or org-shared file into the organization's file library.
+    /// Returns the created file plus flags indicating whether the caller can/did publish immediately.
+    /// </summary>
+    Task<OrgFileCopyClientResult?> CopyFileFromUserAsync(Guid orgId, Guid uploadFileId, string? description, bool publishImmediately, CancellationToken token = default);
+
+    /// <summary>Approves or revokes public access for an organization file. Logs approver and timestamp.</summary>
+    Task<OrganizationFileRecord?> PublishOrgFileAsync(Guid orgId, Guid fileId, bool isPublic, CancellationToken token = default);
+
+    /// <summary>Updates metadata (description, sort order) of an organization file.</summary>
+    Task<OrganizationFileRecord?> UpdateOrgFileAsync(Guid orgId, Guid fileId, string? description, int sortOrder, CancellationToken token = default);
+
+    /// <summary>Permanently deletes an organization-owned file. Writes an audit log before deleting.</summary>
+    Task<bool> DeleteOrgFileAsync(Guid orgId, Guid fileId, CancellationToken token = default);
+    Task<OrgMemberGroupRecord?> CreateGroupAsync(Guid orgId, OrgGroupUpsertRequest request, CancellationToken token = default);
+    Task<OrgMemberGroupRecord?> UpdateGroupAsync(Guid orgId, Guid groupId, OrgGroupUpsertRequest request, CancellationToken token = default);
+    Task<bool> DeleteGroupAsync(Guid orgId, Guid groupId, CancellationToken token = default);
+    Task<IReadOnlyList<OrgMemberGroupMembershipRecord>> GetGroupMembersAsync(Guid orgId, Guid groupId, CancellationToken token = default);
+    Task<OrgMemberGroupMembershipRecord?> AddGroupMemberAsync(Guid orgId, Guid groupId, Guid membershipId, CancellationToken token = default);
+    Task<bool> RemoveGroupMemberAsync(Guid orgId, Guid groupId, Guid membershipId, CancellationToken token = default);
+
+    // ── Organization Roles ────────────────────────────────────────────────────────
+    Task<IReadOnlyList<OrganizationRoleRecord>> GetOrgRolesAsync(Guid orgId, CancellationToken token = default);
+    Task<OrganizationRoleRecord?> GetOrgRoleAsync(Guid orgId, Guid roleId, CancellationToken token = default);
+    Task<OrganizationRoleRecord?> CreateOrgRoleAsync(Guid orgId, CreateOrgRoleRequest request, CancellationToken token = default);
+    Task<OrganizationRoleRecord?> UpdateOrgRoleAsync(Guid orgId, Guid roleId, UpdateOrgRoleRequest request, CancellationToken token = default);
+    Task<bool> DeleteOrgRoleAsync(Guid orgId, Guid roleId, CancellationToken token = default);
+    Task<IReadOnlyList<OrganizationRolePermissionRecord>> GetOrgRolePermissionsAsync(Guid orgId, Guid roleId, CancellationToken token = default);
+    Task<bool> SetOrgRolePermissionsAsync(Guid orgId, Guid roleId, IEnumerable<SetRolePermissionRequest> permissions, CancellationToken token = default);
+    Task<IReadOnlyList<OrganizationRoleMembershipRecord>> GetOrgRoleMembersAsync(Guid orgId, Guid roleId, CancellationToken token = default);
+    Task<OrganizationRoleMembershipRecord?> AddOrgRoleMemberAsync(Guid orgId, Guid roleId, Guid orgUserMembershipId, CancellationToken token = default);
+    Task<bool> RemoveOrgRoleMemberAsync(Guid orgId, Guid roleId, Guid membershipId, CancellationToken token = default);
+
+    // ── CMS Page Permissions ──────────────────────────────────────────────────
+
+    Task<IReadOnlyList<CmsPagePermissionRecord>> GetPagePermissionsAsync(Guid orgId, Guid pageId, CancellationToken token = default);
+    Task<CmsPagePermissionRecord?> CreatePagePermissionAsync(Guid orgId, Guid pageId, PagePermissionCreateRequest request, CancellationToken token = default);
+    Task<CmsPagePermissionRecord?> UpdatePagePermissionAsync(Guid orgId, Guid pageId, Guid permId, CmsPageAction actions, CancellationToken token = default);
+    Task<bool> DeletePagePermissionAsync(Guid orgId, Guid pageId, Guid permId, CancellationToken token = default);
+
     // ── User sub-entity type lists (for dropdowns) ────────────────────────────
 
     Task<IReadOnlyList<UserAddressTypeRecord>> GetUserAddressTypesAsync(CancellationToken token = default);
@@ -171,11 +318,11 @@ public interface IBenAdminClient
     Task<IReadOnlyList<UserNoteTypeRecord>> GetUserNoteTypesAsync(CancellationToken token = default);
 
     // Type management (SuperAdmin creates new types)
-    Task<bool> CreateUserAddressTypeAsync(string name, CancellationToken token = default);
-    Task<bool> CreateUserEmailTypeAsync(string name, CancellationToken token = default);
-    Task<bool> CreateUserPhoneTypeAsync(string name, CancellationToken token = default);
-    Task<bool> CreateUserLinkTypeAsync(string name, CancellationToken token = default);
-    Task<bool> CreateUserNoteTypeAsync(string name, CancellationToken token = default);
+    Task<bool> CreateUserAddressTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, string? iconClass = null, string? colorClass = null, CancellationToken token = default);
+    Task<bool> CreateUserEmailTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, string? iconClass = null, string? colorClass = null, CancellationToken token = default);
+    Task<bool> CreateUserPhoneTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, string? iconClass = null, string? colorClass = null, CancellationToken token = default);
+    Task<bool> CreateUserLinkTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, string? iconClass = null, string? colorClass = null, CancellationToken token = default);
+    Task<bool> CreateUserNoteTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, string? iconClass = null, string? colorClass = null, CancellationToken token = default);
 
     // ── User sub-entity CRUD (SuperAdmin) ─────────────────────────────────────
 
@@ -201,6 +348,104 @@ public interface IBenAdminClient
 
     Task<bool> DeleteUploadFileAdminAsync(Guid id, CancellationToken token = default);
 
+    // ── Case Transfers ────────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<CaseTransferLogRecord>> GetCaseTransfersAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<CaseTransferLogRecord?> ProposeCaseTransferAsync(Guid orgId, Guid caseId, Guid toOrganizationId, string? reason, CancellationToken token = default);
+    Task<CaseTransferLogRecord?> RespondCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, bool accept, string? rejectionReason, CancellationToken token = default);
+
+    // ── Public Case Discovery ─────────────────────────────────────────────────
+
+    Task<IReadOnlyList<PublicCaseListItem>> GetPublicCasesAsync(string orgUrlName, CancellationToken token = default);
+    Task<PublicCaseDetail?> GetPublicCaseAsync(string orgUrlName, string caseRef, CancellationToken token = default);
+
+    // ── Investigations ────────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<InvestigationRecord>> GetInvestigationsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<InvestigationRecord?> GetInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
+    Task<InvestigationRecord?> CreateInvestigationAsync(Guid orgId, Guid caseId, UpsertInvestigationRequest request, CancellationToken token = default);
+    Task<InvestigationRecord?> UpdateInvestigationAsync(Guid orgId, Guid caseId, Guid id, UpsertInvestigationRequest request, CancellationToken token = default);
+    Task<bool> DeleteInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
+    Task<IReadOnlyList<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
+    Task<InvestigationAttendeeRecord?> AddInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, AddInvestigationAttendeeRequest request, CancellationToken token = default);
+    Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, CancellationToken token = default);
+    Task<bool> RemoveInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, CancellationToken token = default);
+
+    // ── Evidence Voting ───────────────────────────────────────────────────────
+
+    Task<EvidenceVoteSummary?> GetEvidenceVoteSummaryAsync(Guid uploadFileId, CancellationToken token = default);
+    Task<IReadOnlyList<EvidenceVoteRecord>> GetEvidenceVotesAsync(Guid uploadFileId, CancellationToken token = default);
+    Task<EvidenceVoteSummary?> CastEvidenceVoteAsync(Guid uploadFileId, Ben.Data.Common.Enums.EvidenceVoteType voteType, string? comment, CancellationToken token = default);
+    Task<bool> RemoveEvidenceVoteAsync(Guid uploadFileId, CancellationToken token = default);
+
+    // ── Messaging ─────────────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<OrgMessageRecord>> GetOrgInboxAsync(Guid orgId, CancellationToken token = default);
+    Task<IReadOnlyList<OrgMessageRecord>> GetOrgSentAsync(Guid orgId, CancellationToken token = default);
+    Task<OrgMessageRecord?> GetOrgMessageAsync(Guid orgId, Guid messageId, CancellationToken token = default);
+    Task<OrgMessageRecord?> SendOrgMessageAsync(Guid orgId, SendOrgMessageRequest request, CancellationToken token = default);
+
+    // ── Calendar ──────────────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default);
+    Task<OrgCalendarEventTypeRecord?> CreateCalendarEventTypeAsync(Guid orgId, UpsertCalendarEventTypeRequest request, CancellationToken token = default);
+    Task<OrgCalendarEventTypeRecord?> UpdateCalendarEventTypeAsync(Guid orgId, Guid id, UpsertCalendarEventTypeRequest request, CancellationToken token = default);
+    Task<bool> DeleteCalendarEventTypeAsync(Guid orgId, Guid id, CancellationToken token = default);
+
+    Task<IReadOnlyList<OrgCalendarEventRecord>> GetCalendarEventsAsync(Guid orgId, DateTime? from = null, DateTime? to = null, CancellationToken token = default);
+    Task<OrgCalendarEventRecord?> GetCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+    Task<OrgCalendarEventRecord?> CreateCalendarEventAsync(Guid orgId, UpsertCalendarEventRequest request, CancellationToken token = default);
+    Task<OrgCalendarEventRecord?> UpdateCalendarEventAsync(Guid orgId, Guid eventId, UpsertCalendarEventRequest request, CancellationToken token = default);
+    Task<bool> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+
+    Task<IReadOnlyList<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+    Task<OrgCalendarEventAttendeeRecord?> AddCalendarAttendeeAsync(Guid orgId, Guid eventId, AddAttendeeRequest request, CancellationToken token = default);
+    Task<OrgCalendarEventAttendeeRecord?> RsvpCalendarEventAsync(Guid orgId, Guid eventId, Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus status, CancellationToken token = default);
+    Task<bool> RemoveCalendarAttendeeAsync(Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default);
+
+    // ── Cases ─────────────────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<CaseRecord>> GetOrgCasesAsync(Guid orgId, CancellationToken token = default);
+    Task<CaseRecord?> GetOrgCaseAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<CaseRecord?> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default);
+    Task<CaseRecord?> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default);
+    Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default);
+    Task<IReadOnlyList<CaseTimelineEntryRecord>> GetCaseTimelineAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<CaseTimelineEntryRecord?> AddCaseTimelineEntryAsync(Guid orgId, Guid caseId, UpsertTimelineEntryRequest request, CancellationToken token = default);
+    Task<CaseTimelineEntryRecord?> UpdateCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, UpsertTimelineEntryRequest request, CancellationToken token = default);
+    Task<bool> DeleteCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
+
+    // ── Client Requests ───────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<ClientRequestRecord>> GetMyClientRequestsAsync(CancellationToken token = default);
+    Task<ClientRequestRecord?> GetClientRequestAsync(Guid id, CancellationToken token = default);
+    Task<IReadOnlyList<ClientRequestOrganizationRecord>> GetClientRequestOrgsAsync(Guid id, CancellationToken token = default);
+    Task<ClientRequestRecord?> CreateClientRequestAsync(UpsertClientRequestRequest request, CancellationToken token = default);
+    Task<ClientRequestRecord?> UpdateClientRequestAsync(Guid id, UpsertClientRequestRequest request, CancellationToken token = default);
+    Task<ClientRequestRecord?> SubmitClientRequestAsync(Guid id, IList<Guid> organizationIds, CancellationToken token = default);
+    Task<ClientRequestRecord?> WithdrawClientRequestAsync(Guid id, CancellationToken token = default);
+
+    // ── Experience Taxonomy ───────────────────────────────────────────────────
+
+    /// <summary>Returns all approved, active categories with their types (public — no auth).</summary>
+    Task<IReadOnlyList<ExperienceCategoryWithTypesResponse>> GetExperienceTaxonomyAsync(CancellationToken token = default);
+
+    /// <summary>SuperAdmin: all categories including pending/inactive.</summary>
+    Task<IReadOnlyList<ExperienceCategoryRecord>> GetAllExperienceCategoriesAsync(CancellationToken token = default);
+
+    /// <summary>SuperAdmin: all types for a category including pending/inactive.</summary>
+    Task<IReadOnlyList<ExperienceTypeRecord>> GetAllExperienceTypesAsync(Guid categoryId, CancellationToken token = default);
+
+    Task<ExperienceCategoryRecord?> CreateExperienceCategoryAsync(UpsertExperienceCategoryRequest request, CancellationToken token = default);
+    Task<ExperienceCategoryRecord?> UpdateExperienceCategoryAsync(Guid id, UpsertExperienceCategoryRequest request, CancellationToken token = default);
+    Task<bool> DeleteExperienceCategoryAsync(Guid id, CancellationToken token = default);
+    Task<ExperienceCategoryRecord?> ApproveExperienceCategoryAsync(Guid id, CancellationToken token = default);
+
+    Task<ExperienceTypeRecord?> CreateExperienceTypeAsync(Guid categoryId, UpsertExperienceTypeRequest request, CancellationToken token = default);
+    Task<ExperienceTypeRecord?> UpdateExperienceTypeAsync(Guid categoryId, Guid id, UpsertExperienceTypeRequest request, CancellationToken token = default);
+    Task<bool> DeleteExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default);
+    Task<ExperienceTypeRecord?> ApproveExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default);
+
     // ── CMS File Library ──────────────────────────────────────────────────────
 
     /// <summary>Returns upload files shared with the given organization (for logo/gallery selection).</summary>
@@ -215,6 +460,16 @@ public interface IBenAdminClient
     /// <summary>Uploads an image file and returns its record. Used to add a logo from device.</summary>
     Task<UploadFileRecord?> UploadImageAsync(Guid fileTypeId, Guid userId, string fileName, string contentType, byte[] data, CancellationToken token = default);
 
+    /// <summary>
+    /// Uploads any file (audio, document, image, etc.) for a specific user.
+    /// Use when the caller controls the description and public-visibility flag.
+    /// </summary>
+    Task<UploadFileRecord?> UploadUserFileAsync(
+        Guid fileTypeId, Guid userId,
+        string fileName, string contentType, byte[] data,
+        string? description = null, bool isPublic = false,
+        CancellationToken token = default);
+
     // ── Audio Config ─────────────────────────────────────────────────────
 
     /// <summary>
@@ -228,6 +483,64 @@ public interface IBenAdminClient
 
     /// <summary>Removes the saved WaveSurfer config; the player will use theme-derived defaults on next render.</summary>
     Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default);
+
+    // ── Region Notes ──────────────────────────────────────────────
+
+    /// <summary>Returns all region notes for the given file, ordered by region start then time offset.</summary>
+    Task<IReadOnlyList<UploadFileRegionNoteRecord>> GetRegionNotesAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Creates a new region note and returns the persisted record.</summary>
+    Task<UploadFileRegionNoteRecord?> CreateRegionNoteAsync(Guid fileId, CreateRegionNoteRequest request, CancellationToken token = default);
+
+    /// <summary>Updates an existing region note (text, public flag, time offset).</summary>
+    Task<UploadFileRegionNoteRecord?> UpdateRegionNoteAsync(Guid fileId, Guid noteId, UpdateRegionNoteRequest request, CancellationToken token = default);
+
+    /// <summary>Permanently deletes a region note.</summary>
+    Task<bool> DeleteRegionNoteAsync(Guid fileId, Guid noteId, CancellationToken token = default);
+
+    // ── Audio Clip ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Clips the audio of <paramref name="fileId"/> to the specified time range and saves the
+    /// result as a new UploadFile. Currently supports WAV and MP3 sources; output is WAV.
+    /// </summary>
+    Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// Returns clipped audio bytes for the given time range WITHOUT saving a new file.
+    /// Used by <c>WsRegionExplorer</c> to load only the region's audio.
+    /// Returns null if the source format is unsupported (non-WAV / non-MP3).
+    /// </summary>
+    Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default);
+
+    /// <summary>Returns all child clip files that were derived from <paramref name="fileId"/> via the region-clip workflow.</summary>
+    Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default);
+
+    // ── Votes ──────────────────────────────────────────────────────
+
+    /// <summary>Returns the aggregated vote summary including the current user's vote (if any).</summary>
+    Task<UploadFileVoteSummary?> GetVoteSummaryAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>
+    /// Creates or updates the current user's vote (upsert).
+    /// Pass score 1 for upvote, -1 for downvote.
+    /// </summary>
+    Task<UploadFileVoteRecord?> UpsertMyVoteAsync(Guid fileId, int score, CancellationToken token = default);
+
+    /// <summary>Removes the current user's vote. No-op if the user has not voted.</summary>
+    Task<bool> RemoveMyVoteAsync(Guid fileId, CancellationToken token = default);
+
+    // ── Directions ────────────────────────────────────────────────────────────
+    Task<DirectionsResult?> GetDirectionsAsync(double fromLat, double fromLon, double toLat, double toLon, CancellationToken token = default);
+
+    // ── Org address member access ──────────────────────────────────────────────
+    Task<IReadOnlyList<OrganizationAddressMemberAccessRecord>> GetAddressMemberAccessAsync(Guid orgId, Guid addressId, CancellationToken token = default);
+    Task<OrganizationAddressMemberAccessRecord?> AddAddressMemberAccessAsync(Guid orgId, Guid addressId, Guid orgUserMembershipId, CancellationToken token = default);
+    Task<bool> RemoveAddressMemberAccessAsync(Guid orgId, Guid addressId, Guid accessId, CancellationToken token = default);
+
+    // ── Org settings ──────────────────────────────────────────────────────────
+    Task<OrgSettingsResponse?> GetOrgSettingsAsync(Guid orgId, CancellationToken token = default);
+    Task<OrgSettingsResponse?> UpdateOrgSettingsAsync(Guid orgId, OrgSettingsRequest request, CancellationToken token = default);
 }
 
 /// <summary>
@@ -287,6 +600,55 @@ public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName)
 
 /// <summary>Role record paired with its current user count.</summary>
 public sealed record AdminRoleWithCountResponse(AppRoleAdminRecord Role, int UserCount);
+
+// ── Public org page response records ─────────────────────────────────────────
+
+public sealed record OrgAddressUpsertRequest(
+    Guid   OrganizationAddressTypeId,
+    string StreetAddress1,
+    string? StreetAddress2,
+    string City,
+    string State,
+    string ZipCode,
+    string Country,
+    int    SortOrder,
+    OrganizationAddressVisibility  Visibility          = OrganizationAddressVisibility.Private,
+    OrganizationAddressDisplayMode PublicDisplayMode   = OrganizationAddressDisplayMode.Hidden,
+    OrganizationAddressDisplayMode MemberDisplayMode   = OrganizationAddressDisplayMode.FullAddressAndMap,
+    bool   IsSearchable     = false,
+    OrganizationAddressVisibility  SearchVisibility    = OrganizationAddressVisibility.Public,
+    double? SearchRadiusMiles = null,
+    decimal? Latitude  = null,
+    decimal? Longitude = null);
+
+public sealed record GeocodingPreviewResponse(decimal? Latitude, decimal? Longitude, string? ResultType);
+
+public sealed record ReverseGeocodingResponse(
+    string? StreetAddress1,
+    string? City,
+    string? State,
+    string? ZipCode,
+    string? Country);
+
+public sealed record OrgPublicHomeResponse(
+    Guid OrgId, string OrgName, string OrgUrlName,
+    IReadOnlyList<OrgPublicLogoItem> Logos,
+    OrgPublicPageItem? HomePage,
+    IReadOnlyList<OrgPublicNavItem> NavPages);
+
+public sealed record OrgPublicPageResponse(
+    Guid OrgId, string OrgName, string OrgUrlName,
+    IReadOnlyList<OrgPublicLogoItem> Logos,
+    OrgPublicPageItem Page,
+    IReadOnlyList<OrgPublicNavItem> NavPages);
+
+public sealed record OrgPublicLogoItem(Guid LogoId, Guid UploadFileId, string? AltText, int SortOrder);
+public sealed record OrgPublicPageItem(Guid Id, string PageTitle, string UrlName, bool IsHome, IReadOnlyList<OrgPublicSectionItem> Sections);
+public sealed record OrgPublicSectionItem(Guid Id, CmsSectionType SectionType, string? Title, string ContentJson, int SortOrder);
+public sealed record OrgPublicNavItem(Guid Id, string PageTitle, string UrlName, Guid? ParentPageId, int SortOrder);
+
+// AuditLogRecord, AuditLogPagedResponse, SendAuditLogMessageRequest
+// are defined in Ben.Service.Models.Admin (via project reference).
 
 /// <summary>
 /// Request body for creating a new application user.
@@ -368,7 +730,9 @@ public sealed record UserAddressUpsertRequest(
     string ZipCode,
     string Country,
     bool IsPublic,
-    int SortOrder = 0);
+    int SortOrder = 0,
+    decimal? Latitude  = null,
+    decimal? Longitude = null);
 
 public sealed record UserEmailUpsertRequest(
     Guid UserEmailTypeId,
@@ -397,3 +761,231 @@ public sealed record UserNoteUpsertRequest(
     string NoteSubject,
     string NoteBody,
     bool IsPublic);
+
+/// <summary>
+/// Request body for creating or fully replacing a lookup-type row
+/// (UserAddressType, OrganizationEmailType, etc.).
+/// The Id field must be set to the existing Id on update, or <see cref="Guid.Empty"/> on create.
+/// </summary>
+public sealed record LookupTypeUpsertRequest(
+    Guid Id,
+    string Name,
+    string? Description,
+    string? IconClass,
+    string? ColorClass,
+    bool IsActive,
+    bool IsPublic,
+    int SortOrder,
+    DateTime DateCreated,
+    DateTime? DateUpdated,
+    Guid CreatedByAppUserId,
+    Guid? UpdatedByAppUserId);
+
+public sealed record OrgGroupUpsertRequest(string Name, string? Description, bool IsActive, int SortOrder);
+
+public sealed record CreateOrgRoleRequest(string Name, string? Description, bool IsActive, int SortOrder);
+public sealed record UpdateOrgRoleRequest(string Name, string? Description, bool IsActive, int SortOrder);
+public sealed record SetRolePermissionRequest(OrganizationSecurityTable TableName, OrganizationSecurityAction Actions);
+
+public sealed record PagePermissionCreateRequest(Guid? AppUserId, Guid? OrgMemberGroupId, CmsPageAction Actions);
+
+/// <summary>Org membership row from GET /api/organizations/{orgId}/security/users.</summary>
+public sealed record OrgMembershipItem(Guid MembershipId, Guid AppUserId, OrganizationMemberRole Role, bool IsActive, string? DisplayName = null);
+
+/// <summary>Computed display label: DisplayName → email → id.</summary>
+public static class OrgMembershipItemExtensions
+{
+    public static string Label(this OrgMembershipItem m) =>
+        string.IsNullOrWhiteSpace(m.DisplayName)
+            ? $"{m.Role} ({m.MembershipId.ToString()[..8]}…)"
+            : $"{m.DisplayName} ({m.Role})";
+}
+
+public sealed record DirectionsResult(
+    string RouteGeoJson,
+    IReadOnlyList<RoutePoint> RoutePoints,
+    double TotalDistanceMiles,
+    double TotalDurationMinutes,
+    IReadOnlyList<RouteStep> Steps);
+
+public sealed record RoutePoint(double Lat, double Lon);
+
+public sealed record RouteStep(string Instruction, double DistanceMiles, double DurationSeconds);
+
+public sealed record OrgSettingsResponse(bool ShowAddressMap, bool ShowAddressDirections);
+public sealed record OrgSettingsRequest(bool ShowAddressMap, bool ShowAddressDirections);
+public sealed record AddAddressMemberAccessRequest(Guid OrganizationUserMembershipId);
+
+// ── Experience Taxonomy request records ──────────────────────────────────────
+public sealed record UpsertExperienceCategoryRequest(
+    string Name,
+    string? Description,
+    string? IconClass,
+    string? ColorClass,
+    int SortOrder,
+    bool IsActive);
+
+public sealed record UpsertExperienceTypeRequest(
+    string Name,
+    string? Description,
+    string? IconClass,
+    int SortOrder,
+    bool IsActive);
+
+public sealed record ExperienceCategoryWithTypesResponse(
+    ExperienceCategoryRecord Category,
+    IReadOnlyList<ExperienceTypeRecord> Types);
+
+// ── Area of operation / org discovery records ─────────────────────────────────
+public sealed record UpsertAreaOfOperationRequest(
+    decimal RadiusMiles,
+    decimal CenterLatitude,
+    decimal CenterLongitude,
+    string? DisplayLabel,
+    bool IsAcceptingClients,
+    bool AcceptsClientsOutsideRange);
+
+/// <summary>
+/// Public search result — center coordinates intentionally omitted for privacy.
+/// </summary>
+public sealed record OrgSearchResult(
+    Guid OrganizationId,
+    string Name,
+    string UrlName,
+    string? DisplayLabel,
+    double RadiusMiles,
+    double DistanceFromSearchMiles,
+    bool IsWithinRange,
+    bool AcceptsClientsOutsideRange,
+    Guid? ActiveLogoFileId);
+
+// ── Phase 6: Case Transfer + Public Discovery records ─────────────────────────
+public sealed record PublicCaseListItem(
+    string CaseReference,
+    string Title,
+    string City,
+    string State,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    DateTime DateCaseOpened,
+    DateTime? DateCaseClosed,
+    bool IsHaunted);
+
+public sealed record PublicCaseDetail(
+    string CaseReference,
+    string Title,
+    string City,
+    string State,
+    string Country,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    bool IsHaunted,
+    string? ClientName,
+    string? Description,
+    DateTime DateCaseOpened,
+    DateTime? DateCaseClosed,
+    IReadOnlyList<PublicTimelineEntry> Timeline,
+    string OrgName,
+    string OrgUrlName);
+
+public sealed record PublicTimelineEntry(
+    Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,
+    DateTime? EventDateTime,
+    string? Title,
+    string? Body);
+
+// ── Phase 5: Investigation + Evidence Voting request records ──────────────────
+public sealed record UpsertInvestigationRequest(
+    string Title,
+    string? Description,
+    string? Location,
+    DateTime ScheduledDateTime,
+    DateTime? EndDateTime,
+    Ben.Data.Common.Enums.InvestigationStatus Status,
+    string? Notes,
+    Guid? OrgCalendarEventId);
+
+public sealed record AddInvestigationAttendeeRequest(Guid AppUserId, string? AssignedRole);
+
+// ── Phase 4: Messaging + Calendar request records ─────────────────────────────
+public sealed record SendOrgMessageRequest(
+    Ben.Data.Common.Enums.OrgMessageChannel ChannelType,
+    string? Subject,
+    string Body,
+    bool IsEncrypted,
+    Guid? ParentMessageId,
+    Guid? CaseId,
+    IList<Guid> RecipientUserIds);
+
+public sealed record UpsertCalendarEventTypeRequest(
+    string Name,
+    string? ColorClass,
+    string? IconClass,
+    int SortOrder,
+    bool IsActive);
+
+public sealed record UpsertCalendarEventRequest(
+    string Title,
+    string? Description,
+    string? Location,
+    DateTime StartDateTime,
+    DateTime EndDateTime,
+    bool IsAllDay,
+    bool IsPublic,
+    Guid? EventTypeId,
+    Guid? CaseId,
+    string? RecurrenceRule);
+
+public sealed record AddAttendeeRequest(Guid AppUserId, string? AssignedTask);
+
+// ── Membership Phase 3 request records ────────────────────────────────────────
+public sealed record UpsertMembershipQuestionRequest(
+    string QuestionText,
+    bool IsRequired,
+    int SortOrder,
+    bool IsActive);
+
+// ── Case request records ──────────────────────────────────────────────────────
+public sealed record CreateCaseRequest(
+    string Title,
+    string? Description,
+    string StreetAddress1,
+    string? StreetAddress2,
+    string City,
+    string State,
+    string ZipCode,
+    string? Country,
+    decimal? Latitude,
+    decimal? Longitude);
+
+public sealed record AcceptClientRequestAsCaseRequest(
+    string? Title,
+    Guid? CaseManagerAppUserId);
+
+public sealed record UpdateCaseRequest(
+    string? Title,
+    string? Description,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    string? PublicPseudonym,
+    bool IsPublic,
+    Guid? CaseManagerAppUserId);
+
+public sealed record UpsertTimelineEntryRequest(
+    Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,
+    DateTime? EventDateTime,
+    string? Title,
+    string? Body,
+    bool IsPublic,
+    IList<Guid> ExperienceTypeIds);
+
+// ── Client Request request records ────────────────────────────────────────────
+public sealed record UpsertClientRequestRequest(
+    string StreetAddress1,
+    string? StreetAddress2,
+    string City,
+    string State,
+    string ZipCode,
+    string? Country,
+    decimal? Latitude,
+    decimal? Longitude,
+    Ben.Data.Common.Enums.ClientGender Gender,
+    int? BirthYear,
+    string? Description);

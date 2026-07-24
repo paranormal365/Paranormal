@@ -6,3 +6,5 @@ global using Ben.Service.RepositoryService.GenericInterfaces;
 global using Microsoft.AspNetCore.Identity;
 global using Microsoft.EntityFrameworkCore;
 //global using Serilog;
+
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Ben.Web.Tests")]

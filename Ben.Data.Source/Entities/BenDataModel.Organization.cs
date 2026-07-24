@@ -14,5 +14,9 @@ namespace Ben.Data.Source.Entities
     public partial class Organization : IAuditableEntity
     {
         public Guid Id { get; set; }
+
+        // Map and directions feature toggles (owner/admin configures per org)
+        public bool ShowAddressMap { get; set; }
+        public bool ShowAddressDirections { get; set; }
     }
 }

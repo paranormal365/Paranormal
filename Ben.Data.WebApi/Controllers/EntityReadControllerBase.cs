@@ -21,7 +21,7 @@ namespace Ben.Data.WebApi.Controllers;
 /// </remarks>
 [ApiController]
 [Authorize]
-public abstract class EntityReadControllerBase<TEntity, TRecord> : ControllerBase
+public abstract class EntityReadControllerBase<TEntity, TRecord> : BenControllerBase
     where TEntity : class
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;

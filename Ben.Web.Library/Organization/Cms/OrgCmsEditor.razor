@@ -186,6 +186,61 @@
             }
         </TabStripTab>
 
+        @* ── Member Groups tab ─────────────────────────────────────────── *@
+        <TabStripTab Title="Member Groups">
+
+            <div class="d-flex justify-content-end mb-2">
+                <TelerikButton Icon="@SvgIcon.Plus"
+                               ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                               OnClick="OpenNewGroupDialog">New Group</TelerikButton>
+            </div>
+
+            @if (_groups is null)
+            {
+                <TelerikLoaderContainer Visible="true" Text="Loading groups…" />
+            }
+            else if (_groups.Count == 0)
+            {
+                <p class="text-secondary">No member groups yet.</p>
+            }
+            else
+            {
+                <TelerikGrid Data="@_groups"
+                             TItem="OrgMemberGroupRecord"
+                             Sortable="true"
+                             Pageable="false">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(OrgMemberGroupRecord.Name)" Title="Name" />
+                        <GridColumn Field="@nameof(OrgMemberGroupRecord.Description)" Title="Description" />
+                        <GridColumn Field="@nameof(OrgMemberGroupRecord.SortOrder)" Title="Sort" Width="70px" />
+                        <GridColumn Field="@nameof(OrgMemberGroupRecord.IsActive)" Title="Active" Width="80px">
+                            <Template>
+                                @if (((OrgMemberGroupRecord)context).IsActive)
+                                { <TelerikSvgIcon Icon="@SvgIcon.Check" ThemeColor="@ThemeConstants.SvgIcon.ThemeColor.Success" /> }
+                            </Template>
+                        </GridColumn>
+                        <GridCommandColumn Width="210px">
+                            <GridCommandButton Command="Edit"
+                                               Icon="@SvgIcon.Pencil"
+                                               OnClick="@((GridCommandEventArgs e) => OpenEditGroupDialog((OrgMemberGroupRecord)e.Items.First()))">
+                                Edit
+                            </GridCommandButton>
+                            <GridCommandButton Command="Members"
+                                               Icon="@SvgIcon.User"
+                                               OnClick="@((GridCommandEventArgs e) => OpenMembersDialog((OrgMemberGroupRecord)e.Items.First()))">
+                                Members
+                            </GridCommandButton>
+                            <GridCommandButton Command="Delete"
+                                               Icon="@SvgIcon.Trash"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                               OnClick="@((GridCommandEventArgs e) => ConfirmDeleteGroup((OrgMemberGroupRecord)e.Items.First()))">
+                            </GridCommandButton>
+                        </GridCommandColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            }
+        </TabStripTab>
+
     </TelerikTabStrip>
 </div>
 
@@ -395,6 +450,108 @@
     </WindowContent>
 </TelerikWindow>
 
+@* ── New/Edit Group dialog ────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showGroupDialog"
+               Title="@(_editingGroup is null ? "New Member Group" : "Edit Member Group")"
+               Width="480px">
+    <DialogContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+                <TelerikTextBox @bind-Value="@_groupForm.Name" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label">Description</label>
+                <TelerikTextBox @bind-Value="@_groupForm.Description" Width="100%" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Sort Order</label>
+                <TelerikNumericTextBox @bind-Value="@_groupForm.SortOrder" Width="100%" Min="0" />
+            </div>
+            <div class="col-md-8 d-flex align-items-end gap-2">
+                <TelerikCheckBox @bind-Value="@_groupForm.IsActive" Id="grp-active" />
+                <label for="grp-active">Active</label>
+            </div>
+            @if (_groupDialogError is not null)
+            { <div class="col-12"><div class="alert alert-danger py-2">@_groupDialogError</div></div> }
+        </div>
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       OnClick="SaveGroupAsync"
+                       Enabled="@(!string.IsNullOrWhiteSpace(_groupForm.Name))">Save</TelerikButton>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="@(() => _showGroupDialog = false)">Cancel</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Delete Group confirmation ────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showDeleteGroupDialog" Title="Delete Group" Width="400px">
+    <DialogContent>
+        <p>Delete group <strong>@_deletingGroup?.Name</strong>? All member assignments will also be removed.</p>
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error" OnClick="ExecuteDeleteGroupAsync">Delete</TelerikButton>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline" OnClick="@(() => _showDeleteGroupDialog = false)">Cancel</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Group Members dialog ─────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showMembersDialog"
+               Title="@($"Members — {_membersGroup?.Name}")"
+               Width="580px">
+    <DialogContent>
+        @if (_membersGroup is not null)
+        {
+            @* Current members *@
+            @if (_groupMembers.Count == 0)
+            {
+                <p class="text-secondary small">No members yet.</p>
+            }
+            else
+            {
+                <TelerikGrid Data="@_groupMembers" TItem="GroupMemberRow" Pageable="false">
+                    <GridColumns>
+                        <GridColumn Title="Member" Field="@nameof(GroupMemberRow.DisplayName)" />
+                        <GridColumn Title="Role" Field="@nameof(GroupMemberRow.Role)" Width="110px" />
+                        <GridCommandColumn Width="90px">
+                            <GridCommandButton Command="Remove"
+                                               Icon="@SvgIcon.Trash"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                               OnClick="@((GridCommandEventArgs e) => RemoveMemberAsync((GroupMemberRow)e.Items.First()))">
+                            </GridCommandButton>
+                        </GridCommandColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            }
+
+            @* Add member *@
+            <div class="mt-3 d-flex gap-2 align-items-end">
+                <div class="flex-grow-1">
+                    <label class="form-label fw-semibold mb-1">Add member</label>
+                    <TelerikDropDownList Data="@_availableOrgMembers"
+                                         @bind-Value="@_addMemberMembershipId"
+                                         TextField="@nameof(OrgMemberOption.DisplayName)"
+                                         ValueField="@nameof(OrgMemberOption.MembershipId)"
+                                         DefaultText="— Select org member —"
+                                         Width="100%" />
+                </div>
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                               Icon="@SvgIcon.Plus"
+                               OnClick="AddMemberAsync"
+                               Enabled="@(_addMemberMembershipId != Guid.Empty)">
+                    Add
+                </TelerikButton>
+            </div>
+            @if (_membersDialogError is not null)
+            { <div class="alert alert-danger py-2 mt-2">@_membersDialogError</div> }
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="@(() => _showMembersDialog = false)">Close</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
 @code {
     [Parameter] public Guid OrgId { get; set; }
 
@@ -424,6 +581,25 @@
     private IReadOnlyList<UploadFileTypeRecord>? _fileTypes;
     private Guid _uploadFileTypeId;
 
+    // Member Groups
+    private IReadOnlyList<OrgMemberGroupRecord>? _groups;
+    private bool _showGroupDialog;
+    private OrgMemberGroupRecord? _editingGroup;
+    private GroupFormModel _groupForm = new();
+    private string? _groupDialogError;
+    private bool _showDeleteGroupDialog;
+    private OrgMemberGroupRecord? _deletingGroup;
+
+    // Group Members dialog
+    private bool _showMembersDialog;
+    private OrgMemberGroupRecord? _membersGroup;
+    private List<GroupMemberRow> _groupMembers = [];
+    private IReadOnlyList<OrgMemberOption> _availableOrgMembers = [];
+    private Guid _addMemberMembershipId;
+    private string? _membersDialogError;
+    private IReadOnlyList<OrgMembershipItem>? _orgMemberships;
+    private IReadOnlyList<AppUserRecord>? _orgUsers;
+
     // Preview
     private bool _showPreview;
     private CmsPageListItem? _previewPage;
@@ -444,13 +620,25 @@
 
     private async Task LoadAsync()
     {
-        // Get org name from the pages list (or first page's org)
-        _pages = await AdminClient.GetCmsPagesAsync(OrgId);
-        _logos = await AdminClient.GetOrgLogosAsync(OrgId);
+        try
+        {
+            // Get org name from the pages list (or first page's org)
+            _pages = await AdminClient.GetCmsPagesAsync(OrgId);
+            _logos = await AdminClient.GetOrgLogosAsync(OrgId);
+            _groups = await AdminClient.GetGroupsAsync(OrgId);
 
-        // Try to get org name
-        var org = await AdminClient.GetOrganizationAsync(OrgId);
-        _orgName = org?.Name;
+            // Pre-load org membership + user list for member management
+            _orgMemberships = await AdminClient.GetOrganizationMembersAsync(OrgId);
+            _orgUsers = await AdminClient.GetAllUsersAsync();
+
+            // Try to get org name
+            var org = await AdminClient.GetOrganizationAsync(OrgId);
+            _orgName = org?.Name;
+        }
+        catch
+        {
+            // Partial load failures are non-fatal — UI renders with whatever data arrived
+        }
     }
 
     // ── Parent page dropdown ──────────────────────────────────────────────────
@@ -710,11 +898,28 @@
         }
         _isBusy = true;
         _logoError = null;
-        var result = await AdminClient.CreateOrgLogoAsync(OrgId, new CmsCreateLogoRequest(
-            _selectedLogoFileId.Value, _logoAltText?.Trim(), _logoIsActive, (_logos?.Count ?? 0) + 1));
-        _isBusy = false;
-        if (result is null) { _logoError = "Failed to add logo. Ensure the file exists."; }
-        else { CloseLogoDialog(); await LoadAsync(); }
+        try
+        {
+            var result = await AdminClient.CreateOrgLogoAsync(OrgId, new CmsCreateLogoRequest(
+                _selectedLogoFileId.Value, _logoAltText?.Trim(), _logoIsActive, (_logos?.Count ?? 0) + 1));
+            if (result is null)
+            {
+                _logoError = "Failed to add logo. The file may not exist, or you may not have permission.";
+            }
+            else
+            {
+                CloseLogoDialog();
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logoError = $"An error occurred while saving the logo: {ex.Message}";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
     }
 
     private async Task SetLogoActive(OrganizationLogoRecord logo)
@@ -748,4 +953,128 @@
     }
 
     private sealed record PageOption(Guid Id, string Title);
+
+    // ── Member Group methods ──────────────────────────────────────────────────
+
+    private void OpenNewGroupDialog()
+    {
+        _editingGroup = null;
+        _groupForm = new GroupFormModel { IsActive = true };
+        _groupDialogError = null;
+        _showGroupDialog = true;
+    }
+
+    private void OpenEditGroupDialog(OrgMemberGroupRecord g)
+    {
+        _editingGroup = g;
+        _groupForm = new GroupFormModel { Name = g.Name, Description = g.Description, IsActive = g.IsActive, SortOrder = g.SortOrder };
+        _groupDialogError = null;
+        _showGroupDialog = true;
+    }
+
+    private async Task SaveGroupAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_groupForm.Name)) { _groupDialogError = "Name is required."; return; }
+        _groupDialogError = null;
+        var req = new OrgGroupUpsertRequest(_groupForm.Name.Trim(), _groupForm.Description?.Trim(), _groupForm.IsActive, _groupForm.SortOrder);
+        if (_editingGroup is null)
+        {
+            var created = await AdminClient.CreateGroupAsync(OrgId, req);
+            if (created is null) { _groupDialogError = "Create failed."; return; }
+            _groups = [created, ..(_groups ?? [])];
+        }
+        else
+        {
+            var updated = await AdminClient.UpdateGroupAsync(OrgId, _editingGroup.Id, req);
+            if (updated is null) { _groupDialogError = "Update failed."; return; }
+            _groups = [..(_groups ?? []).Select(g => g.Id == updated.Id ? updated : g)];
+        }
+        _showGroupDialog = false;
+    }
+
+    private void ConfirmDeleteGroup(OrgMemberGroupRecord g)
+    {
+        _deletingGroup = g;
+        _showDeleteGroupDialog = true;
+    }
+
+    private async Task ExecuteDeleteGroupAsync()
+    {
+        if (_deletingGroup is null) return;
+        await AdminClient.DeleteGroupAsync(OrgId, _deletingGroup.Id);
+        _groups = [..(_groups ?? []).Where(g => g.Id != _deletingGroup.Id)];
+        _showDeleteGroupDialog = false;
+        _deletingGroup = null;
+    }
+
+    // ── Group Members dialog ──────────────────────────────────────────────────
+
+    private async Task OpenMembersDialog(OrgMemberGroupRecord g)
+    {
+        _membersGroup = g;
+        _membersDialogError = null;
+        _addMemberMembershipId = Guid.Empty;
+        await RefreshMembersDialogAsync();
+        _showMembersDialog = true;
+    }
+
+    private async Task RefreshMembersDialogAsync()
+    {
+        if (_membersGroup is null) return;
+
+        var rawMembers = await AdminClient.GetGroupMembersAsync(OrgId, _membersGroup.Id);
+        var memberships = _orgMemberships ?? [];
+        var users = _orgUsers ?? [];
+
+        _groupMembers = rawMembers.Select(m =>
+        {
+            var membership = memberships.FirstOrDefault(ms => ms.MembershipId == m.OrganizationUserMembershipId);
+            var user = membership is not null ? users.FirstOrDefault(u => u.Id == membership.AppUserId) : null;
+            return new GroupMemberRow(m.Id, m.OrganizationUserMembershipId,
+                user?.DisplayName ?? user?.Email ?? membership?.AppUserId.ToString() ?? "Unknown",
+                membership?.Role.ToString() ?? "");
+        }).ToList();
+
+        var alreadyInGroup = rawMembers.Select(m => m.OrganizationUserMembershipId).ToHashSet();
+        _availableOrgMembers = memberships
+            .Where(m => m.IsActive && !alreadyInGroup.Contains(m.MembershipId))
+            .Select(m =>
+            {
+                var user = users.FirstOrDefault(u => u.Id == m.AppUserId);
+                return new OrgMemberOption(m.MembershipId, user?.DisplayName ?? user?.Email ?? m.AppUserId.ToString());
+            })
+            .OrderBy(o => o.DisplayName)
+            .ToList();
+    }
+
+    private async Task AddMemberAsync()
+    {
+        if (_membersGroup is null || _addMemberMembershipId == Guid.Empty) return;
+        _membersDialogError = null;
+        var result = await AdminClient.AddGroupMemberAsync(OrgId, _membersGroup.Id, _addMemberMembershipId);
+        if (result is null) { _membersDialogError = "Failed to add member."; return; }
+        _addMemberMembershipId = Guid.Empty;
+        await RefreshMembersDialogAsync();
+    }
+
+    private async Task RemoveMemberAsync(GroupMemberRow row)
+    {
+        if (_membersGroup is null) return;
+        _membersDialogError = null;
+        await AdminClient.RemoveGroupMemberAsync(OrgId, _membersGroup.Id, row.MembershipId);
+        await RefreshMembersDialogAsync();
+    }
+
+    // ── Helper types ──────────────────────────────────────────────────────────
+
+    private sealed class GroupFormModel
+    {
+        public string Name        { get; set; } = "";
+        public string? Description { get; set; }
+        public bool IsActive      { get; set; } = true;
+        public int SortOrder      { get; set; }
+    }
+
+    private sealed record GroupMemberRow(Guid Id, Guid MembershipId, string DisplayName, string Role);
+    private sealed record OrgMemberOption(Guid MembershipId, string DisplayName);
 }

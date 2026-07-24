@@ -174,6 +174,64 @@
                     </div>
                 </div>
 
+                @* Permissions card *@
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>Permissions (@(_permissions.Count))</strong>
+                        <TelerikButton Icon="@SvgIcon.Plus"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                       OnClick="OpenAddPermissionDialog">
+                            Add Permission
+                        </TelerikButton>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (_permissions.Count == 0)
+                        {
+                            <p class="p-3 mb-0 text-secondary small">No explicit permissions. Page visibility is controlled by the <em>Public</em> flag above.</p>
+                        }
+                        else
+                        {
+                            <TelerikGrid Data="@_permissions" TItem="PermissionRow" Pageable="false">
+                                <GridColumns>
+                                    <GridColumn Field="@nameof(PermissionRow.GranteeName)" Title="Grantee" />
+                                    <GridColumn Field="@nameof(PermissionRow.GranteeType)" Title="Type" Width="80px" />
+                                    <GridColumn Title="View" Width="65px">
+                                        <Template>
+                                            @if (((PermissionRow)context).Actions.HasFlag(CmsPageAction.View))
+                                            { <TelerikSvgIcon Icon="@SvgIcon.Check" ThemeColor="@ThemeConstants.SvgIcon.ThemeColor.Success" /> }
+                                        </Template>
+                                    </GridColumn>
+                                    <GridColumn Title="Edit" Width="65px">
+                                        <Template>
+                                            @if (((PermissionRow)context).Actions.HasFlag(CmsPageAction.Edit))
+                                            { <TelerikSvgIcon Icon="@SvgIcon.Check" ThemeColor="@ThemeConstants.SvgIcon.ThemeColor.Success" /> }
+                                        </Template>
+                                    </GridColumn>
+                                    <GridColumn Title="Delete" Width="70px">
+                                        <Template>
+                                            @if (((PermissionRow)context).Actions.HasFlag(CmsPageAction.Delete))
+                                            { <TelerikSvgIcon Icon="@SvgIcon.Check" ThemeColor="@ThemeConstants.SvgIcon.ThemeColor.Success" /> }
+                                        </Template>
+                                    </GridColumn>
+                                    <GridCommandColumn Width="130px">
+                                        <GridCommandButton Command="Edit"
+                                                           Icon="@SvgIcon.Pencil"
+                                                           OnClick="@((GridCommandEventArgs e) => OpenEditPermissionDialog((PermissionRow)e.Items.First()))">
+                                            Edit
+                                        </GridCommandButton>
+                                        <GridCommandButton Command="Delete"
+                                                           Icon="@SvgIcon.Trash"
+                                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                                           OnClick="@((GridCommandEventArgs e) => DeletePermissionAsync((PermissionRow)e.Items.First()))">
+                                        </GridCommandButton>
+                                    </GridCommandColumn>
+                                </GridColumns>
+                            </TelerikGrid>
+                        }
+                    </div>
+                </div>
+
             </div>
 
             @* ── Inline preview column ─────────────────────────────────────── *@
@@ -281,6 +339,75 @@
     </DialogButtons>
 </TelerikDialog>
 
+@* ── Add/Edit Permission dialog ───────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showPermissionDialog"
+               Title="@(_editingPerm is null ? "Add Permission" : "Edit Permission")"
+               Width="480px">
+    <DialogContent>
+        @if (_editingPerm is null)
+        {
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Grant to</label>
+                <TelerikDropDownList Data="@_permGranteeOptions"
+                                     @bind-Value="@_permGranteeType"
+                                     TextField="@nameof(GranteeTypeOption.Label)"
+                                     ValueField="@nameof(GranteeTypeOption.Value)"
+                                     Width="100%" />
+            </div>
+            @if (_permGranteeType == "user")
+            {
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">User</label>
+                    <TelerikDropDownList Data="@_orgMemberOptions"
+                                         @bind-Value="@_permUserId"
+                                         TextField="@nameof(OrgMemberPermOption.DisplayName)"
+                                         ValueField="@nameof(OrgMemberPermOption.AppUserId)"
+                                         DefaultText="— Select user —"
+                                         Width="100%" />
+                </div>
+            }
+            else
+            {
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Group</label>
+                    <TelerikDropDownList Data="@_groupOptions"
+                                         @bind-Value="@_permGroupId"
+                                         TextField="@nameof(GroupPermOption.Name)"
+                                         ValueField="@nameof(GroupPermOption.Id)"
+                                         DefaultText="— Select group —"
+                                         Width="100%" />
+                </div>
+            }
+        }
+        else
+        {
+            <p class="text-secondary small mb-3">Editing permissions for <strong>@_editingPerm.GranteeName</strong>.</p>
+        }
+        <div class="d-flex gap-4">
+            <div class="d-flex align-items-center gap-2">
+                <TelerikCheckBox @bind-Value="@_permView" Id="perm-view" />
+                <label for="perm-view">View</label>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <TelerikCheckBox @bind-Value="@_permEdit" Id="perm-edit" />
+                <label for="perm-edit">Edit</label>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <TelerikCheckBox @bind-Value="@_permDelete" Id="perm-delete" />
+                <label for="perm-delete">Delete</label>
+            </div>
+        </div>
+        @if (_permDialogError is not null)
+        { <div class="alert alert-danger py-2 mt-2">@_permDialogError</div> }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       OnClick="SavePermissionAsync">Save</TelerikButton>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="@(() => _showPermissionDialog = false)">Cancel</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
 @code {
     [Parameter] public Guid OrgId  { get; set; }
     [Parameter] public Guid PageId { get; set; }
@@ -304,6 +431,27 @@
     // Delete section
     private bool _showDeleteSectionDialog;
     private CmsSectionRecord? _pendingDeleteSection;
+
+    // Permissions
+    private List<PermissionRow> _permissions = [];
+    private bool _showPermissionDialog;
+    private PermissionRow? _editingPerm;
+    private string _permGranteeType = "user";
+    private Guid _permUserId;
+    private Guid _permGroupId;
+    private bool _permView;
+    private bool _permEdit;
+    private bool _permDelete;
+    private string? _permDialogError;
+    private IReadOnlyList<OrgMemberPermOption> _orgMemberOptions = [];
+    private IReadOnlyList<GroupPermOption> _groupOptions = [];
+    private static readonly List<GranteeTypeOption> _permGranteeOptions =
+    [
+        new("User",  "user"),
+        new("Group", "group"),
+    ];
+    // Raw permission records for reference when editing
+    private List<CmsPagePermissionRecord> _permissionRecords = [];
 
     private static readonly List<SectionTypeOption> _sectionTypeOptions = Enum.GetValues<CmsSectionType>()
         .Select(t => new SectionTypeOption(t, t.ToString()))
@@ -337,6 +485,113 @@
             IsPublic    = _page.IsPublic,
             SortOrder   = _page.SortOrder
         };
+
+        // Load permissions + supporting data in parallel
+        var permsTask  = AdminClient.GetPagePermissionsAsync(OrgId, PageId);
+        var groupsTask = AdminClient.GetGroupsAsync(OrgId);
+        var membersTask= AdminClient.GetOrganizationMembersAsync(OrgId);
+        var usersTask  = AdminClient.GetAllUsersAsync();
+        await Task.WhenAll(permsTask, groupsTask, membersTask, usersTask);
+
+        _permissionRecords = [..permsTask.Result];
+        var groups  = groupsTask.Result;
+        var members = membersTask.Result;
+        var users   = usersTask.Result;
+
+        _groupOptions = groups.Select(g => new GroupPermOption(g.Id, g.Name)).ToList();
+        _orgMemberOptions = members
+            .Where(m => m.IsActive)
+            .Select(m =>
+            {
+                var u = users.FirstOrDefault(x => x.Id == m.AppUserId);
+                return new OrgMemberPermOption(m.AppUserId, u?.DisplayName ?? u?.Email ?? m.AppUserId.ToString());
+            })
+            .OrderBy(o => o.DisplayName)
+            .ToList();
+
+        _permissions = _permissionRecords.Select(p =>
+        {
+            if (p.AppUserId.HasValue)
+            {
+                var u = users.FirstOrDefault(x => x.Id == p.AppUserId.Value);
+                return new PermissionRow(p.Id, p.AppUserId.Value, null, "User",
+                    u?.DisplayName ?? u?.Email ?? p.AppUserId.Value.ToString(), p.Actions);
+            }
+            else
+            {
+                var g = groups.FirstOrDefault(x => x.Id == p.OrgMemberGroupId!.Value);
+                return new PermissionRow(p.Id, null, p.OrgMemberGroupId, "Group",
+                    g?.Name ?? p.OrgMemberGroupId!.Value.ToString(), p.Actions);
+            }
+        }).ToList();
+    }
+
+    // ── Permission methods ────────────────────────────────────────────────────
+
+    private void OpenAddPermissionDialog()
+    {
+        _editingPerm = null;
+        _permGranteeType = "user";
+        _permUserId = Guid.Empty;
+        _permGroupId = Guid.Empty;
+        _permView = _permEdit = _permDelete = false;
+        _permDialogError = null;
+        _showPermissionDialog = true;
+    }
+
+    private void OpenEditPermissionDialog(PermissionRow row)
+    {
+        _editingPerm = row;
+        _permView   = row.Actions.HasFlag(CmsPageAction.View);
+        _permEdit   = row.Actions.HasFlag(CmsPageAction.Edit);
+        _permDelete = row.Actions.HasFlag(CmsPageAction.Delete);
+        _permDialogError = null;
+        _showPermissionDialog = true;
+    }
+
+    private async Task SavePermissionAsync()
+    {
+        var actions = CmsPageAction.None;
+        if (_permView)   actions |= CmsPageAction.View;
+        if (_permEdit)   actions |= CmsPageAction.Edit;
+        if (_permDelete) actions |= CmsPageAction.Delete;
+
+        if (actions == CmsPageAction.None) { _permDialogError = "Select at least one action."; return; }
+        _permDialogError = null;
+
+        if (_editingPerm is null)
+        {
+            // Create
+            if (_permGranteeType == "user" && _permUserId == Guid.Empty)
+            { _permDialogError = "Select a user."; return; }
+            if (_permGranteeType == "group" && _permGroupId == Guid.Empty)
+            { _permDialogError = "Select a group."; return; }
+
+            var req = new PagePermissionCreateRequest(
+                _permGranteeType == "user"  ? _permUserId  : null,
+                _permGranteeType == "group" ? _permGroupId : null,
+                actions);
+
+            var created = await AdminClient.CreatePagePermissionAsync(OrgId, PageId, req);
+            if (created is null) { _permDialogError = "Failed to create permission."; return; }
+        }
+        else
+        {
+            // Update
+            var updated = await AdminClient.UpdatePagePermissionAsync(OrgId, PageId, _editingPerm.Id, actions);
+            if (updated is null) { _permDialogError = "Failed to update permission."; return; }
+        }
+
+        _showPermissionDialog = false;
+        await LoadPageAsync();
+        StateHasChanged();
+    }
+
+    private async Task DeletePermissionAsync(PermissionRow row)
+    {
+        await AdminClient.DeletePagePermissionAsync(OrgId, PageId, row.Id);
+        await LoadPageAsync();
+        StateHasChanged();
     }
 
     // ── Metadata ──────────────────────────────────────────────────────────────
@@ -534,4 +789,9 @@
     }
 
     private sealed record SectionTypeOption(CmsSectionType Value, string Label);
+
+    private sealed record PermissionRow(Guid Id, Guid? AppUserId, Guid? GroupId, string GranteeType, string GranteeName, CmsPageAction Actions);
+    private sealed record OrgMemberPermOption(Guid AppUserId, string DisplayName);
+    private sealed record GroupPermOption(Guid Id, string Name);
+    private sealed record GranteeTypeOption(string Label, string Value);
 }

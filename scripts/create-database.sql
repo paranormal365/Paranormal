@@ -2599,3 +2599,829 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    ALTER TABLE [UploadFiles] ADD [ParentFileId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    ALTER TABLE [UploadFiles] ADD [RegionEnd] float NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    ALTER TABLE [UploadFiles] ADD [RegionStart] float NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    CREATE TABLE [UploadFileRegionNotes] (
+        [Id] uniqueidentifier NOT NULL,
+        [UploadFileId] uniqueidentifier NOT NULL,
+        [RegionStart] float NOT NULL,
+        [RegionEnd] float NOT NULL,
+        [RegionLabel] nvarchar(max) NULL,
+        [TimeOffset] float NULL,
+        [NoteHtml] nvarchar(max) NULL,
+        [IsPublic] bit NOT NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_UploadFileRegionNotes] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_UploadFileRegionNotes_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_UploadFileRegionNotes_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_UploadFileRegionNotes_UploadFiles_UploadFileId] FOREIGN KEY ([UploadFileId]) REFERENCES [UploadFiles] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    CREATE INDEX [IX_UploadFiles_ParentFileId] ON [UploadFiles] ([ParentFileId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    CREATE INDEX [IX_UploadFileRegionNotes_CreatedByAppUserId] ON [UploadFileRegionNotes] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    CREATE INDEX [IX_UploadFileRegionNotes_UpdatedByAppUserId] ON [UploadFileRegionNotes] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    CREATE INDEX [IX_UploadFileRegionNotes_UploadFileId] ON [UploadFileRegionNotes] ([UploadFileId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    ALTER TABLE [UploadFiles] ADD CONSTRAINT [FK_UploadFiles_UploadFiles_ParentFileId] FOREIGN KEY ([ParentFileId]) REFERENCES [UploadFiles] ([Id]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719142238_AddUploadFileRegionNotesAndParentClip'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260719142238_AddUploadFileRegionNotesAndParentClip', N'10.0.9');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719163758_AddUploadFileVotes'
+)
+BEGIN
+    CREATE TABLE [UploadFileVotes] (
+        [Id] uniqueidentifier NOT NULL,
+        [UploadFileId] uniqueidentifier NOT NULL,
+        [AppUserId] uniqueidentifier NOT NULL,
+        [Score] int NOT NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        CONSTRAINT [PK_UploadFileVotes] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_UploadFileVotes_AppUsers_AppUserId] FOREIGN KEY ([AppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_UploadFileVotes_UploadFiles_UploadFileId] FOREIGN KEY ([UploadFileId]) REFERENCES [UploadFiles] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719163758_AddUploadFileVotes'
+)
+BEGIN
+    CREATE INDEX [IX_UploadFileVotes_AppUserId] ON [UploadFileVotes] ([AppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719163758_AddUploadFileVotes'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_UploadFileVotes_UploadFileId_AppUserId] ON [UploadFileVotes] ([UploadFileId], [AppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260719163758_AddUploadFileVotes'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260719163758_AddUploadFileVotes', N'10.0.9');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260721133025_AddFileStoragePath'
+)
+BEGIN
+    ALTER TABLE [UploadFiles] ADD [StoragePath] nvarchar(500) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260721133025_AddFileStoragePath'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260721133025_AddFileStoragePath', N'10.0.9');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722135037_AddOrganizationMembershipRequestsAndFiles'
+)
+BEGIN
+    ALTER TABLE [Organizations] ADD [IsAcceptingApplications] bit NOT NULL DEFAULT CAST(0 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722135037_AddOrganizationMembershipRequestsAndFiles'
+)
+BEGIN
+    CREATE TABLE [OrganizationFiles] (
+        [Id] uniqueidentifier NOT NULL,
+        [OrganizationId] uniqueidentifier NOT NULL,
+        [UploadFileTypeId] uniqueidentifier NOT NULL,
+        [FileName] nvarchar(max) NULL,
+        [StoredFileName] nvarchar(max) NULL,
+        [ContentType] nvarchar(max) NULL,
+        [FileSize] bigint NOT NULL,
+        [StoragePath] nvarchar(500) NULL,
+        [FileData] varbinary(max) NULL,
+        [Description] nvarchar(max) NULL,
+        [IsPublic] bit NOT NULL,
+        [SortOrder] int NOT NULL,
+        [SourceUploadFileId] uniqueidentifier NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_OrganizationFiles] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_OrganizationFiles_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_OrganizationFiles_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_OrganizationFiles_Organizations_OrganizationId] FOREIGN KEY ([OrganizationId]) REFERENCES [Organizations] ([Id]) ON DELETE CASCADE,
+        CONSTRAINT [FK_OrganizationFiles_UploadFileTypes_UploadFileTypeId] FOREIGN KEY ([UploadFileTypeId]) REFERENCES [UploadFileTypes] ([Id]),
+        CONSTRAINT [FK_OrganizationFiles_UploadFiles_SourceUploadFileId] FOREIGN KEY ([SourceUploadFileId]) REFERENCES [UploadFiles] ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722135037_AddOrganizationMembershipRequestsAndFiles'
+)
+BEGIN
+    CREATE TABLE [OrganizationMembershipRequests] (
+        [Id] uniqueidentifier NOT NULL,
+        [OrganizationId] uniqueidentifier NOT NULL,
+        [AppUserId] uniqueidentifier NOT NULL,
+        [RequestMessage] nvarchar(2000) NULL,
+        [Status] int NOT NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_OrganizationMembershipRequests] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_OrganizationMembershipRequests_AppUsers_AppUserId] FOREIGN KEY ([AppUserId]) REFERENCES [AppUsers] ([Id]) ON DELETE CASCADE,
+        CONSTRAINT [FK_OrganizationMembershipRequests_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_OrganizationMembershipRequests_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_OrganizationMembershipRequests_Organizations_OrganizationId] FOREIGN KEY ([OrganizationId]) REFERENCES [Organizations] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722135037_AddOrganizationMembershipRequestsAndFiles'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationFiles_CreatedByAppUserId] ON [OrganizationFiles] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722135037_AddOrganizationMembershipRequestsAndFiles'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationFiles_OrganizationId] ON [OrganizationFiles] ([OrganizationId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722135037_AddOrganizationMembershipRequestsAndFiles'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationFiles_SourceUploadFileId] ON [OrganizationFiles] ([SourceUploadFileId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722135037_AddOrganizationMembershipRequestsAndFiles'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationFiles_UpdatedByAppUserId] ON [OrganizationFiles] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722135037_AddOrganizationMembershipRequestsAndFiles'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationFiles_UploadFileTypeId] ON [OrganizationFiles] ([UploadFileTypeId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722135037_AddOrganizationMembershipRequestsAndFiles'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationMembershipRequests_AppUserId] ON [OrganizationMembershipRequests] ([AppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722135037_AddOrganizationMembershipRequestsAndFiles'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationMembershipRequests_CreatedByAppUserId] ON [OrganizationMembershipRequests] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722135037_AddOrganizationMembershipRequestsAndFiles'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationMembershipRequests_OrganizationId_AppUserId] ON [OrganizationMembershipRequests] ([OrganizationId], [AppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722135037_AddOrganizationMembershipRequestsAndFiles'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationMembershipRequests_UpdatedByAppUserId] ON [OrganizationMembershipRequests] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722135037_AddOrganizationMembershipRequestsAndFiles'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260722135037_AddOrganizationMembershipRequestsAndFiles', N'10.0.9');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722140331_AddOrgFilePublishingAndDeleteLog'
+)
+BEGIN
+    ALTER TABLE [OrganizationFiles] ADD [DatePublished] datetime2 NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722140331_AddOrgFilePublishingAndDeleteLog'
+)
+BEGIN
+    ALTER TABLE [OrganizationFiles] ADD [PublishedByAppUserId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722140331_AddOrgFilePublishingAndDeleteLog'
+)
+BEGIN
+    CREATE TABLE [OrganizationFileDeleteLogs] (
+        [Id] uniqueidentifier NOT NULL,
+        [OrganizationId] uniqueidentifier NOT NULL,
+        [OrganizationName] nvarchar(256) NOT NULL,
+        [OriginalFileId] uniqueidentifier NOT NULL,
+        [FileName] nvarchar(512) NOT NULL,
+        [ContentType] nvarchar(128) NOT NULL,
+        [FileSize] bigint NOT NULL,
+        [StoragePath] nvarchar(500) NULL,
+        [SourceUploadFileId] uniqueidentifier NULL,
+        [WasPublic] bit NOT NULL,
+        [WasPublishedByAppUserId] uniqueidentifier NULL,
+        [WasPublishedByDisplayName] nvarchar(256) NULL,
+        [WasDatePublished] datetime2 NULL,
+        [DeletedByAppUserId] uniqueidentifier NOT NULL,
+        [DeletedByDisplayName] nvarchar(256) NOT NULL,
+        [DateDeleted] datetime2 NOT NULL,
+        CONSTRAINT [PK_OrganizationFileDeleteLogs] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722140331_AddOrgFilePublishingAndDeleteLog'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationFiles_PublishedByAppUserId] ON [OrganizationFiles] ([PublishedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722140331_AddOrgFilePublishingAndDeleteLog'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationFileDeleteLogs_DeletedByAppUserId] ON [OrganizationFileDeleteLogs] ([DeletedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722140331_AddOrgFilePublishingAndDeleteLog'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationFileDeleteLogs_OrganizationId] ON [OrganizationFileDeleteLogs] ([OrganizationId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722140331_AddOrgFilePublishingAndDeleteLog'
+)
+BEGIN
+    ALTER TABLE [OrganizationFiles] ADD CONSTRAINT [FK_OrganizationFiles_AppUsers_PublishedByAppUserId] FOREIGN KEY ([PublishedByAppUserId]) REFERENCES [AppUsers] ([Id]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722140331_AddOrgFilePublishingAndDeleteLog'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260722140331_AddOrgFilePublishingAndDeleteLog', N'10.0.9');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722150352_AddOrganizationAddressMapConfig'
+)
+BEGIN
+    CREATE TABLE [OrganizationAddressMapConfigs] (
+        [Id] uniqueidentifier NOT NULL,
+        [OrganizationAddressId] uniqueidentifier NOT NULL,
+        [IsOnMap] bit NOT NULL,
+        [ShowMarker] bit NOT NULL,
+        [ShowRegion] bit NOT NULL,
+        [RegionRadiusMiles] float NOT NULL,
+        [MarkerColor] nvarchar(50) NOT NULL,
+        [MarkerIconKey] nvarchar(64) NULL,
+        [RegionFillColor] nvarchar(50) NOT NULL,
+        [RegionFillOpacity] float NOT NULL,
+        [RegionStrokeColor] nvarchar(50) NOT NULL,
+        [RegionStrokeOpacity] float NOT NULL,
+        [RegionStrokeWidth] float NOT NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_OrganizationAddressMapConfigs] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_OrganizationAddressMapConfigs_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_OrganizationAddressMapConfigs_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_OrganizationAddressMapConfigs_OrganizationAddresses_OrganizationAddressId] FOREIGN KEY ([OrganizationAddressId]) REFERENCES [OrganizationAddresses] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722150352_AddOrganizationAddressMapConfig'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationAddressMapConfigs_CreatedByAppUserId] ON [OrganizationAddressMapConfigs] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722150352_AddOrganizationAddressMapConfig'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_OrganizationAddressMapConfigs_OrganizationAddressId] ON [OrganizationAddressMapConfigs] ([OrganizationAddressId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722150352_AddOrganizationAddressMapConfig'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationAddressMapConfigs_UpdatedByAppUserId] ON [OrganizationAddressMapConfigs] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260722150352_AddOrganizationAddressMapConfig'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260722150352_AddOrganizationAddressMapConfig', N'10.0.9');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723132324_AddOrganizationNamedRoles'
+)
+BEGIN
+    CREATE TABLE [OrganizationRoles] (
+        [Id] uniqueidentifier NOT NULL,
+        [OrganizationId] uniqueidentifier NOT NULL,
+        [Name] nvarchar(max) NULL,
+        [Description] nvarchar(max) NULL,
+        [IsActive] bit NOT NULL,
+        [SortOrder] int NOT NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_OrganizationRoles] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_OrganizationRoles_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_OrganizationRoles_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_OrganizationRoles_Organizations_OrganizationId] FOREIGN KEY ([OrganizationId]) REFERENCES [Organizations] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723132324_AddOrganizationNamedRoles'
+)
+BEGIN
+    CREATE TABLE [OrganizationRoleMemberships] (
+        [Id] uniqueidentifier NOT NULL,
+        [OrganizationRoleId] uniqueidentifier NOT NULL,
+        [OrganizationUserMembershipId] uniqueidentifier NOT NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        CONSTRAINT [PK_OrganizationRoleMemberships] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_OrganizationRoleMemberships_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_OrganizationRoleMemberships_OrganizationRoles_OrganizationRoleId] FOREIGN KEY ([OrganizationRoleId]) REFERENCES [OrganizationRoles] ([Id]) ON DELETE CASCADE,
+        CONSTRAINT [FK_OrganizationRoleMemberships_OrganizationUserMemberships_OrganizationUserMembershipId] FOREIGN KEY ([OrganizationUserMembershipId]) REFERENCES [OrganizationUserMemberships] ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723132324_AddOrganizationNamedRoles'
+)
+BEGIN
+    CREATE TABLE [OrganizationRolePermissions] (
+        [Id] uniqueidentifier NOT NULL,
+        [OrganizationRoleId] uniqueidentifier NOT NULL,
+        [TableName] int NOT NULL,
+        [Actions] int NOT NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        CONSTRAINT [PK_OrganizationRolePermissions] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_OrganizationRolePermissions_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_OrganizationRolePermissions_OrganizationRoles_OrganizationRoleId] FOREIGN KEY ([OrganizationRoleId]) REFERENCES [OrganizationRoles] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723132324_AddOrganizationNamedRoles'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationRoleMemberships_CreatedByAppUserId] ON [OrganizationRoleMemberships] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723132324_AddOrganizationNamedRoles'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_OrganizationRoleMemberships_OrganizationRoleId_OrganizationUserMembershipId] ON [OrganizationRoleMemberships] ([OrganizationRoleId], [OrganizationUserMembershipId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723132324_AddOrganizationNamedRoles'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationRoleMemberships_OrganizationUserMembershipId] ON [OrganizationRoleMemberships] ([OrganizationUserMembershipId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723132324_AddOrganizationNamedRoles'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationRolePermissions_CreatedByAppUserId] ON [OrganizationRolePermissions] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723132324_AddOrganizationNamedRoles'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_OrganizationRolePermissions_OrganizationRoleId_TableName] ON [OrganizationRolePermissions] ([OrganizationRoleId], [TableName]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723132324_AddOrganizationNamedRoles'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationRoles_CreatedByAppUserId] ON [OrganizationRoles] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723132324_AddOrganizationNamedRoles'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationRoles_OrganizationId] ON [OrganizationRoles] ([OrganizationId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723132324_AddOrganizationNamedRoles'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationRoles_UpdatedByAppUserId] ON [OrganizationRoles] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723132324_AddOrganizationNamedRoles'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260723132324_AddOrganizationNamedRoles', N'10.0.9');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723160816_FixLatLonPrecision'
+)
+BEGIN
+    DECLARE @var2 nvarchar(max);
+    SELECT @var2 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[UserAddresses]') AND [c].[name] = N'Longitude');
+    IF @var2 IS NOT NULL EXEC(N'ALTER TABLE [UserAddresses] DROP CONSTRAINT ' + @var2 + ';');
+    ALTER TABLE [UserAddresses] ALTER COLUMN [Longitude] decimal(18,10) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723160816_FixLatLonPrecision'
+)
+BEGIN
+    DECLARE @var3 nvarchar(max);
+    SELECT @var3 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[UserAddresses]') AND [c].[name] = N'Latitude');
+    IF @var3 IS NOT NULL EXEC(N'ALTER TABLE [UserAddresses] DROP CONSTRAINT ' + @var3 + ';');
+    ALTER TABLE [UserAddresses] ALTER COLUMN [Latitude] decimal(18,10) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723160816_FixLatLonPrecision'
+)
+BEGIN
+    DECLARE @var4 nvarchar(max);
+    SELECT @var4 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[OrganizationAddresses]') AND [c].[name] = N'Longitude');
+    IF @var4 IS NOT NULL EXEC(N'ALTER TABLE [OrganizationAddresses] DROP CONSTRAINT ' + @var4 + ';');
+    ALTER TABLE [OrganizationAddresses] ALTER COLUMN [Longitude] decimal(18,10) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723160816_FixLatLonPrecision'
+)
+BEGIN
+    DECLARE @var5 nvarchar(max);
+    SELECT @var5 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[OrganizationAddresses]') AND [c].[name] = N'Latitude');
+    IF @var5 IS NOT NULL EXEC(N'ALTER TABLE [OrganizationAddresses] DROP CONSTRAINT ' + @var5 + ';');
+    ALTER TABLE [OrganizationAddresses] ALTER COLUMN [Latitude] decimal(18,10) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723160816_FixLatLonPrecision'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260723160816_FixLatLonPrecision', N'10.0.9');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723165923_AddAddressVisibilityAndOrgSettings'
+)
+BEGIN
+    ALTER TABLE [Organizations] ADD [ShowAddressDirections] bit NOT NULL DEFAULT CAST(0 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723165923_AddAddressVisibilityAndOrgSettings'
+)
+BEGIN
+    ALTER TABLE [Organizations] ADD [ShowAddressMap] bit NOT NULL DEFAULT CAST(0 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723165923_AddAddressVisibilityAndOrgSettings'
+)
+BEGIN
+    ALTER TABLE [OrganizationAddresses] ADD [IsSearchable] bit NOT NULL DEFAULT CAST(0 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723165923_AddAddressVisibilityAndOrgSettings'
+)
+BEGIN
+    ALTER TABLE [OrganizationAddresses] ADD [MemberDisplayMode] int NOT NULL DEFAULT 2;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723165923_AddAddressVisibilityAndOrgSettings'
+)
+BEGIN
+    ALTER TABLE [OrganizationAddresses] ADD [PublicDisplayMode] int NOT NULL DEFAULT 4;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723165923_AddAddressVisibilityAndOrgSettings'
+)
+BEGIN
+    ALTER TABLE [OrganizationAddresses] ADD [SearchRadiusMiles] float NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723165923_AddAddressVisibilityAndOrgSettings'
+)
+BEGIN
+    ALTER TABLE [OrganizationAddresses] ADD [SearchVisibility] int NOT NULL DEFAULT 0;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723165923_AddAddressVisibilityAndOrgSettings'
+)
+BEGIN
+    ALTER TABLE [OrganizationAddresses] ADD [Visibility] int NOT NULL DEFAULT 3;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723165923_AddAddressVisibilityAndOrgSettings'
+)
+BEGIN
+    UPDATE OrganizationAddresses SET Visibility = CASE WHEN IsPublic = 1 THEN 0 ELSE 3 END
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723165923_AddAddressVisibilityAndOrgSettings'
+)
+BEGIN
+    UPDATE OrganizationAddresses SET PublicDisplayMode = CASE WHEN IsPublic = 1 THEN 0 ELSE 4 END
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723165923_AddAddressVisibilityAndOrgSettings'
+)
+BEGIN
+    DECLARE @var6 nvarchar(max);
+    SELECT @var6 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[OrganizationAddresses]') AND [c].[name] = N'IsPublic');
+    IF @var6 IS NOT NULL EXEC(N'ALTER TABLE [OrganizationAddresses] DROP CONSTRAINT ' + @var6 + ';');
+    ALTER TABLE [OrganizationAddresses] DROP COLUMN [IsPublic];
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723165923_AddAddressVisibilityAndOrgSettings'
+)
+BEGIN
+    CREATE TABLE [OrganizationAddressMemberAccesses] (
+        [Id] uniqueidentifier NOT NULL,
+        [OrganizationAddressId] uniqueidentifier NOT NULL,
+        [OrganizationUserMembershipId] uniqueidentifier NOT NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        CONSTRAINT [PK_OrganizationAddressMemberAccesses] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_OrganizationAddressMemberAccesses_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_OrganizationAddressMemberAccesses_OrganizationAddresses_OrganizationAddressId] FOREIGN KEY ([OrganizationAddressId]) REFERENCES [OrganizationAddresses] ([Id]) ON DELETE CASCADE,
+        CONSTRAINT [FK_OrganizationAddressMemberAccesses_OrganizationUserMemberships_OrganizationUserMembershipId] FOREIGN KEY ([OrganizationUserMembershipId]) REFERENCES [OrganizationUserMemberships] ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723165923_AddAddressVisibilityAndOrgSettings'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationAddressMemberAccesses_CreatedByAppUserId] ON [OrganizationAddressMemberAccesses] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723165923_AddAddressVisibilityAndOrgSettings'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_OrganizationAddressMemberAccesses_OrganizationAddressId_OrganizationUserMembershipId] ON [OrganizationAddressMemberAccesses] ([OrganizationAddressId], [OrganizationUserMembershipId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723165923_AddAddressVisibilityAndOrgSettings'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationAddressMemberAccesses_OrganizationUserMembershipId] ON [OrganizationAddressMemberAccesses] ([OrganizationUserMembershipId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260723165923_AddAddressVisibilityAndOrgSettings'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260723165923_AddAddressVisibilityAndOrgSettings', N'10.0.9');
+END;
+
+COMMIT;
+GO
+

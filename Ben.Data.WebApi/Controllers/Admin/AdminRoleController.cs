@@ -5,10 +5,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Ben.Data.WebApi.Controllers.Admin;
 
+/// <summary>CRUD management for ASP.NET Core Identity roles (SuperAdmin only).</summary>
 [ApiController]
 [Route("api/admin/roles")]
 [Authorize(Policy = RoleNames.SuperAdmin)]
-public sealed class AdminRoleController : ControllerBase
+public sealed class AdminRoleController : BenControllerBase
 {
     private readonly RoleManager<IdentityRole<Guid>> _roleManager;
     private readonly UserManager<AppUser> _userManager;

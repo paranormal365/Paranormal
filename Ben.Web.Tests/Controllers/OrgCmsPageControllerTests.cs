@@ -44,7 +44,7 @@ public class OrgCmsPageControllerTests
     {
         security ??= new Mock<IOrganizationSecurityService>();
         mapper   ??= CreateMapperMock();
-        var ctrl = new OrgCmsPageController(factory, mapper.Object, security.Object);
+        var ctrl = new OrgCmsPageController(factory, mapper.Object, security.Object, new Mock<IAuditLogService>().Object);
         ctrl.ControllerContext = new ControllerContext
             { HttpContext = new DefaultHttpContext { User = principal ?? Anonymous() } };
         return ctrl;

@@ -69,7 +69,7 @@ public class UploadFileAudioConfigControllerTests
         BenDataContext db,
         ClaimsPrincipal? user = null)
     {
-        var ctrl = new UploadFileAudioConfigController(db, CreateMapper());
+        var ctrl = new UploadFileAudioConfigController(db, CreateMapper(), new Mock<IAuditLogService>().Object);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = user ?? Anonymous() }

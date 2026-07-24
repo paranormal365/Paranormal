@@ -1,0 +1,334 @@
+@namespace Ben.Web.Library.Shared
+@using Ben.Web.Library.Manage.Maps
+
+@inject IBenAdminClient AdminClient
+@inject IJSRuntime JS
+
+<div class="row g-3">
+
+    @* ── Use my location ────────────────────────────────────────────────────── *@
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <label class="form-label fw-semibold mb-0">Street Address 1 <span class="text-danger">*</span></label>
+        <TelerikButton Icon="@SvgIcon.MapMarker"
+                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Size="@ThemeConstants.Button.Size.Small"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       OnClick="UseMyLocationAsync"
+                       Enabled="@(!_locating)"
+                       Title="Populate from your current GPS location">
+            @(_locating ? "Locating…" : "Use my location")
+        </TelerikButton>
+    </div>
+    @if (_locationError is not null)
+    {
+        <div class="col-12">
+            <div class="alert alert-warning py-1 small mb-0">@_locationError</div>
+        </div>
+    }
+
+    @* ── Address fields ──────────────────────────────────────────────────────── *@
+    @* ValueChanged fires on every keystroke so the map updates as the user types,
+       including after "Use my location" auto-fills a value that the user then edits.
+       The 700ms debounce inside TriggerGeocodingDebounce prevents excessive API calls. *@
+    <div class="col-12">
+        <TelerikTextBox Value="@State.StreetAddress1"
+                        ValueChanged="@((string v) => SetField(v, s => s.StreetAddress1 = v))"
+                        Width="100%"
+                        Placeholder="Street address, P.O. box" />
+    </div>
+    <div class="col-12">
+        <label class="form-label">Street Address 2</label>
+        <TelerikTextBox Value="@State.StreetAddress2"
+                        ValueChanged="@((string v) => SetField(v, s => s.StreetAddress2 = v))"
+                        Width="100%"
+                        Placeholder="Apt, suite, unit, building…" />
+    </div>
+    <div class="col-sm-5">
+        <label class="form-label fw-semibold">City <span class="text-danger">*</span></label>
+        <TelerikTextBox Value="@State.City"
+                        ValueChanged="@((string v) => SetField(v, s => s.City = v))"
+                        Width="100%" />
+    </div>
+    <div class="col-sm-3">
+        <label class="form-label fw-semibold">State <span class="text-danger">*</span></label>
+        <TelerikTextBox Value="@State.State"
+                        ValueChanged="@((string v) => SetField(v, s => s.State = v))"
+                        Width="100%" />
+    </div>
+    <div class="col-sm-4">
+        <label class="form-label fw-semibold">ZIP <span class="text-danger">*</span></label>
+        <TelerikTextBox Value="@State.ZipCode"
+                        ValueChanged="@((string v) => SetField(v, s => s.ZipCode = v))"
+                        Width="100%" />
+    </div>
+    <div class="col-12">
+        <label class="form-label fw-semibold">Country <span class="text-danger">*</span></label>
+        <TelerikTextBox Value="@State.Country"
+                        ValueChanged="@((string v) => SetField(v, s => s.Country = v))"
+                        Width="100%" />
+    </div>
+
+    @* ── Validation ── *@
+    @if (ValidationMessage is not null)
+    {
+        <div class="col-12">
+            <div class="alert alert-warning py-1 small mb-0">@ValidationMessage</div>
+        </div>
+    }
+
+    @* ── Live map preview ────────────────────────────────────────────────────── *@
+    <div class="col-12 mt-1">
+        @if (_geocoding)
+        {
+            <div class="text-muted small mb-1">
+                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                Looking up location…
+            </div>
+        }
+        @* Map is always visible. No-coords → world zoom; geocoded → zooms to address. *@
+        <AddressMapPlayer Latitude="@(_hasPreview ? _previewLat : 20.0)"
+                          Longitude="@(_hasPreview ? _previewLon : 0.0)"
+                          Zoom="@(_hasPreview ? (double?)null : 2.0)"
+                          Title="@(_hasPreview ? State.StreetAddress1 : "")"
+                          ReadOnly="true"
+                          ShowConfigPanel="false"
+                          Height="@MapHeight" />
+    </div>
+</div>
+
+@code {
+    /// <summary>Mutable address state shared with the parent form.</summary>
+    [Parameter, EditorRequired] public AddressFieldsState State { get; set; } = new();
+
+    /// <summary>Optional callback fired after any field or location change.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    /// <summary>Height of the embedded map preview.</summary>
+    [Parameter] public string MapHeight { get; set; } = "240px";
+
+    // ── Map / geocoding state ──────────────────────────────────────────────────
+
+    private double  _previewLat;
+    private double  _previewLon;
+    private bool    _hasPreview;
+    private bool    _geocoding;
+    private CancellationTokenSource? _geocodeCts;
+
+    // ── Location button state ──────────────────────────────────────────────────
+
+    private bool    _locating;
+    private string? _locationError;
+
+    // ── Initialise map if coordinates already exist (e.g. editing a saved record) ──
+
+    /// <summary>Call this from the parent after populating State with existing coords.</summary>
+    public void InitPreview(double? latitude, double? longitude)
+    {
+        if (latitude is null || longitude is null || (latitude == 0 && longitude == 0))
+        {
+            _hasPreview       = false;
+            State.Latitude    = null;
+            State.Longitude   = null;
+        }
+        else
+        {
+            _previewLat       = latitude.Value;
+            _previewLon       = longitude.Value;
+            _hasPreview       = true;
+            State.Latitude    = (decimal)latitude.Value;
+            State.Longitude   = (decimal)longitude.Value;
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// When State already carries Latitude/Longitude (e.g. an existing saved
+    /// address was loaded into the form), auto-initialize the map pin without
+    /// requiring the parent to call InitPreview() separately.
+    /// </summary>
+    protected override void OnParametersSet()
+    {
+        if (!_hasPreview && State.Latitude.HasValue && State.Longitude.HasValue
+            && !(State.Latitude == 0 && State.Longitude == 0))
+        {
+            _previewLat = (double)State.Latitude.Value;
+            _previewLon = (double)State.Longitude.Value;
+            _hasPreview = true;
+        }
+    }
+
+    /// <summary>
+    /// Resets the map preview to the zoomed-out world view.
+    /// Call from the parent when opening a blank 'New Address' form so the
+    /// previous entry's pin is not carried over.
+    /// </summary>
+    public void ResetPreview()
+    {
+        _hasPreview       = false;
+        State.Latitude    = null;
+        State.Longitude   = null;
+        _geocodeCts?.Cancel();
+        _geocoding        = false;
+        StateHasChanged();
+    }
+
+    // ── Field change → debounce geocoding ────────────────────────────────────
+
+    /// <summary>
+    /// Updates a single field on State, notifies the parent, and starts the
+    /// geocoding debounce timer.  Used by ValueChanged on each address textbox
+    /// so the map responds on every keystroke — including after a programmatic
+    /// fill from "Use my location".
+    /// </summary>
+    private void SetField(string value, Action<AddressFieldsState> setter)
+    {
+        setter(State);
+        _ = OnFieldChanged();   // fire-and-forget so ValueChanged stays synchronous
+    }
+
+    private async Task OnFieldChanged()
+    {
+        await OnChanged.InvokeAsync();
+        await TriggerGeocodingDebounce();
+    }
+
+    private async Task TriggerGeocodingDebounce()
+    {
+        _geocodeCts?.Cancel();
+        _geocodeCts?.Dispose();
+        _geocodeCts = new CancellationTokenSource();
+        var token   = _geocodeCts.Token;
+
+        if (string.IsNullOrWhiteSpace(State.StreetAddress1) ||
+            string.IsNullOrWhiteSpace(State.City) ||
+            string.IsNullOrWhiteSpace(State.State) ||
+            string.IsNullOrWhiteSpace(State.Country))
+        {
+            // Keep the last known pin visible while the user is mid-edit.
+            // The map only resets to world view via ResetPreview() (called by
+            // the parent on a fresh 'New Address' form).
+            return;
+        }
+
+        _geocoding = true;
+        StateHasChanged();
+
+        try
+        {
+            await Task.Delay(700, token);
+            var result = await AdminClient.PreviewGeocodingAsync(
+                State.StreetAddress1, State.StreetAddress2,
+                State.City, State.State, State.ZipCode, State.Country, token);
+
+            if (result?.Latitude is not null && result.Longitude is not null)
+            {
+                _previewLat    = (double)result.Latitude;
+                _previewLon    = (double)result.Longitude;
+                _hasPreview    = true;
+                State.Latitude  = result.Latitude;
+                State.Longitude = result.Longitude;
+            }
+            // No result → keep showing the last known pin rather than
+            // snapping back to world view. The user may just be mid-edit.
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        catch
+        {
+            // Keep last known pin on error — don't snap to world view.
+        }
+        finally
+        {
+            _geocoding = false;
+        }
+
+        StateHasChanged();
+    }
+
+    // ── Use my location ───────────────────────────────────────────────────────
+
+    private async Task UseMyLocationAsync()
+    {
+        _locating      = true;
+        _locationError = null;
+        StateHasChanged();
+
+        try
+        {
+            var coords = await JS.InvokeAsync<GeoCoords>("benGetCurrentPosition");
+
+            var result = await AdminClient.ReverseGeocodeAsync(coords.Latitude, coords.Longitude);
+            if (result is null || (string.IsNullOrWhiteSpace(result.City) && string.IsNullOrWhiteSpace(result.StreetAddress1)))
+            {
+                _locationError = "Could not resolve an address for your current location.";
+                return;
+            }
+
+            // Populate form fields with the resolved address
+            if (!string.IsNullOrWhiteSpace(result.StreetAddress1)) State.StreetAddress1 = result.StreetAddress1;
+            if (!string.IsNullOrWhiteSpace(result.City))           State.City           = result.City;
+            if (!string.IsNullOrWhiteSpace(result.State))          State.State          = result.State;
+            if (!string.IsNullOrWhiteSpace(result.ZipCode))        State.ZipCode        = result.ZipCode;
+            if (!string.IsNullOrWhiteSpace(result.Country))        State.Country        = result.Country;
+
+            // Show the pin at the GPS coordinates immediately (no need to geocode again)
+            _previewLat     = coords.Latitude;
+            _previewLon     = coords.Longitude;
+            _hasPreview     = true;
+            State.Latitude  = (decimal)coords.Latitude;
+            State.Longitude = (decimal)coords.Longitude;
+
+            await OnChanged.InvokeAsync();
+        }
+        catch (JSException ex) when (ex.Message.Contains("denied") || ex.Message.Contains("not supported"))
+        {
+            _locationError = "Location access was denied or is not supported by this browser.";
+        }
+        catch
+        {
+            _locationError = "Could not obtain your current location. Please ensure location services are enabled.";
+        }
+        finally
+        {
+            _locating = false;
+        }
+
+        StateHasChanged();
+    }
+
+    private sealed record GeoCoords(double Latitude, double Longitude);
+
+    // ── Validation ────────────────────────────────────────────────────────────────
+
+    private static readonly HashSet<string> _allowedCountries = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "US", "USA", "United States", "United States of America",
+        "CA", "Canada",
+        "MX", "Mexico", "México"
+    };
+
+    /// <summary>True when all required fields are filled and country is US/CA/MX.</summary>
+    public bool IsValid =>
+        !string.IsNullOrWhiteSpace(State.StreetAddress1) &&
+        !string.IsNullOrWhiteSpace(State.City) &&
+        !string.IsNullOrWhiteSpace(State.State) &&
+        !string.IsNullOrWhiteSpace(State.ZipCode) &&
+        _allowedCountries.Contains(State.Country?.Trim() ?? "");
+
+    /// <summary>First validation error message, or null when valid.</summary>
+    public string? ValidationMessage
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(State.StreetAddress1)) return "Street Address 1 is required.";
+            if (string.IsNullOrWhiteSpace(State.City))           return "City is required.";
+            if (string.IsNullOrWhiteSpace(State.State))          return "State is required.";
+            if (string.IsNullOrWhiteSpace(State.ZipCode))        return "ZIP code is required.";
+            if (!_allowedCountries.Contains(State.Country?.Trim() ?? ""))
+                return "Country must be US, CA (Canada), or MX (Mexico).";
+            return null;
+        }
+    }
+}

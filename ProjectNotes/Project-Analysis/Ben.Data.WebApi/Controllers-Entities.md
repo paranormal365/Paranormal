@@ -235,3 +235,126 @@ options.AddPolicy(RoleNames.SuperAdmin, policy =>
           .RequireAuthenticatedUser()
           .AddRequirements(new SuperAdminRequirement()));
 ```
+
+---
+
+## `UploadFileAudioConfigController`
+
+**Route:** `api/upload-files/{fileId:guid}/audio-config` | **Auth:** `[Authorize]`
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/audio-config` | Returns saved WaveSurfer config or null |
+| `PUT` | `/audio-config` | Create or replace (upsert) via `UpsertAudioConfigRequest` |
+| `DELETE` | `/audio-config` | Remove saved config; player reverts to theme defaults |
+
+---
+
+## `UploadFileRegionNoteController`
+
+**Route:** `api/upload-files/{fileId:guid}/region-notes` | **Auth:** `[Authorize]`
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/region-notes` | All notes for file, ordered by `RegionStart` then `TimeOffset` |
+| `GET` | `/region-notes/{noteId}` | Single note |
+| `POST` | `/region-notes` | Create (`CreateRegionNoteRequest`) |
+| `PUT` | `/region-notes/{noteId}` | Update note text, public flag, time offset |
+| `DELETE` | `/region-notes/{noteId}` | Delete |
+
+---
+
+## `UploadFileAudioClipController`
+
+**Route:** `api/upload-files/{fileId:guid}/clip` | **Auth:** `[Authorize]`
+
+| Method | Route | Description |
+|---|---|---|
+| `POST` | `/clip` | Clip audio to time range; creates new `UploadFile` with `ParentFileId` set |
+| `GET` | `/clip/preview?start=&end=` | Returns clipped WAV bytes **without** creating a DB record |
+
+**Supported input formats:** WAV, MP3. Output is always WAV. Returns 400 for unsupported formats.
+
+---
+
+## `UploadFileVoteController`
+
+**Route:** `api/upload-files/{fileId:guid}/votes` | **Auth:** `[Authorize]`
+
+Business rule: one vote per `(UploadFileId, AppUserId)` — enforced by unique DB index. Upsert pattern prevents duplicates at the application level too.
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/votes` | Returns `UploadFileVoteSummary` (UpvoteCount, DownvoteCount, TotalScore, TotalVotes, UserScore?) |
+| `PUT` | `/votes/my-vote` | Create or update own vote (`UpsertVoteRequest { Score }`). 201 on first vote, 200 on update. |
+| `DELETE` | `/votes/my-vote` | Remove own vote. 204 whether or not vote existed. |
+
+---
+
+## Organization Participation Controllers *(added 2026-07-22)*
+
+These controllers use org-level `OrganizationSecurityService` permission checks (not the SuperAdmin base class). All require `[Authorize]`.
+
+---
+
+### `OrganizationMembershipRequestController`
+
+**Route:** `api/organizations/{orgId}/membership-requests`
+
+| Method | Route | Permission Required | Request Body | Response | Description |
+|---|---|---|---|---|---|
+| `GET` | `/` | [`MembershipRequests`](../Ben.Data.Common/Enums.md#organizationsecuritytable)-Read or Org Admin | — | [`OrganizationMembershipRequestRecord[]`](../Ben.Service.Models/Records-Entities.md#organizationmembershiprequestrecord) | All requests for the org |
+| `GET` | `/my` | Any authenticated user | — | [`OrganizationMembershipRequestRecord?`](../Ben.Service.Models/Records-Entities.md#organizationmembershiprequestrecord) | The calling user's own request |
+| `POST` | `/` | Any authenticated user | `ApplyForMembershipRequest` | [`OrganizationMembershipRequestRecord`](../Ben.Service.Models/Records-Entities.md#organizationmembershiprequestrecord) | Submit an application. Fails `400` if `Organization.IsAcceptingApplications=false` or a `Pending` request already exists |
+| `PUT` | `/{id}/respond` | [`MembershipRequests`](../Ben.Data.Common/Enums.md#organizationsecuritytable)-Update or Org Admin | `RespondToMembershipRequest` | `bool` | Accept (→ auto-creates [`OrganizationUserMembership`](../Ben.Data.Source/Entities-Core.md) + sends [`UserMessage`](../Ben.Data.Source/Entities-User.md) notification) or Deny |
+| `DELETE` | `/{id}` | Applicant (own request only) | — | `bool` | Withdraw a `Pending` request |
+
+**Request types:**
+
+`ApplyForMembershipRequest(string? Message)` — optional cover message.
+
+`RespondToMembershipRequest(OrganizationMembershipRequestStatus Status, string? ResponseNote)` — `Status` must be `Accepted` or `Denied`. `ResponseNote` is included in the auto-generated `UserMessage`.
+
+---
+
+### `OrganizationFileController`
+
+**Route:** `api/organizations/{orgId}/files`
+
+| Method | Route | Permission Required | Request Body | Response | Description |
+|---|---|---|---|---|---|
+| `GET` | `/` | [`OrganizationFiles`](../Ben.Data.Common/Enums.md#organizationsecuritytable)-Read | — | [`OrganizationFileRecord[]`](../Ben.Service.Models/Records-Entities.md#organizationfilerecord) | List all org files |
+| `GET` | `/delete-log` | `OrganizationFiles`-Delete | — | [`OrganizationFileDeleteLogRecord[]`](../Ben.Service.Models/Records-Entities.md#organizationfiledeletelogrecord) | Immutable delete audit log |
+| `GET` | `/{id}/download` | `OrganizationFiles`-Read or `IsPublic=true` | — | File stream | Signed download |
+| `POST` | `/` | `OrganizationFiles`-Create | `OrgFileUploadRequest` (multipart, 200 MB limit) | [`OrganizationFileRecord`](../Ben.Service.Models/Records-Entities.md#organizationfilerecord) | Direct upload |
+| `POST` | `/copy-from-user/{uploadFileId}` | `OrganizationFiles`-Create | `CopyFromUserRequest` | `OrgFileCopyResult` | Copy an accessible user file. Checks ownership or public/shared access |
+| `PUT` | `/{id}/publish` | `OrganizationFiles`-Update | `PublishOrgFileRequest(bool IsPublic)` | [`OrganizationFileRecord`](../Ben.Service.Models/Records-Entities.md#organizationfilerecord) | Toggle public access; stamps `PublishedByAppUserId` + `DatePublished` |
+| `PUT` | `/{id}` | `OrganizationFiles`-Update | `OrgFileUpdateRequest` | [`OrganizationFileRecord`](../Ben.Service.Models/Records-Entities.md#organizationfilerecord) | Metadata-only update (Description, SortOrder) |
+| `DELETE` | `/{id}` | `OrganizationFiles`-Delete | — | `bool` | Writes [`OrganizationFileDeleteLog`](../Ben.Data.Source/Entities-Org.md#organizationfiledeleterelog) snapshot first, then deletes storage file + DB row |
+
+**Request types:**
+
+`OrgFileUploadRequest(IFormFile? File, Guid UploadFileTypeId, string? Description, bool IsPublic, int SortOrder)` — multipart form.
+
+`OrgFileUpdateRequest(string? Description, int SortOrder)` — metadata only; IsPublic is controlled via the `/publish` endpoint.
+
+`CopyFromUserRequest(string? Description, bool PublishImmediately = false)` — if `PublishImmediately=true` and caller has Update permission, the copied file is auto-published; result `PublishedImmediately=true`.
+
+**API-only result type (not in Service.Models):**  
+`OrgFileCopyResult(OrganizationFileRecord File, bool CanPublishImmediately, bool PublishedImmediately)` — the client-layer equivalent is [`OrgFileCopyClientResult`](../Ben.Service.Models/Records-Entities.md#orgfilecopyclientresult).
+
+---
+
+### `OrganizationAddressMapConfigController`
+
+**Route:** `api/organizations/{orgId}/addresses/{addressId}/map-config`
+
+| Method | Route | Permission Required | Request Body | Response | Description |
+|---|---|---|---|---|---|
+| `GET` | `/` | `OrganizationAddress`-Read | — | [`AddressMapConfigRecord?`](../Ben.Service.Models/Records-Entities.md#addressmapconfigrecord) | Load config; `404` if none exists |
+| `PUT` | `/` | `OrganizationAddress`-Update | `UpsertAddressMapConfigRequest` | [`AddressMapConfigRecord`](../Ben.Service.Models/Records-Entities.md#addressmapconfigrecord) | Create or replace the config |
+| `DELETE` | `/` | `OrganizationAddress`-Update | — | `bool` | Remove config; address reverts to no-map-display |
+
+**Request type:**
+
+`UpsertAddressMapConfigRequest(bool IsOnMap, bool ShowMarker, bool ShowRegion, double RegionRadiusMiles, string? MarkerColor, string? MarkerIconKey, string? RegionFillColor, double RegionFillOpacity, string? RegionStrokeColor, double RegionStrokeOpacity, double RegionStrokeWidth)` — full replacement PUT; null color strings use server-side defaults.

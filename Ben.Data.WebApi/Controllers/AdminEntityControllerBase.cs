@@ -5,13 +5,12 @@ using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 
 namespace Ben.Data.WebApi.Controllers;
 
 [ApiController]
 [Authorize(Policy = RoleNames.SuperAdmin)]
-public abstract class AdminEntityControllerBase<TEntity, TRecord> : ControllerBase
+public abstract class AdminEntityControllerBase<TEntity, TRecord> : BenControllerBase
     where TEntity : class
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
@@ -59,11 +58,20 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : ControllerBa
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
         EnsureEntityId(entity);
+
+        // Always overwrite audit fields from the authenticated principal — never trust client-sent values.
+        // This prevents FK violations (e.g. Guid.Empty) and tampering regardless of entity type.
+        var now           = DateTime.UtcNow;
+        var currentUserId = GetCurrentUserId();
+        SetPropertyIfExists(entity, "CreatedByAppUserId", currentUserId);
+        SetPropertyIfExists(entity, "DateCreated",        now);
+        SetPropertyIfExists(entity, "IsActive",           GetPropertyIfNotSet<bool>(entity, "IsActive", true));
+
         dbContext.Set<TEntity>().Add(entity);
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var id = GetEntityId(entity);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(typeof(TEntity).Name, id, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(typeof(TEntity).Name, id, entity, currentUserId, AppSources.WebApi, cancellationToken));
 
         return CreatedAtAction(nameof(GetById), new { id }, _mapper.Map<TRecord>(entity));
     }
@@ -79,6 +87,13 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : ControllerBa
             return NotFound();
 
         SetEntityId(entity, id);
+
+        // Preserve immutable creation fields that the client never sends back.
+        // Without this, CreatedByAppUserId deserialises as Guid.Empty which
+        // causes an FK violation on SQL Server.
+        CopyProperty(entity, before, "CreatedByAppUserId");
+        CopyProperty(entity, before, "DateCreated");
+
         dbContext.Entry(entity).State = EntityState.Modified;
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -106,18 +121,11 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : ControllerBa
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private Guid GetCurrentUserId()
-    {
-        var value = User.FindFirstValue(Ben.Data.WebApi.Services.EntraClaimsTransformation.AppUserIdClaimType)
-                    ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return Guid.TryParse(value, out var id) ? id : Guid.Empty;
-    }
-
     /// <summary>
     /// Awaits an audit task and silently swallows exceptions so that an audit
     /// failure never rolls back or masks the main CRUD operation.
     /// </summary>
-    private static async Task TryAuditAsync(Task auditTask)
+    private new static async Task TryAuditAsync(Task auditTask)
     {
         try { await auditTask; }
         catch { /* audit failure must not surface to the caller */ }
@@ -151,5 +159,33 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : ControllerBa
         {
             idProperty.SetValue(entity, id);
         }
+    }
+
+    /// <summary>Sets a property by name if it exists and is writable on the entity.</summary>
+    private static void SetPropertyIfExists(TEntity entity, string propertyName, object value)
+    {
+        var prop = typeof(TEntity).GetProperty(propertyName);
+        if (prop?.CanWrite == true)
+            prop.SetValue(entity, value);
+    }
+
+    /// <summary>Copies a property value from <paramref name="source"/> to <paramref name="target"/>.</summary>
+    private static void CopyProperty(TEntity target, TEntity source, string propertyName)
+    {
+        var prop = typeof(TEntity).GetProperty(propertyName);
+        if (prop is { CanRead: true, CanWrite: true })
+            prop.SetValue(target, prop.GetValue(source));
+    }
+
+    /// <summary>
+    /// Returns the property's current value if it is the default for its type, otherwise returns the
+    /// provided fallback. Used so that caller-supplied IsActive=false is still respected.
+    /// </summary>
+    private static T GetPropertyIfNotSet<T>(TEntity entity, string propertyName, T fallback)
+    {
+        var prop = typeof(TEntity).GetProperty(propertyName);
+        if (prop is null) return fallback;
+        var val = prop.GetValue(entity);
+        return (val is T t && !t.Equals(default(T))) ? t : fallback;
     }
 }

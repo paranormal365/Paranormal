@@ -13,7 +13,7 @@ namespace Ben.Data.WebApi.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/me")]
-public sealed class MeController : ControllerBase
+public sealed class MeController : BenControllerBase
 {
     private readonly UserManager<AppUser> _userManager;
 

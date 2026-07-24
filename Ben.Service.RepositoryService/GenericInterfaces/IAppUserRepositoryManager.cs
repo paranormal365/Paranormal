@@ -18,4 +18,12 @@ public interface IAppUserRepositoryManager
     IUserNoteTypeRepository NoteTypeRepository { get; }
     IUserPhoneRepository PhoneRepository { get; }
     IUserPhoneTypeRepository PhoneTypeRepository { get; }
+    IUploadFileRepository UploadFileRepository { get; }
+    IUploadFileTypeRepository UploadFileTypeRepository { get; }
+    IUploadFileTypeExtensionRepository UploadFileTypeExtensionRepository { get; }
+    IUploadFileAudioConfigRepository UploadFileAudioConfigRepository { get; }
+    IUploadFileOrganizationShareRepository UploadFileShareRepository { get; }
+    IUploadFilePermissionRequestRepository UploadFilePermissionRequestRepository { get; }
+    IUploadFileRegionNoteRepository UploadFileRegionNoteRepository { get; }
+    IUploadFileVoteRepository UploadFileVoteRepository { get; }
 }

@@ -30,8 +30,8 @@ Ben.Service.Models
 | File | Description |
 |---|---|
 | [Records-People.md](Records-People.md) | `AppUserRecord` — public user projection |
-| [Records-Admin.md](Records-Admin.md) | All 27 Admin records including `AppUserDetailAdminRecord` |
-| [Records-Entities.md](Records-Entities.md) | All 26 Entity records |
+| [Records-Admin.md](Records-Admin.md) | All Admin records including `AppUserDetailAdminRecord`, `UploadFileAdminRecord` |
+| [Records-Entities.md](Records-Entities.md) | Entity records: `UploadFileRecord` (+ parent tracking), `UploadFileTypeRecord`, `UploadFileAudioConfigRecord`, `UploadFileRegionNoteRecord`, `UploadFileVoteRecord` + `UploadFileVoteSummary`, `ClipAudioRequest`, `CreateRegionNoteRequest` and more |
 | [Records-Identity.md](Records-Identity.md) | All 6 Identity records |
 
 ## Design Conventions

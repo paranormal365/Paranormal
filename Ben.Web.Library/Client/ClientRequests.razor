@@ -1,0 +1,115 @@
+@page "/my-requests"
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>My Investigation Requests</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:860px;">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <h3 class="mb-0">My Investigation Requests</h3>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Icon="@SvgIcon.Plus"
+                       OnClick="@(() => NavManager.NavigateTo("/my-requests/new"))">
+            New Request
+        </TelerikButton>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_requests is null)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading your requests…" />
+    }
+    else if (_requests.Count == 0)
+    {
+        <div class="text-center py-5 text-secondary">
+            <p class="mb-3">You haven't submitted an investigation request yet.</p>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           OnClick="@(() => NavManager.NavigateTo("/my-requests/new"))">
+                Submit Your First Request
+            </TelerikButton>
+        </div>
+    }
+    else
+    {
+        <div class="d-flex flex-column gap-3">
+            @foreach (var r in _requests)
+            {
+                <div class="card" style="cursor:pointer;" @onclick="@(() => NavManager.NavigateTo($"/my-requests/{r.Id}"))">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start justify-content-between">
+                            <div>
+                                <div class="fw-semibold">@r.City, @r.State @r.ZipCode</div>
+                                <div class="text-secondary small">@r.StreetAddress1</div>
+                            </div>
+                            <span class="badge @StatusBadgeClass(r.Status)">@StatusLabel(r.Status)</span>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(r.Description))
+                        {
+                            <div class="text-secondary small mt-2" style="max-height:3em;overflow:hidden;">
+                                @((MarkupString)TruncateHtml(r.Description, 120))
+                            </div>
+                        }
+                        <div class="text-secondary small mt-2">Submitted @r.DateCreated.ToLocalTime().ToString("MMM d, yyyy")</div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<ClientRequestRecord>? _requests;
+    private string? _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!UserState.IsAuthenticated)
+        {
+            NavManager.NavigateTo("/login");
+            return;
+        }
+        try
+        {
+            _requests = (await AdminClient.GetMyClientRequestsAsync()).ToList();
+        }
+        catch { _error = "Failed to load requests."; _requests = []; }
+        StateHasChanged();
+    }
+
+    private static string StatusBadgeClass(ClientRequestStatus s) => s switch
+    {
+        ClientRequestStatus.Draft      => "bg-secondary",
+        ClientRequestStatus.Submitted  => "bg-primary",
+        ClientRequestStatus.Assigned   => "bg-success",
+        ClientRequestStatus.Closed     => "bg-dark",
+        ClientRequestStatus.Withdrawn  => "bg-warning text-dark",
+        _                              => "bg-secondary",
+    };
+
+    private static string StatusLabel(ClientRequestStatus s) => s switch
+    {
+        ClientRequestStatus.Draft      => "Draft",
+        ClientRequestStatus.Submitted  => "Submitted",
+        ClientRequestStatus.Assigned   => "Assigned",
+        ClientRequestStatus.Closed     => "Closed",
+        ClientRequestStatus.Withdrawn  => "Withdrawn",
+        _                              => s.ToString(),
+    };
+
+    /// <summary>Strip HTML tags and truncate for the card preview.</summary>
+    private static string TruncateHtml(string html, int maxChars)
+    {
+        var text = System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", " ")
+                       .Replace("&nbsp;", " ").Trim();
+        return text.Length > maxChars ? text[..maxChars] + "…" : text;
+    }
+}

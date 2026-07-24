@@ -20,14 +20,5 @@ namespace Ben.Service.RepositoryService
 
         public IOrganizationRepositoryManager Organization => organizationRepositoryManager ??= new OrganizationRepositoryManager(dbContextFactory);
         public IAppUserRepositoryManager AppUser => appUserRepositoryManager ??= new AppUserRepositoryManager(dbContextFactory);
-
-
-
-
-
-        public Task<int> SaveChangesAsync(CancellationToken token = default)
-        {
-            throw new NotImplementedException();
-        }
     }
 }

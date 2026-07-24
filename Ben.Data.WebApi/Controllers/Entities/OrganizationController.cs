@@ -9,7 +9,6 @@ using Ben.Service.Models.Entities;
 using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -19,16 +18,19 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
     private readonly IMapper _mapper2;
     private readonly IOrganizationSecurityService _security;
+    private readonly IAuditLogService _auditLog;
 
     public OrganizationController(
         IDbContextFactory<BenDataContext> dbContextFactory,
         IMapper mapper,
-        IOrganizationSecurityService security)
+        IOrganizationSecurityService security,
+        IAuditLogService auditLog)
         : base(dbContextFactory, mapper)
     {
         _dbFactory = dbContextFactory;
         _mapper2   = mapper;
         _security  = security;
+        _auditLog  = auditLog;
     }
 
     // ── Suppress base read-only GET endpoints ─────────────────────────────────
@@ -50,7 +52,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
     [HttpGet]
     public async Task<ActionResult<IEnumerable<OrganizationListItemResponse>>> GetAllWithPermissions(CancellationToken ct)
     {
-        var userId       = GetCurrentUserId();
+        var userId       = GetCurrentUserIdOrNull();
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
         var orgs = await _security.GetOrganizationsForUserAsync(userId.Value, ct);
@@ -69,7 +71,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
                 canEdit   = await _security.HasAccessAsync(userId.Value, org.Id, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Update, ct);
                 canDelete = await _security.HasAccessAsync(userId.Value, org.Id, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Delete, ct);
             }
-            result.Add(new OrganizationListItemResponse(org.Id, org.Name, org.UrlName, org.DateCreated, canEdit, canDelete));
+            result.Add(new OrganizationListItemResponse(org.Id, org.Name, org.UrlName, org.DateCreated, org.IsAcceptingApplications, canEdit, canDelete));
         }
         return Ok(result);
     }
@@ -78,7 +80,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<OrganizationAdminRecord>> GetByIdWithPermissions(Guid id, CancellationToken ct)
     {
-        var userId       = GetCurrentUserId();
+        var userId       = GetCurrentUserIdOrNull();
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
 
@@ -102,7 +104,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
     public async Task<ActionResult<OrganizationAdminRecord>> Update(
         Guid id, [FromBody] AdminUpdateOrganizationRequest request, CancellationToken ct)
     {
-        var userId       = GetCurrentUserId();
+        var userId       = GetCurrentUserIdOrNull();
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
 
@@ -116,15 +118,18 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         if (string.IsNullOrWhiteSpace(request.UrlName)) return BadRequest("UrlName is required.");
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var before = await db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.Id == id, ct);
+        if (before is null) return NotFound();
         var org = await db.Organizations.FirstOrDefaultAsync(o => o.Id == id, ct);
-        if (org is null) return NotFound();
 
-        org.Name               = request.Name.Trim();
-        org.UrlName            = request.UrlName.Trim().ToLowerInvariant();
-        org.DateUpdated        = DateTime.UtcNow;
-        org.UpdatedByAppUserId = userId.Value;
+        org!.Name                   = request.Name.Trim();
+        org.UrlName                = request.UrlName.Trim().ToLowerInvariant();
+        org.IsAcceptingApplications = request.IsAcceptingApplications;
+        org.DateUpdated            = DateTime.UtcNow;
+        org.UpdatedByAppUserId     = userId.Value;
 
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Organization), id, before, org!, GetCurrentUserId(), AppSources.WebApi, ct));
         return Ok(_mapper2.Map<OrganizationAdminRecord>(org));
     }
 
@@ -132,7 +137,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var userId       = GetCurrentUserId();
+        var userId       = GetCurrentUserIdOrNull();
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
 
@@ -148,6 +153,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
 
         db.Organizations.Remove(org);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(Organization), id, org, GetCurrentUserId(), AppSources.WebApi, ct));
         return NoContent();
     }
 
@@ -156,7 +162,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
     public async Task<ActionResult<OrganizationAdminRecord>> Create(
         [FromBody] AdminCreateOrganizationRequest request, CancellationToken ct)
     {
-        var userId = GetCurrentUserId();
+        var userId = GetCurrentUserIdOrNull();
         if (userId is null) return Unauthorized();
 
         if (!User.IsInRole(RoleNames.SuperAdmin)) return Forbid();
@@ -180,17 +186,12 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
 
         db.Organizations.Add(org);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi, ct));
 
         return CreatedAtAction(nameof(GetByIdWithPermissions), new { id = org.Id },
             _mapper2.Map<OrganizationAdminRecord>(org));
     }
 
-    private Guid? GetCurrentUserId()
-    {
-        var value = User.FindFirstValue(Services.EntraClaimsTransformation.AppUserIdClaimType)
-                    ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return Guid.TryParse(value, out var id) ? id : null;
-    }
 }
 
 public sealed record OrganizationListItemResponse(
@@ -198,8 +199,9 @@ public sealed record OrganizationListItemResponse(
     string Name,
     string UrlName,
     DateTime DateCreated,
+    bool IsAcceptingApplications,
     bool CanEdit,
     bool CanDelete);
 
-public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName);
+public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName, bool IsAcceptingApplications = false);
 

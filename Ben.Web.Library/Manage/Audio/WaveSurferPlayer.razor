@@ -25,7 +25,7 @@
             min-height:@cfg.MinHeight;
             max-height:@cfg.MaxHeight;
             height:@cfg.InitialHeight;
-            resize:vertical;
+            @(Resizable ? "resize:vertical;" : "")
             overflow:hidden;
             display:flex;
             flex-direction:column;
@@ -60,7 +60,12 @@
     <div id="@_containerId"
          style="flex:1;min-height:0;width:100%;overflow:hidden;">
     </div>
-
+    @* ── Timeline bar — OUTSIDE the waveform container so it is never clipped ── *@
+    @* The Timeline plugin inserts its 20 px canvas here via the `container`    *@
+    @* option.  display:none collapses it; flex:1 on the waveform fills the gap. *@
+    <div id="@(_containerId)-tl"
+         style="width:100%;overflow:hidden;">
+    </div>
     @* ── Built-in controls bar ─────────────────────────────────────────────── *@
     @if (cfg.ShowControls && _ready)
     {
@@ -164,9 +169,21 @@
     [Parameter] public EventCallback<string>        OnRegionIn      { get; set; }
     [Parameter] public EventCallback<string>        OnRegionOut     { get; set; }
 
+    [Parameter] public EventCallback<WsRegionContextMenuArgs> OnRegionContextMenu { get; set; }
+
     // Envelope events
     [Parameter] public EventCallback<List<WsEnvelopePoint>> OnEnvelopePointsChanged  { get; set; }
     [Parameter] public EventCallback<double>                 OnEnvelopeVolumeChanged  { get; set; }
+
+    // Spectrogram events
+    [Parameter] public EventCallback<int>       OnSpectrogramProgress    { get; set; }
+    [Parameter] public EventCallback             OnSpectrogramReady        { get; set; }
+    [Parameter] public EventCallback<WsPointArgs> OnSpectrogramContextMenu { get; set; }
+
+    // ── Layout parameters ─────────────────────────────────────────────────────
+
+    /// <summary>When <c>true</c> the player container gets <c>resize: vertical</c> so the user can drag to resize.</summary>
+    [Parameter] public bool Resizable { get; set; }
 
     // ── Public state ──────────────────────────────────────────────────────────
 
@@ -199,13 +216,21 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        try
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor.js");
 
-        _module = await JS.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Web.Library/Manage/Audio/WaveSurferPlayer.razor.js");
+            _dotnetRef = DotNetObjectReference.Create(this);
 
-        _dotnetRef = DotNetObjectReference.Create(this);
-
-        await InitAsync();
+            await InitAsync();
+        }
+        catch (Exception ex)
+        {
+            _loading = false;
+            _errorMessage = $"Player init failed: {ex.Message}";
+            StateHasChanged();
+        }
     }
 
     protected override async Task OnParametersSetAsync()
@@ -216,7 +241,17 @@
         if (currentSource == _lastSource) return;
         _lastSource = currentSource;
         if (currentSource is not null)
-            await _module.InvokeVoidAsync("load", _containerId, currentSource.ToLoadUrl());
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("load", _containerId, currentSource.ToLoadUrl());
+            }
+            catch (Exception ex)
+            {
+                _errorMessage = $"Load failed: {ex.Message}";
+                StateHasChanged();
+            }
+        }
     }
 
     private async Task InitAsync()
@@ -267,12 +302,59 @@
     public async Task<double> GetDurationAsync()  => await InvokeGet<double>("getDuration");
     public async Task<double> GetVolumeAsync()    => await InvokeGet<double>("getVolume");
 
+    /// <summary>Updates the text label of an existing region without recreating it.</summary>
+    public async Task UpdateRegionLabelAsync(string regionId, string? label)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("updateRegionLabel", _containerId, regionId, label);
+    }
+
+    // ── Timeline ─────────────────────────────────────────────────────────
+
+    /// <summary>Shows or hides the Timeline plugin bar. When showing, fires zoom() to repaint labels.</summary>
+    public async Task ToggleTimelineAsync(bool visible)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("toggleTimeline", _containerId, visible);
+    }
+
+    // ── Spectrogram ──────────────────────────────────────────────────────
+
+    /// <summary>Enables or disables the canvas-based spectrogram (Web Worker FFT). Idempotent.</summary>
+    public async Task ToggleSpectrogramAsync(bool enable, bool showLabels, int fftSamples = 512)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("toggleSpectrogram", _containerId, enable, showLabels, fftSamples, _dotnetRef);
+    }
+
+    /// <summary>Re-computes the spectrogram at a different FFT window size. Only effective when the spectrogram is currently visible.</summary>
+    public async Task SetSpectrogramResolutionAsync(int fftSamples, bool showLabels)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("setSpectrogramResolution", _containerId, fftSamples, showLabels, _dotnetRef);
+    }
+
+    /// <summary>Redraws the spectrogram with cached FFT data, toggling frequency-axis labels.</summary>
+    public async Task UpdateSpectrogramLabelsAsync(bool showLabels)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("updateSpectrogramLabels", _containerId, showLabels);
+    }
+
     // Regions
     public async Task<string?> AddRegionAsync(WsRegionParams region)
         => _module is null ? null : await _module.InvokeAsync<string?>("addRegion", _containerId, region);
 
     public async Task RemoveRegionAsync(string id)    => await Invoke("removeRegion", id);
     public async Task ClearRegionsAsync()             => await Invoke("clearRegions");
+
+    /// <summary>Removes all user-drawn regions, keeping the specified IDs (e.g. saved-clip overlays).</summary>
+    public async Task ClearUserRegionsAsync(IEnumerable<string> keepIds)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("clearUserRegions", _containerId, keepIds.ToArray());
+    }
+
     public async Task PlayRegionAsync(string id)      => await Invoke("playRegion", id);
 
     public async Task<List<WsRegionData>> GetRegionsAsync()
@@ -344,6 +426,11 @@
         await OnSeeking.InvokeAsync(time);
     }
 
+    [JSInvokable] public async Task OnWsRegionContextMenu(WsRegionContextMenuArgs args)
+    {
+        await OnRegionContextMenu.InvokeAsync(args);
+    }
+
     [JSInvokable] public async Task OnWsRegionCreated(WsRegionData r) => await OnRegionCreated.InvokeAsync(r);
     [JSInvokable] public async Task OnWsRegionUpdated(WsRegionData r) => await OnRegionUpdated.InvokeAsync(r);
     [JSInvokable] public async Task OnWsRegionRemoved(string id)      => await OnRegionRemoved.InvokeAsync(id);
@@ -353,6 +440,12 @@
 
     [JSInvokable] public async Task OnWsEnvelopePointsChanged(List<WsEnvelopePoint> pts) => await OnEnvelopePointsChanged.InvokeAsync(pts);
     [JSInvokable] public async Task OnWsEnvelopeVolumeChanged(double v)                  => await OnEnvelopeVolumeChanged.InvokeAsync(v);
+
+    // Spectrogram callbacks
+    [JSInvokable] public async Task OnWsSpectrogramProgress(int percent)  => await OnSpectrogramProgress.InvokeAsync(percent);
+    [JSInvokable] public async Task OnWsSpectrogramReady()                 => await OnSpectrogramReady.InvokeAsync();
+    [JSInvokable] public async Task OnWsSpectrogramContextMenu(double clientX, double clientY)
+        => await OnSpectrogramContextMenu.InvokeAsync(new WsPointArgs { ClientX = clientX, ClientY = clientY });
 
     // ── UI handlers ───────────────────────────────────────────────────────────
 

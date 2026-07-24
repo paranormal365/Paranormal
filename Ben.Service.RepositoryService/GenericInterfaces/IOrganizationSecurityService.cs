@@ -96,4 +96,15 @@ public interface IOrganizationSecurityService
     /// <returns>The created or updated <see cref="OrganizationAccessGrant"/> entity.</returns>
     /// <exception cref="InvalidOperationException">Thrown when <paramref name="targetUserId"/> is not an active member.</exception>
     Task<OrganizationAccessGrant> SetAccessGrantAsync(Guid organizationId, Guid targetUserId, OrganizationSecurityTable tableName, OrganizationSecurityAction actions, Guid actingUserId, CancellationToken token = default);
+
+    /// <summary>
+    /// Deletes one or all access grants for a user in an organization.
+    /// </summary>
+    /// <param name="organizationId">Target organization.</param>
+    /// <param name="targetUserId">User whose grant(s) are being removed.</param>
+    /// <param name="tableName">When provided, only the grant for that table is deleted.  When <c>null</c>, all grants for the user in the organization are deleted.</param>
+    /// <param name="actingUserId">Must be a SuperAdmin or an Owner/Administrator of the organization.</param>
+    /// <param name="token">Propagates cancellation to the database write.</param>
+    /// <returns>The number of grant rows deleted.</returns>
+    Task<int> DeleteGrantAsync(Guid organizationId, Guid targetUserId, OrganizationSecurityTable? tableName, Guid actingUserId, CancellationToken token = default);
 }

@@ -1,0 +1,94 @@
+@namespace Ben.Web.Library.Organization.Public
+@using Ben.Data.Common.Enums
+@using System.Text.Json
+
+@* Renders a single CmsSection on a public org page. *@
+
+@if (Section is null || string.IsNullOrWhiteSpace(Section.ContentJson)) { return; }
+
+<div class="cms-section mb-4">
+    @if (!string.IsNullOrWhiteSpace(Section.Title))
+    {
+        <h3 class="cms-section-title mb-3">@Section.Title</h3>
+    }
+
+    @switch (Section.SectionType)
+    {
+        case CmsSectionType.RichText:
+        case CmsSectionType.CustomHtml:
+            @RenderHtml()
+            break;
+
+        case CmsSectionType.ImageBanner:
+            @RenderImageBanner()
+            break;
+
+        case CmsSectionType.ContactInfo:
+            <div class="alert alert-light">
+                <em>Contact information section — configure in org settings.</em>
+            </div>
+            break;
+
+        case CmsSectionType.FileGallery:
+            <div class="alert alert-light">
+                <em>File gallery section.</em>
+            </div>
+            break;
+
+        case CmsSectionType.MemberRoster:
+            <div class="alert alert-light">
+                <em>Member roster section.</em>
+            </div>
+            break;
+
+        default:
+            <div class="text-muted small">Unknown section type.</div>
+            break;
+    }
+</div>
+
+@code {
+    [Parameter] public OrgPublicSectionItem? Section { get; set; }
+    /// <summary>Base URL prefix for file downloads, e.g. "http://localhost:5252/api/upload-files/"</summary>
+    [Parameter] public string FileBaseUrl { get; set; } = "";
+
+    private RenderFragment RenderHtml()
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(Section!.ContentJson);
+            var html = doc.RootElement.TryGetProperty("html", out var h) ? h.GetString() : null;
+            return @<div class="cms-richtext">@((MarkupString)(html ?? ""))</div>;
+        }
+        catch
+        {
+            return @<span />;
+        }
+    }
+
+    private RenderFragment RenderImageBanner()
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(Section!.ContentJson);
+            var root    = doc.RootElement;
+            var fileId  = root.TryGetProperty("uploadFileId", out var f) ? f.GetString() : null;
+            var altText = root.TryGetProperty("altText",      out var a) ? a.GetString() : "";
+            var linkUrl = root.TryGetProperty("linkUrl",      out var l) ? l.GetString() : null;
+
+            var imgSrc = fileId is not null ? $"{FileBaseUrl}{fileId}/download" : null;
+            if (imgSrc is null) return @<span />;
+
+            if (!string.IsNullOrWhiteSpace(linkUrl))
+                return @<a href="@linkUrl" target="_blank" rel="noopener">
+                           <img src="@imgSrc" alt="@altText" class="img-fluid rounded" />
+                       </a>;
+
+            return @<img src="@imgSrc" alt="@altText" class="img-fluid rounded" />;
+        }
+        catch
+        {
+            return @<span />;
+        }
+    }
+}

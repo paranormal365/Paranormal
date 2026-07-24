@@ -27,7 +27,7 @@ This registers every `Profile` class in the `Ben.Service.Mappings` assembly.
 
 | File | Description |
 |---|---|
-| [Profiles.md](Profiles.md) | All AutoMapper profile classes |
+| [Profiles.md](Profiles.md) | All AutoMapper profile classes (Admin, Entities, Identity) including `UploadFileAudioConfigProfile`, `UploadFileRegionNoteProfile`, `UploadFileVoteProfile` |
 
 ## Profile Patterns
 

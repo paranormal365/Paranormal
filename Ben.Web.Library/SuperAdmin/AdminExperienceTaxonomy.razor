@@ -1,0 +1,447 @@
+@page "/admin/experience-taxonomy"
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+<PageTitle>Experience Taxonomy</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h3 class="mb-0">Experience Taxonomy</h3>
+        <TelerikButton Icon="@SvgIcon.Plus"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       OnClick="OpenNewCategoryDialog">
+            New Category
+        </TelerikButton>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_categories is null)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading taxonomy…" />
+    }
+    else if (_categories.Count == 0)
+    {
+        <p class="text-secondary">No categories yet.</p>
+    }
+    else
+    {
+        @foreach (var cat in _categories.OrderBy(c => c.SortOrder))
+        {
+            <div class="card mb-3">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-2">
+                        @if (!string.IsNullOrEmpty(cat.IconClass))
+                        {
+                            <i class="@cat.IconClass @cat.ColorClass"></i>
+                        }
+                        <strong class="@cat.ColorClass">@cat.Name</strong>
+                        @if (!cat.IsApproved)
+                        {
+                            <span class="badge bg-warning text-dark ms-2">Pending Approval</span>
+                        }
+                        @if (!cat.IsActive)
+                        {
+                            <span class="badge bg-secondary ms-2">Inactive</span>
+                        }
+                        @if (!string.IsNullOrEmpty(cat.Description))
+                        {
+                            <small class="text-secondary ms-2">@cat.Description</small>
+                        }
+                    </div>
+                    <div class="d-flex gap-2">
+                        @if (!cat.IsApproved)
+                        {
+                            <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
+                                           OnClick="@(() => ApproveCategory(cat))">Approve</TelerikButton>
+                        }
+                        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                       Icon="@SvgIcon.Plus"
+                                       OnClick="@(() => OpenNewTypeDialog(cat))">Add Type</TelerikButton>
+                        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                       Icon="@SvgIcon.Pencil"
+                                       OnClick="@(() => OpenEditCategoryDialog(cat))">Edit</TelerikButton>
+                        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                       Icon="@SvgIcon.Trash"
+                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                       OnClick="@(() => ConfirmDeleteCategory(cat))">Delete</TelerikButton>
+                    </div>
+                </div>
+                <div class="card-body p-2">
+                    @if (_typesByCat.TryGetValue(cat.Id, out var types) && types.Count > 0)
+                    {
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach (var t in types.OrderBy(x => x.SortOrder))
+                            {
+                                <div class="badge-pill d-flex align-items-center gap-1 border rounded px-2 py-1 @(t.IsApproved ? "" : "border-warning")">
+                                    @if (!string.IsNullOrEmpty(t.IconClass))
+                                    {
+                                        <i class="@t.IconClass" style="font-size:0.75rem;"></i>
+                                    }
+                                    <span style="font-size:0.85rem;">@t.Name</span>
+                                    @if (!t.IsApproved) { <span class="text-warning" title="Pending approval">⚠</span> }
+                                    @if (!t.IsActive) { <span class="text-secondary" title="Inactive">●</span> }
+                                    <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                   Size="@ThemeConstants.Button.Size.Small"
+                                                   Icon="@SvgIcon.Pencil"
+                                                   Title="Edit"
+                                                   OnClick="@(() => OpenEditTypeDialog(cat, t))" />
+                                    <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                   Size="@ThemeConstants.Button.Size.Small"
+                                                   Icon="@SvgIcon.Trash"
+                                                   Title="Delete"
+                                                   OnClick="@(() => ConfirmDeleteType(cat, t))" />
+                                    @if (!t.IsApproved)
+                                    {
+                                        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                       Size="@ThemeConstants.Button.Size.Small"
+                                                       Title="Approve"
+                                                       OnClick="@(() => ApproveType(cat, t))">✓</TelerikButton>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <span class="text-secondary small">No types yet — click Add Type.</span>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@* ── Category dialog ──────────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showCatDialog"
+               Title="@(_editCat is null ? "New Category" : "Edit Category")"
+               Width="520px">
+    <DialogContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+                <TelerikTextBox @bind-Value="@_catForm.Name" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Description</label>
+                <TelerikTextArea @bind-Value="@_catForm.Description" Rows="2" Width="100%" />
+            </div>
+            <div class="col-6">
+                <label class="form-label fw-semibold">Icon Class</label>
+                <TelerikTextBox @bind-Value="@_catForm.IconClass" Width="100%" Placeholder="e.g. bi bi-ear" />
+            </div>
+            <div class="col-6">
+                <label class="form-label fw-semibold">Color Class</label>
+                <TelerikTextBox @bind-Value="@_catForm.ColorClass" Width="100%" Placeholder="e.g. text-warning" />
+            </div>
+            <div class="col-6">
+                <label class="form-label fw-semibold">Sort Order</label>
+                <TelerikNumericTextBox @bind-Value="@_catForm.SortOrder" Width="100%" />
+            </div>
+            <div class="col-6 d-flex align-items-center gap-2 pt-4">
+                <TelerikCheckBox @bind-Value="@_catForm.IsActive" Id="cat-active" />
+                <label for="cat-active" class="form-label mb-0">Active</label>
+            </div>
+        </div>
+        @if (_dialogError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="CloseCatDialog">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Icon="@SvgIcon.Save"
+                       OnClick="SaveCategory"
+                       Enabled="@(!_isBusy)">
+            @(_isBusy ? "Saving…" : "Save")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Type dialog ──────────────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showTypeDialog"
+               Title="@(_editType is null ? $"New Type — {_typeParentCat?.Name}" : $"Edit Type — {_typeParentCat?.Name}")"
+               Width="480px">
+    <DialogContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+                <TelerikTextBox @bind-Value="@_typeForm.Name" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Description</label>
+                <TelerikTextArea @bind-Value="@_typeForm.Description" Rows="2" Width="100%" />
+            </div>
+            <div class="col-8">
+                <label class="form-label fw-semibold">Icon Class</label>
+                <TelerikTextBox @bind-Value="@_typeForm.IconClass" Width="100%" Placeholder="e.g. bi bi-soundwave" />
+            </div>
+            <div class="col-4">
+                <label class="form-label fw-semibold">Sort Order</label>
+                <TelerikNumericTextBox @bind-Value="@_typeForm.SortOrder" Width="100%" />
+            </div>
+            <div class="col-12 d-flex align-items-center gap-2">
+                <TelerikCheckBox @bind-Value="@_typeForm.IsActive" Id="type-active" />
+                <label for="type-active" class="form-label mb-0">Active</label>
+            </div>
+        </div>
+        @if (_dialogError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="CloseTypeDialog">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Icon="@SvgIcon.Save"
+                       OnClick="SaveType"
+                       Enabled="@(!_isBusy)">
+            @(_isBusy ? "Saving…" : "Save")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Confirm delete ───────────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showDeleteConfirm" Title="Confirm Delete" Width="400px">
+    <DialogContent>
+        <p>Delete <strong>@_deleteLabel</strong>? This cannot be undone.</p>
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="@(() => _showDeleteConfirm = false)">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                       OnClick="ExecuteDelete"
+                       Enabled="@(!_isBusy)">
+            @(_isBusy ? "Deleting…" : "Delete")
+        </TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@code {
+    // ── State ─────────────────────────────────────────────────────────────────
+    private List<ExperienceCategoryRecord>? _categories;
+    private Dictionary<Guid, List<ExperienceTypeRecord>> _typesByCat = new();
+    private string? _error;
+    private bool _isBusy;
+
+    // Category dialog
+    private bool _showCatDialog;
+    private ExperienceCategoryRecord? _editCat;
+    private CategoryFormModel _catForm = new();
+    private string? _dialogError;
+
+    // Type dialog
+    private bool _showTypeDialog;
+    private ExperienceCategoryRecord? _typeParentCat;
+    private ExperienceTypeRecord? _editType;
+    private TypeFormModel _typeForm = new();
+
+    // Delete confirm
+    private bool _showDeleteConfirm;
+    private string? _deleteLabel;
+    private Func<Task>? _deleteAction;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _categories = (await AdminClient.GetAllExperienceCategoriesAsync()).ToList();
+            _typesByCat.Clear();
+            foreach (var cat in _categories)
+            {
+                var types = (await AdminClient.GetAllExperienceTypesAsync(cat.Id)).ToList();
+                _typesByCat[cat.Id] = types;
+            }
+        }
+        catch { _error = "Failed to load taxonomy."; }
+    }
+
+    // ── Category CRUD ─────────────────────────────────────────────────────────
+    private void OpenNewCategoryDialog()
+    {
+        _editCat = null;
+        _catForm = new();
+        _dialogError = null;
+        _showCatDialog = true;
+    }
+
+    private void OpenEditCategoryDialog(ExperienceCategoryRecord cat)
+    {
+        _editCat = cat;
+        _catForm = new CategoryFormModel
+        {
+            Name        = cat.Name,
+            Description = cat.Description ?? "",
+            IconClass   = cat.IconClass ?? "",
+            ColorClass  = cat.ColorClass ?? "",
+            SortOrder   = cat.SortOrder,
+            IsActive    = cat.IsActive,
+        };
+        _dialogError = null;
+        _showCatDialog = true;
+    }
+
+    private void CloseCatDialog() => _showCatDialog = false;
+
+    private async Task SaveCategory()
+    {
+        if (string.IsNullOrWhiteSpace(_catForm.Name)) { _dialogError = "Name is required."; return; }
+        _isBusy = true; _dialogError = null;
+        try
+        {
+            var req = new UpsertExperienceCategoryRequest(
+                _catForm.Name.Trim(),
+                NullIfEmpty(_catForm.Description),
+                NullIfEmpty(_catForm.IconClass),
+                NullIfEmpty(_catForm.ColorClass),
+                _catForm.SortOrder,
+                _catForm.IsActive);
+
+            var result = _editCat is null
+                ? await AdminClient.CreateExperienceCategoryAsync(req)
+                : await AdminClient.UpdateExperienceCategoryAsync(_editCat.Id, req);
+
+            if (result is null) { _dialogError = "Save failed."; }
+            else { CloseCatDialog(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _dialogError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private async Task ApproveCategory(ExperienceCategoryRecord cat)
+    {
+        _isBusy = true;
+        await AdminClient.ApproveExperienceCategoryAsync(cat.Id);
+        _isBusy = false;
+        await LoadAsync();
+    }
+
+    private void ConfirmDeleteCategory(ExperienceCategoryRecord cat)
+    {
+        _deleteLabel = $"category '{cat.Name}' and all its types";
+        _deleteAction = async () =>
+        {
+            await AdminClient.DeleteExperienceCategoryAsync(cat.Id);
+            await LoadAsync();
+        };
+        _showDeleteConfirm = true;
+    }
+
+    // ── Type CRUD ─────────────────────────────────────────────────────────────
+    private void OpenNewTypeDialog(ExperienceCategoryRecord cat)
+    {
+        _typeParentCat = cat;
+        _editType = null;
+        _typeForm = new() { SortOrder = (_typesByCat.TryGetValue(cat.Id, out var ts) ? ts.Count : 0) + 1 };
+        _dialogError = null;
+        _showTypeDialog = true;
+    }
+
+    private void OpenEditTypeDialog(ExperienceCategoryRecord cat, ExperienceTypeRecord t)
+    {
+        _typeParentCat = cat;
+        _editType = t;
+        _typeForm = new TypeFormModel
+        {
+            Name        = t.Name,
+            Description = t.Description ?? "",
+            IconClass   = t.IconClass ?? "",
+            SortOrder   = t.SortOrder,
+            IsActive    = t.IsActive,
+        };
+        _dialogError = null;
+        _showTypeDialog = true;
+    }
+
+    private void CloseTypeDialog() => _showTypeDialog = false;
+
+    private async Task SaveType()
+    {
+        if (_typeParentCat is null) return;
+        if (string.IsNullOrWhiteSpace(_typeForm.Name)) { _dialogError = "Name is required."; return; }
+        _isBusy = true; _dialogError = null;
+        try
+        {
+            var req = new UpsertExperienceTypeRequest(
+                _typeForm.Name.Trim(),
+                NullIfEmpty(_typeForm.Description),
+                NullIfEmpty(_typeForm.IconClass),
+                _typeForm.SortOrder,
+                _typeForm.IsActive);
+
+            var result = _editType is null
+                ? await AdminClient.CreateExperienceTypeAsync(_typeParentCat.Id, req)
+                : await AdminClient.UpdateExperienceTypeAsync(_typeParentCat.Id, _editType.Id, req);
+
+            if (result is null) { _dialogError = "Save failed."; }
+            else { CloseTypeDialog(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _dialogError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private async Task ApproveType(ExperienceCategoryRecord cat, ExperienceTypeRecord t)
+    {
+        _isBusy = true;
+        await AdminClient.ApproveExperienceTypeAsync(cat.Id, t.Id);
+        _isBusy = false;
+        await LoadAsync();
+    }
+
+    private void ConfirmDeleteType(ExperienceCategoryRecord cat, ExperienceTypeRecord t)
+    {
+        _deleteLabel = $"type '{t.Name}'";
+        _deleteAction = async () =>
+        {
+            await AdminClient.DeleteExperienceTypeAsync(cat.Id, t.Id);
+            await LoadAsync();
+        };
+        _showDeleteConfirm = true;
+    }
+
+    // ── Shared delete ─────────────────────────────────────────────────────────
+    private async Task ExecuteDelete()
+    {
+        if (_deleteAction is null) return;
+        _isBusy = true;
+        try { await _deleteAction(); _showDeleteConfirm = false; }
+        catch { _error = "Delete failed."; }
+        finally { _isBusy = false; }
+    }
+
+    private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
+
+    // ── Form models ───────────────────────────────────────────────────────────
+    private class CategoryFormModel
+    {
+        public string Name        { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string IconClass   { get; set; } = "";
+        public string ColorClass  { get; set; } = "";
+        public int SortOrder      { get; set; } = 1;
+        public bool IsActive      { get; set; } = true;
+    }
+
+    private class TypeFormModel
+    {
+        public string Name        { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string IconClass   { get; set; } = "";
+        public int SortOrder      { get; set; } = 1;
+        public bool IsActive      { get; set; } = true;
+    }
+}

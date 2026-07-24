@@ -85,7 +85,7 @@ public class OrganizationSecurityService : IOrganizationSecurityService
             return true;
         }
 
-        return await dbContext.OrganizationAccessGrants
+        var hasDirectGrant = await dbContext.OrganizationAccessGrants
             .AsNoTracking()
             .AnyAsync(g =>
                 g.OrganizationId == organizationId &&
@@ -93,6 +93,23 @@ public class OrganizationSecurityService : IOrganizationSecurityService
                 g.TableName == tableName &&
                 (g.Actions & actionName) != OrganizationSecurityAction.None,
                 token);
+
+        if (hasDirectGrant) return true;
+
+        // Check named role permissions (OR logic across all active roles assigned to the user)
+        return await (
+            from roleMembership in dbContext.OrganizationRoleMemberships
+            join role in dbContext.OrganizationRoles on roleMembership.OrganizationRoleId equals role.Id
+            join permission in dbContext.OrganizationRolePermissions on role.Id equals permission.OrganizationRoleId
+            join userMembership in dbContext.OrganizationUserMemberships on roleMembership.OrganizationUserMembershipId equals userMembership.Id
+            where userMembership.OrganizationId == organizationId
+                && userMembership.AppUserId == appUserId
+                && userMembership.IsActive
+                && role.IsActive
+                && permission.TableName == tableName
+                && (permission.Actions & actionName) != OrganizationSecurityAction.None
+            select role.Id
+        ).AnyAsync(token);
     }
 
     public async Task<IReadOnlyList<Organization>> GetOrganizationsForUserAsync(Guid appUserId, CancellationToken token = default)
@@ -272,6 +289,23 @@ public class OrganizationSecurityService : IOrganizationSecurityService
 
         await dbContext.SaveChangesAsync(token);
         return existing;
+    }
+
+    public async Task<int> DeleteGrantAsync(Guid organizationId, Guid targetUserId, OrganizationSecurityTable? tableName, Guid actingUserId, CancellationToken token = default)
+    {
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(token);
+        await EnsureCanManageOrganizationAsync(dbContext, actingUserId, organizationId, token);
+
+        IQueryable<OrganizationAccessGrant> query = dbContext.OrganizationAccessGrants
+            .Where(g => g.OrganizationId == organizationId && g.AppUserId == targetUserId);
+
+        if (tableName.HasValue)
+            query = query.Where(g => g.TableName == tableName.Value);
+
+        var rows = await query.ToListAsync(token);
+        dbContext.OrganizationAccessGrants.RemoveRange(rows);
+        await dbContext.SaveChangesAsync(token);
+        return rows.Count;
     }
 
     private static async Task<bool> IsSuperAdminAsync(BenDataContext dbContext, Guid appUserId, CancellationToken token)

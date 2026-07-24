@@ -12,15 +12,17 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [ApiController]
 [Route("api/upload-file-permission-requests")]
 [Authorize]
-public sealed class UploadFilePermissionRequestController : ControllerBase
+public sealed class UploadFilePermissionRequestController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;
+    private readonly IAuditLogService _auditLog;
 
-    public UploadFilePermissionRequestController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper)
+    public UploadFilePermissionRequestController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper, IAuditLogService auditLog)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
+        _auditLog = auditLog;
     }
 
     /// <summary>Get all permission requests for a file (visible to file owner and org admins).</summary>
@@ -82,6 +84,7 @@ public sealed class UploadFilePermissionRequestController : ControllerBase
 
         db.UploadFilePermissionRequests.Add(request);
         await db.SaveChangesAsync(cancellationToken);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFilePermissionRequest), request.Id, request, request.RequestedByAppUserId, AppSources.WebApi, cancellationToken));
         return CreatedAtAction(nameof(GetForFile), new { fileId }, _mapper.Map<UploadFilePermissionRequestRecord>(request));
     }
 
@@ -93,6 +96,7 @@ public sealed class UploadFilePermissionRequestController : ControllerBase
         CancellationToken cancellationToken)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var before = await db.UploadFilePermissionRequests.AsNoTracking().FirstOrDefaultAsync(r => r.Id == requestId, cancellationToken);
         var request = await db.UploadFilePermissionRequests.FirstOrDefaultAsync(r => r.Id == requestId, cancellationToken);
         if (request is null) return NotFound();
 
@@ -103,6 +107,7 @@ public sealed class UploadFilePermissionRequestController : ControllerBase
         request.DateUpdated = DateTime.UtcNow;
         request.UpdatedByAppUserId = body.ReviewedByAppUserId;
         await db.SaveChangesAsync(cancellationToken);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFilePermissionRequest), requestId, before!, request, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
         return Ok(_mapper.Map<UploadFilePermissionRequestRecord>(request));
     }
 
@@ -112,6 +117,7 @@ public sealed class UploadFilePermissionRequestController : ControllerBase
         Guid requestId, [FromQuery] Guid cancelledByAppUserId, CancellationToken cancellationToken)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var before = await db.UploadFilePermissionRequests.AsNoTracking().FirstOrDefaultAsync(r => r.Id == requestId, cancellationToken);
         var request = await db.UploadFilePermissionRequests.FirstOrDefaultAsync(r => r.Id == requestId, cancellationToken);
         if (request is null) return NotFound();
         if (request.RequestedByAppUserId != cancelledByAppUserId
@@ -121,6 +127,7 @@ public sealed class UploadFilePermissionRequestController : ControllerBase
         request.DateUpdated = DateTime.UtcNow;
         request.UpdatedByAppUserId = cancelledByAppUserId;
         await db.SaveChangesAsync(cancellationToken);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFilePermissionRequest), requestId, before!, request, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
         return Ok(_mapper.Map<UploadFilePermissionRequestRecord>(request));
     }
 }

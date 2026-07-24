@@ -12,6 +12,26 @@
 // Map of containerId → { ws, regionsPlugin, envelopePlugin, resizeObserver }
 const instances = new Map()
 
+// Timeline is hidden automatically when the player is shorter than this.
+const TIMELINE_MIN_HEIGHT = 150   // px
+
+/**
+ * Show or hide the external timeline bar, respecting both the user's explicit
+ * preference (_timelineEnabled on the instance) and the available height.
+ * Called on create, on every resize, and when the user clicks the toggle.
+ */
+function _syncTimelineVisibility(containerId) {
+  const instance = instances.get(containerId)
+  const tlEl     = document.getElementById(containerId + '-tl')
+  if (!tlEl) return
+
+  const playerEl  = document.getElementById(containerId)?.parentElement
+  const hasRoom   = playerEl ? playerEl.offsetHeight >= TIMELINE_MIN_HEIGHT : false
+  const userWants = instance ? instance._timelineEnabled !== false : true
+
+  tlEl.style.display = (hasRoom && userWants) ? '' : 'none'
+}
+
 // ── Lazy-loaded module cache ──────────────────────────────────────────────────
 let WaveSurfer = null
 let RegionsPlugin = null
@@ -137,12 +157,20 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
 
   if (plugins.regions && RegionsPlugin) {
     regionsPlugin = RegionsPlugin.create()
+    // dragToCreate is implemented manually below for reliable seek/draw separation
     wsPlugins.push(regionsPlugin)
   }
   if (plugins.hover && HoverPlugin)
     wsPlugins.push(HoverPlugin.create(plugins.hoverOptions ?? {}))
-  if (plugins.timeline && TimelinePlugin)
-    wsPlugins.push(TimelinePlugin.create(plugins.timelineOptions ?? {}))
+  if (plugins.timeline && TimelinePlugin) {
+    // Render the timeline in the dedicated external div so it is never clipped
+    // by the waveform container's overflow:hidden.
+    const tlEl = document.getElementById(containerId + '-tl')
+    wsPlugins.push(TimelinePlugin.create({
+      ...(plugins.timelineOptions ?? {}),
+      ...(tlEl ? { container: tlEl } : {}),
+    }))
+  }
   if (plugins.zoom && ZoomPlugin)
     wsPlugins.push(ZoomPlugin.create(plugins.zoomOptions ?? {}))
   if (plugins.minimap && MinimapPlugin)
@@ -200,7 +228,20 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
   // ── Core event forwarding ────────────────────────────────────────────────
   const safe = (fn) => fn.catch(() => {})
 
-  ws.on('ready',      (duration)  => safe(dotnetRef.invokeMethodAsync('OnWsReady',      duration)))
+  ws.on('ready', (duration) => {
+    // Force Timeline repaint after the TelerikWindow open animation completes.
+    // Also re-evaluate height-based visibility at each attempt.
+    ;[50, 200, 400].forEach(ms =>
+      setTimeout(() => {
+        const inst = instances.get(containerId)
+        if (inst) {
+          _syncTimelineVisibility(containerId)
+          inst.ws.zoom(inst.ws.options.minPxPerSec ?? 0)
+        }
+      }, ms)
+    )
+    safe(dotnetRef.invokeMethodAsync('OnWsReady', duration))
+  })
   ws.on('play',       ()          => safe(dotnetRef.invokeMethodAsync('OnWsPlay')))
   ws.on('pause',      ()          => safe(dotnetRef.invokeMethodAsync('OnWsPause')))
   ws.on('finish',     ()          => safe(dotnetRef.invokeMethodAsync('OnWsFinish')))
@@ -209,11 +250,33 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
   ws.on('error',      (err)       => safe(dotnetRef.invokeMethodAsync('OnWsError',      err?.message ?? String(err))))
   ws.on('zoom',       (pps)       => safe(dotnetRef.invokeMethodAsync('OnWsZoom',       pps)))
   ws.on('seeking',    (time)      => safe(dotnetRef.invokeMethodAsync('OnWsSeeking',    time)))
+  // Keep spectrogram in sync with zoom and horizontal scroll.
+  // When the pre-render canvas is ready, drawImage is instant — no debounce needed,
+  // which also makes the spectrogram follow the audio playhead smoothly.
+  ws.on('zoom', () => {
+    if (instances.get(containerId)?._prerenderCanvas) _redrawSpectrogramViewport(containerId)
+    else _scheduleSpectrogramRedraw(containerId, false)
+  })
+  ws.on('scroll', () => {
+    if (instances.get(containerId)?._prerenderCanvas) _redrawSpectrogramViewport(containerId)
+    else _scheduleSpectrogramRedraw(containerId, true)
+  })
 
   // ── Regions events ───────────────────────────────────────────────────────
   if (regionsPlugin) {
-    const rd = (r) => ({ id: r.id, start: r.start, end: r.end, color: r.color })
-    regionsPlugin.on('region-created', (r)  => safe(dotnetRef.invokeMethodAsync('OnWsRegionCreated', rd(r))))
+    const rd = (r) => ({ id: r.id, start: r.start, end: r.end, color: r.color, label: r.content ?? null })
+    regionsPlugin.on('region-created', (r)  => {
+      safe(dotnetRef.invokeMethodAsync('OnWsRegionCreated', rd(r)))
+      // Attach right-click (contextmenu) listener so the host can show a context menu
+      if (r.element) {
+        r.element.addEventListener('contextmenu', (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          safe(dotnetRef.invokeMethodAsync('OnWsRegionContextMenu',
+            { id: r.id, start: r.start, end: r.end, label: r.content ?? null, clientX: e.clientX, clientY: e.clientY }))
+        })
+      }
+    })
     regionsPlugin.on('region-updated', (r)  => safe(dotnetRef.invokeMethodAsync('OnWsRegionUpdated', rd(r))))
     regionsPlugin.on('region-removed', (r)  => safe(dotnetRef.invokeMethodAsync('OnWsRegionRemoved', r.id)))
     regionsPlugin.on('region-clicked', (r)  => safe(dotnetRef.invokeMethodAsync('OnWsRegionClicked', r.id)))
@@ -236,14 +299,118 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
     resizeTimer = setTimeout(() => {
       const inst = instances.get(containerId)
       if (inst) {
-        // Re-apply height:'auto' to trigger internal re-measure
         inst.ws.setOptions({ height: 'auto' })
+        _syncTimelineVisibility(containerId)
       }
     }, 50)
   })
   resizeObserver.observe(container.parentElement ?? container)
 
   instances.set(containerId, { ws, regionsPlugin, envelopePlugin, resizeObserver })
+
+  // ── Custom drag-to-create (only when requested) ────────────────────────
+  // We implement drag-to-create manually instead of relying on RegionsPlugin's
+  // built-in option so that:
+  //   1. A plain click still seeks (WaveSurfer handles it via 'click' event)
+  //   2. A click-and-drag creates a region with a live blue preview overlay
+  //   3. WaveSurfer's click-to-seek is blocked when the user actually dragged
+
+  if (plugins.regionsDragToCreate && regionsPlugin) {
+    const DRAG_THRESHOLD = 5   // px moved before we treat this as a drag
+
+    let dragStartX    = null
+    let dragStartTime = null
+    let isDragging    = false
+    let wasDragging   = false   // stays true until 'click' fires
+    let previewDiv    = null
+
+    const onPointerDown = (ev) => {
+      if (ev.button !== 0) return
+      const duration = ws.getDuration()
+      if (!duration) return
+      try { container.setPointerCapture(ev.pointerId) } catch {}
+      dragStartX    = ev.clientX
+      dragStartTime = _wsTimeAtClientX(ws, container, ev.clientX)
+      isDragging    = false
+      wasDragging   = false
+    }
+
+    const onPointerMove = (ev) => {
+      if (dragStartX === null) return
+      if (Math.abs(ev.clientX - dragStartX) > DRAG_THRESHOLD) isDragging = true
+      if (!isDragging) return
+
+      // Create / update the preview overlay
+      if (!previewDiv) {
+        previewDiv = document.createElement('div')
+        previewDiv.style.cssText =
+          'position:absolute;top:0;bottom:0;z-index:20;pointer-events:none;' +
+          'background:rgba(59,130,246,0.18);' +
+          'border:2px solid rgba(59,130,246,0.55);border-radius:2px;'
+        container.style.position = 'relative'
+        container.appendChild(previewDiv)
+      }
+      const rect   = container.getBoundingClientRect()
+      const leftPx = Math.min(dragStartX, ev.clientX) - rect.left
+      const wdPx   = Math.abs(ev.clientX - dragStartX)
+      previewDiv.style.left  = `${Math.max(0, leftPx)}px`
+      previewDiv.style.width = `${wdPx}px`
+    }
+
+    const onPointerUp = (ev) => {
+      if (previewDiv) { previewDiv.remove(); previewDiv = null }
+      try { container.releasePointerCapture(ev.pointerId) } catch {}
+
+      if (isDragging && dragStartTime !== null) {
+        wasDragging = true
+        const endTime = _wsTimeAtClientX(ws, container, ev.clientX)
+        const start = Math.min(dragStartTime, endTime)
+        const end   = Math.max(dragStartTime, endTime)
+
+        if (end - start > 0.05) {   // at least 50 ms
+          regionsPlugin.addRegion({
+            start, end,
+            color: 'rgba(59,130,246,0.2)',
+            drag: true, resize: true,
+          })
+        }
+      }
+
+      dragStartX    = null
+      dragStartTime = null
+      isDragging    = false
+    }
+
+    const onPointerCancel = () => {
+      if (previewDiv) { previewDiv.remove(); previewDiv = null }
+      dragStartX = null; dragStartTime = null
+      isDragging = false; wasDragging = false
+    }
+
+    // Stop WaveSurfer's seek when the user dragged instead of clicking
+    const onClickCapture = (ev) => {
+      if (wasDragging) {
+        ev.stopImmediatePropagation()
+        wasDragging = false
+      }
+    }
+
+    container.addEventListener('pointerdown',   onPointerDown,   { capture: true })
+    container.addEventListener('pointermove',   onPointerMove,   { capture: true })
+    container.addEventListener('pointerup',     onPointerUp,     { capture: true })
+    container.addEventListener('pointercancel', onPointerCancel, { capture: true })
+    container.addEventListener('click',         onClickCapture,  { capture: true })
+
+    // Store cleanup function so destroy() can remove the listeners
+    instances.get(containerId).dragCleanup = () => {
+      container.removeEventListener('pointerdown',   onPointerDown,   { capture: true })
+      container.removeEventListener('pointermove',   onPointerMove,   { capture: true })
+      container.removeEventListener('pointerup',     onPointerUp,     { capture: true })
+      container.removeEventListener('pointercancel', onPointerCancel, { capture: true })
+      container.removeEventListener('click',         onClickCapture,  { capture: true })
+      if (previewDiv) { previewDiv.remove(); previewDiv = null }
+    }
+  }
 
   if (audioUrl) {
     await ws.load(audioUrl)
@@ -307,14 +474,86 @@ export function clearRegions(containerId) {
   instances.get(containerId)?.regionsPlugin?.clearRegions()
 }
 
+/**
+ * Removes all regions except those whose IDs are in keepIds.
+ * Used to clear only user-drawn regions while preserving saved-clip overlays.
+ */
+export function clearUserRegions(containerId, keepIds) {
+  const { regionsPlugin } = instances.get(containerId) ?? {}
+  if (!regionsPlugin) return
+  const keep = new Set(keepIds ?? [])
+  regionsPlugin.getRegions()
+    .filter(r => !keep.has(r.id))
+    .forEach(r => r.remove())
+}
+
 export function getRegions(containerId) {
   const { regionsPlugin } = instances.get(containerId) ?? {}
   return regionsPlugin?.getRegions().map((r) => ({ id: r.id, start: r.start, end: r.end, color: r.color })) ?? []
 }
 
 export function playRegion(containerId, regionId) {
+  const instance = instances.get(containerId)
+  if (!instance) return
+  const { ws, regionsPlugin } = instance
+
+  const region = regionsPlugin?.getRegions().find(r => r.id === regionId)
+  if (!region) return
+
+  // Cancel any in-progress region-play monitor from a previous call
+  instance._regionPlayCleanup?.()
+  instance._regionPlayCleanup = null
+
+  const duration = ws.getDuration()
+  if (!duration) return
+
+  ws.seekTo(region.start / duration)
+  ws.play()
+
+  // WaveSurfer 7’s .on() returns an unsubscribe function
+  let unsubs = []
+
+  const stopAndClean = () => {
+    unsubs.forEach(u => u?.())
+    unsubs = []
+    if (instance._regionPlayCleanup === stopAndClean)
+      instance._regionPlayCleanup = null
+  }
+
+  // On every timeupdate, read the LIVE region end so that resize/expand/delete
+  // all take effect without touching the audio file itself.
+  unsubs.push(ws.on('timeupdate', () => {
+    const live = regionsPlugin.getRegions().find(r => r.id === regionId)
+    if (!live) {
+      // Region was deleted while playing — stop immediately
+      stopAndClean()
+      ws.pause()
+      return
+    }
+    if (ws.getCurrentTime() >= live.end) {
+      stopAndClean()
+      ws.pause()
+    }
+  }))
+
+  // Clean up if the user manually pauses or the track finishes naturally.
+  // Note: ws.seekTo() above fires a 'seeking' event asynchronously; skipNextSeek
+  // absorbs that first event so it does NOT tear down the region-end monitor.
+  let skipNextSeek = true
+  unsubs.push(ws.on('pause',  stopAndClean))
+  unsubs.push(ws.on('finish', stopAndClean))
+  unsubs.push(ws.on('seeking', () => {
+    if (skipNextSeek) { skipNextSeek = false; return }
+    stopAndClean()
+  }))
+
+  instance._regionPlayCleanup = stopAndClean
+}
+
+export function updateRegionLabel(containerId, regionId, label) {
   const { regionsPlugin } = instances.get(containerId) ?? {}
-  regionsPlugin?.getRegions().find((r) => r.id === regionId)?.play()
+  const region = regionsPlugin?.getRegions().find((r) => r.id === regionId)
+  if (region) region.setOptions({ content: label ?? '' })
 }
 
 // ── Envelope API ──────────────────────────────────────────────────────────────
@@ -325,12 +564,623 @@ export function removeEnvelopePoint(containerId, id)    { instances.get(containe
 export function setEnvelopeVolume(containerId, volume)  { instances.get(containerId)?.envelopePlugin?.setVolume(volume) }
 export function getEnvelopePoints(containerId)          { return instances.get(containerId)?.envelopePlugin?.getPoints() ?? [] }
 
+// ── Spectrogram (Web-Worker FFT) ─────────────────────────────────────────────
+
+/**
+ * Enables or disables the custom canvas spectrogram for the given player.
+ * When enabling, a Web Worker computes FFT data; progress/ready events fire
+ * back through the dotnetRef so Blazor can update its UI if desired.
+ * The loading-progress text is managed purely in the DOM for performance.
+ *
+ * @param {string}               containerId  Player container ID
+ * @param {boolean}              enable       true = show, false = remove
+ * @param {boolean}              showLabels   Render frequency-axis labels
+ * @param {number}               fftSamples   FFT window size (128/256/512/1024/2048/4096)
+ * @param {DotNetObjectReference} dotnetRef   Used to fire progress/ready/menu callbacks
+ */
+export async function toggleSpectrogram(containerId, enable, showLabels, fftSamples, dotnetRef) {
+  const instance = instances.get(containerId)
+  if (!instance) return
+
+  const canvasId = `${containerId}-spectro`
+
+  if (!enable) {
+    document.getElementById(`${canvasId}-wrapper`)?.remove()
+    if (instance._spectrogramDebounceTimer) { clearTimeout(instance._spectrogramDebounceTimer); delete instance._spectrogramDebounceTimer }
+    instance.spectrogramWorker?.terminate()
+    delete instance.spectrogramWorker
+    instance._spectrogramDrawWorker?.terminate()
+    delete instance._spectrogramDrawWorker
+    delete instance._spectrogramDrawVersion
+    delete instance._spectrogramCache
+    instance._spectrogramPrerenderWorker?.terminate()
+    delete instance._spectrogramPrerenderWorker
+    delete instance._prerenderCanvas
+    delete instance._prerenderWidth
+    delete instance.spectrogramData
+    delete instance.spectrogramMeta
+    // Restore the player container to its pre-spectrogram height
+    const _waveEl2 = document.getElementById(containerId)
+    const _playerEl2 = _waveEl2?.parentElement
+    if (_playerEl2 && instance._savedPlayerHeight !== undefined) {
+      _playerEl2.style.height = instance._savedPlayerHeight
+      delete instance._savedPlayerHeight
+      instance.ws.setOptions({ height: 'auto' })
+    }
+    return
+  }
+
+  // Expand the player container so the waveform keeps its current height and
+  // the spectrogram adds below it.  Only shrink the waveform if the expanded
+  // size would exceed the player's CSS max-height.
+  const SPECTRO_H  = 128   // canvas height (px) defined in _ensureSpectrogramCanvas
+  const _waveEl    = document.getElementById(containerId)
+  const _playerEl  = _waveEl?.parentElement
+  if (_playerEl && instance._savedPlayerHeight === undefined) {
+    const curH = _playerEl.offsetHeight
+    const maxH = parseFloat(getComputedStyle(_playerEl).maxHeight) || 9999
+    instance._savedPlayerHeight = _playerEl.style.height   // save inline value
+    _playerEl.style.height = `${Math.min(curH + SPECTRO_H, maxH)}px`
+    instance.ws.setOptions({ height: 'auto' })
+  }
+
+  // Already computed — rebuild the canvas from cached data (respects current zoom/scroll)
+  if (instance.spectrogramData) {
+    _ensureSpectrogramCanvas(canvasId, containerId, dotnetRef)
+    instance.spectrogramMeta.showLabels = showLabels
+    _hideSpectrogramLoading(canvasId)
+    if (!instance._prerenderCanvas) _startSpectrogramPrerender(containerId)  // restart pre-render
+    _redrawSpectrogramViewport(containerId)
+    return
+  }
+
+  const ws          = instance.ws
+  const audioBuffer = ws.getDecodedData?.()
+  if (!audioBuffer) {
+    console.warn('WaveSurfer audio not yet decoded — spectrogram unavailable')
+    return
+  }
+
+  // Create wrapper + loading text + canvas in the DOM
+  const canvas = _ensureSpectrogramCanvas(canvasId, containerId, dotnetRef)
+  if (!canvas) return
+
+  const noverlap   = Math.floor(fftSamples / 2)
+  const channelCopy = new Float32Array(audioBuffer.getChannelData(0))
+
+  const worker = new Worker('/js/wavesurfer/spectrogram-worker.js')
+  instance.spectrogramWorker = worker
+  instance.spectrogramMeta   = { sampleRate: audioBuffer.sampleRate, fftSamples, showLabels }
+
+  const safe = (fn) => fn.catch(() => {})
+
+  worker.onmessage = (e) => {
+    if (e.data.type === 'progress') {
+      _updateSpectrogramLoading(canvasId, e.data.percent)
+      safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramProgress', e.data.percent))
+    } else if (e.data.type === 'done') {
+      instance.spectrogramData = e.data.data
+      _hideSpectrogramLoading(canvasId)
+      _startSpectrogramPrerender(containerId)   // build full pre-render for instant playback tracking
+      _redrawSpectrogramViewport(containerId)    // immediate viewport render (slow path until pre-render ready)
+      safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramReady'))
+      worker.terminate()
+      delete instance.spectrogramWorker
+    }
+  }
+  worker.onerror = () => {
+    _hideSpectrogramLoading(canvasId)
+    safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramReady'))
+  }
+
+  worker.postMessage(
+    { channels: [channelCopy], sampleRate: audioBuffer.sampleRate, fftSamples, noverlap },
+    [channelCopy.buffer]
+  )
+}
+
+/**
+ * Re-computes the spectrogram canvas at a new FFT resolution.
+ * Clears cached data, shows a fresh loading indicator, and re-runs the Web Worker.
+ *
+ * @param {string}               containerId  Player container ID
+ * @param {number}               fftSamples   FFT window size (128/256/512/1024/2048/4096)
+ * @param {boolean}              showLabels   Whether to render frequency-axis labels
+ * @param {DotNetObjectReference} dotnetRef   Progress / ready callbacks
+ */
+export async function setSpectrogramResolution(containerId, fftSamples, showLabels, dotnetRef) {
+  const instance = instances.get(containerId)
+  if (!instance?.spectrogramMeta) return   // spectrogram not currently shown
+
+  const canvasId = `${containerId}-spectro`
+
+  // Terminate any in-progress computation (FFT worker, draw worker, pre-render worker)
+  if (instance._spectrogramDebounceTimer) { clearTimeout(instance._spectrogramDebounceTimer); delete instance._spectrogramDebounceTimer }
+  instance.spectrogramWorker?.terminate()
+  delete instance.spectrogramWorker
+  instance._spectrogramDrawWorker?.terminate()
+  delete instance._spectrogramDrawWorker
+  delete instance._spectrogramDrawVersion
+  delete instance._spectrogramCache
+  instance._spectrogramPrerenderWorker?.terminate()
+  delete instance._spectrogramPrerenderWorker
+  delete instance._prerenderCanvas
+  delete instance._prerenderWidth
+  delete instance.spectrogramData
+
+  // Show loading text again
+  const loadingEl = document.getElementById(`${canvasId}-loading`)
+  if (loadingEl) {
+    loadingEl.textContent = 'Generating spectrogram… 0%'
+    loadingEl.style.display = ''
+  }
+
+  // Clear the canvas
+  const canvas = document.getElementById(canvasId)
+  if (canvas) {
+    const ctx = canvas.getContext('2d')
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+  }
+
+  const ws          = instance.ws
+  const audioBuffer = ws.getDecodedData?.()
+  if (!audioBuffer) return
+
+  const noverlap    = Math.floor(fftSamples / 2)
+  const channelCopy = new Float32Array(audioBuffer.getChannelData(0))
+
+  const safe = (fn) => fn.catch(() => {})
+
+  const worker = new Worker('/js/wavesurfer/spectrogram-worker.js')
+  instance.spectrogramWorker = worker
+  instance.spectrogramMeta   = { sampleRate: audioBuffer.sampleRate, fftSamples, showLabels }
+
+  worker.onmessage = (e) => {
+    if (e.data.type === 'progress') {
+      _updateSpectrogramLoading(canvasId, e.data.percent)
+      safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramProgress', e.data.percent))
+    } else if (e.data.type === 'done') {
+      instance.spectrogramData = e.data.data
+      _hideSpectrogramLoading(canvasId)
+      _startSpectrogramPrerender(containerId)   // rebuild pre-render at new resolution
+      _redrawSpectrogramViewport(containerId)    // immediate viewport render (slow path until pre-render ready)
+      safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramReady'))
+      worker.terminate()
+      delete instance.spectrogramWorker
+    }
+  }
+  worker.onerror = () => {
+    _hideSpectrogramLoading(canvasId)
+    safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramReady'))
+  }
+
+  worker.postMessage(
+    { channels: [channelCopy], sampleRate: audioBuffer.sampleRate, fftSamples, noverlap },
+    [channelCopy.buffer]
+  )
+}
+
+/**
+ * Shows or hides the WaveSurfer Timeline plugin bar.
+ * When making it visible, fires zoom() so the Timeline plugin repaints its
+ * notches at the current container width.
+ */
+export function toggleTimeline(containerId, visible) {
+  const instance = instances.get(containerId)
+  // Store the user's preference so _syncTimelineVisibility can respect it
+  if (instance) instance._timelineEnabled = visible
+  _syncTimelineVisibility(containerId)
+  if (visible && instance) {
+    instance.ws.zoom(instance.ws.options.minPxPerSec ?? 0)
+  }
+}
+
+/**
+ * Redraws the spectrogram canvas with the cached FFT data, toggling labels.
+ */
+export function updateSpectrogramLabels(containerId, showLabels) {
+  const instance = instances.get(containerId)
+  if (!instance?.spectrogramData) return
+  if (instance.spectrogramMeta) instance.spectrogramMeta.showLabels = showLabels
+  _redrawSpectrogramViewport(containerId)
+}
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Pre-renders the entire spectrogram into an OffscreenCanvas at high resolution.
+ * Once ready, all viewport operations (zoom, scroll, playback tracking) become
+ * instant GPU-accelerated drawImage crops instead of Worker renders.
+ *
+ * Pre-render width = min(8192, max(2048, nFrames)) so there is roughly one
+ * pre-render pixel per FFT frame for typical fftSamples values.
+ *
+ * @param {string} containerId  Player container ID
+ */
+function _startSpectrogramPrerender(containerId) {
+  const instance = instances.get(containerId)
+  if (!instance?.spectrogramData) return
+
+  // Terminate any previous pre-render (e.g. resolution change mid-render)
+  instance._spectrogramPrerenderWorker?.terminate()
+  delete instance._spectrogramPrerenderWorker
+
+  const nFrames    = instance.spectrogramData.length
+  const nBins      = Math.floor((instance.spectrogramMeta?.fftSamples ?? 512) / 2)
+  const prerenderW = Math.min(8192, Math.max(2048, nFrames))
+
+  // Flatten all FFT frames into a single transferable Float32Array
+  const flat = new Float32Array(nFrames * nBins)
+  for (let i = 0; i < nFrames; i++)
+    flat.set(instance.spectrogramData[i], i * nBins)
+
+  const w = new Worker('/js/wavesurfer/spectrogram-draw-worker.js')
+  instance._spectrogramPrerenderWorker = w
+
+  w.onmessage = (e) => {
+    const { pixels, width, height } = e.data
+    const inst = instances.get(containerId)
+    if (!inst?.spectrogramData) return  // spectrogram was disabled while rendering
+
+    // Paint into an OffscreenCanvas so subsequent drawImage calls are GPU-backed
+    const oc  = new OffscreenCanvas(width, height)
+    oc.getContext('2d').putImageData(new ImageData(pixels, width, height), 0, 0)
+    inst._prerenderCanvas = oc
+    inst._prerenderWidth  = width
+
+    // Refresh the visible viewport now that instant drawImage is available
+    _redrawSpectrogramViewport(containerId)
+
+    w.terminate()
+    delete inst._spectrogramPrerenderWorker
+  }
+  w.onerror = () => {
+    w.terminate()
+    const inst = instances.get(containerId)
+    if (inst) delete inst._spectrogramPrerenderWorker
+  }
+
+  // cacheKey 'prerender' and version 1 are just placeholders—ignored by the main thread handler
+  w.postMessage(
+    { flat, nFrames, nBins, width: prerenderW, height: 128, version: 1, cacheKey: 'prerender' },
+    [flat.buffer]
+  )
+}
+
+/**
+ * Returns WaveSurfer's internal scroll container.
+ * WaveSurfer 7 creates its waveform inside a shadow root attached to a wrapper
+ * div it appends to the container we pass, so [part="scroll"] is only reachable
+ * via the shadow root — not via a plain querySelector on the outer container.
+ *
+ * @param {HTMLElement} container  The outer WaveSurfer container element
+ * @returns {HTMLElement|null}
+ */
+function _wsScrollEl(container) {
+  if (!container) return null
+  for (const child of container.children) {
+    if (child.shadowRoot) {
+      const el = child.shadowRoot.querySelector('[part="scroll"]')
+      if (el) return el
+    }
+  }
+  return null
+}
+
+/**
+ * Shows a "Recalculating spectrogram…" message in the loading div above the
+ * canvas while a new viewport render is being computed in the background.
+ */
+function _showSpectrogramRecalculating(canvasId) {
+  const el = document.getElementById(`${canvasId}-loading`)
+  if (el) { el.textContent = 'Recalculating spectrogram…'; el.style.display = '' }
+}
+
+/**
+ * Schedules a spectrogram viewport redraw, debouncing scroll events so that
+ * rapid scrolling only triggers one redraw per idle window.
+ *
+ * @param {string}  containerId  Player container ID
+ * @param {boolean} debounce     true = scroll (60 ms debounce), false = zoom (immediate)
+ */
+function _scheduleSpectrogramRedraw(containerId, debounce) {
+  const instance = instances.get(containerId)
+  if (!instance?.spectrogramData) return
+
+  if (instance._spectrogramDebounceTimer) {
+    clearTimeout(instance._spectrogramDebounceTimer)
+    instance._spectrogramDebounceTimer = null
+  }
+
+  if (debounce) {
+    // Scroll: silent background update — no loading message during playback auto-scroll.
+    // The render fires once the scroll settles (60 ms quiet window).
+    instance._spectrogramDebounceTimer = setTimeout(() => {
+      instance._spectrogramDebounceTimer = null
+      _redrawSpectrogramViewport(containerId)
+    }, 60)
+  } else {
+    _redrawSpectrogramViewport(containerId)
+  }
+}
+
+/**
+ * Returns the WaveSurfer time (seconds) at a given viewport X position.
+ * Mirrors WaveSurfer's own click-to-seek formula so times are always accurate,
+ * even when the waveform is zoomed in and scrolled.
+ *
+ * @param {WaveSurfer} ws          WaveSurfer instance
+ * @param {HTMLElement} container  The outer WaveSurfer container element
+ * @param {number}      clientX    Viewport X coordinate from a pointer event
+ * @returns {number}               Time in seconds, clamped to [0, duration]
+ */
+function _wsTimeAtClientX(ws, container, clientX) {
+  const duration = ws.getDuration?.() ?? 0
+  if (!duration) return 0
+  // WaveSurfer 7 renders into a scrollable [part="scroll"] div inside the container.
+  // Using its scrollLeft + scrollWidth mirrors WaveSurfer's own seek formula exactly.
+  const scrollEl = _wsScrollEl(container)
+  if (scrollEl && scrollEl.scrollWidth > scrollEl.clientWidth + 1) {
+    // Zoomed: position = (scrollOffset + x within visible area) / total scrollable width
+    const rect = scrollEl.getBoundingClientRect()
+    const x    = clientX - rect.left + scrollEl.scrollLeft
+    return Math.max(0, Math.min(duration, (x / scrollEl.scrollWidth) * duration))
+  }
+  // Default (fill parent): simple proportion across the container width
+  const rect = container.getBoundingClientRect()
+  return Math.max(0, Math.min(duration, ((clientX - rect.left) / rect.width) * duration))
+}
+
+/**
+ * Redraws the spectrogram canvas showing only the currently visible time window.
+ * Called after zoom and scroll events so the spectrogram stays aligned with the waveform.
+ *
+ * @param {string} containerId  Player container ID
+ */
+function _redrawSpectrogramViewport(containerId) {
+  const instance = instances.get(containerId)
+  if (!instance?.spectrogramData) return
+
+  const canvasId = `${containerId}-spectro`
+  const canvas   = document.getElementById(canvasId)
+  if (!canvas) return
+
+  const container  = document.getElementById(containerId)
+  const scrollEl   = _wsScrollEl(container)
+  const scrollLeft  = scrollEl?.scrollLeft  ?? 0
+  const scrollWidth = scrollEl?.scrollWidth ?? 0
+  const clientWidth = scrollEl?.clientWidth ?? canvas.parentElement?.offsetWidth ?? 800
+  const isZoomed    = scrollWidth > clientWidth + 1
+  const canvasW     = Math.max(1, canvas.parentElement?.offsetWidth ?? clientWidth ?? 800)
+
+  const { sampleRate = 44100, fftSamples = 512, showLabels = false } = instance.spectrogramMeta ?? {}
+  const nBins = Math.floor(fftSamples / 2)
+
+  // Visible fraction of the total audio
+  let startFrac = 0, endFrac = 1
+  if (isZoomed && scrollWidth > 0) {
+    startFrac = Math.max(0, scrollLeft / scrollWidth)
+    endFrac   = Math.min(1, (scrollLeft + clientWidth) / scrollWidth)
+  }
+
+  // ── Fast path: GPU-accelerated crop from pre-render OffscreenCanvas ──────────
+  // ~1 ms, synchronous. Enables smooth playback tracking at any zoom level.
+  if (instance._prerenderCanvas) {
+    const prerenderW = instance._prerenderWidth
+    const srcX     = Math.floor(startFrac * prerenderW)
+    const srcWidth = Math.max(1, Math.ceil((endFrac - startFrac) * prerenderW))
+
+    if (canvas.width !== canvasW || canvas.height !== 128) {
+      canvas.width  = canvasW
+      canvas.height = 128
+    }
+    const ctx = canvas.getContext('2d')
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(instance._prerenderCanvas, srcX, 0, srcWidth, 128, 0, 0, canvasW, 128)
+    if (showLabels) _drawSpectrogramLabels(canvas, sampleRate, nBins)
+    _hideSpectrogramLoading(canvasId)
+    return
+  }
+
+  // ── Slow path: Worker render (pre-render not yet ready) ────────────────────
+  const nFrames = instance.spectrogramData.length
+  let startFrame = 0, endFrame = nFrames
+  if (isZoomed && scrollWidth > 0) {
+    startFrame = Math.max(0, Math.floor(startFrac * nFrames))
+    endFrame   = Math.min(nFrames, Math.ceil(endFrac * nFrames))
+  }
+  endFrame = Math.max(startFrame + 1, endFrame)
+
+  // Cache lookup
+  if (!instance._spectrogramCache) instance._spectrogramCache = new Map()
+  const cacheKey = `${startFrame}:${endFrame}:${canvasW}:${showLabels ? 1 : 0}`
+  const cached   = instance._spectrogramCache.get(cacheKey)
+
+  if (cached) {
+    canvas.width  = canvasW
+    canvas.height = 128
+    canvas.getContext('2d').putImageData(cached, 0, 0)
+    _hideSpectrogramLoading(canvasId)
+    return
+  }
+
+  _showSpectrogramRecalculating(canvasId)
+
+  if (!instance._spectrogramDrawWorker) {
+    const w = new Worker('/js/wavesurfer/spectrogram-draw-worker.js')
+    instance._spectrogramDrawWorker  = w
+    instance._spectrogramDrawVersion = 0
+
+    w.onmessage = (e) => {
+      const { pixels, width, height, version, cacheKey: ck } = e.data
+      const inst = instances.get(containerId)
+      if (!inst || version !== inst._spectrogramDrawVersion) return  // stale — discard
+
+      const c = document.getElementById(canvasId)
+      if (!c) return
+
+      c.width  = width
+      c.height = height
+      const ctx = c.getContext('2d')
+      ctx.putImageData(new ImageData(pixels, width, height), 0, 0)
+
+      if (ck.endsWith(':1')) {
+        const { sampleRate: sr = 44100, fftSamples: fs = 512 } = inst.spectrogramMeta ?? {}
+        _drawSpectrogramLabels(c, sr, Math.floor(fs / 2))
+      }
+
+      if (!inst._spectrogramCache) inst._spectrogramCache = new Map()
+      if (inst._spectrogramCache.size >= 30)
+        inst._spectrogramCache.delete(inst._spectrogramCache.keys().next().value)
+      inst._spectrogramCache.set(ck, ctx.getImageData(0, 0, width, height))
+      _hideSpectrogramLoading(canvasId)
+    }
+    w.onerror = () => _hideSpectrogramLoading(canvasId)
+  }
+
+  instance._spectrogramDrawVersion = (instance._spectrogramDrawVersion ?? 0) + 1
+
+  const sliceLen = endFrame - startFrame
+  const flat     = new Float32Array(sliceLen * nBins)
+  for (let i = 0; i < sliceLen; i++)
+    flat.set(instance.spectrogramData[startFrame + i], i * nBins)
+
+  instance._spectrogramDrawWorker.postMessage(
+    { flat, nFrames: sliceLen, nBins, width: canvasW, height: 128,
+      version: instance._spectrogramDrawVersion, cacheKey },
+    [flat.buffer]
+  )
+}
+
+function _ensureSpectrogramCanvas(canvasId, containerId, dotnetRef) {
+  if (document.getElementById(canvasId)) return document.getElementById(canvasId)
+
+  const waveformEl = document.getElementById(containerId)
+  if (!waveformEl) return null
+
+  const wrapper  = document.createElement('div')
+  wrapper.id     = `${canvasId}-wrapper`
+  wrapper.style.cssText = 'position:relative;width:100%;'
+
+  const loadingEl = document.createElement('div')
+  loadingEl.id    = `${canvasId}-loading`
+  loadingEl.style.cssText = 'font-size:0.72rem;color:var(--kendo-color-subtle-text,#888);font-style:italic;padding:2px 4px;'
+  loadingEl.textContent   = 'Generating spectrogram… 0%'
+
+  const canvas = document.createElement('canvas')
+  canvas.id    = canvasId
+  canvas.style.cssText = 'display:block;width:100%;height:128px;cursor:context-menu;'
+
+  wrapper.appendChild(loadingEl)
+  wrapper.appendChild(canvas)
+
+  // Insert immediately after the waveform container
+  waveformEl.parentNode.insertBefore(wrapper, waveformEl.nextSibling)
+
+  // Right-click → context menu
+  const safe = (fn) => fn.catch(() => {})
+  canvas.addEventListener('contextmenu', (ev) => {
+    ev.preventDefault()
+    ev.stopPropagation()
+    safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramContextMenu', ev.clientX, ev.clientY))
+  })
+
+  return canvas
+}
+
+function _updateSpectrogramLoading(canvasId, percent) {
+  const el = document.getElementById(`${canvasId}-loading`)
+  if (el) el.textContent = `Generating spectrogram… ${percent}%`
+}
+
+function _hideSpectrogramLoading(canvasId) {
+  const el = document.getElementById(`${canvasId}-loading`)
+  if (el) el.style.display = 'none'
+}
+
+/**
+ * Draws a spectrogram to a canvas synchronously using a pixel-buffer approach
+ * (O(W×H) output iterations instead of O(nFrames×nBins) fillRect calls).
+ * Used for the initial render once FFT data is ready. Subsequent viewport
+ * redraws triggered by zoom/scroll use the async Worker path in
+ * _redrawSpectrogramViewport instead.
+ */
+function _drawSpectrogram(canvas, data, showLabels, sampleRate, fftSamples) {
+  if (!data?.length) return
+
+  const W     = Math.max(1, canvas.parentElement?.offsetWidth || 800)
+  const H     = 128
+  canvas.width  = W
+  canvas.height = H
+
+  const nFrames = data.length
+  const nBins   = Math.floor(fftSamples / 2)
+
+  // Normalise over the visible slice
+  let maxMag = 1e-9
+  for (const frame of data)
+    for (const v of frame)
+      if (v > maxMag) maxMag = v
+
+  // O(W×H) pixel-buffer render — one putImageData instead of millions of fillRects
+  const pixels = new Uint8ClampedArray(W * H * 4)
+  for (let px = 0; px < W; px++) {
+    const frame = data[Math.min(nFrames - 1, Math.floor(px * nFrames / W))]
+    for (let py = 0; py < H; py++) {
+      const binIdx = nBins - 1 - Math.min(nBins - 1, Math.floor(py * nBins / H))
+      const t  = frame[binIdx] / maxMag
+      const r  = Math.floor(255 * Math.pow(t, 0.5))
+      const g  = Math.floor(255 * Math.min(1, t * 1.5))
+      const b  = Math.floor(255 * Math.max(0, 0.9 - t))
+      const idx = (py * W + px) * 4
+      pixels[idx]     = r
+      pixels[idx + 1] = g
+      pixels[idx + 2] = b
+      pixels[idx + 3] = 255
+    }
+  }
+  canvas.getContext('2d').putImageData(new ImageData(pixels, W, H), 0, 0)
+
+  if (showLabels) _drawSpectrogramLabels(canvas, sampleRate, nBins)
+}
+
+/**
+ * Overlays frequency-axis gridlines and labels on an already-drawn spectrogram canvas.
+ * Fast canvas text calls only — safe to call on the main thread after putImageData.
+ */
+function _drawSpectrogramLabels(canvas, sampleRate, nBins) {
+  const W = canvas.width
+  const H = canvas.height
+  if (!W || !H) return
+  const ctx     = canvas.getContext('2d')
+  const nyquist = sampleRate / 2
+  ctx.font      = '10px monospace'
+  ctx.textAlign = 'left'
+  for (const freq of [250, 500, 1000, 2000, 4000, 8000, 16000]) {
+    if (freq >= nyquist) continue
+    const y = H - Math.floor((freq / nyquist) * H)
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'
+    ctx.setLineDash([3, 3])
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
+    ctx.setLineDash([])
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'
+    ctx.fillText(freq >= 1000 ? `${freq / 1000}kHz` : `${freq}Hz`, 4, y - 2)
+  }
+}
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 export function destroy(containerId) {
   const instance = instances.get(containerId)
   if (!instance) return
+  instance._regionPlayCleanup?.()
+  instance.dragCleanup?.()
   instance.resizeObserver?.disconnect()
+  if (instance._spectrogramDebounceTimer) clearTimeout(instance._spectrogramDebounceTimer)
+  instance.spectrogramWorker?.terminate()
+  instance._spectrogramPrerenderWorker?.terminate()
+  instance._spectrogramDrawWorker?.terminate()
   try { instance.ws?.destroy() } catch { /* ignore */ }
   instances.delete(containerId)
 }
