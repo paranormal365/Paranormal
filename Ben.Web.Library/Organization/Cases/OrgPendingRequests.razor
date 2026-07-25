@@ -1,0 +1,232 @@
+@page "/organizations/{OrgId:guid}/pending-requests"
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>Pending Requests</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:900px;">
+    <div class="d-flex align-items-center gap-2 mb-4">
+        <TelerikButton Icon="@SvgIcon.ArrowLeft"
+                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases"))">
+            Cases
+        </TelerikButton>
+        <span class="text-secondary">/</span>
+        <h5 class="mb-0">Pending Investigation Requests</h5>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_requests is null)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading pending requests…" />
+    }
+    else if (_requests.Count == 0)
+    {
+        <div class="text-center py-5 text-secondary">
+            <p>No pending investigation requests.</p>
+        </div>
+    }
+    else
+    {
+        <div class="d-flex flex-column gap-3">
+            @foreach (var r in _requests)
+            {
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start justify-content-between gap-3">
+                            <div>
+                                <div class="fw-semibold">@r.City, @r.State @r.ZipCode</div>
+                                <div class="text-secondary small mt-1">
+                                    Applied @r.DateApplied.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                                </div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                               Icon="@SvgIcon.Check"
+                                               OnClick="@(() => OpenAccept(r))">
+                                    Accept
+                                </TelerikButton>
+                                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                               Icon="@SvgIcon.Cancel"
+                                               OnClick="@(() => OpenDecline(r))">
+                                    Decline
+                                </TelerikButton>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(r.Description))
+                        {
+                            <div class="text-secondary small mt-2 border-top pt-2"
+                                 style="max-height:4em;overflow:hidden;">
+                                @((MarkupString)TruncateHtml(r.Description, 200))
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@* ── Accept window ─────────────────────────────────────────────────────────── *@
+@if (_acceptTarget is not null)
+{
+    <TelerikWindow Visible="true"
+                   VisibleChanged="@((bool v) => { if (!v) _acceptTarget = null; })"
+                   Width="500px"
+                   Modal="true"
+                   CloseOnOverlayClick="false">
+        <WindowTitle>Accept Investigation Request</WindowTitle>
+        <WindowActions>
+            <WindowAction Name="Close" OnClick="@(() => _acceptTarget = null)" />
+        </WindowActions>
+        <WindowContent>
+            <div class="p-2">
+                <p class="text-secondary small mb-3">
+                    Accepting this request will create a new case.
+                    You can update the title and assign a case manager later.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Case Title <span class="text-secondary fw-normal">(optional)</span></label>
+                    <TelerikTextBox @bind-Value="@_acceptTitle"
+                                    Width="100%"
+                                    Placeholder="Auto-generated from client name and city if blank" />
+                </div>
+                @if (_actionError is not null)
+                {
+                    <div class="alert alert-danger">@_actionError</div>
+                }
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <TelerikButton OnClick="@(() => _acceptTarget = null)">Cancel</TelerikButton>
+                    <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                   Icon="@SvgIcon.Check"
+                                   Enabled="@(!_isBusy)"
+                                   OnClick="AcceptAsync">
+                        @(_isBusy ? "Accepting…" : "Accept & Create Case")
+                    </TelerikButton>
+                </div>
+            </div>
+        </WindowContent>
+    </TelerikWindow>
+}
+
+@* ── Decline window ────────────────────────────────────────────────────────── *@
+@if (_declineTarget is not null)
+{
+    <TelerikWindow Visible="true"
+                   VisibleChanged="@((bool v) => { if (!v) _declineTarget = null; })"
+                   Width="420px"
+                   Modal="true"
+                   CloseOnOverlayClick="false">
+        <WindowTitle>Decline Request</WindowTitle>
+        <WindowActions>
+            <WindowAction Name="Close" OnClick="@(() => _declineTarget = null)" />
+        </WindowActions>
+        <WindowContent>
+            <div class="p-2">
+                <p>Are you sure you want to decline this request from <strong>@_declineTarget.City, @_declineTarget.State</strong>?</p>
+                @if (_actionError is not null)
+                {
+                    <div class="alert alert-danger">@_actionError</div>
+                }
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <TelerikButton OnClick="@(() => _declineTarget = null)">Cancel</TelerikButton>
+                    <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                   Enabled="@(!_isBusy)"
+                                   OnClick="DeclineAsync">
+                        @(_isBusy ? "Declining…" : "Decline")
+                    </TelerikButton>
+                </div>
+            </div>
+        </WindowContent>
+    </TelerikWindow>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private List<OrgPendingRequestRecord>? _requests;
+    private string? _error;
+    private bool _isBusy;
+    private string? _actionError;
+
+    private OrgPendingRequestRecord? _acceptTarget;
+    private string _acceptTitle = "";
+    private OrgPendingRequestRecord? _declineTarget;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        try { _requests = (await AdminClient.GetOrgPendingRequestsAsync(OrgId)).ToList(); }
+        catch { _error = "Failed to load pending requests."; _requests = []; }
+    }
+
+    private void OpenAccept(OrgPendingRequestRecord r)
+    {
+        _acceptTarget = r;
+        _acceptTitle  = "";
+        _actionError  = null;
+    }
+
+    private void OpenDecline(OrgPendingRequestRecord r)
+    {
+        _declineTarget = r;
+        _actionError   = null;
+    }
+
+    private async Task AcceptAsync()
+    {
+        if (_acceptTarget is null) return;
+        _isBusy = true; _actionError = null;
+        try
+        {
+            var req = new AcceptClientRequestAsCaseRequest(
+                Title: string.IsNullOrWhiteSpace(_acceptTitle) ? null : _acceptTitle.Trim(),
+                CaseManagerAppUserId: null);
+            var newCase = await AdminClient.AcceptClientRequestAsCaseAsync(OrgId, _acceptTarget.ClientRequestId, req);
+            if (newCase is null) { _actionError = "Accept failed."; }
+            else
+            {
+                _acceptTarget = null;
+                NavManager.NavigateTo($"/organizations/{OrgId}/cases/{newCase.Id}");
+            }
+        }
+        catch (Exception ex) { _actionError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private async Task DeclineAsync()
+    {
+        if (_declineTarget is null) return;
+        _isBusy = true; _actionError = null;
+        try
+        {
+            await AdminClient.DeclineClientRequestAsync(OrgId, _declineTarget.ClientRequestId);
+            _requests?.Remove(_declineTarget);
+            _declineTarget = null;
+        }
+        catch (Exception ex) { _actionError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private static string TruncateHtml(string html, int maxChars)
+    {
+        var text = System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", " ")
+                       .Replace("&nbsp;", " ").Trim();
+        return text.Length > maxChars ? text[..maxChars] + "…" : text;
+    }
+}

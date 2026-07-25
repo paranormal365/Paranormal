@@ -1,16 +1,27 @@
 ﻿@page "/"
 
-<PageTitle>Telerik Blazor App | Home</PageTitle>
+<PageTitle>IsHaunted</PageTitle>
 
 <div id="home-page">
-    <HomeSvg />
+    <div class="logo-box">
+        <img src="./static/images/ghost glass 699x640.png" alt="" />
+    </div>
+    <h1 class="is-haunted-text">IsHaunted.com</h1>
 
-    <h1>Hello, Telerik UI for Blazor!</h1>
-
-    <p>Welcome to your new Telerik Blazor app.</p>
+    <p>where you can come to get your haunt on</p>
 </div>
 
 <style>
+    #home-page .logo-box {
+        width: 400px;
+        height: 400px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    #home-page img {
+        width: 100%;
+        height: auto;
+    }
     #home-page {
         margin-left: auto;
         margin-right: auto;
@@ -20,10 +31,10 @@
     }
 
     @@media (min-height: calc(56px + 50px + 400px)) {
-        /* header + footer + home page container*/
+        /* header + footer + home page container
         #home-page {
             margin-top: calc(50vh - 28px - 25px - 200px);
-        }
+        }*/
     }
 </style>
 

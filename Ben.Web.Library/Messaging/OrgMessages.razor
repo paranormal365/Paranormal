@@ -16,14 +16,14 @@
     </div>
 
     @* ── Tab strip: Inbox / Sent ──────────────────────────────────────────── *@
-    <TelerikTabStrip ActiveTabIndex="@_tabIndex"
-                     ActiveTabIndexChanged="@((int i) => { _tabIndex = i; _ = LoadActiveTabAsync(); })">
+    <TelerikTabStrip ActiveTabId="@_activeTabId"
+                     ActiveTabIdChanged="@((string id) => { _activeTabId = id; _ = LoadActiveTabAsync(); })">
 
-        <TabStripTab Title="Inbox">
+        <TabStripTab Title="Inbox" Id="inbox">
             <MessageList Messages="@_inbox" OnOpen="OpenMessage" />
         </TabStripTab>
 
-        <TabStripTab Title="Sent">
+        <TabStripTab Title="Sent" Id="sent">
             <MessageList Messages="@_sent" OnOpen="OpenMessage" />
         </TabStripTab>
 
@@ -119,7 +119,7 @@
 @code {
     [Parameter] public Guid OrgId { get; set; }
 
-    private int _tabIndex;
+    private string _activeTabId = "inbox";
     private List<OrgMessageRecord>? _inbox;
     private List<OrgMessageRecord>? _sent;
 
@@ -169,7 +169,7 @@
     {
         try
         {
-            if (_tabIndex == 0)
+            if (_activeTabId == "inbox")
                 _inbox = (await AdminClient.GetOrgInboxAsync(OrgId)).ToList();
             else
                 _sent = (await AdminClient.GetOrgSentAsync(OrgId)).ToList();

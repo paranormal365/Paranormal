@@ -11,11 +11,18 @@
 <div class="container-fluid py-3" style="max-width:1000px;">
     <div class="d-flex align-items-center justify-content-between mb-4">
         <h3 class="mb-0">Cases</h3>
-        <TelerikButton Icon="@SvgIcon.Plus"
-                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/new"))">
-            New Case
-        </TelerikButton>
+        <div class="d-flex gap-2">
+            <TelerikButton Icon="@SvgIcon.Inbox"
+                           FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/pending-requests"))">
+                Pending Requests @(_pendingCount > 0 ? $"({_pendingCount})" : "")
+            </TelerikButton>
+            <TelerikButton Icon="@SvgIcon.Plus"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/new"))">
+                New Case
+            </TelerikButton>
+        </div>
     </div>
 
     @if (_error is not null)
@@ -95,6 +102,7 @@
     private string? _orgName;
     private string? _error;
     private CaseStatus? _activeFilter;
+    private int _pendingCount;
 
     private static readonly CaseStatus?[] _filterOptions =
         [null, CaseStatus.Proposed, CaseStatus.Accepted, CaseStatus.Active,
@@ -111,6 +119,7 @@
             _cases = (await AdminClient.GetOrgCasesAsync(OrgId)).ToList();
             var org = await AdminClient.GetOrganizationAsync(OrgId);
             _orgName = org?.Name;
+            try { _pendingCount = (await AdminClient.GetOrgPendingRequestsAsync(OrgId)).Count; } catch { }
         }
         catch { _error = "Failed to load cases."; }
         StateHasChanged();

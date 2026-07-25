@@ -91,6 +91,60 @@ public sealed class CaseController : BenControllerBase
     }
 
     /// <summary>
+    /// Returns all pending client-request applications submitted to this organization.
+    /// Anonymized — exact address not included until accepted.
+    /// </summary>
+    [HttpGet("pending-requests")]
+    public async Task<ActionResult<IEnumerable<OrgPendingRequestRecord>>> GetPendingRequests(
+        Guid orgId, CancellationToken ct)
+    {
+        if (!await CanReadAsync(orgId, ct)) return Forbid();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var apps = await db.ClientRequestOrganizations
+            .AsNoTracking()
+            .Include(a => a.ClientRequest)
+            .Where(a => a.OrganizationId == orgId && a.Status == ClientOrgRequestStatus.Pending)
+            .OrderByDescending(a => a.DateApplied)
+            .ToListAsync(ct);
+
+        var records = apps.Select(a => new OrgPendingRequestRecord
+        {
+            ClientRequestId = a.ClientRequestId,
+            DateApplied     = a.DateApplied,
+            DateSubmitted   = a.ClientRequest!.DateCreated,
+            City            = a.ClientRequest.City,
+            State           = a.ClientRequest.State,
+            ZipCode         = a.ClientRequest.ZipCode,
+            Description     = a.ClientRequest.Description,
+            Latitude        = a.ClientRequest.Latitude,
+            Longitude       = a.ClientRequest.Longitude,
+        });
+        return Ok(records);
+    }
+
+    /// <summary>
+    /// Declines a pending client-request application for this organization.
+    /// </summary>
+    [HttpPost("decline-request/{clientRequestId:guid}")]
+    public async Task<ActionResult> DeclineClientRequest(Guid orgId, Guid clientRequestId, CancellationToken ct)
+    {
+        if (!await IsOrgAdminOrSuperAsync(orgId, ct)) return Forbid();
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var application = await db.ClientRequestOrganizations
+            .FirstOrDefaultAsync(a => a.ClientRequestId == clientRequestId && a.OrganizationId == orgId, ct);
+        if (application is null) return NotFound();
+        if (application.Status != ClientOrgRequestStatus.Pending)
+            return BadRequest("This application has already been responded to.");
+
+        application.Status               = ClientOrgRequestStatus.Rejected;
+        application.DateResponded        = DateTime.UtcNow;
+        application.RespondedByAppUserId = userId == Guid.Empty ? null : userId;
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>
     /// Accepts a pending <see cref="ClientRequest"/> and promotes it to a Case.
     /// Auto-generates 4 standard CMS pages linked to the case.
     /// </summary>

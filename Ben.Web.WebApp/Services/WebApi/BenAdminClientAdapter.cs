@@ -808,9 +808,22 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<CaseRecord?> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default)
         => _api.PostAsync<CreateCaseRequest, CaseRecord>($"/api/organizations/{orgId}/cases", request, token);
 
+    public async Task<IReadOnlyList<OrgPendingRequestRecord>> GetOrgPendingRequestsAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrgPendingRequestRecord>>($"/api/organizations/{orgId}/cases/pending-requests", token);
+        return result ?? [];
+    }
+
     public Task<CaseRecord?> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default)
         => _api.PostAsync<AcceptClientRequestAsCaseRequest, CaseRecord>(
                $"/api/organizations/{orgId}/cases/accept-client-request/{clientRequestId}", request, token);
+
+    public async Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default)
+    {
+        var result = await _api.PostAsync<object, object>(
+            $"/api/organizations/{orgId}/cases/decline-request/{clientRequestId}", new { }, token);
+        return result is not null;
+    }
 
     public Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default)
         => _api.PutAsync<UpdateCaseRequest, CaseRecord>($"/api/organizations/{orgId}/cases/{caseId}", request, token);
