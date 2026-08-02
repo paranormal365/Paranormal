@@ -59,7 +59,7 @@ else
                      Placeholder="@(CurrentSide == CaseMessageSide.Client ? "Message your investigation group…" : "Message the client…")"
                      Class="flex-grow-1" />
     <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                   Icon="@SvgIcon.Envelop"
+                   Icon="@SvgIcon.Envelope"
                    Enabled="@(!_sending && !string.IsNullOrWhiteSpace(_draft))"
                    OnClick="Send">
         Send

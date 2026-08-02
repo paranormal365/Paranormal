@@ -367,6 +367,27 @@ internal static class DevelopmentDataSeeder
             }
 
             Console.WriteLine("[DevDataSeeder] Created accepted case for Daniel Park (client dashboard test data).");
+
+            // Seed a published report so the client-side report view has content
+            if (!await db.CaseReports.AnyAsync(r => r.CaseId == danielCase.Id))
+            {
+                var report = new CaseReport
+                {
+                    Id                   = new Guid("30000001-0000-0000-0000-000000000001"),
+                    CaseId               = danielCase.Id,
+                    Title                = "Initial Assessment — Park Residence",
+                    Summary              = "Team conducted a baseline sweep of the property on 2026-08-07. Activity was primarily concentrated in the upstairs hallway.",
+                    Conclusion           = "Evidence is consistent with a Type 2 residual haunting. Further investigations are recommended to capture additional audio and visual evidence.",
+                    Status               = Ben.Data.Common.Enums.CaseReportStatus.Published,
+                    PublishedAt          = now.AddDays(-1),
+                    PublishedByAppUserId = sarah.Id,
+                    ExpectedDeliveryDate = now.AddDays(14),
+                    DateCreated          = now.AddDays(-3),
+                    CreatedByAppUserId   = sarah.Id,
+                };
+                db.CaseReports.Add(report);
+                await db.SaveChangesAsync();
+            }
         }
 
         Console.WriteLine("[DevDataSeeder] Development seed data applied successfully.");

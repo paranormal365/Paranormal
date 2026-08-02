@@ -449,6 +449,34 @@ public interface IBenAdminClient
     Task<CaseTimelineEntryRecord?> UpdateCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, UpsertTimelineEntryRequest request, CancellationToken token = default);
     Task<bool> DeleteCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
 
+    /// <summary>Returns published reports the client can view for their case.</summary>
+    Task<IReadOnlyList<CaseReportSummary>> GetMyCaseReportsAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Returns a URL to stream the published report PDF for the client.</summary>
+    string GetMyCaseReportPdfUrl(Guid caseId, Guid reportId);
+
+    // ── Case Report Builder ───────────────────────────────────────────────────
+
+    Task<IReadOnlyList<CaseReportSummary>> GetCaseReportsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<CaseReportDetail?> GetCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
+    Task<CaseReportDetail?> CreateCaseReportAsync(Guid orgId, Guid caseId, UpsertCaseReportRequest request, CancellationToken token = default);
+    Task<CaseReportDetail?> UpdateCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, UpsertCaseReportRequest request, CancellationToken token = default);
+    Task<CaseReportDetail?> PublishCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
+    Task<bool> DeleteCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
+    Task<CaseReportSectionDto?> AddReportSectionAsync(Guid orgId, Guid caseId, Guid reportId, UpsertSectionRequest request, CancellationToken token = default);
+    Task<CaseReportSectionDto?> UpdateReportSectionAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, UpsertSectionRequest request, CancellationToken token = default);
+    Task<bool> DeleteReportSectionAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, CancellationToken token = default);
+    Task<CaseReportSectionFileDto?> AddReportSectionFileAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid uploadFileId, string? caption, CancellationToken token = default);
+    Task<bool> RemoveReportSectionFileAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid fileId, CancellationToken token = default);
+    /// <summary>Returns a URL to stream the PDF export for in-browser viewing.</summary>
+    string GetReportPdfUrl(Guid orgId, Guid caseId, Guid reportId);
+
+    /// <summary>Downloads the report PDF bytes using the bearer token.</summary>
+    Task<(byte[] Data, string FileName)?> DownloadCaseReportPdfAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
+
+    /// <summary>Downloads the published report PDF bytes for the client.</summary>
+    Task<(byte[] Data, string FileName)?> DownloadMyCaseReportPdfAsync(Guid caseId, Guid reportId, CancellationToken token = default);
+
     // ── Client Requests ───────────────────────────────────────────────────────
 
     Task<IReadOnlyList<ClientRequestRecord>> GetMyClientRequestsAsync(CancellationToken token = default);
@@ -1180,6 +1208,57 @@ public sealed record OccurrenceFileItem(
     string FileName,
     string ContentType,
     long   FileSize);
+
+// ── Case Report Builder records ───────────────────────────────────────────────
+public sealed record UpsertCaseReportRequest(
+    string    Title,
+    string?   Summary,
+    string?   Conclusion,
+    DateTime? ExpectedDeliveryDate);
+
+public sealed record UpsertSectionRequest(
+    string                                           Title,
+    string?                                          Body,
+    Ben.Data.Common.Enums.CaseReportSectionType      SectionType);
+
+public sealed record CaseReportSummary(
+    Guid                                             Id,
+    Guid                                             CaseId,
+    string                                           Title,
+    Ben.Data.Common.Enums.CaseReportStatus           Status,
+    DateTime?                                        ExpectedDeliveryDate,
+    DateTime?                                        PublishedAt,
+    DateTime                                         DateCreated);
+
+public sealed record CaseReportDetail(
+    Guid                                             Id,
+    Guid                                             CaseId,
+    string                                           Title,
+    string?                                          Summary,
+    string?                                          Conclusion,
+    Ben.Data.Common.Enums.CaseReportStatus           Status,
+    DateTime?                                        ExpectedDeliveryDate,
+    DateTime?                                        PublishedAt,
+    DateTime                                         DateCreated,
+    IReadOnlyList<CaseReportSectionDto>              Sections);
+
+public sealed record CaseReportSectionDto(
+    Guid                                             Id,
+    Guid                                             CaseReportId,
+    int                                              SortOrder,
+    string                                           Title,
+    string?                                          Body,
+    Ben.Data.Common.Enums.CaseReportSectionType      SectionType,
+    IReadOnlyList<CaseReportSectionFileDto>          Files);
+
+public sealed record CaseReportSectionFileDto(
+    Guid    Id,
+    Guid    UploadFileId,
+    string  FileName,
+    string  ContentType,
+    long    FileSize,
+    string? Caption,
+    int     SortOrder);
 
 public sealed record ClientCaseInvestigation(
     Guid       Id,

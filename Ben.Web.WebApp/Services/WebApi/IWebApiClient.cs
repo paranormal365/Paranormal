@@ -14,6 +14,9 @@ public interface IWebApiClient
     Task<bool> PutVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> DeleteAsync(string relativeUrl, CancellationToken token = default);
 
+    /// <summary>Downloads raw bytes from any authenticated endpoint (e.g. PDF export).</summary>
+    Task<(byte[] Data, string ContentType, string FileName)?> GetBytesAsync(string relativeUrl, string fallbackFileName, CancellationToken token = default);
+
     // Example typed endpoint usage using service models.
     Task<IReadOnlyList<AppUserRecord>> GetUsersAsync(CancellationToken token = default);
 

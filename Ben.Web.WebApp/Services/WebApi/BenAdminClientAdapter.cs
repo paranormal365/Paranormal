@@ -877,6 +877,64 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/cases/{caseId}/timeline/{entryId}", token);
 
+    // ── Case Report Builder ───────────────────────────────────────────────────
+
+    // Client-facing: published reports only
+    public async Task<IReadOnlyList<CaseReportSummary>> GetMyCaseReportsAsync(Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<CaseReportSummary>>($"/api/my-cases/{caseId}/reports", token) ?? [];
+
+    public string GetMyCaseReportPdfUrl(Guid caseId, Guid reportId)
+        => $"/api/my-cases/{caseId}/reports/{reportId}/pdf";
+
+    // Org-facing
+    public async Task<IReadOnlyList<CaseReportSummary>> GetCaseReportsAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<CaseReportSummary>>($"/api/orgs/{orgId}/cases/{caseId}/reports", token) ?? [];
+
+    public Task<CaseReportDetail?> GetCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default)
+        => _api.GetAsync<CaseReportDetail>($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}", token);
+
+    public Task<CaseReportDetail?> CreateCaseReportAsync(Guid orgId, Guid caseId, UpsertCaseReportRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertCaseReportRequest, CaseReportDetail>($"/api/orgs/{orgId}/cases/{caseId}/reports", request, token);
+
+    public Task<CaseReportDetail?> UpdateCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, UpsertCaseReportRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertCaseReportRequest, CaseReportDetail>($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}", request, token);
+
+    public Task<CaseReportDetail?> PublishCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default)
+        => _api.PostAsync<object, CaseReportDetail>($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/publish", new { }, token);
+
+    public Task<bool> DeleteCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}", token);
+
+    public Task<CaseReportSectionDto?> AddReportSectionAsync(Guid orgId, Guid caseId, Guid reportId, UpsertSectionRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertSectionRequest, CaseReportSectionDto>($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/sections", request, token);
+
+    public Task<CaseReportSectionDto?> UpdateReportSectionAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, UpsertSectionRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertSectionRequest, CaseReportSectionDto>($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/sections/{sectionId}", request, token);
+
+    public Task<bool> DeleteReportSectionAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/sections/{sectionId}", token);
+
+    public Task<CaseReportSectionFileDto?> AddReportSectionFileAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid uploadFileId, string? caption, CancellationToken token = default)
+        => _api.PostAsync<object, CaseReportSectionFileDto>($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/sections/{sectionId}/files", new { UploadFileId = uploadFileId, Caption = caption }, token);
+
+    public Task<bool> RemoveReportSectionFileAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid fileId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/sections/{sectionId}/files/{fileId}", token);
+
+    public string GetReportPdfUrl(Guid orgId, Guid caseId, Guid reportId)
+        => $"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/pdf";
+
+    public async Task<(byte[] Data, string FileName)?> DownloadCaseReportPdfAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default)
+    {
+        var result = await _api.GetBytesAsync($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/pdf", "report.pdf", token);
+        return result is null ? null : (result.Value.Data, result.Value.FileName);
+    }
+
+    public async Task<(byte[] Data, string FileName)?> DownloadMyCaseReportPdfAsync(Guid caseId, Guid reportId, CancellationToken token = default)
+    {
+        var result = await _api.GetBytesAsync($"/api/my-cases/{caseId}/reports/{reportId}/pdf", "report.pdf", token);
+        return result is null ? null : (result.Value.Data, result.Value.FileName);
+    }
+
     // ── Client Requests ───────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<ClientRequestRecord>> GetMyClientRequestsAsync(CancellationToken token = default)
