@@ -1,4 +1,5 @@
 @page "/organizations/{OrgId:guid}/pending-requests"
+@using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Library.Services
 @inject IBenAdminClient AdminClient
@@ -41,35 +42,62 @@
         <div class="d-flex flex-column gap-3">
             @foreach (var r in _requests)
             {
-                <div class="card">
+                var isExpanded = _expandedId == r.ClientRequestId;
+                <div class="card @(r.Status == ClientOrgRequestStatus.UnderReview ? "border-warning" : "")">
                     <div class="card-body">
                         <div class="d-flex align-items-start justify-content-between gap-3">
-                            <div>
-                                <div class="fw-semibold">@r.City, @r.State @r.ZipCode</div>
-                                <div class="text-secondary small mt-1">
-                                    Applied @r.DateApplied.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                            <div class="flex-grow-1" style="cursor:pointer;" @onclick="@(() => ToggleExpand(r))">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="badge @StatusBadge(r.Status)">@StatusLabel(r.Status)</span>
+                                    <span class="fw-semibold">@r.City, @r.State @r.ZipCode</span>
+                                </div>
+                                <div class="text-secondary small">
+                                    Submitted @r.DateApplied.ToLocalTime().ToString("MMM d, yyyy")
                                 </div>
                             </div>
-                            <div class="d-flex gap-2">
+                            <div class="d-flex gap-2 flex-wrap justify-content-end">
+                                @if (r.Status == ClientOrgRequestStatus.Pending || r.Status == ClientOrgRequestStatus.Viewed)
+                                {
+                                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                                   FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                                   Icon="@SvgIcon.Search"
+                                                   OnClick="@(() => MarkUnderReview(r))"
+                                                   Enabled="@(!_isBusy)">
+                                        Under Review
+                                    </TelerikButton>
+                                }
                                 <TelerikButton Size="@ThemeConstants.Button.Size.Small"
                                                ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                                                Icon="@SvgIcon.Check"
-                                               OnClick="@(() => OpenAccept(r))">
+                                               OnClick="@(() => OpenAccept(r))"
+                                               Enabled="@(!_isBusy)">
                                     Accept
                                 </TelerikButton>
                                 <TelerikButton Size="@ThemeConstants.Button.Size.Small"
                                                ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                                Icon="@SvgIcon.Cancel"
-                                               OnClick="@(() => OpenDecline(r))">
+                                               OnClick="@(() => OpenDecline(r))"
+                                               Enabled="@(!_isBusy)">
                                     Decline
                                 </TelerikButton>
                             </div>
                         </div>
-                        @if (!string.IsNullOrWhiteSpace(r.Description))
+
+                        @* Expanded details — clicking auto-marks Viewed *@
+                        @if (isExpanded && !string.IsNullOrWhiteSpace(r.Description))
+                        {
+                            <div class="mt-3 border-top pt-3">
+                                <div class="text-secondary small fw-semibold mb-1">Request Details</div>
+                                <div class="text-body-secondary small">@((MarkupString)r.Description)</div>
+                            </div>
+                        }
+                        else if (!isExpanded && !string.IsNullOrWhiteSpace(r.Description))
                         {
                             <div class="text-secondary small mt-2 border-top pt-2"
-                                 style="max-height:4em;overflow:hidden;">
-                                @((MarkupString)TruncateHtml(r.Description, 200))
+                                 style="max-height:3em;overflow:hidden;cursor:pointer;"
+                                 @onclick="@(() => ToggleExpand(r))">
+                                @((MarkupString)TruncateHtml(r.Description, 150))
+                                <span class="text-primary ms-1">View more…</span>
                             </div>
                         }
                     </div>
@@ -160,6 +188,7 @@
     private List<OrgPendingRequestRecord>? _requests;
     private string? _error;
     private bool _isBusy;
+    private Guid? _expandedId;
     private string? _actionError;
 
     private OrgPendingRequestRecord? _acceptTarget;
@@ -178,6 +207,45 @@
         try { _requests = (await AdminClient.GetOrgPendingRequestsAsync(OrgId)).ToList(); }
         catch { _error = "Failed to load pending requests."; _requests = []; }
     }
+
+    private async Task ToggleExpand(OrgPendingRequestRecord r)
+    {
+        _expandedId = _expandedId == r.ClientRequestId ? null : r.ClientRequestId;
+        // Auto-mark as Viewed when first expanded (if still Pending)
+        if (_expandedId == r.ClientRequestId && r.Status == ClientOrgRequestStatus.Pending)
+        {
+            await AdminClient.UpdatePendingRequestStatusAsync(OrgId, r.ClientRequestId, ClientOrgRequestStatus.Viewed);
+            await LoadAsync();
+        }
+    }
+
+    private async Task MarkUnderReview(OrgPendingRequestRecord r)
+    {
+        _isBusy = true;
+        try
+        {
+            await AdminClient.UpdatePendingRequestStatusAsync(OrgId, r.ClientRequestId, ClientOrgRequestStatus.UnderReview);
+            await LoadAsync();
+        }
+        catch { _error = "Failed to update status."; }
+        finally { _isBusy = false; }
+    }
+
+    private static string StatusLabel(ClientOrgRequestStatus s) => s switch
+    {
+        ClientOrgRequestStatus.Pending     => "Submitted",
+        ClientOrgRequestStatus.Viewed      => "Viewed",
+        ClientOrgRequestStatus.UnderReview => "Under Review",
+        _                                  => s.ToString(),
+    };
+
+    private static string StatusBadge(ClientOrgRequestStatus s) => s switch
+    {
+        ClientOrgRequestStatus.Pending     => "bg-secondary",
+        ClientOrgRequestStatus.Viewed      => "bg-info text-dark",
+        ClientOrgRequestStatus.UnderReview => "bg-warning text-dark",
+        _                                  => "bg-secondary",
+    };
 
     private void OpenAccept(OrgPendingRequestRecord r)
     {

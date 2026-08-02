@@ -853,6 +853,12 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         return result is not null;
     }
 
+    public Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default)
+        => _api.PutAsync<object, object>(
+               $"/api/organizations/{orgId}/cases/request-status/{clientRequestId}",
+               new { Status = (int)status }, token)
+           .ContinueWith(t => t.Result is not null);
+
     public Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default)
         => _api.PutAsync<UpdateCaseRequest, CaseRecord>($"/api/organizations/{orgId}/cases/{caseId}", request, token);
 

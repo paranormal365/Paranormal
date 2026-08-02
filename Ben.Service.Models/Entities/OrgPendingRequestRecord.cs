@@ -1,3 +1,5 @@
+using Ben.Data.Common.Enums;
+
 namespace Ben.Service.Models.Entities;
 
 /// <summary>
@@ -15,4 +17,5 @@ public record OrgPendingRequestRecord
     public string? Description { get; init; }
     public decimal? Latitude { get; init; }
     public decimal? Longitude { get; init; }
+    public ClientOrgRequestStatus Status { get; init; } = ClientOrgRequestStatus.Pending;
 }

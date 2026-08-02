@@ -103,7 +103,10 @@ public sealed class CaseController : BenControllerBase
         var apps = await db.ClientRequestOrganizations
             .AsNoTracking()
             .Include(a => a.ClientRequest)
-            .Where(a => a.OrganizationId == orgId && a.Status == ClientOrgRequestStatus.Pending)
+            .Where(a => a.OrganizationId == orgId &&
+                (a.Status == ClientOrgRequestStatus.Pending ||
+                 a.Status == ClientOrgRequestStatus.Viewed ||
+                 a.Status == ClientOrgRequestStatus.UnderReview))
             .OrderByDescending(a => a.DateApplied)
             .ToListAsync(ct);
 
@@ -118,13 +121,34 @@ public sealed class CaseController : BenControllerBase
             Description     = a.ClientRequest.Description,
             Latitude        = a.ClientRequest.Latitude,
             Longitude       = a.ClientRequest.Longitude,
+            Status          = a.Status,
         });
         return Ok(records);
     }
 
-    /// <summary>
-    /// Declines a pending client-request application for this organization.
-    /// </summary>
+    /// <summary>Updates a pending request's status to Viewed or UnderReview.</summary>
+    [HttpPut("request-status/{clientRequestId:guid}")]
+    public async Task<IActionResult> UpdateRequestStatus(
+        Guid orgId, Guid clientRequestId, [FromBody] UpdateRequestStatusRequest request, CancellationToken ct)
+    {
+        if (!await CanReadAsync(orgId, ct)) return Forbid();
+        if (request.Status is not ClientOrgRequestStatus.Viewed and not ClientOrgRequestStatus.UnderReview)
+            return BadRequest("Only Viewed and UnderReview statuses may be set via this endpoint.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var application = await db.ClientRequestOrganizations
+            .FirstOrDefaultAsync(a => a.ClientRequestId == clientRequestId && a.OrganizationId == orgId, ct);
+        if (application is null) return NotFound();
+
+        // Only advance the status — never move backward
+        if ((int)request.Status > (int)application.Status)
+            application.Status = request.Status;
+
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>Declines a pending (or viewed/under-review) client-request application for this organization.</summary>
     [HttpPost("decline-request/{clientRequestId:guid}")]
     public async Task<ActionResult> DeclineClientRequest(Guid orgId, Guid clientRequestId, CancellationToken ct)
     {
@@ -134,7 +158,7 @@ public sealed class CaseController : BenControllerBase
         var application = await db.ClientRequestOrganizations
             .FirstOrDefaultAsync(a => a.ClientRequestId == clientRequestId && a.OrganizationId == orgId, ct);
         if (application is null) return NotFound();
-        if (application.Status != ClientOrgRequestStatus.Pending)
+        if (application.Status is ClientOrgRequestStatus.Accepted or ClientOrgRequestStatus.Rejected or ClientOrgRequestStatus.Cancelled)
             return BadRequest("This application has already been responded to.");
 
         application.Status               = ClientOrgRequestStatus.Rejected;
@@ -163,7 +187,7 @@ public sealed class CaseController : BenControllerBase
             .FirstOrDefaultAsync(a => a.ClientRequestId == clientRequestId
                                    && a.OrganizationId == orgId, ct);
         if (application is null) return NotFound("Client request application not found for this organization.");
-        if (application.Status != ClientOrgRequestStatus.Pending)
+        if (application.Status is ClientOrgRequestStatus.Accepted or ClientOrgRequestStatus.Cancelled)
             return BadRequest("This application has already been responded to.");
         if (application.ClientRequest is null) return NotFound("Client request not found.");
 
@@ -497,3 +521,7 @@ public sealed record UpsertTimelineEntryRequest(
     string? Body,
     bool IsPublic,
     IList<Guid> ExperienceTypeIds);
+
+/// <summary>Updates a client-request org application to Viewed or UnderReview.</summary>
+public sealed record UpdateRequestStatusRequest(
+    Ben.Data.Common.Enums.ClientOrgRequestStatus Status);
