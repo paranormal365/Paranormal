@@ -168,6 +168,20 @@
         </div>
 
     </div>
+
+    @* ── Message thread ──────────────────────────────────────────────────────── *@
+    <div class="card mt-4">
+        <div class="card-header fw-semibold d-flex align-items-center gap-2">
+            <TelerikSvgIcon Icon="@SvgIcon.Comment" />
+            Messages with your investigation group
+        </div>
+        <div class="card-body">
+            <CaseMessageThread CurrentSide="@Ben.Data.Common.Enums.CaseMessageSide.Client"
+                               LoadMessages="@LoadClientMessages"
+                               PostMessage="@PostClientMessage" />
+        </div>
+    </div>
+
 </div>
 
 @* ── Log / Edit Occurrence dialog ─────────────────────────────────────────────── *@
@@ -375,4 +389,10 @@
         public string    Title         { get; set; } = "";
         public string    Body          { get; set; } = "";
     }
+
+    private Task<IReadOnlyList<CaseMessageRecord>> LoadClientMessages()
+        => AdminClient.GetMyCaseMessagesAsync(CaseId);
+
+    private async Task<CaseMessageRecord?> PostClientMessage(string body)
+        => await AdminClient.PostMyCaseMessageAsync(CaseId, body);
 }

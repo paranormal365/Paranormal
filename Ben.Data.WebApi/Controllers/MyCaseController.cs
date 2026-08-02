@@ -203,6 +203,78 @@ public sealed class MyCaseController : BenControllerBase
         await db.SaveChangesAsync(ct);
         return NoContent();
     }
+
+    // ── Case messages ──────────────────────────────────────────────────────────
+
+    /// <summary>Returns all messages for this case and marks org messages as read by the client.</summary>
+    [HttpGet("{caseId:guid}/messages")]
+    public async Task<ActionResult<IEnumerable<CaseMessageRecord>>> GetMessages(Guid caseId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var messages = await db.CaseMessages.AsNoTracking()
+            .Include(m => m.AuthorAppUser)
+            .Where(m => m.CaseId == caseId)
+            .OrderBy(m => m.DateCreated)
+            .ToListAsync(ct);
+
+        // Mark unread org messages as read now that the client is viewing
+        var unread = await db.CaseMessages
+            .Where(m => m.CaseId == caseId && m.SenderSide == CaseMessageSide.Organization && !m.IsReadByClient)
+            .ToListAsync(ct);
+        if (unread.Count > 0)
+        {
+            unread.ForEach(m => m.IsReadByClient = true);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return Ok(messages.Select(ToRecord));
+    }
+
+    /// <summary>Posts a new message from the client to the org.</summary>
+    [HttpPost("{caseId:guid}/messages")]
+    public async Task<ActionResult<CaseMessageRecord>> PostMessage(
+        Guid caseId, [FromBody] PostCaseMessageRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        if (string.IsNullOrWhiteSpace(request.Body)) return BadRequest("Message body is required.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var msg = new Ben.Data.Source.Entities.CaseMessage
+        {
+            Id                = Guid.NewGuid(),
+            CaseId            = caseId,
+            AuthorAppUserId   = userId,
+            Body              = request.Body.Trim(),
+            SenderSide        = CaseMessageSide.Client,
+            IsReadByClient    = true,
+            IsReadByOrg       = false,
+            DateCreated       = DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        };
+        db.CaseMessages.Add(msg);
+        await db.SaveChangesAsync(ct);
+
+        await db.Entry(msg).Reference(m => m.AuthorAppUser).LoadAsync(ct);
+        return Ok(ToRecord(msg));
+    }
+
+    private static async Task<bool> IsCaseClient(Ben.Data.Source.Context.BenDataContext db, Guid caseId, Guid userId, CancellationToken ct)
+        => await db.Cases.AsNoTracking()
+            .Include(c => c.ClientRequest)
+            .AnyAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+
+    private static CaseMessageRecord ToRecord(Ben.Data.Source.Entities.CaseMessage m) => new(
+        m.Id, m.CaseId, m.AuthorAppUserId,
+        m.AuthorAppUser?.DisplayName ?? "Unknown",
+        m.Body, m.SenderSide, m.IsReadByClient, m.IsReadByOrg, m.DateCreated);
 }
 
 // ── Response records ──────────────────────────────────────────────────────────
@@ -252,3 +324,16 @@ public sealed record LogOccurrenceRequest(
     DateTime? EventDateTime,
     string?   Title,
     string?   Body);
+
+public sealed record PostCaseMessageRequest(string Body);
+
+public sealed record CaseMessageRecord(
+    Guid   Id,
+    Guid   CaseId,
+    Guid   AuthorAppUserId,
+    string AuthorDisplayName,
+    string Body,
+    Ben.Data.Common.Enums.CaseMessageSide SenderSide,
+    bool   IsReadByClient,
+    bool   IsReadByOrg,
+    DateTime DateCreated);
