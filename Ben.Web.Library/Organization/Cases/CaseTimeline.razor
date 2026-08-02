@@ -89,6 +89,21 @@
                                         }
                                     </div>
                                 }
+                                @if (e.Files.Count > 0)
+                                {
+                                    <div class="mt-1 d-flex gap-1 flex-wrap">
+                                        @foreach (var f in e.Files)
+                                        {
+                                            var icon = f.ContentType.StartsWith("image/") ? SvgIcon.Image
+                                                     : f.ContentType.StartsWith("video/") ? SvgIcon.Play
+                                                     : SvgIcon.File;
+                                            <span class="badge bg-secondary d-flex align-items-center gap-1" title="@f.FileName (@(f.FileSize / 1024) KB)">
+                                                <TelerikSvgIcon Icon="@icon" />
+                                                <span style="max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@f.FileName</span>
+                                            </span>
+                                        }
+                                    </div>
+                                }
                             </div>
                             <div class="d-flex gap-1 flex-shrink-0">
                                 <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"

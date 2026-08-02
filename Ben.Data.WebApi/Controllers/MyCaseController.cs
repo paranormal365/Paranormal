@@ -1,6 +1,9 @@
 using AutoMapper;
 using Ben.Data.Common.Enums;
+using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
+using Ben.Data.Source.Entities;
+using Ben.Data.WebApi.Services;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,9 +23,15 @@ public sealed class MyCaseController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
+    private readonly IFileStorageService _fileStorage;
+    private readonly FileMetadataExtractorService _metadataExtractor;
 
-    public MyCaseController(IDbContextFactory<BenDataContext> db, IMapper mapper)
-    { _db = db; _mapper = mapper; }
+    // Fixed Guid for the 'Case Evidence' upload file type seeded by UploadFileTypeSeeder
+    private static readonly Guid EvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
+
+    public MyCaseController(IDbContextFactory<BenDataContext> db, IMapper mapper,
+        IFileStorageService fileStorage, FileMetadataExtractorService metadataExtractor)
+    { _db = db; _mapper = mapper; _fileStorage = fileStorage; _metadataExtractor = metadataExtractor; }
 
     /// <summary>Returns all active cases where the current user is the originating client.</summary>
     [HttpGet]
@@ -69,6 +78,8 @@ public sealed class MyCaseController : BenControllerBase
                 e.EntryType == CaseTimelineEntryType.ClientReport ||
                 (e.EntryType == CaseTimelineEntryType.Evidence && e.IsPublic))
                 .OrderBy(e => e.EventDateTime ?? e.DateCreated))
+                .ThenInclude(e => e.Files)
+                .ThenInclude(f => f.UploadFile)
             .FirstOrDefaultAsync(x => x.Id == caseId
                 && x.ClientRequest != null && x.ClientRequest.AppUserId == userId, ct);
 
@@ -88,7 +99,9 @@ public sealed class MyCaseController : BenControllerBase
             EventDateTime: e.EventDateTime,
             Title:         e.Title,
             Body:          e.Body,
-            DateCreated:   e.DateCreated)).ToList();
+            DateCreated:   e.DateCreated,
+            Files:         e.Files.Select(f => new OccurrenceFileItem(
+                f.UploadFileId, f.UploadFile.FileName, f.UploadFile.ContentType, f.UploadFile.FileSize)).ToList())).ToList();
 
         var invItems = investigations.Select(i => new ClientCaseInvestigation(
             Id:                i.Id,
@@ -209,6 +222,109 @@ public sealed class MyCaseController : BenControllerBase
         return NoContent();
     }
 
+    // ── Occurrence file attachments ────────────────────────────────────────────
+
+    /// <summary>Attaches a file to an occurrence. Saved to cases/{caseId}/... path.</summary>
+    [HttpPost("{caseId:guid}/occurrences/{entryId:guid}/files")]
+    [Consumes("multipart/form-data")]
+    public async Task<ActionResult<OccurrenceFileItem>> AttachFile(
+        Guid caseId, Guid entryId, IFormFile file, CancellationToken ct)
+    {
+        if (file.Length == 0) return BadRequest("File is empty.");
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var entry = await db.CaseTimelineEntries.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == entryId && e.CaseId == caseId
+                && e.AuthorAppUserId == userId, ct);
+        if (entry is null) return NotFound();
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, ct);
+        var fileBytes = ms.ToArray();
+
+        var storedName   = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+        var storagePath  = _fileStorage.CaseFilePath(caseId, storedName);
+        using (var ws = new MemoryStream(fileBytes))
+            await _fileStorage.WriteAsync(storagePath, ws, ct);
+
+        var uploadFile = new UploadFile
+        {
+            Id                 = Guid.NewGuid(),
+            UploadFileTypeId   = EvidenceFileTypeId,
+            AppUserId          = userId,
+            FileName           = file.FileName,
+            StoredFileName     = storedName,
+            ContentType        = file.ContentType,
+            FileSize           = fileBytes.Length,
+            StoragePath        = storagePath,
+            IsPublic           = false,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        };
+        db.UploadFiles.Add(uploadFile);
+
+        db.CaseTimelineEntryFiles.Add(new CaseTimelineEntryFile
+        {
+            Id                   = Guid.NewGuid(),
+            CaseTimelineEntryId  = entryId,
+            UploadFileId         = uploadFile.Id,
+            DateCreated          = DateTime.UtcNow,
+            CreatedByAppUserId   = userId,
+        });
+        await db.SaveChangesAsync(ct);
+
+        // Metadata extraction fire-and-forget
+        var capturedBytes = fileBytes;
+        var capturedType  = file.ContentType;
+        var capturedId    = uploadFile.Id;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var meta = _metadataExtractor.Extract(capturedId, capturedType, capturedBytes);
+                await using var dbMeta = await _db.CreateDbContextAsync(CancellationToken.None);
+                dbMeta.UploadFileMetadata.Add(meta);
+                await dbMeta.SaveChangesAsync(CancellationToken.None);
+            }
+            catch { }
+        });
+
+        return Ok(new OccurrenceFileItem(uploadFile.Id, uploadFile.FileName, uploadFile.ContentType, uploadFile.FileSize));
+    }
+
+    /// <summary>Removes a file attachment from an occurrence and deletes the stored file.</summary>
+    [HttpDelete("{caseId:guid}/occurrences/{entryId:guid}/files/{fileId:guid}")]
+    public async Task<IActionResult> DetachFile(Guid caseId, Guid entryId, Guid fileId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var link = await db.CaseTimelineEntryFiles
+            .Include(f => f.UploadFile)
+            .FirstOrDefaultAsync(f => f.CaseTimelineEntryId == entryId && f.UploadFileId == fileId, ct);
+        if (link is null) return NotFound();
+        // Verify the entry belongs to this client's case
+        if (!await db.CaseTimelineEntries.AnyAsync(e => e.Id == entryId && e.CaseId == caseId && e.AuthorAppUserId == userId, ct))
+            return Forbid();
+
+        var storagePath = link.UploadFile.StoragePath;
+        db.CaseTimelineEntryFiles.Remove(link);
+        db.UploadFiles.Remove(link.UploadFile);
+        await db.SaveChangesAsync(ct);
+
+        if (storagePath is not null)
+            await _fileStorage.DeleteAsync(storagePath, ct);
+
+        return NoContent();
+    }
+
     // ── Case messages ──────────────────────────────────────────────────────────
 
     /// <summary>Returns all messages for this case and marks org messages as read by the client.</summary>
@@ -315,7 +431,14 @@ public sealed record ClientCaseOccurrence(
     DateTime? EventDateTime,
     string?   Title,
     string?   Body,
-    DateTime  DateCreated);
+    DateTime  DateCreated,
+    IReadOnlyList<OccurrenceFileItem> Files);
+
+public sealed record OccurrenceFileItem(
+    Guid   FileId,
+    string FileName,
+    string ContentType,
+    long   FileSize);
 
 public sealed record ClientCaseInvestigation(
     Guid       Id,

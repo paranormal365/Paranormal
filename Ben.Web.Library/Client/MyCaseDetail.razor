@@ -1,6 +1,7 @@
 @page "/my-cases/{CaseId:guid}"
 @using Ben.Data.Common.Enums
 @using Ben.Web.Library.Services
+@using Microsoft.AspNetCore.Components.Forms
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -92,6 +93,42 @@
                                         }
                                         <div class="text-muted" style="font-size:.72rem;">
                                             @((o.EventDateTime ?? o.DateCreated).ToLocalTime().ToString("h:mm tt"))
+                                        </div>
+                                        @* Attached files *@
+                                        @if (o.Files.Count > 0)
+                                        {
+                                            <div class="d-flex flex-wrap gap-1 mt-1">
+                                                @foreach (var f in o.Files)
+                                                {
+                                                    var icon = f.ContentType.StartsWith("image/") ? SvgIcon.Image
+                                                             : f.ContentType.StartsWith("video/") ? SvgIcon.Play
+                                                             : f.ContentType.StartsWith("audio/") ? SvgIcon.Play
+                                                             : SvgIcon.File;
+                                                    <span class="badge bg-secondary d-flex align-items-center gap-1" title="@f.FileName">
+                                                        <TelerikSvgIcon Icon="@icon" />
+                                                        <span style="max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@f.FileName</span>
+                                                        <TelerikButton Size="sm" FillMode="flat"
+                                                                       Icon="@SvgIcon.X"
+                                                                       Class="text-white p-0"
+                                                                       OnClick="@(async () => await RemoveFile(o.Id, f.FileId))" />
+                                                    </span>
+                                                }
+                                            </div>
+                                        }
+                                        @* Attach file input *@
+                                        <div class="mt-1">
+                                            <InputFile OnChange="@(e => AttachFiles(o.Id, e))"
+                                                       accept="image/*,audio/*,video/*,.pdf,.doc,.docx"
+                                                       multiple
+                                                       style="display:none;"
+                                                       id="@($"file-{o.Id}")" />
+                                            <label for="@($"file-{o.Id}")" class="btn btn-outline-secondary btn-sm" style="cursor:pointer; font-size:.72rem;">
+                                                <TelerikSvgIcon Icon="@SvgIcon.Upload" /> Attach File
+                                            </label>
+                                            @if (_uploading.Contains(o.Id))
+                                            {
+                                                <TelerikLoader Size="sm" Class="ms-1" />
+                                            }
                                         </div>
                                     </div>
                                     <div class="d-flex gap-1 ms-2">
@@ -262,6 +299,7 @@
     private bool _loading = true;
     private string? _error;
     private bool _isBusy;
+    private HashSet<Guid> _uploading = [];
     private DateTime _selectedDate = DateTime.Today;
 
     // Dialog state
@@ -399,4 +437,53 @@
 
     private async Task<CaseMessageRecord?> PostClientMessage(string body)
         => await AdminClient.PostMyCaseMessageAsync(CaseId, body);
+
+    private async Task AttachFiles(Guid entryId, InputFileChangeEventArgs e)
+    {
+        _uploading.Add(entryId);
+        StateHasChanged();
+        try
+        {
+            foreach (var f in e.GetMultipleFiles(10))
+            {
+                using var stream = f.OpenReadStream(maxAllowedSize: 50_000_000); // 50 MB max
+                var item = await AdminClient.AttachOccurrenceFileAsync(CaseId, entryId, stream, f.Name, f.ContentType);
+                if (item is not null)
+                {
+                    // Optimistic update — add file to the in-memory occurrence
+                    var occ = _case?.Occurrences.FirstOrDefault(o => o.Id == entryId);
+                    if (occ is not null)
+                    {
+                        var updatedFiles = occ.Files.ToList();
+                        updatedFiles.Add(item);
+                        var idx = _case!.Occurrences.ToList().IndexOf(occ);
+                        var newList = _case.Occurrences.ToList();
+                        newList[idx] = occ with { Files = updatedFiles };
+                        _case = _case with { Occurrences = newList };
+                    }
+                }
+            }
+        }
+        catch { _error = "Failed to attach file. Please try again."; }
+        finally { _uploading.Remove(entryId); StateHasChanged(); }
+    }
+
+    private async Task RemoveFile(Guid entryId, Guid fileId)
+    {
+        try
+        {
+            await AdminClient.DetachOccurrenceFileAsync(CaseId, entryId, fileId);
+            var occ = _case?.Occurrences.FirstOrDefault(o => o.Id == entryId);
+            if (occ is not null)
+            {
+                var updatedFiles = occ.Files.Where(f => f.FileId != fileId).ToList();
+                var idx = _case!.Occurrences.ToList().IndexOf(occ);
+                var newList = _case.Occurrences.ToList();
+                newList[idx] = occ with { Files = updatedFiles };
+                _case = _case with { Occurrences = newList };
+                StateHasChanged();
+            }
+        }
+        catch { _error = "Failed to remove file."; }
+    }
 }
