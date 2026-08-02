@@ -396,6 +396,7 @@ public interface IBenAdminClient
     Task<InvestigationRecord?> CreateInvestigationAsync(Guid orgId, Guid caseId, UpsertInvestigationRequest request, CancellationToken token = default);
     Task<InvestigationRecord?> UpdateInvestigationAsync(Guid orgId, Guid caseId, Guid id, UpsertInvestigationRequest request, CancellationToken token = default);
     Task<bool> DeleteInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
+    Task<bool> CancelInvestigationByOrgAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
     Task<IReadOnlyList<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
     Task<InvestigationAttendeeRecord?> AddInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, AddInvestigationAttendeeRequest request, CancellationToken token = default);
     Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, Ben.Data.Common.Enums.RsvpStatus? rsvp = null, CancellationToken token = default);
@@ -525,6 +526,12 @@ public interface IBenAdminClient
 
     /// <summary>Deletes a previously logged occurrence.</summary>
     Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default);
+
+    // ── Co-client access management ───────────────────────────────────────────
+
+    Task<IReadOnlyList<CoClientItem>> GetCoClientsAsync(Guid caseId, CancellationToken token = default);
+    Task<CoClientItem?> AddCoClientAsync(Guid caseId, string email, CancellationToken token = default);
+    Task<bool> RemoveCoClientAsync(Guid caseId, Guid accessId, CancellationToken token = default);
 
     /// <summary>Attaches a file to an occurrence entry using case-scoped storage.</summary>
     Task<OccurrenceFileItem?> AttachOccurrenceFileAsync(Guid caseId, Guid entryId, Stream content, string fileName, string contentType, CancellationToken token = default);
@@ -1372,3 +1379,6 @@ public sealed record ScheduleProposalDto(
     IReadOnlyList<SlotDto>                            Slots);
 
 public sealed record SlotDto(Guid Id, DateTime StartDateTime, DateTime? EndDateTime, int SortOrder);
+
+// ── Co-client access records ──────────────────────────────────────────────────
+public sealed record CoClientItem(Guid AccessId, Guid AppUserId, string DisplayName);

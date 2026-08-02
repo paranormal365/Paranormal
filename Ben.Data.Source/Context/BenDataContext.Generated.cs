@@ -80,6 +80,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<CaseVote> CaseVotes { get; set; }
         public virtual DbSet<CaseTransferLog> CaseTransferLogs { get; set; }
         public virtual DbSet<CaseMessage> CaseMessages { get; set; }
+        public virtual DbSet<CaseClientAccess> CaseClientAccesses { get; set; }
         public virtual DbSet<UploadFileMetadata> UploadFileMetadata { get; set; }
         public virtual DbSet<CaseReport> CaseReports { get; set; }
         public virtual DbSet<CaseReportSection> CaseReportSections { get; set; }
@@ -1249,6 +1250,22 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Body).HasMaxLength(4000);
             modelBuilder.Entity<CaseMessage>()
                 .HasIndex(e => new { e.CaseId, e.DateCreated });
+
+            // ── CaseClientAccess ────────────────────────────────────────
+            modelBuilder.Entity<CaseClientAccess>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseClientAccess>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseClientAccess>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseClientAccess>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseClientAccess>()
+                .HasIndex(e => new { e.CaseId, e.AppUserId }).IsUnique();
 
             // ── CaseTimelineEntry.IpAddress ─────────────────────────────────
             modelBuilder.Entity<CaseTimelineEntry>()

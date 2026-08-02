@@ -73,6 +73,25 @@ public sealed class InvestigationController : BenControllerBase
             CreatedByAppUserId  = userId,
         };
         db.Investigations.Add(entity);
+
+        // Auto-create an org calendar event if none was supplied
+        if (entity.OrgCalendarEventId is null)
+        {
+            var calEvent = new Ben.Data.Source.Entities.OrgCalendarEvent
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, CaseId = caseId,
+                Title = $"Investigation: {entity.Title}",
+                Description = entity.Description,
+                Location = entity.Location,
+                StartDateTime = entity.ScheduledDateTime,
+                EndDateTime = entity.EndDateTime ?? entity.ScheduledDateTime.AddHours(2),
+                IsAllDay = false, IsPublic = false,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            };
+            db.OrgCalendarEvents.Add(calEvent);
+            entity.OrgCalendarEventId = calEvent.Id;
+        }
+
         await db.SaveChangesAsync(ct);
         var loaded = await db.Investigations.AsNoTracking()
             .Include(i => i.Attendees)
@@ -116,6 +135,36 @@ public sealed class InvestigationController : BenControllerBase
         var entity = await db.Investigations.FirstOrDefaultAsync(i => i.Id == id && i.CaseId == caseId, ct);
         if (entity is null) return NotFound();
         db.Investigations.Remove(entity);
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>Org cancels a scheduled investigation and notifies the client via CaseMessage.</summary>
+    [HttpPost("{id:guid}/cancel")]
+    public async Task<IActionResult> Cancel(Guid orgId, Guid caseId, Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var investigation = await db.Investigations.FirstOrDefaultAsync(i => i.Id == id && i.CaseId == caseId, ct);
+        if (investigation is null) return NotFound();
+        if (investigation.Status != InvestigationStatus.Scheduled)
+            return Conflict($"Investigation is already {investigation.Status}.");
+
+        investigation.Status = InvestigationStatus.Cancelled;
+        investigation.DateUpdated = DateTime.UtcNow;
+        investigation.UpdatedByAppUserId = userId;
+
+        // Notify the client via the case message board
+        db.CaseMessages.Add(new Ben.Data.Source.Entities.CaseMessage
+        {
+            Id = Guid.NewGuid(), CaseId = caseId, AuthorAppUserId = userId,
+            Body = $"The investigation scheduled for <strong>{investigation.ScheduledDateTime.ToLocalTime():MMM d, yyyy h:mm tt}</strong> has been cancelled by the organisation.",
+            SenderSide = Ben.Data.Common.Enums.CaseMessageSide.Organization,
+            IsReadByClient = false, IsReadByOrg = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
         await db.SaveChangesAsync(ct);
         return NoContent();
     }
