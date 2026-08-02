@@ -962,6 +962,10 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     // ── Investigation Scheduling ──────────────────────────────────────────────
 
+    public Task<bool> CancelMyInvestigationAsync(Guid caseId, Guid investigationId, CancellationToken token = default)
+        => _api.PostAsync<object, object>($"/api/my-cases/{caseId}/investigations/{investigationId}/cancel", new { }, token)
+               .ContinueWith(t => t.Result is not null);
+
     public async Task<IReadOnlyList<ScheduleProposalDto>> GetScheduleProposalsAsync(Guid orgId, Guid caseId, CancellationToken token = default)
         => await _api.GetAsync<IReadOnlyList<ScheduleProposalDto>>($"/api/orgs/{orgId}/cases/{caseId}/schedule-proposals", token) ?? [];
 

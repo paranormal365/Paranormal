@@ -173,6 +173,8 @@
                     <div class="list-group list-group-flush">
                         @foreach (var inv in _case.Investigations.OrderBy(i => i.ScheduledDateTime))
                         {
+                            var canCancel  = inv.CancellationDeadlineUtc.HasValue && DateTime.UtcNow < inv.CancellationDeadlineUtc.Value;
+                            var deadlinePassed = inv.CancellationDeadlineUtc.HasValue && DateTime.UtcNow >= inv.CancellationDeadlineUtc.Value;
                             <div class="list-group-item">
                                 <div class="d-flex align-items-start justify-content-between gap-2">
                                     <div>
@@ -196,8 +198,26 @@
                                                 @if (isPastDue) { <strong> (closed)</strong> }
                                             </div>
                                         }
+                                        @if (canCancel)
+                                        {
+                                            <div class="text-secondary small mt-1">
+                                                Cancel by: @inv.CancellationDeadlineUtc!.Value.ToLocalTime().ToString("MMM d h:mm tt")
+                                            </div>
+                                        }
+                                        @if (deadlinePassed && inv.Status == Ben.Data.Common.Enums.InvestigationStatus.Scheduled)
+                                        {
+                                            <div class="text-muted small mt-1"><em>Cancellation window closed</em></div>
+                                        }
                                     </div>
-                                    <span class="badge @InvStatusBadge(inv.Status)">@InvStatusLabel(inv.Status)</span>
+                                    <div class="d-flex flex-column align-items-end gap-1">
+                                        <span class="badge @InvStatusBadge(inv.Status)">@InvStatusLabel(inv.Status)</span>
+                                        @if (canCancel)
+                                        {
+                                            <TelerikButton Size="sm" ThemeColor="error" FillMode="outline"
+                                                           OnClick="@(async () => await CancelInvestigation(inv.Id))"
+                                                           Enabled="@(!_cancelling)">Cancel Visit</TelerikButton>
+                                        }
+                                    </div>
                                 </div>
                             </div>
                         }
@@ -414,6 +434,7 @@
     private List<CaseReportSummary> _reports = [];
     private List<ScheduleProposalDto> _pendingProposals = [];
     private bool _respondingProposal;
+    private bool _cancelling;
     private bool _showCounterDialog;
     private Guid _counterProposalId;
     private DateTime? _counterDateTime;
@@ -586,6 +607,24 @@
         }
         catch { _error = "Failed to decline proposal."; }
         finally { _respondingProposal = false; StateHasChanged(); }
+    }
+
+    private async Task CancelInvestigation(Guid invId)
+    {
+        _cancelling = true;
+        try
+        {
+            var ok = await AdminClient.CancelMyInvestigationAsync(CaseId, invId);
+            if (ok)
+            {
+                // Reload so the status badge and cancel button update
+                _case = await AdminClient.GetMyCaseAsync(CaseId);
+                _pendingProposals = (await AdminClient.GetMyScheduleProposalsAsync(CaseId)).ToList();
+            }
+            else { _error = "The cancellation window has closed for this investigation."; }
+        }
+        catch { _error = "Failed to cancel investigation."; }
+        finally { _cancelling = false; StateHasChanged(); }
     }
 
     private async Task SendCounter()
