@@ -222,6 +222,25 @@ public sealed class MyCaseController : BenControllerBase
         return NoContent();
     }
 
+    // ── Client report view (published reports only) ────────────────────────────
+
+    [HttpGet("{caseId:guid}/reports")]
+    public async Task<ActionResult<IEnumerable<CaseReportSummary>>> GetPublishedReports(Guid caseId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var reports = await db.CaseReports.AsNoTracking()
+            .Where(r => r.CaseId == caseId && r.Status == Ben.Data.Common.Enums.CaseReportStatus.Published)
+            .OrderByDescending(r => r.PublishedAt)
+            .Select(r => new CaseReportSummary(r.Id, r.CaseId, r.Title, r.Status, r.ExpectedDeliveryDate, r.PublishedAt, r.DateCreated))
+            .ToListAsync(ct);
+        return Ok(reports);
+    }
+
     // ── Occurrence file attachments ────────────────────────────────────────────
 
     /// <summary>Attaches a file to an occurrence. Saved to cases/{caseId}/... path.</summary>
@@ -466,3 +485,12 @@ public sealed record CaseMessageRecord(
     bool   IsReadByClient,
     bool   IsReadByOrg,
     DateTime DateCreated);
+
+public sealed record CaseReportSummary(
+    Guid                                   Id,
+    Guid                                   CaseId,
+    string                                 Title,
+    Ben.Data.Common.Enums.CaseReportStatus Status,
+    DateTime?                              ExpectedDeliveryDate,
+    DateTime?                              PublishedAt,
+    DateTime                               DateCreated);
