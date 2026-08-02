@@ -96,6 +96,12 @@
                     </TelerikButton>
                 </div>
             }
+            @if (_request.Status == ClientRequestStatus.Assigned)
+            {
+                <div class="card-footer">
+                    <a href="/my-cases" class="btn btn-primary">View My Cases →</a>
+                </div>
+            }
         </div>
 
         @* ── Submitted-to organizations ─────────────────────────────────── *@

@@ -457,6 +457,23 @@ public interface IBenAdminClient
     Task<ClientRequestRecord?> SubmitClientRequestAsync(Guid id, IList<Guid> organizationIds, CancellationToken token = default);
     Task<ClientRequestRecord?> WithdrawClientRequestAsync(Guid id, CancellationToken token = default);
 
+    // ── My Cases (client dashboard) ───────────────────────────────────────────
+
+    /// <summary>Returns all cases where the current user is the originating client.</summary>
+    Task<IReadOnlyList<ClientCaseListItem>> GetMyCasesAsync(CancellationToken token = default);
+
+    /// <summary>Returns case detail + client-visible occurrences and upcoming investigations.</summary>
+    Task<ClientCaseDetail?> GetMyCaseAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Logs a new occurrence (ClientReport timeline entry) on the client's case.</summary>
+    Task<CaseTimelineEntryRecord?> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default);
+
+    /// <summary>Updates a previously logged occurrence.</summary>
+    Task<CaseTimelineEntryRecord?> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default);
+
+    /// <summary>Deletes a previously logged occurrence.</summary>
+    Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default);
+
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
     /// <summary>Returns all approved, active categories with their types (public — no auth).</summary>
@@ -1089,3 +1106,48 @@ public sealed record UpsertClientRequestRequest(
     Ben.Data.Common.Enums.ClientGender Gender,
     int? BirthYear,
     string? Description);
+// ── My Cases (client dashboard) response records ─────────────────────────────
+public sealed record ClientCaseListItem(
+    Guid      CaseId,
+    string    CaseReference,
+    string    Title,
+    string    City,
+    string    State,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    string?   CaseManagerDisplayName,
+    DateTime  DateCaseOpened);
+
+public sealed record ClientCaseDetail(
+    Guid      CaseId,
+    string    CaseReference,
+    string    Title,
+    string    City,
+    string    State,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    string?   Description,
+    string?   CaseManagerDisplayName,
+    DateTime  DateCaseOpened,
+    DateTime? DateCaseClosed,
+    IReadOnlyList<ClientCaseOccurrence>    Occurrences,
+    IReadOnlyList<ClientCaseInvestigation> Investigations);
+
+public sealed record ClientCaseOccurrence(
+    Guid      Id,
+    Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,
+    DateTime? EventDateTime,
+    string?   Title,
+    string?   Body,
+    DateTime  DateCreated);
+
+public sealed record ClientCaseInvestigation(
+    Guid       Id,
+    string     Title,
+    DateTime   ScheduledDateTime,
+    DateTime?  EndDateTime,
+    string?    Location,
+    Ben.Data.Common.Enums.InvestigationStatus Status);
+
+public sealed record LogOccurrenceRequest(
+    DateTime? EventDateTime,
+    string?   Title,
+    string?   Body);
