@@ -147,6 +147,16 @@
                                         {
                                             <div class="text-secondary small">@inv.Location</div>
                                         }
+                                        @if (inv.EvidenceDueDate.HasValue)
+                                        {
+                                            var isPastDue = inv.EvidenceDueDate.Value.ToLocalTime() < DateTime.Now;
+                                            var isSoon    = !isPastDue && inv.EvidenceDueDate.Value.ToLocalTime() < DateTime.Now.AddDays(7);
+                                            <div class="small mt-1 @(isPastDue ? "text-danger" : isSoon ? "text-warning" : "text-secondary")">
+                                                Evidence @(isPastDue ? "was due" : "due"):
+                                                @inv.EvidenceDueDate.Value.ToLocalTime().ToString("MMM d, yyyy")
+                                                @if (isPastDue) { <strong> (closed)</strong> }
+                                            </div>
+                                        }
                                     </div>
                                     <span class="badge @InvStatusBadge(inv.Status)">@InvStatusLabel(inv.Status)</span>
                                 </div>

@@ -30,7 +30,8 @@
     {
         var upcoming = _items.Where(i => i.Status is InvestigationStatus.Scheduled or InvestigationStatus.InProgress)
                              .OrderBy(i => i.ScheduledDateTime).ToList();
-        var past     = _items.Where(i => i.Status is InvestigationStatus.Completed or InvestigationStatus.Cancelled)
+        var past     = _items.Where(i => i.Status is InvestigationStatus.Completed or InvestigationStatus.Cancelled
+                                      || i.ScheduledDateTime < DateTime.Now)
                              .OrderByDescending(i => i.ScheduledDateTime).ToList();
 
         @if (upcoming.Count > 0)

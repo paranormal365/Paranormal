@@ -1156,7 +1156,8 @@ public sealed record ClientCaseInvestigation(
     DateTime   ScheduledDateTime,
     DateTime?  EndDateTime,
     string?    Location,
-    Ben.Data.Common.Enums.InvestigationStatus Status);
+    Ben.Data.Common.Enums.InvestigationStatus Status,
+    DateTime?  EvidenceDueDate = null);
 
 public sealed record LogOccurrenceRequest(
     DateTime? EventDateTime,

@@ -57,9 +57,15 @@ public sealed class MyInvestigationsController : BenControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
-        var attendee = await db.InvestigationAttendees.FindAsync([attendeeId], ct);
+        var attendee = await db.InvestigationAttendees
+            .Include(a => a.Investigation)
+            .FirstOrDefaultAsync(a => a.Id == attendeeId, ct);
         if (attendee is null) return NotFound();
         if (attendee.AppUserId != userId) return Forbid();
+
+        // RSVP is only meaningful before the investigation takes place.
+        if (attendee.Investigation.ScheduledDateTime < DateTime.UtcNow)
+            return UnprocessableEntity("This investigation has already taken place; RSVP can no longer be changed.");
 
         attendee.Rsvp = request.Rsvp;
         await db.SaveChangesAsync(ct);
