@@ -538,6 +538,9 @@ public interface IBenAdminClient
     /// <summary>Posts a message from the client to the org on this case.</summary>
     Task<CaseMessageRecord?> PostMyCaseMessageAsync(Guid caseId, string body, CancellationToken token = default);
 
+    /// <summary>Client cancels a scheduled investigation (422 if outside cancellation window).</summary>
+    Task<bool> CancelMyInvestigationAsync(Guid caseId, Guid investigationId, CancellationToken token = default);
+
     // ── My Investigations (member dashboard) ──────────────────────────────────
 
     /// <summary>Returns all investigations the current user is assigned to attend.</summary>
@@ -1290,7 +1293,8 @@ public sealed record ClientCaseInvestigation(
     DateTime?  EndDateTime,
     string?    Location,
     Ben.Data.Common.Enums.InvestigationStatus Status,
-    DateTime?  EvidenceDueDate = null);
+    DateTime?  EvidenceDueDate = null,
+    DateTime?  CancellationDeadlineUtc = null);
 
 public sealed record LogOccurrenceRequest(
     DateTime? EventDateTime,

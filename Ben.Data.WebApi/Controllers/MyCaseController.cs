@@ -115,14 +115,27 @@ public sealed class MyCaseController : BenControllerBase
             Files:         e.Files.Select(f => new OccurrenceFileItem(
                 f.UploadFileId, f.UploadFile.FileName, f.UploadFile.ContentType, f.UploadFile.FileSize)).ToList())).ToList();
 
+        // Compute cancellation deadline — requires org's primary address coordinates
+        var orgAddr = await db.OrganizationAddresses.AsNoTracking()
+            .Where(a => a.OrganizationId == c.OrganizationId && a.Latitude != null && a.Longitude != null)
+            .OrderBy(a => a.DateCreated)
+            .FirstOrDefaultAsync(ct);
+
+        double distMiles = 0.0;
+        if (c.Latitude.HasValue && c.Longitude.HasValue && orgAddr?.Latitude != null && orgAddr.Longitude != null)
+            distMiles = HaversineDistanceMiles((double)c.Latitude, (double)c.Longitude, (double)orgAddr.Latitude, (double)orgAddr.Longitude);
+
         var invItems = investigations.Select(i => new ClientCaseInvestigation(
-            Id:                i.Id,
-            Title:             i.Title,
-            ScheduledDateTime: i.ScheduledDateTime,
-            EndDateTime:       i.EndDateTime,
-            Location:          i.Location,
-            Status:            i.Status,
-            EvidenceDueDate:   i.EvidenceDueDate)).ToList();
+            Id:                     i.Id,
+            Title:                  i.Title,
+            ScheduledDateTime:      i.ScheduledDateTime,
+            EndDateTime:            i.EndDateTime,
+            Location:               i.Location,
+            Status:                 i.Status,
+            EvidenceDueDate:        i.EvidenceDueDate,
+            CancellationDeadlineUtc: i.Status == InvestigationStatus.Scheduled
+                ? Ben.Data.Common.Helpers.InvestigationCancellationHelper.CancellationDeadlineUtc(i.ScheduledDateTime, distMiles)
+                : null)).ToList();
 
         return Ok(new ClientCaseDetail(
             CaseId:                  c.Id,
@@ -558,6 +571,74 @@ public sealed class MyCaseController : BenControllerBase
             .Include(c => c.ClientRequest)
             .AnyAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
 
+    // ── Investigation cancellation (client-initiated, time-gated) ─────────────
+
+    [HttpPost("{caseId:guid}/investigations/{invId:guid}/cancel")]
+    public async Task<ActionResult<CancellationResult>> CancelInvestigation(
+        Guid caseId, Guid invId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var investigation = await db.Investigations.AsNoTracking()
+            .FirstOrDefaultAsync(i => i.Id == invId && i.CaseId == caseId, ct);
+        if (investigation is null) return NotFound();
+        if (investigation.Status != Ben.Data.Common.Enums.InvestigationStatus.Scheduled)
+            return Conflict($"Investigation is already {investigation.Status}.");
+
+        // Load coords for distance-based deadline calculation
+        var c = await db.Cases.AsNoTracking()
+            .Include(x => x.Organization)
+            .FirstAsync(x => x.Id == caseId, ct);
+
+        var orgAddr = await db.OrganizationAddresses.AsNoTracking()
+            .Where(a => a.OrganizationId == c.OrganizationId && a.Latitude != null && a.Longitude != null)
+            .OrderBy(a => a.DateCreated)
+            .FirstOrDefaultAsync(ct);
+
+        double distMiles = 0.0;
+        if (c.Latitude.HasValue && c.Longitude.HasValue && orgAddr?.Latitude != null && orgAddr.Longitude != null)
+            distMiles = HaversineDistanceMiles((double)c.Latitude, (double)c.Longitude, (double)orgAddr.Latitude, (double)orgAddr.Longitude);
+
+        var deadline    = Ben.Data.Common.Helpers.InvestigationCancellationHelper.CancellationDeadlineUtc(investigation.ScheduledDateTime, distMiles);
+        var leadHours   = (int)Ben.Data.Common.Helpers.InvestigationCancellationHelper.RequiredLeadHours(distMiles);
+
+        if (!Ben.Data.Common.Helpers.InvestigationCancellationHelper.IsCancellationAllowed(investigation.ScheduledDateTime, distMiles))
+            return UnprocessableEntity($"Cancellation window has closed. Cancellations must be made at least {leadHours} hours before the scheduled visit (deadline was {deadline:MMM d, yyyy h:mm tt} UTC).");
+
+        // Apply cancellation and notify case manager
+        var inv = await db.Investigations.FirstAsync(i => i.Id == invId, ct);
+        inv.Status = Ben.Data.Common.Enums.InvestigationStatus.Cancelled;
+        inv.DateUpdated = DateTime.UtcNow;
+        inv.UpdatedByAppUserId = userId;
+
+        db.CaseMessages.Add(new Ben.Data.Source.Entities.CaseMessage
+        {
+            Id = Guid.NewGuid(), CaseId = caseId, AuthorAppUserId = userId,
+            Body = $"The client has cancelled the investigation scheduled for <strong>{investigation.ScheduledDateTime.ToLocalTime():MMM d, yyyy h:mm tt}</strong>.",
+            SenderSide = Ben.Data.Common.Enums.CaseMessageSide.Client,
+            IsReadByClient = true, IsReadByOrg = false,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        await db.SaveChangesAsync(ct);
+        return Ok(new CancellationResult(invId, deadline, leadHours));
+    }
+
+    // Haversine duplicated in WebApi (WebApi cannot reference Ben.Web.Library)
+    private static double HaversineDistanceMiles(double lat1, double lon1, double lat2, double lon2)
+    {
+        const double R = 3958.8;
+        var dLat = (lat2 - lat1) * Math.PI / 180.0;
+        var dLon = (lon2 - lon1) * Math.PI / 180.0;
+        var a    = Math.Sin(dLat / 2) * Math.Sin(dLat / 2)
+                 + Math.Cos(lat1 * Math.PI / 180) * Math.Cos(lat2 * Math.PI / 180)
+                 * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+        return 2 * R * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+    }
+
     private static CaseMessageRecord ToRecord(Ben.Data.Source.Entities.CaseMessage m) => new(
         m.Id, m.CaseId, m.AuthorAppUserId,
         m.AuthorAppUser?.DisplayName ?? "Unknown",
@@ -614,7 +695,8 @@ public sealed record ClientCaseInvestigation(
     DateTime?  EndDateTime,
     string?    Location,
     Ben.Data.Common.Enums.InvestigationStatus Status,
-    DateTime?  EvidenceDueDate = null);
+    DateTime?  EvidenceDueDate = null,
+    DateTime?  CancellationDeadlineUtc = null);
 
 public sealed record LogOccurrenceRequest(
     DateTime? EventDateTime,
@@ -661,3 +743,5 @@ public sealed record ScheduleProposalDto(
     IReadOnlyList<SlotDto>                            Slots);
 
 public sealed record SlotDto(Guid Id, DateTime StartDateTime, DateTime? EndDateTime, int SortOrder);
+
+public sealed record CancellationResult(Guid InvestigationId, DateTime DeadlineUtc, int RequiredLeadHours);
