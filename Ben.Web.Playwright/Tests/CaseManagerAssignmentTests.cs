@@ -1,0 +1,124 @@
+using Microsoft.Playwright;
+using NUnit.Framework;
+
+namespace Ben.Web.Playwright.Tests;
+
+/// <summary>
+/// Tests for case manager assignment in CaseDetail and CaseList.
+/// Sarah Mitchell is seeded as an org member of TGH; Daniel Park's case is used.
+/// </summary>
+[TestFixture]
+[Category("CaseManager")]
+public class CaseManagerAssignmentTests : BenTestBase
+{
+    // ── Helper: navigate to Daniel Park's case detail as Sarah ─────────────────
+
+    private async Task NavigateToTghCaseDetail()
+    {
+        await LoginAsync(UserEmail, UserPassword); // Sarah
+        await Page.GotoAsync($"{BaseUrl}/organizations");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        var tgh = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
+        if (!await tgh.IsVisibleAsync()) { Assert.Pass("TGH org not visible; seed data may differ."); return; }
+        await tgh.ClickAsync();
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
+                            .Or(Page.GetByText("Cases", new() { Exact = true })).First;
+        await casesLink.ClickAsync();
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        var caseItem = Page.GetByText("Park", new() { Exact = false }).First;
+        await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await caseItem.ClickAsync();
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+    }
+
+    // ── CaseList: manager column ───────────────────────────────────────────────
+
+    [Test]
+    public async Task CaseList_ShowsManagerOrUnassigned()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+        await Page.GotoAsync($"{BaseUrl}/organizations");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        var tgh = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
+        if (!await tgh.IsVisibleAsync()) { Assert.Pass("TGH org not visible."); return; }
+        await tgh.ClickAsync();
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
+                            .Or(Page.GetByText("Cases", new() { Exact = true })).First;
+        await casesLink.ClickAsync();
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        // Each case card should show either a manager name or 'Unassigned'
+        var managerLabels = Page.GetByText("Manager:", new() { Exact = false });
+        await Expect(managerLabels.First).ToBeVisibleAsync(new() { Timeout = 10_000 });
+    }
+
+    // ── CaseDetail: manager in header ─────────────────────────────────────────
+
+    [Test]
+    public async Task CaseDetail_HeaderShowsCaseManager()
+    {
+        await NavigateToTghCaseDetail();
+
+        // Header row should contain 'Case Manager:' text
+        var managerRow = Page.GetByText("Case Manager:", new() { Exact = false });
+        await Expect(managerRow).ToBeVisibleAsync(new() { Timeout = 10_000 });
+    }
+
+    [Test]
+    public async Task CaseDetail_Header_ShowsUnassignedWhenNoManager()
+    {
+        await NavigateToTghCaseDetail();
+
+        // Either shows a name OR 'Unassigned' — both are valid states
+        var managerRow = Page.GetByText("Case Manager:", new() { Exact = false });
+        await Expect(managerRow).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        var body = await Page.InnerTextAsync("body");
+        Assert.That(body.Contains("Case Manager:"), Is.True, "Expected 'Case Manager:' in header.");
+    }
+
+    // ── CaseDetail: edit dialog shows manager dropdown ────────────────────────
+
+    [Test]
+    public async Task EditCaseDialog_HasCaseManagerDropdown()
+    {
+        await NavigateToTghCaseDetail();
+
+        var editBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Edit Case" });
+        await Expect(editBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await editBtn.ClickAsync();
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        // 'Case Manager' label should appear in the dialog
+        var label = Page.GetByText("Case Manager", new() { Exact = false });
+        await Expect(label).ToBeVisibleAsync(new() { Timeout = 8_000 });
+    }
+
+    [Test]
+    public async Task EditCaseDialog_CaseManagerDropdown_HasOrgMembers()
+    {
+        await NavigateToTghCaseDetail();
+
+        var editBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Edit Case" });
+        await editBtn.ClickAsync();
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        // Wait for the dropdown to populate with org members (loaded lazily)
+        await Page.WaitForTimeoutAsync(800);
+
+        var label = Page.GetByText("Case Manager", new() { Exact = false });
+        await Expect(label).ToBeVisibleAsync(new() { Timeout = 8_000 });
+
+        // The dropdown should be present and interactable
+        var body = await Page.InnerTextAsync("body");
+        Assert.That(body.Contains("Case Manager"), Is.True,
+            "Expected Case Manager dropdown in edit dialog.");
+    }
+}

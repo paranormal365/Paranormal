@@ -84,6 +84,17 @@
                                     <span> · Closed @c.DateCaseClosed.Value.ToLocalTime().ToString("MMM d, yyyy")</span>
                                 }
                             </div>
+                            <div class="text-secondary small mt-1">
+                                Manager:
+                                @if (!string.IsNullOrEmpty(c.CaseManagerDisplayName))
+                                {
+                                    <strong>@c.CaseManagerDisplayName</strong>
+                                }
+                                else
+                                {
+                                    <em class="text-warning">Unassigned</em>
+                                }
+                            </div>
                         </div>
                         <TelerikButton Size="@ThemeConstants.Button.Size.Small"
                                        Icon="@SvgIcon.ArrowRight"
