@@ -159,7 +159,8 @@ else
                                 @if (UserState.IsAuthenticated)
                                 {
                                     <div class="mt-2">
-                                        <CaseVoteWidget CaseId="@item.CaseId" />
+                                        <CaseVoteWidget CaseId="@item.CaseId"
+                                                        PreloadedSummary="@(_voteSummaries.GetValueOrDefault(item.CaseId))" />
                                     </div>
                                 }
                             </div>
@@ -204,6 +205,7 @@ else
 
     private List<PublicCaseDiscoveryItem> _pagedItems = [];
     private List<CaseMapMarker>           _markers    = [];
+    private Dictionary<Guid, CaseVoteSummary> _voteSummaries = [];
 
     // Per-marker cluster data (index = marker.Index)
     private List<List<PublicCaseDiscoveryItem>> _clusters = [];
@@ -250,6 +252,7 @@ else
 
         BuildMarkers(allItems);
         SlicePage(allItems);
+        await LoadVoteSummariesAsync();
 
         _loading = false;
         StateHasChanged();
@@ -338,7 +341,17 @@ else
             _totalCount = response.TotalCount;
             _pagedItems = response.Items.ToList();
         }
+        await LoadVoteSummariesAsync();
         StateHasChanged();
+    }
+
+    // Fetches vote summaries for the current page items in a single request.
+    private async Task LoadVoteSummariesAsync()
+    {
+        if (!UserState.IsAuthenticated || _pagedItems.Count == 0) return;
+        var ids = _pagedItems.Select(i => i.CaseId);
+        var summaries = await AdminClient.GetCaseVoteSummariesAsync(ids);
+        _voteSummaries = summaries.ToDictionary(s => s.CaseId);
     }
 
     public async ValueTask DisposeAsync()

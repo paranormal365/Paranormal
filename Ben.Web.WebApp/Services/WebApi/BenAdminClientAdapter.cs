@@ -668,6 +668,15 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<CaseVoteSummary?> GetCaseVoteSummaryAsync(Guid caseId, CancellationToken token = default)
         => _api.GetAnonymousAsync<CaseVoteSummary>($"/api/public/cases/{caseId}/votes", token);
 
+    public async Task<IReadOnlyList<CaseVoteSummary>> GetCaseVoteSummariesAsync(IEnumerable<Guid> caseIds, CancellationToken token = default)
+    {
+        var qs = string.Join("&", caseIds.Select(id => $"caseIds={id}"));
+        if (string.IsNullOrEmpty(qs)) return [];
+        var result = await _api.GetAnonymousAsync<IReadOnlyList<CaseVoteSummary>>(
+            $"/api/public/cases/vote-summaries?{qs}", token);
+        return result ?? [];
+    }
+
     public Task<CaseVoteSummary?> CastCaseVoteAsync(Guid caseId, Ben.Data.Common.Enums.EvidenceVoteType voteType, CancellationToken token = default)
         => _api.PostAsync<object, CaseVoteSummary>($"/api/public/cases/{caseId}/votes", new { VoteType = voteType }, token);
 

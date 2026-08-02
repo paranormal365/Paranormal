@@ -378,17 +378,13 @@ public interface IBenAdminClient
     Task<CaseVoteSummary?> GetCaseVoteSummaryAsync(Guid caseId, CancellationToken token = default);
 
     /// <summary>
-    /// Casts or replaces the current user's vote on a public case (upsert).
-    /// Returns the updated <see cref="CaseVoteSummary"/> for immediate UI refresh.
-    /// Requires authentication. Calls <c>POST api/public/cases/{caseId}/votes</c>.
+    /// Returns vote summaries for multiple cases in one request.
+    /// Used by <c>PublicCaseDiscovery.razor</c> to pre-load summaries for all visible
+    /// list-cards without N individual requests. Calls <c>GET api/public/cases/vote-summaries</c>.
     /// </summary>
-    Task<CaseVoteSummary?> CastCaseVoteAsync(Guid caseId, Ben.Data.Common.Enums.EvidenceVoteType voteType, CancellationToken token = default);
+    Task<IReadOnlyList<CaseVoteSummary>> GetCaseVoteSummariesAsync(IEnumerable<Guid> caseIds, CancellationToken token = default);
 
-    /// <summary>
-    /// Removes the current user's vote from a public case.
-    /// Returns <c>true</c> on success, <c>false</c> if the vote did not exist or the API call failed.
-    /// Requires authentication. Calls <c>DELETE api/public/cases/{caseId}/votes</c>.
-    /// </summary>
+    Task<CaseVoteSummary?> CastCaseVoteAsync(Guid caseId, Ben.Data.Common.Enums.EvidenceVoteType voteType, CancellationToken token = default);
     Task<bool> RemoveCaseVoteAsync(Guid caseId, CancellationToken token = default);
 
     // ── Investigations ────────────────────────────────────────────────────────

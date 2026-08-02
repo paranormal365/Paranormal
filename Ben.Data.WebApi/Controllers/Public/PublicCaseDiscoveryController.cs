@@ -1,5 +1,6 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Service.Models.Entities;
 using Ben.Service.RepositoryService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -126,6 +127,51 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
         var total = items.Count;
         var paged = items.Skip((page - 1) * pageSize).Take(pageSize).ToList();
         return Ok(new PublicCaseDiscoveryPagedResponse(paged, total, page, pageSize));
+    }
+
+    /// <summary>
+    /// Returns vote summaries for a set of case IDs in one round-trip.
+    /// Used by <c>PublicCaseDiscovery.razor</c> to pre-load summaries for all
+    /// visible list-cards without firing one request per card.
+    /// </summary>
+    [HttpGet("vote-summaries")]
+    public async Task<ActionResult<IReadOnlyList<CaseVoteSummary>>> GetVoteSummaries(
+        [FromQuery] Guid[] caseIds, CancellationToken ct)
+    {
+        if (caseIds.Length == 0) return Ok(Array.Empty<CaseVoteSummary>());
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var votes = await db.CaseVotes.AsNoTracking()
+            .Where(v => caseIds.Contains(v.CaseId))
+            .ToListAsync(ct);
+
+        // Resolve the authenticated user's ID (null when anonymous)
+        Guid? userId = null;
+        if (HttpContext.User.Identity?.IsAuthenticated == true)
+        {
+            var claim = HttpContext.User.FindFirst("app_user_id")
+                     ?? HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+            if (claim is not null && Guid.TryParse(claim.Value, out var parsed))
+                userId = parsed;
+        }
+
+        var result = caseIds.Select(caseId =>
+        {
+            var caseVotes = votes.Where(v => v.CaseId == caseId).ToList();
+            var myVote    = userId.HasValue
+                ? caseVotes.FirstOrDefault(v => v.VoterAppUserId == userId.Value)?.VoteType
+                : null;
+            return new CaseVoteSummary(
+                CaseId:            caseId,
+                ConfirmsCount:     caseVotes.Count(v => v.VoteType == EvidenceVoteType.Confirms),
+                DisputesCount:     caseVotes.Count(v => v.VoteType == EvidenceVoteType.Disputes),
+                InconclusiveCount: caseVotes.Count(v => v.VoteType == EvidenceVoteType.Inconclusive),
+                TotalVotes:        caseVotes.Count,
+                CurrentUserVote:   myVote);
+        }).ToList();
+
+        return Ok(result);
     }
 }
 

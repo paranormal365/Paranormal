@@ -72,6 +72,8 @@
 
 @code {
     [Parameter, EditorRequired] public Guid CaseId { get; set; }
+    /// <summary>When provided, skips the API fetch. Used by list views that pre-load summaries in batch.</summary>
+    [Parameter] public CaseVoteSummary? PreloadedSummary { get; set; }
 
     private CaseVoteSummary? _summary;
     private bool _loading = true;
@@ -79,6 +81,12 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        if (PreloadedSummary is not null)
+        {
+            _summary = PreloadedSummary;
+            _loading = false;
+            return;
+        }
         _loading = true;
         try { _summary = await AdminClient.GetCaseVoteSummaryAsync(CaseId); }
         catch { }
