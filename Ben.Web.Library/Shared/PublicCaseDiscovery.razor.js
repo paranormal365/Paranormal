@@ -71,6 +71,23 @@ export function tryGetUserLocation(dotnetRef) {
     )
 }
 
+// ── Center update ─────────────────────────────────────────────────────────────
+
+/**
+ * Drives the Kendo map widget to the new center+zoom using its own JS API.
+ * This forces tile layer reload, which Blazor re-render alone does not guarantee.
+ */
+export function setMapCenter(lat, lon, zoom) {
+    const mapEl = document.querySelector('[data-role="map"]')
+    if (!mapEl) return
+    const map = typeof kendo !== 'undefined' && kendo.widgetInstance
+        ? kendo.widgetInstance(mapEl)
+        : null
+    if (!map) return
+    map.center([lat, lon])
+    map.zoom(zoom)
+}
+
 // ── Init / dispose ────────────────────────────────────────────────────────────
 
 export function init(dotnetRef) {

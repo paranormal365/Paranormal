@@ -156,6 +156,12 @@ else
                                          Disputes="@item.DisputesCount"
                                          Inconclusive="@item.InconclusiveCount"
                                          Total="@item.TotalVotes" />
+                                @if (UserState.IsAuthenticated)
+                                {
+                                    <div class="mt-2">
+                                        <CaseVoteWidget CaseId="@item.CaseId" />
+                                    </div>
+                                }
                             </div>
                             <div class="card-footer bg-transparent d-flex gap-2 pt-2">
                                 <a href="/o/@item.OrgUrlName/cases/@item.CaseReference.TrimStart('#')"
@@ -290,13 +296,16 @@ else
     }
 
     [JSInvokable]
-    public void SetUserLocation(double? lat, double? lon)
+    public async Task SetUserLocation(double? lat, double? lon)
     {
         if (lat.HasValue && lon.HasValue)
         {
             _mapCenter = [lat.Value, lon.Value];
             _mapZoom   = 9;
-            InvokeAsync(StateHasChanged);
+            await InvokeAsync(StateHasChanged);
+            // Drive Kendo tile reload via its own JS API (Blazor re-render alone is not enough)
+            if (_module is not null)
+                await _module.InvokeVoidAsync("setMapCenter", lat.Value, lon.Value, 9);
         }
     }
 
