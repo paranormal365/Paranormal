@@ -7,6 +7,17 @@
 @* Embedded panel showing investigations for a case — used in CaseDetail.razor *@
 
 <div>
+    @* ── Date negotiation with client ─────────────────────────────────────────── *@
+    <details class="mb-3">
+        <summary class="fw-semibold small text-secondary" style="cursor:pointer;">
+            <TelerikSvgIcon Icon="@SvgIcon.Calendar" /> Date Proposals to Client
+        </summary>
+        <div class="mt-2">
+            <SchedulingProposalPanel OrgId="@OrgId" CaseId="@CaseId" />
+        </div>
+    </details>
+    <hr class="my-2" />
+
     <div class="d-flex align-items-center justify-content-between mb-3">
         <span class="fw-semibold">Investigations (@(_investigations?.Count ?? 0))</span>
         <TelerikButton Icon="@SvgIcon.Plus"

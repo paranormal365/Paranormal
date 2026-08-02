@@ -485,6 +485,20 @@ public interface IBenAdminClient
     Task<CaseResearchEntryDto?> UpdateCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, UpsertResearchRequest request, CancellationToken token = default);
     Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
 
+    // ── Investigation Scheduling ──────────────────────────────────────────────
+
+    // Org side
+    Task<IReadOnlyList<ScheduleProposalDto>> GetScheduleProposalsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<ScheduleProposalDto?> CreateScheduleProposalAsync(Guid orgId, Guid caseId, CreateProposalRequest request, CancellationToken token = default);
+    Task<bool> WithdrawScheduleProposalAsync(Guid orgId, Guid caseId, Guid proposalId, CancellationToken token = default);
+    Task<ScheduleProposalDto?> ConvertProposalToInvestigationAsync(Guid orgId, Guid caseId, Guid proposalId, ConvertProposalRequest request, CancellationToken token = default);
+
+    // Client side
+    Task<IReadOnlyList<ScheduleProposalDto>> GetMyScheduleProposalsAsync(Guid caseId, CancellationToken token = default);
+    Task<ScheduleProposalDto?> AcceptScheduleProposalAsync(Guid caseId, Guid proposalId, Guid slotId, CancellationToken token = default);
+    Task<ScheduleProposalDto?> CounterScheduleProposalAsync(Guid caseId, Guid proposalId, DateTime preferredDateTime, string? notes, CancellationToken token = default);
+    Task<ScheduleProposalDto?> DeclineScheduleProposalAsync(Guid caseId, Guid proposalId, string? notes, CancellationToken token = default);
+
     // ── Client Requests ───────────────────────────────────────────────────────
 
     Task<IReadOnlyList<ClientRequestRecord>> GetMyClientRequestsAsync(CancellationToken token = default);
@@ -1333,3 +1347,23 @@ public sealed record CaseResearchEntryDto(
     DateTime                               DateCreated);
 
 public sealed record ResearchFileInfo(Guid FileId, string FileName, string ContentType, long FileSize);
+
+// ── Investigation Scheduling records ─────────────────────────────────────────
+public sealed record CreateProposalRequest(string? Notes, IReadOnlyList<SlotInput> Slots);
+public sealed record SlotInput(DateTime StartDateTime, DateTime? EndDateTime);
+public sealed record ConvertProposalRequest(Guid? SlotId, string? Title);
+
+public sealed record ScheduleProposalDto(
+    Guid                                              Id,
+    Guid                                              CaseId,
+    Ben.Data.Common.Enums.ScheduleProposalStatus      Status,
+    string?                                           Notes,
+    Guid?                                             AcceptedSlotId,
+    DateTime?                                         ClientCounterDateTime,
+    string?                                           ClientResponseNotes,
+    DateTime?                                         ClientRespondedAt,
+    Guid?                                             InvestigationId,
+    DateTime                                          DateCreated,
+    IReadOnlyList<SlotDto>                            Slots);
+
+public sealed record SlotDto(Guid Id, DateTime StartDateTime, DateTime? EndDateTime, int SortOrder);

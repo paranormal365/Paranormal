@@ -264,6 +264,118 @@ public sealed class MyCaseController : BenControllerBase
         return File(pdfBytes, "application/pdf", $"report-{report.Title.Replace(' ', '-')}.pdf");
     }
 
+    // ── Investigation scheduling (client responds to proposed dates) ───────────
+
+    [HttpGet("{caseId:guid}/schedule-proposals")]
+    public async Task<ActionResult<IEnumerable<ScheduleProposalDto>>> GetScheduleProposals(Guid caseId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var proposals = await db.InvestigationScheduleProposals.AsNoTracking()
+            .Include(p => p.Slots)
+            .Where(p => p.CaseId == caseId && p.Status == Ben.Data.Common.Enums.ScheduleProposalStatus.Pending)
+            .OrderByDescending(p => p.DateCreated)
+            .ToListAsync(ct);
+
+        return Ok(proposals.Select(ProposalToDto));
+    }
+
+    [HttpPost("{caseId:guid}/schedule-proposals/{proposalId:guid}/accept")]
+    public async Task<ActionResult<ScheduleProposalDto>> AcceptProposal(
+        Guid caseId, Guid proposalId, [FromBody] AcceptProposalRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var proposal = await db.InvestigationScheduleProposals.Include(p => p.Slots)
+            .FirstOrDefaultAsync(p => p.Id == proposalId && p.CaseId == caseId
+                && p.Status == Ben.Data.Common.Enums.ScheduleProposalStatus.Pending, ct);
+        if (proposal is null) return NotFound();
+
+        var slot = proposal.Slots.FirstOrDefault(s => s.Id == request.SlotId);
+        if (slot is null) return BadRequest("Slot not found in this proposal.");
+
+        // Auto-create the Investigation
+        var investigation = new Ben.Data.Source.Entities.Investigation
+        {
+            Id = Guid.NewGuid(), CaseId = caseId,
+            Title = "Scheduled Investigation",
+            ScheduledDateTime = slot.StartDateTime,
+            EndDateTime = slot.EndDateTime,
+            Status = Ben.Data.Common.Enums.InvestigationStatus.Scheduled,
+            Notes = $"Scheduled via date negotiation; client accepted {slot.StartDateTime:MMM d, yyyy h:mm tt}.",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        };
+        db.Investigations.Add(investigation);
+
+        proposal.Status = Ben.Data.Common.Enums.ScheduleProposalStatus.AcceptedByClient;
+        proposal.AcceptedSlotId = slot.Id;
+        proposal.InvestigationId = investigation.Id;
+        proposal.ClientRespondedAt = DateTime.UtcNow;
+        proposal.DateUpdated = DateTime.UtcNow;
+        proposal.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+        return Ok(ProposalToDto(proposal));
+    }
+
+    [HttpPost("{caseId:guid}/schedule-proposals/{proposalId:guid}/counter")]
+    public async Task<ActionResult<ScheduleProposalDto>> CounterProposal(
+        Guid caseId, Guid proposalId, [FromBody] CounterProposalRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var proposal = await db.InvestigationScheduleProposals.Include(p => p.Slots)
+            .FirstOrDefaultAsync(p => p.Id == proposalId && p.CaseId == caseId
+                && p.Status == Ben.Data.Common.Enums.ScheduleProposalStatus.Pending, ct);
+        if (proposal is null) return NotFound();
+
+        proposal.Status = Ben.Data.Common.Enums.ScheduleProposalStatus.Countered;
+        proposal.ClientCounterDateTime = request.PreferredDateTime;
+        proposal.ClientResponseNotes = request.Notes?.Trim();
+        proposal.ClientRespondedAt = DateTime.UtcNow;
+        proposal.DateUpdated = DateTime.UtcNow;
+        proposal.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+        return Ok(ProposalToDto(proposal));
+    }
+
+    [HttpPost("{caseId:guid}/schedule-proposals/{proposalId:guid}/decline")]
+    public async Task<ActionResult<ScheduleProposalDto>> DeclineProposal(
+        Guid caseId, Guid proposalId, [FromBody] DeclineProposalRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var proposal = await db.InvestigationScheduleProposals.Include(p => p.Slots)
+            .FirstOrDefaultAsync(p => p.Id == proposalId && p.CaseId == caseId
+                && p.Status == Ben.Data.Common.Enums.ScheduleProposalStatus.Pending, ct);
+        if (proposal is null) return NotFound();
+
+        proposal.Status = Ben.Data.Common.Enums.ScheduleProposalStatus.Declined;
+        proposal.ClientResponseNotes = request.Notes?.Trim();
+        proposal.ClientRespondedAt = DateTime.UtcNow;
+        proposal.DateUpdated = DateTime.UtcNow;
+        proposal.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+        return Ok(ProposalToDto(proposal));
+    }
+
+    private static ScheduleProposalDto ProposalToDto(Ben.Data.Source.Entities.InvestigationScheduleProposal p) => new(
+        p.Id, p.CaseId, p.Status, p.Notes, p.AcceptedSlotId,
+        p.ClientCounterDateTime, p.ClientResponseNotes, p.ClientRespondedAt,
+        p.InvestigationId, p.DateCreated,
+        p.Slots.OrderBy(s => s.SortOrder).Select(s => new SlotDto(s.Id, s.StartDateTime, s.EndDateTime, s.SortOrder)).ToList());
+
     // ── Occurrence file attachments ────────────────────────────────────────────
 
     /// <summary>Attaches a file to an occurrence. Saved to cases/{caseId}/... path.</summary>
@@ -517,3 +629,22 @@ public sealed record CaseReportSummary(
     DateTime?                              ExpectedDeliveryDate,
     DateTime?                              PublishedAt,
     DateTime                               DateCreated);
+
+public sealed record AcceptProposalRequest(Guid SlotId);
+public sealed record CounterProposalRequest(DateTime PreferredDateTime, string? Notes);
+public sealed record DeclineProposalRequest(string? Notes);
+
+public sealed record ScheduleProposalDto(
+    Guid                                              Id,
+    Guid                                              CaseId,
+    Ben.Data.Common.Enums.ScheduleProposalStatus      Status,
+    string?                                           Notes,
+    Guid?                                             AcceptedSlotId,
+    DateTime?                                         ClientCounterDateTime,
+    string?                                           ClientResponseNotes,
+    DateTime?                                         ClientRespondedAt,
+    Guid?                                             InvestigationId,
+    DateTime                                          DateCreated,
+    IReadOnlyList<SlotDto>                            Slots);
+
+public sealed record SlotDto(Guid Id, DateTime StartDateTime, DateTime? EndDateTime, int SortOrder);
