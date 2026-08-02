@@ -297,6 +297,7 @@ public sealed class CaseController : BenControllerBase
             .AsNoTracking()
             .Include(e => e.AuthorAppUser)
             .Include(e => e.ExperienceTypes)
+            .Include(e => e.Files).ThenInclude(f => f.UploadFile)
             .Where(e => e.CaseId == caseId)
             .OrderBy(e => e.EventDateTime ?? e.DateCreated)
             .ToListAsync(ct);
@@ -344,6 +345,7 @@ public sealed class CaseController : BenControllerBase
             .AsNoTracking()
             .Include(e => e.AuthorAppUser)
             .Include(e => e.ExperienceTypes)
+            .Include(e => e.Files).ThenInclude(f => f.UploadFile)
             .FirstAsync(e => e.Id == entry.Id, ct);
         return CreatedAtAction(nameof(GetTimeline), new { orgId, caseId },
             _mapper.Map<CaseTimelineEntryRecord>(loaded));
@@ -387,6 +389,7 @@ public sealed class CaseController : BenControllerBase
             .AsNoTracking()
             .Include(e => e.AuthorAppUser)
             .Include(e => e.ExperienceTypes)
+            .Include(e => e.Files).ThenInclude(f => f.UploadFile)
             .FirstAsync(e => e.Id == entry.Id, ct);
         return Ok(_mapper.Map<CaseTimelineEntryRecord>(loaded));
     }

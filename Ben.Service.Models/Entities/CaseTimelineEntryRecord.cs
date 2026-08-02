@@ -14,6 +14,7 @@ public record CaseTimelineEntryRecord
     public string? Body { get; init; }
     public bool IsPublic { get; init; }
     public IReadOnlyList<Guid> ExperienceTypeIds { get; init; } = [];
+    public IReadOnlyList<CaseTimelineFileRecord> Files { get; init; } = [];
     public DateTime DateCreated { get; init; }
     public DateTime? DateUpdated { get; init; }
     public Guid CreatedByAppUserId { get; init; }

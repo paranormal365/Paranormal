@@ -18,6 +18,14 @@ public class CaseTimelineEntryProfile : Profile
             .ForMember(d => d.AuthorDisplayName,
                        o => o.MapFrom(s => s.AuthorAppUser != null ? s.AuthorAppUser.DisplayName : null))
             .ForMember(d => d.ExperienceTypeIds,
-                       o => o.MapFrom(s => s.ExperienceTypes.Select(x => x.ExperienceTypeId).ToList()));
+                       o => o.MapFrom(s => s.ExperienceTypes.Select(x => x.ExperienceTypeId).ToList()))
+            .ForMember(d => d.Files,
+                       o => o.MapFrom(s => s.Files.Select(f => new CaseTimelineFileRecord
+                       {
+                           FileId      = f.UploadFileId,
+                           FileName    = f.UploadFile.FileName,
+                           ContentType = f.UploadFile.ContentType,
+                           FileSize    = f.UploadFile.FileSize,
+                       }).ToList()));
     }
 }
