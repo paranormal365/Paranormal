@@ -99,7 +99,14 @@
             @if (_request.Status == ClientRequestStatus.Assigned)
             {
                 <div class="card-footer">
-                    <a href="/my-cases" class="btn btn-primary">View My Cases →</a>
+                    @if (_myCase is not null)
+                    {
+                        <a href="/my-cases/@_myCase.CaseId" class="btn btn-primary">View My Case →</a>
+                    }
+                    else
+                    {
+                        <a href="/my-cases" class="btn btn-primary">View My Cases →</a>
+                    }
                 </div>
             }
         </div>
@@ -184,6 +191,7 @@
 
     private ClientRequestRecord? _request;
     private List<ClientRequestOrganizationRecord> _orgs = [];
+    private ClientCaseListItem? _myCase;  // set when Assigned to link directly to the case
     private string? _error;
     private bool _isBusy;
     private bool _showWithdrawConfirm;
@@ -201,7 +209,15 @@
         {
             _request = await AdminClient.GetClientRequestAsync(Id);
             if (_request is null) { _error = "Request not found."; }
-            else _orgs = (await AdminClient.GetClientRequestOrgsAsync(Id)).ToList();
+            else
+            {
+                _orgs = (await AdminClient.GetClientRequestOrgsAsync(Id)).ToList();
+                if (_request.Status == ClientRequestStatus.Assigned)
+                {
+                    var cases = await AdminClient.GetMyCasesAsync();
+                    _myCase = cases.FirstOrDefault();
+                }
+            }
         }
         catch { _error = "Failed to load request."; }
         StateHasChanged();
