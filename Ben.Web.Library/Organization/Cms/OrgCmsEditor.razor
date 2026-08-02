@@ -7,20 +7,26 @@
 @using System.Text.Json
 @using Ben.Data.Common.Enums
 
-<PageTitle>CMS — @(_orgName ?? OrgId.ToString())</PageTitle>
+@if (!EmbeddedMode)
+{
+    <PageTitle>CMS — @(_orgName ?? OrgId.ToString())</PageTitle>
+}
 
 <div class="container-fluid px-3">
 
-    <div class="row mb-3 align-items-center">
-        <div class="col">
-            <TelerikButton Icon="@SvgIcon.ArrowLeft"
-                           FillMode="@ThemeConstants.Button.FillMode.Flat"
-                           OnClick="@(() => NavManager.NavigateTo("/organizations"))">
-                Back to Organizations
-            </TelerikButton>
-            <h3 class="d-inline-block ms-3 mb-0">CMS — @(_orgName ?? OrgId.ToString())</h3>
+    @if (!EmbeddedMode)
+    {
+        <div class="row mb-3 align-items-center">
+            <div class="col">
+                <TelerikButton Icon="@SvgIcon.ArrowLeft"
+                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               OnClick="@(() => NavManager.NavigateTo("/organizations"))">
+                    Back to Organizations
+                </TelerikButton>
+                <h3 class="d-inline-block ms-3 mb-0">CMS — @(_orgName ?? OrgId.ToString())</h3>
+            </div>
         </div>
-    </div>
+    }
 
     @if (_errorMessage is not null)
     {
@@ -553,7 +559,8 @@
 </TelerikDialog>
 
 @code {
-    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid OrgId        { get; set; }
+    [Parameter] public bool EmbeddedMode  { get; set; }
 
     private string? _orgName;
     private string? _errorMessage;

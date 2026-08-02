@@ -1,4 +1,5 @@
 @page "/my-requests/new"
+@page "/my-requests/{Id:guid}/edit"
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Library.Services
@@ -198,10 +199,20 @@
                 }
                 else if (_orgs.Count == 0)
                 {
-                    <div class="alert alert-warning mb-0">
-                        No organizations are currently accepting cases in your area.
-                        Check back later or <a href="/my-requests">save your request as a draft</a>.
-                    </div>
+                    @if (_lat is null || _lon is null)
+                    {
+                        <div class="alert alert-warning mb-0">
+                            <strong>Address not verified.</strong> We couldn't locate your address to find nearby organizations.
+                            <a @onclick="@(() => _step = 1)" href="#" class="alert-link">Go back and verify your address.</a>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning mb-0">
+                            No organizations are currently accepting cases in your area.
+                            Check back later or <a href="/my-requests" class="alert-link">save your request as a draft</a>.
+                        </div>
+                    }
                 }
                 else
                 {
@@ -286,6 +297,8 @@
 </div>
 
 @code {
+    [Parameter] public Guid? Id { get; set; }
+
     // ── State ─────────────────────────────────────────────────────────────────
     private int _step = 1;
     private bool _isBusy;
@@ -344,6 +357,35 @@
             new Telerik.Blazor.Components.Editor.Undo(),
             new Telerik.Blazor.Components.Editor.Redo()),
     ];
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || Id is null) return;
+        if (!UserState.IsAuthenticated) return;
+        try
+        {
+            var existing = await AdminClient.GetClientRequestAsync(Id.Value);
+            if (existing is null || existing.Status != ClientRequestStatus.Draft)
+            {
+                NavManager.NavigateTo("/my-requests");
+                return;
+            }
+            _draftId        = existing.Id;
+            _streetAddress1 = existing.StreetAddress1;
+            _streetAddress2 = existing.StreetAddress2;
+            _city           = existing.City;
+            _state          = existing.State;
+            _zipCode        = existing.ZipCode;
+            _lat            = existing.Latitude;
+            _lon            = existing.Longitude;
+            _gender         = existing.Gender;
+            _birthYear      = existing.BirthYear;
+            _description    = existing.Description ?? "";
+        }
+        catch { _error = "Failed to load request."; }
+        StateHasChanged();
+    }
 
     // ── Geocoding ─────────────────────────────────────────────────────────────
     private async Task GeocodeAddress()

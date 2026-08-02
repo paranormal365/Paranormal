@@ -647,6 +647,11 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
                $"/api/organizations/{orgId}/cases/{caseId}/transfers/{logId}/respond",
                new { Accept = accept, Reason = rejectionReason }, token);
 
+    public Task<CaseTransferLogRecord?> CancelCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, CancellationToken token = default)
+        => _api.PutAsync<object, CaseTransferLogRecord>(
+               $"/api/organizations/{orgId}/cases/{caseId}/transfers/{logId}/cancel",
+               new { }, token);
+
     // ── Public Case Discovery ─────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<PublicCaseListItem>> GetPublicCasesAsync(string orgUrlName, CancellationToken token = default)
@@ -659,6 +664,29 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<PublicCaseDetail?> GetPublicCaseAsync(string orgUrlName, string caseRef, CancellationToken token = default)
         => _api.GetAnonymousAsync<PublicCaseDetail>(
                $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/cases/{Uri.EscapeDataString(caseRef)}", token);
+
+    public Task<PublicCaseDiscoveryPagedResponse?> GetPublicCaseDiscoveryAsync(int page = 1, int pageSize = 20, string sort = "votes", CancellationToken token = default)
+        => _api.GetAnonymousAsync<PublicCaseDiscoveryPagedResponse>($"/api/public/cases?page={page}&pageSize={pageSize}&sort={Uri.EscapeDataString(sort)}", token);
+
+    // ── Case votes ────────────────────────────────────────────────────────────
+
+    public Task<CaseVoteSummary?> GetCaseVoteSummaryAsync(Guid caseId, CancellationToken token = default)
+        => _api.GetAnonymousAsync<CaseVoteSummary>($"/api/public/cases/{caseId}/votes", token);
+
+    public async Task<IReadOnlyList<CaseVoteSummary>> GetCaseVoteSummariesAsync(IEnumerable<Guid> caseIds, CancellationToken token = default)
+    {
+        var qs = string.Join("&", caseIds.Select(id => $"caseIds={id}"));
+        if (string.IsNullOrEmpty(qs)) return [];
+        var result = await _api.GetAnonymousAsync<IReadOnlyList<CaseVoteSummary>>(
+            $"/api/public/cases/vote-summaries?{qs}", token);
+        return result ?? [];
+    }
+
+    public Task<CaseVoteSummary?> CastCaseVoteAsync(Guid caseId, Ben.Data.Common.Enums.EvidenceVoteType voteType, CancellationToken token = default)
+        => _api.PostAsync<object, CaseVoteSummary>($"/api/public/cases/{caseId}/votes", new { VoteType = voteType }, token);
+
+    public Task<bool> RemoveCaseVoteAsync(Guid caseId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/public/cases/{caseId}/votes", token);
 
     // ── Investigations ────────────────────────────────────────────────────────
 
@@ -683,6 +711,10 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"{InvBase(orgId, caseId)}/{id}", token);
 
+    public Task<bool> CancelInvestigationByOrgAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
+        => _api.PostAsync<object, object>($"{InvBase(orgId, caseId)}/{id}/cancel", new { }, token)
+               .ContinueWith(t => t.Result is not null);
+
     public async Task<IReadOnlyList<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
     {
         var result = await _api.GetAsync<IReadOnlyList<InvestigationAttendeeRecord>>($"{InvBase(orgId, caseId)}/{id}/attendees", token);
@@ -692,10 +724,10 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<InvestigationAttendeeRecord?> AddInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, AddInvestigationAttendeeRequest request, CancellationToken token = default)
         => _api.PostAsync<AddInvestigationAttendeeRequest, InvestigationAttendeeRecord>($"{InvBase(orgId, caseId)}/{id}/attendees", request, token);
 
-    public Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, CancellationToken token = default)
+    public Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, Ben.Data.Common.Enums.RsvpStatus? rsvp = null, CancellationToken token = default)
         => _api.PutAsync<object, InvestigationAttendeeRecord>(
                $"{InvBase(orgId, caseId)}/{id}/attendees/{attendeeId}/attendance",
-               new { DidAttend = didAttend, AssignedRole = assignedRole }, token);
+               new { DidAttend = didAttend, AssignedRole = assignedRole, Rsvp = rsvp }, token);
 
     public Task<bool> RemoveInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, CancellationToken token = default)
         => _api.DeleteAsync($"{InvBase(orgId, caseId)}/{id}/attendees/{attendeeId}", token);
@@ -808,9 +840,28 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<CaseRecord?> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default)
         => _api.PostAsync<CreateCaseRequest, CaseRecord>($"/api/organizations/{orgId}/cases", request, token);
 
+    public async Task<IReadOnlyList<OrgPendingRequestRecord>> GetOrgPendingRequestsAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrgPendingRequestRecord>>($"/api/organizations/{orgId}/cases/pending-requests", token);
+        return result ?? [];
+    }
+
     public Task<CaseRecord?> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default)
         => _api.PostAsync<AcceptClientRequestAsCaseRequest, CaseRecord>(
                $"/api/organizations/{orgId}/cases/accept-client-request/{clientRequestId}", request, token);
+
+    public async Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default)
+    {
+        var result = await _api.PostAsync<object, object>(
+            $"/api/organizations/{orgId}/cases/decline-request/{clientRequestId}", new { }, token);
+        return result is not null;
+    }
+
+    public Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default)
+        => _api.PutAsync<object, object>(
+               $"/api/organizations/{orgId}/cases/request-status/{clientRequestId}",
+               new { Status = (int)status }, token)
+           .ContinueWith(t => t.Result is not null);
 
     public Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default)
         => _api.PutAsync<UpdateCaseRequest, CaseRecord>($"/api/organizations/{orgId}/cases/{caseId}", request, token);
@@ -829,6 +880,119 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<bool> DeleteCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/cases/{caseId}/timeline/{entryId}", token);
+
+    // ── Case Report Builder ───────────────────────────────────────────────────
+
+    // Client-facing: published reports only
+    public async Task<IReadOnlyList<CaseReportSummary>> GetMyCaseReportsAsync(Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<CaseReportSummary>>($"/api/my-cases/{caseId}/reports", token) ?? [];
+
+    public string GetMyCaseReportPdfUrl(Guid caseId, Guid reportId)
+        => $"/api/my-cases/{caseId}/reports/{reportId}/pdf";
+
+    // Org-facing
+    public async Task<IReadOnlyList<CaseReportSummary>> GetCaseReportsAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<CaseReportSummary>>($"/api/orgs/{orgId}/cases/{caseId}/reports", token) ?? [];
+
+    public Task<CaseReportDetail?> GetCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default)
+        => _api.GetAsync<CaseReportDetail>($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}", token);
+
+    public Task<CaseReportDetail?> CreateCaseReportAsync(Guid orgId, Guid caseId, UpsertCaseReportRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertCaseReportRequest, CaseReportDetail>($"/api/orgs/{orgId}/cases/{caseId}/reports", request, token);
+
+    public Task<CaseReportDetail?> UpdateCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, UpsertCaseReportRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertCaseReportRequest, CaseReportDetail>($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}", request, token);
+
+    public Task<CaseReportDetail?> PublishCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default)
+        => _api.PostAsync<object, CaseReportDetail>($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/publish", new { }, token);
+
+    public Task<bool> DeleteCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}", token);
+
+    public Task<CaseReportSectionDto?> AddReportSectionAsync(Guid orgId, Guid caseId, Guid reportId, UpsertSectionRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertSectionRequest, CaseReportSectionDto>($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/sections", request, token);
+
+    public Task<CaseReportSectionDto?> UpdateReportSectionAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, UpsertSectionRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertSectionRequest, CaseReportSectionDto>($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/sections/{sectionId}", request, token);
+
+    public Task<bool> DeleteReportSectionAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/sections/{sectionId}", token);
+
+    public Task<CaseReportSectionFileDto?> AddReportSectionFileAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid uploadFileId, string? caption, CancellationToken token = default)
+        => _api.PostAsync<object, CaseReportSectionFileDto>($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/sections/{sectionId}/files", new { UploadFileId = uploadFileId, Caption = caption }, token);
+
+    public Task<bool> RemoveReportSectionFileAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid fileId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/sections/{sectionId}/files/{fileId}", token);
+
+    public string GetReportPdfUrl(Guid orgId, Guid caseId, Guid reportId)
+        => $"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/pdf";
+
+    public async Task<(byte[] Data, string FileName)?> DownloadCaseReportPdfAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default)
+    {
+        var result = await _api.GetBytesAsync($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/pdf", "report.pdf", token);
+        return result is null ? null : (result.Value.Data, result.Value.FileName);
+    }
+
+    public async Task<(byte[] Data, string FileName)?> DownloadMyCaseReportPdfAsync(Guid caseId, Guid reportId, CancellationToken token = default)
+    {
+        var result = await _api.GetBytesAsync($"/api/my-cases/{caseId}/reports/{reportId}/pdf", "report.pdf", token);
+        return result is null ? null : (result.Value.Data, result.Value.FileName);
+    }
+
+    // ── Case Research ─────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<CaseResearchEntryDto>> GetCaseResearchAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<CaseResearchEntryDto>>($"/api/orgs/{orgId}/cases/{caseId}/research", token) ?? [];
+
+    public Task<CaseResearchEntryDto?> AddCaseResearchAsync(Guid orgId, Guid caseId, UpsertResearchRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertResearchRequest, CaseResearchEntryDto>($"/api/orgs/{orgId}/cases/{caseId}/research", request, token);
+
+    public async Task<CaseResearchEntryDto?> UploadCaseResearchFileAsync(Guid orgId, Guid caseId, string title, string? description, Stream content, string fileName, string contentType, CancellationToken token = default)
+    {
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent(title), "title");
+        if (description is not null) form.Add(new StringContent(description), "description");
+        using var sc = new StreamContent(content);
+        sc.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        form.Add(sc, "file", fileName);
+        return await _api.PostMultipartAsync<CaseResearchEntryDto>($"/api/orgs/{orgId}/cases/{caseId}/research/files", form, token);
+    }
+
+    public Task<CaseResearchEntryDto?> UpdateCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, UpsertResearchRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertResearchRequest, CaseResearchEntryDto>($"/api/orgs/{orgId}/cases/{caseId}/research/{entryId}", request, token);
+
+    public Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/research/{entryId}", token);
+
+    // ── Investigation Scheduling ──────────────────────────────────────────────
+
+    public Task<bool> CancelMyInvestigationAsync(Guid caseId, Guid investigationId, CancellationToken token = default)
+        => _api.PostAsync<object, object>($"/api/my-cases/{caseId}/investigations/{investigationId}/cancel", new { }, token)
+               .ContinueWith(t => t.Result is not null);
+
+    public async Task<IReadOnlyList<ScheduleProposalDto>> GetScheduleProposalsAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<ScheduleProposalDto>>($"/api/orgs/{orgId}/cases/{caseId}/schedule-proposals", token) ?? [];
+
+    public Task<ScheduleProposalDto?> CreateScheduleProposalAsync(Guid orgId, Guid caseId, CreateProposalRequest request, CancellationToken token = default)
+        => _api.PostAsync<CreateProposalRequest, ScheduleProposalDto>($"/api/orgs/{orgId}/cases/{caseId}/schedule-proposals", request, token);
+
+    public Task<bool> WithdrawScheduleProposalAsync(Guid orgId, Guid caseId, Guid proposalId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/schedule-proposals/{proposalId}", token);
+
+    public Task<ScheduleProposalDto?> ConvertProposalToInvestigationAsync(Guid orgId, Guid caseId, Guid proposalId, ConvertProposalRequest request, CancellationToken token = default)
+        => _api.PostAsync<ConvertProposalRequest, ScheduleProposalDto>($"/api/orgs/{orgId}/cases/{caseId}/schedule-proposals/{proposalId}/convert", request, token);
+
+    public async Task<IReadOnlyList<ScheduleProposalDto>> GetMyScheduleProposalsAsync(Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<ScheduleProposalDto>>($"/api/my-cases/{caseId}/schedule-proposals", token) ?? [];
+
+    public Task<ScheduleProposalDto?> AcceptScheduleProposalAsync(Guid caseId, Guid proposalId, Guid slotId, CancellationToken token = default)
+        => _api.PostAsync<object, ScheduleProposalDto>($"/api/my-cases/{caseId}/schedule-proposals/{proposalId}/accept", new { SlotId = slotId }, token);
+
+    public Task<ScheduleProposalDto?> CounterScheduleProposalAsync(Guid caseId, Guid proposalId, DateTime preferredDateTime, string? notes, CancellationToken token = default)
+        => _api.PostAsync<object, ScheduleProposalDto>($"/api/my-cases/{caseId}/schedule-proposals/{proposalId}/counter", new { PreferredDateTime = preferredDateTime, Notes = notes }, token);
+
+    public Task<ScheduleProposalDto?> DeclineScheduleProposalAsync(Guid caseId, Guid proposalId, string? notes, CancellationToken token = default)
+        => _api.PostAsync<object, ScheduleProposalDto>($"/api/my-cases/{caseId}/schedule-proposals/{proposalId}/decline", new { Notes = notes }, token);
 
     // ── Client Requests ───────────────────────────────────────────────────────
 
@@ -859,6 +1023,88 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<ClientRequestRecord?> WithdrawClientRequestAsync(Guid id, CancellationToken token = default)
         => _api.PostAsync<object, ClientRequestRecord>($"/api/client-requests/{id}/withdraw", new { }, token);
+
+    // ── My Cases ─────────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<ClientCaseListItem>> GetMyCasesAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<ClientCaseListItem>>("/api/my-cases", token);
+        return result ?? [];
+    }
+
+    public Task<ClientCaseDetail?> GetMyCaseAsync(Guid caseId, CancellationToken token = default)
+        => _api.GetAsync<ClientCaseDetail>($"/api/my-cases/{caseId}", token);
+
+    public Task<CaseTimelineEntryRecord?> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default)
+        => _api.PostAsync<LogOccurrenceRequest, CaseTimelineEntryRecord>($"/api/my-cases/{caseId}/occurrences", request, token);
+
+    public Task<CaseTimelineEntryRecord?> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default)
+        => _api.PutAsync<LogOccurrenceRequest, CaseTimelineEntryRecord>($"/api/my-cases/{caseId}/occurrences/{entryId}", request, token);
+
+    public Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/my-cases/{caseId}/occurrences/{entryId}", token);
+
+    public async Task<OccurrenceFileItem?> AttachOccurrenceFileAsync(
+        Guid caseId, Guid entryId, Stream content, string fileName, string contentType, CancellationToken token = default)
+    {
+        using var form = new MultipartFormDataContent();
+        using var sc   = new StreamContent(content);
+        sc.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        form.Add(sc, "file", fileName);
+        return await _api.PostMultipartAsync<OccurrenceFileItem>(
+            $"/api/my-cases/{caseId}/occurrences/{entryId}/files", form, token);
+    }
+
+    public Task<bool> DetachOccurrenceFileAsync(Guid caseId, Guid entryId, Guid fileId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/my-cases/{caseId}/occurrences/{entryId}/files/{fileId}", token);
+
+    public async Task<IReadOnlyList<CaseMessageRecord>> GetMyCaseMessagesAsync(Guid caseId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<CaseMessageRecord>>($"/api/my-cases/{caseId}/messages", token);
+        return result ?? [];
+    }
+
+    public Task<CaseMessageRecord?> PostMyCaseMessageAsync(Guid caseId, string body, CancellationToken token = default)
+        => _api.PostAsync<object, CaseMessageRecord>($"/api/my-cases/{caseId}/messages", new { Body = body }, token);
+
+    // ── Co-client access management ───────────────────────────────────────────
+
+    public async Task<IReadOnlyList<CoClientItem>> GetCoClientsAsync(Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<CoClientItem>>($"/api/my-cases/{caseId}/co-clients", token) ?? [];
+
+    public Task<CoClientItem?> AddCoClientAsync(Guid caseId, string email, CancellationToken token = default)
+        => _api.PostAsync<object, CoClientItem>($"/api/my-cases/{caseId}/co-clients", new { Email = email }, token);
+
+    public Task<bool> RemoveCoClientAsync(Guid caseId, Guid accessId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/my-cases/{caseId}/co-clients/{accessId}", token);
+
+    // ── My Investigations ───────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<MyInvestigationItem>>("/api/my-investigations", token);
+        return result ?? [];
+    }
+
+    public async Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default)
+        => await _api.PutAsync<object, object>($"/api/my-investigations/{attendeeId}/rsvp", new { Rsvp = rsvp }, token);
+
+    // ── Case Messages (org side) ──────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<CaseMessageRecord>> GetCaseMessagesAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<CaseMessageRecord>>($"/api/orgs/{orgId}/cases/{caseId}/messages", token);
+        return result ?? [];
+    }
+
+    public Task<CaseMessageRecord?> PostCaseMessageAsync(Guid orgId, Guid caseId, string body, CancellationToken token = default)
+        => _api.PostAsync<object, CaseMessageRecord>($"/api/orgs/{orgId}/cases/{caseId}/messages", new { Body = body }, token);
+
+    public async Task<int> GetCaseMessageUnreadCountAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<int>($"/api/orgs/{orgId}/cases/{caseId}/messages/unread-count", token);
+        return result;
+    }
 
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 

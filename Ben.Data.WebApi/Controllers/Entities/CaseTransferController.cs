@@ -116,6 +116,32 @@ public sealed class CaseTransferController : BenControllerBase
         return Ok(_mapper.Map<CaseTransferLogRecord>(log));
     }
 
+    /// <summary>Cancel an outgoing pending transfer proposed by this organization.</summary>
+    [HttpPut("{logId:guid}/cancel")]
+    public async Task<ActionResult<CaseTransferLogRecord>> Cancel(
+        Guid orgId, Guid caseId, Guid logId, CancellationToken ct)
+    {
+        if (!await IsOrgAdminAsync(orgId, ct)) return Forbid();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var log = await db.CaseTransferLogs
+            .Include(l => l.FromOrganization).Include(l => l.ToOrganization).Include(l => l.ProposedByAppUser)
+            .FirstOrDefaultAsync(l => l.Id == logId && l.FromOrganizationId == orgId, ct);
+        if (log is null) return NotFound();
+        if (log.Status != CaseTransferStatus.Pending) return BadRequest("Transfer is not pending.");
+
+        log.Status        = CaseTransferStatus.Cancelled;
+        log.DateResponded = DateTime.UtcNow;
+
+        // Restore case status to Accepted (it was set to Transferred on proposal)
+        var c = await db.Cases.FirstOrDefaultAsync(x => x.Id == caseId, ct);
+        if (c?.Status == CaseStatus.Transferred)
+            c.Status = CaseStatus.Accepted;
+
+        await db.SaveChangesAsync(ct);
+        return Ok(_mapper.Map<CaseTransferLogRecord>(log));
+    }
+
     private async Task<bool> IsOrgMemberAsync(Guid orgId, CancellationToken ct)
     {
         if (User.IsInRole(RoleNames.SuperAdmin)) return true;

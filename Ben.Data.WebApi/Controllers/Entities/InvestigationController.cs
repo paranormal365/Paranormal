@@ -68,10 +68,30 @@ public sealed class InvestigationController : BenControllerBase
             ScheduledDateTime   = request.ScheduledDateTime,
             EndDateTime         = request.EndDateTime,
             Status              = InvestigationStatus.Scheduled,
+            EvidenceDueDate     = request.EvidenceDueDate,
             DateCreated         = DateTime.UtcNow,
             CreatedByAppUserId  = userId,
         };
         db.Investigations.Add(entity);
+
+        // Auto-create an org calendar event if none was supplied
+        if (entity.OrgCalendarEventId is null)
+        {
+            var calEvent = new Ben.Data.Source.Entities.OrgCalendarEvent
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, CaseId = caseId,
+                Title = $"Investigation: {entity.Title}",
+                Description = entity.Description,
+                Location = entity.Location,
+                StartDateTime = entity.ScheduledDateTime,
+                EndDateTime = entity.EndDateTime ?? entity.ScheduledDateTime.AddHours(2),
+                IsAllDay = false, IsPublic = false,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            };
+            db.OrgCalendarEvents.Add(calEvent);
+            entity.OrgCalendarEventId = calEvent.Id;
+        }
+
         await db.SaveChangesAsync(ct);
         var loaded = await db.Investigations.AsNoTracking()
             .Include(i => i.Attendees)
@@ -97,6 +117,7 @@ public sealed class InvestigationController : BenControllerBase
         entity.EndDateTime         = request.EndDateTime;
         entity.Status              = request.Status;
         entity.Notes               = request.Notes?.Trim();
+        entity.EvidenceDueDate     = request.EvidenceDueDate;
         entity.DateUpdated         = DateTime.UtcNow;
         entity.UpdatedByAppUserId  = userId == Guid.Empty ? null : userId;
         await db.SaveChangesAsync(ct);
@@ -114,6 +135,36 @@ public sealed class InvestigationController : BenControllerBase
         var entity = await db.Investigations.FirstOrDefaultAsync(i => i.Id == id && i.CaseId == caseId, ct);
         if (entity is null) return NotFound();
         db.Investigations.Remove(entity);
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>Org cancels a scheduled investigation and notifies the client via CaseMessage.</summary>
+    [HttpPost("{id:guid}/cancel")]
+    public async Task<IActionResult> Cancel(Guid orgId, Guid caseId, Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var investigation = await db.Investigations.FirstOrDefaultAsync(i => i.Id == id && i.CaseId == caseId, ct);
+        if (investigation is null) return NotFound();
+        if (investigation.Status != InvestigationStatus.Scheduled)
+            return Conflict($"Investigation is already {investigation.Status}.");
+
+        investigation.Status = InvestigationStatus.Cancelled;
+        investigation.DateUpdated = DateTime.UtcNow;
+        investigation.UpdatedByAppUserId = userId;
+
+        // Notify the client via the case message board
+        db.CaseMessages.Add(new Ben.Data.Source.Entities.CaseMessage
+        {
+            Id = Guid.NewGuid(), CaseId = caseId, AuthorAppUserId = userId,
+            Body = $"The investigation scheduled for <strong>{investigation.ScheduledDateTime.ToLocalTime():MMM d, yyyy h:mm tt}</strong> has been cancelled by the organisation.",
+            SenderSide = Ben.Data.Common.Enums.CaseMessageSide.Organization,
+            IsReadByClient = false, IsReadByOrg = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
         await db.SaveChangesAsync(ct);
         return NoContent();
     }
@@ -167,6 +218,7 @@ public sealed class InvestigationController : BenControllerBase
         if (attendee is null) return NotFound();
         attendee.DidAttend    = request.DidAttend;
         attendee.AssignedRole = request.AssignedRole?.Trim() ?? attendee.AssignedRole;
+        if (request.Rsvp.HasValue) attendee.Rsvp = request.Rsvp.Value;
         await db.SaveChangesAsync(ct);
         var loaded = await db.InvestigationAttendees.AsNoTracking()
             .Include(a => a.AppUser).FirstAsync(a => a.Id == attendee.Id, ct);
@@ -246,6 +298,8 @@ public sealed class EvidenceVoteController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         var votes = await db.EvidenceVotes.AsNoTracking()
             .Include(v => v.VoterAppUser)
+            .Include(v => v.VoterOrganization)
+            .Include(v => v.Case)
             .Where(v => v.UploadFileId == uploadFileId)
             .OrderByDescending(v => v.DateVoted)
             .ToListAsync(ct);
@@ -264,7 +318,7 @@ public sealed class EvidenceVoteController : BenControllerBase
         if (!await db.UploadFiles.AnyAsync(f => f.Id == uploadFileId, ct))
             return NotFound("File not found.");
 
-        // Determine if voter is a public user (not in any org)
+        // Determine voter's org membership
         bool isPublic = !await db.OrganizationUserMemberships
             .AnyAsync(m => m.AppUserId == userId && m.IsActive, ct);
 
@@ -273,23 +327,56 @@ public sealed class EvidenceVoteController : BenControllerBase
             .Select(m => (Guid?)m.OrganizationId)
             .FirstOrDefaultAsync(ct);
 
+        // Compute vote context fields
+        var uploadFile = await db.UploadFiles.AsNoTracking()
+            .FirstAsync(f => f.Id == uploadFileId, ct);
+        bool isOriginalUploader = uploadFile.AppUserId == userId;
+
+        var caseEntry = await db.CaseTimelineEntryFiles.AsNoTracking()
+            .Include(f => f.CaseTimelineEntry).ThenInclude(e => e.Case).ThenInclude(c => c.ClientRequest)
+            .FirstOrDefaultAsync(f => f.UploadFileId == uploadFileId
+                && f.CaseTimelineEntry.EntryType == Ben.Data.Common.Enums.CaseTimelineEntryType.Evidence, ct);
+
+        Guid? caseId                 = caseEntry?.CaseTimelineEntry.CaseId;
+        Guid? caseOrgId              = caseEntry?.CaseTimelineEntry.Case.OrganizationId;
+        Guid? caseClientId           = caseEntry?.CaseTimelineEntry.Case.ClientRequest?.AppUserId;
+        bool isVoterCaseOrgMember    = caseOrgId.HasValue && voterOrgId == caseOrgId;
+        bool isVoterCaseClient       = caseClientId.HasValue && caseClientId == userId;
+
+        string? voterOrgName = voterOrgId.HasValue
+            ? await db.Organizations.Where(o => o.Id == voterOrgId).Select(o => o.Name).FirstOrDefaultAsync(ct)
+            : null;
+
         var existing = await db.EvidenceVotes
             .FirstOrDefaultAsync(v => v.UploadFileId == uploadFileId && v.VoterAppUserId == userId, ct);
 
         if (existing is not null)
         {
-            existing.VoteType  = request.VoteType;
-            existing.Comment   = request.Comment?.Trim();
-            existing.DateVoted = DateTime.UtcNow;
+            existing.VoteType              = request.VoteType;
+            existing.Comment               = request.Comment?.Trim();
+            existing.DateVoted             = DateTime.UtcNow;
+            // Re-compute context on update in case membership changed
+            existing.IsOriginalUploader    = isOriginalUploader;
+            existing.CaseId                = caseId;
+            existing.IsVoterCaseOrgMember  = isVoterCaseOrgMember;
+            existing.IsVoterCaseClient     = isVoterCaseClient;
+            existing.VoterOrganizationName = voterOrgName;
         }
         else
         {
             db.EvidenceVotes.Add(new EvidenceVote
             {
                 Id = Guid.NewGuid(), UploadFileId = uploadFileId, VoterAppUserId = userId,
-                VoterOrganizationId = voterOrgId, VoteType = request.VoteType,
-                Comment = request.Comment?.Trim(), IsPublicVoter = isPublic,
-                DateVoted = DateTime.UtcNow,
+                VoterOrganizationId    = voterOrgId,
+                VoterOrganizationName  = voterOrgName,
+                VoteType               = request.VoteType,
+                Comment                = request.Comment?.Trim(),
+                IsPublicVoter          = isPublic,
+                IsOriginalUploader     = isOriginalUploader,
+                CaseId                 = caseId,
+                IsVoterCaseOrgMember   = isVoterCaseOrgMember,
+                IsVoterCaseClient      = isVoterCaseClient,
+                DateVoted              = DateTime.UtcNow,
             });
         }
         await db.SaveChangesAsync(ct);
@@ -332,10 +419,11 @@ public sealed record UpsertInvestigationRequest(
     DateTime? EndDateTime,
     Ben.Data.Common.Enums.InvestigationStatus Status,
     string? Notes,
-    Guid? OrgCalendarEventId);
+    Guid? OrgCalendarEventId,
+    DateTime? EvidenceDueDate = null);
 
 public sealed record AddInvestigationAttendeeRequest(Guid AppUserId, string? AssignedRole);
-public sealed record UpdateAttendanceRequest(bool? DidAttend, string? AssignedRole);
+public sealed record UpdateAttendanceRequest(bool? DidAttend, string? AssignedRole, Ben.Data.Common.Enums.RsvpStatus? Rsvp = null);
 public sealed record CastEvidenceVoteRequest(
     Ben.Data.Common.Enums.EvidenceVoteType VoteType,
     string? Comment);

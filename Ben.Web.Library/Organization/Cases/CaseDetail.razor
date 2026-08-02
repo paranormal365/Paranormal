@@ -40,6 +40,17 @@
                         <span class="ms-2 text-secondary">Public name: <em>@_case.PublicPseudonym</em></span>
                     }
                 </div>
+                <div class="text-secondary small mt-1">
+                    Case Manager:
+                    @if (!string.IsNullOrEmpty(_case.CaseManagerDisplayName))
+                    {
+                        <strong>@_case.CaseManagerDisplayName</strong>
+                    }
+                    else
+                    {
+                        <em class="text-warning">Unassigned</em>
+                    }
+                </div>
             </div>
             <div class="d-flex gap-2">
                 <span class="badge fs-6 @CaseList.StatusBadgeClass(_case.Status)">
@@ -113,6 +124,36 @@
                 </div>
             </TabStripTab>
 
+            @* ── Transfers ────────────────────────────────────────────────── *@
+            <TabStripTab Title="Transfers">
+                <div class="mt-2">
+                    <CaseTransferPanel OrgId="@OrgId" CaseId="@CaseId" />
+                </div>
+            </TabStripTab>
+
+            @* ── Client Messages ─────────────────────────────────────────────── *@
+            <TabStripTab Title="@(_unreadCount > 0 ? $"Messages ({_unreadCount})" : "Messages")">
+                <div class="mt-2" style="max-width:680px;">
+                    <CaseMessageThread CurrentSide="@Ben.Data.Common.Enums.CaseMessageSide.Organization"
+                                       LoadMessages="@LoadOrgMessages"
+                                       PostMessage="@PostOrgMessage" />
+                </div>
+            </TabStripTab>
+
+            @* ── Report Builder ──────────────────────────────────────────────── *@
+            <TabStripTab Title="Reports">
+                <div class="mt-2">
+                    <ReportBuilder OrgId="@OrgId" CaseId="@CaseId" />
+                </div>
+            </TabStripTab>
+
+            @* ── Research ─────────────────────────────────────────────────────── *@
+            <TabStripTab Title="Research">
+                <div class="mt-2">
+                    <CaseResearch OrgId="@OrgId" CaseId="@CaseId" />
+                </div>
+            </TabStripTab>
+
         </TelerikTabStrip>
     </div>
 }
@@ -147,6 +188,15 @@
                 <TelerikCheckBox @bind-Value="@_editIsPublic" Id="case-public" />
                 <label for="case-public" class="form-label mb-0">Make Public</label>
             </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Case Manager</label>
+                <TelerikDropDownList Data="@_memberOptions"
+                                     @bind-Value="@_editCaseManagerId"
+                                     TextField="@nameof(MemberOption.Label)"
+                                     ValueField="@nameof(MemberOption.Id)"
+                                     DefaultText="— Unassigned —"
+                                     Width="100%" />
+            </div>
         </div>
         @if (_editError is not null)
         {
@@ -172,6 +222,7 @@
     private bool _loaded;
     private string? _error;
     private bool _isBusy;
+    private int _unreadCount;
 
     // Edit dialog
     private bool _showEdit;
@@ -180,7 +231,9 @@
     private string _editDescription  = "";
     private string _editPseudonym    = "";
     private bool _editIsPublic;
+    private Guid? _editCaseManagerId;
     private string? _editError;
+    private List<MemberOption> _memberOptions = [];
 
     private static readonly List<StatusOption> _statusOptions = Enum
         .GetValues<CaseStatus>()
@@ -194,18 +247,42 @@
         catch { _error = "Failed to load case."; }
         _loaded = true;
         StateHasChanged();
+
+        // Load unread count separately so it doesn't block the page render
+        try { _unreadCount = await AdminClient.GetCaseMessageUnreadCountAsync(OrgId, CaseId); }
+        catch { /* non-critical; badge stays at 0 */ }
+        StateHasChanged();
     }
 
     private void OpenEditDialog()
     {
         if (_case is null) return;
-        _editTitle       = _case.Title;
-        _editStatus      = _case.Status;
-        _editDescription = _case.Description ?? "";
-        _editPseudonym   = _case.PublicPseudonym ?? "";
-        _editIsPublic    = _case.IsPublic;
-        _editError       = null;
-        _showEdit        = true;
+        _editTitle          = _case.Title;
+        _editStatus         = _case.Status;
+        _editDescription    = _case.Description ?? "";
+        _editPseudonym      = _case.PublicPseudonym ?? "";
+        _editIsPublic       = _case.IsPublic;
+        _editCaseManagerId  = _case.CaseManagerAppUserId;
+        _editError          = null;
+        // Load org members lazily for the dropdown
+        if (_memberOptions.Count == 0)
+            _ = LoadMembersAsync();
+        _showEdit = true;
+    }
+
+    private async Task LoadMembersAsync()
+    {
+        try
+        {
+            var members = await AdminClient.GetOrganizationMembersAsync(OrgId);
+            _memberOptions = members
+                .Where(m => m.IsActive)
+                .OrderBy(m => m.DisplayName)
+                .Select(m => new MemberOption(m.AppUserId, m.DisplayName ?? m.AppUserId.ToString()))
+                .ToList();
+            StateHasChanged();
+        }
+        catch { /* non-critical — dropdown just stays empty */ }
     }
 
     private async Task SaveEdit()
@@ -220,7 +297,7 @@
                 Status:               _editStatus,
                 PublicPseudonym:      string.IsNullOrWhiteSpace(_editPseudonym) ? null : _editPseudonym.Trim(),
                 IsPublic:             _editIsPublic,
-                CaseManagerAppUserId: _case?.CaseManagerAppUserId);
+                CaseManagerAppUserId: _editCaseManagerId);
 
             var result = await AdminClient.UpdateOrgCaseAsync(OrgId, CaseId, req);
             if (result is null) { _editError = "Save failed."; }
@@ -231,4 +308,15 @@
     }
 
     private record StatusOption(CaseStatus Value, string Label);
+    private record MemberOption(Guid Id, string Label);
+
+    private async Task<IReadOnlyList<CaseMessageRecord>> LoadOrgMessages()
+    {
+        var msgs = await AdminClient.GetCaseMessagesAsync(OrgId, CaseId);
+        _unreadCount = 0; // tab opened — all now marked read by the server
+        return msgs;
+    }
+
+    private async Task<CaseMessageRecord?> PostOrgMessage(string body)
+        => await AdminClient.PostCaseMessageAsync(OrgId, CaseId, body);
 }

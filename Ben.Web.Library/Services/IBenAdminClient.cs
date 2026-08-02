@@ -353,11 +353,41 @@ public interface IBenAdminClient
     Task<IReadOnlyList<CaseTransferLogRecord>> GetCaseTransfersAsync(Guid orgId, Guid caseId, CancellationToken token = default);
     Task<CaseTransferLogRecord?> ProposeCaseTransferAsync(Guid orgId, Guid caseId, Guid toOrganizationId, string? reason, CancellationToken token = default);
     Task<CaseTransferLogRecord?> RespondCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, bool accept, string? rejectionReason, CancellationToken token = default);
+    /// <summary>Cancels an outgoing pending transfer proposed by this org. Only the proposing org can cancel.</summary>
+    Task<CaseTransferLogRecord?> CancelCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, CancellationToken token = default);
 
     // ── Public Case Discovery ─────────────────────────────────────────────────
 
     Task<IReadOnlyList<PublicCaseListItem>> GetPublicCasesAsync(string orgUrlName, CancellationToken token = default);
+    /// <summary>Returns a single public case by org URL name and case reference (e.g. "2026-042").</summary>
     Task<PublicCaseDetail?> GetPublicCaseAsync(string orgUrlName, string caseRef, CancellationToken token = default);
+
+    /// <summary>
+    /// Returns a paginated, cross-organization list of all public cases worldwide,
+    /// with city-level approximate coordinates and aggregated vote counts.
+    /// Used to drive the home-page investigation map and ranked list.
+    /// </summary>
+    /// <param name="sort">"votes" (default) sorts by total votes desc; "date" sorts by open date desc.</param>
+    Task<PublicCaseDiscoveryPagedResponse?> GetPublicCaseDiscoveryAsync(int page = 1, int pageSize = 20, string sort = "votes", CancellationToken token = default);
+
+    // ── Case votes (community rating) ─────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the aggregate vote summary for a public case.
+    /// Anonymous-friendly: <c>CurrentUserVote</c> is non-null only when the bearer token is present.
+    /// Calls <c>GET api/public/cases/{caseId}/votes</c>.
+    /// </summary>
+    Task<CaseVoteSummary?> GetCaseVoteSummaryAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>
+    /// Returns vote summaries for multiple cases in one request.
+    /// Used by <c>PublicCaseDiscovery.razor</c> to pre-load summaries for all visible
+    /// list-cards without N individual requests. Calls <c>GET api/public/cases/vote-summaries</c>.
+    /// </summary>
+    Task<IReadOnlyList<CaseVoteSummary>> GetCaseVoteSummariesAsync(IEnumerable<Guid> caseIds, CancellationToken token = default);
+
+    Task<CaseVoteSummary?> CastCaseVoteAsync(Guid caseId, Ben.Data.Common.Enums.EvidenceVoteType voteType, CancellationToken token = default);
+    Task<bool> RemoveCaseVoteAsync(Guid caseId, CancellationToken token = default);
 
     // ── Investigations ────────────────────────────────────────────────────────
 
@@ -366,9 +396,10 @@ public interface IBenAdminClient
     Task<InvestigationRecord?> CreateInvestigationAsync(Guid orgId, Guid caseId, UpsertInvestigationRequest request, CancellationToken token = default);
     Task<InvestigationRecord?> UpdateInvestigationAsync(Guid orgId, Guid caseId, Guid id, UpsertInvestigationRequest request, CancellationToken token = default);
     Task<bool> DeleteInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
+    Task<bool> CancelInvestigationByOrgAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
     Task<IReadOnlyList<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
     Task<InvestigationAttendeeRecord?> AddInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, AddInvestigationAttendeeRequest request, CancellationToken token = default);
-    Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, CancellationToken token = default);
+    Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, Ben.Data.Common.Enums.RsvpStatus? rsvp = null, CancellationToken token = default);
     Task<bool> RemoveInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, CancellationToken token = default);
 
     // ── Evidence Voting ───────────────────────────────────────────────────────
@@ -408,12 +439,66 @@ public interface IBenAdminClient
     Task<IReadOnlyList<CaseRecord>> GetOrgCasesAsync(Guid orgId, CancellationToken token = default);
     Task<CaseRecord?> GetOrgCaseAsync(Guid orgId, Guid caseId, CancellationToken token = default);
     Task<CaseRecord?> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default);
+    Task<IReadOnlyList<OrgPendingRequestRecord>> GetOrgPendingRequestsAsync(Guid orgId, CancellationToken token = default);
     Task<CaseRecord?> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default);
+    Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default);
+    /// <summary>Marks a pending request as Viewed or UnderReview without accepting or declining.</summary>
+    Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default);
     Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default);
     Task<IReadOnlyList<CaseTimelineEntryRecord>> GetCaseTimelineAsync(Guid orgId, Guid caseId, CancellationToken token = default);
     Task<CaseTimelineEntryRecord?> AddCaseTimelineEntryAsync(Guid orgId, Guid caseId, UpsertTimelineEntryRequest request, CancellationToken token = default);
     Task<CaseTimelineEntryRecord?> UpdateCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, UpsertTimelineEntryRequest request, CancellationToken token = default);
     Task<bool> DeleteCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
+
+    /// <summary>Returns published reports the client can view for their case.</summary>
+    Task<IReadOnlyList<CaseReportSummary>> GetMyCaseReportsAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Returns a URL to stream the published report PDF for the client.</summary>
+    string GetMyCaseReportPdfUrl(Guid caseId, Guid reportId);
+
+    // ── Case Report Builder ───────────────────────────────────────────────────
+
+    Task<IReadOnlyList<CaseReportSummary>> GetCaseReportsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<CaseReportDetail?> GetCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
+    Task<CaseReportDetail?> CreateCaseReportAsync(Guid orgId, Guid caseId, UpsertCaseReportRequest request, CancellationToken token = default);
+    Task<CaseReportDetail?> UpdateCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, UpsertCaseReportRequest request, CancellationToken token = default);
+    Task<CaseReportDetail?> PublishCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
+    Task<bool> DeleteCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
+    Task<CaseReportSectionDto?> AddReportSectionAsync(Guid orgId, Guid caseId, Guid reportId, UpsertSectionRequest request, CancellationToken token = default);
+    Task<CaseReportSectionDto?> UpdateReportSectionAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, UpsertSectionRequest request, CancellationToken token = default);
+    Task<bool> DeleteReportSectionAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, CancellationToken token = default);
+    Task<CaseReportSectionFileDto?> AddReportSectionFileAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid uploadFileId, string? caption, CancellationToken token = default);
+    Task<bool> RemoveReportSectionFileAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid fileId, CancellationToken token = default);
+    /// <summary>Returns a URL to stream the PDF export for in-browser viewing.</summary>
+    string GetReportPdfUrl(Guid orgId, Guid caseId, Guid reportId);
+
+    /// <summary>Downloads the report PDF bytes using the bearer token.</summary>
+    Task<(byte[] Data, string FileName)?> DownloadCaseReportPdfAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
+
+    /// <summary>Downloads the published report PDF bytes for the client.</summary>
+    Task<(byte[] Data, string FileName)?> DownloadMyCaseReportPdfAsync(Guid caseId, Guid reportId, CancellationToken token = default);
+
+    // ── Case Research ─────────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<CaseResearchEntryDto>> GetCaseResearchAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<CaseResearchEntryDto?> AddCaseResearchAsync(Guid orgId, Guid caseId, UpsertResearchRequest request, CancellationToken token = default);
+    Task<CaseResearchEntryDto?> UploadCaseResearchFileAsync(Guid orgId, Guid caseId, string title, string? description, Stream content, string fileName, string contentType, CancellationToken token = default);
+    Task<CaseResearchEntryDto?> UpdateCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, UpsertResearchRequest request, CancellationToken token = default);
+    Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
+
+    // ── Investigation Scheduling ──────────────────────────────────────────────
+
+    // Org side
+    Task<IReadOnlyList<ScheduleProposalDto>> GetScheduleProposalsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<ScheduleProposalDto?> CreateScheduleProposalAsync(Guid orgId, Guid caseId, CreateProposalRequest request, CancellationToken token = default);
+    Task<bool> WithdrawScheduleProposalAsync(Guid orgId, Guid caseId, Guid proposalId, CancellationToken token = default);
+    Task<ScheduleProposalDto?> ConvertProposalToInvestigationAsync(Guid orgId, Guid caseId, Guid proposalId, ConvertProposalRequest request, CancellationToken token = default);
+
+    // Client side
+    Task<IReadOnlyList<ScheduleProposalDto>> GetMyScheduleProposalsAsync(Guid caseId, CancellationToken token = default);
+    Task<ScheduleProposalDto?> AcceptScheduleProposalAsync(Guid caseId, Guid proposalId, Guid slotId, CancellationToken token = default);
+    Task<ScheduleProposalDto?> CounterScheduleProposalAsync(Guid caseId, Guid proposalId, DateTime preferredDateTime, string? notes, CancellationToken token = default);
+    Task<ScheduleProposalDto?> DeclineScheduleProposalAsync(Guid caseId, Guid proposalId, string? notes, CancellationToken token = default);
 
     // ── Client Requests ───────────────────────────────────────────────────────
 
@@ -424,6 +509,63 @@ public interface IBenAdminClient
     Task<ClientRequestRecord?> UpdateClientRequestAsync(Guid id, UpsertClientRequestRequest request, CancellationToken token = default);
     Task<ClientRequestRecord?> SubmitClientRequestAsync(Guid id, IList<Guid> organizationIds, CancellationToken token = default);
     Task<ClientRequestRecord?> WithdrawClientRequestAsync(Guid id, CancellationToken token = default);
+
+    // ── My Cases (client dashboard) ───────────────────────────────────────────
+
+    /// <summary>Returns all cases where the current user is the originating client.</summary>
+    Task<IReadOnlyList<ClientCaseListItem>> GetMyCasesAsync(CancellationToken token = default);
+
+    /// <summary>Returns case detail + client-visible occurrences and upcoming investigations.</summary>
+    Task<ClientCaseDetail?> GetMyCaseAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Logs a new occurrence (ClientReport timeline entry) on the client's case.</summary>
+    Task<CaseTimelineEntryRecord?> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default);
+
+    /// <summary>Updates a previously logged occurrence.</summary>
+    Task<CaseTimelineEntryRecord?> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default);
+
+    /// <summary>Deletes a previously logged occurrence.</summary>
+    Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default);
+
+    // ── Co-client access management ───────────────────────────────────────────
+
+    Task<IReadOnlyList<CoClientItem>> GetCoClientsAsync(Guid caseId, CancellationToken token = default);
+    Task<CoClientItem?> AddCoClientAsync(Guid caseId, string email, CancellationToken token = default);
+    Task<bool> RemoveCoClientAsync(Guid caseId, Guid accessId, CancellationToken token = default);
+
+    /// <summary>Attaches a file to an occurrence entry using case-scoped storage.</summary>
+    Task<OccurrenceFileItem?> AttachOccurrenceFileAsync(Guid caseId, Guid entryId, Stream content, string fileName, string contentType, CancellationToken token = default);
+
+    /// <summary>Removes a file attachment from an occurrence and deletes the stored file.</summary>
+    Task<bool> DetachOccurrenceFileAsync(Guid caseId, Guid entryId, Guid fileId, CancellationToken token = default);
+
+    /// <summary>Returns all case messages visible to the client (marks org messages read).</summary>
+    Task<IReadOnlyList<CaseMessageRecord>> GetMyCaseMessagesAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Posts a message from the client to the org on this case.</summary>
+    Task<CaseMessageRecord?> PostMyCaseMessageAsync(Guid caseId, string body, CancellationToken token = default);
+
+    /// <summary>Client cancels a scheduled investigation (422 if outside cancellation window).</summary>
+    Task<bool> CancelMyInvestigationAsync(Guid caseId, Guid investigationId, CancellationToken token = default);
+
+    // ── My Investigations (member dashboard) ──────────────────────────────────
+
+    /// <summary>Returns all investigations the current user is assigned to attend.</summary>
+    Task<IReadOnlyList<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default);
+
+    /// <summary>Sets the current user's RSVP on their attendee record.</summary>
+    Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default);
+
+    // ── Case Messages (org side) ───────────────────────────────────────────────
+
+    /// <summary>Returns all case messages visible to the org (marks client messages read).</summary>
+    Task<IReadOnlyList<CaseMessageRecord>> GetCaseMessagesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+
+    /// <summary>Posts a message from the org to the client on this case.</summary>
+    Task<CaseMessageRecord?> PostCaseMessageAsync(Guid orgId, Guid caseId, string body, CancellationToken token = default);
+
+    /// <summary>Returns the count of unread client messages the org hasn't seen yet.</summary>
+    Task<int> GetCaseMessageUnreadCountAsync(Guid orgId, Guid caseId, CancellationToken token = default);
 
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
@@ -589,6 +731,7 @@ public sealed record OrganizationListItemResponse(
     string Name,
     string UrlName,
     DateTime DateCreated,
+    bool IsAcceptingApplications,
     bool CanEdit,
     bool CanDelete);
 
@@ -870,7 +1013,21 @@ public sealed record PublicCaseListItem(
     DateTime? DateCaseClosed,
     bool IsHaunted);
 
+/// <summary>
+/// Full public case detail returned by <c>GET api/public/organizations/{orgUrlName}/cases/{caseRef}</c>.
+/// Consumed by <c>OrgPublicCaseDetail.razor</c>.
+/// </summary>
+/// <param name="CaseId">DB primary key — used by <c>CaseVoteWidget.razor</c> to fetch/cast votes.</param>
+/// <param name="ClientName">
+/// The client's <c>PublicPseudonym</c> when set, otherwise <c>null</c>.
+/// Real names are never exposed on public endpoints.
+/// </param>
+/// <param name="Timeline">
+/// Public timeline entries ordered by <c>EventDateTime</c>.
+/// Evidence entries include <see cref="PublicTimelineEntry.EvidenceFileIds"/> for <c>EvidenceVoteWidget</c>.
+/// </param>
 public sealed record PublicCaseDetail(
+    Guid CaseId,
     string CaseReference,
     string Title,
     string City,
@@ -886,11 +1043,64 @@ public sealed record PublicCaseDetail(
     string OrgName,
     string OrgUrlName);
 
+/// <summary>
+/// A single public timeline entry within a <see cref="PublicCaseDetail"/>.
+/// </summary>
+/// <param name="EvidenceFileIds">
+/// Non-empty only for <c>CaseTimelineEntryType.Evidence</c> entries.
+/// Each ID is passed to <c>EvidenceVoteWidget.razor</c> so visitors can vote on individual pieces of evidence.
+/// </param>
 public sealed record PublicTimelineEntry(
     Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,
     DateTime? EventDateTime,
     string? Title,
-    string? Body);
+    string? Body,
+    IReadOnlyList<Guid> EvidenceFileIds);
+
+// ── Global public case discovery ──────────────────────────────────────────────
+
+/// <summary>Paged wrapper returned by <c>GET api/public/cases</c>. Drives the home-page map and ranked list.</summary>
+public sealed record PublicCaseDiscoveryPagedResponse(
+    IReadOnlyList<PublicCaseDiscoveryItem> Items,
+    int TotalCount,
+    int Page,
+    int PageSize);
+
+/// <summary>
+/// A single row in the global case discovery feed. Used by both the map markers
+/// and the ranked card list in <c>PublicCaseDiscovery.razor</c>.
+/// </summary>
+/// <param name="CaseId">
+/// DB primary key — stored on each <c>CaseMapMarker</c> so that the map popup
+/// can pass it to <c>CaseVoteWidget.razor</c>.
+/// </param>
+/// <param name="ApproxLatitude">
+/// City-level coordinates geocoded from the case's city/state/country and cached
+/// 24 h in <c>IMemoryCache</c>. Null when geocoding fails.
+/// Exact street addresses are never included.
+/// </param>
+/// <param name="ConfirmsCount">Aggregate count of <c>EvidenceVote</c> rows whose
+/// type is <c>Confirms</c> across all timeline-entry files of this case.</param>
+public sealed record PublicCaseDiscoveryItem(
+    Guid     CaseId,
+    string   CaseReference,
+    string   Title,
+    string   City,
+    string   State,
+    string   Country,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    bool     IsHaunted,
+    DateTime DateCaseOpened,
+    DateTime? DateCaseClosed,
+    string   OrgName,
+    string   OrgUrlName,
+    int      ConfirmsCount,
+    int      DisputesCount,
+    int      InconclusiveCount,
+    int      TotalVotes,
+    decimal? ApproxLatitude,
+    decimal? ApproxLongitude,
+    string?  ClientName);
 
 // ── Phase 5: Investigation + Evidence Voting request records ──────────────────
 public sealed record UpsertInvestigationRequest(
@@ -901,7 +1111,8 @@ public sealed record UpsertInvestigationRequest(
     DateTime? EndDateTime,
     Ben.Data.Common.Enums.InvestigationStatus Status,
     string? Notes,
-    Guid? OrgCalendarEventId);
+    Guid? OrgCalendarEventId,
+    DateTime? EvidenceDueDate = null);
 
 public sealed record AddInvestigationAttendeeRequest(Guid AppUserId, string? AssignedRole);
 
@@ -989,3 +1200,185 @@ public sealed record UpsertClientRequestRequest(
     Ben.Data.Common.Enums.ClientGender Gender,
     int? BirthYear,
     string? Description);
+// ── My Cases (client dashboard) response records ─────────────────────────────
+public sealed record ClientCaseListItem(
+    Guid      CaseId,
+    string    CaseReference,
+    string    Title,
+    string    City,
+    string    State,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    string?   CaseManagerDisplayName,
+    DateTime  DateCaseOpened,
+    DateTime? NextInvestigationDate = null);
+
+public sealed record ClientCaseDetail(
+    Guid      CaseId,
+    string    CaseReference,
+    string    Title,
+    string    City,
+    string    State,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    string?   Description,
+    string?   CaseManagerDisplayName,
+    DateTime  DateCaseOpened,
+    DateTime? DateCaseClosed,
+    IReadOnlyList<ClientCaseOccurrence>    Occurrences,
+    IReadOnlyList<ClientCaseInvestigation> Investigations,
+    int       UnreadMessageCount = 0);
+
+public sealed record ClientCaseOccurrence(
+    Guid      Id,
+    Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,
+    DateTime? EventDateTime,
+    string?   Title,
+    string?   Body,
+    DateTime  DateCreated,
+    IReadOnlyList<OccurrenceFileItem> Files);
+
+public sealed record OccurrenceFileItem(
+    Guid   FileId,
+    string FileName,
+    string ContentType,
+    long   FileSize);
+
+// ── Case Report Builder records ───────────────────────────────────────────────
+public sealed record UpsertCaseReportRequest(
+    string    Title,
+    string?   Summary,
+    string?   Conclusion,
+    DateTime? ExpectedDeliveryDate);
+
+public sealed record UpsertSectionRequest(
+    string                                           Title,
+    string?                                          Body,
+    Ben.Data.Common.Enums.CaseReportSectionType      SectionType);
+
+public sealed record CaseReportSummary(
+    Guid                                             Id,
+    Guid                                             CaseId,
+    string                                           Title,
+    Ben.Data.Common.Enums.CaseReportStatus           Status,
+    DateTime?                                        ExpectedDeliveryDate,
+    DateTime?                                        PublishedAt,
+    DateTime                                         DateCreated);
+
+public sealed record CaseReportDetail(
+    Guid                                             Id,
+    Guid                                             CaseId,
+    string                                           Title,
+    string?                                          Summary,
+    string?                                          Conclusion,
+    Ben.Data.Common.Enums.CaseReportStatus           Status,
+    DateTime?                                        ExpectedDeliveryDate,
+    DateTime?                                        PublishedAt,
+    DateTime                                         DateCreated,
+    IReadOnlyList<CaseReportSectionDto>              Sections);
+
+public sealed record CaseReportSectionDto(
+    Guid                                             Id,
+    Guid                                             CaseReportId,
+    int                                              SortOrder,
+    string                                           Title,
+    string?                                          Body,
+    Ben.Data.Common.Enums.CaseReportSectionType      SectionType,
+    IReadOnlyList<CaseReportSectionFileDto>          Files);
+
+public sealed record CaseReportSectionFileDto(
+    Guid    Id,
+    Guid    UploadFileId,
+    string  FileName,
+    string  ContentType,
+    long    FileSize,
+    string? Caption,
+    int     SortOrder);
+
+public sealed record ClientCaseInvestigation(
+    Guid       Id,
+    string     Title,
+    DateTime   ScheduledDateTime,
+    DateTime?  EndDateTime,
+    string?    Location,
+    Ben.Data.Common.Enums.InvestigationStatus Status,
+    DateTime?  EvidenceDueDate = null,
+    DateTime?  CancellationDeadlineUtc = null);
+
+public sealed record LogOccurrenceRequest(
+    DateTime? EventDateTime,
+    string?   Title,
+    string?   Body);
+
+// ── Case message board response records ──────────────────────────────────────
+public sealed record CaseMessageRecord(
+    Guid                             Id,
+    Guid                             CaseId,
+    Guid                             AuthorAppUserId,
+    string                           AuthorDisplayName,
+    string                           Body,
+    Ben.Data.Common.Enums.CaseMessageSide SenderSide,
+    bool                             IsReadByClient,
+    bool                             IsReadByOrg,
+    DateTime                         DateCreated);
+
+// ── My Investigations response records ───────────────────────────────────────
+public sealed record MyInvestigationItem(
+    Guid                               AttendeeId,
+    Guid                               InvestigationId,
+    Guid                               CaseId,
+    string                             CaseReference,
+    string                             CaseTitle,
+    Guid                               OrgId,
+    string                             OrgName,
+    string                             OrgUrlName,
+    string                             Title,
+    DateTime                           ScheduledDateTime,
+    DateTime?                          EndDateTime,
+    string?                            Location,
+    Ben.Data.Common.Enums.InvestigationStatus Status,
+    string?                            AssignedRole,
+    Ben.Data.Common.Enums.RsvpStatus   Rsvp,
+    bool?                              DidAttend,
+    DateTime?                          EvidenceDueDate);
+
+// ── Case Research records ─────────────────────────────────────────────────────
+public sealed record UpsertResearchRequest(
+    Ben.Data.Common.Enums.CaseResearchType ResearchType,
+    string  Title,
+    string? Body,
+    string? Url);
+
+public sealed record CaseResearchEntryDto(
+    Guid                                   Id,
+    Guid                                   CaseId,
+    Ben.Data.Common.Enums.CaseResearchType ResearchType,
+    string                                 Title,
+    string?                                Body,
+    string?                                Url,
+    ResearchFileInfo?                      File,
+    int                                    SortOrder,
+    DateTime                               DateCreated);
+
+public sealed record ResearchFileInfo(Guid FileId, string FileName, string ContentType, long FileSize);
+
+// ── Investigation Scheduling records ─────────────────────────────────────────
+public sealed record CreateProposalRequest(string? Notes, IReadOnlyList<SlotInput> Slots);
+public sealed record SlotInput(DateTime StartDateTime, DateTime? EndDateTime);
+public sealed record ConvertProposalRequest(Guid? SlotId, string? Title);
+
+public sealed record ScheduleProposalDto(
+    Guid                                              Id,
+    Guid                                              CaseId,
+    Ben.Data.Common.Enums.ScheduleProposalStatus      Status,
+    string?                                           Notes,
+    Guid?                                             AcceptedSlotId,
+    DateTime?                                         ClientCounterDateTime,
+    string?                                           ClientResponseNotes,
+    DateTime?                                         ClientRespondedAt,
+    Guid?                                             InvestigationId,
+    DateTime                                          DateCreated,
+    IReadOnlyList<SlotDto>                            Slots);
+
+public sealed record SlotDto(Guid Id, DateTime StartDateTime, DateTime? EndDateTime, int SortOrder);
+
+// ── Co-client access records ──────────────────────────────────────────────────
+public sealed record CoClientItem(Guid AccessId, Guid AppUserId, string DisplayName);

@@ -5,25 +5,28 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 
-<PageTitle>Messages</PageTitle>
+@if (!EmbeddedMode) { <PageTitle>Messages</PageTitle> }
 
 <div class="container-fluid py-3" style="max-width:900px;">
-    <div class="d-flex align-items-center justify-content-between mb-3">
-        <h3 class="mb-0">Messages</h3>
-        <TelerikButton Icon="@SvgIcon.Pencil"
-                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       OnClick="OpenCompose">Compose</TelerikButton>
-    </div>
+    @if (!EmbeddedMode)
+    {
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h3 class="mb-0">Messages</h3>
+            <TelerikButton Icon="@SvgIcon.Pencil"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           OnClick="OpenCompose">Compose</TelerikButton>
+        </div>
+    }
 
     @* ── Tab strip: Inbox / Sent ──────────────────────────────────────────── *@
-    <TelerikTabStrip ActiveTabIndex="@_tabIndex"
-                     ActiveTabIndexChanged="@((int i) => { _tabIndex = i; _ = LoadActiveTabAsync(); })">
+    <TelerikTabStrip ActiveTabId="@_activeTabId"
+                     ActiveTabIdChanged="@((string id) => { _activeTabId = id; _ = LoadActiveTabAsync(); })">
 
-        <TabStripTab Title="Inbox">
+        <TabStripTab Title="Inbox" Id="inbox">
             <MessageList Messages="@_inbox" OnOpen="OpenMessage" />
         </TabStripTab>
 
-        <TabStripTab Title="Sent">
+        <TabStripTab Title="Sent" Id="sent">
             <MessageList Messages="@_sent" OnOpen="OpenMessage" />
         </TabStripTab>
 
@@ -117,9 +120,10 @@
 </TelerikDialog>
 
 @code {
-    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid OrgId        { get; set; }
+    [Parameter] public bool EmbeddedMode  { get; set; }
 
-    private int _tabIndex;
+    private string _activeTabId = "inbox";
     private List<OrgMessageRecord>? _inbox;
     private List<OrgMessageRecord>? _sent;
 
@@ -169,7 +173,7 @@
     {
         try
         {
-            if (_tabIndex == 0)
+            if (_activeTabId == "inbox")
                 _inbox = (await AdminClient.GetOrgInboxAsync(OrgId)).ToList();
             else
                 _sent = (await AdminClient.GetOrgSentAsync(OrgId)).ToList();

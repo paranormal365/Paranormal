@@ -48,6 +48,7 @@ public sealed class CaseController : BenControllerBase
         if (!await CanReadAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
         var c = await db.Cases.AsNoTracking()
+            .Include(x => x.CaseManagerAppUser)
             .FirstOrDefaultAsync(x => x.Id == caseId && x.OrganizationId == orgId, ct);
         return c is null ? NotFound() : Ok(_mapper.Map<CaseRecord>(c));
     }
@@ -91,6 +92,84 @@ public sealed class CaseController : BenControllerBase
     }
 
     /// <summary>
+    /// Returns all pending client-request applications submitted to this organization.
+    /// Anonymized — exact address not included until accepted.
+    /// </summary>
+    [HttpGet("pending-requests")]
+    public async Task<ActionResult<IEnumerable<OrgPendingRequestRecord>>> GetPendingRequests(
+        Guid orgId, CancellationToken ct)
+    {
+        if (!await CanReadAsync(orgId, ct)) return Forbid();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var apps = await db.ClientRequestOrganizations
+            .AsNoTracking()
+            .Include(a => a.ClientRequest)
+            .Where(a => a.OrganizationId == orgId &&
+                (a.Status == ClientOrgRequestStatus.Pending ||
+                 a.Status == ClientOrgRequestStatus.Viewed ||
+                 a.Status == ClientOrgRequestStatus.UnderReview))
+            .OrderByDescending(a => a.DateApplied)
+            .ToListAsync(ct);
+
+        var records = apps.Select(a => new OrgPendingRequestRecord
+        {
+            ClientRequestId = a.ClientRequestId,
+            DateApplied     = a.DateApplied,
+            DateSubmitted   = a.ClientRequest!.DateCreated,
+            City            = a.ClientRequest.City,
+            State           = a.ClientRequest.State,
+            ZipCode         = a.ClientRequest.ZipCode,
+            Description     = a.ClientRequest.Description,
+            Latitude        = a.ClientRequest.Latitude,
+            Longitude       = a.ClientRequest.Longitude,
+            Status          = a.Status,
+        });
+        return Ok(records);
+    }
+
+    /// <summary>Updates a pending request's status to Viewed or UnderReview.</summary>
+    [HttpPut("request-status/{clientRequestId:guid}")]
+    public async Task<IActionResult> UpdateRequestStatus(
+        Guid orgId, Guid clientRequestId, [FromBody] UpdateRequestStatusRequest request, CancellationToken ct)
+    {
+        if (!await CanReadAsync(orgId, ct)) return Forbid();
+        if (request.Status is not ClientOrgRequestStatus.Viewed and not ClientOrgRequestStatus.UnderReview)
+            return BadRequest("Only Viewed and UnderReview statuses may be set via this endpoint.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var application = await db.ClientRequestOrganizations
+            .FirstOrDefaultAsync(a => a.ClientRequestId == clientRequestId && a.OrganizationId == orgId, ct);
+        if (application is null) return NotFound();
+
+        // Only advance the status — never move backward
+        if ((int)request.Status > (int)application.Status)
+            application.Status = request.Status;
+
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>Declines a pending (or viewed/under-review) client-request application for this organization.</summary>
+    [HttpPost("decline-request/{clientRequestId:guid}")]
+    public async Task<ActionResult> DeclineClientRequest(Guid orgId, Guid clientRequestId, CancellationToken ct)
+    {
+        if (!await IsOrgAdminOrSuperAsync(orgId, ct)) return Forbid();
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var application = await db.ClientRequestOrganizations
+            .FirstOrDefaultAsync(a => a.ClientRequestId == clientRequestId && a.OrganizationId == orgId, ct);
+        if (application is null) return NotFound();
+        if (application.Status is ClientOrgRequestStatus.Accepted or ClientOrgRequestStatus.Rejected or ClientOrgRequestStatus.Cancelled)
+            return BadRequest("This application has already been responded to.");
+
+        application.Status               = ClientOrgRequestStatus.Rejected;
+        application.DateResponded        = DateTime.UtcNow;
+        application.RespondedByAppUserId = userId == Guid.Empty ? null : userId;
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>
     /// Accepts a pending <see cref="ClientRequest"/> and promotes it to a Case.
     /// Auto-generates 4 standard CMS pages linked to the case.
     /// </summary>
@@ -109,7 +188,7 @@ public sealed class CaseController : BenControllerBase
             .FirstOrDefaultAsync(a => a.ClientRequestId == clientRequestId
                                    && a.OrganizationId == orgId, ct);
         if (application is null) return NotFound("Client request application not found for this organization.");
-        if (application.Status != ClientOrgRequestStatus.Pending)
+        if (application.Status is ClientOrgRequestStatus.Accepted or ClientOrgRequestStatus.Cancelled)
             return BadRequest("This application has already been responded to.");
         if (application.ClientRequest is null) return NotFound("Client request not found.");
 
@@ -219,6 +298,7 @@ public sealed class CaseController : BenControllerBase
             .AsNoTracking()
             .Include(e => e.AuthorAppUser)
             .Include(e => e.ExperienceTypes)
+            .Include(e => e.Files).ThenInclude(f => f.UploadFile)
             .Where(e => e.CaseId == caseId)
             .OrderBy(e => e.EventDateTime ?? e.DateCreated)
             .ToListAsync(ct);
@@ -266,6 +346,7 @@ public sealed class CaseController : BenControllerBase
             .AsNoTracking()
             .Include(e => e.AuthorAppUser)
             .Include(e => e.ExperienceTypes)
+            .Include(e => e.Files).ThenInclude(f => f.UploadFile)
             .FirstAsync(e => e.Id == entry.Id, ct);
         return CreatedAtAction(nameof(GetTimeline), new { orgId, caseId },
             _mapper.Map<CaseTimelineEntryRecord>(loaded));
@@ -309,6 +390,7 @@ public sealed class CaseController : BenControllerBase
             .AsNoTracking()
             .Include(e => e.AuthorAppUser)
             .Include(e => e.ExperienceTypes)
+            .Include(e => e.Files).ThenInclude(f => f.UploadFile)
             .FirstAsync(e => e.Id == entry.Id, ct);
         return Ok(_mapper.Map<CaseTimelineEntryRecord>(loaded));
     }
@@ -443,3 +525,7 @@ public sealed record UpsertTimelineEntryRequest(
     string? Body,
     bool IsPublic,
     IList<Guid> ExperienceTypeIds);
+
+/// <summary>Updates a client-request org application to Viewed or UnderReview.</summary>
+public sealed record UpdateRequestStatusRequest(
+    Ben.Data.Common.Enums.ClientOrgRequestStatus Status);

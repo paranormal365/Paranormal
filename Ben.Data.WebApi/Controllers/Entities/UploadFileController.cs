@@ -3,6 +3,7 @@ using Ben.Data.Common.Helpers;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
+using Ben.Data.WebApi.Services;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -25,17 +26,20 @@ public sealed class UploadFileController : BenControllerBase
     private readonly IMapper _mapper;
     private readonly IFileStorageService _fileStorage;
     private readonly IAuditLogService _auditLog;
+    private readonly FileMetadataExtractorService _metadataExtractor;
 
     public UploadFileController(
         IDbContextFactory<BenDataContext> dbContextFactory,
         IMapper mapper,
         IFileStorageService fileStorage,
-        IAuditLogService auditLog)
+        IAuditLogService auditLog,
+        FileMetadataExtractorService metadataExtractor)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
         _fileStorage = fileStorage;
         _auditLog = auditLog;
+        _metadataExtractor = metadataExtractor;
     }
 
     [HttpGet]
@@ -163,6 +167,19 @@ public sealed class UploadFileController : BenControllerBase
         db.UploadFiles.Add(entity);
         await db.SaveChangesAsync(cancellationToken);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), entity.Id, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
+
+        // Extract and persist metadata — fire-and-forget so upload latency is unaffected
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var meta = _metadataExtractor.Extract(entity.Id, contentType, fileBytes);
+                await using var dbMeta = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
+                dbMeta.UploadFileMetadata.Add(meta);
+                await dbMeta.SaveChangesAsync(CancellationToken.None);
+            }
+            catch { /* extraction is best-effort */ }
+        });
 
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, _mapper.Map<UploadFileRecord>(entity));
     }

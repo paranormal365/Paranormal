@@ -1,3 +1,5 @@
+using Ben.Data.Common.Enums;
+
 namespace Ben.Data.Source.Entities
 {
     /// <summary>A member invited or assigned to participate in a specific investigation.</summary>
@@ -9,6 +11,9 @@ namespace Ben.Data.Source.Entities
 
         /// <summary>e.g. "Lead Investigator", "Audio Technician", "Camera Operator"</summary>
         public string? AssignedRole { get; set; }
+
+        /// <summary>Pre-event RSVP — set by the member once they are notified of the investigation.</summary>
+        public RsvpStatus Rsvp { get; set; } = RsvpStatus.Invited;
 
         /// <summary>
         /// Whether the member actually attended. Null = not yet determined (investigation in future or in progress).

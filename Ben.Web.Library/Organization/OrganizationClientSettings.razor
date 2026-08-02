@@ -106,65 +106,12 @@
 </div>
 
 @* ── Edit Area dialog ────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showAreaDialog"
-               Title="@(_area is null ? "Set Operating Area" : "Edit Operating Area")"
-               Width="620px">
-    <DialogContent>
-        <div class="row g-3">
-            <div class="col-12">
-                <label class="form-label fw-semibold">
-                    Center Location
-                    <span class="text-secondary fw-normal small ms-1">— use a city or town center, not a personal address</span>
-                </label>
-                <div class="input-group">
-                    <TelerikTextBox @bind-Value="@_locationQuery"
-                                    Width="100%"
-                                    Placeholder="e.g. Nashville, TN" />
-                    <TelerikButton OnClick="GeocodeLookup"
-                                   Enabled="@(!_isBusy && !string.IsNullOrWhiteSpace(_locationQuery))">
-                        Look Up
-                    </TelerikButton>
-                </div>
-                @if (_geocodeError is not null)
-                {
-                    <div class="text-danger small mt-1">@_geocodeError</div>
-                }
-                @if (_geocodedLat.HasValue)
-                {
-                    <div class="text-success small mt-1">
-                        ✓ Location found — coordinates saved privately.
-                    </div>
-                }
-            </div>
-            <div class="col-8">
-                <label class="form-label fw-semibold">Radius (miles)</label>
-                <TelerikSlider @bind-Value="@_radiusMiles"
-                               Min="5m" Max="200m" Step="5m"
-                               Width="100%" />
-                <div class="text-secondary small mt-1">@_radiusMiles miles</div>
-            </div>
-            <div class="col-12">
-                <label class="form-label fw-semibold">Public Display Label</label>
-                <TelerikTextBox @bind-Value="@_displayLabel" Width="100%"
-                                Placeholder="e.g. Within 30 miles of Nashville, TN" />
-                <div class="form-text">This is what clients see — do not include your exact address.</div>
-            </div>
-        </div>
-        @if (_dialogError is not null)
-        {
-            <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
-        }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="@(() => _showAreaDialog = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Icon="@SvgIcon.Save"
-                       OnClick="SaveArea"
-                       Enabled="@(!_isBusy && _geocodedLat.HasValue)">
-            @(_isBusy ? "Saving…" : "Save")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+<AreaOfOperationDialog @bind-Visible="@_showAreaDialog"
+                       OrgId="@OrgId"
+                       ExistingArea="@_area"
+                       IsAcceptingClients="@_isAcceptingClients"
+                       AcceptsClientsOutsideRange="@_acceptsOutsideRange"
+                       OnSaved="@OnAreaSaved" />
 
 @* ── Delete confirm ───────────────────────────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showDeleteConfirm" Title="Remove Operating Area" Width="400px">
@@ -198,14 +145,7 @@
     private bool _showAreaDialog;
     private bool _showDeleteConfirm;
 
-    // Area dialog form
-    private string _locationQuery = "";
-    private decimal? _geocodedLat;
-    private decimal? _geocodedLon;
-    private decimal _radiusMiles = 30;
-    private string _displayLabel = "";
-    private string? _geocodeError;
-    private string? _dialogError;
+    // Area dialog form state is managed by AreaOfOperationDialog component
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -245,79 +185,11 @@
     }
 
     // ── Area of Operation ─────────────────────────────────────────────────────
-    private void OpenEditArea()
+    private void OpenEditArea() => _showAreaDialog = true;
+
+    private void OnAreaSaved(OrganizationAreaOfOperationRecord result)
     {
-        if (_area is not null)
-        {
-            _geocodedLat    = _area.CenterLatitude;
-            _geocodedLon    = _area.CenterLongitude;
-            _radiusMiles    = _area.RadiusMiles;
-            _displayLabel   = _area.DisplayLabel ?? "";
-            _locationQuery  = "";
-        }
-        else
-        {
-            _geocodedLat   = null;
-            _geocodedLon   = null;
-            _radiusMiles   = 30;
-            _displayLabel  = "";
-            _locationQuery = "";
-        }
-        _geocodeError = null;
-        _dialogError  = null;
-        _showAreaDialog = true;
-    }
-
-    private async Task GeocodeLookup()
-    {
-        if (string.IsNullOrWhiteSpace(_locationQuery)) return;
-        _isBusy = true; _geocodeError = null; _geocodedLat = null; _geocodedLon = null;
-        try
-        {
-            var result = await AdminClient.SearchGeocodingAsync(_locationQuery);
-            if (result is null)
-            {
-                _geocodeError = "Location not found. Try a city and state (e.g. Nashville, TN).";
-            }
-            else
-            {
-                _geocodedLat = (decimal)result.Latitude;
-                _geocodedLon = (decimal)result.Longitude;
-                // Auto-suggest a display label if blank
-                if (string.IsNullOrWhiteSpace(_displayLabel))
-                    _displayLabel = $"Within {_radiusMiles} miles of {_locationQuery.Trim()}";
-            }
-        }
-        catch { _geocodeError = "Geocoding failed. Please try again."; }
-        finally { _isBusy = false; }
-    }
-
-    private async Task SaveArea()
-    {
-        if (!_geocodedLat.HasValue || !_geocodedLon.HasValue)
-        {
-            _dialogError = "Please look up a location first.";
-            return;
-        }
-        if (_radiusMiles < 1) { _dialogError = "Radius must be at least 1 mile."; return; }
-
-        _isBusy = true; _dialogError = null;
-        try
-        {
-            var req = new UpsertAreaOfOperationRequest(
-                RadiusMiles:              _radiusMiles,
-                CenterLatitude:           _geocodedLat!.Value,
-                CenterLongitude:          _geocodedLon!.Value,
-                DisplayLabel:             string.IsNullOrWhiteSpace(_displayLabel) ? null : _displayLabel.Trim(),
-                IsAcceptingClients:       _isAcceptingClients,
-                AcceptsClientsOutsideRange: _acceptsOutsideRange);
-
-            var result = await AdminClient.UpsertOrgAreaOfOperationAsync(OrgId, req);
-            if (result is null) { _dialogError = "Save failed."; }
-            else { _area = result; _showAreaDialog = false; }
-        }
-        catch (Exception ex) { _dialogError = ex.Message; }
-        finally { _isBusy = false; }
+        _area = result;
     }
 
     private void ConfirmDeleteArea() => _showDeleteConfirm = true;

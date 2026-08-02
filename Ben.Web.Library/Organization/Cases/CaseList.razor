@@ -6,16 +6,25 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 
-<PageTitle>Cases — @(_orgName ?? "Organization")</PageTitle>
-
 <div class="container-fluid py-3" style="max-width:1000px;">
+    @if (!EmbeddedMode)
+    {
+        <PageTitle>Cases — @(_orgName ?? "Organization")</PageTitle>
+    }
     <div class="d-flex align-items-center justify-content-between mb-4">
         <h3 class="mb-0">Cases</h3>
-        <TelerikButton Icon="@SvgIcon.Plus"
-                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/new"))">
-            New Case
-        </TelerikButton>
+        <div class="d-flex gap-2">
+            <TelerikButton Icon="@SvgIcon.Inbox"
+                           FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/pending-requests"))">
+                Pending Requests @(_pendingCount > 0 ? $"({_pendingCount})" : "")
+            </TelerikButton>
+            <TelerikButton Icon="@SvgIcon.Plus"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/new"))">
+                New Case
+            </TelerikButton>
+        </div>
     </div>
 
     @if (_error is not null)
@@ -75,6 +84,17 @@
                                     <span> · Closed @c.DateCaseClosed.Value.ToLocalTime().ToString("MMM d, yyyy")</span>
                                 }
                             </div>
+                            <div class="text-secondary small mt-1">
+                                Manager:
+                                @if (!string.IsNullOrEmpty(c.CaseManagerDisplayName))
+                                {
+                                    <strong>@c.CaseManagerDisplayName</strong>
+                                }
+                                else
+                                {
+                                    <em class="text-warning">Unassigned</em>
+                                }
+                            </div>
                         </div>
                         <TelerikButton Size="@ThemeConstants.Button.Size.Small"
                                        Icon="@SvgIcon.ArrowRight"
@@ -89,12 +109,14 @@
 </div>
 
 @code {
-    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid OrgId        { get; set; }
+    [Parameter] public bool EmbeddedMode  { get; set; }
 
     private List<CaseRecord>? _cases;
     private string? _orgName;
     private string? _error;
     private CaseStatus? _activeFilter;
+    private int _pendingCount;
 
     private static readonly CaseStatus?[] _filterOptions =
         [null, CaseStatus.Proposed, CaseStatus.Accepted, CaseStatus.Active,
@@ -111,6 +133,7 @@
             _cases = (await AdminClient.GetOrgCasesAsync(OrgId)).ToList();
             var org = await AdminClient.GetOrganizationAsync(OrgId);
             _orgName = org?.Name;
+            try { _pendingCount = (await AdminClient.GetOrgPendingRequestsAsync(OrgId)).Count; } catch { }
         }
         catch { _error = "Failed to load cases."; }
         StateHasChanged();

@@ -71,6 +71,7 @@ public sealed class PublicCaseController : ControllerBase
 
         var c = await db.Cases.AsNoTracking()
             .Include(x => x.TimelineEntries.Where(e => e.IsPublic).OrderBy(e => e.EventDateTime ?? e.DateCreated))
+                .ThenInclude(e => e.Files)
             .FirstOrDefaultAsync(x => x.OrganizationId == org.Id
                                    && x.CaseYear == year && x.OrgCaseNumber == number
                                    && x.IsPublic
@@ -81,12 +82,16 @@ public sealed class PublicCaseController : ControllerBase
         var clientName = string.IsNullOrWhiteSpace(c.PublicPseudonym) ? null : c.PublicPseudonym;
 
         var publicTimeline = c.TimelineEntries.Select(e => new PublicTimelineEntry(
-            EntryType:     e.EntryType,
-            EventDateTime: e.EventDateTime,
-            Title:         e.Title,
-            Body:          e.Body)).ToList();
+            EntryType:      e.EntryType,
+            EventDateTime:  e.EventDateTime,
+            Title:          e.Title,
+            Body:           e.Body,
+            EvidenceFileIds: e.EntryType == CaseTimelineEntryType.Evidence
+                ? e.Files.Select(f => f.UploadFileId).ToList()
+                : [])).ToList();
 
         return Ok(new PublicCaseDetail(
+            CaseId:         c.Id,
             CaseReference:  $"#{c.CaseYear}-{c.OrgCaseNumber:D3}",
             Title:          c.Title,
             City:           c.City,
@@ -117,6 +122,7 @@ public sealed record PublicCaseListItem(
     bool IsHaunted);
 
 public sealed record PublicCaseDetail(
+    Guid CaseId,
     string CaseReference,
     string Title,
     string City,
@@ -136,4 +142,5 @@ public sealed record PublicTimelineEntry(
     Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,
     DateTime? EventDateTime,
     string? Title,
-    string? Body);
+    string? Body,
+    IReadOnlyList<Guid> EvidenceFileIds);

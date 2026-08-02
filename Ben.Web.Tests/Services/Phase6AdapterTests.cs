@@ -144,7 +144,7 @@ public class Phase6AdapterTests
                 "/api/public/organizations/ghost-hunters-tn/cases/2026-042",
                 It.IsAny<CancellationToken>()))
            .ReturnsAsync(new PublicCaseDetail(
-               "#2026-042", "Smith, Nashville TN", "Nashville", "TN", "US",
+               Guid.NewGuid(), "#2026-042", "Smith, Nashville TN", "Nashville", "TN", "US",
                CaseStatus.Public, false, "The Smith Family", null,
                DateTime.UtcNow, null, [], "Ghost Hunters TN", "ghost-hunters-tn"));
 

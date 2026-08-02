@@ -77,7 +77,17 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<Investigation> Investigations { get; set; }
         public virtual DbSet<InvestigationAttendee> InvestigationAttendees { get; set; }
         public virtual DbSet<EvidenceVote> EvidenceVotes { get; set; }
+        public virtual DbSet<CaseVote> CaseVotes { get; set; }
         public virtual DbSet<CaseTransferLog> CaseTransferLogs { get; set; }
+        public virtual DbSet<CaseMessage> CaseMessages { get; set; }
+        public virtual DbSet<CaseClientAccess> CaseClientAccesses { get; set; }
+        public virtual DbSet<UploadFileMetadata> UploadFileMetadata { get; set; }
+        public virtual DbSet<CaseReport> CaseReports { get; set; }
+        public virtual DbSet<CaseReportSection> CaseReportSections { get; set; }
+        public virtual DbSet<CaseReportSectionFile> CaseReportSectionFiles { get; set; }
+        public virtual DbSet<CaseResearchEntry> CaseResearchEntries { get; set; }
+        public virtual DbSet<InvestigationScheduleProposal> InvestigationScheduleProposals { get; set; }
+        public virtual DbSet<ScheduleProposalSlot> ScheduleProposalSlots { get; set; }
         public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
         public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
         public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
@@ -1181,9 +1191,26 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.VoterOrganization).WithMany()
                 .HasForeignKey(e => e.VoterOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<EvidenceVote>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<EvidenceVote>()
                 .Property(e => e.Comment).HasMaxLength(1000);
             modelBuilder.Entity<EvidenceVote>()
+                .Property(e => e.VoterOrganizationName).HasMaxLength(200);
+            modelBuilder.Entity<EvidenceVote>()
                 .HasIndex(e => new { e.UploadFileId, e.VoterAppUserId }).IsUnique();
+
+            // ── CaseVote ──────────────────────────────────────────────────────
+            modelBuilder.Entity<CaseVote>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseVote>()
+                .HasOne(e => e.VoterAppUser).WithMany()
+                .HasForeignKey(e => e.VoterAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseVote>()
+                .Property(e => e.Comment).HasMaxLength(1000);
+            modelBuilder.Entity<CaseVote>()
+                .HasIndex(e => new { e.CaseId, e.VoterAppUserId }).IsUnique();
 
             // ── CaseTransferLog ───────────────────────────────────────────────
             modelBuilder.Entity<CaseTransferLog>()
@@ -1205,6 +1232,141 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.TransferReason).HasMaxLength(1000);
             modelBuilder.Entity<CaseTransferLog>()
                 .Property(e => e.RejectionReason).HasMaxLength(1000);
+
+            // ── CaseMessage ─────────────────────────────────────────
+            modelBuilder.Entity<CaseMessage>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseMessage>()
+                .HasOne(e => e.AuthorAppUser).WithMany()
+                .HasForeignKey(e => e.AuthorAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseMessage>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseMessage>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseMessage>()
+                .Property(e => e.Body).HasMaxLength(4000);
+            modelBuilder.Entity<CaseMessage>()
+                .HasIndex(e => new { e.CaseId, e.DateCreated });
+
+            // ── CaseClientAccess ────────────────────────────────────────
+            modelBuilder.Entity<CaseClientAccess>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseClientAccess>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseClientAccess>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseClientAccess>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseClientAccess>()
+                .HasIndex(e => new { e.CaseId, e.AppUserId }).IsUnique();
+
+            // ── CaseTimelineEntry.IpAddress ─────────────────────────────────
+            modelBuilder.Entity<CaseTimelineEntry>()
+                .Property(e => e.IpAddress).HasMaxLength(45); // supports IPv6
+
+            // ── UploadFileMetadata ──────────────────────────────────────────
+            modelBuilder.Entity<UploadFileMetadata>()
+                .HasOne(e => e.UploadFile).WithOne()
+                .HasForeignKey<UploadFileMetadata>(e => e.UploadFileId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UploadFileMetadata>()
+                .Property(e => e.MediaKind).HasMaxLength(20);
+            modelBuilder.Entity<UploadFileMetadata>()
+                .Property(e => e.AudioCodec).HasMaxLength(50);
+            modelBuilder.Entity<UploadFileMetadata>()
+                .Property(e => e.CameraManufacturer).HasMaxLength(100);
+            modelBuilder.Entity<UploadFileMetadata>()
+                .Property(e => e.CameraModel).HasMaxLength(100);
+
+            // ── CaseReport ──────────────────────────────────────────────────
+            modelBuilder.Entity<CaseReport>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseReport>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseReport>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseReport>()
+                .HasOne(e => e.PublishedByAppUser).WithMany()
+                .HasForeignKey(e => e.PublishedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseReport>()
+                .Property(e => e.Title).HasMaxLength(300);
+            modelBuilder.Entity<CaseReport>()
+                .HasIndex(e => e.CaseId);
+
+            // ── CaseReportSection ────────────────────────────────────────────
+            modelBuilder.Entity<CaseReportSection>()
+                .HasOne(e => e.CaseReport).WithMany(e => e.Sections)
+                .HasForeignKey(e => e.CaseReportId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CaseReportSection>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseReportSection>()
+                .Property(e => e.Title).HasMaxLength(300);
+
+            // ── CaseReportSectionFile ────────────────────────────────────────
+            modelBuilder.Entity<CaseReportSectionFile>()
+                .HasOne(e => e.Section).WithMany(e => e.Files)
+                .HasForeignKey(e => e.CaseReportSectionId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CaseReportSectionFile>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseReportSectionFile>()
+                .Property(e => e.Caption).HasMaxLength(500);
+
+            // ── CaseResearchEntry ─────────────────────────────────────
+            modelBuilder.Entity<CaseResearchEntry>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseResearchEntry>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<CaseResearchEntry>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseResearchEntry>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseResearchEntry>()
+                .Property(e => e.Title).HasMaxLength(300);
+            modelBuilder.Entity<CaseResearchEntry>()
+                .Property(e => e.Url).HasMaxLength(2000);
+            modelBuilder.Entity<CaseResearchEntry>()
+                .HasIndex(e => new { e.CaseId, e.SortOrder });
+
+            // ── InvestigationScheduleProposal ──────────────────────────────
+            modelBuilder.Entity<InvestigationScheduleProposal>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvestigationScheduleProposal>()
+                .HasOne(e => e.Investigation).WithMany()
+                .HasForeignKey(e => e.InvestigationId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<InvestigationScheduleProposal>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvestigationScheduleProposal>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvestigationScheduleProposal>()
+                .Property(e => e.Notes).HasMaxLength(2000);
+            modelBuilder.Entity<InvestigationScheduleProposal>()
+                .Property(e => e.ClientResponseNotes).HasMaxLength(1000);
+            modelBuilder.Entity<InvestigationScheduleProposal>()
+                .HasIndex(e => new { e.CaseId, e.Status });
+
+            // ── ScheduleProposalSlot ──────────────────────────────────────────
+            modelBuilder.Entity<ScheduleProposalSlot>()
+                .HasOne(e => e.Proposal).WithMany(e => e.Slots)
+                .HasForeignKey(e => e.ProposalId).OnDelete(DeleteBehavior.Cascade);
         }
     }
 }
