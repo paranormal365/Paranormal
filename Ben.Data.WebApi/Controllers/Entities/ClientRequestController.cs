@@ -38,7 +38,16 @@ public sealed class ClientRequestController : BenControllerBase
             .Where(r => r.AppUserId == userId)
             .OrderByDescending(r => r.DateCreated)
             .ToListAsync(ct);
-        return Ok(_mapper.Map<IEnumerable<ClientRequestRecord>>(requests));
+
+        var ids = requests.Select(r => r.Id).ToList();
+        var orgCounts = await db.ClientRequestOrganizations.AsNoTracking()
+            .Where(o => ids.Contains(o.ClientRequestId))
+            .GroupBy(o => o.ClientRequestId)
+            .Select(g => new { g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
+
+        return Ok(requests.Select(r =>
+            _mapper.Map<ClientRequestRecord>(r) with { OrgCount = orgCounts.GetValueOrDefault(r.Id) }));
     }
 
     /// <summary>Returns a single request. Only the owner or SuperAdmin can access it.</summary>

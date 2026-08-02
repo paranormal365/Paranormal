@@ -22,4 +22,6 @@ public record ClientRequestRecord
     public DateTime? DateUpdated { get; init; }
     public Guid CreatedByAppUserId { get; init; }
     public Guid? UpdatedByAppUserId { get; init; }
+    /// <summary>Number of orgs this request has been submitted to. 0 for drafts.</summary>
+    public int OrgCount { get; init; }
 }
