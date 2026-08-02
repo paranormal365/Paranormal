@@ -15,6 +15,7 @@ public record InvestigationRecord
     public InvestigationStatus Status { get; init; }
     public string? Notes { get; init; }
     public int AttendeeCount { get; init; }
+    public DateTime? EvidenceDueDate { get; init; }
     public DateTime DateCreated { get; init; }
     public DateTime? DateUpdated { get; init; }
     public Guid CreatedByAppUserId { get; init; }
@@ -28,6 +29,7 @@ public record InvestigationAttendeeRecord
     public Guid AppUserId { get; init; }
     public string? DisplayName { get; init; }
     public string? AssignedRole { get; init; }
+    public RsvpStatus Rsvp { get; init; } = RsvpStatus.Invited;
     public bool? DidAttend { get; init; }
     public DateTime DateCreated { get; init; }
     public Guid CreatedByAppUserId { get; init; }

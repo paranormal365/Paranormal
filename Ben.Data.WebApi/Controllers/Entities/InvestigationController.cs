@@ -68,6 +68,7 @@ public sealed class InvestigationController : BenControllerBase
             ScheduledDateTime   = request.ScheduledDateTime,
             EndDateTime         = request.EndDateTime,
             Status              = InvestigationStatus.Scheduled,
+            EvidenceDueDate     = request.EvidenceDueDate,
             DateCreated         = DateTime.UtcNow,
             CreatedByAppUserId  = userId,
         };
@@ -97,6 +98,7 @@ public sealed class InvestigationController : BenControllerBase
         entity.EndDateTime         = request.EndDateTime;
         entity.Status              = request.Status;
         entity.Notes               = request.Notes?.Trim();
+        entity.EvidenceDueDate     = request.EvidenceDueDate;
         entity.DateUpdated         = DateTime.UtcNow;
         entity.UpdatedByAppUserId  = userId == Guid.Empty ? null : userId;
         await db.SaveChangesAsync(ct);
@@ -167,6 +169,7 @@ public sealed class InvestigationController : BenControllerBase
         if (attendee is null) return NotFound();
         attendee.DidAttend    = request.DidAttend;
         attendee.AssignedRole = request.AssignedRole?.Trim() ?? attendee.AssignedRole;
+        if (request.Rsvp.HasValue) attendee.Rsvp = request.Rsvp.Value;
         await db.SaveChangesAsync(ct);
         var loaded = await db.InvestigationAttendees.AsNoTracking()
             .Include(a => a.AppUser).FirstAsync(a => a.Id == attendee.Id, ct);
@@ -332,10 +335,11 @@ public sealed record UpsertInvestigationRequest(
     DateTime? EndDateTime,
     Ben.Data.Common.Enums.InvestigationStatus Status,
     string? Notes,
-    Guid? OrgCalendarEventId);
+    Guid? OrgCalendarEventId,
+    DateTime? EvidenceDueDate = null);
 
 public sealed record AddInvestigationAttendeeRequest(Guid AppUserId, string? AssignedRole);
-public sealed record UpdateAttendanceRequest(bool? DidAttend, string? AssignedRole);
+public sealed record UpdateAttendanceRequest(bool? DidAttend, string? AssignedRole, Ben.Data.Common.Enums.RsvpStatus? Rsvp = null);
 public sealed record CastEvidenceVoteRequest(
     Ben.Data.Common.Enums.EvidenceVoteType VoteType,
     string? Comment);

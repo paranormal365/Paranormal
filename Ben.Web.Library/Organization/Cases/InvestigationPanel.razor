@@ -85,6 +85,7 @@
                                                     <tr>
                                                         <th>Member</th>
                                                         <th>Role</th>
+                                                        <th>RSVP</th>
                                                         <th class="text-center">Attended</th>
                                                         <th></th>
                                                     </tr>
@@ -111,6 +112,9 @@
                                                                                    Title="Edit role"
                                                                                    OnClick="@(() => StartEditRole(a))" />
                                                                 }
+                                                            </td>
+                                                            <td class="align-middle">
+                                                                <span class="badge @RsvpBadge(a.Rsvp)" style="font-size:.7rem;">@RsvpLabel(a.Rsvp)</span>
                                                             </td>
                                                             <td class="text-center align-middle">
                                                                 <input type="checkbox"
@@ -209,6 +213,11 @@
                     <label class="form-label fw-semibold">Post-Investigation Notes</label>
                     <TelerikTextArea @bind-Value="@_form.Notes" Rows="4" Width="100%"
                                      Placeholder="Summary of findings…" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Evidence Due Date (optional)</label>
+                    <TelerikDateTimePicker @bind-Value="@_form.EvidenceDueDate" Width="100%" />
+                    <div class="form-text">After this date, no new evidence may be submitted for this investigation.</div>
                 </div>
             }
         </div>
@@ -391,6 +400,7 @@
             EndDateTime       = inv.EndDateTime,
             Status            = inv.Status,
             Notes             = inv.Notes ?? "",
+            EvidenceDueDate   = inv.EvidenceDueDate,
         };
         _dialogError = null;
         _showDialog = true;
@@ -410,7 +420,8 @@
                 EndDateTime:       _form.EndDateTime,
                 Status:            _form.Status,
                 Notes:             string.IsNullOrWhiteSpace(_form.Notes) ? null : _form.Notes.Trim(),
-                OrgCalendarEventId: null);
+                OrgCalendarEventId: null,
+                EvidenceDueDate:   _form.EvidenceDueDate);
 
             InvestigationRecord? result;
             if (_editInv is null)
@@ -466,8 +477,26 @@
         public DateTime?          EndDateTime       { get; set; }
         public InvestigationStatus Status           { get; set; } = InvestigationStatus.Scheduled;
         public string             Notes             { get; set; } = "";
+        public DateTime?          EvidenceDueDate   { get; set; }
     }
 
     private record StatusOption(InvestigationStatus Value, string Label);
     private record MemberOption(Guid UserId, string Label);
+
+    private static string RsvpLabel(RsvpStatus r) => r switch
+    {
+        RsvpStatus.Invited   => "Invited",
+        RsvpStatus.Accepted  => "Will Attend",
+        RsvpStatus.Declined  => "Cannot Attend",
+        RsvpStatus.Tentative => "Tentative",
+        _                    => r.ToString(),
+    };
+
+    private static string RsvpBadge(RsvpStatus r) => r switch
+    {
+        RsvpStatus.Accepted  => "bg-success",
+        RsvpStatus.Declined  => "bg-danger",
+        RsvpStatus.Tentative => "bg-warning text-dark",
+        _                    => "bg-secondary",
+    };
 }

@@ -720,10 +720,10 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<InvestigationAttendeeRecord?> AddInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, AddInvestigationAttendeeRequest request, CancellationToken token = default)
         => _api.PostAsync<AddInvestigationAttendeeRequest, InvestigationAttendeeRecord>($"{InvBase(orgId, caseId)}/{id}/attendees", request, token);
 
-    public Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, CancellationToken token = default)
+    public Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, Ben.Data.Common.Enums.RsvpStatus? rsvp = null, CancellationToken token = default)
         => _api.PutAsync<object, InvestigationAttendeeRecord>(
                $"{InvBase(orgId, caseId)}/{id}/attendees/{attendeeId}/attendance",
-               new { DidAttend = didAttend, AssignedRole = assignedRole }, token);
+               new { DidAttend = didAttend, AssignedRole = assignedRole, Rsvp = rsvp }, token);
 
     public Task<bool> RemoveInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, CancellationToken token = default)
         => _api.DeleteAsync($"{InvBase(orgId, caseId)}/{id}/attendees/{attendeeId}", token);

@@ -25,6 +25,9 @@ namespace Ben.Data.Source.Entities
         /// <summary>Post-investigation notes and summary (HTML).</summary>
         public string? Notes { get; set; }
 
+        /// <summary>Deadline after which no new evidence submissions are accepted for this investigation.</summary>
+        public DateTime? EvidenceDueDate { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }
