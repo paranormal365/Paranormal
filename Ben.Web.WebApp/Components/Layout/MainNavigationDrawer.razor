@@ -54,6 +54,7 @@
             var items = new List<NavItem>
             {
                 new NavItem("Home", SvgIcon.Home, "/"),
+                new NavItem("Find a Group", SvgIcon.MapMarker, "/find"),
             };
             if (TokenStore.IsAuthenticated && !TokenStore.IsImpersonating)
             {
