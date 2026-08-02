@@ -48,6 +48,7 @@ public sealed class CaseController : BenControllerBase
         if (!await CanReadAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
         var c = await db.Cases.AsNoTracking()
+            .Include(x => x.CaseManagerAppUser)
             .FirstOrDefaultAsync(x => x.Id == caseId && x.OrganizationId == orgId, ct);
         return c is null ? NotFound() : Ok(_mapper.Map<CaseRecord>(c));
     }

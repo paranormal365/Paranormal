@@ -8,6 +8,7 @@ public record CaseRecord
     public Guid OrganizationId { get; init; }
     public Guid? ClientRequestId { get; init; }
     public Guid? CaseManagerAppUserId { get; init; }
+    public string? CaseManagerDisplayName { get; init; }
     public CaseStatus Status { get; init; }
     public required string Title { get; init; }
     public int CaseYear { get; init; }
