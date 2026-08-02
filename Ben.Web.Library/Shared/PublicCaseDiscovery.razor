@@ -1,0 +1,378 @@
+@namespace Ben.Web.Library.Shared
+@using Ben.Data.Common.Enums
+@implements IAsyncDisposable
+
+@inject IBenAdminClient  AdminClient
+@inject IBenUserState    UserState
+@inject IJSRuntime       JS
+
+@* ── Loading ─────────────────────────────────────────────────────────────── *@
+@if (_loading)
+{
+    <div class="d-flex justify-content-center py-5">
+        <TelerikLoaderContainer Visible="true" Text="Loading investigations…" />
+    </div>
+}
+else
+{
+    @* ── Section header ───────────────────────────────────────────────────── *@
+    <div class="container-fluid px-3 mt-5" style="max-width:1000px;">
+        <div class="d-flex align-items-baseline justify-content-between mb-2">
+            <h4 class="mb-0">Public Investigations</h4>
+            <span class="text-muted small">@_totalCount case@(_totalCount == 1 ? "" : "s") worldwide</span>
+        </div>
+        <p class="text-secondary small mb-3">
+            Click a marker or case below to view details.
+            @if (!UserState.IsAuthenticated)
+            {
+                <a href="/login" class="text-decoration-none">Sign in</a><span> to vote on evidence.</span>
+            }
+        </p>
+    </div>
+
+    @* ── Map ──────────────────────────────────────────────────────────────── *@
+    <div class="container-fluid px-3 mb-4" style="max-width:1000px;">
+        <div style="height:420px; border-radius:.5rem; overflow:hidden;">
+            <TelerikMap Center="@_mapCenter"
+                        Zoom="@_mapZoom"
+                        Style="height:420px;">
+                <MapLayers>
+                    <MapLayer Type="@MapLayersType.Tile"
+                              Attribution="© OpenStreetMap contributors"
+                              Subdomains="@(new[] {"a","b","c"})"
+                              UrlTemplate="caseMapTileTemplate" />
+
+                    @if (_markers.Count > 0)
+                    {
+                        <MapLayer Type="@MapLayersType.Marker"
+                                  Data="@_markers"
+                                  LocationField="@nameof(CaseMapMarker.LatLng)"
+                                  TitleField="@nameof(CaseMapMarker.Title)">
+                            <MapLayerMarkerSettings Template="caseMapMarkerTemplate" />
+                        </MapLayer>
+                    }
+                </MapLayers>
+            </TelerikMap>
+        </div>
+    </div>
+
+    @* ── Case popup ───────────────────────────────────────────────────────── *@
+    <TelerikWindow @bind-Visible="@_popupVisible"
+                   Width="420px"
+                   Title="@(_selectedCase != null ? _selectedCase.Title : _selectedCity)"
+                   Modal="false"
+                   Resizable="true">
+        <WindowContent>
+            @if (_clusterCases.Count > 1 && _selectedCase is null)
+            {
+                @* City cluster list *@
+                <p class="text-secondary small mb-2">@_clusterCases.Count cases in @_selectedCity</p>
+                <div class="list-group list-group-flush">
+                    @foreach (var c in _clusterCases)
+                    {
+                        <button class="list-group-item list-group-item-action py-2 px-0"
+                                @onclick="@(() => _selectedCase = c)">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="font-monospace small text-muted">@c.CaseReference</span>
+                                    @if (c.IsHaunted) { <span class="ms-1">👻</span> }
+                                    <div class="fw-semibold">@c.Title</div>
+                                </div>
+                                <CaseVoteBar Confirms="@c.ConfirmsCount" Disputes="@c.DisputesCount" Inconclusive="@c.InconclusiveCount" Total="@c.TotalVotes" Compact="true" />
+                            </div>
+                        </button>
+                    }
+                </div>
+            }
+            else if (_selectedCase is not null)
+            {
+                @* Single case detail *@
+                @if (_clusterCases.Count > 1)
+                {
+                    <button class="btn btn-sm btn-link ps-0 mb-2 text-decoration-none"
+                            @onclick="@(() => _selectedCase = null)">← All cases in @_selectedCity</button>
+                }
+                <div class="mb-2">
+                    <span class="font-monospace small text-muted">@_selectedCase.CaseReference</span>
+                    @if (_selectedCase.IsHaunted) { <span class="ms-1 badge bg-warning text-dark">Haunted 👻</span> }
+                    else { <span class="ms-1 badge bg-info text-dark">Public</span> }
+                </div>
+                <h6 class="mb-1">@_selectedCase.Title</h6>
+                <p class="text-secondary small mb-2">@_selectedCase.City, @_selectedCase.State · @_selectedCase.OrgName</p>
+                @if (_selectedCase.ClientName is not null)
+                {
+                    <p class="text-muted small mb-2">Client: @_selectedCase.ClientName</p>
+                }
+
+                @* Community votes *@
+                <CaseVoteWidget CaseId="@_selectedCase.CaseId" />
+
+                <div class="d-flex gap-2 mt-3 flex-wrap">
+                    <a href="/o/@_selectedCase.OrgUrlName/cases/@_selectedCase.CaseReference.TrimStart('#')"
+                       class="btn btn-sm btn-outline-primary">View Investigation</a>
+                    <a href="/o/@_selectedCase.OrgUrlName"
+                       class="btn btn-sm btn-outline-secondary">View Group</a>
+                </div>
+            }
+        </WindowContent>
+        <WindowActions>
+            <WindowAction Name="Close" />
+        </WindowActions>
+    </TelerikWindow>
+
+    @* ── Paged list ────────────────────────────────────────────────────────── *@
+    <div class="container-fluid px-3 mb-5" style="max-width:1000px;">
+        <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+            <span class="fw-semibold">Sort by</span>
+            <TelerikButtonGroup>
+                <ButtonGroupButton Selected="@(_sort == "votes")"    OnClick="@(() => SetSort("votes"))">Most Votes</ButtonGroupButton>
+                <ButtonGroupButton Selected="@(_sort == "date")"     OnClick="@(() => SetSort("date"))">Newest</ButtonGroupButton>
+            </TelerikButtonGroup>
+        </div>
+
+        @if (_pagedItems.Count == 0)
+        {
+            <div class="alert alert-light text-muted text-center">No public investigations yet.</div>
+        }
+        else
+        {
+            <div class="row g-3">
+                @foreach (var item in _pagedItems)
+                {
+                    <div class="col-12 col-md-6 col-lg-4">
+                        <div class="card h-100 @(item.IsHaunted ? "border-warning" : "")">
+                            <div class="card-body pb-1">
+                                <div class="d-flex justify-content-between align-items-start mb-1">
+                                    <span class="font-monospace text-muted" style="font-size:.75rem;">@item.CaseReference</span>
+                                    @if (item.IsHaunted)
+                                    { <span class="badge bg-warning text-dark">👻 Haunted</span> }
+                                    else
+                                    { <span class="badge bg-info text-dark">Public</span> }
+                                </div>
+                                <h6 class="card-title mb-1">@item.Title</h6>
+                                <p class="card-text text-secondary mb-1" style="font-size:.8rem;">@item.City, @item.State</p>
+                                <p class="card-text text-muted mb-2" style="font-size:.78rem;">@item.OrgName</p>
+                                <CaseVoteBar Confirms="@item.ConfirmsCount"
+                                         Disputes="@item.DisputesCount"
+                                         Inconclusive="@item.InconclusiveCount"
+                                         Total="@item.TotalVotes" />
+                                @if (UserState.IsAuthenticated)
+                                {
+                                    <div class="mt-2">
+                                        <CaseVoteWidget CaseId="@item.CaseId"
+                                                        PreloadedSummary="@(_voteSummaries.GetValueOrDefault(item.CaseId))" />
+                                    </div>
+                                }
+                            </div>
+                            <div class="card-footer bg-transparent d-flex gap-2 pt-2">
+                                <a href="/o/@item.OrgUrlName/cases/@item.CaseReference.TrimStart('#')"
+                                   class="btn btn-sm btn-outline-primary">View</a>
+                                <a href="/o/@item.OrgUrlName"
+                                   class="btn btn-sm btn-outline-secondary">Group</a>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (_totalCount > _pageSize)
+            {
+                <div class="mt-3 d-flex justify-content-center">
+                    <TelerikPager Total="@_totalCount"
+                                  PageSize="@_pageSize"
+                                  Page="@_page"
+                                  PageChanged="@OnPageChanged" />
+                </div>
+            }
+        }
+    </div>
+}
+
+@* ── Vote bar helper ──────────────────────────────────────────────────────── *@
+@* Renders inline vote counts for a case *@
+
+@code {
+    // ── Map state ────────────────────────────────────────────────────────────
+    private double[] _mapCenter = [39.5, -98.35];   // US center default
+    private int      _mapZoom   = 4;
+
+    // ── Data ─────────────────────────────────────────────────────────────────
+    private bool   _loading    = true;
+    private int    _totalCount = 0;
+    private int    _page       = 1;
+    private int    _pageSize   = 18;
+    private string _sort       = "votes";
+
+    private List<PublicCaseDiscoveryItem> _pagedItems = [];
+    private List<CaseMapMarker>           _markers    = [];
+    private Dictionary<Guid, CaseVoteSummary> _voteSummaries = [];
+
+    // Per-marker cluster data (index = marker.Index)
+    private List<List<PublicCaseDiscoveryItem>> _clusters = [];
+
+    // ── Popup state ──────────────────────────────────────────────────────────
+    private bool   _popupVisible  = false;
+    private string _selectedCity  = "";
+    private List<PublicCaseDiscoveryItem> _clusterCases = [];
+    private PublicCaseDiscoveryItem? _selectedCase;
+
+    // ── JS interop ───────────────────────────────────────────────────────────
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<PublicCaseDiscovery>? _dotnetRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _module     = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Ben.Web.Library/Shared/PublicCaseDiscovery.razor.js");
+        _dotnetRef  = DotNetObjectReference.Create(this);
+        await _module.InvokeVoidAsync("init", _dotnetRef);
+        await _module.InvokeVoidAsync("tryGetUserLocation", _dotnetRef);
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        // Load all cases for the map + first page for the list
+        // We load up to 500 for map coverage; list is sliced client-side
+        var response = await AdminClient.GetPublicCaseDiscoveryAsync(page: 1, pageSize: 500, sort: _sort);
+        if (response is null)
+        {
+            _loading = false;
+            StateHasChanged();
+            return;
+        }
+
+        _totalCount  = response.TotalCount;
+        var allItems = response.Items.ToList();
+
+        BuildMarkers(allItems);
+        SlicePage(allItems);
+        await LoadVoteSummariesAsync();
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void BuildMarkers(List<PublicCaseDiscoveryItem> all)
+    {
+        _markers  = [];
+        _clusters = [];
+
+        // Group by rounded coordinate (city-level) — items with null coords are map-excluded
+        var groups = all
+            .Where(i => i.ApproxLatitude.HasValue && i.ApproxLongitude.HasValue)
+            .GroupBy(i => (
+                Lat: Math.Round((double)i.ApproxLatitude!.Value, 2),
+                Lon: Math.Round((double)i.ApproxLongitude!.Value, 2)))
+            .ToList();
+
+        foreach (var group in groups)
+        {
+            var idx   = _clusters.Count;
+            var cases = group.ToList();
+            _clusters.Add(cases);
+
+            var first = cases[0];
+            _markers.Add(new CaseMapMarker
+            {
+                LatLng    = [group.Key.Lat, group.Key.Lon],
+                Title     = cases.Count == 1 ? first.Title : $"{cases.Count} cases near {first.City}",
+                Count     = cases.Count,
+                Index     = idx,
+                IsHaunted = cases.Any(c => c.IsHaunted),
+                CaseId    = first.CaseId,
+            });
+        }
+    }
+
+    private void SlicePage(List<PublicCaseDiscoveryItem> all)
+    {
+        _pagedItems = all
+            .Skip((_page - 1) * _pageSize)
+            .Take(_pageSize)
+            .ToList();
+    }
+
+    [JSInvokable]
+    public async Task SetUserLocation(double? lat, double? lon)
+    {
+        if (lat.HasValue && lon.HasValue)
+        {
+            _mapCenter = [lat.Value, lon.Value];
+            _mapZoom   = 9;
+            await InvokeAsync(StateHasChanged);
+            // Drive Kendo tile reload via its own JS API (Blazor re-render alone is not enough)
+            if (_module is not null)
+                await _module.InvokeVoidAsync("setMapCenter", lat.Value, lon.Value, 9);
+        }
+    }
+
+    [JSInvokable]
+    public void OnMarkerClicked(int index)
+    {
+        if (index < 0 || index >= _clusters.Count) return;
+
+        _clusterCases = _clusters[index];
+        _selectedCity = _clusterCases[0].City;
+        _selectedCase = _clusterCases.Count == 1 ? _clusterCases[0] : null;
+        _popupVisible = true;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SetSort(string sort)
+    {
+        if (_sort == sort) return;
+        _sort  = sort;
+        _page  = 1;
+        await LoadAsync();
+    }
+
+    private async Task OnPageChanged(int newPage)
+    {
+        _page = newPage;
+        var response = await AdminClient.GetPublicCaseDiscoveryAsync(page: _page, pageSize: _pageSize, sort: _sort);
+        if (response is not null)
+        {
+            _totalCount = response.TotalCount;
+            _pagedItems = response.Items.ToList();
+        }
+        await LoadVoteSummariesAsync();
+        StateHasChanged();
+    }
+
+    // Fetches vote summaries for the current page items in a single request.
+    private async Task LoadVoteSummariesAsync()
+    {
+        if (!UserState.IsAuthenticated || _pagedItems.Count == 0) return;
+        var ids = _pagedItems.Select(i => i.CaseId);
+        var summaries = await AdminClient.GetCaseVoteSummariesAsync(ids);
+        _voteSummaries = summaries.ToDictionary(s => s.CaseId);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            await _module.InvokeVoidAsync("dispose");
+            await _module.DisposeAsync();
+        }
+        _dotnetRef?.Dispose();
+    }
+
+    // ── Marker data model ─────────────────────────────────────────────────────
+
+    private sealed class CaseMapMarker
+    {
+        public double[]? LatLng    { get; set; }
+        public string    Title     { get; set; } = string.Empty;
+        public int       Count     { get; set; } = 1;
+        public int       Index     { get; set; }
+        public bool      IsHaunted { get; set; }
+        public Guid      CaseId    { get; set; }
+    }
+}

@@ -77,6 +77,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<Investigation> Investigations { get; set; }
         public virtual DbSet<InvestigationAttendee> InvestigationAttendees { get; set; }
         public virtual DbSet<EvidenceVote> EvidenceVotes { get; set; }
+        public virtual DbSet<CaseVote> CaseVotes { get; set; }
         public virtual DbSet<CaseTransferLog> CaseTransferLogs { get; set; }
         public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
         public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
@@ -1184,6 +1185,18 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Comment).HasMaxLength(1000);
             modelBuilder.Entity<EvidenceVote>()
                 .HasIndex(e => new { e.UploadFileId, e.VoterAppUserId }).IsUnique();
+
+            // ── CaseVote ──────────────────────────────────────────────────────
+            modelBuilder.Entity<CaseVote>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseVote>()
+                .HasOne(e => e.VoterAppUser).WithMany()
+                .HasForeignKey(e => e.VoterAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseVote>()
+                .Property(e => e.Comment).HasMaxLength(1000);
+            modelBuilder.Entity<CaseVote>()
+                .HasIndex(e => new { e.CaseId, e.VoterAppUserId }).IsUnique();
 
             // ── CaseTransferLog ───────────────────────────────────────────────
             modelBuilder.Entity<CaseTransferLog>()

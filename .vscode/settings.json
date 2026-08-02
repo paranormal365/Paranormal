@@ -3,6 +3,8 @@
         "dotnet build": true,
         "dotnet test": true,
         "git add": true,
-        "git commit": true
+        "git commit": true,
+        "cp": true,
+        "dotnet new": true
     }
 }

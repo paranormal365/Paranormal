@@ -660,6 +660,29 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         => _api.GetAnonymousAsync<PublicCaseDetail>(
                $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/cases/{Uri.EscapeDataString(caseRef)}", token);
 
+    public Task<PublicCaseDiscoveryPagedResponse?> GetPublicCaseDiscoveryAsync(int page = 1, int pageSize = 20, string sort = "votes", CancellationToken token = default)
+        => _api.GetAnonymousAsync<PublicCaseDiscoveryPagedResponse>($"/api/public/cases?page={page}&pageSize={pageSize}&sort={Uri.EscapeDataString(sort)}", token);
+
+    // ── Case votes ────────────────────────────────────────────────────────────
+
+    public Task<CaseVoteSummary?> GetCaseVoteSummaryAsync(Guid caseId, CancellationToken token = default)
+        => _api.GetAnonymousAsync<CaseVoteSummary>($"/api/public/cases/{caseId}/votes", token);
+
+    public async Task<IReadOnlyList<CaseVoteSummary>> GetCaseVoteSummariesAsync(IEnumerable<Guid> caseIds, CancellationToken token = default)
+    {
+        var qs = string.Join("&", caseIds.Select(id => $"caseIds={id}"));
+        if (string.IsNullOrEmpty(qs)) return [];
+        var result = await _api.GetAnonymousAsync<IReadOnlyList<CaseVoteSummary>>(
+            $"/api/public/cases/vote-summaries?{qs}", token);
+        return result ?? [];
+    }
+
+    public Task<CaseVoteSummary?> CastCaseVoteAsync(Guid caseId, Ben.Data.Common.Enums.EvidenceVoteType voteType, CancellationToken token = default)
+        => _api.PostAsync<object, CaseVoteSummary>($"/api/public/cases/{caseId}/votes", new { VoteType = voteType }, token);
+
+    public Task<bool> RemoveCaseVoteAsync(Guid caseId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/public/cases/{caseId}/votes", token);
+
     // ── Investigations ────────────────────────────────────────────────────────
 
     private static string InvBase(Guid orgId, Guid caseId)
