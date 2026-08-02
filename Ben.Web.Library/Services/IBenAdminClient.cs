@@ -591,6 +591,7 @@ public sealed record OrganizationListItemResponse(
     string Name,
     string UrlName,
     DateTime DateCreated,
+    bool IsAcceptingApplications,
     bool CanEdit,
     bool CanDelete);
 

@@ -20,10 +20,13 @@
     }
     else
     {
-        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-            <h4 class="mb-0">Members — @_orgName</h4>
-            <a href="/organizations" class="btn btn-sm btn-outline-secondary">← Organizations</a>
-        </div>
+        @if (!EmbeddedMode)
+        {
+            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                <h4 class="mb-0">Members — @_orgName</h4>
+                <a href="/organizations" class="btn btn-sm btn-outline-secondary">← Organizations</a>
+            </div>
+        }
 
         @if (_error is not null)
         {
@@ -59,7 +62,8 @@
 </div>
 
 @code {
-    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid OrgId        { get; set; }
+    [Parameter] public bool EmbeddedMode  { get; set; }
 
     private bool _loading = true;
     private string? _error;

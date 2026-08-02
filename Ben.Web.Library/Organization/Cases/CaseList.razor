@@ -6,9 +6,11 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 
-<PageTitle>Cases — @(_orgName ?? "Organization")</PageTitle>
-
 <div class="container-fluid py-3" style="max-width:1000px;">
+    @if (!EmbeddedMode)
+    {
+        <PageTitle>Cases — @(_orgName ?? "Organization")</PageTitle>
+    }
     <div class="d-flex align-items-center justify-content-between mb-4">
         <h3 class="mb-0">Cases</h3>
         <div class="d-flex gap-2">
@@ -96,7 +98,8 @@
 </div>
 
 @code {
-    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid OrgId        { get; set; }
+    [Parameter] public bool EmbeddedMode  { get; set; }
 
     private List<CaseRecord>? _cases;
     private string? _orgName;
