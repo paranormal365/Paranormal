@@ -84,6 +84,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<CaseReport> CaseReports { get; set; }
         public virtual DbSet<CaseReportSection> CaseReportSections { get; set; }
         public virtual DbSet<CaseReportSectionFile> CaseReportSectionFiles { get; set; }
+        public virtual DbSet<CaseResearchEntry> CaseResearchEntries { get; set; }
         public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
         public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
         public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
@@ -1297,6 +1298,26 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<CaseReportSectionFile>()
                 .Property(e => e.Caption).HasMaxLength(500);
+
+            // ── CaseResearchEntry ─────────────────────────────────────
+            modelBuilder.Entity<CaseResearchEntry>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseResearchEntry>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<CaseResearchEntry>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseResearchEntry>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseResearchEntry>()
+                .Property(e => e.Title).HasMaxLength(300);
+            modelBuilder.Entity<CaseResearchEntry>()
+                .Property(e => e.Url).HasMaxLength(2000);
+            modelBuilder.Entity<CaseResearchEntry>()
+                .HasIndex(e => new { e.CaseId, e.SortOrder });
         }
     }
 }
