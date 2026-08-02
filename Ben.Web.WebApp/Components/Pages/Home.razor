@@ -1,43 +1,9 @@
 ﻿@page "/"
+@using Ben.Web.Library.Shared
 
-<PageTitle>IsHaunted</PageTitle>
+<PageTitle>IsHaunted — Find Paranormal Investigators Near You</PageTitle>
 
-<div id="home-page">
-    <div class="logo-box">
-        <img src="./static/images/ghost glass 699x640.png" alt="" />
-    </div>
-    <h1 class="is-haunted-text">IsHaunted.com</h1>
+<HomeHero />
 
-    <p>where you can come to get your haunt on</p>
-</div>
-
-<style>
-    #home-page .logo-box {
-        width: 400px;
-        height: 400px;
-        margin-left: auto;
-        margin-right: auto;
-    }
-    #home-page img {
-        width: 100%;
-        height: auto;
-    }
-    #home-page {
-        margin-left: auto;
-        margin-right: auto;
-        max-width: max-content;
-        text-align: center;
-        font-size: var(--kendo-font-size-xl);
-    }
-
-    @@media (min-height: calc(56px + 50px + 400px)) {
-        /* header + footer + home page container
-        #home-page {
-            margin-top: calc(50vh - 28px - 25px - 200px);
-        }*/
-    }
-</style>
-
-@code {
 
 }
