@@ -923,6 +923,18 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public string GetReportPdfUrl(Guid orgId, Guid caseId, Guid reportId)
         => $"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/pdf";
 
+    public async Task<(byte[] Data, string FileName)?> DownloadCaseReportPdfAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default)
+    {
+        var result = await _api.GetBytesAsync($"/api/orgs/{orgId}/cases/{caseId}/reports/{reportId}/pdf", "report.pdf", token);
+        return result is null ? null : (result.Value.Data, result.Value.FileName);
+    }
+
+    public async Task<(byte[] Data, string FileName)?> DownloadMyCaseReportPdfAsync(Guid caseId, Guid reportId, CancellationToken token = default)
+    {
+        var result = await _api.GetBytesAsync($"/api/my-cases/{caseId}/reports/{reportId}/pdf", "report.pdf", token);
+        return result is null ? null : (result.Value.Data, result.Value.FileName);
+    }
+
     // ── Client Requests ───────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<ClientRequestRecord>> GetMyClientRequestsAsync(CancellationToken token = default)

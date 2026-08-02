@@ -185,6 +185,17 @@ public sealed class WebApiClient : IWebApiClient
         return (data, contentType, fileName);
     }
 
+    public async Task<(byte[] Data, string ContentType, string FileName)?> GetBytesAsync(string relativeUrl, string fallbackFileName, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Get, relativeUrl);
+        using var response = await _httpClient.SendAsync(req, token);
+        if (!response.IsSuccessStatusCode) return null;
+        var data = await response.Content.ReadAsByteArrayAsync(token);
+        var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/pdf";
+        var fileName = response.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? fallbackFileName;
+        return (data, contentType, fileName);
+    }
+
     // ── Audio Config ──────────────────────────────────────────────────────────
     public Task<UploadFileAudioConfigRecord?> GetAudioConfigAsync(Guid fileId, CancellationToken token = default)
         => GetAsync<UploadFileAudioConfigRecord>($"/api/upload-files/{fileId}/audio-config", token);

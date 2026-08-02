@@ -471,6 +471,12 @@ public interface IBenAdminClient
     /// <summary>Returns a URL to stream the PDF export for in-browser viewing.</summary>
     string GetReportPdfUrl(Guid orgId, Guid caseId, Guid reportId);
 
+    /// <summary>Downloads the report PDF bytes using the bearer token.</summary>
+    Task<(byte[] Data, string FileName)?> DownloadCaseReportPdfAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
+
+    /// <summary>Downloads the published report PDF bytes for the client.</summary>
+    Task<(byte[] Data, string FileName)?> DownloadMyCaseReportPdfAsync(Guid caseId, Guid reportId, CancellationToken token = default);
+
     // ── Client Requests ───────────────────────────────────────────────────────
 
     Task<IReadOnlyList<ClientRequestRecord>> GetMyClientRequestsAsync(CancellationToken token = default);

@@ -1,7 +1,9 @@
 @using Ben.Data.Common.Enums
 @using Ben.Web.Library.Services
+@using Microsoft.JSInterop
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
+@inject IJSRuntime JS
 
 @* ── Report list or editor ────────────────────────────────────────────────── *@
 
@@ -46,9 +48,8 @@ else if (_editingReport is null)
                 </div>
                 <div class="d-flex gap-1">
                     <TelerikButton Size="sm" Icon="@SvgIcon.Pencil" OnClick="@(() => OpenEditor(r.Id))" />
-                    <a href="@AdminClient.GetReportPdfUrl(OrgId, CaseId, r.Id)" target="_blank" class="btn btn-sm btn-outline-secondary" title="Download PDF">
-                        <TelerikSvgIcon Icon="@SvgIcon.FilePdf" />
-                    </a>
+                    <TelerikButton Size="sm" Icon="@SvgIcon.FilePdf" Title="Download PDF"
+                                   OnClick="@(() => DownloadPdf(r.Id, r.Title))" />
                     @if (r.Status == CaseReportStatus.Draft)
                     {
                         <TelerikButton Size="sm" ThemeColor="error" Icon="@SvgIcon.Trash" OnClick="@(() => DeleteReport(r.Id))" />
@@ -69,9 +70,8 @@ else
         {
             <TelerikButton ThemeColor="success" Size="sm" OnClick="PublishReport" Enabled="@(!_saving)">Publish</TelerikButton>
         }
-        <a href="@AdminClient.GetReportPdfUrl(OrgId, CaseId, _editingReport.Id)" target="_blank" class="btn btn-sm btn-outline-secondary">
-            <TelerikSvgIcon Icon="@SvgIcon.FilePdf" /> PDF
-        </a>
+        <TelerikButton Size="sm" Icon="@SvgIcon.FilePdf"
+                       OnClick="@(() => DownloadPdf(_editingReport.Id, _editingReport.Title))">PDF</TelerikButton>
     </div>
 
     @if (_error is not null) { <div class="alert alert-danger py-2 small">@_error</div> }
@@ -348,4 +348,12 @@ else
     }
 
     private record SectionTypeOption(CaseReportSectionType Value, string Label);
+
+    private async Task DownloadPdf(Guid reportId, string reportTitle)
+    {
+        var result = await AdminClient.DownloadCaseReportPdfAsync(OrgId, CaseId, reportId);
+        if (result is null) return;
+        var base64 = Convert.ToBase64String(result.Value.Data);
+        await JS.InvokeVoidAsync("downloadFileFromBase64", base64, "application/pdf", result.Value.FileName);
+    }
 }
