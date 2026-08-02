@@ -33,6 +33,7 @@ builder.Host.UseSerilog();
 /* END LOGGING */
 
 builder.Services.AddControllers();
+builder.Services.AddMemoryCache();
 
 builder.Services.AddCors(options =>
 {
@@ -240,6 +241,9 @@ await Ben.Data.WebApi.SeedData.SuperAdminSeeder.SeedAsync(app.Services, app.Conf
 await Ben.Data.WebApi.SeedData.OrganizationSeeder.SeedAsync(app.Services, app.Configuration);
 await Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.SeedAsync(app.Services, app.Configuration);
 await Ben.Data.WebApi.SeedData.ExperienceTaxonomySeeder.SeedAsync(app.Services, app.Configuration);
+// DevelopmentDataSeeder runs last — depends on all users/orgs above being present.
+// Enable via SeedData:DevData:Enabled = true in appsettings.Development.json.
+await Ben.Data.WebApi.SeedData.DevelopmentDataSeeder.SeedAsync(app.Services, app.Configuration);
 
 app.Run();
 

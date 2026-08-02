@@ -1,7 +1,7 @@
 # IsHaunted Platform — System Architecture
 
-**Last updated:** 2026-07-24  
-**Branch:** `feature/organization-enhancements`
+**Last updated:** 2026-08-02
+**Branch:** `develop`
 
 ---
 
@@ -39,8 +39,9 @@ Ben.slnx
 ├── Ben.Service.RepositoryService.Tests/  354 xUnit tests
 ├── Ben.Service.Security/     Org-level tenant security service
 ├── Ben.Web.Library/          Razor Class Library — all reusable Blazor components
-├── Ben.Web.Tests/            588 xUnit tests for WebApp services
-└── Ben.Web.WebApp/           Blazor Server application
+├── Ben.Web.Tests/            662 xUnit tests for WebApp services and controllers
+├── Ben.Web.WebApp/           Blazor Server application
+└── Ben.Web.Playwright/       Playwright front-end tests (NUnit + Microsoft.Playwright)
 ```
 
 ---

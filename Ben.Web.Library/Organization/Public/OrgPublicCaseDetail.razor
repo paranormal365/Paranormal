@@ -1,6 +1,8 @@
 @page "/o/{UrlName}/cases/{CaseRef}"
 @namespace Ben.Web.Library.Organization.Public
 @using Ben.Data.Common.Enums
+@using Ben.Web.Library.Shared
+@using Ben.Web.Library.Organization.Cases
 
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
@@ -68,6 +70,12 @@ else
             </div>
         }
 
+        @* ── Community vote ───────────────────────────────────────────────── *@
+        <div class="mb-4">
+            <h5 class="border-bottom pb-1 mb-2">Community Rating</h5>
+            <CaseVoteWidget CaseId="@_case.CaseId" />
+        </div>
+
         @* ── Timeline ─────────────────────────────────────────────────────── *@
         @if (_case.Timeline.Count > 0)
         {
@@ -96,6 +104,15 @@ else
                                 {
                                     <div class="text-body-secondary" style="font-size:.9rem;">
                                         @((MarkupString)entry.Body)
+                                    </div>
+                                }
+                                @if (entry.EntryType == CaseTimelineEntryType.Evidence && entry.EvidenceFileIds.Count > 0)
+                                {
+                                    <div class="mt-2 d-flex flex-wrap gap-2">
+                                        @foreach (var fileId in entry.EvidenceFileIds)
+                                        {
+                                            <EvidenceVoteWidget UploadFileId="@fileId" />
+                                        }
                                     </div>
                                 }
                             </div>

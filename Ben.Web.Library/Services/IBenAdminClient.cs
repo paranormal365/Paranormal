@@ -357,7 +357,39 @@ public interface IBenAdminClient
     // ── Public Case Discovery ─────────────────────────────────────────────────
 
     Task<IReadOnlyList<PublicCaseListItem>> GetPublicCasesAsync(string orgUrlName, CancellationToken token = default);
+    /// <summary>Returns a single public case by org URL name and case reference (e.g. "2026-042").</summary>
     Task<PublicCaseDetail?> GetPublicCaseAsync(string orgUrlName, string caseRef, CancellationToken token = default);
+
+    /// <summary>
+    /// Returns a paginated, cross-organization list of all public cases worldwide,
+    /// with city-level approximate coordinates and aggregated vote counts.
+    /// Used to drive the home-page investigation map and ranked list.
+    /// </summary>
+    /// <param name="sort">"votes" (default) sorts by total votes desc; "date" sorts by open date desc.</param>
+    Task<PublicCaseDiscoveryPagedResponse?> GetPublicCaseDiscoveryAsync(int page = 1, int pageSize = 20, string sort = "votes", CancellationToken token = default);
+
+    // ── Case votes (community rating) ─────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the aggregate vote summary for a public case.
+    /// Anonymous-friendly: <c>CurrentUserVote</c> is non-null only when the bearer token is present.
+    /// Calls <c>GET api/public/cases/{caseId}/votes</c>.
+    /// </summary>
+    Task<CaseVoteSummary?> GetCaseVoteSummaryAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>
+    /// Casts or replaces the current user's vote on a public case (upsert).
+    /// Returns the updated <see cref="CaseVoteSummary"/> for immediate UI refresh.
+    /// Requires authentication. Calls <c>POST api/public/cases/{caseId}/votes</c>.
+    /// </summary>
+    Task<CaseVoteSummary?> CastCaseVoteAsync(Guid caseId, Ben.Data.Common.Enums.EvidenceVoteType voteType, CancellationToken token = default);
+
+    /// <summary>
+    /// Removes the current user's vote from a public case.
+    /// Returns <c>true</c> on success, <c>false</c> if the vote did not exist or the API call failed.
+    /// Requires authentication. Calls <c>DELETE api/public/cases/{caseId}/votes</c>.
+    /// </summary>
+    Task<bool> RemoveCaseVoteAsync(Guid caseId, CancellationToken token = default);
 
     // ── Investigations ────────────────────────────────────────────────────────
 
@@ -873,7 +905,21 @@ public sealed record PublicCaseListItem(
     DateTime? DateCaseClosed,
     bool IsHaunted);
 
+/// <summary>
+/// Full public case detail returned by <c>GET api/public/organizations/{orgUrlName}/cases/{caseRef}</c>.
+/// Consumed by <c>OrgPublicCaseDetail.razor</c>.
+/// </summary>
+/// <param name="CaseId">DB primary key — used by <c>CaseVoteWidget.razor</c> to fetch/cast votes.</param>
+/// <param name="ClientName">
+/// The client's <c>PublicPseudonym</c> when set, otherwise <c>null</c>.
+/// Real names are never exposed on public endpoints.
+/// </param>
+/// <param name="Timeline">
+/// Public timeline entries ordered by <c>EventDateTime</c>.
+/// Evidence entries include <see cref="PublicTimelineEntry.EvidenceFileIds"/> for <c>EvidenceVoteWidget</c>.
+/// </param>
 public sealed record PublicCaseDetail(
+    Guid CaseId,
     string CaseReference,
     string Title,
     string City,
@@ -889,11 +935,64 @@ public sealed record PublicCaseDetail(
     string OrgName,
     string OrgUrlName);
 
+/// <summary>
+/// A single public timeline entry within a <see cref="PublicCaseDetail"/>.
+/// </summary>
+/// <param name="EvidenceFileIds">
+/// Non-empty only for <c>CaseTimelineEntryType.Evidence</c> entries.
+/// Each ID is passed to <c>EvidenceVoteWidget.razor</c> so visitors can vote on individual pieces of evidence.
+/// </param>
 public sealed record PublicTimelineEntry(
     Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,
     DateTime? EventDateTime,
     string? Title,
-    string? Body);
+    string? Body,
+    IReadOnlyList<Guid> EvidenceFileIds);
+
+// ── Global public case discovery ──────────────────────────────────────────────
+
+/// <summary>Paged wrapper returned by <c>GET api/public/cases</c>. Drives the home-page map and ranked list.</summary>
+public sealed record PublicCaseDiscoveryPagedResponse(
+    IReadOnlyList<PublicCaseDiscoveryItem> Items,
+    int TotalCount,
+    int Page,
+    int PageSize);
+
+/// <summary>
+/// A single row in the global case discovery feed. Used by both the map markers
+/// and the ranked card list in <c>PublicCaseDiscovery.razor</c>.
+/// </summary>
+/// <param name="CaseId">
+/// DB primary key — stored on each <c>CaseMapMarker</c> so that the map popup
+/// can pass it to <c>CaseVoteWidget.razor</c>.
+/// </param>
+/// <param name="ApproxLatitude">
+/// City-level coordinates geocoded from the case's city/state/country and cached
+/// 24 h in <c>IMemoryCache</c>. Null when geocoding fails.
+/// Exact street addresses are never included.
+/// </param>
+/// <param name="ConfirmsCount">Aggregate count of <c>EvidenceVote</c> rows whose
+/// type is <c>Confirms</c> across all timeline-entry files of this case.</param>
+public sealed record PublicCaseDiscoveryItem(
+    Guid     CaseId,
+    string   CaseReference,
+    string   Title,
+    string   City,
+    string   State,
+    string   Country,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    bool     IsHaunted,
+    DateTime DateCaseOpened,
+    DateTime? DateCaseClosed,
+    string   OrgName,
+    string   OrgUrlName,
+    int      ConfirmsCount,
+    int      DisputesCount,
+    int      InconclusiveCount,
+    int      TotalVotes,
+    decimal? ApproxLatitude,
+    decimal? ApproxLongitude,
+    string?  ClientName);
 
 // ── Phase 5: Investigation + Evidence Voting request records ──────────────────
 public sealed record UpsertInvestigationRequest(
