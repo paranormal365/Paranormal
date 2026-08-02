@@ -249,6 +249,8 @@ public sealed class EvidenceVoteController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         var votes = await db.EvidenceVotes.AsNoTracking()
             .Include(v => v.VoterAppUser)
+            .Include(v => v.VoterOrganization)
+            .Include(v => v.Case)
             .Where(v => v.UploadFileId == uploadFileId)
             .OrderByDescending(v => v.DateVoted)
             .ToListAsync(ct);
@@ -267,7 +269,7 @@ public sealed class EvidenceVoteController : BenControllerBase
         if (!await db.UploadFiles.AnyAsync(f => f.Id == uploadFileId, ct))
             return NotFound("File not found.");
 
-        // Determine if voter is a public user (not in any org)
+        // Determine voter's org membership
         bool isPublic = !await db.OrganizationUserMemberships
             .AnyAsync(m => m.AppUserId == userId && m.IsActive, ct);
 
@@ -276,23 +278,56 @@ public sealed class EvidenceVoteController : BenControllerBase
             .Select(m => (Guid?)m.OrganizationId)
             .FirstOrDefaultAsync(ct);
 
+        // Compute vote context fields
+        var uploadFile = await db.UploadFiles.AsNoTracking()
+            .FirstAsync(f => f.Id == uploadFileId, ct);
+        bool isOriginalUploader = uploadFile.AppUserId == userId;
+
+        var caseEntry = await db.CaseTimelineEntryFiles.AsNoTracking()
+            .Include(f => f.CaseTimelineEntry).ThenInclude(e => e.Case).ThenInclude(c => c.ClientRequest)
+            .FirstOrDefaultAsync(f => f.UploadFileId == uploadFileId
+                && f.CaseTimelineEntry.EntryType == Ben.Data.Common.Enums.CaseTimelineEntryType.Evidence, ct);
+
+        Guid? caseId                 = caseEntry?.CaseTimelineEntry.CaseId;
+        Guid? caseOrgId              = caseEntry?.CaseTimelineEntry.Case.OrganizationId;
+        Guid? caseClientId           = caseEntry?.CaseTimelineEntry.Case.ClientRequest?.AppUserId;
+        bool isVoterCaseOrgMember    = caseOrgId.HasValue && voterOrgId == caseOrgId;
+        bool isVoterCaseClient       = caseClientId.HasValue && caseClientId == userId;
+
+        string? voterOrgName = voterOrgId.HasValue
+            ? await db.Organizations.Where(o => o.Id == voterOrgId).Select(o => o.Name).FirstOrDefaultAsync(ct)
+            : null;
+
         var existing = await db.EvidenceVotes
             .FirstOrDefaultAsync(v => v.UploadFileId == uploadFileId && v.VoterAppUserId == userId, ct);
 
         if (existing is not null)
         {
-            existing.VoteType  = request.VoteType;
-            existing.Comment   = request.Comment?.Trim();
-            existing.DateVoted = DateTime.UtcNow;
+            existing.VoteType              = request.VoteType;
+            existing.Comment               = request.Comment?.Trim();
+            existing.DateVoted             = DateTime.UtcNow;
+            // Re-compute context on update in case membership changed
+            existing.IsOriginalUploader    = isOriginalUploader;
+            existing.CaseId                = caseId;
+            existing.IsVoterCaseOrgMember  = isVoterCaseOrgMember;
+            existing.IsVoterCaseClient     = isVoterCaseClient;
+            existing.VoterOrganizationName = voterOrgName;
         }
         else
         {
             db.EvidenceVotes.Add(new EvidenceVote
             {
                 Id = Guid.NewGuid(), UploadFileId = uploadFileId, VoterAppUserId = userId,
-                VoterOrganizationId = voterOrgId, VoteType = request.VoteType,
-                Comment = request.Comment?.Trim(), IsPublicVoter = isPublic,
-                DateVoted = DateTime.UtcNow,
+                VoterOrganizationId    = voterOrgId,
+                VoterOrganizationName  = voterOrgName,
+                VoteType               = request.VoteType,
+                Comment                = request.Comment?.Trim(),
+                IsPublicVoter          = isPublic,
+                IsOriginalUploader     = isOriginalUploader,
+                CaseId                 = caseId,
+                IsVoterCaseOrgMember   = isVoterCaseOrgMember,
+                IsVoterCaseClient      = isVoterCaseClient,
+                DateVoted              = DateTime.UtcNow,
             });
         }
         await db.SaveChangesAsync(ct);

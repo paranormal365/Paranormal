@@ -1190,7 +1190,12 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.VoterOrganization).WithMany()
                 .HasForeignKey(e => e.VoterOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<EvidenceVote>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<EvidenceVote>()
                 .Property(e => e.Comment).HasMaxLength(1000);
+            modelBuilder.Entity<EvidenceVote>()
+                .Property(e => e.VoterOrganizationName).HasMaxLength(200);
             modelBuilder.Entity<EvidenceVote>()
                 .HasIndex(e => new { e.UploadFileId, e.VoterAppUserId }).IsUnique();
 

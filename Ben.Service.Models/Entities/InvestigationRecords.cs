@@ -37,15 +37,21 @@ public record InvestigationAttendeeRecord
 
 public record EvidenceVoteRecord
 {
-    public Guid Id { get; init; }
-    public Guid UploadFileId { get; init; }
-    public Guid VoterAppUserId { get; init; }
-    public string? VoterDisplayName { get; init; }
-    public Guid? VoterOrganizationId { get; init; }
-    public EvidenceVoteType VoteType { get; init; }
-    public string? Comment { get; init; }
-    public bool IsPublicVoter { get; init; }
-    public DateTime DateVoted { get; init; }
+    public Guid   Id                    { get; init; }
+    public Guid   UploadFileId          { get; init; }
+    public Guid   VoterAppUserId        { get; init; }
+    public string? VoterDisplayName     { get; init; }
+    public Guid?  VoterOrganizationId   { get; init; }
+    public string? VoterOrganizationName { get; init; }
+    public EvidenceVoteType VoteType    { get; init; }
+    public string? Comment              { get; init; }
+    public bool   IsPublicVoter         { get; init; }
+    public bool   IsOriginalUploader    { get; init; }
+    public Guid?  CaseId                { get; init; }
+    public string? CaseReference        { get; init; }
+    public bool   IsVoterCaseOrgMember  { get; init; }
+    public bool   IsVoterCaseClient     { get; init; }
+    public DateTime DateVoted           { get; init; }
 }
 
 /// <summary>
