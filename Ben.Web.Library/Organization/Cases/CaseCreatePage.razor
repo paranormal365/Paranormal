@@ -1,0 +1,133 @@
+@page "/organizations/{OrgId:guid}/cases/new"
+@using Ben.Web.Library.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>New Case</PageTitle>
+
+@if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
+<div class="container-fluid py-3" style="max-width:720px;">
+    <div class="d-flex align-items-center gap-2 mb-4">
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Icon="@SvgIcon.ChevronLeft"
+                       OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases"))">
+            Cases
+        </TelerikButton>
+        <h4 class="mb-0">Open New Case</h4>
+    </div>
+
+    @if (_error is not null) { <div class="alert alert-danger mb-3">@_error</div> }
+
+    <div class="card">
+        <div class="card-header fw-semibold">Case Details</div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Case Title <span class="text-danger">*</span></label>
+                    <TelerikTextBox @bind-Value="@_form.Title" Width="100%"
+                                    Placeholder="e.g. Smith, Nashville TN" />
+                    <div class="form-text">A brief label identifying this case.</div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Description</label>
+                    <TelerikTextArea @bind-Value="@_form.Description" Rows="4" Width="100%"
+                                     Placeholder="Summarise the reported activity or reason for opening the case…" />
+                </div>
+
+                <div class="col-12">
+                    <hr class="my-1" />
+                    <div class="fw-semibold small text-secondary mb-2">Investigation Address</div>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Street Address <span class="text-danger">*</span></label>
+                    <TelerikTextBox @bind-Value="@_form.StreetAddress1" Width="100%" Placeholder="123 Main St" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Unit / Apt (optional)</label>
+                    <TelerikTextBox @bind-Value="@_form.StreetAddress2" Width="100%" Placeholder="Apt 4B" />
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label fw-semibold">City <span class="text-danger">*</span></label>
+                    <TelerikTextBox @bind-Value="@_form.City" Width="100%" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">State <span class="text-danger">*</span></label>
+                    <TelerikTextBox @bind-Value="@_form.State" Width="100%" Placeholder="TN" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">ZIP Code <span class="text-danger">*</span></label>
+                    <TelerikTextBox @bind-Value="@_form.ZipCode" Width="100%" />
+                </div>
+            </div>
+        </div>
+        <div class="card-footer d-flex gap-2 justify-content-end">
+            <TelerikButton OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases"))">
+                Cancel
+            </TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           OnClick="Submit"
+                           Enabled="@(!_saving && IsValid)">
+                @(_saving ? "Creating…" : "Open Case")
+            </TelerikButton>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private readonly CaseForm _form = new();
+    private bool _saving;
+    private string? _error;
+
+    private bool IsValid =>
+        !string.IsNullOrWhiteSpace(_form.Title)   &&
+        !string.IsNullOrWhiteSpace(_form.StreetAddress1) &&
+        !string.IsNullOrWhiteSpace(_form.City)    &&
+        !string.IsNullOrWhiteSpace(_form.State)   &&
+        !string.IsNullOrWhiteSpace(_form.ZipCode);
+
+    private async Task Submit()
+    {
+        _saving = true;
+        _error  = null;
+        try
+        {
+            var request = new CreateCaseRequest(
+                _form.Title.Trim(),
+                string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim(),
+                _form.StreetAddress1.Trim(),
+                string.IsNullOrWhiteSpace(_form.StreetAddress2) ? null : _form.StreetAddress2.Trim(),
+                _form.City.Trim(),
+                _form.State.Trim().ToUpperInvariant(),
+                _form.ZipCode.Trim(),
+                "US",
+                null, null);
+
+            var result = await AdminClient.CreateOrgCaseAsync(OrgId, request);
+            if (result is not null)
+                NavManager.NavigateTo($"/organizations/{OrgId}/cases/{result.Id}");
+            else
+                _error = "Case creation failed. Please try again.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally { _saving = false; }
+    }
+
+    private class CaseForm
+    {
+        public string  Title          { get; set; } = "";
+        public string? Description    { get; set; }
+        public string  StreetAddress1 { get; set; } = "";
+        public string? StreetAddress2 { get; set; }
+        public string  City           { get; set; } = "";
+        public string  State          { get; set; } = "";
+        public string  ZipCode        { get; set; } = "";
+    }
+}
