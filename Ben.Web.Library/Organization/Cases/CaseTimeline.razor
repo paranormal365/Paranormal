@@ -103,6 +103,22 @@
                                             </span>
                                         }
                                     </div>
+                                    @* Vote detail panel — expanded per evidence file *@
+                                    @if (e.EntryType == CaseTimelineEntryType.Evidence)
+                                    {
+                                        @foreach (var f in e.Files)
+                                        {
+                                            var fid = f.FileId;
+                                            <details class="mt-2">
+                                                <summary class="text-secondary small" style="cursor:pointer;">
+                                                    Vote details — @f.FileName
+                                                </summary>
+                                                <div class="mt-1 ms-2">
+                                                    <EvidenceVoteDetailPanel UploadFileId="@fid" />
+                                                </div>
+                                            </details>
+                                        }
+                                    }
                                 }
                             </div>
                             <div class="d-flex gap-1 flex-shrink-0">

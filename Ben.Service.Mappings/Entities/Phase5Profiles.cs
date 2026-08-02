@@ -26,6 +26,10 @@ public class EvidenceVoteProfile : Profile
     {
         CreateMap<EvidenceVote, EvidenceVoteRecord>()
             .ForMember(d => d.VoterDisplayName,
-                       o => o.MapFrom(s => s.VoterAppUser != null ? s.VoterAppUser.DisplayName : null));
+                       o => o.MapFrom(s => s.VoterAppUser != null ? s.VoterAppUser.DisplayName : null))
+            .ForMember(d => d.VoterOrganizationName,
+                       o => o.MapFrom(s => s.VoterOrganization != null ? s.VoterOrganization.Name : null))
+            .ForMember(d => d.CaseReference,
+                       o => o.MapFrom(s => s.Case != null ? $"#{s.Case.CaseYear}-{s.Case.OrgCaseNumber:D3}" : null));
     }
 }
