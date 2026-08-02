@@ -27,19 +27,17 @@
     }
     else
     {
-        <div class="d-flex flex-column gap-2">
+        <div class="d-flex flex-column gap-3">
             @foreach (var inv in _investigations.OrderBy(i => i.ScheduledDateTime))
             {
                 var i = inv;
+                var attendeesOpen = _activeAttendeeInvId == i.Id;
                 <div class="card">
                     <div class="card-body d-flex align-items-start justify-content-between gap-3">
-                        <div>
-                            <div class="d-flex align-items-center gap-2 mb-1">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
                                 <span class="badge @StatusBadge(i.Status)">@StatusLabel(i.Status)</span>
                                 <strong>@i.Title</strong>
-                                <span class="badge bg-secondary" style="font-size:0.7rem;">
-                                    @i.AttendeeCount attendee@(i.AttendeeCount == 1 ? "" : "s")
-                                </span>
                             </div>
                             <div class="text-secondary small">
                                 @i.ScheduledDateTime.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
@@ -48,6 +46,117 @@
                                 @if (!string.IsNullOrEmpty(i.Location))
                                 { <span> · @i.Location</span> }
                             </div>
+                            @if (!string.IsNullOrWhiteSpace(i.Description))
+                            {
+                                <div class="mt-1 text-secondary small">@i.Description</div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(i.Notes))
+                            {
+                                <div class="mt-2 text-body-secondary" style="font-size:.85rem;">
+                                    @((MarkupString)i.Notes)
+                                </div>
+                            }
+                            <div class="mt-2">
+                                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                               FillMode="@(attendeesOpen ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Outline)"
+                                               Icon="@SvgIcon.User"
+                                               OnClick="@(() => ToggleAttendees(i))">
+                                    Attendees (@i.AttendeeCount)
+                                </TelerikButton>
+                            </div>
+                            @if (attendeesOpen)
+                            {
+                                <div class="mt-3 border rounded p-3 bg-body-secondary">
+                                    @if (_attendeeBusy && !_attendeeCache.ContainsKey(i.Id))
+                                    {
+                                        <TelerikLoaderContainer Visible="true" Text="Loading…" />
+                                    }
+                                    else
+                                    {
+                                        var attendees = _attendeeCache.GetValueOrDefault(i.Id) ?? [];
+                                        @if (attendees.Count == 0)
+                                        {
+                                            <p class="text-secondary small mb-2">No attendees yet.</p>
+                                        }
+                                        else
+                                        {
+                                            <table class="table table-sm mb-2">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Member</th>
+                                                        <th>Role</th>
+                                                        <th class="text-center">Attended</th>
+                                                        <th></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var att in attendees)
+                                                    {
+                                                        var a = att;
+                                                        <tr>
+                                                            <td class="align-middle small">@(a.DisplayName ?? a.AppUserId.ToString()[..8])</td>
+                                                            <td class="align-middle small">
+                                                                @if (_editRoleAttendeeId == a.Id)
+                                                                {
+                                                                    <TelerikTextBox @bind-Value="@_editRoleValue"
+                                                                                    Width="120px"
+                                                                                    @onblur="@(() => SaveRole(i, a))" />
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="text-secondary" @ondblclick="@(() => StartEditRole(a))">@(a.AssignedRole ?? "—")</span>
+                                                                    <TelerikButton Size="@ThemeConstants.Button.Size.ExtraSmall"
+                                                                                   FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                                                   Icon="@SvgIcon.Pencil"
+                                                                                   Title="Edit role"
+                                                                                   OnClick="@(() => StartEditRole(a))" />
+                                                                }
+                                                            </td>
+                                                            <td class="text-center align-middle">
+                                                                <input type="checkbox"
+                                                                       class="form-check-input"
+                                                                       checked="@(a.DidAttend == true)"
+                                                                       @onchange="@(e => ToggleAttendance(i, a, (bool)e.Value!))" />
+                                                            </td>
+                                                            <td class="align-middle">
+                                                                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                                                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                                                               Icon="@SvgIcon.X"
+                                                                               OnClick="@(() => RemoveAttendee(i, a))" />
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        }
+                                        <div class="d-flex gap-2 align-items-end flex-wrap">
+                                            <div>
+                                                <label class="form-label mb-1" style="font-size:.8rem;">Add member</label>
+                                                <TelerikDropDownList Data="@AvailableMembers(i.Id)"
+                                                                     @bind-Value="@_newAttendeeUserId"
+                                                                     TextField="@nameof(MemberOption.Label)"
+                                                                     ValueField="@nameof(MemberOption.UserId)"
+                                                                     DefaultText="— select —"
+                                                                     Width="180px" />
+                                            </div>
+                                            <div>
+                                                <label class="form-label mb-1" style="font-size:.8rem;">Role (optional)</label>
+                                                <TelerikTextBox @bind-Value="@_newAttendeeRole"
+                                                                Placeholder="Lead Investigator"
+                                                                Width="160px" />
+                                            </div>
+                                            <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                                           Icon="@SvgIcon.Plus"
+                                                           OnClick="@(() => AddAttendee(i))"
+                                                           Enabled="@(_newAttendeeUserId != Guid.Empty && !_attendeeBusy)">
+                                                Add
+                                            </TelerikButton>
+                                        </div>
+                                    }
+                                </div>
+                            }
                         </div>
                         <TelerikButton Size="@ThemeConstants.Button.Size.Small"
                                        Icon="@SvgIcon.Pencil"
@@ -69,8 +178,11 @@
                 <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
                 <TelerikTextBox @bind-Value="@_form.Title" Width="100%"
                                 Placeholder="Night Investigation #1" />
-            </div>
-            <div class="col-md-6">
+            </div>            <div class="col-12">
+                <label class="form-label fw-semibold">Investigation Plan / Description</label>
+                <TelerikTextArea @bind-Value="@_form.Description" Rows="3" Width="100%"
+                                 Placeholder="What areas will be investigated? What equipment will be used?" />
+            </div>            <div class="col-md-6">
                 <label class="form-label fw-semibold">Scheduled Date & Time</label>
                 <TelerikDateTimePicker @bind-Value="@_form.ScheduledDateTime" Width="100%" />
             </div>
@@ -135,18 +247,128 @@
     private string? _dialogError;
     private InvForm _form = new();
 
+    // ── Attendee state ────────────────────────────────────────────────────────
+    private Guid? _activeAttendeeInvId;
+    private Dictionary<Guid, List<InvestigationAttendeeRecord>> _attendeeCache = [];
+    private List<OrgMembershipItem> _orgMembers = [];
+    private bool _attendeeBusy;
+    private Guid _newAttendeeUserId;
+    private string _newAttendeeRole = "";
+    private Guid _editRoleAttendeeId;
+    private string _editRoleValue = "";
+
     private static readonly List<StatusOption> _statusOptions = Enum
         .GetValues<InvestigationStatus>()
         .Select(s => new StatusOption(s, StatusLabel(s)))
         .ToList();
 
     protected override async Task OnParametersSetAsync()
-        => await LoadAsync();
+    {
+        await LoadAsync();
+        var members = await AdminClient.GetOrganizationMembersAsync(OrgId);
+        _orgMembers = members.ToList();
+    }
 
     private async Task LoadAsync()
     {
         try { _investigations = (await AdminClient.GetInvestigationsAsync(OrgId, CaseId)).ToList(); }
         catch { _error = "Failed to load investigations."; }
+    }
+
+    private async Task ToggleAttendees(InvestigationRecord inv)
+    {
+        if (_activeAttendeeInvId == inv.Id) { _activeAttendeeInvId = null; return; }
+        _activeAttendeeInvId = inv.Id;
+        _newAttendeeUserId = Guid.Empty;
+        _newAttendeeRole = "";
+        if (!_attendeeCache.ContainsKey(inv.Id))
+            await RefreshAttendeesAsync(inv.Id);
+    }
+
+    private async Task RefreshAttendeesAsync(Guid invId)
+    {
+        _attendeeBusy = true;
+        try
+        {
+            var list = await AdminClient.GetInvestigationAttendeesAsync(OrgId, CaseId, invId);
+            _attendeeCache[invId] = list.ToList();
+        }
+        catch { _error = "Failed to load attendees."; }
+        finally { _attendeeBusy = false; }
+    }
+
+    private async Task AddAttendee(InvestigationRecord inv)
+    {
+        if (_newAttendeeUserId == Guid.Empty) return;
+        _attendeeBusy = true;
+        try
+        {
+            await AdminClient.AddInvestigationAttendeeAsync(OrgId, CaseId, inv.Id,
+                new AddInvestigationAttendeeRequest(_newAttendeeUserId,
+                    string.IsNullOrWhiteSpace(_newAttendeeRole) ? null : _newAttendeeRole.Trim()));
+            _newAttendeeUserId = Guid.Empty;
+            _newAttendeeRole = "";
+            await RefreshAttendeesAsync(inv.Id);
+            await LoadAsync();
+        }
+        catch { _error = "Failed to add attendee."; }
+        finally { _attendeeBusy = false; }
+    }
+
+    private async Task RemoveAttendee(InvestigationRecord inv, InvestigationAttendeeRecord att)
+    {
+        _attendeeBusy = true;
+        try
+        {
+            await AdminClient.RemoveInvestigationAttendeeAsync(OrgId, CaseId, inv.Id, att.Id);
+            await RefreshAttendeesAsync(inv.Id);
+            await LoadAsync();
+        }
+        catch { _error = "Failed to remove attendee."; }
+        finally { _attendeeBusy = false; }
+    }
+
+    private async Task ToggleAttendance(InvestigationRecord inv, InvestigationAttendeeRecord att, bool didAttend)
+    {
+        _attendeeBusy = true;
+        try
+        {
+            await AdminClient.UpdateInvestigationAttendanceAsync(OrgId, CaseId, inv.Id, att.Id, didAttend, att.AssignedRole);
+            await RefreshAttendeesAsync(inv.Id);
+        }
+        catch { _error = "Failed to update attendance."; }
+        finally { _attendeeBusy = false; }
+    }
+
+    private void StartEditRole(InvestigationAttendeeRecord att)
+    {
+        _editRoleAttendeeId = att.Id;
+        _editRoleValue      = att.AssignedRole ?? "";
+    }
+
+    private async Task SaveRole(InvestigationRecord inv, InvestigationAttendeeRecord att)
+    {
+        if (_editRoleAttendeeId != att.Id) return;
+        _editRoleAttendeeId = Guid.Empty;
+        var newRole = string.IsNullOrWhiteSpace(_editRoleValue) ? null : _editRoleValue.Trim();
+        if (newRole == att.AssignedRole) return;
+        _attendeeBusy = true;
+        try
+        {
+            await AdminClient.UpdateInvestigationAttendanceAsync(OrgId, CaseId, inv.Id, att.Id, att.DidAttend, newRole);
+            await RefreshAttendeesAsync(inv.Id);
+        }
+        catch { _error = "Failed to update role."; }
+        finally { _attendeeBusy = false; }
+    }
+
+    private List<MemberOption> AvailableMembers(Guid invId)
+    {
+        var added = _attendeeCache.GetValueOrDefault(invId)?.Select(a => a.AppUserId).ToHashSet() ?? [];
+        return _orgMembers
+            .Where(m => !added.Contains(m.AppUserId))
+            .Select(m => new MemberOption(m.AppUserId, m.DisplayName ?? m.AppUserId.ToString()[..8]))
+            .ToList();
     }
 
     private void OpenAdd()
@@ -163,6 +385,7 @@
         _form = new InvForm
         {
             Title             = inv.Title,
+            Description       = inv.Description ?? "",
             Location          = inv.Location ?? "",
             ScheduledDateTime = inv.ScheduledDateTime,
             EndDateTime       = inv.EndDateTime,
@@ -181,7 +404,7 @@
         {
             var req = new UpsertInvestigationRequest(
                 Title:             _form.Title.Trim(),
-                Description:       null,
+                Description:       string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim(),
                 Location:          string.IsNullOrWhiteSpace(_form.Location) ? null : _form.Location.Trim(),
                 ScheduledDateTime: _form.ScheduledDateTime,
                 EndDateTime:       _form.EndDateTime,
@@ -236,13 +459,15 @@
 
     private class InvForm
     {
-        public string            Title             { get; set; } = "";
-        public string            Location          { get; set; } = "";
-        public DateTime          ScheduledDateTime { get; set; } = DateTime.Now.AddDays(7);
-        public DateTime?         EndDateTime       { get; set; }
-        public InvestigationStatus Status          { get; set; } = InvestigationStatus.Scheduled;
-        public string            Notes             { get; set; } = "";
+        public string             Title             { get; set; } = "";
+        public string             Description       { get; set; } = "";
+        public string             Location          { get; set; } = "";
+        public DateTime           ScheduledDateTime { get; set; } = DateTime.Now.AddDays(7);
+        public DateTime?          EndDateTime       { get; set; }
+        public InvestigationStatus Status           { get; set; } = InvestigationStatus.Scheduled;
+        public string             Notes             { get; set; } = "";
     }
 
     private record StatusOption(InvestigationStatus Value, string Label);
+    private record MemberOption(Guid UserId, string Label);
 }

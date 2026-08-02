@@ -647,6 +647,11 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
                $"/api/organizations/{orgId}/cases/{caseId}/transfers/{logId}/respond",
                new { Accept = accept, Reason = rejectionReason }, token);
 
+    public Task<CaseTransferLogRecord?> CancelCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, CancellationToken token = default)
+        => _api.PutAsync<object, CaseTransferLogRecord>(
+               $"/api/organizations/{orgId}/cases/{caseId}/transfers/{logId}/cancel",
+               new { }, token);
+
     // ── Public Case Discovery ─────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<PublicCaseListItem>> GetPublicCasesAsync(string orgUrlName, CancellationToken token = default)
