@@ -54,6 +54,12 @@
                         <dd class="col-sm-9">@_request.BirthYear</dd>
                     }
 
+                    @if (_request.Gender != ClientGender.NotProvided)
+                    {
+                        <dt class="col-sm-3">Gender</dt>
+                        <dd class="col-sm-9">@GenderLabel(_request.Gender)</dd>
+                    }
+
                     <dt class="col-sm-3">Submitted</dt>
                     <dd class="col-sm-9">@_request.DateCreated.ToLocalTime().ToString("MMMM d, yyyy h:mm tt")</dd>
 
@@ -79,7 +85,7 @@
                     {
                         <TelerikButton Icon="@SvgIcon.Pencil"
                                        OnClick="@(() => NavManager.NavigateTo($"/my-requests/{Id}/edit"))">
-                            Edit Draft
+                            Edit &amp; Submit
                         </TelerikButton>
                     }
                     <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
@@ -91,6 +97,28 @@
                 </div>
             }
         </div>
+
+        @* ── Submitted-to organizations ─────────────────────────────────── *@
+        @if (_orgs.Count > 0)
+        {
+            <div class="card mt-3">
+                <div class="card-header fw-semibold">Submitted To</div>
+                <div class="list-group list-group-flush">
+                    @foreach (var o in _orgs)
+                    {
+                        <div class="list-group-item d-flex align-items-center justify-content-between">
+                            <div>
+                                <div class="fw-semibold small">@o.OrganizationName</div>
+                                <div class="text-secondary" style="font-size:.75rem;">
+                                    Applied @o.DateApplied.ToLocalTime().ToString("MMM d, yyyy")
+                                </div>
+                            </div>
+                            <span class="badge @OrgStatusBadge(o.Status)">@OrgStatusLabel(o.Status)</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
     }
 </div>
 
@@ -130,6 +158,7 @@
     [Parameter] public Guid Id { get; set; }
 
     private ClientRequestRecord? _request;
+    private List<ClientRequestOrganizationRecord> _orgs = [];
     private string? _error;
     private bool _isBusy;
     private bool _showWithdrawConfirm;
@@ -146,7 +175,8 @@
         try
         {
             _request = await AdminClient.GetClientRequestAsync(Id);
-            if (_request is null) _error = "Request not found.";
+            if (_request is null) { _error = "Request not found."; }
+            else _orgs = (await AdminClient.GetClientRequestOrgsAsync(Id)).ToList();
         }
         catch { _error = "Failed to load request."; }
         StateHasChanged();
@@ -189,5 +219,27 @@
         ClientRequestStatus.Closed    => "Closed",
         ClientRequestStatus.Withdrawn => "Withdrawn",
         _                             => s.ToString(),
+    };
+
+    private static string GenderLabel(ClientGender g) => g switch
+    {
+        ClientGender.Male        => "Male",
+        ClientGender.Female      => "Female",
+        _                        => g.ToString(),
+    };
+
+    private static string OrgStatusLabel(ClientOrgRequestStatus s) => s switch
+    {
+        ClientOrgRequestStatus.Pending  => "Pending",
+        ClientOrgRequestStatus.Accepted => "Accepted",
+        ClientOrgRequestStatus.Rejected => "Declined",
+        _                               => s.ToString(),
+    };
+
+    private static string OrgStatusBadge(ClientOrgRequestStatus s) => s switch
+    {
+        ClientOrgRequestStatus.Accepted => "bg-success",
+        ClientOrgRequestStatus.Rejected => "bg-secondary",
+        _                               => "bg-primary",
     };
 }

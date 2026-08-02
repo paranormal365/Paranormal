@@ -5,18 +5,21 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 
-<PageTitle>Pending Requests</PageTitle>
+@if (!EmbeddedMode) { <PageTitle>Pending Requests</PageTitle> }
 
-<div class="container-fluid py-3" style="max-width:900px;">
-    <div class="d-flex align-items-center gap-2 mb-4">
-        <TelerikButton Icon="@SvgIcon.ArrowLeft"
-                       FillMode="@ThemeConstants.Button.FillMode.Flat"
-                       OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases"))">
-            Cases
-        </TelerikButton>
-        <span class="text-secondary">/</span>
-        <h5 class="mb-0">Pending Investigation Requests</h5>
-    </div>
+<div class="@(EmbeddedMode ? "mt-2" : "container-fluid py-3" )" style="@(EmbeddedMode ? "" : "max-width:900px;")">
+    @if (!EmbeddedMode)
+    {
+        <div class="d-flex align-items-center gap-2 mb-4">
+            <TelerikButton Icon="@SvgIcon.ArrowLeft"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases"))">
+                Cases
+            </TelerikButton>
+            <span class="text-secondary">/</span>
+            <h5 class="mb-0">Pending Investigation Requests</h5>
+        </div>
+    }
 
     @if (_error is not null)
     {
@@ -151,7 +154,8 @@
 }
 
 @code {
-    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid OrgId       { get; set; }
+    [Parameter] public bool EmbeddedMode { get; set; }
 
     private List<OrgPendingRequestRecord>? _requests;
     private string? _error;
