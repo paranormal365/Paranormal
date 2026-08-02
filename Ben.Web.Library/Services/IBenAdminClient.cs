@@ -476,6 +476,14 @@ public interface IBenAdminClient
     /// <summary>Deletes a previously logged occurrence.</summary>
     Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default);
 
+    // ── My Investigations (member dashboard) ──────────────────────────────────
+
+    /// <summary>Returns all investigations the current user is assigned to attend.</summary>
+    Task<IReadOnlyList<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default);
+
+    /// <summary>Sets the current user's RSVP on their attendee record.</summary>
+    Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default);
+
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
     /// <summary>Returns all approved, active categories with their types (public — no auth).</summary>
@@ -1154,3 +1162,23 @@ public sealed record LogOccurrenceRequest(
     DateTime? EventDateTime,
     string?   Title,
     string?   Body);
+
+// ── My Investigations response records ───────────────────────────────────────
+public sealed record MyInvestigationItem(
+    Guid                               AttendeeId,
+    Guid                               InvestigationId,
+    Guid                               CaseId,
+    string                             CaseReference,
+    string                             CaseTitle,
+    Guid                               OrgId,
+    string                             OrgName,
+    string                             OrgUrlName,
+    string                             Title,
+    DateTime                           ScheduledDateTime,
+    DateTime?                          EndDateTime,
+    string?                            Location,
+    Ben.Data.Common.Enums.InvestigationStatus Status,
+    string?                            AssignedRole,
+    Ben.Data.Common.Enums.RsvpStatus   Rsvp,
+    bool?                              DidAttend,
+    DateTime?                          EvidenceDueDate);

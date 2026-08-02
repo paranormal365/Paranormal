@@ -1,0 +1,188 @@
+@page "/my-investigations"
+@using Ben.Data.Common.Enums
+@using Ben.Web.Library.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>My Investigations</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:860px;">
+    <h3 class="mb-4">My Investigations</h3>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_items is null)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading your investigations…" />
+    }
+    else if (_items.Count == 0)
+    {
+        <div class="text-center py-5 text-secondary">
+            <p class="mb-3">You have not been assigned to any investigations.</p>
+            <p class="small">When an investigation group schedules a visit and adds you to the team, it will appear here.</p>
+        </div>
+    }
+    else
+    {
+        var upcoming = _items.Where(i => i.Status is InvestigationStatus.Scheduled or InvestigationStatus.InProgress)
+                             .OrderBy(i => i.ScheduledDateTime).ToList();
+        var past     = _items.Where(i => i.Status is InvestigationStatus.Completed or InvestigationStatus.Cancelled)
+                             .OrderByDescending(i => i.ScheduledDateTime).ToList();
+
+        @if (upcoming.Count > 0)
+        {
+            <h5 class="text-secondary mb-3">Upcoming</h5>
+            <div class="d-flex flex-column gap-3 mb-4">
+                @foreach (var inv in upcoming)
+                {
+                    var isSaving = _saving.Contains(inv.AttendeeId);
+                    <div class="card @(inv.Status == InvestigationStatus.InProgress ? "border-warning" : "")">
+                        <div class="card-body">
+                            @InvCardHeader(inv)
+                            @InvRsvpButtons(inv, isSaving)
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (past.Count > 0)
+        {
+            <h5 class="text-secondary mb-3">Past</h5>
+            <div class="d-flex flex-column gap-3">
+                @foreach (var inv in past)
+                {
+                    <div class="card opacity-75">
+                        <div class="card-body">
+                            @InvCardHeader(inv)
+                            @if (inv.DidAttend.HasValue)
+                            {
+                                <div class="text-secondary small mt-2">
+                                    Attendance: <strong>@(inv.DidAttend.Value ? "Attended" : "Did not attend")</strong>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<MyInvestigationItem>? _items;
+    private string? _error;
+    private HashSet<Guid> _saving = [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+        try { _items = (await AdminClient.GetMyInvestigationsAsync()).ToList(); }
+        catch { _error = "Failed to load investigations."; _items = []; }
+        StateHasChanged();
+    }
+
+    private async Task SetRsvp(MyInvestigationItem inv, RsvpStatus rsvp)
+    {
+        if (_saving.Contains(inv.AttendeeId)) return;
+        _saving.Add(inv.AttendeeId);
+        StateHasChanged();
+        try
+        {
+            await AdminClient.UpdateMyInvestigationRsvpAsync(inv.AttendeeId, rsvp);
+            var idx = _items!.IndexOf(inv);
+            if (idx >= 0) _items[idx] = inv with { Rsvp = rsvp };
+        }
+        catch { _error = "Failed to save your RSVP. Please try again."; }
+        finally { _saving.Remove(inv.AttendeeId); StateHasChanged(); }
+    }
+
+    // ── Render helpers ────────────────────────────────────────────────────────
+
+    private RenderFragment InvCardHeader(MyInvestigationItem inv) => __builder =>
+    {
+        <div class="d-flex align-items-start justify-content-between">
+            <div class="flex-grow-1">
+                <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                    <span class="fw-semibold">@inv.Title</span>
+                    <span class="badge @InvStatusBadge(inv.Status)" style="font-size:.72rem;">@inv.Status</span>
+                    @if (!string.IsNullOrWhiteSpace(inv.AssignedRole))
+                    {
+                        <span class="badge bg-secondary" style="font-size:.72rem;">@inv.AssignedRole</span>
+                    }
+                </div>
+                <div class="text-secondary small">
+                    <span class="font-monospace">@inv.CaseReference</span>
+                    <span class="mx-1">·</span>@inv.CaseTitle
+                    <span class="mx-1">·</span><strong>@inv.OrgName</strong>
+                </div>
+                <div class="small mt-1">
+                    <TelerikSvgIcon Icon="@SvgIcon.Calendar" />
+                    @inv.ScheduledDateTime.ToLocalTime().ToString("ddd MMM d, yyyy h:mm tt")
+                    @if (inv.EndDateTime.HasValue)
+                    {
+                        <span class="text-secondary"> – @inv.EndDateTime.Value.ToLocalTime().ToString("h:mm tt")</span>
+                    }
+                </div>
+                @if (!string.IsNullOrWhiteSpace(inv.Location))
+                {
+                    <div class="text-secondary small">
+                        <TelerikSvgIcon Icon="@SvgIcon.MapMarker" /> @inv.Location
+                    </div>
+                }
+                @if (inv.EvidenceDueDate.HasValue)
+                {
+                    <div class="text-warning small mt-1">
+                        Evidence due: @inv.EvidenceDueDate.Value.ToLocalTime().ToString("MMM d, yyyy")
+                    </div>
+                }
+            </div>
+        </div>
+    };
+
+    private RenderFragment InvRsvpButtons(MyInvestigationItem inv, bool isSaving) => __builder =>
+    {
+        <div class="d-flex align-items-center gap-2 mt-3 flex-wrap">
+            <span class="text-secondary small me-1">Your RSVP:</span>
+            <TelerikButton ThemeColor="@(inv.Rsvp == RsvpStatus.Accepted ? "success" : "base")"
+                           FillMode="@(inv.Rsvp == RsvpStatus.Accepted ? "solid" : "outline")"
+                           Size="sm"
+                           Enabled="@(!isSaving)"
+                           OnClick="@(() => SetRsvp(inv, RsvpStatus.Accepted))">
+                Will Attend
+            </TelerikButton>
+            <TelerikButton ThemeColor="@(inv.Rsvp == RsvpStatus.Tentative ? "warning" : "base")"
+                           FillMode="@(inv.Rsvp == RsvpStatus.Tentative ? "solid" : "outline")"
+                           Size="sm"
+                           Enabled="@(!isSaving)"
+                           OnClick="@(() => SetRsvp(inv, RsvpStatus.Tentative))">
+                Tentative
+            </TelerikButton>
+            <TelerikButton ThemeColor="@(inv.Rsvp == RsvpStatus.Declined ? "error" : "base")"
+                           FillMode="@(inv.Rsvp == RsvpStatus.Declined ? "solid" : "outline")"
+                           Size="sm"
+                           Enabled="@(!isSaving)"
+                           OnClick="@(() => SetRsvp(inv, RsvpStatus.Declined))">
+                Cannot Attend
+            </TelerikButton>
+            @if (isSaving)
+            {
+                <TelerikLoader Size="sm" />
+            }
+        </div>
+    };
+
+    private static string InvStatusBadge(InvestigationStatus s) => s switch
+    {
+        InvestigationStatus.Scheduled  => "bg-primary",
+        InvestigationStatus.InProgress => "bg-warning text-dark",
+        InvestigationStatus.Completed  => "bg-success",
+        InvestigationStatus.Cancelled  => "bg-secondary",
+        _                              => "bg-secondary",
+    };
+}

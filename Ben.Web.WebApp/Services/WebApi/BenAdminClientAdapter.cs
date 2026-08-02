@@ -927,6 +927,17 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/my-cases/{caseId}/occurrences/{entryId}", token);
 
+    // ── My Investigations ───────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<MyInvestigationItem>>("/api/my-investigations", token);
+        return result ?? [];
+    }
+
+    public async Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default)
+        => await _api.PutAsync<object, object>($"/api/my-investigations/{attendeeId}/rsvp", new { Rsvp = rsvp }, token);
+
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<ExperienceCategoryWithTypesResponse>> GetExperienceTaxonomyAsync(CancellationToken token = default)
