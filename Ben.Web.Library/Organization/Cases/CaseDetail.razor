@@ -121,7 +121,7 @@
             </TabStripTab>
 
             @* ── Client Messages ─────────────────────────────────────────────── *@
-            <TabStripTab Title="Messages">
+            <TabStripTab Title="@(_unreadCount > 0 ? $"Messages ({_unreadCount})" : "Messages")">
                 <div class="mt-2" style="max-width:680px;">
                     <CaseMessageThread CurrentSide="@Ben.Data.Common.Enums.CaseMessageSide.Organization"
                                        LoadMessages="@LoadOrgMessages"
@@ -188,6 +188,7 @@
     private bool _loaded;
     private string? _error;
     private bool _isBusy;
+    private int _unreadCount;
 
     // Edit dialog
     private bool _showEdit;
@@ -209,6 +210,11 @@
         try { _case = await AdminClient.GetOrgCaseAsync(OrgId, CaseId); }
         catch { _error = "Failed to load case."; }
         _loaded = true;
+        StateHasChanged();
+
+        // Load unread count separately so it doesn't block the page render
+        try { _unreadCount = await AdminClient.GetCaseMessageUnreadCountAsync(OrgId, CaseId); }
+        catch { /* non-critical; badge stays at 0 */ }
         StateHasChanged();
     }
 
@@ -248,8 +254,12 @@
 
     private record StatusOption(CaseStatus Value, string Label);
 
-    private Task<IReadOnlyList<CaseMessageRecord>> LoadOrgMessages()
-        => AdminClient.GetCaseMessagesAsync(OrgId, CaseId);
+    private async Task<IReadOnlyList<CaseMessageRecord>> LoadOrgMessages()
+    {
+        var msgs = await AdminClient.GetCaseMessagesAsync(OrgId, CaseId);
+        _unreadCount = 0; // tab opened — all now marked read by the server
+        return msgs;
+    }
 
     private async Task<CaseMessageRecord?> PostOrgMessage(string body)
         => await AdminClient.PostCaseMessageAsync(OrgId, CaseId, body);

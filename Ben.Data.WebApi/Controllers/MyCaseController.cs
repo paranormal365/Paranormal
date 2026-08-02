@@ -79,6 +79,9 @@ public sealed class MyCaseController : BenControllerBase
             .OrderBy(i => i.ScheduledDateTime)
             .ToListAsync(ct);
 
+        var unreadCount = await db.CaseMessages
+            .CountAsync(m => m.CaseId == caseId && m.SenderSide == CaseMessageSide.Organization && !m.IsReadByClient, ct);
+
         var occurrences = c.TimelineEntries.Select(e => new ClientCaseOccurrence(
             Id:            e.Id,
             EntryType:     e.EntryType,
@@ -108,7 +111,8 @@ public sealed class MyCaseController : BenControllerBase
             DateCaseOpened:          c.DateCaseOpened,
             DateCaseClosed:          c.DateCaseClosed,
             Occurrences:             occurrences,
-            Investigations:          invItems));
+            Investigations:          invItems,
+            UnreadMessageCount:      unreadCount));
     }
 
     /// <summary>
@@ -301,7 +305,8 @@ public sealed record ClientCaseDetail(
     DateTime  DateCaseOpened,
     DateTime? DateCaseClosed,
     IReadOnlyList<ClientCaseOccurrence>    Occurrences,
-    IReadOnlyList<ClientCaseInvestigation> Investigations);
+    IReadOnlyList<ClientCaseInvestigation> Investigations,
+    int       UnreadMessageCount = 0);
 
 public sealed record ClientCaseOccurrence(
     Guid      Id,

@@ -498,6 +498,9 @@ public interface IBenAdminClient
     /// <summary>Posts a message from the org to the client on this case.</summary>
     Task<CaseMessageRecord?> PostCaseMessageAsync(Guid orgId, Guid caseId, string body, CancellationToken token = default);
 
+    /// <summary>Returns the count of unread client messages the org hasn't seen yet.</summary>
+    Task<int> GetCaseMessageUnreadCountAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
     /// <summary>Returns all approved, active categories with their types (public — no auth).</summary>
@@ -1154,7 +1157,8 @@ public sealed record ClientCaseDetail(
     DateTime  DateCaseOpened,
     DateTime? DateCaseClosed,
     IReadOnlyList<ClientCaseOccurrence>    Occurrences,
-    IReadOnlyList<ClientCaseInvestigation> Investigations);
+    IReadOnlyList<ClientCaseInvestigation> Investigations,
+    int       UnreadMessageCount = 0);
 
 public sealed record ClientCaseOccurrence(
     Guid      Id,

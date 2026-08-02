@@ -958,6 +958,12 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<CaseMessageRecord?> PostCaseMessageAsync(Guid orgId, Guid caseId, string body, CancellationToken token = default)
         => _api.PostAsync<object, CaseMessageRecord>($"/api/orgs/{orgId}/cases/{caseId}/messages", new { Body = body }, token);
 
+    public async Task<int> GetCaseMessageUnreadCountAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<int>($"/api/orgs/{orgId}/cases/{caseId}/messages/unread-count", token);
+        return result;
+    }
+
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<ExperienceCategoryWithTypesResponse>> GetExperienceTaxonomyAsync(CancellationToken token = default)

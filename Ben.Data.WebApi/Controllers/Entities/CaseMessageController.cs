@@ -87,6 +87,21 @@ public sealed class CaseMessageController : BenControllerBase
         m.Id, m.CaseId, m.AuthorAppUserId,
         m.AuthorAppUser?.DisplayName ?? "Unknown",
         m.Body, m.SenderSide, m.IsReadByClient, m.IsReadByOrg, m.DateCreated);
+
+    /// <summary>Returns the count of unread client messages (org has not yet seen them).</summary>
+    [HttpGet("unread-count")]
+    public async Task<ActionResult<int>> GetUnreadCount(Guid orgId, Guid caseId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsOrgCase(db, orgId, caseId, userId, ct)) return NotFound();
+
+        var count = await db.CaseMessages
+            .CountAsync(m => m.CaseId == caseId && m.SenderSide == CaseMessageSide.Client && !m.IsReadByOrg, ct);
+        return Ok(count);
+    }
 }
 
 public sealed record PostCaseMessageRequest(string Body);
