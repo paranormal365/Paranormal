@@ -85,6 +85,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<CaseReportSection> CaseReportSections { get; set; }
         public virtual DbSet<CaseReportSectionFile> CaseReportSectionFiles { get; set; }
         public virtual DbSet<CaseResearchEntry> CaseResearchEntries { get; set; }
+        public virtual DbSet<InvestigationScheduleProposal> InvestigationScheduleProposals { get; set; }
+        public virtual DbSet<ScheduleProposalSlot> ScheduleProposalSlots { get; set; }
         public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
         public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
         public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
@@ -1318,6 +1320,31 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Url).HasMaxLength(2000);
             modelBuilder.Entity<CaseResearchEntry>()
                 .HasIndex(e => new { e.CaseId, e.SortOrder });
+
+            // ── InvestigationScheduleProposal ──────────────────────────────
+            modelBuilder.Entity<InvestigationScheduleProposal>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvestigationScheduleProposal>()
+                .HasOne(e => e.Investigation).WithMany()
+                .HasForeignKey(e => e.InvestigationId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<InvestigationScheduleProposal>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvestigationScheduleProposal>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvestigationScheduleProposal>()
+                .Property(e => e.Notes).HasMaxLength(2000);
+            modelBuilder.Entity<InvestigationScheduleProposal>()
+                .Property(e => e.ClientResponseNotes).HasMaxLength(1000);
+            modelBuilder.Entity<InvestigationScheduleProposal>()
+                .HasIndex(e => new { e.CaseId, e.Status });
+
+            // ── ScheduleProposalSlot ──────────────────────────────────────────
+            modelBuilder.Entity<ScheduleProposalSlot>()
+                .HasOne(e => e.Proposal).WithMany(e => e.Slots)
+                .HasForeignKey(e => e.ProposalId).OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

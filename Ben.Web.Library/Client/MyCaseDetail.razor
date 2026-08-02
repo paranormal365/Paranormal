@@ -208,6 +208,53 @@
 
     </div>
 
+    @* ── Scheduling proposals from the org ───────────────────────────────────── *@
+    @if (_pendingProposals.Count > 0)
+    {
+        <div class="card mt-4 border-warning">
+            <div class="card-header fw-semibold d-flex align-items-center gap-2 bg-warning text-dark">
+                <TelerikSvgIcon Icon="@SvgIcon.Calendar" />
+                Investigation Date Proposal
+                <span class="badge bg-dark">@_pendingProposals.Count</span>
+            </div>
+            <div class="list-group list-group-flush">
+                @foreach (var prop in _pendingProposals)
+                {
+                    var p = prop;
+                    <div class="list-group-item">
+                        @if (!string.IsNullOrWhiteSpace(p.Notes))
+                        {
+                            <div class="small mb-2">@p.Notes</div>
+                        }
+                        <div class="d-flex flex-column gap-1 mb-3">
+                            @foreach (var slot in p.Slots)
+                            {
+                                var s = slot;
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="small">
+                                        @s.StartDateTime.ToLocalTime().ToString("ddd MMM d, yyyy h:mm tt")
+                                        @if (s.EndDateTime.HasValue) { <span> – @s.EndDateTime.Value.ToLocalTime().ToString("h:mm tt")</span> }
+                                    </span>
+                                    <TelerikButton Size="sm" ThemeColor="success"
+                                                   OnClick="@(async () => await AcceptProposal(p.Id, s.Id))"
+                                                   Enabled="@(!_respondingProposal)">Accept</TelerikButton>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <TelerikButton Size="sm" FillMode="outline"
+                                           OnClick="@(() => { _counterProposalId = p.Id; _showCounterDialog = true; })"
+                                           Enabled="@(!_respondingProposal)">Suggest Different Date</TelerikButton>
+                            <TelerikButton Size="sm" FillMode="flat" ThemeColor="error"
+                                           OnClick="@(async () => await DeclineProposal(p.Id))"
+                                           Enabled="@(!_respondingProposal)">Decline All</TelerikButton>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
     @* ── Message thread ──────────────────────────────────────────────────────── *@
     <div class="card mt-4">
         <div class="card-header fw-semibold d-flex align-items-center gap-2">
@@ -322,6 +369,32 @@
     </TelerikWindow>
 }
 
+@* ── Counter-proposal dialog ──────────────────────────────────────────────────── *@
+<TelerikWindow @bind-Visible="@_showCounterDialog" Title="Suggest a Different Date"
+               Width="440px" Modal="true">
+    <WindowContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Your Preferred Date & Time</label>
+                <TelerikDateTimePicker @bind-Value="@_counterDateTime" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Notes (optional)</label>
+                <TelerikTextArea @bind-Value="@_counterNotes" Rows="3" Width="100%"
+                                 Placeholder="e.g. I am free weekends only." />
+            </div>
+        </div>
+    </WindowContent>
+    <WindowActions><WindowAction Name="Close" OnClick="@(() => _showCounterDialog = false)" /></WindowActions>
+    <WindowFooter>
+        <div class="d-flex gap-2 justify-content-end w-100">
+            <TelerikButton OnClick="@(() => _showCounterDialog = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="primary" OnClick="SendCounter"
+                           Enabled="@(_counterDateTime.HasValue && !_respondingProposal)">Send</TelerikButton>
+        </div>
+    </WindowFooter>
+</TelerikWindow>
+
 @code {
     [Parameter] public Guid CaseId { get; set; }
 
@@ -339,6 +412,12 @@
     private string? _dialogError;
     private OccForm _form = new();
     private List<CaseReportSummary> _reports = [];
+    private List<ScheduleProposalDto> _pendingProposals = [];
+    private bool _respondingProposal;
+    private bool _showCounterDialog;
+    private Guid _counterProposalId;
+    private DateTime? _counterDateTime;
+    private string _counterNotes = "";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -359,6 +438,10 @@
         // Load published reports after case renders (non-blocking)
         try { _reports = (await AdminClient.GetMyCaseReportsAsync(CaseId)).ToList(); StateHasChanged(); }
         catch { /* reports are optional; silent failure */ }
+
+        // Load pending scheduling proposals
+        try { _pendingProposals = (await AdminClient.GetMyScheduleProposalsAsync(CaseId)).ToList(); StateHasChanged(); }
+        catch { /* silent */ }
     }
 
     private List<ClientCaseOccurrence> OccurrencesForDate(DateTime date) =>
@@ -479,6 +562,44 @@
         if (result is null) return;
         var base64 = Convert.ToBase64String(result.Value.Data);
         await JS.InvokeVoidAsync("downloadFileFromBase64", base64, "application/pdf", result.Value.FileName);
+    }
+
+    private async Task AcceptProposal(Guid proposalId, Guid slotId)
+    {
+        _respondingProposal = true;
+        try
+        {
+            var result = await AdminClient.AcceptScheduleProposalAsync(CaseId, proposalId, slotId);
+            if (result is not null) _pendingProposals.RemoveAll(p => p.Id == proposalId);
+        }
+        catch { _error = "Failed to accept proposal."; }
+        finally { _respondingProposal = false; StateHasChanged(); }
+    }
+
+    private async Task DeclineProposal(Guid proposalId)
+    {
+        _respondingProposal = true;
+        try
+        {
+            await AdminClient.DeclineScheduleProposalAsync(CaseId, proposalId, null);
+            _pendingProposals.RemoveAll(p => p.Id == proposalId);
+        }
+        catch { _error = "Failed to decline proposal."; }
+        finally { _respondingProposal = false; StateHasChanged(); }
+    }
+
+    private async Task SendCounter()
+    {
+        if (!_counterDateTime.HasValue) return;
+        _respondingProposal = true;
+        try
+        {
+            await AdminClient.CounterScheduleProposalAsync(CaseId, _counterProposalId, _counterDateTime.Value, _counterNotes);
+            _pendingProposals.RemoveAll(p => p.Id == _counterProposalId);
+            _showCounterDialog = false;
+        }
+        catch { _error = "Failed to send counter-proposal."; }
+        finally { _respondingProposal = false; StateHasChanged(); }
     }
 
     private async Task AttachFiles(Guid entryId, InputFileChangeEventArgs e)
