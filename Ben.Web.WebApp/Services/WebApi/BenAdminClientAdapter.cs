@@ -879,6 +879,14 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     // ── Case Report Builder ───────────────────────────────────────────────────
 
+    // Client-facing: published reports only
+    public async Task<IReadOnlyList<CaseReportSummary>> GetMyCaseReportsAsync(Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<CaseReportSummary>>($"/api/my-cases/{caseId}/reports", token) ?? [];
+
+    public string GetMyCaseReportPdfUrl(Guid caseId, Guid reportId)
+        => $"/api/my-cases/{caseId}/reports/{reportId}/pdf";
+
+    // Org-facing
     public async Task<IReadOnlyList<CaseReportSummary>> GetCaseReportsAsync(Guid orgId, Guid caseId, CancellationToken token = default)
         => await _api.GetAsync<IReadOnlyList<CaseReportSummary>>($"/api/orgs/{orgId}/cases/{caseId}/reports", token) ?? [];
 

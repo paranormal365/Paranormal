@@ -241,6 +241,29 @@ public sealed class MyCaseController : BenControllerBase
         return Ok(reports);
     }
 
+    /// <summary>Streams a published report as a PDF to the client.</summary>
+    [HttpGet("{caseId:guid}/reports/{reportId:guid}/pdf")]
+    public async Task<IActionResult> GetPublishedReportPdf(Guid caseId, Guid reportId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var report = await db.CaseReports.AsNoTracking()
+            .Include(r => r.Sections.OrderBy(s => s.SortOrder))
+                .ThenInclude(s => s.Files.OrderBy(f => f.SortOrder))
+                    .ThenInclude(f => f.UploadFile)
+            .FirstOrDefaultAsync(r => r.Id == reportId && r.CaseId == caseId
+                && r.Status == Ben.Data.Common.Enums.CaseReportStatus.Published, ct);
+        if (report is null) return NotFound();
+
+        // Reuse the static PDF generator from CaseReportController via shared helper
+        var pdfBytes = CaseReportPdfGenerator.Generate(report);
+        return File(pdfBytes, "application/pdf", $"report-{report.Title.Replace(' ', '-')}.pdf");
+    }
+
     // ── Occurrence file attachments ────────────────────────────────────────────
 
     /// <summary>Attaches a file to an occurrence. Saved to cases/{caseId}/... path.</summary>

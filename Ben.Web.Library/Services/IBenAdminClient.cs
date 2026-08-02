@@ -449,6 +449,12 @@ public interface IBenAdminClient
     Task<CaseTimelineEntryRecord?> UpdateCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, UpsertTimelineEntryRequest request, CancellationToken token = default);
     Task<bool> DeleteCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
 
+    /// <summary>Returns published reports the client can view for their case.</summary>
+    Task<IReadOnlyList<CaseReportSummary>> GetMyCaseReportsAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Returns a URL to stream the published report PDF for the client.</summary>
+    string GetMyCaseReportPdfUrl(Guid caseId, Guid reportId);
+
     // ── Case Report Builder ───────────────────────────────────────────────────
 
     Task<IReadOnlyList<CaseReportSummary>> GetCaseReportsAsync(Guid orgId, Guid caseId, CancellationToken token = default);

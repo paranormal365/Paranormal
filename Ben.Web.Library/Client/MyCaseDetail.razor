@@ -223,6 +223,37 @@
         </div>
     </div>
 
+    @* ── Published investigation reports ─────────────────────────────────────── *@
+    @if (_reports.Count > 0)
+    {
+        <div class="card mt-4">
+            <div class="card-header fw-semibold d-flex align-items-center gap-2">
+                <TelerikSvgIcon Icon="@SvgIcon.File" />
+                Investigation Reports
+                <span class="badge bg-secondary">@_reports.Count</span>
+            </div>
+            <div class="list-group list-group-flush">
+                @foreach (var r in _reports)
+                {
+                    <div class="list-group-item d-flex align-items-start justify-content-between gap-2">
+                        <div>
+                            <div class="fw-semibold small">@r.Title</div>
+                            @if (r.PublishedAt.HasValue)
+                            {
+                                <div class="text-secondary small">Published @r.PublishedAt.Value.ToLocalTime().ToString("MMM d, yyyy")</div>
+                            }
+                        </div>
+                        <a href="@AdminClient.GetMyCaseReportPdfUrl(CaseId, r.Id)"
+                           target="_blank"
+                           class="btn btn-sm btn-outline-secondary flex-shrink-0">
+                            <TelerikSvgIcon Icon="@SvgIcon.FilePdf" /> Download PDF
+                        </a>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
 </div>
 
 @* ── Log / Edit Occurrence dialog ─────────────────────────────────────────────── *@
@@ -308,6 +339,7 @@
     private ClientCaseOccurrence? _deleteOcc;
     private string? _dialogError;
     private OccForm _form = new();
+    private List<CaseReportSummary> _reports = [];
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -324,6 +356,10 @@
         catch { _error = "Failed to load case."; }
         _loading = false;
         StateHasChanged();
+
+        // Load published reports after case renders (non-blocking)
+        try { _reports = (await AdminClient.GetMyCaseReportsAsync(CaseId)).ToList(); StateHasChanged(); }
+        catch { /* reports are optional; silent failure */ }
     }
 
     private List<ClientCaseOccurrence> OccurrencesForDate(DateTime date) =>
