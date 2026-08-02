@@ -49,6 +49,17 @@ public sealed class MyCaseController : BenControllerBase
             .OrderByDescending(c => c.DateCaseOpened)
             .ToListAsync(ct);
 
+        // Fetch next upcoming investigation per case in a single query
+        var caseIds    = cases.Select(c => c.Id).ToList();
+        var now        = DateTime.UtcNow;
+        var nextInvMap = await db.Investigations.AsNoTracking()
+            .Where(i => caseIds.Contains(i.CaseId)
+                     && i.ScheduledDateTime >= now
+                     && i.Status == InvestigationStatus.Scheduled)
+            .GroupBy(i => i.CaseId)
+            .Select(g => new { CaseId = g.Key, Next = g.Min(i => i.ScheduledDateTime) })
+            .ToDictionaryAsync(x => x.CaseId, x => (DateTime?)x.Next, ct);
+
         return Ok(cases.Select(c => new ClientCaseListItem(
             CaseId:                  c.Id,
             CaseReference:           $"#{c.CaseYear}-{c.OrgCaseNumber:D3}",
@@ -57,7 +68,8 @@ public sealed class MyCaseController : BenControllerBase
             State:                   c.State,
             Status:                  c.Status,
             CaseManagerDisplayName:  c.CaseManagerAppUser?.DisplayName,
-            DateCaseOpened:          c.DateCaseOpened)));
+            DateCaseOpened:          c.DateCaseOpened,
+            NextInvestigationDate:   nextInvMap.GetValueOrDefault(c.Id))));
     }
 
     /// <summary>
@@ -562,7 +574,8 @@ public sealed record ClientCaseListItem(
     string    State,
     Ben.Data.Common.Enums.CaseStatus Status,
     string?   CaseManagerDisplayName,
-    DateTime  DateCaseOpened);
+    DateTime  DateCaseOpened,
+    DateTime? NextInvestigationDate = null);
 
 public sealed record ClientCaseDetail(
     Guid      CaseId,
