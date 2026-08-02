@@ -720,10 +720,10 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<InvestigationAttendeeRecord?> AddInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, AddInvestigationAttendeeRequest request, CancellationToken token = default)
         => _api.PostAsync<AddInvestigationAttendeeRequest, InvestigationAttendeeRecord>($"{InvBase(orgId, caseId)}/{id}/attendees", request, token);
 
-    public Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, CancellationToken token = default)
+    public Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, Ben.Data.Common.Enums.RsvpStatus? rsvp = null, CancellationToken token = default)
         => _api.PutAsync<object, InvestigationAttendeeRecord>(
                $"{InvBase(orgId, caseId)}/{id}/attendees/{attendeeId}/attendance",
-               new { DidAttend = didAttend, AssignedRole = assignedRole }, token);
+               new { DidAttend = didAttend, AssignedRole = assignedRole, Rsvp = rsvp }, token);
 
     public Task<bool> RemoveInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, CancellationToken token = default)
         => _api.DeleteAsync($"{InvBase(orgId, caseId)}/{id}/attendees/{attendeeId}", token);
@@ -926,6 +926,17 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/my-cases/{caseId}/occurrences/{entryId}", token);
+
+    // ── My Investigations ───────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<MyInvestigationItem>>("/api/my-investigations", token);
+        return result ?? [];
+    }
+
+    public async Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default)
+        => await _api.PutAsync<object, object>($"/api/my-investigations/{attendeeId}/rsvp", new { Rsvp = rsvp }, token);
 
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 

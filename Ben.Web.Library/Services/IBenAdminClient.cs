@@ -398,7 +398,7 @@ public interface IBenAdminClient
     Task<bool> DeleteInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
     Task<IReadOnlyList<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
     Task<InvestigationAttendeeRecord?> AddInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, AddInvestigationAttendeeRequest request, CancellationToken token = default);
-    Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, CancellationToken token = default);
+    Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, Ben.Data.Common.Enums.RsvpStatus? rsvp = null, CancellationToken token = default);
     Task<bool> RemoveInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, CancellationToken token = default);
 
     // ── Evidence Voting ───────────────────────────────────────────────────────
@@ -475,6 +475,14 @@ public interface IBenAdminClient
 
     /// <summary>Deletes a previously logged occurrence.</summary>
     Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default);
+
+    // ── My Investigations (member dashboard) ──────────────────────────────────
+
+    /// <summary>Returns all investigations the current user is assigned to attend.</summary>
+    Task<IReadOnlyList<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default);
+
+    /// <summary>Sets the current user's RSVP on their attendee record.</summary>
+    Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default);
 
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
@@ -1020,7 +1028,8 @@ public sealed record UpsertInvestigationRequest(
     DateTime? EndDateTime,
     Ben.Data.Common.Enums.InvestigationStatus Status,
     string? Notes,
-    Guid? OrgCalendarEventId);
+    Guid? OrgCalendarEventId,
+    DateTime? EvidenceDueDate = null);
 
 public sealed record AddInvestigationAttendeeRequest(Guid AppUserId, string? AssignedRole);
 
@@ -1147,9 +1156,30 @@ public sealed record ClientCaseInvestigation(
     DateTime   ScheduledDateTime,
     DateTime?  EndDateTime,
     string?    Location,
-    Ben.Data.Common.Enums.InvestigationStatus Status);
+    Ben.Data.Common.Enums.InvestigationStatus Status,
+    DateTime?  EvidenceDueDate = null);
 
 public sealed record LogOccurrenceRequest(
     DateTime? EventDateTime,
     string?   Title,
     string?   Body);
+
+// ── My Investigations response records ───────────────────────────────────────
+public sealed record MyInvestigationItem(
+    Guid                               AttendeeId,
+    Guid                               InvestigationId,
+    Guid                               CaseId,
+    string                             CaseReference,
+    string                             CaseTitle,
+    Guid                               OrgId,
+    string                             OrgName,
+    string                             OrgUrlName,
+    string                             Title,
+    DateTime                           ScheduledDateTime,
+    DateTime?                          EndDateTime,
+    string?                            Location,
+    Ben.Data.Common.Enums.InvestigationStatus Status,
+    string?                            AssignedRole,
+    Ben.Data.Common.Enums.RsvpStatus   Rsvp,
+    bool?                              DidAttend,
+    DateTime?                          EvidenceDueDate);

@@ -93,7 +93,8 @@ public sealed class MyCaseController : BenControllerBase
             ScheduledDateTime: i.ScheduledDateTime,
             EndDateTime:       i.EndDateTime,
             Location:          i.Location,
-            Status:            i.Status)).ToList();
+            Status:            i.Status,
+            EvidenceDueDate:   i.EvidenceDueDate)).ToList();
 
         return Ok(new ClientCaseDetail(
             CaseId:                  c.Id,
@@ -244,7 +245,8 @@ public sealed record ClientCaseInvestigation(
     DateTime   ScheduledDateTime,
     DateTime?  EndDateTime,
     string?    Location,
-    Ben.Data.Common.Enums.InvestigationStatus Status);
+    Ben.Data.Common.Enums.InvestigationStatus Status,
+    DateTime?  EvidenceDueDate = null);
 
 public sealed record LogOccurrenceRequest(
     DateTime? EventDateTime,
