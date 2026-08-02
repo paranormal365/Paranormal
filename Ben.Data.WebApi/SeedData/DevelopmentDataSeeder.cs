@@ -331,6 +331,41 @@ internal static class DevelopmentDataSeeder
             });
 
             await db.SaveChangesAsync();
+
+            // Seed a short message thread so the Messages tab has content
+            if (!await db.CaseMessages.AnyAsync(m => m.CaseId == danielCase.Id))
+            {
+                db.CaseMessages.AddRange(
+                    new CaseMessage
+                    {
+                        Id = new Guid("11000001-0000-0000-0000-000000000001"),
+                        CaseId = danielCase.Id, AuthorAppUserId = sarah.Id,
+                        Body = "Hi Daniel, we've reviewed your submission and scheduled an initial site assessment for next week. We'll reach out if we need anything before then.",
+                        SenderSide = Ben.Data.Common.Enums.CaseMessageSide.Organization,
+                        IsReadByClient = false, IsReadByOrg = true,
+                        DateCreated = now.AddDays(-3), CreatedByAppUserId = sarah.Id,
+                    },
+                    new CaseMessage
+                    {
+                        Id = new Guid("11000001-0000-0000-0000-000000000002"),
+                        CaseId = danielCase.Id, AuthorAppUserId = daniel.Id,
+                        Body = "Thank you! The activity has been a bit more frequent this week — mainly in the upstairs hallway around 2am. Should I log these somewhere?",
+                        SenderSide = Ben.Data.Common.Enums.CaseMessageSide.Client,
+                        IsReadByClient = true, IsReadByOrg = true,
+                        DateCreated = now.AddDays(-2), CreatedByAppUserId = daniel.Id,
+                    },
+                    new CaseMessage
+                    {
+                        Id = new Guid("11000001-0000-0000-0000-000000000003"),
+                        CaseId = danielCase.Id, AuthorAppUserId = sarah.Id,
+                        Body = "Yes! Please use the 'Log Occurrence' button on your case page. Include the time and a brief description. That helps us know where to focus our equipment.",
+                        SenderSide = Ben.Data.Common.Enums.CaseMessageSide.Organization,
+                        IsReadByClient = false, IsReadByOrg = true,
+                        DateCreated = now.AddDays(-1), CreatedByAppUserId = sarah.Id,
+                    });
+                await db.SaveChangesAsync();
+            }
+
             Console.WriteLine("[DevDataSeeder] Created accepted case for Daniel Park (client dashboard test data).");
         }
 

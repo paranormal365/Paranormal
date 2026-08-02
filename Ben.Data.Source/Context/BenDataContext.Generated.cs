@@ -79,6 +79,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<EvidenceVote> EvidenceVotes { get; set; }
         public virtual DbSet<CaseVote> CaseVotes { get; set; }
         public virtual DbSet<CaseTransferLog> CaseTransferLogs { get; set; }
+        public virtual DbSet<CaseMessage> CaseMessages { get; set; }
         public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
         public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
         public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
@@ -1218,6 +1219,24 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.TransferReason).HasMaxLength(1000);
             modelBuilder.Entity<CaseTransferLog>()
                 .Property(e => e.RejectionReason).HasMaxLength(1000);
+
+            // ── CaseMessage ─────────────────────────────────────────
+            modelBuilder.Entity<CaseMessage>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseMessage>()
+                .HasOne(e => e.AuthorAppUser).WithMany()
+                .HasForeignKey(e => e.AuthorAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseMessage>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseMessage>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseMessage>()
+                .Property(e => e.Body).HasMaxLength(4000);
+            modelBuilder.Entity<CaseMessage>()
+                .HasIndex(e => new { e.CaseId, e.DateCreated });
         }
     }
 }

@@ -927,6 +927,15 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/my-cases/{caseId}/occurrences/{entryId}", token);
 
+    public async Task<IReadOnlyList<CaseMessageRecord>> GetMyCaseMessagesAsync(Guid caseId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<CaseMessageRecord>>($"/api/my-cases/{caseId}/messages", token);
+        return result ?? [];
+    }
+
+    public Task<CaseMessageRecord?> PostMyCaseMessageAsync(Guid caseId, string body, CancellationToken token = default)
+        => _api.PostAsync<object, CaseMessageRecord>($"/api/my-cases/{caseId}/messages", new { Body = body }, token);
+
     // ── My Investigations ───────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default)
@@ -937,6 +946,17 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public async Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default)
         => await _api.PutAsync<object, object>($"/api/my-investigations/{attendeeId}/rsvp", new { Rsvp = rsvp }, token);
+
+    // ── Case Messages (org side) ──────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<CaseMessageRecord>> GetCaseMessagesAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<CaseMessageRecord>>($"/api/orgs/{orgId}/cases/{caseId}/messages", token);
+        return result ?? [];
+    }
+
+    public Task<CaseMessageRecord?> PostCaseMessageAsync(Guid orgId, Guid caseId, string body, CancellationToken token = default)
+        => _api.PostAsync<object, CaseMessageRecord>($"/api/orgs/{orgId}/cases/{caseId}/messages", new { Body = body }, token);
 
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 

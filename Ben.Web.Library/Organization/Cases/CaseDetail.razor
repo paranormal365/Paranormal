@@ -120,6 +120,15 @@
                 </div>
             </TabStripTab>
 
+            @* ── Client Messages ─────────────────────────────────────────────── *@
+            <TabStripTab Title="Messages">
+                <div class="mt-2" style="max-width:680px;">
+                    <CaseMessageThread CurrentSide="@Ben.Data.Common.Enums.CaseMessageSide.Organization"
+                                       LoadMessages="@LoadOrgMessages"
+                                       PostMessage="@PostOrgMessage" />
+                </div>
+            </TabStripTab>
+
         </TelerikTabStrip>
     </div>
 }
@@ -238,4 +247,10 @@
     }
 
     private record StatusOption(CaseStatus Value, string Label);
+
+    private Task<IReadOnlyList<CaseMessageRecord>> LoadOrgMessages()
+        => AdminClient.GetCaseMessagesAsync(OrgId, CaseId);
+
+    private async Task<CaseMessageRecord?> PostOrgMessage(string body)
+        => await AdminClient.PostCaseMessageAsync(OrgId, CaseId, body);
 }

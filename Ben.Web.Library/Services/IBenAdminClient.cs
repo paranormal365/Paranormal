@@ -476,6 +476,12 @@ public interface IBenAdminClient
     /// <summary>Deletes a previously logged occurrence.</summary>
     Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default);
 
+    /// <summary>Returns all case messages visible to the client (marks org messages read).</summary>
+    Task<IReadOnlyList<CaseMessageRecord>> GetMyCaseMessagesAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Posts a message from the client to the org on this case.</summary>
+    Task<CaseMessageRecord?> PostMyCaseMessageAsync(Guid caseId, string body, CancellationToken token = default);
+
     // ── My Investigations (member dashboard) ──────────────────────────────────
 
     /// <summary>Returns all investigations the current user is assigned to attend.</summary>
@@ -483,6 +489,14 @@ public interface IBenAdminClient
 
     /// <summary>Sets the current user's RSVP on their attendee record.</summary>
     Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default);
+
+    // ── Case Messages (org side) ───────────────────────────────────────────────
+
+    /// <summary>Returns all case messages visible to the org (marks client messages read).</summary>
+    Task<IReadOnlyList<CaseMessageRecord>> GetCaseMessagesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+
+    /// <summary>Posts a message from the org to the client on this case.</summary>
+    Task<CaseMessageRecord?> PostCaseMessageAsync(Guid orgId, Guid caseId, string body, CancellationToken token = default);
 
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
@@ -1163,6 +1177,18 @@ public sealed record LogOccurrenceRequest(
     DateTime? EventDateTime,
     string?   Title,
     string?   Body);
+
+// ── Case message board response records ──────────────────────────────────────
+public sealed record CaseMessageRecord(
+    Guid                             Id,
+    Guid                             CaseId,
+    Guid                             AuthorAppUserId,
+    string                           AuthorDisplayName,
+    string                           Body,
+    Ben.Data.Common.Enums.CaseMessageSide SenderSide,
+    bool                             IsReadByClient,
+    bool                             IsReadByOrg,
+    DateTime                         DateCreated);
 
 // ── My Investigations response records ───────────────────────────────────────
 public sealed record MyInvestigationItem(
