@@ -6,7 +6,9 @@ public class CaseProfile : Profile
 {
     public CaseProfile()
     {
-        CreateMap<Case, CaseRecord>();
+        CreateMap<Case, CaseRecord>()
+            .ForMember(d => d.CaseManagerDisplayName,
+                       o => o.MapFrom(s => s.CaseManagerAppUser != null ? s.CaseManagerAppUser.DisplayName : null));
     }
 }
 
