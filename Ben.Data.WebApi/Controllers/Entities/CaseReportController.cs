@@ -119,6 +119,21 @@ public sealed class CaseReportController : BenControllerBase
         report.DateUpdated          = DateTime.UtcNow;
         report.UpdatedByAppUserId   = userId;
         await db.SaveChangesAsync(ct);
+
+        // Notify client via case message so unread badge and message panel both update
+        db.CaseMessages.Add(new Ben.Data.Source.Entities.CaseMessage
+        {
+            Id                 = Guid.NewGuid(),
+            CaseId             = caseId,
+            AuthorAppUserId    = userId,
+            Body               = $"Your investigation report has been published: <strong>{report.Title}</strong>. You can view and download it from your case page.",
+            SenderSide         = Ben.Data.Common.Enums.CaseMessageSide.Organization,
+            IsReadByClient     = false,
+            IsReadByOrg        = true,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        });
+        await db.SaveChangesAsync(ct);
         return Ok(ToDetail(report));
     }
 

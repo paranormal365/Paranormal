@@ -74,7 +74,13 @@ else
                        OnClick="@(() => DownloadPdf(_editingReport.Id, _editingReport.Title))">PDF</TelerikButton>
     </div>
 
-    @if (_error is not null) { <div class="alert alert-danger py-2 small">@_error</div> }
+    @if (_error is not null) { <div class="alert alert-danger py-2 small mb-3">@_error</div> }
+    @if (_publishedTitle is not null)
+    {
+        <div class="alert alert-success py-2 small mb-3">
+            <strong>Published.</strong> Client has been notified via the case message board: "@_publishedTitle"
+        </div>
+    }
 
     @* ── Header fields ─────────────────────────────────────────────────────── *@
     <div class="card mb-3">
@@ -207,6 +213,7 @@ else
     private bool _loading = true;
     private bool _saving;
     private string? _error;
+    private string? _publishedTitle;
 
     // New report dialog
     private bool _showNewDialog;
@@ -279,11 +286,16 @@ else
     private async Task PublishReport()
     {
         if (_editingReport is null) return;
-        _saving = true;
+        _saving = true; _publishedTitle = null;
         try
         {
             var result = await AdminClient.PublishCaseReportAsync(OrgId, CaseId, _editingReport.Id);
-            if (result is not null) { _editingReport = result; UpdateSummaryList(result); }
+            if (result is not null)
+            {
+                _editingReport = result;
+                UpdateSummaryList(result);
+                _publishedTitle = result.Title; // shows success banner
+            }
         }
         catch { _error = "Failed to publish."; }
         finally { _saving = false; }
