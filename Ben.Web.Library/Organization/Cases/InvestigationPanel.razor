@@ -46,6 +46,10 @@
                                 @if (!string.IsNullOrEmpty(i.Location))
                                 { <span> · @i.Location</span> }
                             </div>
+                            @if (!string.IsNullOrWhiteSpace(i.Description))
+                            {
+                                <div class="mt-1 text-secondary small">@i.Description</div>
+                            }
                             @if (!string.IsNullOrWhiteSpace(i.Notes))
                             {
                                 <div class="mt-2 text-body-secondary" style="font-size:.85rem;">
@@ -91,7 +95,23 @@
                                                         var a = att;
                                                         <tr>
                                                             <td class="align-middle small">@(a.DisplayName ?? a.AppUserId.ToString()[..8])</td>
-                                                            <td class="align-middle small text-secondary">@(a.AssignedRole ?? "—")</td>
+                                                            <td class="align-middle small">
+                                                                @if (_editRoleAttendeeId == a.Id)
+                                                                {
+                                                                    <TelerikTextBox @bind-Value="@_editRoleValue"
+                                                                                    Width="120px"
+                                                                                    @onblur="@(() => SaveRole(i, a))" />
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="text-secondary" @ondblclick="@(() => StartEditRole(a))">@(a.AssignedRole ?? "—")</span>
+                                                                    <TelerikButton Size="@ThemeConstants.Button.Size.ExtraSmall"
+                                                                                   FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                                                   Icon="@SvgIcon.Pencil"
+                                                                                   Title="Edit role"
+                                                                                   OnClick="@(() => StartEditRole(a))" />
+                                                                }
+                                                            </td>
                                                             <td class="text-center align-middle">
                                                                 <input type="checkbox"
                                                                        class="form-check-input"
@@ -158,8 +178,11 @@
                 <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
                 <TelerikTextBox @bind-Value="@_form.Title" Width="100%"
                                 Placeholder="Night Investigation #1" />
-            </div>
-            <div class="col-md-6">
+            </div>            <div class="col-12">
+                <label class="form-label fw-semibold">Investigation Plan / Description</label>
+                <TelerikTextArea @bind-Value="@_form.Description" Rows="3" Width="100%"
+                                 Placeholder="What areas will be investigated? What equipment will be used?" />
+            </div>            <div class="col-md-6">
                 <label class="form-label fw-semibold">Scheduled Date & Time</label>
                 <TelerikDateTimePicker @bind-Value="@_form.ScheduledDateTime" Width="100%" />
             </div>
@@ -231,6 +254,8 @@
     private bool _attendeeBusy;
     private Guid _newAttendeeUserId;
     private string _newAttendeeRole = "";
+    private Guid _editRoleAttendeeId;
+    private string _editRoleValue = "";
 
     private static readonly List<StatusOption> _statusOptions = Enum
         .GetValues<InvestigationStatus>()
@@ -315,6 +340,28 @@
         finally { _attendeeBusy = false; }
     }
 
+    private void StartEditRole(InvestigationAttendeeRecord att)
+    {
+        _editRoleAttendeeId = att.Id;
+        _editRoleValue      = att.AssignedRole ?? "";
+    }
+
+    private async Task SaveRole(InvestigationRecord inv, InvestigationAttendeeRecord att)
+    {
+        if (_editRoleAttendeeId != att.Id) return;
+        _editRoleAttendeeId = Guid.Empty;
+        var newRole = string.IsNullOrWhiteSpace(_editRoleValue) ? null : _editRoleValue.Trim();
+        if (newRole == att.AssignedRole) return;
+        _attendeeBusy = true;
+        try
+        {
+            await AdminClient.UpdateInvestigationAttendanceAsync(OrgId, CaseId, inv.Id, att.Id, att.DidAttend, newRole);
+            await RefreshAttendeesAsync(inv.Id);
+        }
+        catch { _error = "Failed to update role."; }
+        finally { _attendeeBusy = false; }
+    }
+
     private List<MemberOption> AvailableMembers(Guid invId)
     {
         var added = _attendeeCache.GetValueOrDefault(invId)?.Select(a => a.AppUserId).ToHashSet() ?? [];
@@ -338,6 +385,7 @@
         _form = new InvForm
         {
             Title             = inv.Title,
+            Description       = inv.Description ?? "",
             Location          = inv.Location ?? "",
             ScheduledDateTime = inv.ScheduledDateTime,
             EndDateTime       = inv.EndDateTime,
@@ -356,7 +404,7 @@
         {
             var req = new UpsertInvestigationRequest(
                 Title:             _form.Title.Trim(),
-                Description:       null,
+                Description:       string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim(),
                 Location:          string.IsNullOrWhiteSpace(_form.Location) ? null : _form.Location.Trim(),
                 ScheduledDateTime: _form.ScheduledDateTime,
                 EndDateTime:       _form.EndDateTime,
@@ -412,6 +460,7 @@
     private class InvForm
     {
         public string             Title             { get; set; } = "";
+        public string             Description       { get; set; } = "";
         public string             Location          { get; set; } = "";
         public DateTime           ScheduledDateTime { get; set; } = DateTime.Now.AddDays(7);
         public DateTime?          EndDateTime       { get; set; }

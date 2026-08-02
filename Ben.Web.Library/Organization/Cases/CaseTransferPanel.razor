@@ -72,6 +72,16 @@
                                                    Enabled="@(!_isBusy)">Reject</TelerikButton>
                                 </div>
                             }
+                            @* Cancel button for outgoing pending transfers *@
+                            @if (transfer.Status == CaseTransferStatus.Pending && transfer.FromOrganizationId == OrgId)
+                            {
+                                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                               FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                                               Icon="@SvgIcon.Cancel"
+                                               OnClick="@(() => CancelTransfer(transfer))"
+                                               Enabled="@(!_isBusy)">Cancel Transfer</TelerikButton>
+                            }
                         </div>
                     </div>
                 </div>
@@ -253,6 +263,18 @@
             else { _showRespondDialog = false; await LoadAsync(); }
         }
         catch (Exception ex) { _dialogError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private async Task CancelTransfer(CaseTransferLogRecord transfer)
+    {
+        _isBusy = true;
+        try
+        {
+            await AdminClient.CancelCaseTransferAsync(OrgId, CaseId, transfer.Id);
+            await LoadAsync();
+        }
+        catch { _error = "Failed to cancel transfer."; }
         finally { _isBusy = false; }
     }
 
