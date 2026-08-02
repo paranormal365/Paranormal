@@ -35,7 +35,8 @@ namespace Ben.Data.WebApi.SeedData;
 ///   <item><description>Timeline entries: client reports, investigator notes, and research notes.</description></item>
 ///   <item><description>One scheduled investigation with attendees.</description></item>
 ///   <item><description>Case votes from multiple users (confirms/disputes/inconclusive).</description></item>
-///   <item><description>A sample client request from Daniel Park.</description></item>
+///   <item><description>A sample Draft client request from Daniel Park.</description></item>
+///   <item><description>An Assigned client request + Accepted case for Daniel Park (BenCo/tgh, case manager=Sarah) — enables /my-cases dashboard testing.</description></item>
 /// </list>
 /// </para>
 /// </remarks>
@@ -234,7 +235,7 @@ internal static class DevelopmentDataSeeder
             Console.WriteLine("[DevDataSeeder] Created investigation for Springfield Farmhouse case.");
         }
 
-        // ── Client request from Daniel Park ───────────────────────────────────
+        // ── Client request from Daniel Park (Draft) ───────────────────────────
         if (!await db.ClientRequests.AnyAsync(cr => cr.AppUserId == daniel.Id))
         {
             db.ClientRequests.Add(new ClientRequest
@@ -248,7 +249,89 @@ internal static class DevelopmentDataSeeder
                 DateCreated = now, CreatedByAppUserId = daniel.Id,
             });
             await db.SaveChangesAsync();
-            Console.WriteLine("[DevDataSeeder] Created client request for Daniel Park.");
+            Console.WriteLine("[DevDataSeeder] Created client request (Draft) for Daniel Park.");
+        }
+
+        // ── Accepted case for Daniel Park — enables /my-cases testing ─────────
+        // Creates a separate Assigned request + Accepted case so the client dashboard has data.
+        var danielAcceptedReq = await db.ClientRequests
+            .FirstOrDefaultAsync(cr => cr.AppUserId == daniel.Id && cr.Status == ClientRequestStatus.Assigned);
+        if (danielAcceptedReq is null && tgh is not null)
+        {
+            danielAcceptedReq = new ClientRequest
+            {
+                Id = Guid.NewGuid(), AppUserId = daniel.Id,
+                Status = ClientRequestStatus.Assigned,
+                StreetAddress1 = "4512 Belmont Blvd", City = "Nashville",
+                State = "TN", ZipCode = "37215", Country = "US",
+                Latitude = 36.1043m, Longitude = -86.7930m,
+                Gender = ClientGender.Male, BirthYear = 1988,
+                Description = "<p>Persistent unexplained activity at a residential property. Footsteps, moved objects, and temperature anomalies reported over six months.</p>",
+                DateCreated = now.AddDays(-30), CreatedByAppUserId = daniel.Id,
+            };
+            db.ClientRequests.Add(danielAcceptedReq);
+            await db.SaveChangesAsync();
+
+            // Create the accepted case linked to Daniel's request
+            var nextNum = (await db.Cases
+                .Where(c => c.OrganizationId == tgh.Id && c.CaseYear == 2026)
+                .MaxAsync(c => (int?)c.OrgCaseNumber) ?? 2) + 1;
+
+            var danielCase = new Case
+            {
+                Id = Guid.NewGuid(), OrganizationId = tgh.Id,
+                ClientRequestId = danielAcceptedReq.Id,
+                CaseManagerAppUserId = sarah.Id,
+                CaseYear = 2026, OrgCaseNumber = nextNum,
+                Title = "Park Residence, Nashville TN",
+                Description = "<p>Client reports persistent activity over six months: footsteps on the second floor after midnight and objects found displaced. Initial evidence review underway.</p>",
+                StreetAddress1 = "4512 Belmont Blvd", City = "Nashville",
+                State = "TN", ZipCode = "37215", Country = "US",
+                Latitude = 36.1043m, Longitude = -86.7930m,
+                Status = CaseStatus.Accepted, IsPublic = false,
+                PublicPseudonym = "The Park Family",
+                DateCaseOpened = now.AddDays(-25),
+                DateCreated = now.AddDays(-25), CreatedByAppUserId = sarah.Id,
+            };
+            db.Cases.Add(danielCase);
+
+            // Client report entry from Daniel
+            db.CaseTimelineEntries.Add(new CaseTimelineEntry
+            {
+                Id = Guid.NewGuid(), CaseId = danielCase.Id, AuthorAppUserId = daniel.Id,
+                EntryType = CaseTimelineEntryType.ClientReport,
+                EventDateTime = now.AddDays(-28),
+                Title = "Initial Occurrence — Footsteps",
+                Body = "<p>Heard distinct footsteps on the second floor at approximately 2:15 AM. No one was upstairs. Lasted about 90 seconds then stopped. Second occurrence this week.</p>",
+                IsPublic = false,
+                DateCreated = now.AddDays(-28), CreatedByAppUserId = daniel.Id,
+            });
+            db.CaseTimelineEntries.Add(new CaseTimelineEntry
+            {
+                Id = Guid.NewGuid(), CaseId = danielCase.Id, AuthorAppUserId = sarah.Id,
+                EntryType = CaseTimelineEntryType.InvestigatorNote,
+                EventDateTime = now.AddDays(-25),
+                Title = "Case Accepted — Initial Review",
+                Body = "<p>Case accepted following review of client submission. Will schedule initial contact and site assessment.</p>",
+                IsPublic = false,
+                DateCreated = now.AddDays(-25), CreatedByAppUserId = sarah.Id,
+            });
+
+            // Upcoming investigation
+            db.Investigations.Add(new Investigation
+            {
+                Id = Guid.NewGuid(), CaseId = danielCase.Id,
+                Title = "Initial Site Assessment",
+                Description = "First visit to the property. EMF baseline, audio placement, walkthrough with client.",
+                Location = "Park Residence — Full property",
+                ScheduledDateTime = now.AddDays(5),
+                EndDateTime       = now.AddDays(5).AddHours(4),
+                Status = InvestigationStatus.Scheduled,
+                DateCreated = now.AddDays(-20), CreatedByAppUserId = sarah.Id,
+            });
+
+            await db.SaveChangesAsync();
+            Console.WriteLine("[DevDataSeeder] Created accepted case for Daniel Park (client dashboard test data).");
         }
 
         Console.WriteLine("[DevDataSeeder] Development seed data applied successfully.");

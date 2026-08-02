@@ -441,6 +441,8 @@ public interface IBenAdminClient
     Task<IReadOnlyList<OrgPendingRequestRecord>> GetOrgPendingRequestsAsync(Guid orgId, CancellationToken token = default);
     Task<CaseRecord?> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default);
     Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default);
+    /// <summary>Marks a pending request as Viewed or UnderReview without accepting or declining.</summary>
+    Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default);
     Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default);
     Task<IReadOnlyList<CaseTimelineEntryRecord>> GetCaseTimelineAsync(Guid orgId, Guid caseId, CancellationToken token = default);
     Task<CaseTimelineEntryRecord?> AddCaseTimelineEntryAsync(Guid orgId, Guid caseId, UpsertTimelineEntryRequest request, CancellationToken token = default);
@@ -456,6 +458,23 @@ public interface IBenAdminClient
     Task<ClientRequestRecord?> UpdateClientRequestAsync(Guid id, UpsertClientRequestRequest request, CancellationToken token = default);
     Task<ClientRequestRecord?> SubmitClientRequestAsync(Guid id, IList<Guid> organizationIds, CancellationToken token = default);
     Task<ClientRequestRecord?> WithdrawClientRequestAsync(Guid id, CancellationToken token = default);
+
+    // ── My Cases (client dashboard) ───────────────────────────────────────────
+
+    /// <summary>Returns all cases where the current user is the originating client.</summary>
+    Task<IReadOnlyList<ClientCaseListItem>> GetMyCasesAsync(CancellationToken token = default);
+
+    /// <summary>Returns case detail + client-visible occurrences and upcoming investigations.</summary>
+    Task<ClientCaseDetail?> GetMyCaseAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Logs a new occurrence (ClientReport timeline entry) on the client's case.</summary>
+    Task<CaseTimelineEntryRecord?> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default);
+
+    /// <summary>Updates a previously logged occurrence.</summary>
+    Task<CaseTimelineEntryRecord?> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default);
+
+    /// <summary>Deletes a previously logged occurrence.</summary>
+    Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default);
 
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
@@ -1089,3 +1108,48 @@ public sealed record UpsertClientRequestRequest(
     Ben.Data.Common.Enums.ClientGender Gender,
     int? BirthYear,
     string? Description);
+// ── My Cases (client dashboard) response records ─────────────────────────────
+public sealed record ClientCaseListItem(
+    Guid      CaseId,
+    string    CaseReference,
+    string    Title,
+    string    City,
+    string    State,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    string?   CaseManagerDisplayName,
+    DateTime  DateCaseOpened);
+
+public sealed record ClientCaseDetail(
+    Guid      CaseId,
+    string    CaseReference,
+    string    Title,
+    string    City,
+    string    State,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    string?   Description,
+    string?   CaseManagerDisplayName,
+    DateTime  DateCaseOpened,
+    DateTime? DateCaseClosed,
+    IReadOnlyList<ClientCaseOccurrence>    Occurrences,
+    IReadOnlyList<ClientCaseInvestigation> Investigations);
+
+public sealed record ClientCaseOccurrence(
+    Guid      Id,
+    Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,
+    DateTime? EventDateTime,
+    string?   Title,
+    string?   Body,
+    DateTime  DateCreated);
+
+public sealed record ClientCaseInvestigation(
+    Guid       Id,
+    string     Title,
+    DateTime   ScheduledDateTime,
+    DateTime?  EndDateTime,
+    string?    Location,
+    Ben.Data.Common.Enums.InvestigationStatus Status);
+
+public sealed record LogOccurrenceRequest(
+    DateTime? EventDateTime,
+    string?   Title,
+    string?   Body);

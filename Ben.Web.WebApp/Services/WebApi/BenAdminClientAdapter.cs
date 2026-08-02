@@ -853,6 +853,12 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         return result is not null;
     }
 
+    public Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default)
+        => _api.PutAsync<object, object>(
+               $"/api/organizations/{orgId}/cases/request-status/{clientRequestId}",
+               new { Status = (int)status }, token)
+           .ContinueWith(t => t.Result is not null);
+
     public Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default)
         => _api.PutAsync<UpdateCaseRequest, CaseRecord>($"/api/organizations/{orgId}/cases/{caseId}", request, token);
 
@@ -900,6 +906,26 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<ClientRequestRecord?> WithdrawClientRequestAsync(Guid id, CancellationToken token = default)
         => _api.PostAsync<object, ClientRequestRecord>($"/api/client-requests/{id}/withdraw", new { }, token);
+
+    // ── My Cases ─────────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<ClientCaseListItem>> GetMyCasesAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<ClientCaseListItem>>("/api/my-cases", token);
+        return result ?? [];
+    }
+
+    public Task<ClientCaseDetail?> GetMyCaseAsync(Guid caseId, CancellationToken token = default)
+        => _api.GetAsync<ClientCaseDetail>($"/api/my-cases/{caseId}", token);
+
+    public Task<CaseTimelineEntryRecord?> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default)
+        => _api.PostAsync<LogOccurrenceRequest, CaseTimelineEntryRecord>($"/api/my-cases/{caseId}/occurrences", request, token);
+
+    public Task<CaseTimelineEntryRecord?> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default)
+        => _api.PutAsync<LogOccurrenceRequest, CaseTimelineEntryRecord>($"/api/my-cases/{caseId}/occurrences/{entryId}", request, token);
+
+    public Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/my-cases/{caseId}/occurrences/{entryId}", token);
 
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
