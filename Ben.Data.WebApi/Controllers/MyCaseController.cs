@@ -567,9 +567,84 @@ public sealed class MyCaseController : BenControllerBase
     }
 
     private static async Task<bool> IsCaseClient(Ben.Data.Source.Context.BenDataContext db, Guid caseId, Guid userId, CancellationToken ct)
-        => await db.Cases.AsNoTracking()
+    {
+        // Primary client check
+        if (await db.Cases.AsNoTracking()
             .Include(c => c.ClientRequest)
-            .AnyAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+            .AnyAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct))
+            return true;
+        // Secondary co-client check
+        return await db.CaseClientAccesses.AsNoTracking()
+            .AnyAsync(a => a.CaseId == caseId && a.AppUserId == userId, ct);
+    }
+
+    // ── Co-client management ──────────────────────────────────────────────────
+
+    /// <summary>Lists secondary users the primary client has granted access to this case.</summary>
+    [HttpGet("{caseId:guid}/co-clients")]
+    public async Task<ActionResult<IEnumerable<CoClientItem>>> GetCoClients(Guid caseId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        // Only the primary client can manage co-clients
+        var primaryClient = await db.Cases.AsNoTracking().Include(c => c.ClientRequest)
+            .FirstOrDefaultAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+        if (primaryClient is null) return Forbid();
+
+        var coClients = await db.CaseClientAccesses.AsNoTracking()
+            .Include(a => a.AppUser)
+            .Where(a => a.CaseId == caseId)
+            .ToListAsync(ct);
+        return Ok(coClients.Select(a => new CoClientItem(a.Id, a.AppUserId, a.AppUser.DisplayName ?? a.AppUser.Email!)));
+    }
+
+    /// <summary>Primary client grants another registered user access to the case.</summary>
+    [HttpPost("{caseId:guid}/co-clients")]
+    public async Task<ActionResult<CoClientItem>> AddCoClient(Guid caseId, [FromBody] AddCoClientRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var primaryClient = await db.Cases.AsNoTracking().Include(c => c.ClientRequest)
+            .FirstOrDefaultAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+        if (primaryClient is null) return Forbid();
+
+        var target = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == request.Email, ct);
+        if (target is null) return BadRequest("No account found with that email address.");
+        if (target.Id == userId) return BadRequest("You are already the primary client.");
+        if (await db.CaseClientAccesses.AnyAsync(a => a.CaseId == caseId && a.AppUserId == target.Id, ct))
+            return Conflict("This user already has access.");
+
+        var access = new Ben.Data.Source.Entities.CaseClientAccess
+        {
+            Id = Guid.NewGuid(), CaseId = caseId, AppUserId = target.Id,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        };
+        db.CaseClientAccesses.Add(access);
+        await db.SaveChangesAsync(ct);
+        return Ok(new CoClientItem(access.Id, target.Id, target.DisplayName ?? target.Email!));
+    }
+
+    /// <summary>Primary client revokes a co-client's access.</summary>
+    [HttpDelete("{caseId:guid}/co-clients/{accessId:guid}")]
+    public async Task<IActionResult> RemoveCoClient(Guid caseId, Guid accessId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var primaryClient = await db.Cases.AsNoTracking().Include(c => c.ClientRequest)
+            .FirstOrDefaultAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+        if (primaryClient is null) return Forbid();
+
+        var access = await db.CaseClientAccesses.FirstOrDefaultAsync(a => a.Id == accessId && a.CaseId == caseId, ct);
+        if (access is null) return NotFound();
+        db.CaseClientAccesses.Remove(access);
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
 
     // ── Investigation cancellation (client-initiated, time-gated) ─────────────
 
@@ -745,3 +820,6 @@ public sealed record ScheduleProposalDto(
 public sealed record SlotDto(Guid Id, DateTime StartDateTime, DateTime? EndDateTime, int SortOrder);
 
 public sealed record CancellationResult(Guid InvestigationId, DateTime DeadlineUtc, int RequiredLeadHours);
+
+public sealed record CoClientItem(Guid AccessId, Guid AppUserId, string DisplayName);
+public sealed record AddCoClientRequest(string Email);

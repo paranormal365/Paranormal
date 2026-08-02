@@ -711,6 +711,10 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"{InvBase(orgId, caseId)}/{id}", token);
 
+    public Task<bool> CancelInvestigationByOrgAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
+        => _api.PostAsync<object, object>($"{InvBase(orgId, caseId)}/{id}/cancel", new { }, token)
+               .ContinueWith(t => t.Result is not null);
+
     public async Task<IReadOnlyList<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
     {
         var result = await _api.GetAsync<IReadOnlyList<InvestigationAttendeeRecord>>($"{InvBase(orgId, caseId)}/{id}/attendees", token);
@@ -1062,6 +1066,17 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<CaseMessageRecord?> PostMyCaseMessageAsync(Guid caseId, string body, CancellationToken token = default)
         => _api.PostAsync<object, CaseMessageRecord>($"/api/my-cases/{caseId}/messages", new { Body = body }, token);
+
+    // ── Co-client access management ───────────────────────────────────────────
+
+    public async Task<IReadOnlyList<CoClientItem>> GetCoClientsAsync(Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<CoClientItem>>($"/api/my-cases/{caseId}/co-clients", token) ?? [];
+
+    public Task<CoClientItem?> AddCoClientAsync(Guid caseId, string email, CancellationToken token = default)
+        => _api.PostAsync<object, CoClientItem>($"/api/my-cases/{caseId}/co-clients", new { Email = email }, token);
+
+    public Task<bool> RemoveCoClientAsync(Guid caseId, Guid accessId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/my-cases/{caseId}/co-clients/{accessId}", token);
 
     // ── My Investigations ───────────────────────────────────────────────────
 

@@ -240,6 +240,13 @@
     <DialogButtons>
         @if (_editInv is not null)
         {
+            @if (_editInv.Status == InvestigationStatus.Scheduled)
+            {
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
+                               Icon="@SvgIcon.Cancel"
+                               OnClick="CancelInvestigation"
+                               Enabled="@(!_isBusy)">Cancel Visit</TelerikButton>
+            }
             <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                            Icon="@SvgIcon.Trash"
                            OnClick="DeleteInvestigation"
@@ -442,6 +449,20 @@
 
             if (result is null) { _dialogError = "Save failed."; }
             else { _showDialog = false; await LoadAsync(); }
+        }
+        catch (Exception ex) { _dialogError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private async Task CancelInvestigation()
+    {
+        if (_editInv is null) return;
+        _isBusy = true;
+        try
+        {
+            await AdminClient.CancelInvestigationByOrgAsync(OrgId, CaseId, _editInv.Id);
+            _showDialog = false;
+            await LoadAsync();
         }
         catch (Exception ex) { _dialogError = ex.Message; }
         finally { _isBusy = false; }

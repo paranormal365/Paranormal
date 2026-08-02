@@ -275,6 +275,33 @@
         </div>
     }
 
+    @* ── Co-client access management (primary client only) ──────────────────── *@
+    @if (_isPrimaryClient)
+    {
+        <div class="card mt-4">
+            <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+                <span><TelerikSvgIcon Icon="@SvgIcon.Group" /> Shared Access</span>
+                <TelerikButton Size="sm" Icon="@SvgIcon.Plus" OnClick="@(() => _showAddCoClient = true)">Add Person</TelerikButton>
+            </div>
+            <div class="card-body">
+                @if (_coClients.Count == 0)
+                {
+                    <div class="text-secondary small">Only you have access. Use 'Add Person' to share this case with another account.</div>
+                }
+                <div class="d-flex flex-column gap-1">
+                    @foreach (var cc in _coClients)
+                    {
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="small">@cc.DisplayName</span>
+                            <TelerikButton Size="sm" FillMode="flat" ThemeColor="error" Icon="@SvgIcon.X"
+                                           OnClick="@(async () => await RemoveCoClient(cc.AccessId))" />
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
     @* ── Message thread ──────────────────────────────────────────────────────── *@
     <div class="card mt-4">
         <div class="card-header fw-semibold d-flex align-items-center gap-2">
@@ -389,6 +416,28 @@
     </TelerikWindow>
 }
 
+@* ── Add co-client dialog ─────────────────────────────────────────────────────── *@
+<TelerikWindow @bind-Visible="@_showAddCoClient" Title="Share Case Access" Width="400px" Modal="true">
+    <WindowContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Email address of person to add</label>
+                <TelerikTextBox @bind-Value="@_addCoClientEmail" Width="100%"
+                                Placeholder="person@example.com" />
+                <div class="form-text">They must already have an account on this platform.</div>
+            </div>
+        </div>
+    </WindowContent>
+    <WindowActions><WindowAction Name="Close" OnClick="@(() => _showAddCoClient = false)" /></WindowActions>
+    <WindowFooter>
+        <div class="d-flex gap-2 justify-content-end w-100">
+            <TelerikButton OnClick="@(() => _showAddCoClient = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="primary" OnClick="AddCoClient"
+                           Enabled="@(!string.IsNullOrWhiteSpace(_addCoClientEmail))">Add</TelerikButton>
+        </div>
+    </WindowFooter>
+</TelerikWindow>
+
 @* ── Counter-proposal dialog ──────────────────────────────────────────────────── *@
 <TelerikWindow @bind-Visible="@_showCounterDialog" Title="Suggest a Different Date"
                Width="440px" Modal="true">
@@ -433,8 +482,12 @@
     private OccForm _form = new();
     private List<CaseReportSummary> _reports = [];
     private List<ScheduleProposalDto> _pendingProposals = [];
+    private List<CoClientItem> _coClients = [];
+    private bool _isPrimaryClient;
     private bool _respondingProposal;
     private bool _cancelling;
+    private bool _showAddCoClient;
+    private string _addCoClientEmail = "";
     private bool _showCounterDialog;
     private Guid _counterProposalId;
     private DateTime? _counterDateTime;
@@ -463,6 +516,16 @@
         // Load pending scheduling proposals
         try { _pendingProposals = (await AdminClient.GetMyScheduleProposalsAsync(CaseId)).ToList(); StateHasChanged(); }
         catch { /* silent */ }
+
+        // Co-clients — only load for primary client
+        _isPrimaryClient = _case?.CaseManagerDisplayName is not null || true; // will check via API result
+        try
+        {
+            _coClients = (await AdminClient.GetCoClientsAsync(CaseId)).ToList();
+            _isPrimaryClient = true; // if this call succeeds, user is primary client
+            StateHasChanged();
+        }
+        catch { _isPrimaryClient = false; }
     }
 
     private List<ClientCaseOccurrence> OccurrencesForDate(DateTime date) =>
@@ -569,6 +632,21 @@
         public DateTime? EventDateTime { get; set; } = DateTime.Now;
         public string    Title         { get; set; } = "";
         public string    Body          { get; set; } = "";
+    }
+
+    private async Task RemoveCoClient(Guid accessId)
+    {
+        await AdminClient.RemoveCoClientAsync(CaseId, accessId);
+        _coClients.RemoveAll(c => c.AccessId == accessId);
+        StateHasChanged();
+    }
+
+    private async Task AddCoClient()
+    {
+        if (string.IsNullOrWhiteSpace(_addCoClientEmail)) return;
+        var result = await AdminClient.AddCoClientAsync(CaseId, _addCoClientEmail.Trim());
+        if (result is not null) { _coClients.Add(result); _showAddCoClient = false; _addCoClientEmail = ""; }
+        StateHasChanged();
     }
 
     private Task<IReadOnlyList<CaseMessageRecord>> LoadClientMessages()
