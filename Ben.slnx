@@ -14,6 +14,7 @@
   </Folder>
   <Folder Name="/Testing Projects/">
     <Project Path="Ben.Service.RepositoryService.Tests/Ben.Service.RepositoryService.Tests.csproj" />
+    <Project Path="Ben.Web.Playwright/Ben.Web.Playwright.csproj" />
   </Folder>
   <Folder Name="/Web Layer/">
     <Project Path="Ben.Web.Library/Ben.Web.Library.csproj" />
