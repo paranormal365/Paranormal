@@ -163,6 +163,13 @@
 
             @if (_canManageRoles)
             {
+                <TabStripTab Title="Requests">
+                    <OrgPendingRequests OrgId="@OrgId" EmbeddedMode="true" />
+                </TabStripTab>
+            }
+
+            @if (_canManageRoles)
+            {
                 <TabStripTab Title="CMS">
                     <OrgCmsEditor OrgId="@OrgId" EmbeddedMode="true" />
                 </TabStripTab>
