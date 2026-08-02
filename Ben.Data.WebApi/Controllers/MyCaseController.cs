@@ -143,6 +143,7 @@ public sealed class MyCaseController : BenControllerBase
             Title              = request.Title?.Trim(),
             Body               = request.Body?.Trim(),
             IsPublic           = false,
+            IpAddress          = HttpContext.Connection.RemoteIpAddress?.ToString(),
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };

@@ -121,4 +121,35 @@ public class LocalFileStorageServiceTests : IDisposable
     {
         Assert.False(_svc.Exists(_svc.UserFilePath(Guid.NewGuid(), "nope.ogg")));
     }
+
+    // ── CaseFilePath ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void CaseFilePath_ReturnsExpectedFormat()
+    {
+        var caseId = Guid.NewGuid();
+        var path = _svc.CaseFilePath(caseId, "evidence.jpg");
+        Assert.Equal($"cases/{caseId}/evidence.jpg", path);
+    }
+
+    [Fact]
+    public void CaseFilePath_UsesForwardSlashes()
+    {
+        var path = _svc.CaseFilePath(Guid.NewGuid(), "clip.mp3");
+        Assert.DoesNotContain('\\', path);
+    }
+
+    [Fact]
+    public async Task CaseFilePath_WrittenFileCanBeRead()
+    {
+        var caseId = Guid.NewGuid();
+        var path   = _svc.CaseFilePath(caseId, "test.bin");
+        var data   = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF };
+        await _svc.WriteAsync(path, new MemoryStream(data));
+
+        await using var stream = await _svc.OpenReadAsync(path);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        Assert.Equal(data, ms.ToArray());
+    }
 }

@@ -33,4 +33,10 @@ public interface IFileStorageService
     /// e.g. "orgs/{orgId}/{storedFileName}"
     /// </summary>
     string OrgFilePath(Guid orgId, string storedFileName);
+
+    /// <summary>
+    /// Builds the canonical relative storage path for a case-scoped file.
+    /// e.g. "cases/{caseId}/{storedFileName}"
+    /// </summary>
+    string CaseFilePath(Guid caseId, string storedFileName);
 }

@@ -43,7 +43,8 @@ public class UploadFileControllerTests
             });
         var ctrl = new UploadFileController(factory, mapperMock.Object,
             new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object,
-            new Moq.Mock<IAuditLogService>().Object);
+            new Moq.Mock<IAuditLogService>().Object,
+            new Ben.Data.WebApi.Services.FileMetadataExtractorService());
         ctrl.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
         {
             HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext

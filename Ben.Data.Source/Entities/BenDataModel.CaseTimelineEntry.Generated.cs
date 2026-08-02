@@ -23,6 +23,9 @@ namespace Ben.Data.Source.Entities
         /// <summary>When true, this entry is visible on the public case page.</summary>
         public bool IsPublic { get; set; }
 
+        /// <summary>Client IP at submission time. SuperAdmin-only — never returned in public responses.</summary>
+        public string? IpAddress { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }

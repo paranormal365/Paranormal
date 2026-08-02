@@ -28,7 +28,11 @@ public sealed class LocalFileStorageService : IFileStorageService
 
     public string OrgFilePath(Guid orgId, string storedFileName)
         => Path.Combine("orgs", orgId.ToString(), storedFileName)
-               .Replace('\\', '/');   // always use forward slashes in stored paths
+               .Replace('\\', '/');
+
+    public string CaseFilePath(Guid caseId, string storedFileName)
+        => Path.Combine("cases", caseId.ToString(), storedFileName)
+               .Replace('\\', '/');
 
     public async Task WriteAsync(string relativePath, Stream data, CancellationToken ct = default)
     {
