@@ -5,12 +5,15 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 
-<PageTitle>Calendar</PageTitle>
+@if (!EmbeddedMode) { <PageTitle>Calendar</PageTitle> }
 
 <div class="container-fluid py-3">
-    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-        <h3 class="mb-0">Organization Calendar</h3>
-    </div>
+    @if (!EmbeddedMode)
+    {
+        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+            <h3 class="mb-0">Organization Calendar</h3>
+        </div>
+    }
 
     @if (_error is not null) { <div class="alert alert-danger mb-3">@_error</div> }
 
@@ -115,7 +118,8 @@
 </TelerikDialog>
 
 @code {
-    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid OrgId        { get; set; }
+    [Parameter] public bool EmbeddedMode  { get; set; }
 
     private List<OrgCalendarAppointment>? _appointments;
     private List<OrgCalendarEventRecord> _events = [];

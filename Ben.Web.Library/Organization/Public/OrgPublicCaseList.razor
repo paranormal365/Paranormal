@@ -1,0 +1,100 @@
+@page "/o/{UrlName}/cases"
+@namespace Ben.Web.Library.Organization.Public
+@using Ben.Data.Common.Enums
+
+@inject IBenAdminClient AdminClient
+@inject NavigationManager NavManager
+
+<PageTitle>Cases — @(_orgName ?? UrlName)</PageTitle>
+
+@if (_loading)
+{
+    <div class="d-flex justify-content-center py-5">
+        <TelerikLoaderContainer Visible="true" Text="Loading…" />
+    </div>
+}
+else
+{
+    <div class="container-fluid px-3 py-3" style="max-width:900px; margin:auto;">
+
+        @* ── Breadcrumb nav ───────────────────────────────────────────────── *@
+        <nav class="mb-4 d-flex flex-wrap gap-2">
+            <a href="/o/@UrlName" class="btn btn-sm btn-outline-secondary">← @(_orgName ?? UrlName)</a>
+            <span class="btn btn-sm btn-outline-primary disabled" aria-current="page">Cases</span>
+        </nav>
+
+        <h2 class="mb-3">Investigations</h2>
+
+        @if (_cases.Count == 0)
+        {
+            <div class="alert alert-light text-muted text-center">
+                No public cases have been published yet.
+            </div>
+        }
+        else
+        {
+            <div class="row g-3">
+                @foreach (var c in _cases)
+                {
+                    <div class="col-12 col-md-6">
+                        <div class="card h-100 @(c.IsHaunted ? "border-warning" : "")">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-1">
+                                    <span class="text-muted small font-monospace">@c.CaseReference</span>
+                                    <span class="badge @BadgeClass(c.Status)">@StatusLabel(c.Status)</span>
+                                </div>
+                                <h5 class="card-title mb-1">@c.Title</h5>
+                                <p class="card-text text-secondary small mb-2">@c.City, @c.State</p>
+                                <p class="card-text text-muted" style="font-size:.8rem;">
+                                    Opened @c.DateCaseOpened.ToString("MMM d, yyyy")
+                                    @if (c.DateCaseClosed.HasValue)
+                                    {
+                                        <span> · Closed @c.DateCaseClosed.Value.ToString("MMM d, yyyy")</span>
+                                    }
+                                </p>
+                            </div>
+                            <div class="card-footer bg-transparent border-0 pt-0">
+                                <a href="/o/@UrlName/cases/@c.CaseReference.TrimStart('#')"
+                                   class="btn btn-sm btn-outline-primary">View Details</a>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string UrlName { get; set; } = "";
+
+    private IReadOnlyList<PublicCaseListItem> _cases = [];
+    private string? _orgName;
+    private bool _loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var org = await AdminClient.GetPublicOrgAsync(UrlName);
+        _orgName = org?.OrgName;
+        _cases   = await AdminClient.GetPublicCasesAsync(UrlName);
+
+        _loading = false;
+    }
+
+    private static string StatusLabel(CaseStatus s) => s switch
+    {
+        CaseStatus.Public   => "Public",
+        CaseStatus.Haunted  => "Haunted",
+        _                   => s.ToString(),
+    };
+
+    private static string BadgeClass(CaseStatus s) => s switch
+    {
+        CaseStatus.Haunted => "bg-warning text-dark",
+        CaseStatus.Public  => "bg-info text-dark",
+        _                  => "bg-secondary",
+    };
+}

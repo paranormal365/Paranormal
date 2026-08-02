@@ -22,9 +22,13 @@
     }
     else
     {
-        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-            <h4 class="mb-0">Files — @_orgName</h4>
-            <div class="d-flex gap-2 flex-wrap">
+        @if (!EmbeddedMode)
+        {
+            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                <h4 class="mb-0">Files — @_orgName</h4>
+            </div>
+        }
+        <div class="d-flex gap-2 flex-wrap mb-3">
                 <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                                Size="@ThemeConstants.Button.Size.Small"
                                OnClick="@(() => _showUploadDialog = true)">⬆ Upload</TelerikButton>
@@ -40,7 +44,6 @@
                 </TelerikButton>
                 <a href="/organizations" class="btn btn-sm btn-outline-secondary">← Organizations</a>
             </div>
-        </div>
 
         @if (_error is not null) { <div class="alert alert-danger">@_error</div> }
 
@@ -281,7 +284,8 @@
                      VerticalPosition="@NotificationVerticalPosition.Top" />
 
 @code {
-    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid OrgId        { get; set; }
+    [Parameter] public bool EmbeddedMode  { get; set; }
 
     private bool   _loading = true;
     private string? _error;
