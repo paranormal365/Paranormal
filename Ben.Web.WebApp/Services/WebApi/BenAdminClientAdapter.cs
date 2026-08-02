@@ -927,6 +927,20 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/my-cases/{caseId}/occurrences/{entryId}", token);
 
+    public async Task<OccurrenceFileItem?> AttachOccurrenceFileAsync(
+        Guid caseId, Guid entryId, Stream content, string fileName, string contentType, CancellationToken token = default)
+    {
+        using var form = new MultipartFormDataContent();
+        using var sc   = new StreamContent(content);
+        sc.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        form.Add(sc, "file", fileName);
+        return await _api.PostMultipartAsync<OccurrenceFileItem>(
+            $"/api/my-cases/{caseId}/occurrences/{entryId}/files", form, token);
+    }
+
+    public Task<bool> DetachOccurrenceFileAsync(Guid caseId, Guid entryId, Guid fileId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/my-cases/{caseId}/occurrences/{entryId}/files/{fileId}", token);
+
     public async Task<IReadOnlyList<CaseMessageRecord>> GetMyCaseMessagesAsync(Guid caseId, CancellationToken token = default)
     {
         var result = await _api.GetAsync<IReadOnlyList<CaseMessageRecord>>($"/api/my-cases/{caseId}/messages", token);

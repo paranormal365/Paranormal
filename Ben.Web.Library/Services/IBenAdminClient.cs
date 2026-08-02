@@ -476,6 +476,12 @@ public interface IBenAdminClient
     /// <summary>Deletes a previously logged occurrence.</summary>
     Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default);
 
+    /// <summary>Attaches a file to an occurrence entry using case-scoped storage.</summary>
+    Task<OccurrenceFileItem?> AttachOccurrenceFileAsync(Guid caseId, Guid entryId, Stream content, string fileName, string contentType, CancellationToken token = default);
+
+    /// <summary>Removes a file attachment from an occurrence and deletes the stored file.</summary>
+    Task<bool> DetachOccurrenceFileAsync(Guid caseId, Guid entryId, Guid fileId, CancellationToken token = default);
+
     /// <summary>Returns all case messages visible to the client (marks org messages read).</summary>
     Task<IReadOnlyList<CaseMessageRecord>> GetMyCaseMessagesAsync(Guid caseId, CancellationToken token = default);
 
@@ -1166,7 +1172,14 @@ public sealed record ClientCaseOccurrence(
     DateTime? EventDateTime,
     string?   Title,
     string?   Body,
-    DateTime  DateCreated);
+    DateTime  DateCreated,
+    IReadOnlyList<OccurrenceFileItem> Files);
+
+public sealed record OccurrenceFileItem(
+    Guid   FileId,
+    string FileName,
+    string ContentType,
+    long   FileSize);
 
 public sealed record ClientCaseInvestigation(
     Guid       Id,
