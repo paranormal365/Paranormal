@@ -477,6 +477,14 @@ public interface IBenAdminClient
     /// <summary>Downloads the published report PDF bytes for the client.</summary>
     Task<(byte[] Data, string FileName)?> DownloadMyCaseReportPdfAsync(Guid caseId, Guid reportId, CancellationToken token = default);
 
+    // ── Case Research ─────────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<CaseResearchEntryDto>> GetCaseResearchAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<CaseResearchEntryDto?> AddCaseResearchAsync(Guid orgId, Guid caseId, UpsertResearchRequest request, CancellationToken token = default);
+    Task<CaseResearchEntryDto?> UploadCaseResearchFileAsync(Guid orgId, Guid caseId, string title, string? description, Stream content, string fileName, string contentType, CancellationToken token = default);
+    Task<CaseResearchEntryDto?> UpdateCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, UpsertResearchRequest request, CancellationToken token = default);
+    Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
+
     // ── Client Requests ───────────────────────────────────────────────────────
 
     Task<IReadOnlyList<ClientRequestRecord>> GetMyClientRequestsAsync(CancellationToken token = default);
@@ -1305,3 +1313,23 @@ public sealed record MyInvestigationItem(
     Ben.Data.Common.Enums.RsvpStatus   Rsvp,
     bool?                              DidAttend,
     DateTime?                          EvidenceDueDate);
+
+// ── Case Research records ─────────────────────────────────────────────────────
+public sealed record UpsertResearchRequest(
+    Ben.Data.Common.Enums.CaseResearchType ResearchType,
+    string  Title,
+    string? Body,
+    string? Url);
+
+public sealed record CaseResearchEntryDto(
+    Guid                                   Id,
+    Guid                                   CaseId,
+    Ben.Data.Common.Enums.CaseResearchType ResearchType,
+    string                                 Title,
+    string?                                Body,
+    string?                                Url,
+    ResearchFileInfo?                      File,
+    int                                    SortOrder,
+    DateTime                               DateCreated);
+
+public sealed record ResearchFileInfo(Guid FileId, string FileName, string ContentType, long FileSize);
