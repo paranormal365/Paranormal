@@ -49,8 +49,6 @@
       "type": "shell",
       "command": "bash scripts/start-webapp-with-api.sh",
       "options": { "cwd": "${workspaceFolder}" },
-      "dependsOn": ["ensure-docker-db"],
-      "dependsOrder": "sequence",
       "isBackground": true,
       "presentation": {
         "label": "WebApp",

@@ -400,8 +400,8 @@
                 _geocodeError = "Address not found. Please check the details and try again.";
             else
             {
-                _lat = (decimal)result.Latitude;
-                _lon = (decimal)result.Longitude;
+                _lat = result.Latitude  ?? _lat;
+                _lon = result.Longitude ?? _lon;
             }
         }
         catch { _geocodeError = "Geocoding failed. You can continue without verification."; }
