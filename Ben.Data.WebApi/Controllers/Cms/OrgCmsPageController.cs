@@ -163,7 +163,7 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
             .FirstOrDefaultAsync(p => p.Id == pageId && p.OrganizationId == orgId, ct);
 
         var urlName = request.UrlName.Trim().ToLowerInvariant();
-        if (page.UrlName != urlName && await db.OrganizationPages.AnyAsync(
+        if (page!.UrlName != urlName && await db.OrganizationPages.AnyAsync(
                 p => p.OrganizationId == orgId && p.UrlName == urlName, ct))
             return BadRequest($"UrlName '{urlName}' is already in use for this organization.");
 
