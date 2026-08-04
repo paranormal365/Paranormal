@@ -31,6 +31,7 @@ public class SmokeTests : BenTestBase
         var body = await Page.InnerTextAsync("body");
         Assert.That(body, Is.Not.Empty, $"Page body was empty for {route.Url}");
         Assert.That(body, Does.Not.Contain("An unhandled error has occurred"), $"Error page detected at {route.Url}");
+        Assert.That(body, Does.Not.Contain("does not have a property matching"), $"Telerik parameter error at {route.Url}");
 
         var match = Page.GetByText(route.ExpectedText, new() { Exact = false });
         await Expect(match.First).ToBeVisibleAsync(new() { Timeout = 12_000 });
