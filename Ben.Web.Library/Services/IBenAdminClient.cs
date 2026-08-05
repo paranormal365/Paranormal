@@ -486,6 +486,13 @@ public interface IBenAdminClient
     Task<CaseResearchEntryDto?> UpdateCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, UpsertResearchRequest request, CancellationToken token = default);
     Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
 
+    // ── Case Notes ────────────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<CaseNoteDto>> GetCaseNotesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<CaseNoteDto?> CreateCaseNoteAsync(Guid orgId, Guid caseId, UpsertCaseNoteDto request, CancellationToken token = default);
+    Task<CaseNoteDto?> UpdateCaseNoteAsync(Guid orgId, Guid caseId, Guid noteId, UpsertCaseNoteDto request, CancellationToken token = default);
+    Task<bool> DeleteCaseNoteAsync(Guid orgId, Guid caseId, Guid noteId, CancellationToken token = default);
+
     // ── Investigation Scheduling ──────────────────────────────────────────────
 
     // Org side
@@ -1382,3 +1389,17 @@ public sealed record SlotDto(Guid Id, DateTime StartDateTime, DateTime? EndDateT
 
 // ── Co-client access records ──────────────────────────────────────────────────
 public sealed record CoClientItem(Guid AccessId, Guid AppUserId, string DisplayName);
+
+// ── Case note records ─────────────────────────────────────────────────────────
+public sealed record CaseNoteDto(
+    Guid      Id,
+    Guid      CaseId,
+    Guid      AuthorAppUserId,
+    string?   AuthorDisplayName,
+    string?   Title,
+    string    Body,
+    bool      IsPinned,
+    DateTime  DateCreated,
+    DateTime? DateUpdated);
+
+public sealed record UpsertCaseNoteDto(string? Title, string Body, bool IsPinned = false);

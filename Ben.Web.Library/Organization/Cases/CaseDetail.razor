@@ -154,7 +154,12 @@
                     <CaseResearch OrgId="@OrgId" CaseId="@CaseId" />
                 </div>
             </TabStripTab>
-
+            @* ── Notes ───────────────────────────────────────────────────────────── *@
+            <TabStripTab Title="Notes">
+                <div class="mt-2">
+                    <CaseNotes OrgId="@OrgId" CaseId="@CaseId" />
+                </div>
+            </TabStripTab>
         </TelerikTabStrip>
     </div>
 }
