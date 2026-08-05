@@ -118,12 +118,88 @@ else
                                                  Width="155px"
                                                  Size="@ThemeConstants.DropDownList.Size.Small"
                                                  Enabled="@_modalReady" />
+                            @* Colormap selector *@
+                            <TelerikDropDownList Data="@_colormapOptions"
+                                                 @bind-Value="_colormap"
+                                                 TextField="Label" ValueField="Value"
+                                                 Width="115px"
+                                                 Size="@ThemeConstants.DropDownList.Size.Small"
+                                                 Enabled="@_modalReady"
+                                                 OnChange="@(()=>_ = OnColormapChangedAsync())" />
                         }
+                        @* EQ toggle *@
+                        <TelerikButton ThemeColor="@(_showEq ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Enabled="@_modalReady"
+                                       OnClick="@(() => _showEq = !_showEq)">
+                            🎚 @(_showEq ? "Hide EQ" : "EQ / Filters")
+                        </TelerikButton>
                         <span class="small text-secondary fst-italic">
                             Click &amp; drag to mark a region &mdash; right-click to play, save, or edit
                         </span>
                     </span>
                 </div>
+
+                @* EQ / Processing panel *@
+                @if (_showEq && _modalReady)
+                {
+                    <div class="p-2 mb-2 rounded border bg-body-secondary" style="font-size:0.8rem;">
+                        <div class="d-flex gap-3 flex-wrap">
+
+                            @* 10-band EQ — horizontal sliders *@
+                            <div class="flex-grow-1" style="min-width:320px;">
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <strong class="small">Graphic EQ</strong>
+                                    <TelerikButton Size="sm" FillMode="flat" OnClick="ResetEqAsync">Reset</TelerikButton>
+                                </div>
+                                @{ var bands = new[] { (0, "32"), (1, "64"), (2, "125"), (3, "250"), (4, "500"), (5, "1k"), (6, "2k"), (7, "4k"), (8, "8k"), (9, "16k") }; }
+                                @foreach (var (idx, lbl) in bands)
+                                {
+                                    var b = idx;
+                                    <div class="d-flex align-items-center gap-1 mb-1">
+                                        <span class="text-muted" style="width:28px; text-align:right; font-size:0.7rem;">@lbl</span>
+                                        <TelerikSlider Value="@_eqGains[b]" Min="-12" Max="12"
+                                                       SmallStep="1" LargeStep="6"
+                                                       ValueChanged="@((double v) => _ = OnEqGainChanged(b, v))" />
+                                        <span class="text-muted small" style="width:28px;">@(_eqGains[b] > 0 ? "+" : "")@_eqGains[b].ToString("0.#")</span>
+                                    </div>
+                                }
+                            </div>
+
+                            @* HP / LP filters *@
+                            <div class="d-flex flex-column gap-1" style="min-width:160px;">
+                                <strong class="small">Filters</strong>
+                                <div class="d-flex align-items-center gap-1">
+                                    <TelerikCheckBox @bind-Value="_hpEnabled" OnChange="@(()=>_ = ApplyHighPassAsync())" />
+                                    <span class="small">High-pass @_hpFreq Hz</span>
+                                </div>
+                                <TelerikSlider @bind-Value="_hpFreq" Min="20" Max="500" SmallStep="10" LargeStep="100"
+                                               Enabled="@_hpEnabled" OnChange="@(()=>_ = ApplyHighPassAsync())" />
+                                <div class="d-flex align-items-center gap-1 mt-2">
+                                    <TelerikCheckBox @bind-Value="_lpEnabled" OnChange="@(()=>_ = ApplyLowPassAsync())" />
+                                    <span class="small">Low-pass @_lpFreq Hz</span>
+                                </div>
+                                <TelerikSlider @bind-Value="_lpFreq" Min="1000" Max="20000" SmallStep="500" LargeStep="2000"
+                                               Enabled="@_lpEnabled" OnChange="@(()=>_ = ApplyLowPassAsync())" />
+                            </div>
+
+                            @* Compressor *@
+                            <div class="d-flex flex-column gap-1" style="min-width:160px;">
+                                <div class="d-flex align-items-center gap-1">
+                                    <TelerikCheckBox @bind-Value="_compEnabled" OnChange="@(()=>_ = ApplyCompressorAsync())" />
+                                    <strong class="small">Compressor</strong>
+                                </div>
+                                <span class="small text-muted">Threshold @_compThreshold dB</span>
+                                <TelerikSlider @bind-Value="_compThreshold" Min="-60" Max="0" SmallStep="1" LargeStep="6"
+                                               Enabled="@_compEnabled" OnChange="@(()=>_ = ApplyCompressorAsync())" />
+                                <span class="small text-muted">Ratio @(_compRatio):1</span>
+                                <TelerikSlider @bind-Value="_compRatio" Min="1" Max="20" SmallStep="1" LargeStep="5"
+                                               Enabled="@_compEnabled" OnChange="@(()=>_ = ApplyCompressorAsync())" />
+                            </div>
+                        </div>
+                    </div>
+                }
 
                 @* Full WaveSurfer player *@
                 <div class="flex-shrink-0">
@@ -411,7 +487,6 @@ else
         _modalReady    = true;
         StateHasChanged();
 
-        // Load file types for the save-clip dialog and overlay child clips in parallel
         try
         {
             _fileTypes = await AdminClient.GetPublicFileTypesAsync();
@@ -421,6 +496,10 @@ else
         catch { /* non-critical */ }
 
         await OverlayChildClipRegionsAsync();
+
+        // Init Web Audio processing chain after player is ready
+        if (_modalPlayer is not null)
+            await _modalPlayer.InitAudioProcessingAsync();
     }
 
     private async Task OverlayChildClipRegionsAsync()
@@ -683,4 +762,59 @@ else
     private sealed record AudioContextMenuItem(string Action, string Text);
     private sealed record RegionContextMenuItem(string Action, string Text);
     private sealed record SpectrogramMenuItem(string Action, string Text);
+
+    // ── Phase C: EQ + processing state ───────────────────────────────────────
+
+    private static readonly int[]    _eqFreqs  = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+    private double[]                 _eqGains  = new double[10];
+    private bool                     _showEq;
+    private bool                     _hpEnabled;
+    private int                      _hpFreq   = 80;
+    private bool                     _lpEnabled;
+    private int                      _lpFreq   = 16000;
+    private bool                     _compEnabled;
+    private double                   _compThreshold = -24;
+    private double                   _compRatio     = 4;
+    private double                   _compAttack    = 0.003;
+    private double                   _compRelease   = 0.25;
+    private string                   _colormap      = "jet";
+
+    private static readonly List<(string Value, string Label)> _colormapOptions =
+    [
+        ("jet","Jet"), ("viridis","Viridis"), ("inferno","Inferno"), ("grayscale","Grayscale"),
+    ];
+
+    private async Task OnEqGainChanged(int band, double db)
+    {
+        _eqGains[band] = db;
+        if (_modalPlayer is not null) await _modalPlayer.SetEqBandAsync(band, db);
+    }
+
+    private async Task ResetEqAsync()
+    {
+        Array.Clear(_eqGains);
+        if (_modalPlayer is not null) await _modalPlayer.SetAllEqBandsAsync(_eqGains);
+    }
+
+    private async Task ApplyHighPassAsync()
+    {
+        if (_modalPlayer is not null) await _modalPlayer.SetHighPassAsync(_hpFreq, _hpEnabled);
+    }
+
+    private async Task ApplyLowPassAsync()
+    {
+        if (_modalPlayer is not null) await _modalPlayer.SetLowPassAsync(_lpFreq, _lpEnabled);
+    }
+
+    private async Task ApplyCompressorAsync()
+    {
+        if (_modalPlayer is not null)
+            await _modalPlayer.SetCompressorAsync(_compEnabled, _compThreshold, _compRatio, _compAttack, _compRelease);
+    }
+
+    private async Task OnColormapChangedAsync()
+    {
+        if (_modalPlayer is not null && _spectrogramEnabled)
+            await _modalPlayer.SetSpectrogramColormapAsync(_colormap, _spectrogramLabels, _spectrogramFftSamples);
+    }
 }

@@ -334,6 +334,23 @@
         await _module.InvokeVoidAsync("setSpectrogramResolution", _containerId, fftSamples, showLabels, _dotnetRef);
     }
 
+    /// <summary>Re-renders the spectrogram with a different colormap preset.</summary>
+    public async Task SetSpectrogramColormapAsync(string colormap, bool showLabels, int fftSamples)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("setSpectrogramColormap", _containerId, colormap, showLabels, fftSamples, _dotnetRef);
+    }
+
+    // ── Phase C: audio processing ──────────────────────────────────────────────
+
+    public async Task InitAudioProcessingAsync()           => await Invoke("initAudioProcessing");
+    public async Task SetEqBandAsync(int band, double db)  => await Invoke("setEqBand", band, db);
+    public async Task SetAllEqBandsAsync(double[] gains)   => await Invoke("setAllEqBands", gains);
+    public async Task SetHighPassAsync(int freq, bool on)  => await Invoke("setHighPass", freq, on);
+    public async Task SetLowPassAsync(int freq, bool on)   => await Invoke("setLowPass",  freq, on);
+    public async Task SetCompressorAsync(bool enabled, double threshold, double ratio, double attack, double release)
+        => await Invoke("setCompressor", enabled, threshold, ratio, attack, release);
+
     /// <summary>Redraws the spectrogram with cached FFT data, toggling frequency-axis labels.</summary>
     public async Task UpdateSpectrogramLabelsAsync(bool showLabels)
     {
