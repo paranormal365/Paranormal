@@ -254,7 +254,16 @@ else
                             </Template>
                         </GridColumn>
                         <GridColumn Field="@nameof(UploadFileAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridCommandColumn Width="90px">
+                        <GridCommandColumn Width="130px">
+                            @{ var fc = (UploadFileAdminRecord)context; }
+                            @if (fc.ContentType.StartsWith("image/"))
+                            {
+                                <GridCommandButton Icon="@SvgIcon.Pencil"
+                                    Size="@ThemeConstants.Button.Size.Small"
+                                    OnClick="@((GridCommandEventArgs e) => OpenImageEditor((UploadFileAdminRecord)e.Items.First()))">
+                                    Edit
+                                </GridCommandButton>
+                            }
                             <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                 OnClick="@((GridCommandEventArgs e) => DeleteFile((UploadFileAdminRecord)e.Items.First()))"></GridCommandButton>
                         </GridCommandColumn>
@@ -522,6 +531,10 @@ else
     </DialogButtons>
 </TelerikDialog>
 
+<ImageEditorPlayer @ref="_imageEditor"
+                   UploadFileId="@_editImageId"
+                   FileName="@_editImageName" />
+
 @code {
     [Parameter] public Guid UserId { get; set; }
 
@@ -529,6 +542,20 @@ else
     private List<UserAddressAdminRecord> _addresses = [];
     private List<UserEmailAdminRecord>   _emails    = [];
     private List<UserPhoneAdminRecord>   _phones    = [];
+
+    // Image editor
+    private ImageEditorPlayer? _imageEditor;
+    private Guid _editImageId;
+    private string? _editImageName;
+
+    private async Task OpenImageEditor(UploadFileAdminRecord file)
+    {
+        _editImageId   = file.Id;
+        _editImageName = file.FileName;
+        StateHasChanged();
+        if (_imageEditor is not null)
+            await _imageEditor.OpenAsync();
+    }
     private List<UserLinkAdminRecord>    _links     = [];
     private List<UserNoteAdminRecord>    _notes     = [];
     private List<OrganizationUserMembershipAdminRecord> _memberships = [];

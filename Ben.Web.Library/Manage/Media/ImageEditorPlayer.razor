@@ -110,6 +110,8 @@
 @code {
     [Parameter, EditorRequired] public Guid UploadFileId { get; set; }
     [Parameter] public string? FileName { get; set; }
+    /// <summary>Override the image source URL. When null the UploadFile download URL is used.</summary>
+    [Parameter] public string? ImageUrl { get; set; }
     [Parameter] public EventCallback<UploadFileRecord> OnSaved { get; set; }
 
     private string _containerId = $"img-editor-{Guid.NewGuid():N}";
@@ -150,7 +152,7 @@
         _dotNetRef  ??= DotNetObjectReference.Create(this);
 
         var record     = await AdminClient.GetFileDataAsync(UploadFileId);
-        var imageUrl   = AdminClient.GetFileDownloadUrl(UploadFileId);
+        var imageUrl   = ImageUrl ?? AdminClient.GetFileDownloadUrl(UploadFileId);
         var editState  = (string?)null;
 
         await _module.InvokeVoidAsync("init", _containerId, imageUrl, editState, _dotNetRef);

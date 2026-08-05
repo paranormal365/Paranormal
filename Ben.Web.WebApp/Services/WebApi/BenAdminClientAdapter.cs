@@ -276,6 +276,8 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public string GetFileDownloadUrl(Guid uploadFileId)
         => $"{_webApiBaseUrl}/api/upload-files/{uploadFileId}/download";
+    public string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId)
+        => $"{_webApiBaseUrl}/api/organizations/{orgId}/files/{orgFileId}/download";
 
     public Task<AddressMapConfigRecord?> GetOrgAddressMapConfigAsync(Guid orgId, Guid addressId, CancellationToken token = default)
         => _api.GetAsync<AddressMapConfigRecord>($"/api/organizations/{orgId}/addresses/{addressId}/map-config", token);

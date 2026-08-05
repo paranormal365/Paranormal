@@ -213,6 +213,7 @@ public interface IBenAdminClient
     Task<OrgPublicHomeResponse?> GetPublicOrgAsync(string urlName, CancellationToken token = default);
     Task<OrgPublicPageResponse?> GetPublicOrgPageAsync(string urlName, string pageSlug, CancellationToken token = default);
     string GetFileDownloadUrl(Guid uploadFileId);
+    string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId);
 
     // ── Organization Address Map Config ───────────────────────────────────────
 
