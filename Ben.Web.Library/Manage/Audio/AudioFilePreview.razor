@@ -126,6 +126,14 @@ else
                                                  Size="@ThemeConstants.DropDownList.Size.Small"
                                                  Enabled="@_modalReady"
                                                  OnChange="@(()=>_ = OnColormapChangedAsync())" />
+                            @* Mel-scale toggle *@
+                            <TelerikButton ThemeColor="@(_melScale ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                                           FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                           Size="@ThemeConstants.Button.Size.Small"
+                                           Enabled="@_modalReady"
+                                           OnClick="ToggleMelScaleAsync">
+                                🎵 Mel Scale
+                            </TelerikButton>
                         }
                         @* EQ toggle *@
                         <TelerikButton ThemeColor="@(_showEq ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
@@ -196,6 +204,23 @@ else
                                 <span class="small text-muted">Ratio @(_compRatio):1</span>
                                 <TelerikSlider @bind-Value="_compRatio" Min="1" Max="20" SmallStep="1" LargeStep="5"
                                                Enabled="@_compEnabled" OnChange="@(()=>_ = ApplyCompressorAsync())" />
+                            </div>
+
+                            @* Noise Gate *@
+                            <div class="d-flex flex-column gap-1" style="min-width:160px;">
+                                <div class="d-flex align-items-center gap-1">
+                                    <TelerikCheckBox @bind-Value="_noiseGateEnabled" OnChange="@(()=>_ = ApplyNoiseGateAsync())" />
+                                    <strong class="small">Noise Gate</strong>
+                                </div>
+                                <span class="small text-muted">Threshold @_noiseGateThreshold dB</span>
+                                <TelerikSlider @bind-Value="_noiseGateThreshold" Min="-80" Max="0" SmallStep="1" LargeStep="10"
+                                               Enabled="@_noiseGateEnabled" OnChange="@(()=>_ = ApplyNoiseGateAsync())" />
+                                <span class="small text-muted">Attack @_noiseGateAttack s</span>
+                                <TelerikSlider @bind-Value="_noiseGateAttack" Min="0.001" Max="0.5" SmallStep="0.01" LargeStep="0.1"
+                                               Enabled="@_noiseGateEnabled" OnChange="@(()=>_ = ApplyNoiseGateAsync())" />
+                                <span class="small text-muted">Release @_noiseGateRelease s</span>
+                                <TelerikSlider @bind-Value="_noiseGateRelease" Min="0.01" Max="1" SmallStep="0.05" LargeStep="0.2"
+                                               Enabled="@_noiseGateEnabled" OnChange="@(()=>_ = ApplyNoiseGateAsync())" />
                             </div>
                         </div>
                     </div>
@@ -777,7 +802,12 @@ else
     private double                   _compRatio     = 4;
     private double                   _compAttack    = 0.003;
     private double                   _compRelease   = 0.25;
+    private bool                     _noiseGateEnabled;
+    private double                   _noiseGateThreshold = -40;
+    private double                   _noiseGateAttack    = 0.01;
+    private double                   _noiseGateRelease   = 0.15;
     private string                   _colormap      = "jet";
+    private bool                     _melScale;
 
     private static readonly List<(string Value, string Label)> _colormapOptions =
     [
@@ -816,5 +846,18 @@ else
     {
         if (_modalPlayer is not null && _spectrogramEnabled)
             await _modalPlayer.SetSpectrogramColormapAsync(_colormap, _spectrogramLabels, _spectrogramFftSamples);
+    }
+
+    private async Task ToggleMelScaleAsync()
+    {
+        _melScale = !_melScale;
+        if (_modalPlayer is not null && _spectrogramEnabled)
+            await _modalPlayer.SetSpectrogramMelScaleAsync(_melScale);
+    }
+
+    private async Task ApplyNoiseGateAsync()
+    {
+        if (_modalPlayer is not null)
+            await _modalPlayer.SetNoiseGateAsync(_noiseGateEnabled, _noiseGateThreshold, _noiseGateAttack, _noiseGateRelease);
     }
 }
