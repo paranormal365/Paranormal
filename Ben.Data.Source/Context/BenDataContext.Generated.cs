@@ -92,6 +92,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
         public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
         public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
+        public virtual DbSet<AudioMarker> AudioMarkers { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
         public virtual DbSet<VideoProject> VideoProjects { get; set; }
 
@@ -715,6 +716,23 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<UploadFileRegionNote>()
                 .Property(e => e.NoteHtml).HasColumnType("nvarchar(max)");
+
+            // ── AudioMarker ────────────────────────────────────────────────
+            modelBuilder.Entity<AudioMarker>()
+                .HasOne(e => e.UploadFile).WithMany(e => e.AudioMarkers)
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<AudioMarker>()
+                .HasIndex(e => e.UploadFileId);
+            modelBuilder.Entity<AudioMarker>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<AudioMarker>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<AudioMarker>()
+                .Property(e => e.Label).HasMaxLength(200);
+            modelBuilder.Entity<AudioMarker>()
+                .Property(e => e.Note).HasColumnType("nvarchar(max)");
 
             // ── UploadFileVote ───────────────────────────────────────────────
             // One vote per (user, file): unique index enforces the business rule.

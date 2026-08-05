@@ -219,6 +219,52 @@ public sealed class ClientRequestController : BenControllerBase
         await db.SaveChangesAsync(ct);
         return Ok(_mapper.Map<ClientRequestRecord>(entity));
     }
+
+    /// <summary>
+    /// Adds one more organization to a Declined request, re-opening it as Submitted.
+    /// Subject to the same 2-organization cap as the initial submission.
+    /// </summary>
+    [HttpPost("{id:guid}/add-organization")]
+    public async Task<ActionResult<ClientRequestRecord>> AddOrganization(
+        Guid id, [FromBody] AddOrganizationRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var entity = await db.ClientRequests
+            .Include(r => r.OrganizationApplications)
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (entity is null) return NotFound();
+        if (entity.AppUserId != userId) return Forbid();
+        if (entity.Status != ClientRequestStatus.Declined)
+            return BadRequest("Only a declined request can be sent to another organization.");
+        if (entity.OrganizationApplications.Count >= 2)
+            return BadRequest("You may apply to a maximum of 2 organizations.");
+        if (entity.OrganizationApplications.Any(a => a.OrganizationId == request.OrganizationId))
+            return BadRequest("This organization has already been applied to.");
+
+        var org = await db.Organizations.AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == request.OrganizationId, ct);
+        if (org is null) return BadRequest("Organization not found.");
+        if (!org.IsAcceptingClients) return BadRequest("This organization is not accepting new requests.");
+
+        var now = DateTime.UtcNow;
+        db.ClientRequestOrganizations.Add(new ClientRequestOrganization
+        {
+            Id                 = Guid.NewGuid(),
+            ClientRequestId    = id,
+            OrganizationId     = request.OrganizationId,
+            Status             = ClientOrgRequestStatus.Pending,
+            DateApplied        = now,
+            DateCreated        = now,
+            CreatedByAppUserId = userId,
+        });
+
+        entity.Status             = ClientRequestStatus.Submitted;
+        entity.DateUpdated        = now;
+        entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
+        await db.SaveChangesAsync(ct);
+        return Ok(_mapper.Map<ClientRequestRecord>(entity));
+    }
 }
 
 // ── Request records ───────────────────────────────────────────────────────────
@@ -237,3 +283,5 @@ public sealed record UpsertClientRequestRequest(
     string? Description);
 
 public sealed record SubmitClientRequestRequest(IList<Guid> OrganizationIds);
+
+public sealed record AddOrganizationRequest(Guid OrganizationId);

@@ -166,6 +166,24 @@ public sealed class CaseController : BenControllerBase
         application.DateResponded        = DateTime.UtcNow;
         application.RespondedByAppUserId = userId == Guid.Empty ? null : userId;
         await db.SaveChangesAsync(ct);
+
+        // If every organization this request was sent to has now declined it,
+        // flip the parent request to Declined so the client can pick another org.
+        var stillActive = await db.ClientRequestOrganizations
+            .AnyAsync(a => a.ClientRequestId == clientRequestId &&
+                (a.Status == ClientOrgRequestStatus.Pending || a.Status == ClientOrgRequestStatus.Viewed ||
+                 a.Status == ClientOrgRequestStatus.UnderReview || a.Status == ClientOrgRequestStatus.Accepted), ct);
+        if (!stillActive)
+        {
+            var clientRequest = await db.ClientRequests.FirstOrDefaultAsync(r => r.Id == clientRequestId, ct);
+            if (clientRequest is not null && clientRequest.Status == ClientRequestStatus.Submitted)
+            {
+                clientRequest.Status      = ClientRequestStatus.Declined;
+                clientRequest.DateUpdated = DateTime.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
+        }
+
         return NoContent();
     }
 

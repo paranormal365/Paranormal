@@ -80,6 +80,14 @@ public sealed class WebApiClient : IWebApiClient
         return response.IsSuccessStatusCode;
     }
 
+    public async Task<bool> PostVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Post, relativeUrl);
+        req.Content = JsonContent.Create(payload);
+        using var response = await _httpClient.SendAsync(req, token);
+        return response.IsSuccessStatusCode;
+    }
+
     public async Task<IReadOnlyList<AppUserRecord>> GetUsersAsync(CancellationToken token = default)
     {
         var users = await GetAsync<List<AppUserRecord>>("/api/app-users", token);
@@ -222,9 +230,29 @@ public sealed class WebApiClient : IWebApiClient
     public Task<bool> DeleteRegionNoteAsync(Guid fileId, Guid noteId, CancellationToken token = default)
         => DeleteAsync($"/api/upload-files/{fileId}/region-notes/{noteId}", token);
 
+    // ── Audio Markers (EVP) ──────────────────────────────────────────────────
+    public async Task<IReadOnlyList<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default)
+    {
+        var result = await GetAsync<List<AudioMarkerRecord>>($"/api/upload-files/{fileId}/audio-markers", token);
+        return result ?? [];
+    }
+
+    public Task<AudioMarkerRecord?> CreateAudioMarkerAsync(Guid fileId, CreateAudioMarkerRequest request, CancellationToken token = default)
+        => PostAsync<CreateAudioMarkerRequest, AudioMarkerRecord>($"/api/upload-files/{fileId}/audio-markers", request, token);
+
+    public Task<AudioMarkerRecord?> UpdateAudioMarkerAsync(Guid fileId, Guid markerId, UpdateAudioMarkerRequest request, CancellationToken token = default)
+        => PutAsync<UpdateAudioMarkerRequest, AudioMarkerRecord>($"/api/upload-files/{fileId}/audio-markers/{markerId}", request, token);
+
+    public Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default)
+        => DeleteAsync($"/api/upload-files/{fileId}/audio-markers/{markerId}", token);
+
     // ── Audio Clip ────────────────────────────────────────────────────────────
     public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)
         => PostAsync<ClipAudioRequest, UploadFileRecord>($"/api/upload-files/{fileId}/clip", request, token);
+
+    // ── Audio Edit (destructive) ─────────────────────────────────────────────
+    public Task<UploadFileRecord?> EditAudioAsync(Guid fileId, AudioEditRequest request, CancellationToken token = default)
+        => PostAsync<AudioEditRequest, UploadFileRecord>($"/api/upload-files/{fileId}/audio-edit", request, token);
 
     public async Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
     {

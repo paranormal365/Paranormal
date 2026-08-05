@@ -353,6 +353,51 @@ public class CaseControllerTests
     }
 
     [Fact]
+    public async Task DeclineClientRequest_LastActiveOrg_SetsParentRequestToDeclined()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var clientId = Guid.NewGuid();
+
+        await using var db = await factory.CreateDbContextAsync();
+        db.Users.Add(new AppUser { Id = clientId, UserName = "c2@t.com", NormalizedUserName = "C2@T.COM", Email = "c2@t.com", NormalizedEmail = "C2@T.COM", DateCreated = DateTime.UtcNow });
+        var req = new ClientRequest { Id = Guid.NewGuid(), AppUserId = clientId, City = "Nashville", State = "TN", ZipCode = "37201", Country = "US", StreetAddress1 = "1 Main", Description = "Desc", Status = ClientRequestStatus.Submitted, DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId };
+        db.ClientRequests.Add(req);
+        db.ClientRequestOrganizations.Add(new ClientRequestOrganization { Id = Guid.NewGuid(), ClientRequestId = req.Id, OrganizationId = orgId, Status = ClientOrgRequestStatus.Pending, DateApplied = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId });
+        await db.SaveChangesAsync();
+
+        var ctrl = Build(factory, userId);
+        await ctrl.DeclineClientRequest(orgId, req.Id, default);
+
+        await using var db2 = await factory.CreateDbContextAsync();
+        var updated = await db2.ClientRequests.FirstAsync(r => r.Id == req.Id);
+        Assert.Equal(ClientRequestStatus.Declined, updated.Status);
+    }
+
+    [Fact]
+    public async Task DeclineClientRequest_OtherOrgStillPending_DoesNotDeclineParentRequest()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var secondOrgId = Guid.NewGuid();
+        var clientId = Guid.NewGuid();
+
+        await using var db = await factory.CreateDbContextAsync();
+        db.Users.Add(new AppUser { Id = clientId, UserName = "c3@t.com", NormalizedUserName = "C3@T.COM", Email = "c3@t.com", NormalizedEmail = "C3@T.COM", DateCreated = DateTime.UtcNow });
+        db.Organizations.Add(new Organization { Id = secondOrgId, Name = "Second Org", UrlName = "second", DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId });
+        var req = new ClientRequest { Id = Guid.NewGuid(), AppUserId = clientId, City = "Nashville", State = "TN", ZipCode = "37201", Country = "US", StreetAddress1 = "1 Main", Description = "Desc", Status = ClientRequestStatus.Submitted, DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId };
+        db.ClientRequests.Add(req);
+        db.ClientRequestOrganizations.Add(new ClientRequestOrganization { Id = Guid.NewGuid(), ClientRequestId = req.Id, OrganizationId = orgId, Status = ClientOrgRequestStatus.Pending, DateApplied = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId });
+        db.ClientRequestOrganizations.Add(new ClientRequestOrganization { Id = Guid.NewGuid(), ClientRequestId = req.Id, OrganizationId = secondOrgId, Status = ClientOrgRequestStatus.Pending, DateApplied = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId });
+        await db.SaveChangesAsync();
+
+        var ctrl = Build(factory, userId);
+        await ctrl.DeclineClientRequest(orgId, req.Id, default);
+
+        await using var db2 = await factory.CreateDbContextAsync();
+        var updated = await db2.ClientRequests.FirstAsync(r => r.Id == req.Id);
+        Assert.Equal(ClientRequestStatus.Submitted, updated.Status);
+    }
+
+    [Fact]
     public async Task AcceptClientRequest_CreatesCaseAndCmsPages()
     {
         var (factory, orgId, userId) = await SeedAsync();

@@ -19,4 +19,7 @@ public enum ClientRequestStatus
 
     /// <summary>Withdrawn by the client before assignment.</summary>
     Withdrawn = 4,
+
+    /// <summary>Every organization the request was sent to has declined it.</summary>
+    Declined = 5,
 }

@@ -220,4 +220,103 @@ public class ClientRequestControllerTests
         var other = Build(factory, Guid.NewGuid());
         Assert.IsType<ForbidResult>((await other.Withdraw(reqId, default)).Result);
     }
+
+    // ── AddOrganization ──────────────────────────────────────────────────────
+
+    /// <summary>Seeds a request Declined after one rejected org application, plus a second accepting org to resubmit to.</summary>
+    private static async Task<(IDbContextFactory<BenDataContext> factory, Guid userId, Guid rejectedOrgId, Guid newOrgId, Guid reqId)> SeedDeclinedAsync()
+    {
+        var (factory, userId, rejectedOrgId) = await SeedAsync();
+        var newOrgId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization { Id = newOrgId, Name = "New Org", UrlName = "new", DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId, IsAcceptingClients = true });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl  = Build(factory, userId);
+        var reqId = ((ClientRequestRecord)((CreatedAtActionResult)(await ctrl.Create(MakeRequest(36.17m, -86.78m, "Haunting"), default)).Result!).Value!).Id;
+        await ctrl.Submit(reqId, new SubmitClientRequestRequest([rejectedOrgId]), default);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var app = await db.ClientRequestOrganizations.FirstAsync(a => a.ClientRequestId == reqId);
+            app.Status = ClientOrgRequestStatus.Rejected;
+            var req = await db.ClientRequests.FirstAsync(r => r.Id == reqId);
+            req.Status = ClientRequestStatus.Declined;
+            await db.SaveChangesAsync();
+        }
+
+        return (factory, userId, rejectedOrgId, newOrgId, reqId);
+    }
+
+    [Fact]
+    public async Task AddOrganization_NotDeclined_ReturnsBadRequest()
+    {
+        var (factory, userId, orgId) = await SeedAsync();
+        var newOrgId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization { Id = newOrgId, Name = "New Org", UrlName = "new", DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId, IsAcceptingClients = true });
+            await db.SaveChangesAsync();
+        }
+        var ctrl  = Build(factory, userId);
+        var reqId = ((ClientRequestRecord)((CreatedAtActionResult)(await ctrl.Create(MakeRequest(36.17m, -86.78m, "Haunting"), default)).Result!).Value!).Id;
+        await ctrl.Submit(reqId, new SubmitClientRequestRequest([orgId]), default);
+
+        var result = await ctrl.AddOrganization(reqId, new AddOrganizationRequest(newOrgId), default);
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task AddOrganization_Declined_Succeeds_AndReopensAsSubmitted()
+    {
+        var (factory, userId, _, newOrgId, reqId) = await SeedDeclinedAsync();
+        var ctrl = Build(factory, userId);
+
+        var result = await ctrl.AddOrganization(reqId, new AddOrganizationRequest(newOrgId), default);
+        var ok  = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<ClientRequestRecord>(ok.Value);
+        Assert.Equal(ClientRequestStatus.Submitted, dto.Status);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.True(await db.ClientRequestOrganizations.AnyAsync(a => a.ClientRequestId == reqId && a.OrganizationId == newOrgId));
+    }
+
+    [Fact]
+    public async Task AddOrganization_AtCap_ReturnsBadRequest()
+    {
+        var (factory, userId, _, newOrgId, reqId) = await SeedDeclinedAsync();
+        var thirdOrgId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization { Id = thirdOrgId, Name = "Third Org", UrlName = "third", DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId, IsAcceptingClients = true });
+            await db.SaveChangesAsync();
+        }
+        var ctrl = Build(factory, userId);
+        await ctrl.AddOrganization(reqId, new AddOrganizationRequest(newOrgId), default); // fills the 2nd slot
+
+        var result = await ctrl.AddOrganization(reqId, new AddOrganizationRequest(thirdOrgId), default);
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task AddOrganization_DuplicateOrg_ReturnsBadRequest()
+    {
+        var (factory, userId, rejectedOrgId, _, reqId) = await SeedDeclinedAsync();
+        var ctrl = Build(factory, userId);
+
+        var result = await ctrl.AddOrganization(reqId, new AddOrganizationRequest(rejectedOrgId), default);
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task AddOrganization_OtherUser_ReturnsForbid()
+    {
+        var (factory, _, _, newOrgId, reqId) = await SeedDeclinedAsync();
+        var other = Build(factory, Guid.NewGuid());
+
+        var result = await other.AddOrganization(reqId, new AddOrganizationRequest(newOrgId), default);
+        Assert.IsType<ForbidResult>(result.Result);
+    }
 }

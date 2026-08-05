@@ -852,18 +852,14 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         => _api.PostAsync<AcceptClientRequestAsCaseRequest, CaseRecord>(
                $"/api/organizations/{orgId}/cases/accept-client-request/{clientRequestId}", request, token);
 
-    public async Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default)
-    {
-        var result = await _api.PostAsync<object, object>(
-            $"/api/organizations/{orgId}/cases/decline-request/{clientRequestId}", new { }, token);
-        return result is not null;
-    }
+    public Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default)
+        => _api.PostVoidAsync(
+               $"/api/organizations/{orgId}/cases/decline-request/{clientRequestId}", new { }, token);
 
     public Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default)
-        => _api.PutAsync<object, object>(
+        => _api.PutVoidAsync(
                $"/api/organizations/{orgId}/cases/request-status/{clientRequestId}",
-               new { Status = (int)status }, token)
-           .ContinueWith(t => t.Result is not null);
+               new { Status = (int)status }, token);
 
     public Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default)
         => _api.PutAsync<UpdateCaseRequest, CaseRecord>($"/api/organizations/{orgId}/cases/{caseId}", request, token);
@@ -1039,6 +1035,10 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<ClientRequestRecord?> WithdrawClientRequestAsync(Guid id, CancellationToken token = default)
         => _api.PostAsync<object, ClientRequestRecord>($"/api/client-requests/{id}/withdraw", new { }, token);
+
+    public Task<ClientRequestRecord?> AddOrganizationToRequestAsync(Guid id, Guid organizationId, CancellationToken token = default)
+        => _api.PostAsync<object, ClientRequestRecord>($"/api/client-requests/{id}/add-organization",
+               new { OrganizationId = organizationId }, token);
 
     // ── My Cases ─────────────────────────────────────────────────────────────
 
@@ -1239,6 +1239,20 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteRegionNoteAsync(Guid fileId, Guid noteId, CancellationToken token = default)
         => _api.DeleteRegionNoteAsync(fileId, noteId, token);
 
+    // ── Audio Markers (EVP) ──────────────────────────────────────────────────
+
+    public Task<IReadOnlyList<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default)
+        => _api.GetAudioMarkersAsync(fileId, token);
+
+    public Task<AudioMarkerRecord?> CreateAudioMarkerAsync(Guid fileId, CreateAudioMarkerRequest request, CancellationToken token = default)
+        => _api.CreateAudioMarkerAsync(fileId, request, token);
+
+    public Task<AudioMarkerRecord?> UpdateAudioMarkerAsync(Guid fileId, Guid markerId, UpdateAudioMarkerRequest request, CancellationToken token = default)
+        => _api.UpdateAudioMarkerAsync(fileId, markerId, request, token);
+
+    public Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default)
+        => _api.DeleteAudioMarkerAsync(fileId, markerId, token);
+
     // ── Audio Clip ────────────────────────────────────────────────────────────
 
     public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)
@@ -1246,6 +1260,9 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
         => _api.GetChildClipsAsync(fileId, token);
+
+    public Task<UploadFileRecord?> EditAudioAsync(Guid fileId, AudioEditRequest request, CancellationToken token = default)
+        => _api.EditAudioAsync(fileId, request, token);
 
     public Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default)
         => _api.GetClipPreviewAsync(fileId, start, end, token);

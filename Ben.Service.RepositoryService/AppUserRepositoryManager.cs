@@ -30,6 +30,7 @@ public class AppUserRepositoryManager : IAppUserRepositoryManager
     private IUploadFilePermissionRequestRepository? _uploadFilePermissionRequestRepository;
     private IUploadFileRegionNoteRepository? _uploadFileRegionNoteRepository;
     private IUploadFileVoteRepository? _uploadFileVoteRepository;
+    private IAudioMarkerRepository? _audioMarkerRepository;
 
     public AppUserRepositoryManager(IDbContextFactory<BenDataContext> dbContextFactory)
     {
@@ -58,4 +59,5 @@ public class AppUserRepositoryManager : IAppUserRepositoryManager
     public IUploadFilePermissionRequestRepository UploadFilePermissionRequestRepository => _uploadFilePermissionRequestRepository ??= new UploadFilePermissionRequestRepository(_dbContextFactory);
     public IUploadFileRegionNoteRepository UploadFileRegionNoteRepository => _uploadFileRegionNoteRepository ??= new UploadFileRegionNoteRepository(_dbContextFactory);
     public IUploadFileVoteRepository UploadFileVoteRepository => _uploadFileVoteRepository ??= new UploadFileVoteRepository(_dbContextFactory);
+    public IAudioMarkerRepository AudioMarkerRepository => _audioMarkerRepository ??= new AudioMarkerRepository(_dbContextFactory);
 }

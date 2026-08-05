@@ -517,6 +517,7 @@ public interface IBenAdminClient
     Task<ClientRequestRecord?> UpdateClientRequestAsync(Guid id, UpsertClientRequestRequest request, CancellationToken token = default);
     Task<ClientRequestRecord?> SubmitClientRequestAsync(Guid id, IList<Guid> organizationIds, CancellationToken token = default);
     Task<ClientRequestRecord?> WithdrawClientRequestAsync(Guid id, CancellationToken token = default);
+    Task<ClientRequestRecord?> AddOrganizationToRequestAsync(Guid id, Guid organizationId, CancellationToken token = default);
 
     // ── My Cases (client dashboard) ───────────────────────────────────────────
 
@@ -648,6 +649,20 @@ public interface IBenAdminClient
     /// <summary>Permanently deletes a region note.</summary>
     Task<bool> DeleteRegionNoteAsync(Guid fileId, Guid noteId, CancellationToken token = default);
 
+    // ── Audio Markers (EVP) ───────────────────────────────────────
+
+    /// <summary>Returns all EVP markers for the given file, ordered by time.</summary>
+    Task<IReadOnlyList<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Creates a new EVP marker and returns the persisted record.</summary>
+    Task<AudioMarkerRecord?> CreateAudioMarkerAsync(Guid fileId, CreateAudioMarkerRequest request, CancellationToken token = default);
+
+    /// <summary>Updates an existing EVP marker (time, label, confidence, note).</summary>
+    Task<AudioMarkerRecord?> UpdateAudioMarkerAsync(Guid fileId, Guid markerId, UpdateAudioMarkerRequest request, CancellationToken token = default);
+
+    /// <summary>Permanently deletes an EVP marker.</summary>
+    Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default);
+
     // ── Audio Clip ─────────────────────────────────────────────────
 
     /// <summary>
@@ -665,6 +680,14 @@ public interface IBenAdminClient
 
     /// <summary>Returns all child clip files that were derived from <paramref name="fileId"/> via the region-clip workflow.</summary>
     Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default);
+
+    // ── Audio Edit (destructive) ──────────────────────────────────
+
+    /// <summary>
+    /// Applies a destructive audio edit (cut, silence, normalize, gain, fade, reverse) to
+    /// <paramref name="fileId"/> and saves the result as a new UploadFile. The source is never modified.
+    /// </summary>
+    Task<UploadFileRecord?> EditAudioAsync(Guid fileId, AudioEditRequest request, CancellationToken token = default);
 
     // ── Votes ──────────────────────────────────────────────────────
 

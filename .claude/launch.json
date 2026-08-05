@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ben-webapp",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["scripts/start-webapp-with-api.sh"],
+      "port": 5078
+    }
+  ]
+}

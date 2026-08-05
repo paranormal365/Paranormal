@@ -163,7 +163,7 @@
         </WindowActions>
         <WindowContent>
             <div class="p-2">
-                <p>Are you sure you want to decline this request from <strong>@_declineTarget.City, @_declineTarget.State</strong>?</p>
+                <p>Are you sure you want to decline this request from <strong>@_declineTarget?.City, @_declineTarget?.State</strong>?</p>
                 @if (_actionError is not null)
                 {
                     <div class="alert alert-danger">@_actionError</div>

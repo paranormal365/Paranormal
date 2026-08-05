@@ -138,8 +138,10 @@ public class VideoEditorRegistrationTests
     }
 
     [Fact]
-    public void Registration_FfmpegService_IsSingleton()
+    public void Registration_FfmpegService_IsScoped()
     {
+        // FfmpegService depends on IJSRuntime, which is scoped to a Blazor circuit —
+        // it cannot be a singleton without failing DI validation at startup.
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddOptions();
@@ -147,7 +149,22 @@ public class VideoEditorRegistrationTests
         services.AddBenVideoEditor();
 
         var descriptor = services.Single(d => d.ServiceType == typeof(FfmpegService));
-        Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+    }
+
+    [Fact]
+    public void Registration_OPFSService_IsScoped()
+    {
+        // OPFSService depends on IJSRuntime, which is scoped to a Blazor circuit —
+        // it cannot be a singleton without failing DI validation at startup.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOptions();
+        services.AddHttpClient();
+        services.AddBenVideoEditor();
+
+        var descriptor = services.Single(d => d.ServiceType == typeof(OPFSService));
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
     }
 
     [Fact]
