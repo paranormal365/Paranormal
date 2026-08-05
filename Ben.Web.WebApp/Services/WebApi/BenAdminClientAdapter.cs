@@ -964,6 +964,20 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/research/{entryId}", token);
 
+    // ── Case Notes ────────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<CaseNoteDto>> GetCaseNotesAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<CaseNoteDto>>($"/api/organizations/{orgId}/cases/{caseId}/notes", token) ?? [];
+
+    public Task<CaseNoteDto?> CreateCaseNoteAsync(Guid orgId, Guid caseId, UpsertCaseNoteDto request, CancellationToken token = default)
+        => _api.PostAsync<UpsertCaseNoteDto, CaseNoteDto>($"/api/organizations/{orgId}/cases/{caseId}/notes", request, token);
+
+    public Task<CaseNoteDto?> UpdateCaseNoteAsync(Guid orgId, Guid caseId, Guid noteId, UpsertCaseNoteDto request, CancellationToken token = default)
+        => _api.PutAsync<UpsertCaseNoteDto, CaseNoteDto>($"/api/organizations/{orgId}/cases/{caseId}/notes/{noteId}", request, token);
+
+    public Task<bool> DeleteCaseNoteAsync(Guid orgId, Guid caseId, Guid noteId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/cases/{caseId}/notes/{noteId}", token);
+
     // ── Investigation Scheduling ──────────────────────────────────────────────
 
     public Task<bool> CancelMyInvestigationAsync(Guid caseId, Guid investigationId, CancellationToken token = default)
