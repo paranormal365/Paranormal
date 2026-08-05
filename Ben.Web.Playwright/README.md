@@ -39,6 +39,8 @@
 #   dotnet test Ben.Web.Playwright --filter TestCategory=OrgDiscovery
 #   dotnet test Ben.Web.Playwright --filter TestCategory=ErrorHandling
 #   dotnet test Ben.Web.Playwright --filter TestCategory=Voting
+#   dotnet test Ben.Web.Playwright --filter TestCategory=CaseNotes
+#   dotnet test Ben.Web.Playwright --filter TestCategory=OrgPublic
 #
 # HEADFUL MODE (see the browser window)
 # -----------

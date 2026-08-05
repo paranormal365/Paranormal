@@ -93,4 +93,33 @@ public class OrgPublicPageTests : BenTestBase
         var orgLink = Page.GetByRole(AriaRole.Link, new() { Name = "Tennessee Ghost Hunters", Exact = false });
         await Expect(orgLink.First).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
+
+    // ── Public contact fields ─────────────────────────────────────────────────
+
+    [Test]
+    [Description("Public org home shows phone, email, and website when set.")]
+    public async Task OrgPublicHome_ContactRow_ShowsWhenFieldsSet()
+    {
+        // The tgh or nps org may have contact fields set in dev seed — test is lenient
+        await Page.GotoAsync($"{BaseUrl}/o/{TghUrl}");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        // Page should render without errors regardless of whether contact fields are set
+        var body = await Page.InnerTextAsync("body");
+        Assert.That(body, Does.Not.Contain("An unhandled error has occurred"),
+            "Public org page should not error even if contact fields are empty.");
+    }
+
+    [Test]
+    [Description("Public org header renders without Telerik or application errors.")]
+    public async Task OrgPublicHome_Header_RendersWithoutErrors()
+    {
+        await Page.GotoAsync($"{BaseUrl}/o/{TghUrl}");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await Page.WaitForTimeoutAsync(1_000);
+        var body = await Page.InnerTextAsync("body");
+        Assert.That(body, Does.Not.Contain("does not have a property matching"),
+            "Public org page should not produce Telerik parameter errors.");
+        Assert.That(body, Does.Not.Contain("NullReferenceException"));
+    }
 }

@@ -239,4 +239,41 @@ public class OrgPublicControllerTests
         var result = await Build(factory).GetPage("my-org", "ABOUT", CancellationToken.None);
         Assert.IsType<OkObjectResult>(result.Result);
     }
+
+    // ── Public contact fields ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetHome_WithContactFields_ReturnsAllContactInfo()
+    {
+        var factory = TestDbFactory.Create();
+        await using var db = await factory.CreateDbContextAsync();
+        db.Organizations.Add(new Organization
+        {
+            Id = Guid.NewGuid(), Name = "Contact Org", UrlName = "contact-org",
+            PublicPhone = "(615) 555-0100", PublicEmail = "hello@example.com", PublicWebsite = "https://example.com",
+            CreatedByAppUserId = Guid.NewGuid()
+        });
+        await db.SaveChangesAsync();
+
+        var result = await Build(factory).GetHome("contact-org", CancellationToken.None);
+        var home   = Assert.IsType<OrgPublicHomeResponse>(((OkObjectResult)result.Result!).Value);
+
+        Assert.Equal("(615) 555-0100",       home.PublicPhone);
+        Assert.Equal("hello@example.com",    home.PublicEmail);
+        Assert.Equal("https://example.com",  home.PublicWebsite);
+    }
+
+    [Fact]
+    public async Task GetHome_WithNoContactFields_ContactFieldsAreNull()
+    {
+        var factory = TestDbFactory.Create();
+        await SeedOrgAsync(factory);
+
+        var result = await Build(factory).GetHome("my-org", CancellationToken.None);
+        var home   = Assert.IsType<OrgPublicHomeResponse>(((OkObjectResult)result.Result!).Value);
+
+        Assert.Null(home.PublicPhone);
+        Assert.Null(home.PublicEmail);
+        Assert.Null(home.PublicWebsite);
+    }
 }
