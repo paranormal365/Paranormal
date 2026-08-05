@@ -2,6 +2,7 @@ using Ben.Web.WebApp.Services.WebApi;
 using Ben.Web.WebApp.Services;
 using Ben.Web.WebApp.Components;
 using Ben.Web.Library.Services;
+using Ben.Video.Editor.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -31,6 +32,22 @@ builder.Host.UseSerilog();
 /* END LOGGING */
 
 builder.Services.AddTelerikBlazor();
+builder.Services.AddBenVideoEditor(options =>
+{
+    options.MultiTrack      = true;
+    options.AudioTracks     = true;
+    options.Transitions     = true;
+    options.TextOverlays    = true;
+    options.VideoEffects    = true;
+    options.MediaLibrary    = true;
+    options.ProjectPersistence = true;
+    options.ErrorLog        = true;
+    options.RippleEdit      = true;
+    options.MediaLibraryBaseUrl = builder.Configuration["WebApi:BaseUrl"];
+    options.DocumentPostUrl = $"{builder.Configuration["WebApi:BaseUrl"]}/api/cases";
+});
+// Override the default HttpMediaLibraryProvider with one that injects the bearer token.
+builder.Services.AddScoped<Ben.Video.Editor.Services.IMediaLibraryProvider, BenMediaLibraryProvider>();
 builder.Services.Configure<WebApiOptions>(builder.Configuration.GetSection("WebApi"));
 builder.Services.AddScoped<IWebApiTokenStore, WebApiTokenStore>();
 builder.Services.AddHttpClient<IWebApiIdentityClient, WebApiIdentityClient>((sp, client) =>

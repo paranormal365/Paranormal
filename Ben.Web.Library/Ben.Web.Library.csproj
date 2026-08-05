@@ -18,6 +18,7 @@
     <ItemGroup>
         <ProjectReference Include="..\Ben.Data.Common\Ben.Data.Common.csproj" />
         <ProjectReference Include="..\Ben.Service.Models\Ben.Service.Models.csproj" />
+        <ProjectReference Include="../../Github-BenVideo/Ben.Video.Editor/Ben.Video.Editor.csproj" />
     </ItemGroup>
 
 </Project>
