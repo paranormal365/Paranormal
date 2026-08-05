@@ -354,6 +354,12 @@
         => await Invoke("setNoiseGate", enabled, threshold, attack, release);
     public async Task SetSpectrogramMelScaleAsync(bool useMel)
         => await Invoke("setSpectrogramMelScale", useMel, _dotnetRef);
+    public async Task ToggleVoiceBandOverlayAsync(bool show)
+        => await Invoke("toggleVoiceBandOverlay", show);
+    public async Task DetectSilenceAsync(double thresholdDb, double windowSeconds = 0.15)
+        => await Invoke("detectSilence", thresholdDb, windowSeconds);
+    public async Task ClearSilenceDetectionAsync()
+        => await Invoke("clearSilenceDetection");
 
     /// <summary>Redraws the spectrogram with cached FFT data, toggling frequency-axis labels.</summary>
     public async Task UpdateSpectrogramLabelsAsync(bool showLabels)

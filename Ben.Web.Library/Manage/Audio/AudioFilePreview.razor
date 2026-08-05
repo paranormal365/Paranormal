@@ -134,6 +134,14 @@ else
                                            OnClick="ToggleMelScaleAsync">
                                 🎵 Mel Scale
                             </TelerikButton>
+                            @* Voice frequency band overlay *@
+                            <TelerikButton ThemeColor="@(_showVoiceBand ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                                           FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                           Size="@ThemeConstants.Button.Size.Small"
+                                           Enabled="@_modalReady"
+                                           OnClick="ToggleVoiceBandAsync">
+                                🗣 Voice Band
+                            </TelerikButton>
                         }
                         @* EQ toggle *@
                         <TelerikButton ThemeColor="@(_showEq ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
@@ -159,6 +167,20 @@ else
                                        OnClick="@(() => _showEdit = !_showEdit)">
                             ✂ @(_showEdit ? "Hide Edit" : "Edit")
                         </TelerikButton>
+                        @* Silence detection toggle *@
+                        <TelerikButton ThemeColor="@(_silenceDetectionEnabled ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Enabled="@_modalReady"
+                                       OnClick="ToggleSilenceDetectionAsync">
+                            🤫 Silence
+                        </TelerikButton>
+                        @if (_silenceDetectionEnabled)
+                        {
+                            <TelerikNumericTextBox @bind-Value="_silenceThresholdDb" Min="-80" Max="-10" Width="90px"
+                                                    OnChange="@(() => _ = ApplySilenceDetectionAsync())" />
+                            <span class="small text-secondary">dB</span>
+                        }
                         <span class="small text-secondary fst-italic">
                             Click &amp; drag to mark a region &mdash; right-click to play, save, or edit
                         </span>
@@ -324,6 +346,18 @@ else
                                 </div>
                                 <TelerikButton Size="sm" Enabled="@CanApplyEdit()"
                                                OnClick="@(() => ApplyAudioEditAsync(AudioEditOperation.Fade))">Apply Fade</TelerikButton>
+                            </div>
+                            <div class="d-flex flex-column gap-1" style="min-width:180px;">
+                                <strong class="small">Speed @_editSpeedRatio.ToString("0.0#")×</strong>
+                                <TelerikSlider @bind-Value="_editSpeedRatio" Min="0.25" Max="4" SmallStep="0.05" LargeStep="0.5" />
+                                <TelerikButton Size="sm" Enabled="@CanApplyEdit()"
+                                               OnClick="@(() => ApplyAudioEditAsync(AudioEditOperation.Speed))">Apply Speed</TelerikButton>
+                            </div>
+                            <div class="d-flex flex-column gap-1" style="min-width:180px;">
+                                <strong class="small">Pitch @(_editPitchSemitones > 0 ? "+" : "")@_editPitchSemitones st</strong>
+                                <TelerikSlider @bind-Value="_editPitchSemitones" Min="-12" Max="12" SmallStep="1" LargeStep="4" />
+                                <TelerikButton Size="sm" Enabled="@CanApplyEdit()"
+                                               OnClick="@(() => ApplyAudioEditAsync(AudioEditOperation.Pitch))">Apply Pitch</TelerikButton>
                             </div>
                         </div>
                         @if (_editError is not null)
@@ -875,6 +909,8 @@ else
             _spectrogramLabels  = false;
             _modalReady         = false;
             _showMarkers        = false;
+            _showVoiceBand      = false;
+            _silenceDetectionEnabled = false;
         }
     }
 
@@ -1060,6 +1096,9 @@ else
     private double                   _noiseGateRelease   = 0.15;
     private string                   _colormap      = "jet";
     private bool                     _melScale;
+    private bool                     _showVoiceBand;
+    private bool                     _silenceDetectionEnabled;
+    private double                   _silenceThresholdDb = -40;
 
     private static readonly List<(string Value, string Label)> _colormapOptions =
     [
@@ -1090,6 +1129,8 @@ else
     private double        _editGainDb   = 0;
     private double        _editFadeIn   = 1;
     private double        _editFadeOut  = 1;
+    private double        _editSpeedRatio     = 1.0;
+    private double        _editPitchSemitones = 0;
 
     private bool CanApplyEdit(bool requiresRegion = false)
         => !_isApplyingEdit
@@ -1115,7 +1156,9 @@ else
                 operation == AudioEditOperation.Fade ? _editFadeOut : null,
                 null,
                 _saveClipIsPublic,
-                _saveClipTypeId));
+                _saveClipTypeId,
+                operation == AudioEditOperation.Speed ? _editSpeedRatio : null,
+                operation == AudioEditOperation.Pitch ? _editPitchSemitones : null));
 
             if (result is not null)
             {
@@ -1177,6 +1220,29 @@ else
         _melScale = !_melScale;
         if (_modalPlayer is not null && _spectrogramEnabled)
             await _modalPlayer.SetSpectrogramMelScaleAsync(_melScale);
+    }
+
+    private async Task ToggleVoiceBandAsync()
+    {
+        _showVoiceBand = !_showVoiceBand;
+        if (_modalPlayer is not null && _spectrogramEnabled)
+            await _modalPlayer.ToggleVoiceBandOverlayAsync(_showVoiceBand);
+    }
+
+    private async Task ToggleSilenceDetectionAsync()
+    {
+        _silenceDetectionEnabled = !_silenceDetectionEnabled;
+        if (_modalPlayer is null) return;
+        if (_silenceDetectionEnabled)
+            await _modalPlayer.DetectSilenceAsync(_silenceThresholdDb);
+        else
+            await _modalPlayer.ClearSilenceDetectionAsync();
+    }
+
+    private async Task ApplySilenceDetectionAsync()
+    {
+        if (_modalPlayer is not null && _silenceDetectionEnabled)
+            await _modalPlayer.DetectSilenceAsync(_silenceThresholdDb);
     }
 
     private async Task ApplyNoiseGateAsync()
