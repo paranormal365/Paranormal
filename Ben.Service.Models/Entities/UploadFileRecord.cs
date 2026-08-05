@@ -26,4 +26,8 @@ public record UploadFileRecord
     public Guid?   ParentFileId { get; init; }
     public double? RegionStart  { get; init; }
     public double? RegionEnd    { get; init; }
+
+    /// <summary>Fabric.js JSON snapshot for the image editor — present when the file has been edited.</summary>
+    public string? EditStateJson    { get; init; }
+    public bool    IsEditedVersion  { get; init; }
 }

@@ -213,6 +213,7 @@ public interface IBenAdminClient
     Task<OrgPublicHomeResponse?> GetPublicOrgAsync(string urlName, CancellationToken token = default);
     Task<OrgPublicPageResponse?> GetPublicOrgPageAsync(string urlName, string pageSlug, CancellationToken token = default);
     string GetFileDownloadUrl(Guid uploadFileId);
+    string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId);
 
     // ── Organization Address Map Config ───────────────────────────────────────
 
@@ -698,6 +699,10 @@ public interface IBenAdminClient
     Task<VideoProjectRecord?> UpdateMyVideoProjectAsync(Guid id, Ben.Video.Editor.Models.ProjectFile file, CancellationToken token = default);
     Task<VideoProjectRecord?> PublishVideoProjectAsync(Guid id, byte[] bytes, string fileName, string contentType, CancellationToken token = default);
     Task<bool> DeleteMyVideoProjectAsync(Guid id, CancellationToken token = default);
+
+    // ── Image editor ────────────────────────────────────────────────────────
+    Task<UploadFileRecord?> SaveImageEditStateAsync(Guid fileId, string? editStateJson, CancellationToken token = default);
+    Task<UploadFileRecord?> SaveImageAsNewVersionAsync(Guid parentFileId, byte[] imageBytes, string format, CancellationToken token = default);
 }
 
 /// <summary>

@@ -87,12 +87,21 @@
                     </Template>
                 </GridColumn>
                 <GridColumn Field="@nameof(OrganizationFileRecord.Description)" Title="Description" />
-                <GridCommandColumn Width="200px">
+                <GridCommandColumn Width="240px">
                     <GridCommandButton OnClick="@(e => OpenPublish((OrganizationFileRecord)e.Items.First()))"
                                        ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
                                        Size="@ThemeConstants.Button.Size.Small">
                         @(((OrganizationFileRecord)context).IsPublic ? "Unpublish" : "Publish")
                     </GridCommandButton>
+                    @{ var fc = (OrganizationFileRecord)context; }
+                    @if (fc.ContentType.StartsWith("image/"))
+                    {
+                        <GridCommandButton Icon="@SvgIcon.Pencil"
+                                           Size="@ThemeConstants.Button.Size.Small" Class="ms-1"
+                                           OnClick="@((GridCommandEventArgs e) => OpenImageEditor((OrganizationFileRecord)e.Items.First()))">
+                            Edit Image
+                        </GridCommandButton>
+                    }
                     <GridCommandButton OnClick="@(e => OpenEdit((OrganizationFileRecord)e.Items.First()))"
                                        Size="@ThemeConstants.Button.Size.Small" Class="ms-1">Edit</GridCommandButton>
                     <GridCommandButton OnClick="@(e => ConfirmDelete((OrganizationFileRecord)e.Items.First()))"
@@ -283,6 +292,12 @@
 <TelerikNotification @ref="_toast" HorizontalPosition="@NotificationHorizontalPosition.Right"
                      VerticalPosition="@NotificationVerticalPosition.Top" />
 
+@* Org file image editor — ImageUrl overrides the default UploadFile download URL *@
+<ImageEditorPlayer @ref="_imageEditor"
+                   UploadFileId="@Guid.Empty"
+                   ImageUrl="@_editImageUrl"
+                   FileName="@_editImageName" />
+
 @code {
     [Parameter] public Guid OrgId        { get; set; }
     [Parameter] public bool EmbeddedMode  { get; set; }
@@ -294,6 +309,20 @@
     private List<OrganizationFileDeleteLogRecord> _deleteLogs = [];
     private IReadOnlyList<UploadFileTypeRecord>   _fileTypes  = [];
     private bool _showDeleteLog;
+
+    // Image editor
+    private ImageEditorPlayer? _imageEditor;
+    private string? _editImageUrl;
+    private string? _editImageName;
+
+    private async Task OpenImageEditor(OrganizationFileRecord file)
+    {
+        _editImageUrl  = AdminClient.GetOrgFileDownloadUrl(OrgId, file.Id);
+        _editImageName = file.FileName;
+        StateHasChanged();
+        if (_imageEditor is not null)
+            await _imageEditor.OpenAsync();
+    }
 
     // Upload
     private bool _showUploadDialog;

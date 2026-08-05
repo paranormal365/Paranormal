@@ -668,6 +668,8 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.ParentFile).WithMany(e => e.ChildClips)
                 .HasForeignKey(e => e.ParentFileId)
                 .IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFile>()
+                .Property(e => e.EditStateJson).HasColumnType("nvarchar(max)");
 
             // ── UploadFileAudioConfig ────────────────────────────────────────
             // One-to-one with UploadFile; cascade so config is deleted with the file.

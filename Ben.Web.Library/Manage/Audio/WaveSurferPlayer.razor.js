@@ -650,7 +650,7 @@ export async function toggleSpectrogram(containerId, enable, showLabels, fftSamp
 
   const worker = new Worker('/js/wavesurfer/spectrogram-worker.js')
   instance.spectrogramWorker = worker
-  instance.spectrogramMeta   = { sampleRate: audioBuffer.sampleRate, fftSamples, showLabels }
+  instance.spectrogramMeta   = { sampleRate: audioBuffer.sampleRate, fftSamples, showLabels, colormap: 'jet' }
 
   const safe = (fn) => fn.catch(() => {})
 
@@ -688,7 +688,7 @@ export async function toggleSpectrogram(containerId, enable, showLabels, fftSamp
  * @param {boolean}              showLabels   Whether to render frequency-axis labels
  * @param {DotNetObjectReference} dotnetRef   Progress / ready callbacks
  */
-export async function setSpectrogramResolution(containerId, fftSamples, showLabels, dotnetRef) {
+export async function setSpectrogramResolution(containerId, fftSamples, showLabels, dotnetRef, colormap) {
   const instance = instances.get(containerId)
   if (!instance?.spectrogramMeta) return   // spectrogram not currently shown
 
@@ -733,7 +733,7 @@ export async function setSpectrogramResolution(containerId, fftSamples, showLabe
 
   const worker = new Worker('/js/wavesurfer/spectrogram-worker.js')
   instance.spectrogramWorker = worker
-  instance.spectrogramMeta   = { sampleRate: audioBuffer.sampleRate, fftSamples, showLabels }
+  instance.spectrogramMeta   = { sampleRate: audioBuffer.sampleRate, fftSamples, showLabels, colormap: colormap ?? 'jet' }
 
   worker.onmessage = (e) => {
     if (e.data.type === 'progress') {
@@ -842,7 +842,10 @@ function _startSpectrogramPrerender(containerId) {
 
   // cacheKey 'prerender' and version 1 are just placeholders—ignored by the main thread handler
   w.postMessage(
-    { flat, nFrames, nBins, width: prerenderW, height: 128, version: 1, cacheKey: 'prerender' },
+    { flat, nFrames, nBins, width: prerenderW, height: 128, version: 1, cacheKey: 'prerender',
+      colormap: _makeColormap(instance.spectrogramMeta?.colormap ?? 'jet'),
+      melScale:   instance.spectrogramMeta?.melScale   ?? false,
+      sampleRate: instance.spectrogramMeta?.sampleRate ?? 44100 },
     [flat.buffer]
   )
 }
@@ -954,6 +957,10 @@ function _redrawSpectrogramViewport(containerId) {
   const canvasW     = Math.max(1, canvas.parentElement?.offsetWidth ?? clientWidth ?? 800)
 
   const { sampleRate = 44100, fftSamples = 512, showLabels = false } = instance.spectrogramMeta ?? {}
+  const colormap  = _makeColormap(instance.spectrogramMeta?.colormap ?? 'jet')
+  const melScale  = instance.spectrogramMeta?.melScale ?? false
+  const fMax      = sampleRate / 2
+  const melMax    = 2595 * Math.log10(1 + fMax / 700)
   const nBins = Math.floor(fftSamples / 2)
 
   // Visible fraction of the total audio
@@ -1048,7 +1055,10 @@ function _redrawSpectrogramViewport(containerId) {
 
   instance._spectrogramDrawWorker.postMessage(
     { flat, nFrames: sliceLen, nBins, width: canvasW, height: 128,
-      version: instance._spectrogramDrawVersion, cacheKey },
+      version: instance._spectrogramDrawVersion, cacheKey,
+      colormap:   _makeColormap(instance.spectrogramMeta?.colormap ?? 'jet'),
+      melScale:   instance.spectrogramMeta?.melScale   ?? false,
+      sampleRate: instance.spectrogramMeta?.sampleRate ?? 44100 },
     [flat.buffer]
   )
 }
@@ -1128,15 +1138,22 @@ function _drawSpectrogram(canvas, data, showLabels, sampleRate, fftSamples) {
   for (let px = 0; px < W; px++) {
     const frame = data[Math.min(nFrames - 1, Math.floor(px * nFrames / W))]
     for (let py = 0; py < H; py++) {
-      const binIdx = nBins - 1 - Math.min(nBins - 1, Math.floor(py * nBins / H))
-      const t  = frame[binIdx] / maxMag
-      const r  = Math.floor(255 * Math.pow(t, 0.5))
-      const g  = Math.floor(255 * Math.min(1, t * 1.5))
-      const b  = Math.floor(255 * Math.max(0, 0.9 - t))
-      const idx = (py * W + px) * 4
-      pixels[idx]     = r
-      pixels[idx + 1] = g
-      pixels[idx + 2] = b
+      let binIdx
+      if (melScale) {
+        const fracFromTop = py / (H - 1)
+        const mel  = melMax * (1 - fracFromTop)
+        const freq = 700 * (Math.pow(10, mel / 2595) - 1)
+        binIdx = Math.min(nBins - 1, Math.max(0, Math.round(freq / fMax * nBins)))
+      } else {
+        binIdx = nBins - 1 - Math.min(nBins - 1, Math.floor(py * nBins / H))
+      }
+      const t     = frame[binIdx] / maxMag
+      const ci    = Math.min(255, Math.floor(t * 255))
+      const c     = colormap[ci]
+      const idx   = (py * W + px) * 4
+      pixels[idx]     = Math.round(c[0] * 255)
+      pixels[idx + 1] = Math.round(c[1] * 255)
+      pixels[idx + 2] = Math.round(c[2] * 255)
       pixels[idx + 3] = 255
     }
   }
@@ -1181,6 +1198,177 @@ export function destroy(containerId) {
   instance.spectrogramWorker?.terminate()
   instance._spectrogramPrerenderWorker?.terminate()
   instance._spectrogramDrawWorker?.terminate()
+  try { instance.audioCtx?.close() } catch { /* ignore */ }
   try { instance.ws?.destroy() } catch { /* ignore */ }
   instances.delete(containerId)
+}
+
+// ── Phase C: Web Audio processing chain ──────────────────────────────────────
+
+const EQ_FREQS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+
+export async function initAudioProcessing(containerId) {
+  const inst = instances.get(containerId)
+  if (!inst || inst.audioCtx) return
+
+  const mediaEl = inst.ws?.getMediaElement?.()
+  if (!mediaEl) return
+
+  const audioCtx = new AudioContext()
+
+  // Register noise gate worklet (non-fatal if unsupported)
+  let noiseGateNode = null
+  try {
+    await audioCtx.audioWorklet.addModule('/js/wavesurfer/noise-gate-processor.js')
+    noiseGateNode = new AudioWorkletNode(audioCtx, 'noise-gate-processor')
+    noiseGateNode.port.postMessage({ enabled: false }) // disabled by default
+  } catch { /* AudioWorklet not supported — skip noise gate */ }
+
+  const source = audioCtx.createMediaElementSource(mediaEl)
+
+  const eqFilters = EQ_FREQS.map((freq, i) => {
+    const f    = audioCtx.createBiquadFilter()
+    f.type     = i === 0 ? 'lowshelf' : i === EQ_FREQS.length - 1 ? 'highshelf' : 'peaking'
+    f.frequency.value = freq
+    f.gain.value      = 0
+    f.Q.value         = 1.4
+    return f
+  })
+
+  const hpFilter = audioCtx.createBiquadFilter()
+  hpFilter.type  = 'highpass'
+  hpFilter.frequency.value = 20
+  hpFilter.Q.value = 0.5
+
+  const lpFilter = audioCtx.createBiquadFilter()
+  lpFilter.type  = 'lowpass'
+  lpFilter.frequency.value = 20000
+  lpFilter.Q.value = 0.5
+
+  const compressor = audioCtx.createDynamicsCompressor()
+  compressor.threshold.value = -24
+  compressor.knee.value      = 30
+  compressor.ratio.value     = 1
+  compressor.attack.value    = 0.003
+  compressor.release.value   = 0.25
+
+  const outputGain = audioCtx.createGain()
+  outputGain.gain.value = 1.0
+
+  // source → [noiseGate →] hp → eq[0..9] → lp → compressor → outputGain → destination
+  let prev = source
+  if (noiseGateNode) { prev.connect(noiseGateNode); prev = noiseGateNode }
+  prev.connect(hpFilter);    prev = hpFilter
+  for (const f of eqFilters) { prev.connect(f); prev = f }
+  prev.connect(lpFilter);    prev = lpFilter
+  prev.connect(compressor);  prev = compressor
+  prev.connect(outputGain)
+  outputGain.connect(audioCtx.destination)
+
+  inst.audioCtx      = audioCtx
+  inst.eqFilters     = eqFilters
+  inst.hpFilter      = hpFilter
+  inst.lpFilter      = lpFilter
+  inst.compressor    = compressor
+  inst.outputGain    = outputGain
+  inst.noiseGateNode = noiseGateNode
+}
+
+export function setEqBand(containerId, bandIndex, gainDb) {
+  const inst = instances.get(containerId)
+  if (!inst?.eqFilters) return
+  const f = inst.eqFilters[bandIndex]
+  if (f) f.gain.value = gainDb
+}
+
+export function setAllEqBands(containerId, gains) {
+  const inst = instances.get(containerId)
+  if (!inst?.eqFilters) return
+  gains.forEach((g, i) => { if (inst.eqFilters[i]) inst.eqFilters[i].gain.value = g })
+}
+
+export function setHighPass(containerId, freqHz, enabled) {
+  const inst = instances.get(containerId)
+  if (!inst?.hpFilter) return
+  inst.hpFilter.frequency.value = enabled ? freqHz : 20
+}
+
+export function setLowPass(containerId, freqHz, enabled) {
+  const inst = instances.get(containerId)
+  if (!inst?.lpFilter) return
+  inst.lpFilter.frequency.value = enabled ? freqHz : 20000
+}
+
+export function setCompressor(containerId, enabled, threshold, ratio, attack, release) {
+  const inst = instances.get(containerId)
+  if (!inst?.compressor) return
+  inst.compressor.threshold.value = enabled ? threshold : 0
+  inst.compressor.ratio.value     = enabled ? ratio     : 1
+  inst.compressor.attack.value    = attack
+  inst.compressor.release.value   = release
+}
+
+// ── Spectrogram colormap ──────────────────────────────────────────────────────
+
+// Generates a 256-entry RGBA colormap array for WaveSurfer's spectrogram plugin.
+function _makeColormap(name) {
+  const map = []
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255
+    let r, g, b
+    switch (name) {
+      case 'grayscale':
+        r = g = b = t; break
+      case 'viridis': {
+        // simplified viridis approximation
+        const stops = [[0.267,0.005,0.329],[0.190,0.407,0.554],[0.208,0.678,0.473],[0.678,0.863,0.190],[0.993,0.906,0.144]]
+        const si = Math.min(Math.floor(t * (stops.length - 1)), stops.length - 2)
+        const u  = t * (stops.length - 1) - si
+        ;[r, g, b] = stops[si].map((v, j) => v + u * (stops[si + 1][j] - v))
+        break
+      }
+      case 'inferno': {
+        const stops = [[0,0,0],[0.278,0.039,0.439],[0.627,0.078,0.353],[0.906,0.361,0.078],[0.988,0.729,0.208],[0.988,1,0.643]]
+        const si = Math.min(Math.floor(t * (stops.length - 1)), stops.length - 2)
+        const u  = t * (stops.length - 1) - si
+        ;[r, g, b] = stops[si].map((v, j) => v + u * (stops[si + 1][j] - v))
+        break
+      }
+      default: { // jet
+        const u = t * 4
+        r = Math.min(Math.max(Math.min(u - 1.5, 4.5 - u), 0), 1)
+        g = Math.min(Math.max(Math.min(u - 0.5, 3.5 - u), 0), 1)
+        b = Math.min(Math.max(Math.min(u + 0.5, 2.5 - u), 0), 1)
+        break
+      }
+    }
+    map.push([r, g, b, 1])
+  }
+  return map
+}
+
+export async function setSpectrogramColormap(containerId, colormap, showLabels, fftSamples, dotnetRef) {
+  await setSpectrogramResolution(containerId, fftSamples, showLabels, dotnetRef, colormap)
+}
+
+export async function setSpectrogramMelScale(containerId, useMel, dotnetRef) {
+  const inst = instances.get(containerId)
+  if (!inst?.spectrogramMeta) return
+  inst.spectrogramMeta.melScale = useMel
+  // Invalidate the pre-render cache so it rebuilds with the new axis mapping
+  delete inst._prerenderCanvas
+  delete inst._prerenderWidth
+  inst._spectrogramCache?.clear()
+  _startSpectrogramPrerender(containerId)
+  _redrawSpectrogramViewport(containerId)
+}
+
+export function setNoiseGate(containerId, enabled, threshold, attack, release) {
+  const inst = instances.get(containerId)
+  if (!inst?.noiseGateNode) return
+  inst.noiseGateNode.port.postMessage({ enabled })
+  const params = inst.noiseGateNode.parameters
+  params.get('threshold').value = threshold
+  params.get('attack').value    = attack
+  params.get('release').value   = release
 }

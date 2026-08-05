@@ -236,6 +236,69 @@ public sealed class UploadFileController : BenControllerBase
             .ToListAsync(cancellationToken);
         return Ok(_mapper.Map<IEnumerable<UploadFileRecord>>(clips));
     }
+
+    // PUT /api/upload-files/{id}/edit-state — persists the Fabric.js editor JSON snapshot
+    [HttpPut("{id:guid}/edit-state")]
+    public async Task<ActionResult<UploadFileRecord>> SaveEditState(
+        Guid id, [FromBody] SaveEditStateRequest request, CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserIdOrNull();
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var entity = await db.UploadFiles
+            .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+        if (entity is null) return NotFound();
+
+        entity.EditStateJson      = request.EditStateJson;
+        entity.DateUpdated        = DateTime.UtcNow;
+        entity.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(cancellationToken);
+        return Ok(_mapper.Map<UploadFileRecord>(entity));
+    }
+
+    // POST /api/upload-files/{id}/save-as-version — saves edited image bytes as a new UploadFile linked to original
+    [HttpPost("{id:guid}/save-as-version")]
+    [RequestSizeLimit(100_000_000)] // 100 MB
+    public async Task<ActionResult<UploadFileRecord>> SaveAsVersion(
+        Guid id, IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file.Length == 0) return BadRequest("File is empty.");
+
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var parent = await db.UploadFiles.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+        if (parent is null) return NotFound();
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, cancellationToken);
+        var bytes       = ms.ToArray();
+        var storedName  = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+        var storagePath = _fileStorage.UserFilePath(userId, storedName);
+
+        using (var writeStream = new MemoryStream(bytes))
+            await _fileStorage.WriteAsync(storagePath, writeStream, cancellationToken);
+
+        var entity = new UploadFile
+        {
+            Id                 = Guid.NewGuid(),
+            UploadFileTypeId   = parent.UploadFileTypeId,
+            AppUserId          = userId,
+            FileName           = Path.GetFileNameWithoutExtension(parent.FileName) + "-edited" + Path.GetExtension(file.FileName),
+            StoredFileName     = storedName,
+            StoragePath        = storagePath,
+            ContentType        = file.ContentType,
+            FileSize           = bytes.Length,
+            IsPublic           = false,
+            IsEditedVersion    = true,
+            ParentFileId       = id,
+            SortOrder          = 0,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        };
+        db.UploadFiles.Add(entity);
+        await db.SaveChangesAsync(cancellationToken);
+        return CreatedAtAction(nameof(GetById), new { id = entity.Id }, _mapper.Map<UploadFileRecord>(entity));
+    }
 }
 
 public sealed record UpdateUploadFileRequest(
@@ -244,3 +307,5 @@ public sealed record UpdateUploadFileRequest(
     bool IsPublic,
     int SortOrder,
     Guid? UpdatedByAppUserId);
+
+public sealed record SaveEditStateRequest(string? EditStateJson);
