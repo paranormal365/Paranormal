@@ -58,7 +58,7 @@
         </AppBarSection>
     </TelerikAppBar>
 
-    <MainNavigationDrawer @ref="_drawer" PersonCount="@personCount">
+    <MainNavigationDrawer @ref="_drawer">
         @Body
     </MainNavigationDrawer>
 
@@ -66,7 +66,7 @@
                    Class="appbar-bottom">
         <AppBarSpacer />
         <AppBarSection>
-            <div id="copyright">Copyright &copy; @DateTime.Today.Year Progress Software. All rights reserved.</div>
+            <div id="copyright">IsHaunted.com &copy; @DateTime.Today.Year</div>
         </AppBarSection>
         <AppBarSpacer />
     </TelerikAppBar>
@@ -88,7 +88,6 @@
     private CancellationTokenSource _cancellationTokenSource = new();
     private bool _adminPanelOpen = false;
     private MainNavigationDrawer? _drawer;
-    int? personCount = null;
     private int _pendingRequestCount;
 
     private const string AuthStateKey = "ben-auth-state";
@@ -151,13 +150,6 @@
 
             if (TokenStore.IsAuthenticated)
             {
-                try
-                {
-                    var users = await WebApiClient.GetUsersAsync(_cancellationTokenSource.Token);
-                    personCount = users.Count;
-                }
-                catch { /* not authenticated or API unavailable */ }
-
                 await RefreshPendingRequestCountAsync();
             }
 

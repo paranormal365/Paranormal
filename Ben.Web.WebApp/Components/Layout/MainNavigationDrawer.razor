@@ -24,13 +24,6 @@
                                OnClick="ReturnToSuperAdmin">Return to SuperAdmin</TelerikButton>
             </div>
         }
-        <div class="container">
-            <div class="row">
-                <div class="col">
-                    <h2 class="ps-4 text-secondary">User Count: <span class="text-info">@PersonCount</span></h2>
-                </div>
-            </div>
-        </div>
         <main>
             @ChildContent
         </main>
@@ -41,7 +34,6 @@
 
 @code {
     [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
-    [Parameter] public int? PersonCount { get; set; }
 
     private bool DrawerExpanded { get; set; } = true;
     private NavItem? DrawerSelectedItem { get; set; }

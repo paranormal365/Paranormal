@@ -64,6 +64,22 @@
                 <TelerikTextBox @bind-Value="@_editUrlName" Width="100%" />
                 <div class="form-text">URL-safe slug (lowercase, letters, numbers, hyphens). Must be unique.</div>
             </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Public Phone</label>
+                <TelerikTextBox @bind-Value="@_editPublicPhone" Width="100%" Placeholder="e.g. (615) 555-0100" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Public Email</label>
+                <TelerikTextBox @bind-Value="@_editPublicEmail" Width="100%" Placeholder="contact@example.com" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Website</label>
+                <TelerikTextBox @bind-Value="@_editPublicWebsite" Width="100%" Placeholder="https://example.com" />
+            </div>
+            <div class="col-12 d-flex align-items-center gap-2">
+                <TelerikCheckBox @bind-Value="@_editIsAcceptingApplications" Id="edit-accepting-apps" />
+                <label for="edit-accepting-apps" class="form-label mb-0">Accepting Membership Applications</label>
+            </div>
             <div class="col-12">
                 <label class="form-label text-secondary small">ID</label>
                 <div class="text-secondary small font-monospace">@_org.Id</div>
@@ -110,6 +126,25 @@
                                 @(_org.IsAcceptingApplications ? "Yes" : "No")
                             </span>
                         </dd>
+
+                        @if (!string.IsNullOrWhiteSpace(_org.PublicPhone) || !string.IsNullOrWhiteSpace(_org.PublicEmail) || !string.IsNullOrWhiteSpace(_org.PublicWebsite))
+                        {
+                            @if (!string.IsNullOrWhiteSpace(_org.PublicPhone))
+                            {
+                                <dt class="col-sm-3 text-secondary small">Phone</dt>
+                                <dd class="col-sm-9 mb-0">@_org.PublicPhone</dd>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(_org.PublicEmail))
+                            {
+                                <dt class="col-sm-3 text-secondary small">Email</dt>
+                                <dd class="col-sm-9 mb-0"><a href="mailto:@_org.PublicEmail">@_org.PublicEmail</a></dd>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(_org.PublicWebsite))
+                            {
+                                <dt class="col-sm-3 text-secondary small">Website</dt>
+                                <dd class="col-sm-9 mb-0"><a href="@_org.PublicWebsite" target="_blank" rel="noopener">@_org.PublicWebsite</a></dd>
+                            }
+                        }
 
                         <dt class="col-sm-3 text-secondary small">ID</dt>
                         <dd class="col-sm-9 mb-0 font-monospace small text-secondary">@_org.Id</dd>
@@ -219,8 +254,12 @@
     private string? _successMessage;
 
     // Edit form state
-    private string _editName    = string.Empty;
-    private string _editUrlName = string.Empty;
+    private string  _editName                  = string.Empty;
+    private string  _editUrlName               = string.Empty;
+    private string? _editPublicPhone;
+    private string? _editPublicEmail;
+    private string? _editPublicWebsite;
+    private bool    _editIsAcceptingApplications;
 
     protected override void OnInitialized()
     {
@@ -275,9 +314,13 @@
     private void BeginEdit()
     {
         if (_org is null) return;
-        _editName    = _org.Name;
-        _editUrlName = _org.UrlName;
-        _editMode    = true;
+        _editName                   = _org.Name;
+        _editUrlName                = _org.UrlName;
+        _editPublicPhone            = _org.PublicPhone;
+        _editPublicEmail            = _org.PublicEmail;
+        _editPublicWebsite          = _org.PublicWebsite;
+        _editIsAcceptingApplications = _org.IsAcceptingApplications;
+        _editMode = true;
     }
 
     private async Task SaveAsync()
@@ -291,7 +334,13 @@
         StateHasChanged();
 
         var updated = await AdminClient.UpdateOrganizationAsync(OrgId,
-            new AdminUpdateOrganizationRequest(_editName.Trim(), _editUrlName.Trim().ToLowerInvariant()));
+            new AdminUpdateOrganizationRequest(
+                _editName.Trim(),
+                _editUrlName.Trim().ToLowerInvariant(),
+                IsAcceptingApplications: _editIsAcceptingApplications,
+                PublicPhone:    _editPublicPhone?.Trim(),
+                PublicEmail:    _editPublicEmail?.Trim(),
+                PublicWebsite:  _editPublicWebsite?.Trim()));
 
         _isSaving = false;
 
