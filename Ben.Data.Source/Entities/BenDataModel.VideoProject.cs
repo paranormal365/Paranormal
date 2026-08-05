@@ -1,0 +1,28 @@
+using Ben.Data.Common.Interfaces;
+
+namespace Ben.Data.Source.Entities
+{
+    /// <summary>A saved Ben.Video project (.benvideo JSON). User-owned; optionally linked to a case.</summary>
+    public class VideoProject : IAuditableEntity
+    {
+        public Guid Id { get; set; }
+        public Guid? CaseId { get; set; }
+        public string Name { get; set; } = null!;
+
+        /// <summary>Full .benvideo JSON blob — stored as nvarchar(max).</summary>
+        public string ProjectJson { get; set; } = null!;
+
+        /// <summary>Set when the user publishes an exported render as an UploadFile.</summary>
+        public Guid? PublishedUploadFileId { get; set; }
+
+        public DateTime DateCreated { get; set; }
+        public DateTime? DateUpdated { get; set; }
+        public Guid CreatedByAppUserId { get; set; }
+        public Guid? UpdatedByAppUserId { get; set; }
+
+        public virtual Case? Case { get; set; }
+        public virtual UploadFile? PublishedUploadFile { get; set; }
+        public virtual AppUser CreatedByAppUser { get; set; } = null!;
+        public virtual AppUser? UpdatedByAppUser { get; set; }
+    }
+}

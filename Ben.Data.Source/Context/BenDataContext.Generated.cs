@@ -93,6 +93,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
         public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
+        public virtual DbSet<VideoProject> VideoProjects { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -641,6 +642,26 @@ namespace Ben.Data.Source.Context
                 .HasIndex(e => e.UserId);
             modelBuilder.Entity<AuditLog>()
                 .HasIndex(e => e.OccurredAt);
+
+            // ── VideoProject ──────────────────────────────────────────────────
+            modelBuilder.Entity<VideoProject>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<VideoProject>()
+                .HasOne(e => e.PublishedUploadFile).WithMany()
+                .HasForeignKey(e => e.PublishedUploadFileId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<VideoProject>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VideoProject>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VideoProject>()
+                .Property(e => e.ProjectJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<VideoProject>()
+                .HasIndex(e => e.CaseId);
+            modelBuilder.Entity<VideoProject>()
+                .HasIndex(e => e.CreatedByAppUserId);
 
             // ── UploadFile self-reference (clip parent/child) ─────────────────
             modelBuilder.Entity<UploadFile>()
