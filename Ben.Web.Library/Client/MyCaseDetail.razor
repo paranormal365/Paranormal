@@ -1,6 +1,7 @@
 @page "/my-cases/{CaseId:guid}"
 @using Ben.Data.Common.Enums
 @using Ben.Web.Library.Services
+@using Ben.Web.Library.Shared
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.JSInterop
 @inject IBenAdminClient AdminClient
@@ -351,9 +352,9 @@
 
 @* ── Log / Edit Occurrence dialog ─────────────────────────────────────────────── *@
 <TelerikWindow @bind-Visible="@_showDialog"
-               Title="@(_editOcc is null ? "Log Occurrence" : "Edit Occurrence")"
                Width="520px"
                Modal="true">
+    <WindowTitle>@(_editOcc is null ? "Log Occurrence" : "Edit Occurrence")</WindowTitle>
     <WindowContent>
         <div class="row g-3">
             <div class="col-12">
@@ -397,8 +398,8 @@
 {
     <TelerikWindow Visible="true"
                    VisibleChanged="@((bool v) => { if (!v) _deleteOcc = null; })"
-                   Width="400px" Modal="true"
-                   Title="Delete Occurrence">
+                   Width="400px" Modal="true">
+        <WindowTitle>Delete Occurrence</WindowTitle>
         <WindowContent>
             <p>Are you sure you want to delete this occurrence?</p>
         </WindowContent>
@@ -417,7 +418,8 @@
 }
 
 @* ── Add co-client dialog ─────────────────────────────────────────────────────── *@
-<TelerikWindow @bind-Visible="@_showAddCoClient" Title="Share Case Access" Width="400px" Modal="true">
+<TelerikWindow @bind-Visible="@_showAddCoClient" Width="400px" Modal="true">
+    <WindowTitle>Share Case Access</WindowTitle>
     <WindowContent>
         <div class="row g-3">
             <div class="col-12">
@@ -439,8 +441,8 @@
 </TelerikWindow>
 
 @* ── Counter-proposal dialog ──────────────────────────────────────────────────── *@
-<TelerikWindow @bind-Visible="@_showCounterDialog" Title="Suggest a Different Date"
-               Width="440px" Modal="true">
+<TelerikWindow @bind-Visible="@_showCounterDialog" Width="440px" Modal="true">
+    <WindowTitle>Suggest a Different Date</WindowTitle>
     <WindowContent>
         <div class="row g-3">
             <div class="col-12">

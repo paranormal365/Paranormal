@@ -1,0 +1,15 @@
+@page "/video-editor"
+@using Microsoft.Extensions.Options
+
+@inject IOptions<VideoEditorOptions> EditorOptions
+@inject IBenUserState UserState
+
+<PageTitle>Video Editor</PageTitle>
+
+@if (!UserState.IsAuthenticated)
+{
+    <p class="text-muted">You must be signed in to use the video editor.</p>
+    return;
+}
+
+<VideoEditor />

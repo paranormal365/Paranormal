@@ -276,6 +276,8 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public string GetFileDownloadUrl(Guid uploadFileId)
         => $"{_webApiBaseUrl}/api/upload-files/{uploadFileId}/download";
+    public string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId)
+        => $"{_webApiBaseUrl}/api/organizations/{orgId}/files/{orgFileId}/download";
 
     public Task<AddressMapConfigRecord?> GetOrgAddressMapConfigAsync(Guid orgId, Guid addressId, CancellationToken token = default)
         => _api.GetAsync<AddressMapConfigRecord>($"/api/organizations/{orgId}/addresses/{addressId}/map-config", token);
@@ -964,6 +966,20 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/research/{entryId}", token);
 
+    // ── Case Notes ────────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<CaseNoteDto>> GetCaseNotesAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<CaseNoteDto>>($"/api/organizations/{orgId}/cases/{caseId}/notes", token) ?? [];
+
+    public Task<CaseNoteDto?> CreateCaseNoteAsync(Guid orgId, Guid caseId, UpsertCaseNoteDto request, CancellationToken token = default)
+        => _api.PostAsync<UpsertCaseNoteDto, CaseNoteDto>($"/api/organizations/{orgId}/cases/{caseId}/notes", request, token);
+
+    public Task<CaseNoteDto?> UpdateCaseNoteAsync(Guid orgId, Guid caseId, Guid noteId, UpsertCaseNoteDto request, CancellationToken token = default)
+        => _api.PutAsync<UpsertCaseNoteDto, CaseNoteDto>($"/api/organizations/{orgId}/cases/{caseId}/notes/{noteId}", request, token);
+
+    public Task<bool> DeleteCaseNoteAsync(Guid orgId, Guid caseId, Guid noteId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/cases/{caseId}/notes/{noteId}", token);
+
     // ── Investigation Scheduling ──────────────────────────────────────────────
 
     public Task<bool> CancelMyInvestigationAsync(Guid caseId, Guid investigationId, CancellationToken token = default)
@@ -1271,4 +1287,45 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         => _api.GetAsync<OrgSettingsResponse>($"/api/organizations/{orgId}/settings", token);
     public Task<OrgSettingsResponse?> UpdateOrgSettingsAsync(Guid orgId, OrgSettingsRequest request, CancellationToken token = default)
         => _api.PutAsync<OrgSettingsRequest, OrgSettingsResponse>($"/api/organizations/{orgId}/settings", request, token);
+
+    // ── Video projects ────────────────────────────────────────────────────────
+    public async Task<IReadOnlyList<VideoProjectRecord>> GetMyVideoProjectsAsync(Guid? caseId = null, CancellationToken token = default)
+    {
+        var url = caseId.HasValue ? $"/api/video-projects?caseId={caseId}" : "/api/video-projects";
+        var result = await _api.GetAsync<IReadOnlyList<VideoProjectRecord>>(url, token);
+        return result ?? [];
+    }
+    public Task<VideoProjectRecord?> GetMyVideoProjectAsync(Guid id, CancellationToken token = default)
+        => _api.GetAsync<VideoProjectRecord>($"/api/video-projects/{id}", token);
+    public Task<VideoProjectRecord?> SaveMyVideoProjectAsync(Ben.Video.Editor.Models.ProjectFile file, Guid? caseId = null, CancellationToken token = default)
+    {
+        var url = caseId.HasValue ? $"/api/video-projects?caseId={caseId}" : "/api/video-projects";
+        return _api.PostAsync<Ben.Video.Editor.Models.ProjectFile, VideoProjectRecord>(url, file, token);
+    }
+    public Task<VideoProjectRecord?> UpdateMyVideoProjectAsync(Guid id, Ben.Video.Editor.Models.ProjectFile file, CancellationToken token = default)
+        => _api.PutAsync<Ben.Video.Editor.Models.ProjectFile, VideoProjectRecord>($"/api/video-projects/{id}", file, token);
+    public Task<VideoProjectRecord?> PublishVideoProjectAsync(Guid id, byte[] bytes, string fileName, string contentType, CancellationToken token = default)
+    {
+        var fileContent = new ByteArrayContent(bytes);
+        fileContent.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentType);
+        var form = new MultipartFormDataContent();
+        form.Add(fileContent, "file", fileName);
+        return _api.PostMultipartAsync<VideoProjectRecord>($"/api/video-projects/{id}/publish", form, token);
+    }
+    public Task<bool> DeleteMyVideoProjectAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/video-projects/{id}", token);
+
+    // ── Image editor ────────────────────────────────────────────────────────
+    public Task<UploadFileRecord?> SaveImageEditStateAsync(Guid fileId, string? editStateJson, CancellationToken token = default)
+        => _api.PutAsync<object, UploadFileRecord>($"/api/upload-files/{fileId}/edit-state", new { EditStateJson = editStateJson }, token);
+    public Task<UploadFileRecord?> SaveImageAsNewVersionAsync(Guid parentFileId, byte[] imageBytes, string format, CancellationToken token = default)
+    {
+        var mime = format == "jpeg" ? "image/jpeg" : "image/png";
+        var ext  = format == "jpeg" ? ".jpg" : ".png";
+        var content = new ByteArrayContent(imageBytes);
+        content.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(mime);
+        var form = new MultipartFormDataContent();
+        form.Add(content, "file", $"edited{ext}");
+        return _api.PostMultipartAsync<UploadFileRecord>($"/api/upload-files/{parentFileId}/save-as-version", form, token);
+    }
 }

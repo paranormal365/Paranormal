@@ -1,0 +1,232 @@
+@page "/my-videos"
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject ProjectService Projects
+@inject ProjectStore ProjectStore
+@inject NavigationManager NavManager
+@inject IJSRuntime JSRuntime
+
+<PageTitle>My Videos</PageTitle>
+
+@if (!UserState.IsAuthenticated)
+{
+    <div class="container py-4"><p class="text-muted">You must be signed in to use the video editor.</p></div>
+    return;
+}
+
+<div class="d-flex flex-column" style="height:100vh; overflow:hidden;">
+
+    @* ── Header bar ──────────────────────────────────────────────────────── *@
+    <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom bg-body" style="flex:0 0 auto;">
+        <h5 class="mb-0 me-auto">My Videos</h5>
+
+        @if (_projects.Count > 0)
+        {
+            <TelerikButton Icon="@SvgIcon.FolderOpen" ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           OnClick="@(() => _showProjectList = true)">Saved Projects (@_projects.Count)</TelerikButton>
+        }
+
+        @if (_saving)
+        {
+            <span class="text-muted small">Saving…</span>
+        }
+        else
+        {
+            <TelerikButton Icon="@SvgIcon.Save" ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           OnClick="SaveProjectAsync">Save to Server</TelerikButton>
+        }
+    </div>
+
+    @* ── Editor (full remaining height) ─────────────────────────────────── *@
+    <div style="flex:1 1 auto; min-height:0; overflow:hidden;">
+        <VideoEditor />
+    </div>
+</div>
+
+@* ── Saved Projects dialog ──────────────────────────────────────────────── *@
+<TelerikWindow @bind-Visible="_showProjectList" Modal="true" Width="600px" Title="Saved Projects">
+    <WindowContent>
+        @if (_loadingList)
+        {
+            <TelerikLoaderContainer Visible="true" Text="Loading…" />
+        }
+        else if (_projects.Count == 0)
+        {
+            <p class="text-muted">No projects saved to server yet.</p>
+        }
+        else
+        {
+            <TelerikGrid Data="@_projects" Pageable="false" Sortable="false"
+                         Height="360px">
+                <GridColumns>
+                    <GridColumn Field="@nameof(VideoProjectRecord.Name)" Title="Name" />
+                    <GridColumn Field="@nameof(VideoProjectRecord.DateCreated)" Title="Saved"
+                                DisplayFormat="{0:MMM d, yyyy h:mm tt}" Width="170px" />
+                    <GridColumn Width="160px">
+                        <Template>
+                            @{ var row = (VideoProjectRecord)context; }
+                            <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                           OnClick="@(() => OpenProjectAsync(row))">Open</TelerikButton>
+                            <TelerikButton Icon="@SvgIcon.Upload" Size="@ThemeConstants.Button.Size.Small"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
+                                           Title="Publish rendered video"
+                                           OnClick="@(() => TriggerPublish(row))" />
+                            <TelerikButton Icon="@SvgIcon.Trash" Size="@ThemeConstants.Button.Size.Small"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                           OnClick="@(() => ConfirmDeleteAsync(row))" />
+                        </Template>
+                    </GridColumn>
+                </GridColumns>
+            </TelerikGrid>
+        }
+    </WindowContent>
+    <WindowActions>
+        <WindowAction Name="Close" />
+    </WindowActions>
+</TelerikWindow>
+
+@* ── Delete confirm dialog ──────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="_showDeleteConfirm" Title="Delete Project" Width="360px">
+    <DialogContent>
+        <p>Delete <strong>@_deleteTarget?.Name</strong>? This cannot be undone.</p>
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="@(() => _showDeleteConfirm = false)">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                       OnClick="DeleteConfirmedAsync">Delete</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+<TelerikNotification @ref="_notifications" VerticalPosition="NotificationVerticalPosition.Bottom"
+                     HorizontalPosition="NotificationHorizontalPosition.Right" />
+
+@* Hidden file input triggered by TriggerPublish — accepts the rendered export from the user's Downloads *@
+<InputFile id="publish-input-my" OnChange="OnPublishFileSelectedAsync" accept="video/*" style="display:none" />
+
+@code {
+    private List<VideoProjectRecord> _projects = [];
+    private bool _loadingList;
+    private bool _showProjectList;
+    private bool _saving;
+    private bool _publishing;
+    private bool _showDeleteConfirm;
+    private VideoProjectRecord? _deleteTarget;
+    private VideoProjectRecord? _publishTarget;
+    private TelerikNotification? _notifications;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserState.IsAuthenticated) return;
+        await LoadProjectListAsync();
+    }
+
+    private async Task LoadProjectListAsync()
+    {
+        _loadingList = true;
+        _projects = (await AdminClient.GetMyVideoProjectsAsync()).ToList();
+        _loadingList = false;
+    }
+
+    private async Task SaveProjectAsync()
+    {
+        _saving = true;
+        StateHasChanged();
+        try
+        {
+            var file   = Projects.BuildCurrentProjectFile(ProjectStore.CurrentProjectName);
+            var record = await AdminClient.SaveMyVideoProjectAsync(file);
+            if (record is not null)
+            {
+                _projects.Insert(0, record);
+                _notifications?.Show("Project saved.", ThemeConstants.Notification.ThemeColor.Success);
+            }
+            else
+            {
+                _notifications?.Show("Save failed.", ThemeConstants.Notification.ThemeColor.Error);
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task OpenProjectAsync(VideoProjectRecord record)
+    {
+        _showProjectList = false;
+        try
+        {
+            var file = System.Text.Json.JsonSerializer.Deserialize<Ben.Video.Editor.Models.ProjectFile>(
+                record.ProjectJson,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (file is not null)
+                await ProjectStore.LoadFromFileAsync(file, record.Name, record.Id);
+        }
+        catch
+        {
+            _notifications?.Show("Could not load project.", ThemeConstants.Notification.ThemeColor.Error);
+        }
+    }
+
+    private void ConfirmDeleteAsync(VideoProjectRecord record)
+    {
+        _deleteTarget = record;
+        _showDeleteConfirm = true;
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        _showDeleteConfirm = false;
+        if (_deleteTarget is null) return;
+        var ok = await AdminClient.DeleteMyVideoProjectAsync(_deleteTarget.Id);
+        if (ok)
+        {
+            _projects.Remove(_deleteTarget);
+            _notifications?.Show("Project deleted.", ThemeConstants.Notification.ThemeColor.Success);
+        }
+        _deleteTarget = null;
+    }
+
+    private void TriggerPublish(VideoProjectRecord record)
+    {
+        _publishTarget = record;
+        _ = JSRuntime.InvokeVoidAsync("eval", "document.getElementById('publish-input-my').click()");
+    }
+
+    private async Task OnPublishFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        if (_publishTarget is null || e.FileCount == 0) return;
+        _publishing = true;
+        StateHasChanged();
+        try
+        {
+            const long maxBytes = 600_000_000;
+            using var ms = new System.IO.MemoryStream();
+            await e.File.OpenReadStream(maxBytes).CopyToAsync(ms);
+            var bytes  = ms.ToArray();
+            var record = await AdminClient.PublishVideoProjectAsync(
+                _publishTarget.Id, bytes, e.File.Name, e.File.ContentType);
+            if (record is not null)
+            {
+                var idx = _projects.FindIndex(p => p.Id == record.Id);
+                if (idx >= 0) _projects[idx] = record;
+                _notifications?.Show("Video published.", ThemeConstants.Notification.ThemeColor.Success);
+            }
+            else
+            {
+                _notifications?.Show("Publish failed.", ThemeConstants.Notification.ThemeColor.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            _notifications?.Show($"Publish error: {ex.Message}", ThemeConstants.Notification.ThemeColor.Error);
+        }
+        finally
+        {
+            _publishing = false;
+            _publishTarget = null;
+        }
+    }
+}

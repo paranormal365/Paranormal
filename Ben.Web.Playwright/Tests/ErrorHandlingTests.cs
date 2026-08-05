@@ -83,4 +83,29 @@ public class ErrorHandlingTests : BenTestBase
         Assert.That(response.Status, Is.EqualTo(401).Or.EqualTo(403),
             "Protected API endpoint should return 401/403 without auth.");
     }
+
+    [Test]
+    [Description("The home page produces no Telerik component parameter errors.")]
+    public async Task HomePage_NoTelerikParameterErrors()
+    {
+        await Page.GotoAsync(BaseUrl);
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // Wait long enough for Blazor circuit and async data loads
+        await Page.WaitForTimeoutAsync(3_000);
+        var body = await Page.InnerTextAsync("body");
+        Assert.That(body, Does.Not.Contain("does not have a property matching"),
+            "Home page should not show Telerik component parameter errors (e.g. TelerikMap Style, TelerikWindow Title).");
+    }
+
+    [Test]
+    [Description("Public case detail page produces no Telerik component errors.")]
+    public async Task PublicCaseDetail_NoTelerikErrors()
+    {
+        await Page.GotoAsync($"{BaseUrl}/o/tgh/cases/2026-001");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await Page.WaitForTimeoutAsync(2_000);
+        var body = await Page.InnerTextAsync("body");
+        Assert.That(body, Does.Not.Contain("does not have a property matching"),
+            "Public case page should not show Telerik component parameter errors.");
+    }
 }

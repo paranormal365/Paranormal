@@ -77,8 +77,8 @@ else
 
 @* ── Add / Edit dialog ───────────────────────────────────────────────────────── *@
 <TelerikWindow @bind-Visible="@_showDialog"
-               Title="@(_editId == Guid.Empty ? $"Add {_dialogType}" : $"Edit {_dialogType}")"
                Width="520px" Modal="true">
+    <WindowTitle>@(_editId == Guid.Empty ? $"Add {_dialogType}" : $"Edit {_dialogType}")</WindowTitle>
     <WindowContent>
         <div class="row g-3">
             <div class="col-12">

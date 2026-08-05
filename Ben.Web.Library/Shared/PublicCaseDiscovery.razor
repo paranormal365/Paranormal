@@ -35,7 +35,7 @@ else
         <div style="height:420px; border-radius:.5rem; overflow:hidden;">
             <TelerikMap Center="@_mapCenter"
                         Zoom="@_mapZoom"
-                        Style="height:420px;">
+                        Height="420px">
                 <MapLayers>
                     <MapLayer Type="@MapLayersType.Tile"
                               Attribution="© OpenStreetMap contributors"
@@ -59,9 +59,9 @@ else
     @* ── Case popup ───────────────────────────────────────────────────────── *@
     <TelerikWindow @bind-Visible="@_popupVisible"
                    Width="420px"
-                   Title="@(_selectedCase != null ? _selectedCase.Title : _selectedCity)"
                    Modal="false"
                    Resizable="true">
+        <WindowTitle>@(_selectedCase != null ? _selectedCase.Title : _selectedCity)</WindowTitle>
         <WindowContent>
             @if (_clusterCases.Count > 1 && _selectedCase is null)
             {
@@ -125,8 +125,8 @@ else
         <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
             <span class="fw-semibold">Sort by</span>
             <TelerikButtonGroup>
-                <ButtonGroupButton Selected="@(_sort == "votes")"    OnClick="@(() => SetSort("votes"))">Most Votes</ButtonGroupButton>
-                <ButtonGroupButton Selected="@(_sort == "date")"     OnClick="@(() => SetSort("date"))">Newest</ButtonGroupButton>
+                <ButtonGroupToggleButton Selected="@(_sort == "votes")" OnClick="@(() => SetSort("votes"))">Most Votes</ButtonGroupToggleButton>
+                <ButtonGroupToggleButton Selected="@(_sort == "date")"  OnClick="@(() => SetSort("date"))">Newest</ButtonGroupToggleButton>
             </TelerikButtonGroup>
         </div>
 

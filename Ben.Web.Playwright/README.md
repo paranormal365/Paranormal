@@ -27,7 +27,20 @@
 #   dotnet test Ben.Web.Playwright --filter TestCategory=Smoke
 #   dotnet test Ben.Web.Playwright --filter TestCategory=Auth
 #   dotnet test Ben.Web.Playwright --filter TestCategory=Home
+#   dotnet test Ben.Web.Playwright --filter TestCategory=HomeMap
 #   dotnet test Ben.Web.Playwright --filter TestCategory=PublicCase
+#   dotnet test Ben.Web.Playwright --filter TestCategory=CaseManagement
+#   dotnet test Ben.Web.Playwright --filter TestCategory=CaseMessages
+#   dotnet test Ben.Web.Playwright --filter TestCategory=CaseReports
+#   dotnet test Ben.Web.Playwright --filter TestCategory=CaseTransfer
+#   dotnet test Ben.Web.Playwright --filter TestCategory=InvestigationPanel
+#   dotnet test Ben.Web.Playwright --filter TestCategory=MyCases
+#   dotnet test Ben.Web.Playwright --filter TestCategory=Navigation
+#   dotnet test Ben.Web.Playwright --filter TestCategory=OrgDiscovery
+#   dotnet test Ben.Web.Playwright --filter TestCategory=ErrorHandling
+#   dotnet test Ben.Web.Playwright --filter TestCategory=Voting
+#   dotnet test Ben.Web.Playwright --filter TestCategory=CaseNotes
+#   dotnet test Ben.Web.Playwright --filter TestCategory=OrgPublic
 #
 # HEADFUL MODE (see the browser window)
 # -----------

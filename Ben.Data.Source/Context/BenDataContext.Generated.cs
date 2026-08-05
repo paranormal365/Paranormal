@@ -86,12 +86,14 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<CaseReportSection> CaseReportSections { get; set; }
         public virtual DbSet<CaseReportSectionFile> CaseReportSectionFiles { get; set; }
         public virtual DbSet<CaseResearchEntry> CaseResearchEntries { get; set; }
+        public virtual DbSet<CaseNote> CaseNotes { get; set; }
         public virtual DbSet<InvestigationScheduleProposal> InvestigationScheduleProposals { get; set; }
         public virtual DbSet<ScheduleProposalSlot> ScheduleProposalSlots { get; set; }
         public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
         public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
         public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
+        public virtual DbSet<VideoProject> VideoProjects { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -641,11 +643,33 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<AuditLog>()
                 .HasIndex(e => e.OccurredAt);
 
+            // ── VideoProject ──────────────────────────────────────────────────
+            modelBuilder.Entity<VideoProject>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<VideoProject>()
+                .HasOne(e => e.PublishedUploadFile).WithMany()
+                .HasForeignKey(e => e.PublishedUploadFileId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<VideoProject>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VideoProject>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VideoProject>()
+                .Property(e => e.ProjectJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<VideoProject>()
+                .HasIndex(e => e.CaseId);
+            modelBuilder.Entity<VideoProject>()
+                .HasIndex(e => e.CreatedByAppUserId);
+
             // ── UploadFile self-reference (clip parent/child) ─────────────────
             modelBuilder.Entity<UploadFile>()
                 .HasOne(e => e.ParentFile).WithMany(e => e.ChildClips)
                 .HasForeignKey(e => e.ParentFileId)
                 .IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFile>()
+                .Property(e => e.EditStateJson).HasColumnType("nvarchar(max)");
 
             // ── UploadFileAudioConfig ────────────────────────────────────────
             // One-to-one with UploadFile; cascade so config is deleted with the file.
@@ -1322,6 +1346,24 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<CaseReportSectionFile>()
                 .Property(e => e.Caption).HasMaxLength(500);
+
+            // ── CaseNote ──────────────────────────────────────────────────
+            modelBuilder.Entity<CaseNote>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseNote>()
+                .HasOne(e => e.AuthorAppUser).WithMany()
+                .HasForeignKey(e => e.AuthorAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseNote>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseNote>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseNote>()
+                .Property(e => e.Title).HasMaxLength(300);
+            modelBuilder.Entity<CaseNote>()
+                .Property(e => e.Body).HasMaxLength(10000);
 
             // ── CaseResearchEntry ─────────────────────────────────────
             modelBuilder.Entity<CaseResearchEntry>()

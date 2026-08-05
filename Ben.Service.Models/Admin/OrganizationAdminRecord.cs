@@ -11,6 +11,9 @@ public record OrganizationAdminRecord
     public bool IsAcceptingClients { get; init; }
     /// <summary>When true, the org considers requests from outside their operating area.</summary>
     public bool AcceptsClientsOutsideRange { get; init; }
+    public string? PublicPhone { get; init; }
+    public string? PublicEmail { get; init; }
+    public string? PublicWebsite { get; init; }
     public DateTime DateCreated { get; init; }
     public DateTime? DateUpdated { get; init; }
     public Guid CreatedByAppUserId { get; init; }

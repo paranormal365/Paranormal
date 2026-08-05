@@ -1,0 +1,275 @@
+@page "/organizations/{OrgId:guid}/cases/{CaseId:guid}/video-editor"
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject ProjectService Projects
+@inject ProjectStore ProjectStore
+@inject NavigationManager NavManager
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Case Video Editor</PageTitle>
+
+@if (_case is null && !_loaded)
+{
+    <TelerikLoaderContainer Visible="true" Text="Loading…" />
+    return;
+}
+
+@if (_error is not null)
+{
+    <div class="container py-3"><div class="alert alert-danger">@_error</div></div>
+    return;
+}
+
+<div class="d-flex flex-column" style="height:100vh; overflow:hidden;">
+
+    @* ── Header bar ──────────────────────────────────────────────────────── *@
+    <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom bg-body" style="flex:0 0 auto;">
+        <a href="/organizations/@OrgId/cases/@CaseId" class="text-secondary small">← @(_case?.DisplayLabel ?? "Case")</a>
+        <span class="vr"></span>
+        <h6 class="mb-0 me-auto text-truncate" style="max-width:300px;">Case Video Editor</h6>
+
+        @if (_caseProjects.Count > 0)
+        {
+            <TelerikButton Icon="@SvgIcon.FolderOpen" ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           OnClick="@(() => _showProjectList = true)">
+                Case Projects (@_caseProjects.Count)
+            </TelerikButton>
+        }
+
+        @if (_saving)
+        {
+            <span class="text-muted small">Saving…</span>
+        }
+        else
+        {
+            <TelerikButton Icon="@SvgIcon.Save" ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           OnClick="SaveProjectAsync">Save to Case</TelerikButton>
+        }
+    </div>
+
+    @* ── Editor (full remaining height) ─────────────────────────────────── *@
+    <div style="flex:1 1 auto; min-height:0; overflow:hidden;">
+        <VideoEditor />
+    </div>
+</div>
+
+@* ── Case Projects dialog ────────────────────────────────────────────────── *@
+<TelerikWindow @bind-Visible="_showProjectList" Modal="true" Width="620px" Title="Case Projects">
+    <WindowContent>
+        @if (_loadingList)
+        {
+            <TelerikLoaderContainer Visible="true" Text="Loading…" />
+        }
+        else if (_caseProjects.Count == 0)
+        {
+            <p class="text-muted">No projects saved to this case yet.</p>
+        }
+        else
+        {
+            <TelerikGrid Data="@_caseProjects" Pageable="false" Sortable="false" Height="380px">
+                <GridColumns>
+                    <GridColumn Field="@nameof(VideoProjectRecord.Name)" Title="Name" />
+                    <GridColumn Title="By" Width="130px">
+                        <Template>
+                            @{ var row = (VideoProjectRecord)context; }
+                            <span class="text-muted small">@row.CreatedByAppUserId.ToString()[..8]…</span>
+                        </Template>
+                    </GridColumn>
+                    <GridColumn Field="@nameof(VideoProjectRecord.DateCreated)" Title="Saved"
+                                DisplayFormat="{0:MMM d, yyyy}" Width="110px" />
+                    <GridColumn Width="160px">
+                        <Template>
+                            @{ var row2 = (VideoProjectRecord)context; }
+                            <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                           OnClick="@(() => OpenProjectAsync(row2))">Open</TelerikButton>
+                            @if (row2.CreatedByAppUserId == _myUserId)
+                            {
+                                <TelerikButton Icon="@SvgIcon.Upload" Size="@ThemeConstants.Button.Size.Small"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
+                                               Title="Publish rendered video to case"
+                                               OnClick="@(() => TriggerPublish(row2))" />
+                                <TelerikButton Icon="@SvgIcon.Trash" Size="@ThemeConstants.Button.Size.Small"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                               OnClick="@(() => ConfirmDelete(row2))" />
+                            }
+                        </Template>
+                    </GridColumn>
+                </GridColumns>
+            </TelerikGrid>
+        }
+    </WindowContent>
+    <WindowActions>
+        <WindowAction Name="Close" />
+    </WindowActions>
+</TelerikWindow>
+
+@* ── Delete confirm ──────────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="_showDeleteConfirm" Title="Delete Project" Width="360px">
+    <DialogContent>
+        <p>Delete <strong>@_deleteTarget?.Name</strong>? This cannot be undone.</p>
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="@(() => _showDeleteConfirm = false)">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                       OnClick="DeleteConfirmedAsync">Delete</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+<TelerikNotification @ref="_notifications" VerticalPosition="NotificationVerticalPosition.Bottom"
+                     HorizontalPosition="NotificationHorizontalPosition.Right" />
+
+@* Hidden file input triggered by TriggerPublish — accepts the rendered export from the user's Downloads *@
+<InputFile id="publish-input-case" OnChange="OnPublishFileSelectedAsync" accept="video/*" style="display:none" />
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid CaseId { get; set; }
+
+    private CaseRecord? _case;
+    private bool _loaded;
+    private string? _error;
+    private List<VideoProjectRecord> _caseProjects = [];
+    private bool _loadingList;
+    private bool _showProjectList;
+    private bool _saving;
+    private bool _publishing;
+    private bool _showDeleteConfirm;
+    private VideoProjectRecord? _deleteTarget;
+    private VideoProjectRecord? _publishTarget;
+    private Guid _myUserId;
+    private TelerikNotification? _notifications;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserState.IsAuthenticated) { _error = "You must be signed in."; _loaded = true; return; }
+
+        try
+        {
+            _case = await AdminClient.GetOrgCaseAsync(OrgId, CaseId);
+            if (_case is null) { _error = "Case not found."; _loaded = true; return; }
+
+            // Set the default project name from the case title
+            ProjectStore.CurrentProjectName = _case.Title ?? "Case Project";
+
+            _caseProjects = (await AdminClient.GetMyVideoProjectsAsync(CaseId)).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private async Task LoadCaseProjectsAsync()
+    {
+        _loadingList = true;
+        _caseProjects = (await AdminClient.GetMyVideoProjectsAsync(CaseId)).ToList();
+        _loadingList = false;
+    }
+
+    private async Task SaveProjectAsync()
+    {
+        _saving = true;
+        StateHasChanged();
+        try
+        {
+            var file   = Projects.BuildCurrentProjectFile(ProjectStore.CurrentProjectName);
+            var record = await AdminClient.SaveMyVideoProjectAsync(file, CaseId);
+            if (record is not null)
+            {
+                _caseProjects.Insert(0, record);
+                _notifications?.Show("Project saved to case.", ThemeConstants.Notification.ThemeColor.Success);
+            }
+            else
+            {
+                _notifications?.Show("Save failed.", ThemeConstants.Notification.ThemeColor.Error);
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task OpenProjectAsync(VideoProjectRecord record)
+    {
+        _showProjectList = false;
+        try
+        {
+            var file = System.Text.Json.JsonSerializer.Deserialize<Ben.Video.Editor.Models.ProjectFile>(
+                record.ProjectJson,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (file is not null)
+                await ProjectStore.LoadFromFileAsync(file, record.Name, record.Id);
+        }
+        catch
+        {
+            _notifications?.Show("Could not load project.", ThemeConstants.Notification.ThemeColor.Error);
+        }
+    }
+
+    private void ConfirmDelete(VideoProjectRecord record)
+    {
+        _deleteTarget = record;
+        _showDeleteConfirm = true;
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        _showDeleteConfirm = false;
+        if (_deleteTarget is null) return;
+        var ok = await AdminClient.DeleteMyVideoProjectAsync(_deleteTarget.Id);
+        if (ok)
+        {
+            _caseProjects.Remove(_deleteTarget);
+            _notifications?.Show("Project deleted.", ThemeConstants.Notification.ThemeColor.Success);
+        }
+        _deleteTarget = null;
+    }
+
+    private void TriggerPublish(VideoProjectRecord record)
+    {
+        _publishTarget = record;
+        _ = JSRuntime.InvokeVoidAsync("eval", "document.getElementById('publish-input-case').click()");
+    }
+
+    private async Task OnPublishFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        if (_publishTarget is null || e.FileCount == 0) return;
+        _publishing = true;
+        StateHasChanged();
+        try
+        {
+            const long maxBytes = 600_000_000;
+            using var ms = new System.IO.MemoryStream();
+            await e.File.OpenReadStream(maxBytes).CopyToAsync(ms);
+            var bytes  = ms.ToArray();
+            var record = await AdminClient.PublishVideoProjectAsync(
+                _publishTarget.Id, bytes, e.File.Name, e.File.ContentType);
+            if (record is not null)
+            {
+                var idx = _caseProjects.FindIndex(p => p.Id == record.Id);
+                if (idx >= 0) _caseProjects[idx] = record;
+                _notifications?.Show("Video published to case.", ThemeConstants.Notification.ThemeColor.Success);
+            }
+            else
+            {
+                _notifications?.Show("Publish failed.", ThemeConstants.Notification.ThemeColor.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            _notifications?.Show($"Publish error: {ex.Message}", ThemeConstants.Notification.ThemeColor.Error);
+        }
+        finally
+        {
+            _publishing = false;
+            _publishTarget = null;
+        }
+    }
+}

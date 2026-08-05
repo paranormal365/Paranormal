@@ -48,6 +48,19 @@
             <GridColumns>
                 <GridColumn Field="@nameof(OrganizationListItemResponse.Name)" Title="Name" />
                 <GridColumn Field="@nameof(OrganizationListItemResponse.UrlName)" Title="URL Name" Width="180px" />
+                <GridColumn Title="Applications" Width="120px">
+                    <Template>
+                        @{ var item = (OrganizationListItemResponse)context; }
+                        @if (item.IsAcceptingApplications)
+                        {
+                            <span class="badge bg-success">Open</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Closed</span>
+                        }
+                    </Template>
+                </GridColumn>
                 <GridColumn Field="@nameof(OrganizationListItemResponse.DateCreated)" Title="Created"
                             DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
                 <GridColumn Title="Actions" Width="340px">
@@ -55,6 +68,12 @@
                         @{
                             var org = (OrganizationListItemResponse)context;
                         }
+                        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Icon="@SvgIcon.Eye"
+                                       OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}"))">
+                            View
+                        </TelerikButton>
                         <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
                                        Size="@ThemeConstants.Button.Size.Small"
                                        ThemeColor="@ThemeConstants.Button.ThemeColor.Info"

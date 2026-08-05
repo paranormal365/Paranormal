@@ -33,7 +33,26 @@ else
                      alt="@(_org.Logos.First().AltText ?? _org.OrgName)"
                      style="max-height:64px; max-width:120px; object-fit:contain;" />
             }
-            <h1 class="mb-0 fs-2 fw-bold">@_org.OrgName</h1>
+            <div>
+                <h1 class="mb-0 fs-2 fw-bold">@_org.OrgName</h1>
+                @if (_org.PublicPhone is not null || _org.PublicEmail is not null || _org.PublicWebsite is not null)
+                {
+                    <div class="d-flex flex-wrap gap-3 mt-1 text-secondary small">
+                        @if (_org.PublicPhone is not null)
+                        {
+                            <span>📞 <a href="tel:@_org.PublicPhone" class="text-decoration-none text-secondary">@_org.PublicPhone</a></span>
+                        }
+                        @if (_org.PublicEmail is not null)
+                        {
+                            <span>✉️ <a href="mailto:@_org.PublicEmail" class="text-decoration-none text-secondary">@_org.PublicEmail</a></span>
+                        }
+                        @if (_org.PublicWebsite is not null)
+                        {
+                            <span>🌐 <a href="@_org.PublicWebsite" target="_blank" rel="noopener noreferrer" class="text-decoration-none text-secondary">@_org.PublicWebsite</a></span>
+                        }
+                    </div>
+                }
+            </div>
         </div>
 
         @* ── Sub-page navigation ──────────────────────────────────────────── *@

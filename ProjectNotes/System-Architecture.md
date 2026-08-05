@@ -1,7 +1,8 @@
 # IsHaunted Platform — System Architecture
 
-**Last updated:** 2026-08-02
-**Branch:** `develop`
+**Last updated:** 2026-08-05
+**Branch:** `feature/ben-video-integration` (off develop)
+**Tests:** 1,324 passing (374 repo + 950 web)
 
 ---
 
@@ -26,7 +27,7 @@ IsHaunted is a full-stack .NET web platform for paranormal investigation organiz
 
 ---
 
-## Solution Structure (13 projects)
+## Solution Structure (14 projects)
 
 ```
 Ben.slnx
@@ -36,13 +37,18 @@ Ben.slnx
 ├── Ben.Service.Mappings/     AutoMapper profiles (Entity → Record)
 ├── Ben.Service.Models/       DTOs / records (Entities/, Admin/, People/, Identity/)
 ├── Ben.Service.RepositoryService/    Repository pattern over BenDataContext
-├── Ben.Service.RepositoryService.Tests/  354 xUnit tests
+├── Ben.Service.RepositoryService.Tests/  374 xUnit tests
 ├── Ben.Service.Security/     Org-level tenant security service
 ├── Ben.Web.Library/          Razor Class Library — all reusable Blazor components
-├── Ben.Web.Tests/            662 xUnit tests for WebApp services and controllers
+├── Ben.Web.Tests/            950 xUnit tests for WebApp services and controllers
 ├── Ben.Web.WebApp/           Blazor Server application
-└── Ben.Web.Playwright/       Playwright front-end tests (NUnit + Microsoft.Playwright)
+├── Ben.Web.Playwright/       Playwright front-end tests (NUnit + Microsoft.Playwright)
+└── [external] ../Github-BenVideo/Ben.Video.Editor/   Video editor RCL (cross-repo project reference)
 ```
+
+> **Ben.Video.Editor** lives in `/Users/ben/Source/Github-BenVideo/` — a sibling folder to this repo.
+> Referenced by `Ben.Web.Library.csproj`; visible in the solution under `/Media Projects/`.
+> Changes to the RCL are picked up by Ben on the next build with no publish step needed.
 
 ---
 
@@ -112,7 +118,7 @@ dotnet ef migrations add <Name> \
 dotnet ef database update --project Ben.Data.Source --startup-project Ben.Data.WebApi
 ```
 
-### Applied migrations (17 total, as of 2026-07-24)
+### Applied migrations (33 total, as of 2026-08-05)
 ```
 InitialCreate → AddIdentitySchema → AddGeocodingMetadata → AddOrganizationSecurityModel
 → AddUploadFileEntities → AddUploadFileSharing → AddUploadFileTypeExtensions
@@ -122,6 +128,11 @@ InitialCreate → AddIdentitySchema → AddGeocodingMetadata → AddOrganization
 → AddOrgClientAcceptanceAndAreaOfOperation → AddClientRequest → AddCaseManagement
 → AddCaseNumberAndYear → AddMembershipPhase3 → AddMessagingAndCalendar
 → AddInvestigationAndEvidenceVoting → AddCaseTransferAndPublicDiscovery
+→ AddOrganizationMembershipRequestsAndFiles → AddOrgFilePublishingAndDeleteLog
+→ AddOrganizationAddressMapConfig → AddInvestigationWorkflowFields
+→ AddInvestigationScheduling → AddCaseClientAccess → AddFileMetadata
+→ AddCaseReportBuilder → AddCaseResearch → AddCaseNotes
+→ AddOrganizationPublicContact → AddVideoProjects
 ```
 
 ---
@@ -231,6 +242,7 @@ All reusable Blazor components live in `Ben.Web.Library/`:
 | Messaging | `Messaging/` | OrgMessages, MessageList |
 | Scheduler | `Manage/Calendar/` | OrgScheduler (TelerikScheduler) |
 | Audio player | `Manage/Audio/` | WaveSurferPlayer |
+| Video editor | `Manage/Video/` | VideoEditorPage (standalone `/video-editor`), CaseVideoEditorPage (case-scoped, in progress) |
 | Maps | `Manage/Maps/` | AddressMapPlayer |
 | CMS | `Organization/Cms/` | OrgCmsEditor, OrgCmsPageEdit |
 
@@ -247,3 +259,56 @@ All reusable Blazor components live in `Ben.Web.Library/`:
 7. **Cascade cycles** — SQL Server rejects multiple cascade paths to the same table. Use `DeleteBehavior.NoAction` on secondary FKs and handle cleanup manually.
 8. **`OrganizationUserMembershipResponse`** — Defined in TWO places. Update both.
 9. **geocod.io `preview` endpoint** — Rejects empty city/state/zip. Use `GET /api/geocode/search?q=` for freeform input.
+10. **Ben.Video.Editor cross-repo reference** — Both repos must be sibling folders (`Source/Ben/` and `Source/Github-BenVideo/`). If the path breaks on another machine, publish to a private NuGet feed instead.
+11. **ffmpeg.wasm `@` in Razor** — CDN URLs containing `@` (e.g. `@ffmpeg/ffmpeg@0.12.15`) must be escaped as `@@` in `.razor` files.
+12. **`IMediaLibraryProvider` scoped override** — `BenMediaLibraryProvider` is registered *after* `AddBenVideoEditor()` to override the default. A `DelegatingHandler` cannot carry the bearer token because `IWebApiTokenStore` is circuit-scoped while handlers are resolved from the root DI scope.
+
+---
+
+## Future Phases
+
+### In Progress — Ben.Video Integration (branch: feature/ben-video-integration)
+
+| Step | Status | Description |
+|---|---|---|
+| RCL project reference + DI | ✅ | Ben.Video.Editor wired into Ben.Web.Library and Program.cs |
+| BenMediaLibraryProvider | ✅ | Auth-aware IMediaLibraryProvider using circuit bearer token |
+| VideoProject entity + controller | ✅ | CRUD at `/api/cases/{caseId}/video-projects` |
+| CaseVideoEditorPage.razor | ⬜ Next | `/organizations/{orgId}/cases/{caseId}/video-editor` — case-scoped with project list and DocumentPostUrl |
+| IBenAdminClient VideoProject methods | ⬜ Next | `GetCaseVideoProjectsAsync` + `GetCaseVideoProjectAsync` |
+| Nav link from case detail | ⬜ Next | "Video Editor" button on case pages |
+
+### Phase — Image Editor
+
+Full spec in `ProjectNotes/Media-Editor-Phase.md`.
+
+| Sub-phase | Description |
+|---|---|
+| A — Foundation | Fabric.js CDN, `ImageEditorPlayer.razor` + `.razor.js`, `AddImageEditorMetadata` migration (`EditStateJson` + `IsEditedVersion` on `UploadFile`), `PUT /api/upload-files/{id}/edit-state`, "Edit" button on evidence images |
+| B — Full feature set | Drawing/annotation tools (pen, arrow, shapes, text, redaction box), layers panel, evidence-specific tools (anomaly halo, timestamp stamp, grid, measurement ruler, magnify lens), perspective correction, save as derived `UploadFile` |
+
+### Phase — Enhanced Audio Editor
+
+Extends `WaveSurferPlayer` in `Ben.Web.Library/Manage/Audio/`.
+
+| Sub-phase | Description |
+|---|---|
+| C — Spectrogram & EQ | Frequency ruler, mel-scale toggle, colormap selector (Jet/Viridis/Inferno/Grayscale), frequency brush tool for surgical notch filtering, 10-band graphic EQ, high/low-pass filter, noise gate (`AudioWorkletProcessor`), compressor |
+| D — EVP Tools | `AudioMarker` entity + `AddAudioEditorAndMarkers` migration, EVP marker tool with confidence ratings (Possible/Probable/Confirmed), silence detection shading, voice frequency overlay (300 Hz–3 kHz band), trim/cut/silence offline render + export, normalize, gain, fade, speed change (SoundTouchJS), pitch shift, reverse |
+| E — Multi-track Mixer | 8-track timeline grid, drag from case evidence panel, per-track controls (mute/solo/gain/pan), offline render, save as case `UploadFile` at `/cases/{caseId}/audio-mix` |
+
+### Phase — Ben.Video Full Integration
+
+Once image and audio editors are complete, Ben.Video becomes the capstone tool for evidence video production:
+
+- Annotated images → video title cards, thumbnails, still frames (referenced by `UploadFileId` — no duplication)
+- EVP clips + mixed audio tracks → drag directly into Ben.Video timeline
+- `AudioMarker` timestamps → Ben.Video chapter/cue points (auto-import)
+- Report Builder → "Export as Video" option pre-loads case evidence into the video editor
+- `EditStateJson` on `UploadFile` → re-open any editor output, refine, and the video project picks up the new version automatically
+
+### Deployment Considerations
+
+- **Multi-thread ffmpeg.wasm** — Requires `SharedArrayBuffer` → COOP/COEP headers. Scope headers to `/video/*` only (path middleware) to avoid breaking CDN resources and Entra OIDC. Currently running single-thread mode.
+- **Self-host WASM binaries** — Removes the cross-origin constraint entirely and enables multi-thread without header restrictions.
+- **Ben.Video.Editor → private NuGet** — When the RCL stabilizes or a second developer joins who works only on Ben, publish to GitHub Packages and replace the cross-repo project reference.

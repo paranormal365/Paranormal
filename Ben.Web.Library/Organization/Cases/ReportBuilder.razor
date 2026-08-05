@@ -149,7 +149,8 @@ else
 }
 
 @* ── New Report dialog ────────────────────────────────────────────────────── *@
-<TelerikWindow @bind-Visible="@_showNewDialog" Title="New Report" Width="520px" Modal="true">
+<TelerikWindow @bind-Visible="@_showNewDialog" Width="520px" Modal="true">
+    <WindowTitle>New Report</WindowTitle>
     <WindowContent>
         <div class="row g-3">
             <div class="col-12">
@@ -173,7 +174,8 @@ else
 </TelerikWindow>
 
 @* ── Add Section dialog ───────────────────────────────────────────────────── *@
-<TelerikWindow @bind-Visible="@_showSectionDialog" Title="Add Section" Width="480px" Modal="true">
+<TelerikWindow @bind-Visible="@_showSectionDialog" Width="480px" Modal="true">
+    <WindowTitle>Add Section</WindowTitle>
     <WindowContent>
         <div class="row g-3">
             <div class="col-12">

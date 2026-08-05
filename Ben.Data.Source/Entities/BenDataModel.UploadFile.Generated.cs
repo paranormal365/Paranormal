@@ -39,6 +39,12 @@ namespace Ben.Data.Source.Entities
         /// <summary>End time (seconds) within the parent file that this clip ends at.</summary>
         public double? RegionEnd { get; set; }
 
+        /// <summary>Fabric.js JSON snapshot — set when the file was saved from the image editor so it can be re-opened.</summary>
+        public string? EditStateJson { get; set; }
+
+        /// <summary>True when this file is an edited copy produced by the image editor; ParentFileId points to the original.</summary>
+        public bool IsEditedVersion { get; set; }
+
         public virtual UploadFileType UploadFileType { get; set; } = null!;
         public virtual AppUser AppUser { get; set; } = null!;
         public virtual AppUser CreatedByAppUser { get; set; } = null!;

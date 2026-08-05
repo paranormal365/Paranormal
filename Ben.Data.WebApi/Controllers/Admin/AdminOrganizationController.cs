@@ -48,6 +48,9 @@ public sealed class AdminOrganizationController : AdminEntityControllerBase<Orga
         {
             Name               = request.Name.Trim(),
             UrlName            = urlName,
+            PublicPhone        = request.PublicPhone?.Trim(),
+            PublicEmail        = request.PublicEmail?.Trim(),
+            PublicWebsite      = request.PublicWebsite?.Trim(),
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = GetCurrentUserIdOrThrow()
         };
@@ -60,5 +63,6 @@ public sealed class AdminOrganizationController : AdminEntityControllerBase<Orga
     }
 }
 
-public sealed record AdminCreateOrganizationRequest(string Name, string UrlName);
+public sealed record AdminCreateOrganizationRequest(string Name, string UrlName,
+    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null);
 

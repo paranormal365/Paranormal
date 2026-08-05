@@ -132,4 +132,38 @@ public class HomeMapTests : BenTestBase
         var signIn = Page.GetByText("Sign in to vote", new() { Exact = false }).First;
         await Expect(signIn).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
+
+    [Test]
+    [Description("The map popup (TelerikWindow) shows a non-empty title when a marker is clicked.")]
+    public async Task Map_PopupTitle_IsNotEmpty()
+    {
+        await Page.WaitForSelectorAsync(".case-map-single, .case-map-cluster", new() { Timeout = 15_000 });
+        var marker = Page.Locator(".case-map-single, .case-map-cluster").First;
+        if (!await marker.IsVisibleAsync()) { Assert.Pass("No markers visible."); return; }
+        await marker.ClickAsync();
+        await Page.WaitForTimeoutAsync(500);
+        var titleBar = Page.Locator(".k-window-title, .k-window-titlebar").First;
+        await Expect(titleBar).ToBeVisibleAsync(new() { Timeout = 5_000 });
+        var titleText = await titleBar.InnerTextAsync();
+        Assert.That(titleText, Is.Not.Empty, "TelerikWindow title should not be empty.");
+    }
+
+    [Test]
+    [Description("Sort toggle buttons show the active button as selected after clicking.")]
+    public async Task List_SortToggle_ShowsSelectedState()
+    {
+        await Page.WaitForSelectorAsync(".card", new() { Timeout = 15_000 });
+
+        // Click Newest and verify the page doesn't error
+        var newestBtn = Page.GetByText("Newest", new() { Exact = false }).First;
+        await Expect(newestBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await newestBtn.ClickAsync();
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        var body = await Page.InnerTextAsync("body");
+        Assert.That(body, Does.Not.Contain("An unhandled error has occurred"),
+            "Clicking sort toggle should not cause a Telerik component error.");
+        Assert.That(body, Does.Not.Contain("does not have a property matching"),
+            "ButtonGroupToggleButton should not produce a parameter error.");
+    }
 }

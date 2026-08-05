@@ -40,7 +40,8 @@ public sealed class OrgPublicController : ControllerBase
 
         return Ok(new OrgPublicHomeResponse(
             org.Id, org.Name, org.UrlName,
-            logos, homePage, navPages));
+            logos, homePage, navPages,
+            org.PublicPhone, org.PublicEmail, org.PublicWebsite));
     }
 
     // ── GET /api/public/organizations/{urlName}/pages/{pageSlug} ─────────────
@@ -135,7 +136,10 @@ public sealed record OrgPublicHomeResponse(
     string OrgUrlName,
     IReadOnlyList<OrgPublicLogoItem> Logos,
     OrgPublicPageItem? HomePage,
-    IReadOnlyList<OrgPublicNavItem> NavPages);
+    IReadOnlyList<OrgPublicNavItem> NavPages,
+    string? PublicPhone = null,
+    string? PublicEmail = null,
+    string? PublicWebsite = null);
 
 public sealed record OrgPublicPageResponse(
     Guid OrgId,

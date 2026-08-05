@@ -92,9 +92,9 @@
 
 @* ── Propose transfer dialog ───────────────────────────────────────────────── *@
 <TelerikWindow @bind-Visible="@_showProposeDialog"
-               Title="Propose Case Transfer"
                Width="480px"
                Modal="true">
+    <WindowTitle>Propose Case Transfer</WindowTitle>
     <WindowContent>
         <div class="row g-3">
             <div class="col-12">
@@ -137,9 +137,9 @@
 
 @* ── Respond dialog ────────────────────────────────────────────────────────── *@
 <TelerikWindow @bind-Visible="@_showRespondDialog"
-               Title="@(_respondAccept ? "Accept Transfer" : "Reject Transfer")"
                Width="420px"
                Modal="true">
+    <WindowTitle>@(_respondAccept ? "Accept Transfer" : "Reject Transfer")</WindowTitle>
     <WindowContent>
         @if (!_respondAccept)
         {

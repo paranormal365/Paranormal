@@ -185,10 +185,10 @@ public class OrganizationFilePublishAndDeleteLogTests
             SourceUploadFileId        = file.SourceUploadFileId,
             WasPublic                 = file.IsPublic,
             WasPublishedByAppUserId   = file.PublishedByAppUserId,
-            WasPublishedByDisplayName = user.DisplayName,
+            WasPublishedByDisplayName = user.DisplayName!,
             WasDatePublished          = file.DatePublished,
             DeletedByAppUserId        = user.Id,
-            DeletedByDisplayName      = user.DisplayName,
+            DeletedByDisplayName      = user.DisplayName!,
             DateDeleted               = deleteTime,
         });
         db.OrganizationFiles.Remove(file);
@@ -234,7 +234,7 @@ public class OrganizationFilePublishAndDeleteLogTests
             FileSize             = file.FileSize,
             WasPublic            = false,
             DeletedByAppUserId   = user.Id,
-            DeletedByDisplayName = user.DisplayName,
+            DeletedByDisplayName = user.DisplayName!,
             DateDeleted          = DateTime.UtcNow,
         });
         db.OrganizationFiles.Remove(file);
@@ -263,7 +263,7 @@ public class OrganizationFilePublishAndDeleteLogTests
                 Id = Guid.NewGuid(), OrganizationId = org.Id, OrganizationName = org.Name,
                 OriginalFileId = Guid.NewGuid(), FileName = $"file{i}.pdf",
                 ContentType = "application/pdf", FileSize = 512,
-                DeletedByAppUserId = user.Id, DeletedByDisplayName = user.DisplayName,
+                DeletedByAppUserId = user.Id, DeletedByDisplayName = user.DisplayName!,
                 DateDeleted = DateTime.UtcNow,
             });
         }
@@ -290,7 +290,7 @@ public class OrganizationFilePublishAndDeleteLogTests
             Id = Guid.NewGuid(), OrganizationId = org.Id, OrganizationName = org.Name,
             OriginalFileId = file.Id, FileName = file.FileName,
             ContentType = file.ContentType, FileSize = file.FileSize,
-            DeletedByAppUserId = user.Id, DeletedByDisplayName = user.DisplayName,
+            DeletedByAppUserId = user.Id, DeletedByDisplayName = user.DisplayName!,
             DateDeleted = DateTime.UtcNow,
         });
         db.OrganizationFiles.Remove(file);

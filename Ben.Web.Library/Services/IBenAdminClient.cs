@@ -213,6 +213,7 @@ public interface IBenAdminClient
     Task<OrgPublicHomeResponse?> GetPublicOrgAsync(string urlName, CancellationToken token = default);
     Task<OrgPublicPageResponse?> GetPublicOrgPageAsync(string urlName, string pageSlug, CancellationToken token = default);
     string GetFileDownloadUrl(Guid uploadFileId);
+    string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId);
 
     // ── Organization Address Map Config ───────────────────────────────────────
 
@@ -486,6 +487,13 @@ public interface IBenAdminClient
     Task<CaseResearchEntryDto?> UpdateCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, UpsertResearchRequest request, CancellationToken token = default);
     Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
 
+    // ── Case Notes ────────────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<CaseNoteDto>> GetCaseNotesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<CaseNoteDto?> CreateCaseNoteAsync(Guid orgId, Guid caseId, UpsertCaseNoteDto request, CancellationToken token = default);
+    Task<CaseNoteDto?> UpdateCaseNoteAsync(Guid orgId, Guid caseId, Guid noteId, UpsertCaseNoteDto request, CancellationToken token = default);
+    Task<bool> DeleteCaseNoteAsync(Guid orgId, Guid caseId, Guid noteId, CancellationToken token = default);
+
     // ── Investigation Scheduling ──────────────────────────────────────────────
 
     // Org side
@@ -683,6 +691,18 @@ public interface IBenAdminClient
     // ── Org settings ──────────────────────────────────────────────────────────
     Task<OrgSettingsResponse?> GetOrgSettingsAsync(Guid orgId, CancellationToken token = default);
     Task<OrgSettingsResponse?> UpdateOrgSettingsAsync(Guid orgId, OrgSettingsRequest request, CancellationToken token = default);
+
+    // ── Video projects ────────────────────────────────────────────────────────
+    Task<IReadOnlyList<VideoProjectRecord>> GetMyVideoProjectsAsync(Guid? caseId = null, CancellationToken token = default);
+    Task<VideoProjectRecord?> GetMyVideoProjectAsync(Guid id, CancellationToken token = default);
+    Task<VideoProjectRecord?> SaveMyVideoProjectAsync(Ben.Video.Editor.Models.ProjectFile file, Guid? caseId = null, CancellationToken token = default);
+    Task<VideoProjectRecord?> UpdateMyVideoProjectAsync(Guid id, Ben.Video.Editor.Models.ProjectFile file, CancellationToken token = default);
+    Task<VideoProjectRecord?> PublishVideoProjectAsync(Guid id, byte[] bytes, string fileName, string contentType, CancellationToken token = default);
+    Task<bool> DeleteMyVideoProjectAsync(Guid id, CancellationToken token = default);
+
+    // ── Image editor ────────────────────────────────────────────────────────
+    Task<UploadFileRecord?> SaveImageEditStateAsync(Guid fileId, string? editStateJson, CancellationToken token = default);
+    Task<UploadFileRecord?> SaveImageAsNewVersionAsync(Guid parentFileId, byte[] imageBytes, string format, CancellationToken token = default);
 }
 
 /// <summary>
@@ -736,10 +756,13 @@ public sealed record OrganizationListItemResponse(
     bool CanDelete);
 
 /// <summary>Request body for creating a new organization (SuperAdmin only).</summary>
-public sealed record AdminCreateOrganizationRequest(string Name, string UrlName);
+public sealed record AdminCreateOrganizationRequest(string Name, string UrlName,
+    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null);
 
 /// <summary>Request body for updating an organization's Name and UrlName.</summary>
-public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName);
+public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName,
+    bool IsAcceptingApplications = false,
+    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null);
 
 /// <summary>Role record paired with its current user count.</summary>
 public sealed record AdminRoleWithCountResponse(AppRoleAdminRecord Role, int UserCount);
@@ -777,7 +800,8 @@ public sealed record OrgPublicHomeResponse(
     Guid OrgId, string OrgName, string OrgUrlName,
     IReadOnlyList<OrgPublicLogoItem> Logos,
     OrgPublicPageItem? HomePage,
-    IReadOnlyList<OrgPublicNavItem> NavPages);
+    IReadOnlyList<OrgPublicNavItem> NavPages,
+    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null);
 
 public sealed record OrgPublicPageResponse(
     Guid OrgId, string OrgName, string OrgUrlName,
@@ -1382,3 +1406,17 @@ public sealed record SlotDto(Guid Id, DateTime StartDateTime, DateTime? EndDateT
 
 // ── Co-client access records ──────────────────────────────────────────────────
 public sealed record CoClientItem(Guid AccessId, Guid AppUserId, string DisplayName);
+
+// ── Case note records ─────────────────────────────────────────────────────────
+public sealed record CaseNoteDto(
+    Guid      Id,
+    Guid      CaseId,
+    Guid      AuthorAppUserId,
+    string?   AuthorDisplayName,
+    string?   Title,
+    string    Body,
+    bool      IsPinned,
+    DateTime  DateCreated,
+    DateTime? DateUpdated);
+
+public sealed record UpsertCaseNoteDto(string? Title, string Body, bool IsPinned = false);

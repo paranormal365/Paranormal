@@ -330,6 +330,55 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("CaseMessages");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.CaseNote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AuthorAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(10000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsPinned")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorAppUserId");
+
+                    b.HasIndex("CaseId");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("CaseNotes");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.CaseReport", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1698,6 +1747,15 @@ namespace Ben.Data.Source.Migrations
                         .HasColumnType("bit");
 
                     b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PublicEmail")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PublicPhone")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PublicWebsite")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("ShowAddressDirections")
@@ -3088,6 +3146,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("EditStateJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<byte[]>("FileData")
                         .HasColumnType("varbinary(max)");
 
@@ -3096,6 +3157,9 @@ namespace Ben.Data.Source.Migrations
 
                     b.Property<long>("FileSize")
                         .HasColumnType("bigint");
+
+                    b.Property<bool>("IsEditedVersion")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsPublic")
                         .HasColumnType("bit");
@@ -4298,6 +4362,51 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("UserPhoneTypes");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.VideoProject", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CaseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProjectJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("PublishedUploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CaseId");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("PublishedUploadFileId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.ToTable("VideoProjects");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4504,6 +4613,40 @@ namespace Ben.Data.Source.Migrations
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.CaseMessage", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AuthorAppUser")
+                        .WithMany()
+                        .HasForeignKey("AuthorAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Case", "Case")
+                        .WithMany()
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("AuthorAppUser");
+
+                    b.Navigation("Case");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.CaseNote", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "AuthorAppUser")
                         .WithMany()
@@ -6700,6 +6843,38 @@ namespace Ben.Data.Source.Migrations
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.VideoProject", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.Case", "Case")
+                        .WithMany()
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "PublishedUploadFile")
+                        .WithMany()
+                        .HasForeignKey("PublishedUploadFileId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Case");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("PublishedUploadFile");
 
                     b.Navigation("UpdatedByAppUser");
                 });

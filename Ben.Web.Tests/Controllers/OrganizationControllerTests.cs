@@ -596,4 +596,74 @@ public class OrganizationControllerTests
         await using var db = await factory.CreateDbContextAsync();
         Assert.True(await db.Organizations.AnyAsync(o => o.UrlName == "myorg-url"));
     }
+
+    // ── Public contact fields ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Update_WithContactFields_PersistsContactFields()
+    {
+        var factory    = CreateFactory();
+        var userId     = Guid.NewGuid();
+        var org        = await SeedOrgAsync(factory, "Org", "org");
+        var controller = BuildController(factory, UserPrincipal(userId, isSuperAdmin: true));
+
+        var result = await controller.Update(org.Id, new AdminUpdateOrganizationRequest(
+            "Org", "org",
+            PublicPhone: "(615) 555-0100",
+            PublicEmail: "contact@example.com",
+            PublicWebsite: "https://example.com"), default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        var updated = await db.Organizations.FindAsync(org.Id);
+        Assert.Equal("(615) 555-0100",      updated!.PublicPhone);
+        Assert.Equal("contact@example.com", updated.PublicEmail);
+        Assert.Equal("https://example.com", updated.PublicWebsite);
+    }
+
+    [Fact]
+    public async Task Update_WithNullContactFields_ClearsContactFields()
+    {
+        var factory = CreateFactory();
+        var userId  = Guid.NewGuid();
+        await using var setupDb = await factory.CreateDbContextAsync();
+        setupDb.Organizations.Add(new Organization
+        {
+            Id = Guid.NewGuid(), Name = "Org", UrlName = "org",
+            PublicPhone = "(615) 555-0100", PublicEmail = "old@example.com",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId
+        });
+        await setupDb.SaveChangesAsync();
+        await using var db2 = await factory.CreateDbContextAsync();
+        var orgId = (await db2.Organizations.FirstAsync(o => o.UrlName == "org")).Id;
+
+        var controller = BuildController(factory, UserPrincipal(userId, isSuperAdmin: true));
+        await controller.Update(orgId, new AdminUpdateOrganizationRequest("Org", "org"), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var updated = await db.Organizations.FindAsync(orgId);
+        Assert.Null(updated!.PublicPhone);
+        Assert.Null(updated.PublicEmail);
+    }
+
+    [Fact]
+    public async Task Create_WithContactFields_PersistsContactFields()
+    {
+        var factory    = CreateFactory();
+        var userId     = Guid.NewGuid();
+        var controller = BuildController(factory, UserPrincipal(userId, isSuperAdmin: true));
+
+        var result = await controller.Create(new AdminCreateOrganizationRequest(
+            "New Org", "new-org",
+            PublicPhone: "(800) 555-0199",
+            PublicEmail: "info@neworg.com",
+            PublicWebsite: "https://neworg.com"), default);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        var created = await db.Organizations.FirstAsync(o => o.UrlName == "new-org");
+        Assert.Equal("(800) 555-0199",  created.PublicPhone);
+        Assert.Equal("info@neworg.com", created.PublicEmail);
+        Assert.Equal("https://neworg.com", created.PublicWebsite);
+    }
 }

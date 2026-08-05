@@ -125,6 +125,9 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         org!.Name                   = request.Name.Trim();
         org.UrlName                = request.UrlName.Trim().ToLowerInvariant();
         org.IsAcceptingApplications = request.IsAcceptingApplications;
+        org.PublicPhone             = request.PublicPhone?.Trim();
+        org.PublicEmail             = request.PublicEmail?.Trim();
+        org.PublicWebsite           = request.PublicWebsite?.Trim();
         org.DateUpdated            = DateTime.UtcNow;
         org.UpdatedByAppUserId     = userId.Value;
 
@@ -180,6 +183,9 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         {
             Name               = request.Name.Trim(),
             UrlName            = urlName,
+            PublicPhone        = request.PublicPhone?.Trim(),
+            PublicEmail        = request.PublicEmail?.Trim(),
+            PublicWebsite      = request.PublicWebsite?.Trim(),
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId.Value
         };
@@ -203,5 +209,7 @@ public sealed record OrganizationListItemResponse(
     bool CanEdit,
     bool CanDelete);
 
-public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName, bool IsAcceptingApplications = false);
+public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName,
+    bool IsAcceptingApplications = false,
+    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null);
 
