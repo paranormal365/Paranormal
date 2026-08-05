@@ -696,6 +696,7 @@ public interface IBenAdminClient
     Task<VideoProjectRecord?> GetMyVideoProjectAsync(Guid id, CancellationToken token = default);
     Task<VideoProjectRecord?> SaveMyVideoProjectAsync(Ben.Video.Editor.Models.ProjectFile file, Guid? caseId = null, CancellationToken token = default);
     Task<VideoProjectRecord?> UpdateMyVideoProjectAsync(Guid id, Ben.Video.Editor.Models.ProjectFile file, CancellationToken token = default);
+    Task<VideoProjectRecord?> PublishVideoProjectAsync(Guid id, byte[] bytes, string fileName, string contentType, CancellationToken token = default);
     Task<bool> DeleteMyVideoProjectAsync(Guid id, CancellationToken token = default);
 }
 

@@ -4,6 +4,7 @@
 @inject ProjectService Projects
 @inject ProjectStore ProjectStore
 @inject NavigationManager NavManager
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Case Video Editor</PageTitle>
 
@@ -78,13 +79,17 @@
                     </GridColumn>
                     <GridColumn Field="@nameof(VideoProjectRecord.DateCreated)" Title="Saved"
                                 DisplayFormat="{0:MMM d, yyyy}" Width="110px" />
-                    <GridColumn Width="130px">
+                    <GridColumn Width="160px">
                         <Template>
                             @{ var row2 = (VideoProjectRecord)context; }
                             <TelerikButton Size="@ThemeConstants.Button.Size.Small"
                                            OnClick="@(() => OpenProjectAsync(row2))">Open</TelerikButton>
                             @if (row2.CreatedByAppUserId == _myUserId)
                             {
+                                <TelerikButton Icon="@SvgIcon.Upload" Size="@ThemeConstants.Button.Size.Small"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
+                                               Title="Publish rendered video to case"
+                                               OnClick="@(() => TriggerPublish(row2))" />
                                 <TelerikButton Icon="@SvgIcon.Trash" Size="@ThemeConstants.Button.Size.Small"
                                                ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                                OnClick="@(() => ConfirmDelete(row2))" />
@@ -115,6 +120,9 @@
 <TelerikNotification @ref="_notifications" VerticalPosition="NotificationVerticalPosition.Bottom"
                      HorizontalPosition="NotificationHorizontalPosition.Right" />
 
+@* Hidden file input triggered by TriggerPublish — accepts the rendered export from the user's Downloads *@
+<InputFile id="publish-input-case" OnChange="OnPublishFileSelectedAsync" accept="video/*" style="display:none" />
+
 @code {
     [Parameter] public Guid OrgId { get; set; }
     [Parameter] public Guid CaseId { get; set; }
@@ -126,8 +134,10 @@
     private bool _loadingList;
     private bool _showProjectList;
     private bool _saving;
+    private bool _publishing;
     private bool _showDeleteConfirm;
     private VideoProjectRecord? _deleteTarget;
+    private VideoProjectRecord? _publishTarget;
     private Guid _myUserId;
     private TelerikNotification? _notifications;
 
@@ -220,5 +230,46 @@
             _notifications?.Show("Project deleted.", ThemeConstants.Notification.ThemeColor.Success);
         }
         _deleteTarget = null;
+    }
+
+    private void TriggerPublish(VideoProjectRecord record)
+    {
+        _publishTarget = record;
+        _ = JSRuntime.InvokeVoidAsync("eval", "document.getElementById('publish-input-case').click()");
+    }
+
+    private async Task OnPublishFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        if (_publishTarget is null || e.FileCount == 0) return;
+        _publishing = true;
+        StateHasChanged();
+        try
+        {
+            const long maxBytes = 600_000_000;
+            using var ms = new System.IO.MemoryStream();
+            await e.File.OpenReadStream(maxBytes).CopyToAsync(ms);
+            var bytes  = ms.ToArray();
+            var record = await AdminClient.PublishVideoProjectAsync(
+                _publishTarget.Id, bytes, e.File.Name, e.File.ContentType);
+            if (record is not null)
+            {
+                var idx = _caseProjects.FindIndex(p => p.Id == record.Id);
+                if (idx >= 0) _caseProjects[idx] = record;
+                _notifications?.Show("Video published to case.", ThemeConstants.Notification.ThemeColor.Success);
+            }
+            else
+            {
+                _notifications?.Show("Publish failed.", ThemeConstants.Notification.ThemeColor.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            _notifications?.Show($"Publish error: {ex.Message}", ThemeConstants.Notification.ThemeColor.Error);
+        }
+        finally
+        {
+            _publishing = false;
+            _publishTarget = null;
+        }
     }
 }

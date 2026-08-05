@@ -1,4 +1,5 @@
 using AutoMapper;
+using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Entities;
@@ -52,7 +53,11 @@ public class VideoProjectControllerTests
     {
         var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, userId.ToString()) };
         if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, "SuperAdmin"));
-        var ctrl = new VideoProjectController(factory, CreateMapper());
+        var fileStorage = new Mock<IFileStorageService>();
+        fileStorage.Setup(s => s.UserFilePath(It.IsAny<Guid>(), It.IsAny<string>())).Returns("test/path");
+        fileStorage.Setup(s => s.CaseFilePath(It.IsAny<Guid>(), It.IsAny<string>())).Returns("test/path");
+        fileStorage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var ctrl = new VideoProjectController(factory, CreateMapper(), fileStorage.Object);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

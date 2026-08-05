@@ -11,9 +11,13 @@ namespace Ben.Data.WebApi.SeedData;
 /// </summary>
 internal static class UploadFileTypeSeeder
 {
-    internal const string LogoFileTypeName     = "Logo";
-    internal const string AudioFileTypeName    = "Audio";
-    internal const string EvidenceFileTypeName = "Case Evidence";
+    internal const string LogoFileTypeName           = "Logo";
+    internal const string AudioFileTypeName          = "Audio";
+    internal const string EvidenceFileTypeName       = "Case Evidence";
+    internal const string PublishedVideoFileTypeName = "Published Video";
+
+    // Fixed GUID so VideoProjectController can reference it without a DB lookup.
+    internal static readonly Guid PublishedVideoFileTypeId = new("30000000-0000-0000-0000-000000000001");
 
     private static readonly string[] LogoExtensions =
         [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"];
@@ -53,6 +57,8 @@ internal static class UploadFileTypeSeeder
 
         // AllowAllExtensions=true so clients can attach any media file to an occurrence
         await SeedEvidenceFileTypeAsync(db, owner.Id);
+
+        await SeedPublishedVideoFileTypeAsync(db, owner.Id);
     }
 
     // ── Private helper ────────────────────────────────────────────────────────
@@ -123,6 +129,26 @@ internal static class UploadFileTypeSeeder
             IsPublic           = false,
             SortOrder          = 3,
             AllowAllExtensions = true,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Ensures the Published Video file type exists (fixed GUID so the publish endpoint can use it directly).</summary>
+    private static async Task SeedPublishedVideoFileTypeAsync(BenDataContext db, Guid ownerId)
+    {
+        if (await db.UploadFileTypes.AnyAsync(t => t.Id == PublishedVideoFileTypeId)) return;
+
+        db.UploadFileTypes.Add(new UploadFileType
+        {
+            Id                 = PublishedVideoFileTypeId,
+            Name               = PublishedVideoFileTypeName,
+            Description        = "Rendered video exports published from the Ben.Video editor",
+            IsActive           = true,
+            IsPublic           = false,
+            SortOrder          = 5,
+            AllowAllExtensions = true, // any video format the editor produces
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = ownerId,
         });

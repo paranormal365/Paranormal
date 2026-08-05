@@ -4,6 +4,7 @@
 @inject ProjectService Projects
 @inject ProjectStore ProjectStore
 @inject NavigationManager NavManager
+@inject IJSRuntime JSRuntime
 
 <PageTitle>My Videos</PageTitle>
 
@@ -63,11 +64,15 @@
                     <GridColumn Field="@nameof(VideoProjectRecord.Name)" Title="Name" />
                     <GridColumn Field="@nameof(VideoProjectRecord.DateCreated)" Title="Saved"
                                 DisplayFormat="{0:MMM d, yyyy h:mm tt}" Width="170px" />
-                    <GridColumn Width="130px">
+                    <GridColumn Width="160px">
                         <Template>
                             @{ var row = (VideoProjectRecord)context; }
                             <TelerikButton Size="@ThemeConstants.Button.Size.Small"
                                            OnClick="@(() => OpenProjectAsync(row))">Open</TelerikButton>
+                            <TelerikButton Icon="@SvgIcon.Upload" Size="@ThemeConstants.Button.Size.Small"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
+                                           Title="Publish rendered video"
+                                           OnClick="@(() => TriggerPublish(row))" />
                             <TelerikButton Icon="@SvgIcon.Trash" Size="@ThemeConstants.Button.Size.Small"
                                            ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                            OnClick="@(() => ConfirmDeleteAsync(row))" />
@@ -97,13 +102,18 @@
 <TelerikNotification @ref="_notifications" VerticalPosition="NotificationVerticalPosition.Bottom"
                      HorizontalPosition="NotificationHorizontalPosition.Right" />
 
+@* Hidden file input triggered by TriggerPublish — accepts the rendered export from the user's Downloads *@
+<InputFile id="publish-input-my" OnChange="OnPublishFileSelectedAsync" accept="video/*" style="display:none" />
+
 @code {
     private List<VideoProjectRecord> _projects = [];
     private bool _loadingList;
     private bool _showProjectList;
     private bool _saving;
+    private bool _publishing;
     private bool _showDeleteConfirm;
     private VideoProjectRecord? _deleteTarget;
+    private VideoProjectRecord? _publishTarget;
     private TelerikNotification? _notifications;
 
     protected override async Task OnInitializedAsync()
@@ -177,5 +187,46 @@
             _notifications?.Show("Project deleted.", ThemeConstants.Notification.ThemeColor.Success);
         }
         _deleteTarget = null;
+    }
+
+    private void TriggerPublish(VideoProjectRecord record)
+    {
+        _publishTarget = record;
+        _ = JSRuntime.InvokeVoidAsync("eval", "document.getElementById('publish-input-my').click()");
+    }
+
+    private async Task OnPublishFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        if (_publishTarget is null || e.FileCount == 0) return;
+        _publishing = true;
+        StateHasChanged();
+        try
+        {
+            const long maxBytes = 600_000_000;
+            using var ms = new System.IO.MemoryStream();
+            await e.File.OpenReadStream(maxBytes).CopyToAsync(ms);
+            var bytes  = ms.ToArray();
+            var record = await AdminClient.PublishVideoProjectAsync(
+                _publishTarget.Id, bytes, e.File.Name, e.File.ContentType);
+            if (record is not null)
+            {
+                var idx = _projects.FindIndex(p => p.Id == record.Id);
+                if (idx >= 0) _projects[idx] = record;
+                _notifications?.Show("Video published.", ThemeConstants.Notification.ThemeColor.Success);
+            }
+            else
+            {
+                _notifications?.Show("Publish failed.", ThemeConstants.Notification.ThemeColor.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            _notifications?.Show($"Publish error: {ex.Message}", ThemeConstants.Notification.ThemeColor.Error);
+        }
+        finally
+        {
+            _publishing = false;
+            _publishTarget = null;
+        }
     }
 }

@@ -1302,6 +1302,14 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     }
     public Task<VideoProjectRecord?> UpdateMyVideoProjectAsync(Guid id, Ben.Video.Editor.Models.ProjectFile file, CancellationToken token = default)
         => _api.PutAsync<Ben.Video.Editor.Models.ProjectFile, VideoProjectRecord>($"/api/video-projects/{id}", file, token);
+    public Task<VideoProjectRecord?> PublishVideoProjectAsync(Guid id, byte[] bytes, string fileName, string contentType, CancellationToken token = default)
+    {
+        var fileContent = new ByteArrayContent(bytes);
+        fileContent.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentType);
+        var form = new MultipartFormDataContent();
+        form.Add(fileContent, "file", fileName);
+        return _api.PostMultipartAsync<VideoProjectRecord>($"/api/video-projects/{id}/publish", form, token);
+    }
     public Task<bool> DeleteMyVideoProjectAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/video-projects/{id}", token);
 }

@@ -1,5 +1,7 @@
 using AutoMapper;
+using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Entities;
+using Ben.Data.WebApi.SeedData;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,11 +22,13 @@ public sealed class VideoProjectController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
+    private readonly IFileStorageService _fileStorage;
 
-    public VideoProjectController(IDbContextFactory<BenDataContext> db, IMapper mapper)
+    public VideoProjectController(IDbContextFactory<BenDataContext> db, IMapper mapper, IFileStorageService fileStorage)
     {
-        _db = db;
-        _mapper = mapper;
+        _db          = db;
+        _mapper      = mapper;
+        _fileStorage = fileStorage;
     }
 
     // GET /api/video-projects[?caseId=...]
@@ -128,6 +132,58 @@ public sealed class VideoProjectController : BenControllerBase
         db.VideoProjects.Remove(entity);
         await db.SaveChangesAsync(ct);
         return NoContent();
+    }
+
+    // POST /api/video-projects/{id}/publish
+    // Stores the rendered video as an UploadFile and links it to the project.
+    [HttpPost("{id:guid}/publish")]
+    [RequestSizeLimit(600_000_000)] // 600 MB
+    public async Task<ActionResult<VideoProjectRecord>> Publish(
+        Guid id, IFormFile file, CancellationToken ct)
+    {
+        if (file.Length == 0) return BadRequest("File is empty.");
+
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var project = await db.VideoProjects
+            .FirstOrDefaultAsync(p => p.Id == id && p.CreatedByAppUserId == userId, ct);
+        if (project is null) return NotFound();
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, ct);
+        var bytes        = ms.ToArray();
+        var storedName   = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+        var storagePath  = project.CaseId.HasValue
+            ? _fileStorage.CaseFilePath(project.CaseId.Value, storedName)
+            : _fileStorage.UserFilePath(userId, storedName);
+
+        using (var writeStream = new MemoryStream(bytes))
+            await _fileStorage.WriteAsync(storagePath, writeStream, ct);
+
+        var upload = new UploadFile
+        {
+            Id                 = Guid.NewGuid(),
+            UploadFileTypeId   = UploadFileTypeSeeder.PublishedVideoFileTypeId,
+            AppUserId          = userId,
+            FileName           = file.FileName,
+            StoredFileName     = storedName,
+            StoragePath        = storagePath,
+            ContentType        = file.ContentType,
+            FileSize           = bytes.Length,
+            IsPublic           = false,
+            SortOrder          = 0,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        };
+        db.UploadFiles.Add(upload);
+
+        project.PublishedUploadFileId = upload.Id;
+        project.DateUpdated           = DateTime.UtcNow;
+        project.UpdatedByAppUserId    = userId;
+
+        await db.SaveChangesAsync(ct);
+        return Ok(_mapper.Map<VideoProjectRecord>(project));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
