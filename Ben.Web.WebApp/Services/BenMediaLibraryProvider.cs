@@ -40,7 +40,7 @@ public sealed class BenMediaLibraryProvider : IMediaLibraryProvider
     public async Task<IReadOnlyList<MediaLibraryFile>> GetFilesAsync(
         CancellationToken cancellationToken = default)
     {
-        var url      = $"{_apiOptions.BaseUrl.TrimEnd('/')}/api/upload-files";
+        var url      = $"{_apiOptions.BaseUrl.TrimEnd('/')}/api/media-library/files";
         var response = await SendAsync(HttpMethod.Get, url, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
