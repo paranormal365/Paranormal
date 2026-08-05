@@ -743,10 +743,13 @@ public sealed record OrganizationListItemResponse(
     bool CanDelete);
 
 /// <summary>Request body for creating a new organization (SuperAdmin only).</summary>
-public sealed record AdminCreateOrganizationRequest(string Name, string UrlName);
+public sealed record AdminCreateOrganizationRequest(string Name, string UrlName,
+    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null);
 
 /// <summary>Request body for updating an organization's Name and UrlName.</summary>
-public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName);
+public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName,
+    bool IsAcceptingApplications = false,
+    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null);
 
 /// <summary>Role record paired with its current user count.</summary>
 public sealed record AdminRoleWithCountResponse(AppRoleAdminRecord Role, int UserCount);
@@ -784,7 +787,8 @@ public sealed record OrgPublicHomeResponse(
     Guid OrgId, string OrgName, string OrgUrlName,
     IReadOnlyList<OrgPublicLogoItem> Logos,
     OrgPublicPageItem? HomePage,
-    IReadOnlyList<OrgPublicNavItem> NavPages);
+    IReadOnlyList<OrgPublicNavItem> NavPages,
+    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null);
 
 public sealed record OrgPublicPageResponse(
     Guid OrgId, string OrgName, string OrgUrlName,
