@@ -17,6 +17,15 @@ namespace Ben.Data.Source.Entities
         /// <summary>When true, the org will also consider client requests outside their configured operating area.</summary>
         public bool AcceptsClientsOutsideRange { get; set; }
 
+        /// <summary>Public phone number shown on the org's public page.</summary>
+        public string? PublicPhone { get; set; }
+
+        /// <summary>Public email address shown on the org's public page.</summary>
+        public string? PublicEmail { get; set; }
+
+        /// <summary>Public website URL shown on the org's public page.</summary>
+        public string? PublicWebsite { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }

@@ -44,6 +44,21 @@
                 <div class="form-text">URL-safe slug (e.g. <code>my-org</code>). Must be unique. Use lowercase letters, numbers, and hyphens only.</div>
             </div>
 
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Public Phone</label>
+                <TelerikTextBox @bind-Value="@_form.PublicPhone" Width="100%" Placeholder="e.g. (615) 555-0100" />
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Public Email</label>
+                <TelerikTextBox @bind-Value="@_form.PublicEmail" Width="100%" Placeholder="contact@example.com" />
+            </div>
+
+            <div class="col-12">
+                <label class="form-label fw-semibold">Website</label>
+                <TelerikTextBox @bind-Value="@_form.PublicWebsite" Width="100%" Placeholder="https://example.com" />
+            </div>
+
             <div class="col-12 mt-2 d-flex gap-2">
                 <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                                Icon="@SvgIcon.Save"
@@ -101,7 +116,14 @@
             return;
         }
 
-        _form = new FormModel { Name = org.Name ?? string.Empty, UrlName = org.UrlName ?? string.Empty };
+        _form = new FormModel
+        {
+            Name          = org.Name    ?? string.Empty,
+            UrlName       = org.UrlName ?? string.Empty,
+            PublicPhone   = org.PublicPhone,
+            PublicEmail   = org.PublicEmail,
+            PublicWebsite = org.PublicWebsite,
+        };
         StateHasChanged();
     }
 
@@ -126,7 +148,10 @@
         {
             var updated = await AdminClient.UpdateOrganizationAsync(
                 OrgId!.Value,
-                new AdminUpdateOrganizationRequest(_form.Name.Trim(), _form.UrlName.Trim().ToLowerInvariant()));
+                new AdminUpdateOrganizationRequest(_form.Name.Trim(), _form.UrlName.Trim().ToLowerInvariant(),
+                    PublicPhone: _form.PublicPhone?.Trim(),
+                    PublicEmail: _form.PublicEmail?.Trim(),
+                    PublicWebsite: _form.PublicWebsite?.Trim()));
 
             _isSaving = false;
 
@@ -138,7 +163,10 @@
         else
         {
             var created = await AdminClient.CreateOrganizationAsync(
-                new AdminCreateOrganizationRequest(_form.Name.Trim(), _form.UrlName.Trim().ToLowerInvariant()));
+                new AdminCreateOrganizationRequest(_form.Name.Trim(), _form.UrlName.Trim().ToLowerInvariant(),
+                    PublicPhone: _form.PublicPhone?.Trim(),
+                    PublicEmail: _form.PublicEmail?.Trim(),
+                    PublicWebsite: _form.PublicWebsite?.Trim()));
 
             _isSaving = false;
 
@@ -151,7 +179,10 @@
 
     private sealed class FormModel
     {
-        public string Name    { get; set; } = string.Empty;
-        public string UrlName { get; set; } = string.Empty;
+        public string  Name          { get; set; } = string.Empty;
+        public string  UrlName       { get; set; } = string.Empty;
+        public string? PublicPhone   { get; set; }
+        public string? PublicEmail   { get; set; }
+        public string? PublicWebsite { get; set; }
     }
 }
