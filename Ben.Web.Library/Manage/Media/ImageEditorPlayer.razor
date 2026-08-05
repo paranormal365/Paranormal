@@ -1,94 +1,173 @@
 @*
   ImageEditorPlayer.razor
   ────────────────────────
-  Full-featured image editor backed by Fabric.js (loaded from CDN).
-  Supports adjustments, filters, drawing/annotation tools, rotate/flip,
-  save edit state, and export as a new file version.
-
-  Usage:
-    <ImageEditorPlayer UploadFileId="@fileId" FileName="@fileName" />
+  Full-featured image editor backed by Fabric.js v6 (CDN).
+  Phase A: adjustments, filters, basic drawing, rotate/flip, save/export.
+  Phase B: layers panel, anomaly highlight, grid overlay, timestamp stamp, ruler.
 *@
 
 @namespace Ben.Web.Library.Manage.Media
 @implements IAsyncDisposable
 @inject IBenAdminClient AdminClient
 @inject IJSRuntime JS
+@using System.Text.Json
 
 @if (_show)
 {
-    <TelerikWindow @bind-Visible="_show" Modal="true" Width="92vw" Height="92vh"
+    <TelerikWindow @bind-Visible="_show" Modal="true" Width="94vw" Height="94vh"
                    Title="@($"Edit: {FileName}")">
         <WindowContent>
             <div class="d-flex h-100 gap-0" style="overflow:hidden;">
 
                 @* ── Left toolbar ──────────────────────────────────────────── *@
-                <div class="d-flex flex-column gap-1 p-2 border-end bg-body-secondary" style="width:56px; flex:0 0 56px; overflow-y:auto;">
-                    @* Tool buttons *@
-                    <TelerikButton Icon="@SvgIcon.Pointer" Size="sm" FillMode="@(_tool=="select"?"solid":"flat")" Title="Select" OnClick="@(()=>SetTool("select"))" />
-                    <TelerikButton Icon="@SvgIcon.Pencil" Size="sm" FillMode="@(_tool=="pen"?"solid":"flat")" Title="Pen" OnClick="@(()=>SetTool("pen"))" />
-                    <TelerikButton Icon="@SvgIcon.Globe" Size="sm" FillMode="@(_tool=="text"?"solid":"flat")" Title="Text" OnClick="@(()=>SetTool("text"))" />
-                    <TelerikButton Icon="@SvgIcon.BorderRadius" Size="sm" FillMode="@(_tool=="rect"?"solid":"flat")" Title="Rectangle" OnClick="@(()=>SetTool("rect"))" />
-                    <TelerikButton Icon="@SvgIcon.Circle" Size="sm" FillMode="@(_tool=="circle"?"solid":"flat")" Title="Ellipse" OnClick="@(()=>SetTool("circle"))" />
-                    <TelerikButton Icon="@SvgIcon.ArrowLeft" Size="sm" FillMode="@(_tool=="arrow"?"solid":"flat")" Title="Arrow" OnClick="@(()=>SetTool("arrow"))" />
-                    <TelerikButton Icon="@SvgIcon.Eye" Size="sm" FillMode="@(_tool=="redact"?"solid":"flat")" Title="Redact" OnClick="@(()=>SetTool("redact"))" />
+                <div class="d-flex flex-column gap-1 p-2 border-end bg-body-secondary"
+                     style="width:56px; flex:0 0 56px; overflow-y:auto;">
+                    <TelerikButton Icon="@SvgIcon.Pointer" Size="sm" FillMode="@Fm("select")"  Title="Select"    OnClick="@(()=>SetTool("select"))" />
+                    <TelerikButton Icon="@SvgIcon.Pencil"  Size="sm" FillMode="@Fm("pen")"     Title="Pen"       OnClick="@(()=>SetTool("pen"))" />
+                    <TelerikButton Icon="@SvgIcon.Globe"   Size="sm" FillMode="@Fm("text")"    Title="Text"      OnClick="@(()=>SetTool("text"))" />
+                    <TelerikButton Icon="@SvgIcon.BorderRadius" Size="sm" FillMode="@Fm("rect")"    Title="Rectangle" OnClick="@(()=>SetTool("rect"))" />
+                    <TelerikButton Icon="@SvgIcon.Circle"  Size="sm" FillMode="@Fm("circle")"  Title="Ellipse"   OnClick="@(()=>SetTool("circle"))" />
+                    <TelerikButton Icon="@SvgIcon.ArrowLeft" Size="sm" FillMode="@Fm("arrow")" Title="Arrow"     OnClick="@(()=>SetTool("arrow"))" />
+                    <TelerikButton Icon="@SvgIcon.Eye"     Size="sm" FillMode="@Fm("redact")"  Title="Redact"    OnClick="@(()=>SetTool("redact"))" />
+                    <TelerikButton Icon="@SvgIcon.Filter"  Size="sm" FillMode="@Fm("measure")" Title="Ruler — click two points" OnClick="@(()=>SetTool("measure"))" />
                     <hr class="my-1" />
-                    <TelerikButton Icon="@SvgIcon.Trash" Size="sm" FillMode="flat" Title="Delete selected" OnClick="DeleteSelected" />
-                    <TelerikButton Icon="@SvgIcon.SortAsc" Size="sm" FillMode="flat" Title="Bring forward" OnClick="BringForward" />
-                    <TelerikButton Icon="@SvgIcon.SortDesc" Size="sm" FillMode="flat" Title="Send backward" OnClick="SendBackward" />
+                    <TelerikButton Icon="@SvgIcon.Trash"   Size="sm" FillMode="flat" Title="Delete selected" OnClick="DeleteSelected" />
+                    <TelerikButton Icon="@SvgIcon.ChevronUp"   Size="sm" FillMode="flat" Title="Bring forward" OnClick="BringForward" />
+                    <TelerikButton Icon="@SvgIcon.ChevronDown" Size="sm" FillMode="flat" Title="Send backward" OnClick="SendBackward" />
                     <hr class="my-1" />
                     <TelerikButton Icon="@SvgIcon.ArrowRotateCcw" Size="sm" FillMode="flat" Title="Rotate 90° CCW" OnClick="@(()=>RotateAsync(-90))" />
-                    <TelerikButton Icon="@SvgIcon.Redo" Size="sm" FillMode="flat" Title="Rotate 90° CW" OnClick="@(()=>RotateAsync(90))" />
+                    <TelerikButton Icon="@SvgIcon.Redo"    Size="sm" FillMode="flat" Title="Rotate 90° CW"  OnClick="@(()=>RotateAsync(90))" />
                     <TelerikButton Icon="@SvgIcon.TableColumnInsertLeft" Size="sm" FillMode="flat" Title="Flip H" OnClick="@(()=>FlipAsync("h"))" />
-                    <TelerikButton Icon="@SvgIcon.TableRowInsertAbove" Size="sm" FillMode="flat" Title="Flip V" OnClick="@(()=>FlipAsync("v"))" />
+                    <TelerikButton Icon="@SvgIcon.TableRowInsertAbove"   Size="sm" FillMode="flat" Title="Flip V" OnClick="@(()=>FlipAsync("v"))" />
                 </div>
 
-                @* ── Canvas area ────────────────────────────────────────────── *@
+                @* ── Canvas ─────────────────────────────────────────────────── *@
                 <div id="@_containerId"
                      style="flex:1 1 auto; min-width:0; overflow:hidden; background:#111;" />
 
                 @* ── Right panel ─────────────────────────────────────────────── *@
-                <div class="d-flex flex-column p-2 border-start bg-body-secondary" style="width:220px; flex:0 0 220px; overflow-y:auto; gap:0.5rem;">
+                <div class="d-flex flex-column p-2 border-start bg-body-secondary"
+                     style="width:230px; flex:0 0 230px; overflow-y:auto; gap:0.4rem;">
 
                     @* Adjustments *@
-                    <strong class="small">Adjustments</strong>
-                    <label class="small">Brightness <span>@_brightness</span></label>
-                    <TelerikSlider @bind-Value="_brightness" Min="-100" Max="100" SmallStep="5" LargeStep="25"
-                                   OnChange="@ApplyAdjustments" />
-                    <label class="small">Contrast <span>@_contrast</span></label>
-                    <TelerikSlider @bind-Value="_contrast" Min="-100" Max="100" SmallStep="5" LargeStep="25"
-                                   OnChange="@ApplyAdjustments" />
-                    <label class="small">Saturation <span>@_saturation</span></label>
-                    <TelerikSlider @bind-Value="_saturation" Min="-100" Max="100" SmallStep="5" LargeStep="25"
-                                   OnChange="@ApplyAdjustments" />
-                    <label class="small">Blur <span>@_blur</span></label>
-                    <TelerikSlider @bind-Value="_blur" Min="0" Max="10" SmallStep="1" LargeStep="5"
-                                   OnChange="@ApplyAdjustments" />
+                    <TelerikExpansionPanel Title="Adjustments" Expanded="true">
+                        <Content>
+                            <div class="d-flex flex-column gap-1 pt-1">
+                                <label class="small">Brightness <span>@_brightness</span></label>
+                                <TelerikSlider @bind-Value="_brightness" Min="-100" Max="100" SmallStep="5" LargeStep="25" OnChange="@ApplyAdjustments" />
+                                <label class="small">Contrast <span>@_contrast</span></label>
+                                <TelerikSlider @bind-Value="_contrast"   Min="-100" Max="100" SmallStep="5" LargeStep="25" OnChange="@ApplyAdjustments" />
+                                <label class="small">Saturation <span>@_saturation</span></label>
+                                <TelerikSlider @bind-Value="_saturation" Min="-100" Max="100" SmallStep="5" LargeStep="25" OnChange="@ApplyAdjustments" />
+                                <label class="small">Blur <span>@_blur</span></label>
+                                <TelerikSlider @bind-Value="_blur"       Min="0"    Max="10"  SmallStep="1" LargeStep="5"  OnChange="@ApplyAdjustments" />
+                            </div>
+                        </Content>
+                    </TelerikExpansionPanel>
 
-                    <hr class="my-1" />
+                    @* Filter presets *@
+                    <TelerikExpansionPanel Title="Filter" Expanded="false">
+                        <Content>
+                            <div class="pt-1">
+                                <TelerikDropDownList Data="@_presets" @bind-Value="_preset"
+                                                     TextField="Label" ValueField="Value"
+                                                     OnChange="@(()=>ApplyPreset())" />
+                            </div>
+                        </Content>
+                    </TelerikExpansionPanel>
 
-                    @* Filters *@
-                    <strong class="small">Filter</strong>
-                    <TelerikDropDownList Data="@_presets" @bind-Value="_preset" TextField="Label" ValueField="Value"
-                                         OnChange="@(()=>ApplyPreset())" />
+                    @* Evidence tools *@
+                    <TelerikExpansionPanel Title="Evidence Tools" Expanded="true">
+                        <Content>
+                            <div class="d-flex flex-column gap-2 pt-1">
+                                <div>
+                                    <strong class="small">Anomaly Highlight</strong>
+                                    <div class="d-flex gap-1 align-items-center mt-1">
+                                        <TelerikColorPicker @bind-Value="_anomalyColor" ShowPreview="true" />
+                                        <TelerikButton Size="sm" OnClick="AddAnomalyHighlight">Add</TelerikButton>
+                                    </div>
+                                </div>
+                                <div>
+                                    <strong class="small">Grid Overlay</strong>
+                                    <div class="mt-1">
+                                        <TelerikButton Size="sm" ThemeColor="@(_gridOn ? "warning" : "base")" OnClick="ToggleGrid">
+                                            @(_gridOn ? "Remove Grid" : "Add Grid")
+                                        </TelerikButton>
+                                    </div>
+                                </div>
+                                <div>
+                                    <strong class="small">Timestamp Stamp</strong>
+                                    <TelerikTextBox @bind-Value="_stampText" PlaceholderText="Text (leave blank for now)" Class="mt-1" />
+                                    <div class="d-flex gap-1 mt-1 flex-wrap">
+                                        @foreach (var pos in new[] { ("tl","↖"), ("tr","↗"), ("bl","↙"), ("br","↘") })
+                                        {
+                                            var p = pos;
+                                            <TelerikButton Size="sm" Title="@p.Item1" OnClick="@(()=>AddTimestampStamp(p.Item1))">@p.Item2</TelerikButton>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </Content>
+                    </TelerikExpansionPanel>
 
-                    @* Drawing options (shown when pen/text active) *@
-                    @if (_tool is "pen" or "text" or "rect" or "circle" or "arrow" or "redact")
+                    @* Drawing options (context-sensitive) *@
+                    @if (_tool is "pen" or "text" or "rect" or "circle" or "arrow")
                     {
-                        <hr class="my-1" />
-                        <strong class="small">Tool Options</strong>
-                        <label class="small">Color</label>
-                        <TelerikColorPicker @bind-Value="_drawColor" ShowPreview="true" />
-                        @if (_tool is "pen" or "rect" or "circle" or "arrow")
-                        {
-                            <label class="small">Width <span>@_drawWidth</span></label>
-                            <TelerikSlider @bind-Value="_drawWidth" Min="1" Max="20" SmallStep="1" LargeStep="5" />
-                        }
-                        @if (_tool is "text")
-                        {
-                            <label class="small">Font size <span>@_fontSize</span></label>
-                            <TelerikSlider @bind-Value="_fontSize" Min="10" Max="72" SmallStep="2" LargeStep="12" />
-                        }
+                        <TelerikExpansionPanel Title="Tool Options" Expanded="true">
+                            <Content>
+                                <div class="d-flex flex-column gap-1 pt-1">
+                                    <label class="small">Color</label>
+                                    <TelerikColorPicker @bind-Value="_drawColor" ShowPreview="true" />
+                                    @if (_tool is not "text")
+                                    {
+                                        <label class="small">Width @_drawWidth</label>
+                                        <TelerikSlider @bind-Value="_drawWidth" Min="1" Max="20" SmallStep="1" LargeStep="5" />
+                                    }
+                                    @if (_tool is "text")
+                                    {
+                                        <label class="small">Font size @_fontSize</label>
+                                        <TelerikSlider @bind-Value="_fontSize" Min="10" Max="72" SmallStep="2" LargeStep="12" />
+                                    }
+                                </div>
+                            </Content>
+                        </TelerikExpansionPanel>
                     }
+
+                    @* Layers panel *@
+                    <TelerikExpansionPanel Title="@($"Layers ({_layers.Count})")" Expanded="true">
+                        <Content>
+                            @if (_layers.Count == 0)
+                            {
+                                <p class="text-muted small mt-1 mb-0">No layers yet.</p>
+                            }
+                            else
+                            {
+                                <div class="d-flex flex-column gap-0 mt-1">
+                                    @foreach (var layer in _layers)
+                                    {
+                                        var l = layer;
+                                        <div class="d-flex align-items-center gap-1 py-1 border-bottom" style="font-size:0.73rem;">
+                                            <TelerikButton Icon="@(l.Visible ? SvgIcon.Eye : SvgIcon.EyeSlash)"
+                                                           Size="sm" FillMode="flat"
+                                                           OnClick="@(()=>ToggleLayerVisible(l))" />
+                                            <span class="text-truncate flex-grow-1" title="@l.Name">@l.Name</span>
+                                            <TelerikButton Icon="@SvgIcon.ChevronUp"   Size="sm" FillMode="flat" OnClick="@(()=>MoveLayerUp(l.Id))" />
+                                            <TelerikButton Icon="@SvgIcon.ChevronDown" Size="sm" FillMode="flat" OnClick="@(()=>MoveLayerDown(l.Id))" />
+                                            <TelerikButton Icon="@SvgIcon.Trash" Size="sm" FillMode="flat"
+                                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                                           OnClick="@(()=>DeleteLayer(l.Id))" />
+                                        </div>
+                                        <div class="d-flex align-items-center gap-1 py-1">
+                                            <span class="small text-muted" style="width:40px;">@l.Opacity%</span>
+                                            <TelerikSlider Value="@l.Opacity" Min="0" Max="100" SmallStep="5" LargeStep="25"
+                                                           ValueChanged="@((int v) => SetLayerOpacity(l.Id, v))" />
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </Content>
+                    </TelerikExpansionPanel>
+
                 </div>
             </div>
         </WindowContent>
@@ -96,7 +175,7 @@
             <WindowAction Name="Minimize" />
             @if (_isDirty)
             {
-                <WindowAction Text="Save State" OnClick="SaveEditStateAsync" />
+                <WindowAction Text="Save State"         OnClick="SaveEditStateAsync" />
                 <WindowAction Text="Save as New Version" OnClick="SaveAsNewVersionAsync" />
             }
             <WindowAction Name="Close" />
@@ -104,7 +183,8 @@
     </TelerikWindow>
 }
 
-<TelerikNotification @ref="_notifications" VerticalPosition="NotificationVerticalPosition.Bottom"
+<TelerikNotification @ref="_notifications"
+                     VerticalPosition="NotificationVerticalPosition.Bottom"
                      HorizontalPosition="NotificationHorizontalPosition.Right" />
 
 @code {
@@ -126,37 +206,48 @@
 
     // Adjustment state
     private int _brightness, _contrast, _saturation, _blur;
-    private string _preset = "none";
+    private string _preset    = "none";
     private string _drawColor = "#ff0000";
-    private int _drawWidth = 3;
-    private int _fontSize = 24;
+    private int    _drawWidth = 3;
+    private int    _fontSize  = 24;
+
+    // Evidence tool state
+    private string _anomalyColor = "#ff6600";
+    private bool   _gridOn;
+    private string _stampText = string.Empty;
+
+    // Layers
+    private List<LayerItem> _layers = [];
 
     private static readonly List<(string Value, string Label)> _presets =
     [
-        ("none", "None"), ("grayscale", "Grayscale"), ("sepia", "Sepia"),
-        ("invert", "Invert"), ("highcontrast", "High Contrast"),
-        ("nightvision", "Night Vision"), ("heatmap", "Heat Map"),
+        ("none","None"), ("grayscale","Grayscale"), ("sepia","Sepia"),
+        ("invert","Invert"), ("highcontrast","High Contrast"),
+        ("nightvision","Night Vision"), ("heatmap","Heat Map"),
     ];
+
+    // ── Public API ────────────────────────────────────────────────────────────
 
     public async Task OpenAsync()
     {
         _show = true;
         StateHasChanged();
-        await Task.Yield(); // let the window render before init
+        await Task.Yield();
         await InitEditorAsync();
     }
 
     private async Task InitEditorAsync()
     {
-        _module     ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/image-editor.js");
-        _dotNetRef  ??= DotNetObjectReference.Create(this);
+        _module    ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/image-editor.js");
+        _dotNetRef ??= DotNetObjectReference.Create(this);
 
-        var record     = await AdminClient.GetFileDataAsync(UploadFileId);
-        var imageUrl   = ImageUrl ?? AdminClient.GetFileDownloadUrl(UploadFileId);
-        var editState  = (string?)null;
+        var imageUrl  = ImageUrl ?? AdminClient.GetFileDownloadUrl(UploadFileId);
+        var editState = (string?)null;
 
         await _module.InvokeVoidAsync("init", _containerId, imageUrl, editState, _dotNetRef);
     }
+
+    // ── Tools ─────────────────────────────────────────────────────────────────
 
     private async Task SetTool(string tool)
     {
@@ -165,6 +256,10 @@
         await _module.InvokeVoidAsync("setDrawingMode", _containerId, tool,
             new { color = _drawColor, width = _drawWidth, fontSize = _fontSize });
     }
+
+    private string Fm(string tool) => _tool == tool ? "solid" : "flat";
+
+    // ── Adjustments ───────────────────────────────────────────────────────────
 
     private async Task ApplyAdjustments()
     {
@@ -179,41 +274,86 @@
         await _module.InvokeVoidAsync("applyPreset", _containerId, _preset);
     }
 
-    private async Task RotateAsync(int degrees)
-    {
-        if (_module is null) return;
-        await _module.InvokeVoidAsync("rotate", _containerId, degrees);
-    }
+    // ── Transform ─────────────────────────────────────────────────────────────
 
-    private async Task FlipAsync(string axis)
-    {
-        if (_module is null) return;
-        await _module.InvokeVoidAsync("flip", _containerId, axis);
-    }
+    private async Task RotateAsync(int d)  { if (_module is not null) await _module.InvokeVoidAsync("rotate", _containerId, d); }
+    private async Task FlipAsync(string a) { if (_module is not null) await _module.InvokeVoidAsync("flip",   _containerId, a); }
 
     private async Task DeleteSelected()
     {
-        if (_module is null) return;
-        await _module.InvokeVoidAsync("deleteSelected", _containerId);
+        if (_module is not null) { await _module.InvokeVoidAsync("deleteSelected", _containerId); await RefreshLayersAsync(); }
     }
 
-    private async Task BringForward()
+    private async Task BringForward() { if (_module is not null) await _module.InvokeVoidAsync("bringForward", _containerId); }
+    private async Task SendBackward() { if (_module is not null) await _module.InvokeVoidAsync("sendBackward", _containerId); }
+
+    // ── Evidence tools ────────────────────────────────────────────────────────
+
+    private async Task AddAnomalyHighlight()
     {
         if (_module is null) return;
-        await _module.InvokeVoidAsync("bringForward", _containerId);
+        await _module.InvokeVoidAsync("addAnomalyHighlight", _containerId, new { color = _anomalyColor });
+        await RefreshLayersAsync();
     }
 
-    private async Task SendBackward()
+    private async Task ToggleGrid()
     {
         if (_module is null) return;
-        await _module.InvokeVoidAsync("sendBackward", _containerId);
+        await _module.InvokeVoidAsync("toggleGrid", _containerId,
+            new { cols = 10, rows = 10, color = "rgba(255,255,255,0.3)" });
+        _gridOn = !_gridOn;
+        await RefreshLayersAsync();
     }
+
+    private async Task AddTimestampStamp(string position)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("addTimestampStamp", _containerId, _stampText, position);
+        await RefreshLayersAsync();
+    }
+
+    // ── Layers ────────────────────────────────────────────────────────────────
+
+    private async Task RefreshLayersAsync()
+    {
+        if (_module is null) return;
+        var json = await _module.InvokeAsync<string?>("getLayersJson", _containerId);
+        if (!string.IsNullOrEmpty(json))
+            _layers = JsonSerializer.Deserialize<List<LayerItem>>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+        StateHasChanged();
+    }
+
+    private async Task ToggleLayerVisible(LayerItem layer)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("setLayerVisible", _containerId, layer.Id, !layer.Visible);
+        await RefreshLayersAsync();
+    }
+
+    private async Task SetLayerOpacity(string id, int pct)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("setLayerOpacity", _containerId, id, pct);
+        await RefreshLayersAsync();
+    }
+
+    private async Task DeleteLayer(string id)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("deleteLayer", _containerId, id);
+        await RefreshLayersAsync();
+    }
+
+    private async Task MoveLayerUp(string id)   { if (_module is not null) { await _module.InvokeVoidAsync("moveLayerUp",   _containerId, id); await RefreshLayersAsync(); } }
+    private async Task MoveLayerDown(string id) { if (_module is not null) { await _module.InvokeVoidAsync("moveLayerDown", _containerId, id); await RefreshLayersAsync(); } }
+
+    // ── Save / Export ─────────────────────────────────────────────────────────
 
     private async Task SaveEditStateAsync()
     {
         if (_module is null) return;
-        _saving = true;
-        StateHasChanged();
+        _saving = true; StateHasChanged();
         try
         {
             var json   = await _module.InvokeAsync<string?>("getStateJson", _containerId);
@@ -231,18 +371,13 @@
     private async Task SaveAsNewVersionAsync()
     {
         if (_module is null) return;
-        _saving = true;
-        StateHasChanged();
+        _saving = true; StateHasChanged();
         try
         {
             var dataUrl = await _module.InvokeAsync<string?>("exportToBase64", _containerId, "png", 0.92);
             if (string.IsNullOrEmpty(dataUrl)) return;
-
-            // Convert base64 data URL to bytes
-            var comma = dataUrl.IndexOf(',');
-            var base64 = comma >= 0 ? dataUrl[(comma + 1)..] : dataUrl;
-            var bytes  = Convert.FromBase64String(base64);
-
+            var comma  = dataUrl.IndexOf(',');
+            var bytes  = Convert.FromBase64String(comma >= 0 ? dataUrl[(comma + 1)..] : dataUrl);
             var result = await AdminClient.SaveImageAsNewVersionAsync(UploadFileId, bytes, "png");
             if (result is not null)
             {
@@ -254,8 +389,16 @@
         finally { _saving = false; }
     }
 
+    // ── JS callback ───────────────────────────────────────────────────────────
+
     [JSInvokable]
-    public void OnEditorChanged() { _isDirty = true; InvokeAsync(StateHasChanged); }
+    public void OnEditorChanged()
+    {
+        _isDirty = true;
+        _ = RefreshLayersAsync();
+    }
+
+    // ── Dispose ───────────────────────────────────────────────────────────────
 
     public async ValueTask DisposeAsync()
     {
@@ -266,4 +409,8 @@
         }
         _dotNetRef?.Dispose();
     }
+
+    // ── Types ─────────────────────────────────────────────────────────────────
+
+    private sealed record LayerItem(string Id, string Name, bool Visible, int Opacity, string Type);
 }
