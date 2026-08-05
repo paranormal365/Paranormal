@@ -86,6 +86,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<CaseReportSection> CaseReportSections { get; set; }
         public virtual DbSet<CaseReportSectionFile> CaseReportSectionFiles { get; set; }
         public virtual DbSet<CaseResearchEntry> CaseResearchEntries { get; set; }
+        public virtual DbSet<CaseFile> CaseFiles { get; set; }
         public virtual DbSet<CaseNote> CaseNotes { get; set; }
         public virtual DbSet<InvestigationScheduleProposal> InvestigationScheduleProposals { get; set; }
         public virtual DbSet<ScheduleProposalSlot> ScheduleProposalSlots { get; set; }
@@ -1402,6 +1403,26 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Url).HasMaxLength(2000);
             modelBuilder.Entity<CaseResearchEntry>()
                 .HasIndex(e => new { e.CaseId, e.SortOrder });
+
+            // ── CaseFile ──────────────────────────────────────────────────────
+            modelBuilder.Entity<CaseFile>()
+                .HasOne(e => e.Case).WithMany(e => e.CaseFiles)
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CaseFile>()
+                .HasOne(e => e.UploadFile).WithMany(e => e.CaseFiles)
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CaseFile>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseFile>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseFile>()
+                .Property(e => e.Description).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<CaseFile>()
+                .HasIndex(e => e.CaseId);
+            modelBuilder.Entity<CaseFile>()
+                .HasIndex(e => e.UploadFileId);
 
             // ── InvestigationScheduleProposal ──────────────────────────────
             modelBuilder.Entity<InvestigationScheduleProposal>()

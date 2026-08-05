@@ -487,6 +487,17 @@ public interface IBenAdminClient
     Task<CaseResearchEntryDto?> UpdateCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, UpsertResearchRequest request, CancellationToken token = default);
     Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
 
+    // ── Case Files (Files/Evidence tab) ──────────────────────────────────────
+
+    /// <summary>Returns all files linked to a case's Files/Evidence tab, newest first.</summary>
+    Task<IReadOnlyList<CaseFileRecord>> GetCaseFilesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+
+    /// <summary>Uploads a file of any content type and links it to the case's Files/Evidence tab.</summary>
+    Task<CaseFileRecord?> UploadCaseFileAsync(Guid orgId, Guid caseId, string? description, Stream content, string fileName, string contentType, CancellationToken token = default);
+
+    /// <summary>Un-links a file from the case. The underlying UploadFile is preserved.</summary>
+    Task<bool> DeleteCaseFileAsync(Guid orgId, Guid caseId, Guid caseFileId, CancellationToken token = default);
+
     // ── Case Notes ────────────────────────────────────────────────────────────
 
     Task<IReadOnlyList<CaseNoteDto>> GetCaseNotesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
