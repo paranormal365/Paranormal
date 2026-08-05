@@ -881,6 +881,7 @@ When building `Ben.Data.WebApi`, you may see a prompt from your IDE to authorize
 - Audit columns: `DateCreated` (required), `DateUpdated?`, `CreatedByAppUserId` (required), `UpdatedByAppUserId?`.
 - Generated partial files are named `*.Generated.cs` alongside user stub files.
 - Cascade deletes are enabled only on ownership relationships. Audit FK relationships use `DeleteBehavior.NoAction`.
+- **WebApiClient calls against `NoContent()` (204) endpoints must use `PutVoidAsync`/`PostVoidAsync`, never `PutAsync<TRequest, object>`/`PostAsync<TRequest, object>`.** The latter call `response.Content.ReadFromJsonAsync<TResponse>()` on success, which throws a `JsonException` on an empty body — the request still succeeds server-side, but the client throws and the caller's catch block reports a generic failure. Found and fixed twice already (`UpdatePendingRequestStatusAsync`, `DeclineClientRequestAsync` in `BenAdminClientAdapter.cs`, 2026-08-05) — before adding a new `PostAsync<object, object>`/`PutAsync<object, object>` call, check whether the target controller action actually returns a body or `NoContent()`.
 
 ## Telerik UI for Blazor
 

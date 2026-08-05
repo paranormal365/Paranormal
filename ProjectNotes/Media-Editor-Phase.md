@@ -196,39 +196,43 @@ Migration name: `AddAudioEditorAndMarkers`
 
 ## Implementation Sequencing
 
-### Phase A — Image Editor Foundation
-1. Add Fabric.js to the rollup build
-2. Build `image-editor.ts` module: canvas init, load from URL, adjustment pipeline, layer model, export
-3. Build `ImageEditorPlayer.razor` (Blazor host, JS interop bridge, save/export buttons)
-4. Add `IsEditedVersion` + `EditStateJson` columns to `UploadFile` (migration)
-5. Add API endpoint `PUT /api/upload-files/{id}/edit-state` to persist editor JSON
-6. Wire "Edit" button into case evidence panel (images only)
+**Status as of 2026-08-05:** Phases A–C and Phase D steps 1 and 4–8 are complete and merged into `develop`. Remaining Phase D work (steps 2, 3, 6) is in progress on `feature/media-editor-phase-d3`. Phase E has not started.
 
-### Phase B — Image Editor Full Feature Set
-1. Drawing and annotation tools (pen, arrow, shapes, text, redaction box)
-2. Layers panel
-3. Evidence-specific tools (anomaly highlight, timestamp stamp, grid overlay)
-4. Perspective correction and measurement ruler
-5. Export to new file version (controller + service)
+### Phase A — Image Editor Foundation ✅ Complete
+1. ✅ Add Fabric.js to the rollup build
+2. ✅ Build `image-editor.ts` module: canvas init, load from URL, adjustment pipeline, layer model, export
+3. ✅ Build `ImageEditorPlayer.razor` (Blazor host, JS interop bridge, save/export buttons)
+4. ✅ Add `IsEditedVersion` + `EditStateJson` columns to `UploadFile` (migration)
+5. ✅ Add API endpoint `PUT /api/upload-files/{id}/edit-state` to persist editor JSON
+6. ✅ Wire "Edit" button into case evidence panel (images only)
 
-### Phase C — Enhanced Audio: Spectrogram & EQ
-1. Frequency ruler and mel-scale toggle in existing spectrogram
-2. Colormap selector
-3. Graphic EQ panel (10-band `BiquadFilterNode` chain)
-4. High-pass / low-pass filter controls
-5. Noise gate `AudioWorkletProcessor`
-6. Compressor controls (expose existing `DynamicsCompressorNode`)
+### Phase B — Image Editor Full Feature Set ✅ Complete
+1. ✅ Drawing and annotation tools (pen, arrow, shapes, text, redaction box)
+2. ✅ Layers panel
+3. ✅ Evidence-specific tools (anomaly highlight, timestamp stamp, grid overlay)
+4. ✅ Perspective correction and measurement ruler
+5. ✅ Export to new file version (controller + service)
+
+### Phase C — Enhanced Audio: Spectrogram & EQ ✅ Complete
+1. ✅ Frequency ruler and mel-scale toggle in existing spectrogram
+2. ✅ Colormap selector
+3. ✅ Graphic EQ panel (10-band `BiquadFilterNode` chain)
+4. ✅ High-pass / low-pass filter controls
+5. ✅ Noise gate `AudioWorkletProcessor`
+6. ✅ Compressor controls (expose existing `DynamicsCompressorNode`)
 
 ### Phase D — Audio Editing & EVP Tools
-1. EVP Marker tool + `AudioMarker` entity + API endpoints
-2. Silence detection shading
-3. Voice frequency overlay
-4. Trim / cut / silence region (offline render + export)
-5. Normalize, gain, fade in/out
-6. Speed change (SoundTouchJS integration)
-7. Pitch shift
-8. Reverse
-9. `EditStateJson` persistence to `UploadFileAudioConfig`
+1. ✅ EVP Marker tool + `AudioMarker` entity + API endpoints (`AudioMarkerController`, waveform overlay, marker panel)
+2. ⬜ Silence detection shading — **in progress** on `feature/media-editor-phase-d3`
+3. ⬜ Voice frequency overlay — **in progress** on `feature/media-editor-phase-d3`
+4. ✅ Trim / cut / silence region
+5. ✅ Normalize, gain, fade in/out
+6. ⬜ Speed change — **in progress**; will use a ported SMB phase-vocoder in C# (see note below), not SoundTouchJS
+7. ⬜ Pitch shift — **in progress**; same SMB phase-vocoder approach
+8. ✅ Reverse
+9. ⬜ `EditStateJson` persistence to `UploadFileAudioConfig` — not started; not required for the destructive-edit tools shipped so far
+
+> **Architecture deviation from the original plan (steps 4, 5, 8, and the planned 6/7):** these were originally spec'd as client-side Web Audio API + SoundTouchJS. Implemented instead as **server-side NAudio** operations (new `AudioEditor.cs` static helper, extending the existing `AudioClipper` pattern from the pre-existing "Trim to region" / Save Clip feature) exposed through a single `POST /api/upload-files/{fileId}/audio-edit` endpoint. Reasoning: the app had no client-side audio decode/encode infrastructure at all (no `OfflineAudioContext`, no WAV encoder) while server-side NAudio processing already existed and worked for large files without loading them into browser memory. Speed/pitch (steps 6–7, not yet built) will follow the same server-side approach using a ported public-domain SMB phase-vocoder algorithm rather than SoundTouchJS, to avoid introducing a client-side audio pipeline for just those two operations.
 
 ### Phase E — Multi-Track Mixer
 1. Multi-track timeline grid component
