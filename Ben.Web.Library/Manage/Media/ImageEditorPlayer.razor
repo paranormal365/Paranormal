@@ -1,0 +1,267 @@
+@*
+  ImageEditorPlayer.razor
+  ────────────────────────
+  Full-featured image editor backed by Fabric.js (loaded from CDN).
+  Supports adjustments, filters, drawing/annotation tools, rotate/flip,
+  save edit state, and export as a new file version.
+
+  Usage:
+    <ImageEditorPlayer UploadFileId="@fileId" FileName="@fileName" />
+*@
+
+@namespace Ben.Web.Library.Manage.Media
+@implements IAsyncDisposable
+@inject IBenAdminClient AdminClient
+@inject IJSRuntime JS
+
+@if (_show)
+{
+    <TelerikWindow @bind-Visible="_show" Modal="true" Width="92vw" Height="92vh"
+                   Title="@($"Edit: {FileName}")">
+        <WindowContent>
+            <div class="d-flex h-100 gap-0" style="overflow:hidden;">
+
+                @* ── Left toolbar ──────────────────────────────────────────── *@
+                <div class="d-flex flex-column gap-1 p-2 border-end bg-body-secondary" style="width:56px; flex:0 0 56px; overflow-y:auto;">
+                    @* Tool buttons *@
+                    <TelerikButton Icon="@SvgIcon.Pointer" Size="sm" FillMode="@(_tool=="select"?"solid":"flat")" Title="Select" OnClick="@(()=>SetTool("select"))" />
+                    <TelerikButton Icon="@SvgIcon.Pencil" Size="sm" FillMode="@(_tool=="pen"?"solid":"flat")" Title="Pen" OnClick="@(()=>SetTool("pen"))" />
+                    <TelerikButton Icon="@SvgIcon.Globe" Size="sm" FillMode="@(_tool=="text"?"solid":"flat")" Title="Text" OnClick="@(()=>SetTool("text"))" />
+                    <TelerikButton Icon="@SvgIcon.BorderRadius" Size="sm" FillMode="@(_tool=="rect"?"solid":"flat")" Title="Rectangle" OnClick="@(()=>SetTool("rect"))" />
+                    <TelerikButton Icon="@SvgIcon.Circle" Size="sm" FillMode="@(_tool=="circle"?"solid":"flat")" Title="Ellipse" OnClick="@(()=>SetTool("circle"))" />
+                    <TelerikButton Icon="@SvgIcon.ArrowLeft" Size="sm" FillMode="@(_tool=="arrow"?"solid":"flat")" Title="Arrow" OnClick="@(()=>SetTool("arrow"))" />
+                    <TelerikButton Icon="@SvgIcon.Eye" Size="sm" FillMode="@(_tool=="redact"?"solid":"flat")" Title="Redact" OnClick="@(()=>SetTool("redact"))" />
+                    <hr class="my-1" />
+                    <TelerikButton Icon="@SvgIcon.Trash" Size="sm" FillMode="flat" Title="Delete selected" OnClick="DeleteSelected" />
+                    <TelerikButton Icon="@SvgIcon.SortAsc" Size="sm" FillMode="flat" Title="Bring forward" OnClick="BringForward" />
+                    <TelerikButton Icon="@SvgIcon.SortDesc" Size="sm" FillMode="flat" Title="Send backward" OnClick="SendBackward" />
+                    <hr class="my-1" />
+                    <TelerikButton Icon="@SvgIcon.ArrowRotateCcw" Size="sm" FillMode="flat" Title="Rotate 90° CCW" OnClick="@(()=>RotateAsync(-90))" />
+                    <TelerikButton Icon="@SvgIcon.Redo" Size="sm" FillMode="flat" Title="Rotate 90° CW" OnClick="@(()=>RotateAsync(90))" />
+                    <TelerikButton Icon="@SvgIcon.TableColumnInsertLeft" Size="sm" FillMode="flat" Title="Flip H" OnClick="@(()=>FlipAsync("h"))" />
+                    <TelerikButton Icon="@SvgIcon.TableRowInsertAbove" Size="sm" FillMode="flat" Title="Flip V" OnClick="@(()=>FlipAsync("v"))" />
+                </div>
+
+                @* ── Canvas area ────────────────────────────────────────────── *@
+                <div id="@_containerId"
+                     style="flex:1 1 auto; min-width:0; overflow:hidden; background:#111;" />
+
+                @* ── Right panel ─────────────────────────────────────────────── *@
+                <div class="d-flex flex-column p-2 border-start bg-body-secondary" style="width:220px; flex:0 0 220px; overflow-y:auto; gap:0.5rem;">
+
+                    @* Adjustments *@
+                    <strong class="small">Adjustments</strong>
+                    <label class="small">Brightness <span>@_brightness</span></label>
+                    <TelerikSlider @bind-Value="_brightness" Min="-100" Max="100" SmallStep="5" LargeStep="25"
+                                   OnChange="@ApplyAdjustments" />
+                    <label class="small">Contrast <span>@_contrast</span></label>
+                    <TelerikSlider @bind-Value="_contrast" Min="-100" Max="100" SmallStep="5" LargeStep="25"
+                                   OnChange="@ApplyAdjustments" />
+                    <label class="small">Saturation <span>@_saturation</span></label>
+                    <TelerikSlider @bind-Value="_saturation" Min="-100" Max="100" SmallStep="5" LargeStep="25"
+                                   OnChange="@ApplyAdjustments" />
+                    <label class="small">Blur <span>@_blur</span></label>
+                    <TelerikSlider @bind-Value="_blur" Min="0" Max="10" SmallStep="1" LargeStep="5"
+                                   OnChange="@ApplyAdjustments" />
+
+                    <hr class="my-1" />
+
+                    @* Filters *@
+                    <strong class="small">Filter</strong>
+                    <TelerikDropDownList Data="@_presets" @bind-Value="_preset" TextField="Label" ValueField="Value"
+                                         OnChange="@(()=>ApplyPreset())" />
+
+                    @* Drawing options (shown when pen/text active) *@
+                    @if (_tool is "pen" or "text" or "rect" or "circle" or "arrow" or "redact")
+                    {
+                        <hr class="my-1" />
+                        <strong class="small">Tool Options</strong>
+                        <label class="small">Color</label>
+                        <TelerikColorPicker @bind-Value="_drawColor" ShowPreview="true" />
+                        @if (_tool is "pen" or "rect" or "circle" or "arrow")
+                        {
+                            <label class="small">Width <span>@_drawWidth</span></label>
+                            <TelerikSlider @bind-Value="_drawWidth" Min="1" Max="20" SmallStep="1" LargeStep="5" />
+                        }
+                        @if (_tool is "text")
+                        {
+                            <label class="small">Font size <span>@_fontSize</span></label>
+                            <TelerikSlider @bind-Value="_fontSize" Min="10" Max="72" SmallStep="2" LargeStep="12" />
+                        }
+                    }
+                </div>
+            </div>
+        </WindowContent>
+        <WindowActions>
+            <WindowAction Name="Minimize" />
+            @if (_isDirty)
+            {
+                <WindowAction Text="Save State" OnClick="SaveEditStateAsync" />
+                <WindowAction Text="Save as New Version" OnClick="SaveAsNewVersionAsync" />
+            }
+            <WindowAction Name="Close" />
+        </WindowActions>
+    </TelerikWindow>
+}
+
+<TelerikNotification @ref="_notifications" VerticalPosition="NotificationVerticalPosition.Bottom"
+                     HorizontalPosition="NotificationHorizontalPosition.Right" />
+
+@code {
+    [Parameter, EditorRequired] public Guid UploadFileId { get; set; }
+    [Parameter] public string? FileName { get; set; }
+    [Parameter] public EventCallback<UploadFileRecord> OnSaved { get; set; }
+
+    private string _containerId = $"img-editor-{Guid.NewGuid():N}";
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<ImageEditorPlayer>? _dotNetRef;
+    private TelerikNotification? _notifications;
+
+    private bool _show;
+    private bool _isDirty;
+    private bool _saving;
+    private string _tool = "select";
+
+    // Adjustment state
+    private int _brightness, _contrast, _saturation, _blur;
+    private string _preset = "none";
+    private string _drawColor = "#ff0000";
+    private int _drawWidth = 3;
+    private int _fontSize = 24;
+
+    private static readonly List<(string Value, string Label)> _presets =
+    [
+        ("none", "None"), ("grayscale", "Grayscale"), ("sepia", "Sepia"),
+        ("invert", "Invert"), ("highcontrast", "High Contrast"),
+        ("nightvision", "Night Vision"), ("heatmap", "Heat Map"),
+    ];
+
+    public async Task OpenAsync()
+    {
+        _show = true;
+        StateHasChanged();
+        await Task.Yield(); // let the window render before init
+        await InitEditorAsync();
+    }
+
+    private async Task InitEditorAsync()
+    {
+        _module     ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/image-editor.js");
+        _dotNetRef  ??= DotNetObjectReference.Create(this);
+
+        var record     = await AdminClient.GetFileDataAsync(UploadFileId);
+        var imageUrl   = AdminClient.GetFileDownloadUrl(UploadFileId);
+        var editState  = (string?)null;
+
+        await _module.InvokeVoidAsync("init", _containerId, imageUrl, editState, _dotNetRef);
+    }
+
+    private async Task SetTool(string tool)
+    {
+        _tool = tool;
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("setDrawingMode", _containerId, tool,
+            new { color = _drawColor, width = _drawWidth, fontSize = _fontSize });
+    }
+
+    private async Task ApplyAdjustments()
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("applyAdjustments", _containerId,
+            new { brightness = _brightness, contrast = _contrast, saturation = _saturation, blur = _blur, hue = 0, noise = 0 });
+    }
+
+    private async Task ApplyPreset()
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("applyPreset", _containerId, _preset);
+    }
+
+    private async Task RotateAsync(int degrees)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("rotate", _containerId, degrees);
+    }
+
+    private async Task FlipAsync(string axis)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("flip", _containerId, axis);
+    }
+
+    private async Task DeleteSelected()
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("deleteSelected", _containerId);
+    }
+
+    private async Task BringForward()
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("bringForward", _containerId);
+    }
+
+    private async Task SendBackward()
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("sendBackward", _containerId);
+    }
+
+    private async Task SaveEditStateAsync()
+    {
+        if (_module is null) return;
+        _saving = true;
+        StateHasChanged();
+        try
+        {
+            var json   = await _module.InvokeAsync<string?>("getStateJson", _containerId);
+            var result = await AdminClient.SaveImageEditStateAsync(UploadFileId, json);
+            if (result is not null)
+            {
+                _isDirty = false;
+                _notifications?.Show("Edit state saved.", ThemeConstants.Notification.ThemeColor.Success);
+                await OnSaved.InvokeAsync(result);
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task SaveAsNewVersionAsync()
+    {
+        if (_module is null) return;
+        _saving = true;
+        StateHasChanged();
+        try
+        {
+            var dataUrl = await _module.InvokeAsync<string?>("exportToBase64", _containerId, "png", 0.92);
+            if (string.IsNullOrEmpty(dataUrl)) return;
+
+            // Convert base64 data URL to bytes
+            var comma = dataUrl.IndexOf(',');
+            var base64 = comma >= 0 ? dataUrl[(comma + 1)..] : dataUrl;
+            var bytes  = Convert.FromBase64String(base64);
+
+            var result = await AdminClient.SaveImageAsNewVersionAsync(UploadFileId, bytes, "png");
+            if (result is not null)
+            {
+                _isDirty = false;
+                _notifications?.Show("Saved as new version.", ThemeConstants.Notification.ThemeColor.Success);
+                await OnSaved.InvokeAsync(result);
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    [JSInvokable]
+    public void OnEditorChanged() { _isDirty = true; InvokeAsync(StateHasChanged); }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            await _module.InvokeVoidAsync("destroy", _containerId);
+            await _module.DisposeAsync();
+        }
+        _dotNetRef?.Dispose();
+    }
+}

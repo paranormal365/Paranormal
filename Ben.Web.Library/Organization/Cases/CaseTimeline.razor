@@ -100,6 +100,13 @@
                                             <span class="badge bg-secondary d-flex align-items-center gap-1" title="@f.FileName (@(f.FileSize / 1024) KB)">
                                                 <TelerikSvgIcon Icon="@icon" />
                                                 <span style="max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@f.FileName</span>
+                                                @if (f.ContentType.StartsWith("image/"))
+                                                {
+                                                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                                                   FillMode="@ThemeConstants.Button.FillMode.Clear"
+                                                                   Icon="@SvgIcon.Pencil" Title="Edit image"
+                                                                   OnClick="@(() => OpenImageEditor(f.FileId, f.FileName))" />
+                                                }
                                             </span>
                                         }
                                     </div>
@@ -225,6 +232,11 @@
     </DialogButtons>
 </TelerikDialog>
 
+@* Image editor — opened when user clicks the pencil icon on an image file *@
+<ImageEditorPlayer @ref="_imageEditor"
+                   UploadFileId="@_editImageFileId"
+                   FileName="@_editImageFileName" />
+
 @code {
     [Parameter] public Guid OrgId  { get; set; }
     [Parameter] public Guid CaseId { get; set; }
@@ -245,6 +257,20 @@
     private CaseTimelineEntryRecord? _pendingDelete;
     private string? _dialogError;
     private EntryFormModel _form = new();
+
+    // Image editor state
+    private ImageEditorPlayer? _imageEditor;
+    private Guid _editImageFileId;
+    private string? _editImageFileName;
+
+    private async Task OpenImageEditor(Guid fileId, string? fileName)
+    {
+        _editImageFileId   = fileId;
+        _editImageFileName = fileName;
+        StateHasChanged();
+        if (_imageEditor is not null)
+            await _imageEditor.OpenAsync();
+    }
 
     private static readonly CaseTimelineEntryType?[] _typeFilters =
         [null, CaseTimelineEntryType.ClientReport, CaseTimelineEntryType.InvestigatorNote,

@@ -1312,4 +1312,18 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     }
     public Task<bool> DeleteMyVideoProjectAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/video-projects/{id}", token);
+
+    // ── Image editor ────────────────────────────────────────────────────────
+    public Task<UploadFileRecord?> SaveImageEditStateAsync(Guid fileId, string? editStateJson, CancellationToken token = default)
+        => _api.PutAsync<object, UploadFileRecord>($"/api/upload-files/{fileId}/edit-state", new { EditStateJson = editStateJson }, token);
+    public Task<UploadFileRecord?> SaveImageAsNewVersionAsync(Guid parentFileId, byte[] imageBytes, string format, CancellationToken token = default)
+    {
+        var mime = format == "jpeg" ? "image/jpeg" : "image/png";
+        var ext  = format == "jpeg" ? ".jpg" : ".png";
+        var content = new ByteArrayContent(imageBytes);
+        content.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(mime);
+        var form = new MultipartFormDataContent();
+        form.Add(content, "file", $"edited{ext}");
+        return _api.PostMultipartAsync<UploadFileRecord>($"/api/upload-files/{parentFileId}/save-as-version", form, token);
+    }
 }
