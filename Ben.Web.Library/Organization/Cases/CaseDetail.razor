@@ -57,6 +57,11 @@
                 <span class="badge fs-6 @CaseList.StatusBadgeClass(_case.Status)">
                     @CaseList.StatusLabel(_case.Status)
                 </span>
+                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                               FillMode="@ThemeConstants.Button.FillMode.Outline"
+                               OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/{CaseId}/audio-mix"))">
+                    🎚 Audio Mixer
+                </TelerikButton>
                 <TelerikButton Icon="@SvgIcon.Pencil" Size="@ThemeConstants.Button.Size.Small"
                                OnClick="OpenEditDialog">Edit Case</TelerikButton>
             </div>

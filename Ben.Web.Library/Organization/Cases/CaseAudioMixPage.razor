@@ -1,0 +1,234 @@
+@page "/organizations/{OrgId:guid}/cases/{CaseId:guid}/audio-mix"
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@implements IAsyncDisposable
+@inject IBenAdminClient AdminClient
+@inject NavigationManager NavManager
+@inject IJSRuntime JS
+
+<PageTitle>Audio Mixer — @(_case?.DisplayLabel ?? "Case")</PageTitle>
+
+@if (!_loaded)
+{
+    <TelerikLoaderContainer Visible="true" Text="Loading mixer…" />
+}
+else if (_case is null)
+{
+    <div class="container py-4">
+        <div class="alert alert-danger">This case doesn't exist, or you don't have access to it.</div>
+    </div>
+}
+else
+{
+    <div class="container-fluid py-3">
+
+        @* ── Header ────────────────────────────────────────────────────────── *@
+        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+            <a href="/organizations/@OrgId/cases/@CaseId" class="text-secondary small">← @_case.DisplayLabel</a>
+            <h4 class="mb-0 ms-2">🎚 Audio Mixer</h4>
+        </div>
+
+        @* ── Transport bar ─────────────────────────────────────────────────── *@
+        <div class="d-flex align-items-center gap-2 mb-3 p-2 rounded border bg-body-secondary">
+            <TelerikButton Size="sm" Enabled="false">▶ Play</TelerikButton>
+            <TelerikButton Size="sm" Enabled="false">⏸ Pause</TelerikButton>
+            <TelerikButton Size="sm" Enabled="false">⏹ Stop</TelerikButton>
+            <span class="small text-secondary ms-auto">Add clips from the case's Files tab to get started.</span>
+            <TelerikButton Size="sm" ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" Enabled="false">
+                Export Mix
+            </TelerikButton>
+        </div>
+
+        <div class="row g-3">
+
+            @* ── Clip picker (audio files from the Files tab) ────────────────── *@
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-header fw-semibold small">Audio Clips</div>
+                    <div class="card-body" style="max-height:520px;overflow-y:auto;">
+                        @if (_audioFiles.Count == 0)
+                        {
+                            <div class="text-secondary small">
+                                No audio files on this case yet. Upload some from the
+                                <a href="/organizations/@OrgId/cases/@CaseId">Files tab</a>.
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var f in _audioFiles)
+                            {
+                                <div class="d-flex align-items-center justify-content-between gap-2 p-2 mb-1 rounded"
+                                     style="background:var(--kendo-color-surface,#f5f5f5);">
+                                    <span class="small text-truncate" title="@f.FileName">@f.FileName</span>
+                                    <TelerikButton Size="sm" FillMode="flat" OnClick="@(() => AddClipToTrack(f))">Add</TelerikButton>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+
+            @* ── Track grid ───────────────────────────────────────────────────── *@
+            <div class="col-md-9">
+                <div class="card">
+                    <div class="card-body" style="overflow-x:auto;">
+
+                        @* Time ruler *@
+                        <div class="d-flex" style="margin-left:180px;min-width:@(TimelineWidthPx)px;">
+                            @for (var s = 0; s <= TimelineSeconds; s += 10)
+                            {
+                                <div class="text-secondary" style="width:@(10 * PxPerSecond)px;font-size:.7rem;flex-shrink:0;">
+                                    @s@("s")
+                                </div>
+                            }
+                        </div>
+
+                        @* Tracks *@
+                        @for (var i = 0; i < TrackCount; i++)
+                        {
+                            var trackIndex = i;
+                            var track = _tracks[trackIndex];
+                            <div class="d-flex align-items-stretch border-top py-2" style="min-width:@(180 + TimelineWidthPx)px;">
+                                <div style="width:180px;flex-shrink:0;" class="d-flex flex-column gap-1 pe-2">
+                                    <strong class="small">Track @(trackIndex + 1)</strong>
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <TelerikCheckBox @bind-Value="track.Mute" TValue="bool" />
+                                        <span class="small text-muted">Mute</span>
+                                        <TelerikCheckBox @bind-Value="track.Solo" TValue="bool" />
+                                        <span class="small text-muted">Solo</span>
+                                    </div>
+                                    <span class="small text-muted">Vol</span>
+                                    <TelerikSlider @bind-Value="track.VolumeDb" Min="-24" Max="6" />
+                                    <span class="small text-muted">Pan</span>
+                                    <TelerikSlider @bind-Value="track.Pan" Min="-1" Max="1" SmallStep="0.1" />
+                                </div>
+                                <div class="flex-grow-1 rounded" style="background:var(--kendo-color-surface,#f5f5f5);min-height:96px;position:relative;min-width:@(TimelineWidthPx)px;">
+                                    @foreach (var clip in track.Clips)
+                                    {
+                                        <div id="@($"clip-{clip.ClipId}")"
+                                             data-clip-id="@clip.ClipId"
+                                             class="rounded px-2 py-1 text-white small text-truncate"
+                                             style="position:absolute;top:8px;left:@(clip.OffsetSeconds * PxPerSecond)px;width:@(DefaultClipSeconds * PxPerSecond)px;height:80px;background:#5b6fd8;cursor:grab;user-select:none;"
+                                             title="@clip.FileName">
+                                            @clip.FileName
+                                            <span class="float-end" style="cursor:pointer;" @onclick="@(() => RemoveClip(track, clip))" @onclick:stopPropagation="true">✕</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId  { get; set; }
+    [Parameter, EditorRequired] public Guid CaseId { get; set; }
+
+    private const int TrackCount = 8;
+    private const int PxPerSecond = 8;
+    private const int TimelineSeconds = 180; // 3-minute default visible window
+    private const int DefaultClipSeconds = 15; // visual placeholder width — real duration isn't probed until export (E4)
+
+    private static int TimelineWidthPx => TimelineSeconds * PxPerSecond;
+
+    private sealed class MixClip
+    {
+        public string ClipId { get; } = Guid.NewGuid().ToString("N");
+        public Guid UploadFileId { get; init; }
+        public string FileName { get; init; } = "";
+        public double OffsetSeconds { get; set; }
+    }
+
+    private sealed class MixTrack
+    {
+        public bool Mute { get; set; }
+        public bool Solo { get; set; }
+        public double VolumeDb { get; set; }
+        public double Pan { get; set; }
+        public List<MixClip> Clips { get; } = [];
+    }
+
+    private CaseRecord? _case;
+    private List<CaseFileRecord> _audioFiles = [];
+    private readonly List<MixTrack> _tracks = [];
+    private bool _loaded;
+
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<CaseAudioMixPage>? _dotNetRef;
+
+    protected override void OnInitialized()
+    {
+        for (var i = 0; i < TrackCount; i++) _tracks.Add(new MixTrack());
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Web.Library/Organization/Cases/CaseAudioMixPage.razor.js");
+            _dotNetRef = DotNetObjectReference.Create(this);
+
+            try { _case = await AdminClient.GetOrgCaseAsync(OrgId, CaseId); }
+            catch { _case = null; }
+
+            if (_case is not null)
+            {
+                try
+                {
+                    var files = await AdminClient.GetCaseFilesAsync(OrgId, CaseId);
+                    _audioFiles = files.Where(f => f.ContentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)).ToList();
+                }
+                catch { /* non-critical — picker just shows empty */ }
+            }
+
+            _loaded = true;
+            StateHasChanged();
+            return;
+        }
+
+        if (_module is null) return;
+
+        foreach (var clip in _tracks.SelectMany(t => t.Clips))
+        {
+            await _module.InvokeVoidAsync("makeDraggable", $"clip-{clip.ClipId}", PxPerSecond, _dotNetRef);
+        }
+    }
+
+    private void AddClipToTrack(CaseFileRecord file)
+    {
+        var track = _tracks.FirstOrDefault(t => t.Clips.Count == 0) ?? _tracks[0];
+        track.Clips.Add(new MixClip
+        {
+            UploadFileId = file.UploadFileId,
+            FileName = file.FileName,
+            OffsetSeconds = 0,
+        });
+    }
+
+    private void RemoveClip(MixTrack track, MixClip clip) => track.Clips.Remove(clip);
+
+    [JSInvokable]
+    public void OnClipMoved(string clipId, double offsetSeconds)
+    {
+        var clip = _tracks.SelectMany(t => t.Clips).FirstOrDefault(c => c.ClipId == clipId);
+        if (clip is null) return;
+
+        clip.OffsetSeconds = Math.Max(0, offsetSeconds);
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _dotNetRef?.Dispose();
+        if (_module is not null)
+        {
+            try { await _module.DisposeAsync(); }
+            catch (JSDisconnectedException) { /* circuit already gone */ }
+        }
+    }
+}
