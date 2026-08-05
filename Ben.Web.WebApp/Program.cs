@@ -44,7 +44,7 @@ builder.Services.AddBenVideoEditor(options =>
     options.ErrorLog        = true;
     options.RippleEdit      = true;
     options.MediaLibraryBaseUrl = builder.Configuration["WebApi:BaseUrl"];
-    options.DocumentPostUrl = $"{builder.Configuration["WebApi:BaseUrl"]}/api/cases";
+    options.DocumentPostUrl = $"{builder.Configuration["WebApi:BaseUrl"]}/api/video-projects";
 });
 // Override the default HttpMediaLibraryProvider with one that injects the bearer token.
 builder.Services.AddScoped<Ben.Video.Editor.Services.IMediaLibraryProvider, BenMediaLibraryProvider>();

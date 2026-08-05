@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 using System.Security.Claims;
+using System.Text.Json;
 using Xunit;
 
 namespace Ben.Web.Tests.Controllers;
@@ -62,6 +63,9 @@ public class VideoProjectControllerTests
         return ctrl;
     }
 
+    private static JsonElement Json(object payload)
+        => JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(payload));
+
     private static async Task<(IDbContextFactory<BenDataContext> factory, Guid orgId, Guid caseId, Guid userId)>
         SeedAsync()
     {
@@ -71,7 +75,6 @@ public class VideoProjectControllerTests
         var caseId  = Guid.NewGuid();
 
         await using var db = factory.CreateDbContext();
-
         db.Organizations.Add(new Organization
         {
             Id = orgId, Name = "Test Org", UrlName = "test-org",
@@ -97,7 +100,7 @@ public class VideoProjectControllerTests
     // ── GetAll ────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetAll_Member_ReturnsProjects()
+    public async Task GetAll_ReturnsOwnProjects()
     {
         var (factory, _, caseId, userId) = await SeedAsync();
         await using (var db = factory.CreateDbContext())
@@ -105,8 +108,44 @@ public class VideoProjectControllerTests
             db.VideoProjects.Add(new VideoProject
             {
                 Id = Guid.NewGuid(), CaseId = caseId, Name = "Edit 1",
-                ProjectJson = "{}", DateCreated = DateTime.UtcNow,
-                CreatedByAppUserId = userId
+                ProjectJson = "{}", DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId
+            });
+            db.VideoProjects.Add(new VideoProject
+            {
+                Id = Guid.NewGuid(), Name = "Personal Edit",
+                ProjectJson = "{}", DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId
+            });
+            // Different user — should NOT be returned
+            db.VideoProjects.Add(new VideoProject
+            {
+                Id = Guid.NewGuid(), Name = "Other",
+                ProjectJson = "{}", DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid()
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = Build(factory, userId);
+        var result = await ctrl.GetAll(null, CancellationToken.None);
+        var ok     = Assert.IsType<OkObjectResult>(result.Result);
+        var items  = Assert.IsAssignableFrom<IEnumerable<VideoProjectRecord>>(ok.Value);
+        Assert.Equal(2, items.Count());
+    }
+
+    [Fact]
+    public async Task GetAll_FilterByCaseId_ReturnsCaseScopedOwnProjects()
+    {
+        var (factory, _, caseId, userId) = await SeedAsync();
+        await using (var db = factory.CreateDbContext())
+        {
+            db.VideoProjects.Add(new VideoProject
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, Name = "Case Edit",
+                ProjectJson = "{}", DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId
+            });
+            db.VideoProjects.Add(new VideoProject
+            {
+                Id = Guid.NewGuid(), Name = "Personal Edit",
+                ProjectJson = "{}", DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId
             });
             await db.SaveChangesAsync();
         }
@@ -116,40 +155,13 @@ public class VideoProjectControllerTests
         var ok     = Assert.IsType<OkObjectResult>(result.Result);
         var items  = Assert.IsAssignableFrom<IEnumerable<VideoProjectRecord>>(ok.Value);
         Assert.Single(items);
-    }
-
-    [Fact]
-    public async Task GetAll_NonMember_ReturnsForbid()
-    {
-        var (factory, _, caseId, _) = await SeedAsync();
-        var stranger = Guid.NewGuid();
-        var ctrl     = Build(factory, stranger);
-        var result   = await ctrl.GetAll(caseId, CancellationToken.None);
-        Assert.IsType<ForbidResult>(result.Result);
-    }
-
-    [Fact]
-    public async Task GetAll_SuperAdmin_ReturnsProjects()
-    {
-        var (factory, _, caseId, userId) = await SeedAsync();
-        var ctrl   = Build(factory, Guid.NewGuid(), isSuperAdmin: true);
-        var result = await ctrl.GetAll(caseId, CancellationToken.None);
-        Assert.IsType<OkObjectResult>(result.Result);
-    }
-
-    [Fact]
-    public async Task GetAll_UnknownCase_ReturnsForbid()
-    {
-        var (factory, _, _, userId) = await SeedAsync();
-        var ctrl   = Build(factory, userId);
-        var result = await ctrl.GetAll(Guid.NewGuid(), CancellationToken.None);
-        Assert.IsType<ForbidResult>(result.Result);
+        Assert.Equal("Case Edit", items.First().Name);
     }
 
     // ── GetById ───────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetById_Member_ReturnsProject()
+    public async Task GetById_Owner_ReturnsProject()
     {
         var (factory, _, caseId, userId) = await SeedAsync();
         var projectId = Guid.NewGuid();
@@ -158,22 +170,20 @@ public class VideoProjectControllerTests
             db.VideoProjects.Add(new VideoProject
             {
                 Id = projectId, CaseId = caseId, Name = "My Edit",
-                ProjectJson = "{\"clips\":[]}", DateCreated = DateTime.UtcNow,
-                CreatedByAppUserId = userId
+                ProjectJson = "{\"clips\":[]}", DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId
             });
             await db.SaveChangesAsync();
         }
 
         var ctrl   = Build(factory, userId);
-        var result = await ctrl.GetById(caseId, projectId, CancellationToken.None);
+        var result = await ctrl.GetById(projectId, CancellationToken.None);
         var ok     = Assert.IsType<OkObjectResult>(result.Result);
         var record = Assert.IsType<VideoProjectRecord>(ok.Value);
         Assert.Equal(projectId, record.Id);
-        Assert.Equal("My Edit", record.Name);
     }
 
     [Fact]
-    public async Task GetById_WrongCase_ReturnsNotFound()
+    public async Task GetById_OtherUser_ReturnsNotFound()
     {
         var (factory, _, caseId, userId) = await SeedAsync();
         var projectId = Guid.NewGuid();
@@ -182,56 +192,69 @@ public class VideoProjectControllerTests
             db.VideoProjects.Add(new VideoProject
             {
                 Id = projectId, CaseId = caseId, Name = "Edit",
-                ProjectJson = "{}", DateCreated = DateTime.UtcNow,
-                CreatedByAppUserId = userId
+                ProjectJson = "{}", DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId
             });
             await db.SaveChangesAsync();
         }
 
-        var ctrl   = Build(factory, userId);
-        var result = await ctrl.GetById(caseId, Guid.NewGuid(), CancellationToken.None);
+        var ctrl   = Build(factory, Guid.NewGuid());
+        var result = await ctrl.GetById(projectId, CancellationToken.None);
         Assert.IsType<NotFoundResult>(result.Result);
     }
 
     // ── Create ────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Create_Member_ReturnsCreatedAndPersists()
+    public async Task Create_Personal_ExtractsNameAndPersists()
     {
-        var (factory, _, caseId, userId) = await SeedAsync();
-        var ctrl    = Build(factory, userId);
-        var request = new VideoProjectRequest { Name = "Investigation #1", ProjectJson = "{\"clips\":[]}" };
+        var (factory, _, _, userId) = await SeedAsync();
+        var ctrl = Build(factory, userId);
+        var body = Json(new { projectName = "My Clip Reel", tracks = new[] { new { } } });
 
-        var result  = await ctrl.Create(caseId, request, CancellationToken.None);
+        var result  = await ctrl.Create(null, body, CancellationToken.None);
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         var record  = Assert.IsType<VideoProjectRecord>(created.Value);
-        Assert.Equal("Investigation #1", record.Name);
+        Assert.Equal("My Clip Reel", record.Name);
+        Assert.Null(record.CaseId);
 
         await using var db = factory.CreateDbContext();
         Assert.Equal(1, await db.VideoProjects.CountAsync());
     }
 
     [Fact]
-    public async Task Create_NonMember_ReturnsForbid()
+    public async Task Create_WithCaseId_Member_LinksCaseAndPersists()
+    {
+        var (factory, _, caseId, userId) = await SeedAsync();
+        var ctrl = Build(factory, userId);
+        var body = Json(new { projectName = "Investigation Edit" });
+
+        var result  = await ctrl.Create(caseId, body, CancellationToken.None);
+        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+        var record  = Assert.IsType<VideoProjectRecord>(created.Value);
+        Assert.Equal(caseId, record.CaseId);
+    }
+
+    [Fact]
+    public async Task Create_WithCaseId_NonMember_ReturnsForbid()
     {
         var (factory, _, caseId, _) = await SeedAsync();
-        var ctrl   = Build(factory, Guid.NewGuid());
-        var result = await ctrl.Create(caseId,
-            new VideoProjectRequest { Name = "x", ProjectJson = "{}" },
-            CancellationToken.None);
+        var ctrl = Build(factory, Guid.NewGuid());
+        var body = Json(new { projectName = "Edit" });
+        var result = await ctrl.Create(caseId, body, CancellationToken.None);
         Assert.IsType<ForbidResult>(result.Result);
     }
 
     [Fact]
-    public async Task Create_SetsCreatedByAppUserId()
+    public async Task Create_MissingProjectName_UsesDefault()
     {
-        var (factory, _, caseId, userId) = await SeedAsync();
-        var ctrl   = Build(factory, userId);
-        await ctrl.Create(caseId, new VideoProjectRequest { Name = "p", ProjectJson = "{}" }, CancellationToken.None);
+        var (factory, _, _, userId) = await SeedAsync();
+        var ctrl = Build(factory, userId);
+        var body = Json(new { tracks = new object[] { } });
 
-        await using var db = factory.CreateDbContext();
-        var entity = await db.VideoProjects.SingleAsync();
-        Assert.Equal(userId, entity.CreatedByAppUserId);
+        var result  = await ctrl.Create(null, body, CancellationToken.None);
+        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+        var record  = Assert.IsType<VideoProjectRecord>(created.Value);
+        Assert.Equal("Untitled Project", record.Name);
     }
 
     // ── Update ────────────────────────────────────────────────────────────────
@@ -239,25 +262,22 @@ public class VideoProjectControllerTests
     [Fact]
     public async Task Update_Owner_PersistsChanges()
     {
-        var (factory, _, caseId, userId) = await SeedAsync();
+        var (factory, _, _, userId) = await SeedAsync();
         var projectId = Guid.NewGuid();
         await using (var db = factory.CreateDbContext())
         {
             db.VideoProjects.Add(new VideoProject
             {
-                Id = projectId, CaseId = caseId, Name = "Old",
-                ProjectJson = "{}", DateCreated = DateTime.UtcNow,
-                CreatedByAppUserId = userId
+                Id = projectId, Name = "Old",
+                ProjectJson = "{}", DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId
             });
             await db.SaveChangesAsync();
         }
 
         var ctrl   = Build(factory, userId);
-        var result = await ctrl.Update(caseId, projectId,
-            new VideoProjectRequest { Name = "New", ProjectJson = "{\"v\":1}" },
-            CancellationToken.None);
-
+        var result = await ctrl.Update(projectId, Json(new { projectName = "New", v = 1 }), CancellationToken.None);
         Assert.IsType<OkObjectResult>(result.Result);
+
         await using var db2 = factory.CreateDbContext();
         var entity = await db2.VideoProjects.SingleAsync();
         Assert.Equal("New", entity.Name);
@@ -265,13 +285,22 @@ public class VideoProjectControllerTests
     }
 
     [Fact]
-    public async Task Update_NotFound_ReturnsNotFound()
+    public async Task Update_OtherUser_ReturnsNotFound()
     {
-        var (factory, _, caseId, userId) = await SeedAsync();
-        var ctrl   = Build(factory, userId);
-        var result = await ctrl.Update(caseId, Guid.NewGuid(),
-            new VideoProjectRequest { Name = "x", ProjectJson = "{}" },
-            CancellationToken.None);
+        var (factory, _, _, userId) = await SeedAsync();
+        var projectId = Guid.NewGuid();
+        await using (var db = factory.CreateDbContext())
+        {
+            db.VideoProjects.Add(new VideoProject
+            {
+                Id = projectId, Name = "Edit",
+                ProjectJson = "{}", DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = Build(factory, Guid.NewGuid());
+        var result = await ctrl.Update(projectId, Json(new { projectName = "x" }), CancellationToken.None);
         Assert.IsType<NotFoundResult>(result.Result);
     }
 
@@ -280,21 +309,20 @@ public class VideoProjectControllerTests
     [Fact]
     public async Task Delete_Creator_RemovesProject()
     {
-        var (factory, _, caseId, userId) = await SeedAsync();
+        var (factory, _, _, userId) = await SeedAsync();
         var projectId = Guid.NewGuid();
         await using (var db = factory.CreateDbContext())
         {
             db.VideoProjects.Add(new VideoProject
             {
-                Id = projectId, CaseId = caseId, Name = "Draft",
-                ProjectJson = "{}", DateCreated = DateTime.UtcNow,
-                CreatedByAppUserId = userId
+                Id = projectId, Name = "Draft",
+                ProjectJson = "{}", DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId
             });
             await db.SaveChangesAsync();
         }
 
         var ctrl   = Build(factory, userId);
-        var result = await ctrl.Delete(caseId, projectId, CancellationToken.None);
+        var result = await ctrl.Delete(projectId, CancellationToken.None);
         Assert.IsType<NoContentResult>(result);
 
         await using var db2 = factory.CreateDbContext();
@@ -302,63 +330,52 @@ public class VideoProjectControllerTests
     }
 
     [Fact]
-    public async Task Delete_NonCreator_NonSuperAdmin_ReturnsForbid()
+    public async Task Delete_NonCreator_ReturnsForbid()
     {
-        var (factory, orgId, caseId, ownerId) = await SeedAsync();
-        var otherId = Guid.NewGuid();
-
-        // Add other user as org member too
+        var (factory, _, _, userId) = await SeedAsync();
+        var projectId = Guid.NewGuid();
         await using (var db = factory.CreateDbContext())
         {
-            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
-            {
-                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = otherId,
-                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId
-            });
-            var projectId = Guid.NewGuid();
             db.VideoProjects.Add(new VideoProject
             {
-                Id = projectId, CaseId = caseId, Name = "Draft",
-                ProjectJson = "{}", DateCreated = DateTime.UtcNow,
-                CreatedByAppUserId = ownerId
+                Id = projectId, Name = "Draft",
+                ProjectJson = "{}", DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId
             });
             await db.SaveChangesAsync();
         }
 
-        await using var dbCheck = factory.CreateDbContext();
-        var pid    = (await dbCheck.VideoProjects.SingleAsync()).Id;
-        var ctrl   = Build(factory, otherId);
-        var result = await ctrl.Delete(caseId, pid, CancellationToken.None);
+        var ctrl   = Build(factory, Guid.NewGuid());
+        var result = await ctrl.Delete(projectId, CancellationToken.None);
         Assert.IsType<ForbidResult>(result);
     }
 
     [Fact]
     public async Task Delete_SuperAdmin_CanDeleteAnyProject()
     {
-        var (factory, _, caseId, userId) = await SeedAsync();
+        var (factory, _, _, userId) = await SeedAsync();
         var projectId = Guid.NewGuid();
         await using (var db = factory.CreateDbContext())
         {
             db.VideoProjects.Add(new VideoProject
             {
-                Id = projectId, CaseId = caseId, Name = "Draft",
-                ProjectJson = "{}", DateCreated = DateTime.UtcNow,
-                CreatedByAppUserId = userId
+                Id = projectId, Name = "Draft",
+                ProjectJson = "{}", DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId
             });
             await db.SaveChangesAsync();
         }
 
         var ctrl   = Build(factory, Guid.NewGuid(), isSuperAdmin: true);
-        var result = await ctrl.Delete(caseId, projectId, CancellationToken.None);
+        var result = await ctrl.Delete(projectId, CancellationToken.None);
         Assert.IsType<NoContentResult>(result);
     }
 
     [Fact]
     public async Task Delete_NotFound_ReturnsNotFound()
     {
-        var (factory, _, caseId, userId) = await SeedAsync();
+        var (factory, _, _, userId) = await SeedAsync();
         var ctrl   = Build(factory, userId);
-        var result = await ctrl.Delete(caseId, Guid.NewGuid(), CancellationToken.None);
+        var result = await ctrl.Delete(Guid.NewGuid(), CancellationToken.None);
         Assert.IsType<NotFoundResult>(result);
     }
 }
+

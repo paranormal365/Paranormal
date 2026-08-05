@@ -646,7 +646,10 @@ namespace Ben.Data.Source.Context
             // ── VideoProject ──────────────────────────────────────────────────
             modelBuilder.Entity<VideoProject>()
                 .HasOne(e => e.Case).WithMany()
-                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.Cascade);
+                .HasForeignKey(e => e.CaseId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<VideoProject>()
+                .HasOne(e => e.PublishedUploadFile).WithMany()
+                .HasForeignKey(e => e.PublishedUploadFileId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
             modelBuilder.Entity<VideoProject>()
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
@@ -657,6 +660,8 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.ProjectJson).HasColumnType("nvarchar(max)");
             modelBuilder.Entity<VideoProject>()
                 .HasIndex(e => e.CaseId);
+            modelBuilder.Entity<VideoProject>()
+                .HasIndex(e => e.CreatedByAppUserId);
 
             // ── UploadFile self-reference (clip parent/child) ─────────────────
             modelBuilder.Entity<UploadFile>()

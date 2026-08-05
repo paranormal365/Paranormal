@@ -1285,4 +1285,23 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         => _api.GetAsync<OrgSettingsResponse>($"/api/organizations/{orgId}/settings", token);
     public Task<OrgSettingsResponse?> UpdateOrgSettingsAsync(Guid orgId, OrgSettingsRequest request, CancellationToken token = default)
         => _api.PutAsync<OrgSettingsRequest, OrgSettingsResponse>($"/api/organizations/{orgId}/settings", request, token);
+
+    // ── Video projects ────────────────────────────────────────────────────────
+    public async Task<IReadOnlyList<VideoProjectRecord>> GetMyVideoProjectsAsync(Guid? caseId = null, CancellationToken token = default)
+    {
+        var url = caseId.HasValue ? $"/api/video-projects?caseId={caseId}" : "/api/video-projects";
+        var result = await _api.GetAsync<IReadOnlyList<VideoProjectRecord>>(url, token);
+        return result ?? [];
+    }
+    public Task<VideoProjectRecord?> GetMyVideoProjectAsync(Guid id, CancellationToken token = default)
+        => _api.GetAsync<VideoProjectRecord>($"/api/video-projects/{id}", token);
+    public Task<VideoProjectRecord?> SaveMyVideoProjectAsync(Ben.Video.Editor.Models.ProjectFile file, Guid? caseId = null, CancellationToken token = default)
+    {
+        var url = caseId.HasValue ? $"/api/video-projects?caseId={caseId}" : "/api/video-projects";
+        return _api.PostAsync<Ben.Video.Editor.Models.ProjectFile, VideoProjectRecord>(url, file, token);
+    }
+    public Task<VideoProjectRecord?> UpdateMyVideoProjectAsync(Guid id, Ben.Video.Editor.Models.ProjectFile file, CancellationToken token = default)
+        => _api.PutAsync<Ben.Video.Editor.Models.ProjectFile, VideoProjectRecord>($"/api/video-projects/{id}", file, token);
+    public Task<bool> DeleteMyVideoProjectAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/video-projects/{id}", token);
 }

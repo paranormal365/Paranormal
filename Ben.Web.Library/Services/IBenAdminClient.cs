@@ -690,6 +690,13 @@ public interface IBenAdminClient
     // ── Org settings ──────────────────────────────────────────────────────────
     Task<OrgSettingsResponse?> GetOrgSettingsAsync(Guid orgId, CancellationToken token = default);
     Task<OrgSettingsResponse?> UpdateOrgSettingsAsync(Guid orgId, OrgSettingsRequest request, CancellationToken token = default);
+
+    // ── Video projects ────────────────────────────────────────────────────────
+    Task<IReadOnlyList<VideoProjectRecord>> GetMyVideoProjectsAsync(Guid? caseId = null, CancellationToken token = default);
+    Task<VideoProjectRecord?> GetMyVideoProjectAsync(Guid id, CancellationToken token = default);
+    Task<VideoProjectRecord?> SaveMyVideoProjectAsync(Ben.Video.Editor.Models.ProjectFile file, Guid? caseId = null, CancellationToken token = default);
+    Task<VideoProjectRecord?> UpdateMyVideoProjectAsync(Guid id, Ben.Video.Editor.Models.ProjectFile file, CancellationToken token = default);
+    Task<bool> DeleteMyVideoProjectAsync(Guid id, CancellationToken token = default);
 }
 
 /// <summary>
