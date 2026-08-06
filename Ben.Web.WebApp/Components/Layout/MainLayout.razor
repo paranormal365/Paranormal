@@ -142,15 +142,24 @@
     {
         if (firstRender)
         {
-            await RestoreAuthStateAsync(); // restore from ProtectedLocalStorage
-
-            // If still not authenticated, check for an active Entra/OIDC session
-            if (!TokenStore.IsAuthenticated)
-                await TryBridgeEntraAuthAsync();
-
-            if (TokenStore.IsAuthenticated)
+            try
             {
-                await RefreshPendingRequestCountAsync();
+                await RestoreAuthStateAsync(); // restore from ProtectedLocalStorage
+
+                // If still not authenticated, check for an active Entra/OIDC session
+                if (!TokenStore.IsAuthenticated)
+                    await TryBridgeEntraAuthAsync();
+
+                if (TokenStore.IsAuthenticated)
+                {
+                    await RefreshPendingRequestCountAsync();
+                }
+            }
+            finally
+            {
+                // Unblock any page-load guard awaiting TokenStore.AuthReady, whether or not
+                // restore succeeded — a guard that never gets signalled would hang forever.
+                TokenStore.SignalAuthReady();
             }
 
             await InvokeAsync(StateHasChanged);

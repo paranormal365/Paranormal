@@ -299,6 +299,8 @@
 @code {
     [Parameter] public Guid? Id { get; set; }
 
+    protected override async Task OnInitializedAsync() => await UserState.AuthReady;
+
     // ── State ─────────────────────────────────────────────────────────────────
     private int _step = 1;
     private bool _isBusy;
