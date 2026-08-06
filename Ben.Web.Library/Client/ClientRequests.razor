@@ -57,13 +57,13 @@
                                         @r.OrgCount org@(r.OrgCount == 1 ? "" : "s")
                                     </span>
                                 }
-                                @if (r.Status == ClientRequestStatus.Declined)
+                                @if (r.Status is ClientRequestStatus.Declined or ClientRequestStatus.Withdrawn)
                                 {
                                     <span @onclick="@(() => { })" @onclick:stopPropagation="true">
                                         <TelerikButton Size="@ThemeConstants.Button.Size.Small"
                                                        ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                                                        OnClick="@(() => OpenPickerAsync(r))">
-                                            Choose Another Organization
+                                            @(r.Status == ClientRequestStatus.Withdrawn ? "Resubmit to an Organization" : "Choose Another Organization")
                                         </TelerikButton>
                                     </span>
                                 }
@@ -90,7 +90,7 @@
                    VisibleChanged="@((bool v) => { if (!v) _pickerTarget = null; })"
                    Width="500px"
                    Modal="true">
-        <WindowTitle>Choose Another Organization</WindowTitle>
+        <WindowTitle>@(_pickerTarget?.Status == ClientRequestStatus.Withdrawn ? "Resubmit to an Organization" : "Choose Another Organization")</WindowTitle>
         <WindowActions>
             <WindowAction Name="Close" OnClick="@(() => _pickerTarget = null)" />
         </WindowActions>

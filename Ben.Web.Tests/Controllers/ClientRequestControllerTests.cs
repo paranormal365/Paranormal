@@ -221,6 +221,35 @@ public class ClientRequestControllerTests
         Assert.IsType<ForbidResult>((await other.Withdraw(reqId, default)).Result);
     }
 
+    [Fact]
+    public async Task Withdraw_CancelsStillOpenOrgApplications()
+    {
+        var (factory, userId, orgId) = await SeedAsync();
+        var ctrl  = Build(factory, userId);
+        var reqId = ((ClientRequestRecord)((CreatedAtActionResult)(await ctrl.Create(MakeRequest(36.17m, -86.78m, "Haunting"), default)).Result!).Value!).Id;
+        await ctrl.Submit(reqId, new SubmitClientRequestRequest([orgId]), default);
+
+        await ctrl.Withdraw(reqId, default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var app = await db.ClientRequestOrganizations.FirstAsync(a => a.ClientRequestId == reqId && a.OrganizationId == orgId);
+        Assert.Equal(ClientOrgRequestStatus.Cancelled, app.Status);
+    }
+
+    [Fact]
+    public async Task Withdraw_DoesNotChangeAlreadyRejectedApplications()
+    {
+        // A Declined request's application is already Rejected — withdrawing it shouldn't touch that row.
+        var (factory, userId, rejectedOrgId, _, reqId) = await SeedDeclinedAsync();
+        var ctrl = Build(factory, userId);
+
+        await ctrl.Withdraw(reqId, default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var app = await db.ClientRequestOrganizations.FirstAsync(a => a.ClientRequestId == reqId && a.OrganizationId == rejectedOrgId);
+        Assert.Equal(ClientOrgRequestStatus.Rejected, app.Status);
+    }
+
     // ── AddOrganization ──────────────────────────────────────────────────────
 
     /// <summary>Seeds a request Declined after one rejected org application, plus a second accepting org to resubmit to.</summary>
@@ -308,6 +337,30 @@ public class ClientRequestControllerTests
 
         var result = await ctrl.AddOrganization(reqId, new AddOrganizationRequest(rejectedOrgId), default);
         Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task AddOrganization_Withdrawn_Succeeds_AndReopensAsSubmitted()
+    {
+        var (factory, userId, orgId) = await SeedAsync();
+        var newOrgId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization { Id = newOrgId, Name = "New Org", UrlName = "new", DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId, IsAcceptingClients = true });
+            await db.SaveChangesAsync();
+        }
+        var ctrl  = Build(factory, userId);
+        var reqId = ((ClientRequestRecord)((CreatedAtActionResult)(await ctrl.Create(MakeRequest(36.17m, -86.78m, "Haunting"), default)).Result!).Value!).Id;
+        await ctrl.Submit(reqId, new SubmitClientRequestRequest([orgId]), default);
+        await ctrl.Withdraw(reqId, default);
+
+        var result = await ctrl.AddOrganization(reqId, new AddOrganizationRequest(newOrgId), default);
+        var ok  = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<ClientRequestRecord>(ok.Value);
+        Assert.Equal(ClientRequestStatus.Submitted, dto.Status);
+
+        await using var db2 = await factory.CreateDbContextAsync();
+        Assert.True(await db2.ClientRequestOrganizations.AnyAsync(a => a.ClientRequestId == reqId && a.OrganizationId == newOrgId));
     }
 
     [Fact]
