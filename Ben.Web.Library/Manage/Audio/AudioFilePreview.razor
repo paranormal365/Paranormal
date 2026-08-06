@@ -442,6 +442,18 @@ else
                     OnClick="@(async (RegionContextMenuItem item) => await OnRegionMenuClickAsync(item))">
 </TelerikContextMenu>
 
+@* ── Region Explorer — playback + save-as-clip + notes for a drawn region ── *@
+@if (_explorerRegion is not null)
+{
+    <WsRegionExplorer FileId="@FileId"
+                      FileName="@FileName"
+                      ContentType="@ContentType"
+                      FileSize="@FileSize"
+                      Region="@_explorerRegion"
+                      @bind-Visible="@_showRegionExplorer"
+                      OnClipSaved="@(async _ => await OverlayChildClipRegionsAsync())" />
+}
+
 @* ── Region label edit dialog ────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showEditLabelDialog" Title="Edit Region Label" Width="360px">
     <DialogContent>
@@ -623,10 +635,16 @@ else
     private static readonly List<RegionContextMenuItem> _regionMenuItems =
     [
         new("play",    "▶  Play Region"),
+        new("explore", "⤢  Explore Region (clip or add a note)"),
         new("save",    "🎵  Create Audio File from Region"),
         new("label",   "✏  Edit Label"),
         new("delete",  "🗑  Delete Region"),
     ];
+
+    // ── Region Explorer (clip + notes) ──────────────────────────────────────────
+
+    private bool         _showRegionExplorer;
+    private WsRegionData? _explorerRegion;
 
     private readonly string _wrapperId = $"afp-{Guid.NewGuid():N}";
 
@@ -1051,6 +1069,17 @@ else
         {
             case "play":
                 if (_modalPlayer is not null) await _modalPlayer.PlayRegionAsync(_pendingRegion.RegionId);
+                break;
+            case "explore":
+                _explorerRegion = new WsRegionData
+                {
+                    Id    = _pendingRegion.RegionId,
+                    Start = _pendingRegion.Start,
+                    End   = _pendingRegion.End,
+                    Label = _pendingRegion.Label,
+                };
+                _showRegionExplorer = true;
+                StateHasChanged();
                 break;
             case "label":
                 _editLabelText       = _pendingRegion.Label ?? string.Empty;
