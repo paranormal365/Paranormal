@@ -303,6 +303,48 @@
         </div>
     }
 
+    @* ── People at the property (basic info, no account) ─────────────────────── *@
+    <div class="card mt-4">
+        <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+            <span><TelerikSvgIcon Icon="@SvgIcon.Group" /> People at the Property</span>
+            @if (_isPrimaryClient)
+            {
+                <TelerikButton Size="sm" Icon="@SvgIcon.Plus" OnClick="@(() => _showAddRelatedPerson = true)">Add Person</TelerikButton>
+            }
+        </div>
+        <div class="card-body">
+            <div class="text-secondary small mb-2">
+                People you mention who don't have accounts on this site — for reference in your notes and timeline. This information is never made public.
+            </div>
+            @if (_relatedPeople.Count == 0)
+            {
+                <div class="text-secondary small">No one added yet.</div>
+            }
+            <div class="d-flex flex-column gap-2">
+                @foreach (var p in _relatedPeople)
+                {
+                    <div class="d-flex align-items-start justify-content-between">
+                        <div>
+                            <span class="small fw-semibold">@p.Name</span>
+                            @if (p.Age.HasValue) { <span class="small text-secondary"> · Age @p.Age</span> }
+                            @if (!string.IsNullOrWhiteSpace(p.Relationship)) { <span class="small text-secondary"> · @p.Relationship</span> }
+                            @if (p.LivesAtProperty) { <span class="badge bg-info text-dark ms-1" style="font-size:.65rem;">Lives here</span> }
+                            @if (!string.IsNullOrWhiteSpace(p.Notes))
+                            {
+                                <div class="text-secondary small">@p.Notes</div>
+                            }
+                        </div>
+                        @if (_isPrimaryClient)
+                        {
+                            <TelerikButton Size="sm" FillMode="flat" ThemeColor="error" Icon="@SvgIcon.X"
+                                           OnClick="@(async () => await RemoveRelatedPerson(p.Id))" />
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
     @* ── Message thread ──────────────────────────────────────────────────────── *@
     <div class="card mt-4">
         <div class="card-header fw-semibold d-flex align-items-center gap-2">
@@ -440,6 +482,48 @@
     </WindowFooter>
 </TelerikWindow>
 
+@* ── Add related person dialog ────────────────────────────────────────────────── *@
+<TelerikWindow @bind-Visible="@_showAddRelatedPerson" Width="420px" Modal="true">
+    <WindowTitle>Add a Person</WindowTitle>
+    <WindowContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Name</label>
+                <TelerikTextBox @bind-Value="@_newPersonName" Width="100%" Placeholder="Full name" />
+            </div>
+            <div class="col-6">
+                <label class="form-label fw-semibold">Age (optional)</label>
+                <TelerikNumericTextBox @bind-Value="@_newPersonAge" Width="100%" Min="0" Max="120" />
+            </div>
+            <div class="col-6 d-flex align-items-end">
+                <div class="form-check">
+                    <TelerikCheckBox @bind-Value="@_newPersonLivesAtProperty" Id="livesHere" />
+                    <label class="form-check-label ms-1" for="livesHere">Lives at the property</label>
+                </div>
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Relationship (optional)</label>
+                <TelerikTextBox @bind-Value="@_newPersonRelationship" Width="100%" Placeholder="e.g. spouse, neighbor, tenant" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Notes (optional)</label>
+                <TelerikTextArea @bind-Value="@_newPersonNotes" Rows="2" Width="100%" />
+            </div>
+            <div class="col-12">
+                <div class="text-secondary small">This information is never made public, even if the case is.</div>
+            </div>
+        </div>
+    </WindowContent>
+    <WindowActions><WindowAction Name="Close" OnClick="@(() => _showAddRelatedPerson = false)" /></WindowActions>
+    <WindowFooter>
+        <div class="d-flex gap-2 justify-content-end w-100">
+            <TelerikButton OnClick="@(() => _showAddRelatedPerson = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="primary" OnClick="AddRelatedPerson"
+                           Enabled="@(!string.IsNullOrWhiteSpace(_newPersonName))">Add</TelerikButton>
+        </div>
+    </WindowFooter>
+</TelerikWindow>
+
 @* ── Counter-proposal dialog ──────────────────────────────────────────────────── *@
 <TelerikWindow @bind-Visible="@_showCounterDialog" Width="440px" Modal="true">
     <WindowTitle>Suggest a Different Date</WindowTitle>
@@ -490,6 +574,13 @@
     private bool _cancelling;
     private bool _showAddCoClient;
     private string _addCoClientEmail = "";
+    private List<CaseRelatedPersonRecord> _relatedPeople = [];
+    private bool _showAddRelatedPerson;
+    private string _newPersonName = "";
+    private int? _newPersonAge;
+    private string _newPersonRelationship = "";
+    private bool _newPersonLivesAtProperty;
+    private string _newPersonNotes = "";
     private bool _showCounterDialog;
     private Guid _counterProposalId;
     private DateTime? _counterDateTime;
@@ -528,6 +619,9 @@
             StateHasChanged();
         }
         catch { _isPrimaryClient = false; }
+
+        try { _relatedPeople = (await AdminClient.GetRelatedPeopleAsync(CaseId)).ToList(); StateHasChanged(); }
+        catch { /* silent */ }
     }
 
     private List<ClientCaseOccurrence> OccurrencesForDate(DateTime date) =>
@@ -648,6 +742,32 @@
         if (string.IsNullOrWhiteSpace(_addCoClientEmail)) return;
         var result = await AdminClient.AddCoClientAsync(CaseId, _addCoClientEmail.Trim());
         if (result is not null) { _coClients.Add(result); _showAddCoClient = false; _addCoClientEmail = ""; }
+        StateHasChanged();
+    }
+
+    private async Task RemoveRelatedPerson(Guid personId)
+    {
+        await AdminClient.RemoveRelatedPersonAsync(CaseId, personId);
+        _relatedPeople.RemoveAll(p => p.Id == personId);
+        StateHasChanged();
+    }
+
+    private async Task AddRelatedPerson()
+    {
+        if (string.IsNullOrWhiteSpace(_newPersonName)) return;
+        var request = new AddRelatedPersonRequest(
+            _newPersonName.Trim(), _newPersonAge,
+            string.IsNullOrWhiteSpace(_newPersonRelationship) ? null : _newPersonRelationship.Trim(),
+            _newPersonLivesAtProperty,
+            string.IsNullOrWhiteSpace(_newPersonNotes) ? null : _newPersonNotes.Trim());
+        var result = await AdminClient.AddRelatedPersonAsync(CaseId, request);
+        if (result is not null)
+        {
+            _relatedPeople.Add(result);
+            _showAddRelatedPerson = false;
+            _newPersonName = ""; _newPersonAge = null; _newPersonRelationship = "";
+            _newPersonLivesAtProperty = false; _newPersonNotes = "";
+        }
         StateHasChanged();
     }
 

@@ -25,13 +25,14 @@ public sealed class MyCaseController : BenControllerBase
     private readonly IMapper _mapper;
     private readonly IFileStorageService _fileStorage;
     private readonly FileMetadataExtractorService _metadataExtractor;
+    private readonly IAuditLogService _auditLog;
 
     // Fixed Guid for the 'Case Evidence' upload file type seeded by UploadFileTypeSeeder
     private static readonly Guid EvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
 
     public MyCaseController(IDbContextFactory<BenDataContext> db, IMapper mapper,
-        IFileStorageService fileStorage, FileMetadataExtractorService metadataExtractor)
-    { _db = db; _mapper = mapper; _fileStorage = fileStorage; _metadataExtractor = metadataExtractor; }
+        IFileStorageService fileStorage, FileMetadataExtractorService metadataExtractor, IAuditLogService auditLog)
+    { _db = db; _mapper = mapper; _fileStorage = fileStorage; _metadataExtractor = metadataExtractor; _auditLog = auditLog; }
 
     /// <summary>Returns all active cases where the current user is the originating client.</summary>
     [HttpGet]
@@ -187,6 +188,7 @@ public sealed class MyCaseController : BenControllerBase
         };
         db.CaseTimelineEntries.Add(entry);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CaseTimelineEntry), entry.Id, entry, userId, AppSources.WebApi, ct));
 
         var loaded = await db.CaseTimelineEntries.AsNoTracking()
             .Include(e => e.AuthorAppUser)
@@ -204,12 +206,16 @@ public sealed class MyCaseController : BenControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
+        var before = await db.CaseTimelineEntries.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == entryId && e.CaseId == caseId
+                && e.AuthorAppUserId == userId
+                && e.EntryType == CaseTimelineEntryType.ClientReport, ct);
         var entry = await db.CaseTimelineEntries
             .Include(e => e.Case).ThenInclude(c => c.ClientRequest)
             .FirstOrDefaultAsync(e => e.Id == entryId && e.CaseId == caseId
                 && e.AuthorAppUserId == userId
                 && e.EntryType == CaseTimelineEntryType.ClientReport, ct);
-        if (entry is null) return NotFound();
+        if (entry is null || before is null) return NotFound();
         if (entry.Case.ClientRequest?.AppUserId != userId) return Forbid();
 
         entry.EventDateTime      = request.EventDateTime;
@@ -218,6 +224,7 @@ public sealed class MyCaseController : BenControllerBase
         entry.DateUpdated        = DateTime.UtcNow;
         entry.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(CaseTimelineEntry), entry.Id, before, entry, userId, AppSources.WebApi, ct));
 
         var loaded = await db.CaseTimelineEntries.AsNoTracking()
             .Include(e => e.AuthorAppUser)
@@ -244,6 +251,7 @@ public sealed class MyCaseController : BenControllerBase
 
         db.CaseTimelineEntries.Remove(entry);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(CaseTimelineEntry), entry.Id, entry, userId, AppSources.WebApi, ct));
         return NoContent();
     }
 
@@ -446,15 +454,17 @@ public sealed class MyCaseController : BenControllerBase
         };
         db.UploadFiles.Add(uploadFile);
 
-        db.CaseTimelineEntryFiles.Add(new CaseTimelineEntryFile
+        var entryFile = new CaseTimelineEntryFile
         {
             Id                   = Guid.NewGuid(),
             CaseTimelineEntryId  = entryId,
             UploadFileId         = uploadFile.Id,
             DateCreated          = DateTime.UtcNow,
             CreatedByAppUserId   = userId,
-        });
+        };
+        db.CaseTimelineEntryFiles.Add(entryFile);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CaseTimelineEntryFile), entryFile.Id, entryFile, userId, AppSources.WebApi, ct));
 
         // Metadata extraction fire-and-forget
         var capturedBytes = fileBytes;
@@ -497,6 +507,7 @@ public sealed class MyCaseController : BenControllerBase
         db.CaseTimelineEntryFiles.Remove(link);
         db.UploadFiles.Remove(link.UploadFile);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(CaseTimelineEntryFile), link.Id, link, userId, AppSources.WebApi, ct));
 
         if (storagePath is not null)
             await _fileStorage.DeleteAsync(storagePath, ct);
@@ -624,6 +635,7 @@ public sealed class MyCaseController : BenControllerBase
         };
         db.CaseClientAccesses.Add(access);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseClientAccess), access.Id, access, userId, AppSources.WebApi, ct));
         return Ok(new CoClientItem(access.Id, target.Id, target.DisplayName ?? target.Email!));
     }
 
@@ -643,8 +655,91 @@ public sealed class MyCaseController : BenControllerBase
         if (access is null) return NotFound();
         db.CaseClientAccesses.Remove(access);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(Ben.Data.Source.Entities.CaseClientAccess), access.Id, access, userId, AppSources.WebApi, ct));
         return NoContent();
     }
+
+    // ── Related people (basic-info, no account) ─────────────────────────────────
+
+    /// <summary>Returns people referenced on this case who are not platform users.</summary>
+    [HttpGet("{caseId:guid}/related-people")]
+    public async Task<ActionResult<IEnumerable<CaseRelatedPersonRecord>>> GetRelatedPeople(Guid caseId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var people = await db.CaseRelatedPeople.AsNoTracking()
+            .Where(p => p.CaseId == caseId)
+            .OrderBy(p => p.Name)
+            .ToListAsync(ct);
+        return Ok(people.Select(ToRecord));
+    }
+
+    /// <summary>Primary client adds a basic-info reference to someone connected to the case (no account created).</summary>
+    [HttpPost("{caseId:guid}/related-people")]
+    public async Task<ActionResult<CaseRelatedPersonRecord>> AddRelatedPerson(
+        Guid caseId, [FromBody] AddRelatedPersonRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name)) return BadRequest("Name is required.");
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var primaryClient = await db.Cases.AsNoTracking().Include(c => c.ClientRequest)
+            .FirstOrDefaultAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+        if (primaryClient is null) return Forbid();
+
+        var person = new Ben.Data.Source.Entities.CaseRelatedPerson
+        {
+            Id                 = Guid.NewGuid(),
+            CaseId             = caseId,
+            Name               = request.Name.Trim(),
+            Age                = request.Age,
+            Relationship       = request.Relationship?.Trim(),
+            LivesAtProperty    = request.LivesAtProperty,
+            Notes              = request.Notes?.Trim(),
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        };
+        db.CaseRelatedPeople.Add(person);
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseRelatedPerson), person.Id, person, userId, AppSources.WebApi, ct));
+        return Ok(ToRecord(person));
+    }
+
+    /// <summary>Primary client removes a related-person reference.</summary>
+    [HttpDelete("{caseId:guid}/related-people/{personId:guid}")]
+    public async Task<IActionResult> RemoveRelatedPerson(Guid caseId, Guid personId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var primaryClient = await db.Cases.AsNoTracking().Include(c => c.ClientRequest)
+            .FirstOrDefaultAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+        if (primaryClient is null) return Forbid();
+
+        var person = await db.CaseRelatedPeople.FirstOrDefaultAsync(p => p.Id == personId && p.CaseId == caseId, ct);
+        if (person is null) return NotFound();
+        db.CaseRelatedPeople.Remove(person);
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(Ben.Data.Source.Entities.CaseRelatedPerson), person.Id, person, userId, AppSources.WebApi, ct));
+        return NoContent();
+    }
+
+    private static CaseRelatedPersonRecord ToRecord(Ben.Data.Source.Entities.CaseRelatedPerson p) => new()
+    {
+        Id              = p.Id,
+        CaseId          = p.CaseId,
+        Name            = p.Name,
+        Age             = p.Age,
+        Relationship    = p.Relationship,
+        LivesAtProperty = p.LivesAtProperty,
+        Notes           = p.Notes,
+        DateCreated     = p.DateCreated,
+    };
 
     // ── Investigation cancellation (client-initiated, time-gated) ─────────────
 

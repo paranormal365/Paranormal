@@ -1,4 +1,5 @@
 using AutoMapper;
+using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
@@ -48,11 +49,12 @@ public class MyCaseControllerTests
         return m.Object;
     }
 
-    private static MyCaseController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
+    private static MyCaseController Build(IDbContextFactory<BenDataContext> factory, Guid userId, IAuditLogService? auditLog = null)
     {
         var storage = new Mock<IFileStorageService>();
         storage.Setup(s => s.CaseFilePath(It.IsAny<Guid>(), It.IsAny<string>())).Returns("fake/path");
-        var ctrl = new MyCaseController(factory, CreateMapper(), storage.Object, new FileMetadataExtractorService());
+        var ctrl = new MyCaseController(factory, CreateMapper(), storage.Object, new FileMetadataExtractorService(),
+            auditLog ?? new Mock<IAuditLogService>().Object);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -67,7 +69,7 @@ public class MyCaseControllerTests
     private static MyCaseController BuildAnonymous(IDbContextFactory<BenDataContext> factory)
     {
         var ctrl = new MyCaseController(factory, CreateMapper(),
-            new Mock<IFileStorageService>().Object, new FileMetadataExtractorService());
+            new Mock<IFileStorageService>().Object, new FileMetadataExtractorService(), new Mock<IAuditLogService>().Object);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
@@ -381,5 +383,122 @@ public class MyCaseControllerTests
         Assert.IsType<NoContentResult>(result);
         await using var db2 = await factory.CreateDbContextAsync();
         Assert.False(await db2.CaseClientAccesses.AnyAsync(a => a.Id == dto.AccessId));
+    }
+
+    // ── Related people (basic-info, no account) ─────────────────────────────────
+
+    [Fact]
+    public async Task AddRelatedPerson_ReturnsRecord_AndPersists()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl = Build(factory, clientId);
+
+        var result = await ctrl.AddRelatedPerson(caseId,
+            new AddRelatedPersonRequest("Jane Doe", 34, "Spouse", true, "Sleeps poorly upstairs."), default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var record = Assert.IsType<CaseRelatedPersonRecord>(ok.Value);
+        Assert.Equal("Jane Doe", record.Name);
+        Assert.True(record.LivesAtProperty);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.True(await db.CaseRelatedPeople.AnyAsync(p => p.Id == record.Id && p.CaseId == caseId));
+    }
+
+    [Fact]
+    public async Task AddRelatedPerson_MissingName_ReturnsBadRequest()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl = Build(factory, clientId);
+
+        var result = await ctrl.AddRelatedPerson(caseId,
+            new AddRelatedPersonRequest("  ", null, null, false, null), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task AddRelatedPerson_NotPrimaryClient_ReturnsForbid()
+    {
+        var (factory, caseId, _, _) = await SeedClientCaseAsync();
+        var ctrl = Build(factory, Guid.NewGuid());
+
+        var result = await ctrl.AddRelatedPerson(caseId,
+            new AddRelatedPersonRequest("Jane Doe", null, null, false, null), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetRelatedPeople_ReturnsAddedPeople()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl = Build(factory, clientId);
+        await ctrl.AddRelatedPerson(caseId, new AddRelatedPersonRequest("Jane Doe", null, null, false, null), default);
+
+        var result = await ctrl.GetRelatedPeople(caseId, default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var list = Assert.IsAssignableFrom<IEnumerable<CaseRelatedPersonRecord>>(ok.Value);
+        Assert.Single(list);
+    }
+
+    [Fact]
+    public async Task RemoveRelatedPerson_DeletesRow()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl = Build(factory, clientId);
+        var added = (CaseRelatedPersonRecord)((OkObjectResult)(await ctrl.AddRelatedPerson(
+            caseId, new AddRelatedPersonRequest("Jane Doe", null, null, false, null), default)).Result!).Value!;
+
+        var result = await ctrl.RemoveRelatedPerson(caseId, added.Id, default);
+
+        Assert.IsType<NoContentResult>(result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.CaseRelatedPeople.AnyAsync(p => p.Id == added.Id));
+    }
+
+    [Fact]
+    public async Task RemoveRelatedPerson_NotPrimaryClient_ReturnsForbid()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var owner = Build(factory, clientId);
+        var added = (CaseRelatedPersonRecord)((OkObjectResult)(await owner.AddRelatedPerson(
+            caseId, new AddRelatedPersonRequest("Jane Doe", null, null, false, null), default)).Result!).Value!;
+
+        var other = Build(factory, Guid.NewGuid());
+        var result = await other.RemoveRelatedPerson(caseId, added.Id, default);
+
+        Assert.IsType<ForbidResult>(result);
+    }
+
+    // ── Audit logging on client case-log writes ──────────────────────────────────
+
+    [Fact]
+    public async Task LogOccurrence_WritesAuditCreateEntry()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var auditLog = new Mock<IAuditLogService>();
+        var ctrl = Build(factory, clientId, auditLog.Object);
+
+        await ctrl.LogOccurrence(caseId, new LogOccurrenceRequest(DateTime.UtcNow, "Title", "Body"), default);
+
+        auditLog.Verify(a => a.LogCreateAsync(
+            nameof(CaseTimelineEntry), It.IsAny<Guid>(), It.IsAny<object>(), clientId, AppSources.WebApi, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task AddRelatedPerson_WritesAuditCreateEntry()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var auditLog = new Mock<IAuditLogService>();
+        var ctrl = Build(factory, clientId, auditLog.Object);
+
+        await ctrl.AddRelatedPerson(caseId, new AddRelatedPersonRequest("Jane Doe", null, null, false, null), default);
+
+        auditLog.Verify(a => a.LogCreateAsync(
+            nameof(Ben.Data.Source.Entities.CaseRelatedPerson), It.IsAny<Guid>(), It.IsAny<object>(), clientId, AppSources.WebApi, It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 }

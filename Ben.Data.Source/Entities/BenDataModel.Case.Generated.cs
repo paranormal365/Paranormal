@@ -75,5 +75,6 @@ namespace Ben.Data.Source.Entities
         public virtual AppUser? UpdatedByAppUser { get; set; }
         public virtual ICollection<CaseTimelineEntry> TimelineEntries { get; set; } = new List<CaseTimelineEntry>();
         public virtual ICollection<CaseFile> CaseFiles { get; set; } = new List<CaseFile>();
+        public virtual ICollection<CaseRelatedPerson> RelatedPeople { get; set; } = new List<CaseRelatedPerson>();
     }
 }
