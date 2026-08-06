@@ -1,0 +1,72 @@
+@page "/admin/cases"
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>SuperAdmin — All Cases</PageTitle>
+
+<div class="container-fluid px-3">
+
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">All Cases</h3>
+            <p class="text-secondary small mb-0">Every case across every organization.</p>
+        </div>
+    </div>
+
+    @if (_cases is null)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading cases…" />
+    }
+    else
+    {
+        <TelerikGrid Data="@_cases"
+                     TItem="AdminCaseSummaryRecord"
+                     Sortable="true"
+                     FilterMode="@GridFilterMode.FilterRow"
+                     Pageable="true"
+                     PageSize="25">
+            <GridColumns>
+                <GridColumn Field="@nameof(AdminCaseSummaryRecord.OrganizationName)" Title="Organization" Width="220px" />
+                <GridColumn Field="@nameof(AdminCaseSummaryRecord.CaseReference)" Title="Reference" Width="120px" />
+                <GridColumn Field="@nameof(AdminCaseSummaryRecord.Title)" Title="Title" />
+                <GridColumn Field="@nameof(AdminCaseSummaryRecord.Status)" Title="Status" Width="130px" />
+                <GridColumn Title="Location" Width="160px">
+                    <Template>
+                        @{ var c = (AdminCaseSummaryRecord)context; }
+                        @c.City, @c.State
+                    </Template>
+                </GridColumn>
+                <GridColumn Field="@nameof(AdminCaseSummaryRecord.DateCaseOpened)" Title="Opened" DisplayFormat="{0:MMM d, yyyy}" Width="120px" />
+                <GridCommandColumn Width="90px">
+                    <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenCase((AdminCaseSummaryRecord)e.Items.First()))">
+                        Open
+                    </GridCommandButton>
+                </GridCommandColumn>
+            </GridColumns>
+        </TelerikGrid>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<AdminCaseSummaryRecord>? _cases;
+
+    protected override void OnInitialized()
+    {
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
+            NavManager.NavigateTo("/");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _cases = await AdminClient.GetAllCasesAsync();
+        StateHasChanged();
+    }
+
+    private void OpenCase(AdminCaseSummaryRecord c)
+        => NavManager.NavigateTo($"/organizations/{c.OrganizationId}/cases/{c.Id}");
+}

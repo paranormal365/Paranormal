@@ -16,9 +16,11 @@ Related: the Declined-status resubmit flow already built for `ClientRequestContr
 
 ---
 
-## 2. SuperAdmin visibility into all cases and investigations
+## 2. SuperAdmin visibility into all cases and investigations ✅ Complete (2026-08-06)
 
 A user with the SuperAdmin role should be able to view all cases and investigations across every organization, not just ones they're a member of.
+
+> **Shipped on `feature/superadmin-all-cases-investigations`:** per-org case/investigation reads already bypassed the membership check for SuperAdmin (`CanReadAsync`), but there was no way to discover which orgs to look at without already knowing. Added `AdminCaseController`/`AdminInvestigationController` (`api/admin/cases`, `api/admin/investigations`, SuperAdmin-only) that join across every org, plus two new admin pages (`/admin/cases`, `/admin/investigations`) linked from the Administration side panel, each opening straight into the org's case detail page.
 
 ---
 

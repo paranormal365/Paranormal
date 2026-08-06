@@ -58,6 +58,14 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteRoleAsync(Guid roleId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/admin/roles/{roleId}", token);
 
+    // ── Cross-org visibility (SuperAdmin) ────────────────────────────────────
+
+    public async Task<IReadOnlyList<AdminCaseSummaryRecord>> GetAllCasesAsync(CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<AdminCaseSummaryRecord>>("/api/admin/cases", token) ?? [];
+
+    public async Task<IReadOnlyList<AdminInvestigationSummaryRecord>> GetAllInvestigationsAsync(CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<AdminInvestigationSummaryRecord>>("/api/admin/investigations", token) ?? [];
+
     // ── Audit Log ─────────────────────────────────────────────────────────────
 
     public async Task<AuditLogPagedResponse?> GetAuditLogsAsync(
