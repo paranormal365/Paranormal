@@ -113,3 +113,11 @@ On audio file playback/preview (e.g. `AudioFilePreview.razor`/`WaveSurferPlayer.
 > **Shipped on `feature/drag-scrub-playhead`, merged to `develop`.** Click-and-drag on the full-view waveform now has two runtime-switchable modes via a toolbar toggle (icon-only, tooltip "Create Region"/"Scrub Playhead", defaults to region mode): region mode draws a selection region as before; scrub mode moves the playhead live and plays audio audibly while dragging (starts playback immediately if paused, restores the prior paused/playing state on release). Implemented as one unified pointer-event system in `WaveSurferPlayer.razor.js` rather than a separate playhead-only hit-test, so the two gestures never conflict. Also added an "Explore Region" action to the region right-click menu that opens the existing `WsRegionExplorer` for a freshly-drawn region — reusing its already-built playback/save-as-clip/notes panel (`UploadFileRegionNote`) wholesale rather than building new note infrastructure, once investigation surfaced that component already did exactly what "add a note to a region" needed.
 >
 > Two unrelated pre-existing bugs were found and fixed on `develop` while verifying this feature: a hard-navigation auth redirect (pages showed the login form on refresh even when signed in) and a missing `.AddAdditionalAssemblies()` call that 404'd every `Ben.Web.Library`-hosted page on a fresh page load.
+
+---
+
+## 9. Thoroughly test the Ben.Video component (not started)
+
+Need a dedicated pass to thoroughly test the Ben.Video.Editor component and verify all aspects of it — not just the specific bugs found incidentally while working on other items (see item #6's follow-up and item #8). Scope/test plan not yet defined.
+
+> Requested 2026-08-06, after several unrelated crashes/CSS bugs turned up in Ben.Video.Editor while verifying other work (the Media & Properties panel drag/resize/fill-height fixes in item #6's follow-up). Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote), not this one.
