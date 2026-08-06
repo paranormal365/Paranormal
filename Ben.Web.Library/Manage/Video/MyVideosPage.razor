@@ -46,7 +46,8 @@
 </div>
 
 @* ── Saved Projects dialog ──────────────────────────────────────────────── *@
-<TelerikWindow @bind-Visible="_showProjectList" Modal="true" Width="600px" Title="Saved Projects">
+<TelerikWindow @bind-Visible="_showProjectList" Modal="true" Width="600px">
+    <WindowTitle>Saved Projects</WindowTitle>
     <WindowContent>
         @if (_loadingList)
         {
