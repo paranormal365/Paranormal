@@ -6,6 +6,7 @@ public record AuditLogRecord
 {
     public Guid Id { get; init; }
     public Guid UserId { get; init; }
+    public string? UserDisplayName { get; init; }
     public AuditAction Action { get; init; }
     public required string EntityType { get; init; }
     public Guid EntityId { get; init; }

@@ -53,7 +53,12 @@ public sealed class AdminAuditLogController : BenControllerBase
             .Take(validPageSize)
             .ToListAsync(ct);
 
-        var records = items.Select(ToRecord).ToList();
+        var userIds = items.Select(i => i.UserId).Distinct().ToList();
+        var displayNames = await db.AppUsers.AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.DisplayName ?? u.Email, ct);
+
+        var records = items.Select(l => ToRecord(l, displayNames.GetValueOrDefault(l.UserId))).ToList();
         return Ok(new AuditLogPagedResponse(records, total));
     }
 
@@ -137,15 +142,16 @@ public sealed class AdminAuditLogController : BenControllerBase
 
     // ── Helper ────────────────────────────────────────────────────────────────
 
-    private static AuditLogRecord ToRecord(AuditLog l) => new()
+    private static AuditLogRecord ToRecord(AuditLog l, string? userDisplayName) => new()
     {
-        Id          = l.Id,
-        UserId      = l.UserId,
-        Action      = l.Action,
-        EntityType  = l.EntityType,
-        EntityId    = l.EntityId,
-        Source      = l.Source,
-        OccurredAt  = l.OccurredAt,
-        ChangesJson = l.ChangesJson
+        Id              = l.Id,
+        UserId          = l.UserId,
+        UserDisplayName = userDisplayName,
+        Action          = l.Action,
+        EntityType      = l.EntityType,
+        EntityId        = l.EntityId,
+        Source          = l.Source,
+        OccurredAt      = l.OccurredAt,
+        ChangesJson     = l.ChangesJson
     };
 }
