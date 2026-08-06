@@ -299,7 +299,11 @@
 @code {
     [Parameter] public Guid? Id { get; set; }
 
-    protected override async Task OnInitializedAsync() => await UserState.AuthReady;
+    protected override async Task OnInitializedAsync()
+    {
+        if (!RendererInfo.IsInteractive) return;
+        await UserState.AuthReady;
+    }
 
     // ── State ─────────────────────────────────────────────────────────────────
     private int _step = 1;
