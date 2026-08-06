@@ -25,4 +25,16 @@ public interface IBenUserState
 
     /// <summary>Gets the authenticated user's <see cref="Guid"/> primary key, or <c>null</c> when not signed in.</summary>
     Guid? UserId { get; }
+
+    /// <summary>
+    /// Completes once this circuit has finished resolving auth state for the current page
+    /// load — i.e. after MainLayout has attempted to restore a persisted session (or bridge
+    /// an Entra session) on first render. <see cref="IsAuthenticated"/> is unreliable before
+    /// this completes: on a hard navigation, a fresh circuit always starts unauthenticated
+    /// until that restore runs, so any page-load guard that checks <see cref="IsAuthenticated"/>
+    /// without awaiting this first will incorrectly redirect an actually-signed-in user to
+    /// /login. Await this before checking <see cref="IsAuthenticated"/> in OnInitializedAsync
+    /// or OnAfterRenderAsync(firstRender).
+    /// </summary>
+    Task AuthReady { get; }
 }

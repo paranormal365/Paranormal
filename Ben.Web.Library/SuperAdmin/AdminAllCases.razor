@@ -54,8 +54,10 @@
 @code {
     private IReadOnlyList<AdminCaseSummaryRecord>? _cases;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        if (!RendererInfo.IsInteractive) return;
+        await UserState.AuthReady;
         if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
             NavManager.NavigateTo("/");
     }

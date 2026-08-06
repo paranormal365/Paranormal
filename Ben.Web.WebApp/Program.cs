@@ -189,6 +189,7 @@ app.UseAntiforgery();
 
 
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+    .AddInteractiveServerRenderMode()
+    .AddAdditionalAssemblies(typeof(Ben.Web.Library.SuperAdmin.LibraryAssemblyMarker).Assembly);
 
 app.Run();

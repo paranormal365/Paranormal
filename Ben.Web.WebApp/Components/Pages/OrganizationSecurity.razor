@@ -249,6 +249,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (!RendererInfo.IsInteractive) return;
+        await TokenStore.AuthReady;
         if (!TokenStore.IsAuthenticated)
         {
             NavManager.NavigateTo("/login");

@@ -83,8 +83,10 @@
     private string _search = string.Empty;
     private string? _errorMessage;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        if (!RendererInfo.IsInteractive) return;
+        await UserState.AuthReady;
         if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
             NavManager.NavigateTo("/");
     }

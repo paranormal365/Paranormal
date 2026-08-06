@@ -103,8 +103,10 @@
     private bool _showDeleteDialog;
     private AdminRoleWithCountResponse? _pendingDelete;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        if (!RendererInfo.IsInteractive) return;
+        await UserState.AuthReady;
         if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
             NavManager.NavigateTo("/");
     }

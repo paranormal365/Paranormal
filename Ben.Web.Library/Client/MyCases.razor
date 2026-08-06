@@ -75,6 +75,8 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        if (!RendererInfo.IsInteractive) return;
+        await UserState.AuthReady;
         if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
         try { _cases = (await AdminClient.GetMyCasesAsync()).ToList(); }
         catch { _error = "Failed to load cases."; _cases = []; }
