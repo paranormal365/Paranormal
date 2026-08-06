@@ -144,6 +144,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (!RendererInfo.IsInteractive) return;
+        await UserState.AuthReady;
         if (!UserState.IsAuthenticated) { _error = "You must be signed in."; _loaded = true; return; }
 
         try
