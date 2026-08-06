@@ -69,21 +69,23 @@
     private bool _isLoading;
     private bool _entraEnabled;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         _entraEnabled = !string.IsNullOrWhiteSpace(Configuration["AzureAd:ClientId"])
                         && Configuration["AzureAd:ClientId"] != "YOUR_WEBAPP_CLIENT_ID";
-
-        // Only redirect if truly authenticated (has a resolved UserId).
-        // AccessToken alone may be set from a partial Entra bridge state (no UserId yet).
-        if (TokenStore.IsAuthenticated && TokenStore.UserId.HasValue)
-            NavManager.NavigateTo("/");
 
         if (Env.IsDevelopment())
         {
             _model.Email    = Configuration["DevLogin:Email"]    ?? string.Empty;
             _model.Password = Configuration["DevLogin:Password"] ?? string.Empty;
         }
+
+        await TokenStore.AuthReady;
+
+        // Only redirect if truly authenticated (has a resolved UserId).
+        // AccessToken alone may be set from a partial Entra bridge state (no UserId yet).
+        if (TokenStore.IsAuthenticated && TokenStore.UserId.HasValue)
+            NavManager.NavigateTo("/");
     }
 
     private async Task HandleLogin()

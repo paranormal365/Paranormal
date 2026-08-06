@@ -86,6 +86,7 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        await UserState.AuthReady;
         if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
         try { _items = (await AdminClient.GetMyInvestigationsAsync()).ToList(); }
         catch { _error = "Failed to load investigations."; _items = []; }

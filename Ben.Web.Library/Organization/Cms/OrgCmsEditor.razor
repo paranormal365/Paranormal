@@ -612,8 +612,9 @@
     private CmsPageListItem? _previewPage;
     private CmsPageDetail? _previewDetail;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        await UserState.AuthReady;
         if (!UserState.IsAuthenticated)
             NavManager.NavigateTo("/login");
     }

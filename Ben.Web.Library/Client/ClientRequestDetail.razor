@@ -200,6 +200,7 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        await UserState.AuthReady;
         if (!UserState.IsAuthenticated)
         {
             NavManager.NavigateTo("/login");
