@@ -1,6 +1,7 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Library.Services
+@using Ben.Web.Library.Shared
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 
@@ -106,7 +107,7 @@
                                                     {
                                                         var a = att;
                                                         <tr>
-                                                            <td class="align-middle small">@(a.DisplayName ?? a.AppUserId.ToString()[..8])</td>
+                                                            <td class="align-middle small"><UserNameLink AppUserId="@a.AppUserId" DisplayName="@a.DisplayName" /></td>
                                                             <td class="align-middle small">
                                                                 @if (_editRoleAttendeeId == a.Id)
                                                                 {

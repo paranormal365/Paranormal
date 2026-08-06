@@ -233,6 +233,48 @@ public class AdminAuditLogControllerTests
         Assert.Equal(1, paged.TotalCount);
     }
 
+    [Fact]
+    public async Task GetAll_JoinsUserDisplayName_ForKnownUser()
+    {
+        var factory = CreateFactory();
+        var actorId = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.AppUsers.Add(new AppUser { Id = actorId, UserName = "jane", Email = "jane@test.com", DisplayName = "Jane Doe" });
+            var log = MakeLog("Organization", AuditAction.Create);
+            log.UserId = actorId;
+            db.AuditLogs.Add(log);
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = Build(factory);
+        var result = await ctrl.GetAll(ct: CancellationToken.None);
+        var ok     = Assert.IsType<OkObjectResult>(result.Result);
+        var paged  = Assert.IsType<AuditLogPagedResponse>(ok.Value);
+
+        Assert.Equal("Jane Doe", paged.Items[0].UserDisplayName);
+    }
+
+    [Fact]
+    public async Task GetAll_UnknownUser_UserDisplayNameIsNull()
+    {
+        var factory = CreateFactory();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.AuditLogs.Add(MakeLog("Organization", AuditAction.Create)); // UserId has no matching AppUser
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = Build(factory);
+        var result = await ctrl.GetAll(ct: CancellationToken.None);
+        var ok     = Assert.IsType<OkObjectResult>(result.Result);
+        var paged  = Assert.IsType<AuditLogPagedResponse>(ok.Value);
+
+        Assert.Null(paged.Items[0].UserDisplayName);
+    }
+
     // ── GetEntityTypes ────────────────────────────────────────────────────────
 
     [Fact]

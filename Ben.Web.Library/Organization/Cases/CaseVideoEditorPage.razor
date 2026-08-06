@@ -74,8 +74,8 @@
                     <GridColumn Field="@nameof(VideoProjectRecord.Name)" Title="Name" />
                     <GridColumn Title="By" Width="130px">
                         <Template>
-                            @{ var row = (VideoProjectRecord)context; }
-                            <span class="text-muted small">@row.CreatedByAppUserId.ToString()[..8]…</span>
+                            @* GetMyVideoProjectsAsync only ever returns the viewer's own projects. *@
+                            <span class="text-muted small">You</span>
                         </Template>
                     </GridColumn>
                     <GridColumn Field="@nameof(VideoProjectRecord.DateCreated)" Title="Saved"
