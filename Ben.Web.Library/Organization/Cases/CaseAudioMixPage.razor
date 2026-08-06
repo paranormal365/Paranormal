@@ -30,12 +30,20 @@ else
 
         @* ── Transport bar ─────────────────────────────────────────────────── *@
         <div class="d-flex align-items-center gap-2 mb-3 p-2 rounded border bg-body-secondary">
-            <TelerikButton Size="sm" Enabled="false">▶ Play</TelerikButton>
-            <TelerikButton Size="sm" Enabled="false">⏸ Pause</TelerikButton>
-            <TelerikButton Size="sm" Enabled="false">⏹ Stop</TelerikButton>
-            <span class="small text-secondary ms-auto">Add clips from the case's Files tab to get started.</span>
-            <TelerikButton Size="sm" ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" Enabled="false">
-                Export Mix
+            <TelerikButton Size="sm" Enabled="false" Title="Live preview isn't available yet">▶ Play</TelerikButton>
+            <TelerikButton Size="sm" Enabled="false" Title="Live preview isn't available yet">⏸ Pause</TelerikButton>
+            <TelerikButton Size="sm" Enabled="false" Title="Live preview isn't available yet">⏹ Stop</TelerikButton>
+            @if (_exportError is not null)
+            {
+                <span class="small text-danger ms-auto">@_exportError</span>
+            }
+            else
+            {
+                <span class="small text-secondary ms-auto">Add clips from the case's Files tab to get started.</span>
+            }
+            <TelerikButton Size="sm" ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Enabled="@(HasAnyClips && !_exporting)" OnClick="ExportMixAsync">
+                @(_exporting ? "Exporting…" : "Export Mix")
             </TelerikButton>
         </div>
 
@@ -138,6 +146,7 @@ else
     private sealed class MixClip
     {
         public string ClipId { get; } = Guid.NewGuid().ToString("N");
+        public Guid CaseFileId { get; init; }
         public Guid UploadFileId { get; init; }
         public string FileName { get; init; } = "";
         public double OffsetSeconds { get; set; }
@@ -204,6 +213,7 @@ else
         var track = _tracks.FirstOrDefault(t => t.Clips.Count == 0) ?? _tracks[0];
         track.Clips.Add(new MixClip
         {
+            CaseFileId = file.Id,
             UploadFileId = file.UploadFileId,
             FileName = file.FileName,
             OffsetSeconds = 0,
@@ -211,6 +221,43 @@ else
     }
 
     private void RemoveClip(MixTrack track, MixClip clip) => track.Clips.Remove(clip);
+
+    private bool HasAnyClips => _tracks.Any(t => t.Clips.Count > 0);
+
+    private bool _exporting;
+    private string? _exportError;
+
+    private async Task ExportMixAsync()
+    {
+        var trackInputs = _tracks
+            .SelectMany(t => t.Clips.Select(c => new MixTrackExportInput(c.CaseFileId, c.OffsetSeconds, t.VolumeDb, t.Pan, t.Mute, t.Solo)))
+            .ToList();
+        if (trackInputs.Count == 0) return;
+
+        _exporting = true;
+        _exportError = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await AdminClient.ExportAudioMixAsync(OrgId, CaseId, new ExportAudioMixRequest(trackInputs));
+            if (result is null)
+            {
+                _exportError = "Export failed. Please try again.";
+                return;
+            }
+            NavManager.NavigateTo($"/organizations/{OrgId}/cases/{CaseId}");
+        }
+        catch
+        {
+            _exportError = "Export failed. Please try again.";
+        }
+        finally
+        {
+            _exporting = false;
+            StateHasChanged();
+        }
+    }
 
     [JSInvokable]
     public void OnClipMoved(string clipId, double offsetSeconds)

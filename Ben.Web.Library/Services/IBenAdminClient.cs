@@ -498,6 +498,9 @@ public interface IBenAdminClient
     /// <summary>Un-links a file from the case. The underlying UploadFile is preserved.</summary>
     Task<bool> DeleteCaseFileAsync(Guid orgId, Guid caseId, Guid caseFileId, CancellationToken token = default);
 
+    /// <summary>Renders the placed clips down to a single mixed audio file and saves it to the case's Files tab.</summary>
+    Task<CaseFileRecord?> ExportAudioMixAsync(Guid orgId, Guid caseId, ExportAudioMixRequest request, CancellationToken token = default);
+
     // ── Case Notes ────────────────────────────────────────────────────────────
 
     Task<IReadOnlyList<CaseNoteDto>> GetCaseNotesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
