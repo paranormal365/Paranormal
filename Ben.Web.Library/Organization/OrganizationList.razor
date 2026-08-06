@@ -165,9 +165,8 @@
     private bool _showDeleteDialog;
     private OrganizationListItemResponse? _pendingDelete;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        await UserState.AuthReady;
         if (!UserState.IsAuthenticated)
             NavManager.NavigateTo("/login");
     }

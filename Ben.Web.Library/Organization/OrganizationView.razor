@@ -261,9 +261,8 @@
     private string? _editPublicWebsite;
     private bool    _editIsAcceptingApplications;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        await UserState.AuthReady;
         if (!UserState.IsAuthenticated)
             NavManager.NavigateTo("/login");
     }

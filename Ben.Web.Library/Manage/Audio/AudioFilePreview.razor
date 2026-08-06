@@ -143,15 +143,6 @@ else
                                 🗣 Voice Band
                             </TelerikButton>
                         }
-                        @* Drag mode toggle: create region (default) vs. scrub the playhead *@
-                        <TelerikButton Icon="@SvgIcon.Crop"
-                                       ThemeColor="@(_regionDrawMode ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
-                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
-                                       Size="@ThemeConstants.Button.Size.Small"
-                                       Enabled="@_modalReady"
-                                       Title="@(_regionDrawMode ? "Create Region" : "Scrub Playhead")"
-                                       OnClick="ToggleDragModeAsync">
-                        </TelerikButton>
                         @* EQ toggle *@
                         <TelerikButton ThemeColor="@(_showEq ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
                                        FillMode="@ThemeConstants.Button.FillMode.Outline"
@@ -191,9 +182,7 @@ else
                             <span class="small text-secondary">dB</span>
                         }
                         <span class="small text-secondary fst-italic">
-                            @(_regionDrawMode
-                                ? "Click & drag to mark a region — right-click to play, save, or edit"
-                                : "Click & drag the waveform to scrub — audio plays while dragging")
+                            Click &amp; drag to mark a region &mdash; right-click to play, save, or edit
                         </span>
                     </span>
                 </div>
@@ -565,9 +554,6 @@ else
     private bool   _modalReady;
     private IReadOnlyList<UploadFileRecord> _childClips = [];
 
-    /// <summary>true = drag creates a region (default); false = drag scrubs the playhead.</summary>
-    private bool   _regionDrawMode = true;
-
     // ── Timeline + Spectrogram state ───────────────────────────────────
 
     private bool   _timelineEnabled  = true;
@@ -697,11 +683,6 @@ else
         _modalDuration = _modalPlayer?.Duration ?? 0;
         _modalReady    = true;
         StateHasChanged();
-
-        // Re-apply the chosen drag mode — each modal open creates a fresh JS/WaveSurfer
-        // instance that defaults back to region mode regardless of the prior selection.
-        if (_modalPlayer is not null)
-            await _modalPlayer.SetDragModeAsync(_regionDrawMode);
 
         try
         {
@@ -930,7 +911,6 @@ else
             _showMarkers        = false;
             _showVoiceBand      = false;
             _silenceDetectionEnabled = false;
-            _regionDrawMode     = true;
         }
     }
 
@@ -996,13 +976,6 @@ else
         _timelineEnabled = !_timelineEnabled;
         if (_modalPlayer is null) return;
         await _modalPlayer.ToggleTimelineAsync(_timelineEnabled);
-    }
-
-    private async Task ToggleDragModeAsync()
-    {
-        _regionDrawMode = !_regionDrawMode;
-        if (_modalPlayer is null) return;
-        await _modalPlayer.SetDragModeAsync(_regionDrawMode);
     }
 
     private async Task ToggleSpectrogramAsync()

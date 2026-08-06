@@ -220,9 +220,8 @@
 
     // ── Lifecycle ────────────────────────────────────────────────────────────────
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        await UserState.AuthReady;
         if (!UserState.IsSuperAdmin)
             NavManager.NavigateTo("/");
     }

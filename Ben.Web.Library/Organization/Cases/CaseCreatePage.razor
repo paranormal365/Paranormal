@@ -6,6 +6,8 @@
 
 <PageTitle>New Case</PageTitle>
 
+@if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
 <div class="container-fluid py-3" style="max-width:720px;">
     <div class="d-flex align-items-center gap-2 mb-4">
         <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
@@ -80,13 +82,6 @@
     private readonly CaseForm _form = new();
     private bool _saving;
     private string? _error;
-
-    protected override async Task OnInitializedAsync()
-    {
-        await UserState.AuthReady;
-        if (!UserState.IsAuthenticated)
-            NavManager.NavigateTo("/login");
-    }
 
     private bool IsValid =>
         !string.IsNullOrWhiteSpace(_form.Title)   &&

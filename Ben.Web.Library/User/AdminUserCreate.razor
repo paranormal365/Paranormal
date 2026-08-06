@@ -90,9 +90,8 @@
     private bool _isSaving;
     private List<string> _errorMessages = [];
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        await UserState.AuthReady;
         if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
             NavManager.NavigateTo("/");
     }

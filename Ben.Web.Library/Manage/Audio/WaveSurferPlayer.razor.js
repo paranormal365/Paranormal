@@ -308,50 +308,26 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
 
   instances.set(containerId, { ws, regionsPlugin, envelopePlugin, resizeObserver })
 
-  // ── Custom drag-to-create / drag-to-scrub (only when requested) ─────────
-  // We implement both manually instead of relying on RegionsPlugin's/WaveSurfer's
-  // built-in options so that:
+  // ── Custom drag-to-create (only when requested) ────────────────────────
+  // We implement drag-to-create manually instead of relying on RegionsPlugin's
+  // built-in option so that:
   //   1. A plain click still seeks (WaveSurfer handles it via 'click' event)
-  //   2. In "region" mode, a click-and-drag creates a region with a live blue
-  //      preview overlay, and WaveSurfer's click-to-seek is blocked afterward
-  //   3. In "scrub" mode, a click-and-drag moves the playhead live and plays the
-  //      audio audibly while dragging (see onPointerDown below)
-  //
-  // Mode is a single runtime switch (instance._dragMode, toggled via the exported
-  // setDragMode()) — the two gestures share the same click-and-drag input, so only
-  // one can be active at a time; there is no separate playhead-only hit-test.
+  //   2. A click-and-drag creates a region with a live blue preview overlay
+  //   3. WaveSurfer's click-to-seek is blocked when the user actually dragged
 
   if (plugins.regionsDragToCreate && regionsPlugin) {
-    const DRAG_THRESHOLD = 5   // px moved before a region-drag counts as a drag
-    const instance = instances.get(containerId)
-    instance._dragMode = 'region'   // 'region' | 'scrub'
+    const DRAG_THRESHOLD = 5   // px moved before we treat this as a drag
 
-    // Region-drag state
     let dragStartX    = null
     let dragStartTime = null
     let isDragging    = false
     let wasDragging   = false   // stays true until 'click' fires
     let previewDiv    = null
 
-    // Scrub state — see setDragMode()'s doc comment for the audible-while-paused rationale
-    let scrubbing             = false
-    let wasPlayingBeforeScrub = false
-    let scrubJustEnded        = false   // stays true until the trailing 'click' fires
-
     const onPointerDown = (ev) => {
       if (ev.button !== 0) return
       const duration = ws.getDuration()
       if (!duration) return
-
-      if (instance._dragMode === 'scrub') {
-        scrubbing = true
-        wasPlayingBeforeScrub = ws.isPlaying()
-        try { container.setPointerCapture(ev.pointerId) } catch {}
-        if (!wasPlayingBeforeScrub) ws.play().catch(() => {})
-        ws.setTime(_wsTimeAtClientX(ws, container, ev.clientX))
-        return
-      }
-
       try { container.setPointerCapture(ev.pointerId) } catch {}
       dragStartX    = ev.clientX
       dragStartTime = _wsTimeAtClientX(ws, container, ev.clientX)
@@ -360,10 +336,6 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
     }
 
     const onPointerMove = (ev) => {
-      if (scrubbing) {
-        ws.setTime(_wsTimeAtClientX(ws, container, ev.clientX))
-        return
-      }
       if (dragStartX === null) return
       if (Math.abs(ev.clientX - dragStartX) > DRAG_THRESHOLD) isDragging = true
       if (!isDragging) return
@@ -386,14 +358,6 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
     }
 
     const onPointerUp = (ev) => {
-      if (scrubbing) {
-        scrubbing = false
-        scrubJustEnded = true
-        try { container.releasePointerCapture(ev.pointerId) } catch {}
-        if (!wasPlayingBeforeScrub) ws.pause()
-        return
-      }
-
       if (previewDiv) { previewDiv.remove(); previewDiv = null }
       try { container.releasePointerCapture(ev.pointerId) } catch {}
 
@@ -418,22 +382,16 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
     }
 
     const onPointerCancel = () => {
-      if (scrubbing) {
-        scrubbing = false
-        if (!wasPlayingBeforeScrub) ws.pause()
-      }
       if (previewDiv) { previewDiv.remove(); previewDiv = null }
       dragStartX = null; dragStartTime = null
       isDragging = false; wasDragging = false
     }
 
-    // Stop WaveSurfer's native click-to-seek after a real region-drag or a scrub —
-    // in both cases the position is already exactly where the user released.
+    // Stop WaveSurfer's seek when the user dragged instead of clicking
     const onClickCapture = (ev) => {
-      if (wasDragging || scrubJustEnded) {
+      if (wasDragging) {
         ev.stopImmediatePropagation()
-        wasDragging    = false
-        scrubJustEnded = false
+        wasDragging = false
       }
     }
 
@@ -444,7 +402,7 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
     container.addEventListener('click',         onClickCapture,  { capture: true })
 
     // Store cleanup function so destroy() can remove the listeners
-    instance.dragCleanup = () => {
+    instances.get(containerId).dragCleanup = () => {
       container.removeEventListener('pointerdown',   onPointerDown,   { capture: true })
       container.removeEventListener('pointermove',   onPointerMove,   { capture: true })
       container.removeEventListener('pointerup',     onPointerUp,     { capture: true })
@@ -800,22 +758,6 @@ export async function setSpectrogramResolution(containerId, fftSamples, showLabe
     { channels: [channelCopy], sampleRate: audioBuffer.sampleRate, fftSamples, noverlap },
     [channelCopy.buffer]
   )
-}
-
-/**
- * Switches what click-and-drag does on the waveform: 'region' (default) draws a
- * selection region for clipping/editing; 'scrub' moves the playhead live, playing
- * audio audibly while dragging (temporarily starting playback if paused, restoring
- * the prior paused/playing state on release). Only meaningful when the player was
- * created with plugins.regionsDragToCreate — that flag registers the pointer
- * handlers this mode switch controls.
- */
-export function setDragMode(containerId, mode) {
-  const instance = instances.get(containerId)
-  if (!instance) return
-  instance._dragMode = mode === 'scrub' ? 'scrub' : 'region'
-  const container = document.getElementById(containerId)
-  if (container) container.style.cursor = instance._dragMode === 'scrub' ? 'ew-resize' : ''
 }
 
 /**

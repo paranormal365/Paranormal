@@ -616,9 +616,8 @@ else
     private int    _newTypeSortOrder;
     private string? _typeError;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        await UserState.AuthReady;
         if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
             NavManager.NavigateTo("/");
     }

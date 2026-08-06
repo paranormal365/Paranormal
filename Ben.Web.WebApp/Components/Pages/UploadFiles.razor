@@ -168,9 +168,8 @@
     ];
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        await TokenStore.AuthReady;
         if (!TokenStore.IsAuthenticated)
             NavManager.NavigateTo("/login");
     }

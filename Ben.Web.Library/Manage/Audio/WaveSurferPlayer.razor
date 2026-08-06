@@ -368,15 +368,6 @@
         await _module.InvokeVoidAsync("updateSpectrogramLabels", _containerId, showLabels);
     }
 
-    /// <summary>
-    /// Switches what click-and-drag does on the waveform (only meaningful when the player
-    /// was configured with <see cref="WsPluginConfig.RegionsDragToCreate"/>): drawing a
-    /// selection region (<paramref name="regionMode"/> <c>true</c>, the default), or
-    /// scrubbing the playhead — playing audio audibly while dragging — when <c>false</c>.
-    /// </summary>
-    public async Task SetDragModeAsync(bool regionMode)
-        => await Invoke("setDragMode", regionMode ? "region" : "scrub");
-
     // Regions
     public async Task<string?> AddRegionAsync(WsRegionParams region)
         => _module is null ? null : await _module.InvokeAsync<string?>("addRegion", _containerId, region);

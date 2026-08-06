@@ -52,15 +52,11 @@ public abstract class BenTestBase : PageTest
         await Page.GotoAsync($"{BaseUrl}/login");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // Fill email and password fields. The Telerik TextBox on Login.razor renders a plain
-        // <input> with no type/id and placeholder "you@example.com" (no "email" substring),
-        // so match that literal placeholder alongside the more generic fallbacks.
-        await Page.FillAsync("input[type='email'], input[placeholder*='email' i], input[id*='email' i], input[placeholder='you@example.com']", email);
+        // Fill email and password fields — using placeholder selectors consistent
+        // with the Login.razor form structure.
+        await Page.FillAsync("input[type='email'], input[placeholder*='email' i], input[id*='email' i]", email);
         await Page.FillAsync("input[type='password']", password);
-        // Scoped to the login <form> — the nav bar/app bar also has unrelated
-        // button[type='submit'] elements (icon toggle, and Sign Out when already
-        // authenticated), and an unscoped selector matches the first of those instead.
-        await Page.ClickAsync("form button[type='submit']");
+        await Page.ClickAsync("button[type='submit']");
 
         // Wait for the redirect away from /login (successful auth)
         await Page.WaitForURLAsync(url => !url.Contains("/login"), new() { Timeout = 10_000 });

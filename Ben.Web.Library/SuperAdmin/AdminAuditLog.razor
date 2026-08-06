@@ -299,7 +299,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await UserState.AuthReady;
         if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
         await Task.WhenAll(LoadEntityTypesAsync(), LoadDataAsync());
     }

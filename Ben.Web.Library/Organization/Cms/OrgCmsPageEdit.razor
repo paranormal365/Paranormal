@@ -457,9 +457,8 @@
         .Select(t => new SectionTypeOption(t, t.ToString()))
         .ToList();
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        await UserState.AuthReady;
         if (!UserState.IsAuthenticated)
             NavManager.NavigateTo("/login");
     }
