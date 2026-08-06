@@ -116,8 +116,23 @@ On audio file playback/preview (e.g. `AudioFilePreview.razor`/`WaveSurferPlayer.
 
 ---
 
-## 9. Thoroughly test the Ben.Video component (not started)
+## 9. Thoroughly test the Ben.Video component 🟡 In progress (2026-08-06)
 
-Need a dedicated pass to thoroughly test the Ben.Video.Editor component and verify all aspects of it — not just the specific bugs found incidentally while working on other items (see item #6's follow-up and item #8). Scope/test plan not yet defined.
+Need a dedicated pass to thoroughly test the Ben.Video.Editor component and verify all aspects of it — not just the specific bugs found incidentally while working on other items (see item #6's follow-up and item #8). Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote), not this one.
 
-> Requested 2026-08-06, after several unrelated crashes/CSS bugs turned up in Ben.Video.Editor while verifying other work (the Media & Properties panel drag/resize/fill-height fixes in item #6's follow-up). Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote), not this one.
+> **In progress.** Bugs found and fixed so far while working through the test plan (import → timeline → editing → overlays → export → persistence):
+> - ffmpeg.wasm was **completely broken** — `App.razor` loaded the main `@ffmpeg/ffmpeg` UMD bundle from unpkg instead of the locally-vendored copy, so the library's own worker chunk (`814.ffmpeg.js`) failed a same-origin check on every single load. Nothing requiring ffmpeg (import, preview, export) could ever have worked in this app. Fixed by pointing at `_content/Ben.Video.Editor/js/ffmpeg.umd.js`, matching what the two standalone host apps already did.
+> - `CaseVideoEditorPage.razor` had the same hard-nav `AuthReady` gap as item #6's follow-up (missed by the original 25-page audit) — fixed with the standard guard.
+> - Clicking a media-library file in `ClipBrowser`'s Server tab imported it into the timeline **twice** from one click — added a reentrancy guard.
+> - `getMetadata()` in `ffmpegInterop.js` only ever read the **video** stream's duration via ffprobe, so every audio-only file (mp3, wav, ...) always reported `duration: 0` — the imported clip rendered as a near-invisible sliver on the timeline. Fixed to fall back to the audio stream's duration when there's no video stream.
+> - The Media & Properties floating window's outline didn't shrink when minimized (stayed pinned at its `MinHeight="200px"` floor, leaving dead space below the titlebar) — overrode height/min-height specifically for the `.k-window-minimized` state.
+>
+> Still to test: clip trim/split/delete/undo-redo, preview scrubbing, audio clip editor + volume automation, image clip editor, text overlays, callouts, clip art, transitions, motion keyframes, export dialog/queue, project save/open (device + server), subtitle export, error log panel, asset browser, keyboard shortcuts.
+
+---
+
+## 10. Stereo channel separation for audio editing (not started)
+
+Ben.Video's audio editing should support separating left and right audio channels so each can be edited independently.
+
+> Requested 2026-08-06, during the item #9 test pass.
