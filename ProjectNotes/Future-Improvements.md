@@ -4,13 +4,15 @@ Ideas captured for later work. Nothing in this file has been scoped, designed, o
 
 ---
 
-## 1. Withdraw request → offer resubmission
+## 1. Withdraw request → offer resubmission ✅ Complete (2026-08-06)
 
 When a client withdraws a submitted investigation request, the client-facing UI should either:
 - Ask if they want to submit the request to another organization, or
 - Show a button to resubmit it.
 
 Related: the Declined-status resubmit flow already built for `ClientRequestController`/`ClientRequests.razor` (2026-08-05, `AddOrganization` endpoint + "Choose Another Organization" picker) is the natural pattern to extend here — a withdrawal is a different trigger than a decline, but the same "pick another org" UI could likely be reused.
+
+> **Shipped on `feature/withdraw-request-resubmit`:** `AddOrganization` now accepts `Withdrawn` in addition to `Declined`; `ClientRequests.razor` shows the same picker (relabeled "Resubmit to an Organization") for withdrawn requests. Also fixed a related gap found along the way: `Withdraw` previously left any still-open `ClientRequestOrganization` rows untouched, so a withdrawn request kept appearing in the organization's pending-requests list — it now cancels them, mirroring the pattern already used when one org accepts and the others are superseded.
 
 ---
 
