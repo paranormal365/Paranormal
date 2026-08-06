@@ -51,6 +51,14 @@ public interface IBenAdminClient
     /// <summary>Deletes a role. Will fail if any users are still assigned to it.</summary>
     Task<bool> DeleteRoleAsync(Guid roleId, CancellationToken token = default);
 
+    // ── Cross-org visibility (SuperAdmin) ────────────────────────────────────
+
+    /// <summary>Returns every case across every organization (SuperAdmin only).</summary>
+    Task<IReadOnlyList<AdminCaseSummaryRecord>> GetAllCasesAsync(CancellationToken token = default);
+
+    /// <summary>Returns every investigation across every organization (SuperAdmin only).</summary>
+    Task<IReadOnlyList<AdminInvestigationSummaryRecord>> GetAllInvestigationsAsync(CancellationToken token = default);
+
     // ── Audit Log ─────────────────────────────────────────────────────────────
 
     Task<AuditLogPagedResponse?> GetAuditLogsAsync(int page = 1, int pageSize = 50, string? entityType = null, int? action = null, Guid? userId = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken token = default);
