@@ -201,7 +201,7 @@ public sealed class ClientRequestController : BenControllerBase
         return Ok(_mapper.Map<ClientRequestRecord>(entity));
     }
 
-    /// <summary>Withdraws a submitted (or draft) request.</summary>
+    /// <summary>Withdraws a submitted (or draft) request, cancelling any still-open organization applications.</summary>
     [HttpPost("{id:guid}/withdraw")]
     public async Task<ActionResult<ClientRequestRecord>> Withdraw(Guid id, CancellationToken ct)
     {
@@ -213,15 +213,24 @@ public sealed class ClientRequestController : BenControllerBase
         if (entity.Status == ClientRequestStatus.Assigned)
             return BadRequest("An assigned case cannot be withdrawn without contacting the organization.");
 
+        var now = DateTime.UtcNow;
+
+        var openApps = await db.ClientRequestOrganizations
+            .Where(a => a.ClientRequestId == id &&
+                (a.Status == ClientOrgRequestStatus.Pending || a.Status == ClientOrgRequestStatus.Viewed ||
+                 a.Status == ClientOrgRequestStatus.UnderReview))
+            .ToListAsync(ct);
+        foreach (var a in openApps) { a.Status = ClientOrgRequestStatus.Cancelled; a.DateResponded = now; }
+
         entity.Status             = ClientRequestStatus.Withdrawn;
-        entity.DateUpdated        = DateTime.UtcNow;
+        entity.DateUpdated        = now;
         entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
         await db.SaveChangesAsync(ct);
         return Ok(_mapper.Map<ClientRequestRecord>(entity));
     }
 
     /// <summary>
-    /// Adds one more organization to a Declined request, re-opening it as Submitted.
+    /// Adds one more organization to a Declined or Withdrawn request, re-opening it as Submitted.
     /// Subject to the same 2-organization cap as the initial submission.
     /// </summary>
     [HttpPost("{id:guid}/add-organization")]
@@ -235,8 +244,8 @@ public sealed class ClientRequestController : BenControllerBase
             .FirstOrDefaultAsync(x => x.Id == id, ct);
         if (entity is null) return NotFound();
         if (entity.AppUserId != userId) return Forbid();
-        if (entity.Status != ClientRequestStatus.Declined)
-            return BadRequest("Only a declined request can be sent to another organization.");
+        if (entity.Status is not (ClientRequestStatus.Declined or ClientRequestStatus.Withdrawn))
+            return BadRequest("Only a declined or withdrawn request can be sent to another organization.");
         if (entity.OrganizationApplications.Count >= 2)
             return BadRequest("You may apply to a maximum of 2 organizations.");
         if (entity.OrganizationApplications.Any(a => a.OrganizationId == request.OrganizationId))
