@@ -99,7 +99,83 @@ internal static class AudioEditor
         return WriteWav(result, format);
     }
 
+    public static (byte[] Bytes, string ContentType, string Extension) PitchShift(
+        Stream sourceStream, string sourceContentType, double semitones)
+    {
+        var (samples, format) = ReadSamples(sourceStream, sourceContentType);
+        var pitchFactor = Math.Pow(2.0, semitones / 12.0);
+        var shifted = ApplyPitchShift(samples, format.Channels, format.SampleRate, pitchFactor);
+        return WriteWav(shifted, format);
+    }
+
+    /// <summary>
+    /// Changes playback speed by <paramref name="speedRatio"/> (2.0 = twice as fast/half duration,
+    /// 0.5 = half speed/double duration) while preserving pitch: resample to change duration and
+    /// pitch together, then pitch-shift back by the inverse ratio to restore the original pitch.
+    /// </summary>
+    public static (byte[] Bytes, string ContentType, string Extension) ChangeSpeed(
+        Stream sourceStream, string sourceContentType, double speedRatio)
+    {
+        var (samples, format) = ReadSamples(sourceStream, sourceContentType);
+        var resampled = ResampleLinear(samples, format.Channels, speedRatio);
+        var corrected = ApplyPitchShift(resampled, format.Channels, format.SampleRate, 1.0 / speedRatio);
+        return WriteWav(corrected, format);
+    }
+
     // ── Shared helpers ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Runs each channel through its own <see cref="SmbPitchShifter"/>. Pads the input with
+    /// <see cref="SmbPitchShifter.InFifoLatency"/> trailing zero samples and discards the same
+    /// number of leading output samples so the phase vocoder's group delay doesn't clip the tail
+    /// or leave silence at the start.
+    /// </summary>
+    private static float[] ApplyPitchShift(float[] samples, int channels, int sampleRate, double pitchFactor)
+    {
+        const int fftFrameSize = 2048;
+        const int oversample = 8;
+
+        var totalFrames = samples.Length / channels;
+        var result = new float[samples.Length];
+
+        for (var c = 0; c < channels; c++)
+        {
+            var shifter = new SmbPitchShifter(fftFrameSize, oversample, sampleRate);
+            var paddedFrames = totalFrames + shifter.InFifoLatency;
+
+            var mono = new float[paddedFrames];
+            for (var f = 0; f < totalFrames; f++) mono[f] = samples[f * channels + c];
+
+            var outMono = new float[paddedFrames];
+            shifter.PitchShift(pitchFactor, mono, outMono, paddedFrames);
+
+            for (var f = 0; f < totalFrames; f++) result[f * channels + c] = outMono[f + shifter.InFifoLatency];
+        }
+        return result;
+    }
+
+    /// <summary>Linear-interpolation resample that changes both frame count and (if played at the original rate) pitch by <paramref name="ratio"/>.</summary>
+    private static float[] ResampleLinear(float[] samples, int channels, double ratio)
+    {
+        var inFrames = samples.Length / channels;
+        var outFrames = Math.Max(1, (int)(inFrames / ratio));
+        var result = new float[outFrames * channels];
+
+        for (var i = 0; i < outFrames; i++)
+        {
+            var srcPos = i * ratio;
+            var srcIndex = Math.Min((int)srcPos, inFrames - 1);
+            var srcIndexNext = Math.Min(srcIndex + 1, inFrames - 1);
+            var frac = srcPos - (int)srcPos;
+            for (var c = 0; c < channels; c++)
+            {
+                var a = samples[srcIndex * channels + c];
+                var b = samples[srcIndexNext * channels + c];
+                result[i * channels + c] = (float)(a + (b - a) * frac);
+            }
+        }
+        return result;
+    }
 
     /// <summary>Decodes the full source stream into normalized [-1, 1] float samples (interleaved by channel).</summary>
     private static (float[] Samples, WaveFormat Format) ReadSamples(Stream sourceStream, string sourceContentType)

@@ -1,0 +1,101 @@
+@using Ben.Web.Library.Services
+@using Ben.Web.Library.User
+@using Microsoft.AspNetCore.Components.Forms
+@inject IBenAdminClient AdminClient
+
+@if (_loading) { <TelerikLoaderContainer Visible="true" Text="Loading files…" /> }
+else
+{
+    @* ── Toolbar ─────────────────────────────────────────────────────────────── *@
+    <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+        <InputFile OnChange="OnFileSelected" accept="*" style="display:none;" id="case-file-upload" />
+        <label for="case-file-upload" class="k-button k-button-sm k-button-outline k-button-outline-base" style="cursor:pointer;">
+            <TelerikSvgIcon Icon="@SvgIcon.Upload" /> Upload File
+        </label>
+        @if (_uploading) { <TelerikLoader Size="sm" /> }
+    </div>
+
+    @if (_error is not null) { <div class="alert alert-danger py-2 small mb-3">@_error</div> }
+
+    @if (_files.Count == 0)
+    {
+        <div class="text-secondary text-center py-4 small">
+            No files yet. Upload evidence photos, audio, video, or documents for this case.
+        </div>
+    }
+
+    @* ── File list ───────────────────────────────────────────────────────────── *@
+    <div class="d-flex flex-column gap-2">
+        @foreach (var file in _files)
+        {
+            var f = file;
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-start justify-content-between gap-2">
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold small mb-1">@f.FileName</div>
+                            <UserMediaPreview FileId="@f.UploadFileId" FileName="@f.FileName" ContentType="@f.ContentType" FileSize="@f.FileSize" />
+                            @if (!string.IsNullOrWhiteSpace(f.Description))
+                            {
+                                <div class="small text-secondary mt-1">@f.Description</div>
+                            }
+                            <div class="text-muted mt-1" style="font-size:.7rem;">
+                                @FormatSize(f.FileSize) · Added @f.DateCreated.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                            </div>
+                        </div>
+                        <TelerikButton Size="sm" FillMode="flat" ThemeColor="error" Icon="@SvgIcon.Trash"
+                                       OnClick="@(() => DeleteFile(f.Id))" />
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId  { get; set; }
+    [Parameter, EditorRequired] public Guid CaseId { get; set; }
+
+    private List<CaseFileRecord> _files = [];
+    private bool _loading = true;
+    private bool _uploading;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _files = (await AdminClient.GetCaseFilesAsync(OrgId, CaseId)).ToList(); }
+        catch { _error = "Failed to load files."; }
+        _loading = false;
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _uploading = true; _error = null;
+        StateHasChanged();
+        try
+        {
+            foreach (var f in e.GetMultipleFiles(5))
+            {
+                using var stream = f.OpenReadStream(maxAllowedSize: 100_000_000); // 100 MB
+                var result = await AdminClient.UploadCaseFileAsync(OrgId, CaseId, null, stream, f.Name, f.ContentType);
+                if (result is not null) _files.Insert(0, result);
+            }
+        }
+        catch { _error = "Failed to upload file."; }
+        finally { _uploading = false; StateHasChanged(); }
+    }
+
+    private async Task DeleteFile(Guid caseFileId)
+    {
+        await AdminClient.DeleteCaseFileAsync(OrgId, CaseId, caseFileId);
+        _files.RemoveAll(f => f.Id == caseFileId);
+        StateHasChanged();
+    }
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        < 1024             => $"{bytes} B",
+        < 1024 * 1024      => $"{bytes / 1024.0:0.#} KB",
+        _                  => $"{bytes / (1024.0 * 1024):0.#} MB",
+    };
+}

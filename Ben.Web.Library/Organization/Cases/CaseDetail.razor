@@ -57,6 +57,11 @@
                 <span class="badge fs-6 @CaseList.StatusBadgeClass(_case.Status)">
                     @CaseList.StatusLabel(_case.Status)
                 </span>
+                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                               FillMode="@ThemeConstants.Button.FillMode.Outline"
+                               OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/{CaseId}/audio-mix"))">
+                    🎚 Audio Mixer
+                </TelerikButton>
                 <TelerikButton Icon="@SvgIcon.Pencil" Size="@ThemeConstants.Button.Size.Small"
                                OnClick="OpenEditDialog">Edit Case</TelerikButton>
             </div>
@@ -122,6 +127,13 @@
             <TabStripTab Title="Investigations">
                 <div class="mt-2">
                     <InvestigationPanel OrgId="@OrgId" CaseId="@CaseId" />
+                </div>
+            </TabStripTab>
+
+            @* ── Files ─────────────────────────────────────────────────────── *@
+            <TabStripTab Title="Files">
+                <div class="mt-2">
+                    <CaseFiles OrgId="@OrgId" CaseId="@CaseId" />
                 </div>
             </TabStripTab>
 

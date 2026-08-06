@@ -51,6 +51,14 @@ public sealed class UploadFileAudioEditController : BenControllerBase
         if (request.Operation == AudioEditOperation.Gain && request.GainDb is null)
             return BadRequest("GainDb is required for Gain.");
 
+        if (request.Operation == AudioEditOperation.Speed &&
+            (request.SpeedRatio is null || request.SpeedRatio is <= 0 or > 4))
+            return BadRequest("SpeedRatio is required for Speed and must be between 0 (exclusive) and 4.");
+
+        if (request.Operation == AudioEditOperation.Pitch &&
+            (request.PitchSemitones is null || request.PitchSemitones is < -24 or > 24))
+            return BadRequest("PitchSemitones is required for Pitch and must be between -24 and 24.");
+
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
         var source = await db.UploadFiles.AsNoTracking()
@@ -76,6 +84,8 @@ public sealed class UploadFileAudioEditController : BenControllerBase
                     AudioEditOperation.Gain      => AudioEditor.Gain(sourceStream, source.ContentType, request.GainDb!.Value),
                     AudioEditOperation.Fade      => AudioEditor.Fade(sourceStream, source.ContentType, request.FadeInSeconds ?? 0, request.FadeOutSeconds ?? 0),
                     AudioEditOperation.Reverse   => AudioEditor.Reverse(sourceStream, source.ContentType),
+                    AudioEditOperation.Speed     => AudioEditor.ChangeSpeed(sourceStream, source.ContentType, request.SpeedRatio!.Value),
+                    AudioEditOperation.Pitch     => AudioEditor.PitchShift(sourceStream, source.ContentType, request.PitchSemitones!.Value),
                     _                            => throw new NotSupportedException($"Unknown operation: {request.Operation}"),
                 };
             }

@@ -962,6 +962,27 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/research/{entryId}", token);
 
+    // ── Case Files (Files/Evidence tab) ──────────────────────────────────────
+
+    public async Task<IReadOnlyList<CaseFileRecord>> GetCaseFilesAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<CaseFileRecord>>($"/api/orgs/{orgId}/cases/{caseId}/files", token) ?? [];
+
+    public async Task<CaseFileRecord?> UploadCaseFileAsync(Guid orgId, Guid caseId, string? description, Stream content, string fileName, string contentType, CancellationToken token = default)
+    {
+        using var form = new MultipartFormDataContent();
+        if (description is not null) form.Add(new StringContent(description), "description");
+        using var sc = new StreamContent(content);
+        sc.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        form.Add(sc, "file", fileName);
+        return await _api.PostMultipartAsync<CaseFileRecord>($"/api/orgs/{orgId}/cases/{caseId}/files", form, token);
+    }
+
+    public Task<bool> DeleteCaseFileAsync(Guid orgId, Guid caseId, Guid caseFileId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/files/{caseFileId}", token);
+
+    public Task<CaseFileRecord?> ExportAudioMixAsync(Guid orgId, Guid caseId, ExportAudioMixRequest request, CancellationToken token = default)
+        => _api.PostAsync<ExportAudioMixRequest, CaseFileRecord>($"/api/orgs/{orgId}/cases/{caseId}/audio-mix/export", request, token);
+
     // ── Case Notes ────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<CaseNoteDto>> GetCaseNotesAsync(Guid orgId, Guid caseId, CancellationToken token = default)
