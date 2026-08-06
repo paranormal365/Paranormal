@@ -96,9 +96,11 @@ This is the largest item here — likely its own multi-phase effort (data model 
 
 ---
 
-## 8. Media & Properties panel — dedicated Preview tab (not started)
+## 8. Media & Properties panel — dedicated Preview tab + real thumbnails (not started)
 
-In the video editor's floating "Media & Properties" window (`Ben.Video.Editor/Components/VideoEditor.razor`), add a third tab and move the preview window into it, instead of the preview sitting below the editor page as it does today.
+In the video editor's floating "Media & Properties" window (`Ben.Video.Editor/Components/VideoEditor.razor`):
+- Add a third tab and move the preview window into it, instead of the preview sitting below the editor page as it does today.
+- `ClipBrowser.razor`'s Video/Audio/Image/Server tabs currently show icon-only placeholder rows (`SvgIcon.FileVideo`/`FileAudio`/`Image`) for every clip — replace with small thumbnails or a list view like the main website's media library (`MediaLibraryGrid.razor`, `Ben.Web.Library/Media/`) already does: eager-load thumbnails for images, lazy-load-on-click for video/audio (since there's no dedicated thumbnail endpoint yet — same constraint noted in item #6).
 
 > Requested 2026-08-06, right after the panel's drag/resize/fill-height crash was fixed (see item #6's follow-up above) — the user wants this done once that panel is confirmed working correctly, which it now is.
 
