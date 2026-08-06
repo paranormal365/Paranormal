@@ -564,6 +564,17 @@ public interface IBenAdminClient
     Task<CoClientItem?> AddCoClientAsync(Guid caseId, string email, CancellationToken token = default);
     Task<bool> RemoveCoClientAsync(Guid caseId, Guid accessId, CancellationToken token = default);
 
+    // ── Related people (basic-info, no account) ─────────────────────────────────
+
+    /// <summary>Returns people referenced on this case who are not platform users.</summary>
+    Task<IReadOnlyList<CaseRelatedPersonRecord>> GetRelatedPeopleAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Adds a basic-info reference to someone connected to the case (no account created).</summary>
+    Task<CaseRelatedPersonRecord?> AddRelatedPersonAsync(Guid caseId, AddRelatedPersonRequest request, CancellationToken token = default);
+
+    /// <summary>Removes a related-person reference.</summary>
+    Task<bool> RemoveRelatedPersonAsync(Guid caseId, Guid personId, CancellationToken token = default);
+
     /// <summary>Attaches a file to an occurrence entry using case-scoped storage.</summary>
     Task<OccurrenceFileItem?> AttachOccurrenceFileAsync(Guid caseId, Guid entryId, Stream content, string fileName, string contentType, CancellationToken token = default);
 

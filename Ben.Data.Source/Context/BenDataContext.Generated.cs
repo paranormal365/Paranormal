@@ -87,6 +87,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<CaseReportSectionFile> CaseReportSectionFiles { get; set; }
         public virtual DbSet<CaseResearchEntry> CaseResearchEntries { get; set; }
         public virtual DbSet<CaseFile> CaseFiles { get; set; }
+        public virtual DbSet<CaseRelatedPerson> CaseRelatedPeople { get; set; }
         public virtual DbSet<CaseNote> CaseNotes { get; set; }
         public virtual DbSet<InvestigationScheduleProposal> InvestigationScheduleProposals { get; set; }
         public virtual DbSet<ScheduleProposalSlot> ScheduleProposalSlots { get; set; }
@@ -1423,6 +1424,25 @@ namespace Ben.Data.Source.Context
                 .HasIndex(e => e.CaseId);
             modelBuilder.Entity<CaseFile>()
                 .HasIndex(e => e.UploadFileId);
+
+            // ── CaseRelatedPerson ─────────────────────────────────────────────
+            modelBuilder.Entity<CaseRelatedPerson>()
+                .HasOne(e => e.Case).WithMany(e => e.RelatedPeople)
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CaseRelatedPerson>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseRelatedPerson>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseRelatedPerson>()
+                .Property(e => e.Name).HasMaxLength(200);
+            modelBuilder.Entity<CaseRelatedPerson>()
+                .Property(e => e.Relationship).HasMaxLength(100);
+            modelBuilder.Entity<CaseRelatedPerson>()
+                .Property(e => e.Notes).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<CaseRelatedPerson>()
+                .HasIndex(e => e.CaseId);
 
             // ── InvestigationScheduleProposal ──────────────────────────────
             modelBuilder.Entity<InvestigationScheduleProposal>()

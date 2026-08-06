@@ -1122,6 +1122,17 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> RemoveCoClientAsync(Guid caseId, Guid accessId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/my-cases/{caseId}/co-clients/{accessId}", token);
 
+    // ── Related people (basic-info, no account) ─────────────────────────────────
+
+    public async Task<IReadOnlyList<CaseRelatedPersonRecord>> GetRelatedPeopleAsync(Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<CaseRelatedPersonRecord>>($"/api/my-cases/{caseId}/related-people", token) ?? [];
+
+    public Task<CaseRelatedPersonRecord?> AddRelatedPersonAsync(Guid caseId, AddRelatedPersonRequest request, CancellationToken token = default)
+        => _api.PostAsync<AddRelatedPersonRequest, CaseRelatedPersonRecord>($"/api/my-cases/{caseId}/related-people", request, token);
+
+    public Task<bool> RemoveRelatedPersonAsync(Guid caseId, Guid personId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/my-cases/{caseId}/related-people/{personId}", token);
+
     // ── My Investigations ───────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default)
