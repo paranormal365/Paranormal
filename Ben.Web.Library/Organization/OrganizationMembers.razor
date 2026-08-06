@@ -7,6 +7,7 @@
 
 @page "/organizations/{OrgId:guid}/members"
 @namespace Ben.Web.Library.Organization
+@using Ben.Web.Library.Shared
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 
@@ -49,7 +50,7 @@
                 <GridColumn Title="Member">
                     <Template>
                         @{ var m2 = (OrgMembershipItem)context; }
-                        @m2.AppUserId.ToString()[..8]
+                        <UserNameLink AppUserId="@m2.AppUserId" DisplayName="@m2.DisplayName" />
                     </Template>
                 </GridColumn>
                 <GridColumn Field="@nameof(OrgMembershipItem.IsActive)" Title="Active" Width="80px" />
