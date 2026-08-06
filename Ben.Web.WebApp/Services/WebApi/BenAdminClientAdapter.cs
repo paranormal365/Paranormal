@@ -66,6 +66,25 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public async Task<IReadOnlyList<AdminInvestigationSummaryRecord>> GetAllInvestigationsAsync(CancellationToken token = default)
         => await _api.GetAsync<IReadOnlyList<AdminInvestigationSummaryRecord>>("/api/admin/investigations", token) ?? [];
 
+    // ── Universal media library sharing ──────────────────────────────────────
+
+    public async Task<IReadOnlyList<UploadFileShareRecord>> GetSharesV2Async(Guid fileId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<UploadFileShareRecord>>($"/api/upload-files/{fileId}/shares-v2", token) ?? [];
+
+    public Task<UploadFileShareRecord?> CreateShareAsync(Guid fileId, CreateShareRequest request, CancellationToken token = default)
+        => _api.PostAsync<CreateShareRequest, UploadFileShareRecord>($"/api/upload-files/{fileId}/shares-v2", request, token);
+
+    public Task<bool> RemoveShareV2Async(Guid shareId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/upload-file-shares-v2/{shareId}", token);
+
+    public async Task<IReadOnlyList<UploadFileRecord>> GetMediaLibraryFilesAsync(string[]? contentTypePrefixes = null, CancellationToken token = default)
+    {
+        var url = "/api/media-library/files";
+        if (contentTypePrefixes is { Length: > 0 })
+            url += $"?contentTypePrefixes={Uri.EscapeDataString(string.Join(',', contentTypePrefixes))}";
+        return await _api.GetAsync<IReadOnlyList<UploadFileRecord>>(url, token) ?? [];
+    }
+
     // ── Audit Log ─────────────────────────────────────────────────────────────
 
     public async Task<AuditLogPagedResponse?> GetAuditLogsAsync(
@@ -986,6 +1005,10 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<bool> DeleteCaseFileAsync(Guid orgId, Guid caseId, Guid caseFileId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/files/{caseFileId}", token);
+
+    public Task<CaseFileRecord?> LinkCaseFileAsync(Guid orgId, Guid caseId, Guid uploadFileId, string? description = null, CancellationToken token = default)
+        => _api.PostAsync<LinkCaseFileRequest, CaseFileRecord>(
+            $"/api/orgs/{orgId}/cases/{caseId}/files/link/{uploadFileId}", new LinkCaseFileRequest(description), token);
 
     public Task<CaseFileRecord?> ExportAudioMixAsync(Guid orgId, Guid caseId, ExportAudioMixRequest request, CancellationToken token = default)
         => _api.PostAsync<ExportAudioMixRequest, CaseFileRecord>($"/api/orgs/{orgId}/cases/{caseId}/audio-mix/export", request, token);

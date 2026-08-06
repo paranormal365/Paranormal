@@ -60,6 +60,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UploadFileTypeExtension> UploadFileTypeExtensions { get; set; }
         public virtual DbSet<UploadFile> UploadFiles { get; set; }
         public virtual DbSet<UploadFileOrganizationShare> UploadFileOrganizationShares { get; set; }
+        public virtual DbSet<UploadFileShare> UploadFileShares { get; set; }
         public virtual DbSet<UploadFilePermissionRequest> UploadFilePermissionRequests { get; set; }
         public virtual DbSet<ClientRequest> ClientRequests { get; set; }
         public virtual DbSet<ClientRequestOrganization> ClientRequestOrganizations { get; set; }
@@ -607,6 +608,40 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<UploadFileOrganizationShare>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── UploadFileShare ────────────────────────────────────────────────
+            modelBuilder.Entity<UploadFileShare>()
+                .HasIndex(e => new { e.UploadFileId, e.TargetType, e.IsActive });
+            modelBuilder.Entity<UploadFileShare>()
+                .HasIndex(e => e.TargetAppUserId);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasIndex(e => e.TargetInvestigationId);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasIndex(e => e.TargetOrganizationId);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasOne(e => e.UploadFile).WithMany(e => e.Shares)
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasOne(e => e.TargetAppUser).WithMany()
+                .HasForeignKey(e => e.TargetAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasOne(e => e.TargetInvestigation).WithMany()
+                .HasForeignKey(e => e.TargetInvestigationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasOne(e => e.TargetOrganization).WithMany()
+                .HasForeignKey(e => e.TargetOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasOne(e => e.SharedByAppUser).WithMany()
+                .HasForeignKey(e => e.SharedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasOne(e => e.RemovedByAppUser).WithMany()
+                .HasForeignKey(e => e.RemovedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileShare>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 

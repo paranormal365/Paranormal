@@ -59,6 +59,24 @@ public interface IBenAdminClient
     /// <summary>Returns every investigation across every organization (SuperAdmin only).</summary>
     Task<IReadOnlyList<AdminInvestigationSummaryRecord>> GetAllInvestigationsAsync(CancellationToken token = default);
 
+    // ── Universal media library sharing (person / investigation team / org / public) ────────────
+
+    /// <summary>Returns active shares for a file. Owner or SuperAdmin only.</summary>
+    Task<IReadOnlyList<UploadFileShareRecord>> GetSharesV2Async(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Grants one of the 4 share targets on a file the caller owns.</summary>
+    Task<UploadFileShareRecord?> CreateShareAsync(Guid fileId, CreateShareRequest request, CancellationToken token = default);
+
+    /// <summary>Revokes a share. Owner or SuperAdmin only.</summary>
+    Task<bool> RemoveShareV2Async(Guid shareId, CancellationToken token = default);
+
+    /// <summary>
+    /// Returns files across every scope the universal media library aggregates (owned, shared,
+    /// org, public, case-linked). Pass <paramref name="contentTypePrefixes"/> (e.g. "video/","image/")
+    /// to narrow the result; omit for everything.
+    /// </summary>
+    Task<IReadOnlyList<UploadFileRecord>> GetMediaLibraryFilesAsync(string[]? contentTypePrefixes = null, CancellationToken token = default);
+
     // ── Audit Log ─────────────────────────────────────────────────────────────
 
     Task<AuditLogPagedResponse?> GetAuditLogsAsync(int page = 1, int pageSize = 50, string? entityType = null, int? action = null, Guid? userId = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken token = default);
@@ -505,6 +523,9 @@ public interface IBenAdminClient
 
     /// <summary>Un-links a file from the case. The underlying UploadFile is preserved.</summary>
     Task<bool> DeleteCaseFileAsync(Guid orgId, Guid caseId, Guid caseFileId, CancellationToken token = default);
+
+    /// <summary>Links an existing UploadFile (e.g. picked from the media library) to the case's Files tab — no bytes are copied.</summary>
+    Task<CaseFileRecord?> LinkCaseFileAsync(Guid orgId, Guid caseId, Guid uploadFileId, string? description = null, CancellationToken token = default);
 
     /// <summary>Renders the placed clips down to a single mixed audio file and saves it to the case's Files tab.</summary>
     Task<CaseFileRecord?> ExportAudioMixAsync(Guid orgId, Guid caseId, ExportAudioMixRequest request, CancellationToken token = default);

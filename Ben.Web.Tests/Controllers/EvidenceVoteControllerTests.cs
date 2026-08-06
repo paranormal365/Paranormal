@@ -235,6 +235,26 @@ public class EvidenceVoteControllerTests
     }
 
     [Fact]
+    public async Task CastVote_FileWithNoCaseLink_SetsCaseContextFieldsToDefault()
+    {
+        // Media library files often have no CaseTimelineEntryFile at all — voting must still
+        // succeed, with case-context fields defaulting to false/null rather than erroring.
+        var factory = TestDbFactory.Create();
+        var fileId  = await SeedFileAsync(factory);
+        var userId  = Guid.NewGuid();
+
+        var result = await Build(factory, userId)
+            .CastVote(fileId, new CastEvidenceVoteRequest(EvidenceVoteType.Inconclusive, null), CancellationToken.None);
+        Assert.IsType<OkObjectResult>(result.Result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var vote = await db.EvidenceVotes.FirstAsync(v => v.UploadFileId == fileId && v.VoterAppUserId == userId);
+        Assert.Null(vote.CaseId);
+        Assert.False(vote.IsVoterCaseOrgMember);
+        Assert.False(vote.IsVoterCaseClient);
+    }
+
+    [Fact]
     public async Task CastVote_ExistingVote_UpdatesVoteTypeInPlace()
     {
         var factory = TestDbFactory.Create();

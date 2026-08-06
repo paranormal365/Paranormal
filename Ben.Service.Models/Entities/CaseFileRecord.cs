@@ -13,3 +13,5 @@ public record CaseFileRecord
     public DateTime DateCreated { get; init; }
     public Guid CreatedByAppUserId { get; init; }
 }
+
+public record LinkCaseFileRequest(string? Description);

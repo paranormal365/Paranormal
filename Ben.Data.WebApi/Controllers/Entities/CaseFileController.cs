@@ -90,6 +90,37 @@ public sealed class CaseFileController : BenControllerBase
         return Ok(ToRecord(caseFile));
     }
 
+    /// <summary>
+    /// Links an existing UploadFile (e.g. picked from the universal media library) to this case's
+    /// Files tab, without copying bytes. Copy-on-attach semantics are a separate future phase —
+    /// this is a reference, matching how every other CaseFile row already behaves.
+    /// </summary>
+    [HttpPost("link/{uploadFileId:guid}")]
+    public async Task<ActionResult<CaseFileRecord>> Link(
+        Guid orgId, Guid caseId, Guid uploadFileId, [FromBody] LinkCaseFileRequest? request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct)) return NotFound();
+
+        var uploadFile = await db.UploadFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == uploadFileId, ct);
+        if (uploadFile is null) return NotFound("File not found.");
+        if (await db.CaseFiles.AnyAsync(f => f.CaseId == caseId && f.UploadFileId == uploadFileId, ct))
+            return Conflict("This file is already linked to this case.");
+
+        var caseFile = new CaseFile
+        {
+            Id = Guid.NewGuid(), CaseId = caseId, UploadFileId = uploadFileId,
+            Description = string.IsNullOrWhiteSpace(request?.Description) ? null : request.Description.Trim(),
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        };
+        db.CaseFiles.Add(caseFile);
+        await db.SaveChangesAsync(ct);
+        caseFile.UploadFile = uploadFile;
+        return Ok(ToRecord(caseFile));
+    }
+
     [HttpDelete("{caseFileId:guid}")]
     public async Task<IActionResult> Delete(Guid orgId, Guid caseId, Guid caseFileId, CancellationToken ct)
     {

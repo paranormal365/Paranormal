@@ -1,3 +1,5 @@
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Media
 @using Ben.Web.Library.Services
 @using Ben.Web.Library.User
 @using Microsoft.AspNetCore.Components.Forms
@@ -12,6 +14,9 @@ else
         <label for="case-file-upload" class="k-button k-button-sm k-button-outline k-button-outline-base" style="cursor:pointer;">
             <TelerikSvgIcon Icon="@SvgIcon.Upload" /> Upload File
         </label>
+        <TelerikButton Size="sm" FillMode="outline" Icon="@SvgIcon.Images" OnClick="@(() => _showLibraryPicker = true)">
+            Attach from Library
+        </TelerikButton>
         @if (_uploading) { <TelerikLoader Size="sm" /> }
     </div>
 
@@ -52,6 +57,15 @@ else
     </div>
 }
 
+@* ── Attach from Library picker ───────────────────────────────────────────── *@
+<TelerikWindow @bind-Visible="@_showLibraryPicker" Width="90vw" Height="80vh" Modal="true">
+    <WindowTitle>Attach from Library</WindowTitle>
+    <WindowContent>
+        <MediaLibraryGrid PickerMode="true" MultiSelect="true" OnFilesSelected="OnLibraryFilesSelected" />
+    </WindowContent>
+    <WindowActions><WindowAction Name="Close" OnClick="@(() => _showLibraryPicker = false)" /></WindowActions>
+</TelerikWindow>
+
 @code {
     [Parameter, EditorRequired] public Guid OrgId  { get; set; }
     [Parameter, EditorRequired] public Guid CaseId { get; set; }
@@ -60,6 +74,7 @@ else
     private bool _loading = true;
     private bool _uploading;
     private string? _error;
+    private bool _showLibraryPicker;
 
     protected override async Task OnInitializedAsync()
     {
@@ -83,6 +98,21 @@ else
         }
         catch { _error = "Failed to upload file."; }
         finally { _uploading = false; StateHasChanged(); }
+    }
+
+    private async Task OnLibraryFilesSelected(IReadOnlyList<UploadFileRecord> selected)
+    {
+        _showLibraryPicker = false;
+        foreach (var file in selected)
+        {
+            try
+            {
+                var result = await AdminClient.LinkCaseFileAsync(OrgId, CaseId, file.Id);
+                if (result is not null) _files.Insert(0, result);
+            }
+            catch { _error = $"Failed to attach '{file.FileName}'."; }
+        }
+        StateHasChanged();
     }
 
     private async Task DeleteFile(Guid caseFileId)

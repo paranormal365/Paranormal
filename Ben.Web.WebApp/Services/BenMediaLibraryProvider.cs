@@ -40,7 +40,11 @@ public sealed class BenMediaLibraryProvider : IMediaLibraryProvider
     public async Task<IReadOnlyList<MediaLibraryFile>> GetFilesAsync(
         CancellationToken cancellationToken = default)
     {
-        var url      = $"{_apiOptions.BaseUrl.TrimEnd('/')}/api/media-library/files";
+        // Explicitly scoped to video/audio/image — the aggregation endpoint now also returns
+        // documents and other file types for the general-purpose media library, so this keeps
+        // Ben.Video's picker payload the same size it always was (the .Where below is a
+        // belt-and-suspenders client-side filter, not the primary mechanism).
+        var url      = $"{_apiOptions.BaseUrl.TrimEnd('/')}/api/media-library/files?contentTypePrefixes=video/,audio/,image/";
         var response = await SendAsync(HttpMethod.Get, url, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
