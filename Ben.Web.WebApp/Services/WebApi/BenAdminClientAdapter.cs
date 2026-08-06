@@ -714,8 +714,7 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         => _api.DeleteAsync($"{InvBase(orgId, caseId)}/{id}", token);
 
     public Task<bool> CancelInvestigationByOrgAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
-        => _api.PostAsync<object, object>($"{InvBase(orgId, caseId)}/{id}/cancel", new { }, token)
-               .ContinueWith(t => t.Result is not null);
+        => _api.PostVoidAsync($"{InvBase(orgId, caseId)}/{id}/cancel", new { }, token);
 
     public async Task<IReadOnlyList<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
     {
@@ -1124,7 +1123,7 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     }
 
     public async Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default)
-        => await _api.PutAsync<object, object>($"/api/my-investigations/{attendeeId}/rsvp", new { Rsvp = rsvp }, token);
+        => await _api.PutVoidAsync($"/api/my-investigations/{attendeeId}/rsvp", new { Rsvp = rsvp }, token);
 
     // ── Case Messages (org side) ──────────────────────────────────────────────
 

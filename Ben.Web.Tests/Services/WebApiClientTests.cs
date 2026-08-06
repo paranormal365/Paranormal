@@ -225,4 +225,58 @@ public class WebApiClientTests
 
         Assert.False(result);
     }
+
+    // ── 204 No Content handling ───────────────────────────────────────────────
+    //
+    // Background: PostAsync/PutAsync always call ReadFromJsonAsync<TResponse> on any
+    // success status, including 204 No Content, which has an empty body. That throws
+    // a JsonException even though the server-side operation succeeded. Found twice in
+    // BenAdminClientAdapter (client-request decline flow, investigation cancel/RSVP) —
+    // the fix is to use PostVoidAsync/PutVoidAsync against endpoints that return 204.
+
+    [Fact]
+    public async Task PostAsync_On204NoContent_ThrowsJsonException()
+    {
+        var (client, _, handler) = Build(TestToken);
+        handler.ResponseStatus = HttpStatusCode.NoContent;
+        handler.ResponseJson = "";
+
+        await Assert.ThrowsAsync<System.Text.Json.JsonException>(
+            () => client.PostAsync<object, object>("/api/test", new { }));
+    }
+
+    [Fact]
+    public async Task PutAsync_On204NoContent_ThrowsJsonException()
+    {
+        var (client, _, handler) = Build(TestToken);
+        handler.ResponseStatus = HttpStatusCode.NoContent;
+        handler.ResponseJson = "";
+
+        await Assert.ThrowsAsync<System.Text.Json.JsonException>(
+            () => client.PutAsync<object, object>("/api/test", new { }));
+    }
+
+    [Fact]
+    public async Task PostVoidAsync_On204NoContent_ReturnsTrue()
+    {
+        var (client, _, handler) = Build(TestToken);
+        handler.ResponseStatus = HttpStatusCode.NoContent;
+        handler.ResponseJson = "";
+
+        var result = await client.PostVoidAsync("/api/test", new { });
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public async Task PutVoidAsync_On204NoContent_ReturnsTrue()
+    {
+        var (client, _, handler) = Build(TestToken);
+        handler.ResponseStatus = HttpStatusCode.NoContent;
+        handler.ResponseJson = "";
+
+        var result = await client.PutVoidAsync("/api/test", new { });
+
+        Assert.True(result);
+    }
 }
