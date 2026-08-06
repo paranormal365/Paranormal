@@ -41,10 +41,13 @@
                 @foreach (var inv in upcoming)
                 {
                     var isSaving = _saving.Contains(inv.AttendeeId);
-                    <div class="card @(inv.Status == InvestigationStatus.InProgress ? "border-warning" : "")">
+                    <div class="card @(inv.Status == InvestigationStatus.InProgress ? "border-warning" : "")"
+                         style="cursor:pointer;" @onclick="@(() => OpenInvestigation(inv))">
                         <div class="card-body">
                             @InvCardHeader(inv)
-                            @InvRsvpButtons(inv, isSaving)
+                            <span @onclick:stopPropagation="true">
+                                @InvRsvpButtons(inv, isSaving)
+                            </span>
                         </div>
                     </div>
                 }
@@ -57,7 +60,7 @@
             <div class="d-flex flex-column gap-3">
                 @foreach (var inv in past)
                 {
-                    <div class="card opacity-75">
+                    <div class="card opacity-75" style="cursor:pointer;" @onclick="@(() => OpenInvestigation(inv))">
                         <div class="card-body">
                             @InvCardHeader(inv)
                             @if (inv.DidAttend.HasValue)
@@ -87,6 +90,9 @@
         catch { _error = "Failed to load investigations."; _items = []; }
         StateHasChanged();
     }
+
+    private void OpenInvestigation(MyInvestigationItem inv)
+        => NavManager.NavigateTo($"/organizations/{inv.OrgId}/cases/{inv.CaseId}?tab=investigations");
 
     private async Task SetRsvp(MyInvestigationItem inv, RsvpStatus rsvp)
     {

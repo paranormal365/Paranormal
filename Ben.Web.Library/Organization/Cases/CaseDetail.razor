@@ -68,7 +68,7 @@
         </div>
 
         @* ── Tab strip ─────────────────────────────────────────────────────── *@
-        <TelerikTabStrip>
+        <TelerikTabStrip @bind-ActiveTabIndex="_activeTabIndex">
 
             @* ── Overview ────────────────────────────────────────────────── *@
             <TabStripTab Title="Overview">
@@ -247,11 +247,29 @@
     [Parameter] public Guid OrgId { get; set; }
     [Parameter] public Guid CaseId { get; set; }
 
+    /// <summary>Selects the initial tab, e.g. "?tab=investigations" — used by My Investigations' clickable cards.</summary>
+    [Parameter, SupplyParameterFromQuery(Name = "tab")] public string? InitialTab { get; set; }
+
     private CaseRecord? _case;
     private bool _loaded;
     private string? _error;
     private bool _isBusy;
     private int _unreadCount;
+    private int _activeTabIndex;
+
+    private static int TabIndexFor(string? tab) => tab?.ToLowerInvariant() switch
+    {
+        "timeline"       => 1,
+        "investigations" => 2,
+        "files"          => 3,
+        "transfers"      => 4,
+        "messages"       => 5,
+        "reports"        => 6,
+        "research"       => 7,
+        "notes"          => 8,
+        "video"          => 9,
+        _                => 0,
+    };
 
     // Edit dialog
     private bool _showEdit;
@@ -268,6 +286,11 @@
         .GetValues<CaseStatus>()
         .Select(s => new StatusOption(s, CaseList.StatusLabel(s)))
         .ToList();
+
+    protected override void OnInitialized()
+    {
+        _activeTabIndex = TabIndexFor(InitialTab);
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

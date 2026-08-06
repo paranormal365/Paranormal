@@ -24,9 +24,11 @@ A user with the SuperAdmin role should be able to view all cases and investigati
 
 ---
 
-## 3. "My Investigations" — clickable detail view
+## 3. "My Investigations" — clickable detail view ✅ Complete (2026-08-06)
 
 Under "My Investigations," each investigation should be clickable and open a detail view showing whatever the current user has permission to see: other members' notes, research, media, evidence, votes, etc.
+
+> **Shipped on `feature/my-investigations-detail-view`:** rather than building a new consolidated view (which would mean re-implementing every existing permission check), each investigation card now navigates to the existing `CaseDetail.razor` page — it already gates every tab (Notes, Research, Files, Reports, etc.) with the same case-manager-or-org-member checks used everywhere else, so "whatever the user has permission to see" was already correct there. Added `?tab=` query-param support to `CaseDetail.razor` so the link lands directly on the Investigations tab instead of Overview.
 
 ---
 
