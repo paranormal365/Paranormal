@@ -107,6 +107,7 @@ In the video editor's floating "Media & Properties" window (`Ben.Video.Editor/Co
   - The playhead can be dragged directly by mouse.
   - Clips can be trimmed by dragging their start/end edges directly on the timeline (not only via the Properties panel's trim sliders).
   - This would also make automated/Playwright testing of drag-to-reposition possible — native HTML5 DnD doesn't respond to synthetic mouse events, which blocked verifying that interaction during item #9's test pass.
+- Minor visual polish: when the window is minimized, the titlebar's bottom-left/bottom-right corners don't get the same border-radius as the rest of the window outline.
 
 > Requested 2026-08-06, right after the panel's drag/resize/fill-height crash was fixed (see item #6's follow-up above) — the user wants this done once that panel is confirmed working correctly, which it now is. Confirmed already working as of item #9's test pass and does *not* need further work: splitting a clip produces two independently selectable/deletable clips on the timeline.
 
