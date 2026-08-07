@@ -102,8 +102,13 @@ In the video editor's floating "Media & Properties" window (`Ben.Video.Editor/Co
 - Add a third tab and move the preview window into it, instead of the preview sitting below the editor page as it does today.
 - `ClipBrowser.razor`'s Video/Audio/Image/Server tabs currently show icon-only placeholder rows (`SvgIcon.FileVideo`/`FileAudio`/`Image`) for every clip — replace with small thumbnails or a list view like the main website's media library (`MediaLibraryGrid.razor`, `Ben.Web.Library/Media/`) already does: eager-load thumbnails for images, lazy-load-on-click for video/audio (since there's no dedicated thumbnail endpoint yet — same constraint noted in item #6). **No voting UI** — unlike `MediaLibraryGrid`'s optional `ShowVoting`/`EvidenceVoteWidget`, this bin is media-only, no vote controls or vote results.
 - The Properties tab's content (`ClipEditor`/`AudioClipEditor`/`ImageClipEditor`/etc.) doesn't dynamically expand when the user resizes the Media & Properties window larger — needs to reflow/fill the available space rather than staying a fixed size.
+- The new Preview tab (above) has the same requirement: it must resize responsively as the window resizes, not stay fixed. It renders a **small** version of the composition — export/final render stays at the normal/full canvas size regardless of how small the in-panel preview is displayed.
+- Override native HTML5 drag-and-drop on the timeline with a custom pointer-based system (matching the pattern already used for `WaveSurferPlayer.razor.js`'s unified drag mode, see item #7) so:
+  - The playhead can be dragged directly by mouse.
+  - Clips can be trimmed by dragging their start/end edges directly on the timeline (not only via the Properties panel's trim sliders).
+  - This would also make automated/Playwright testing of drag-to-reposition possible — native HTML5 DnD doesn't respond to synthetic mouse events, which blocked verifying that interaction during item #9's test pass.
 
-> Requested 2026-08-06, right after the panel's drag/resize/fill-height crash was fixed (see item #6's follow-up above) — the user wants this done once that panel is confirmed working correctly, which it now is.
+> Requested 2026-08-06, right after the panel's drag/resize/fill-height crash was fixed (see item #6's follow-up above) — the user wants this done once that panel is confirmed working correctly, which it now is. Confirmed already working as of item #9's test pass and does *not* need further work: splitting a clip produces two independently selectable/deletable clips on the timeline.
 
 ---
 
