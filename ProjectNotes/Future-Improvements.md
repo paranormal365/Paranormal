@@ -599,3 +599,17 @@ widths. Likely fix: much smaller label font and/or showing only every Nth label 
 not just one.
 
 > Noted by the user 2026-08-08. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+
+---
+
+## 31. Callout text-inside parity, or link a text overlay + callout as one unit (not started)
+
+Callouts gained basic centered text-inside support in phase 74 (item #16 slice A), but the fuller ask:
+either make text-inside a first-class equal of standalone text overlays (fonts, alignment within the
+shape, wrapping, etc.), **or** support linking a text overlay and a callout together into one logical
+unit — if one moves, the other moves; if one fades, the other fades; if one resizes, the other resizes,
+and so on. Linking may be the more powerful model (any shape + any text placement) but needs design:
+a link id between track items, grouped selection/drag on the timeline and canvas, and shared
+motion-path/fade application.
+
+> Requested by the user 2026-08-08. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
