@@ -147,3 +147,92 @@ Need a dedicated pass to thoroughly test the Ben.Video.Editor component and veri
 Ben.Video's audio editing should support separating left and right audio channels so each can be edited independently.
 
 > Requested 2026-08-06, during the item #9 test pass.
+
+---
+
+## 11. Real-time, editable preview window (not started)
+
+Once every layer type (video, audio, image, text overlays, callouts, transitions, motion keyframes) is rendering correctly and passing all tests, revisit the preview window's location and purpose:
+- The preview should regenerate live as changes are made on the timeline, rather than requiring an explicit render/"Preview" step.
+- The preview should become interactive — usable to make changes directly with the mouse on the canvas itself, e.g. dragging a motion keyframe placed at a marker, or resizing a layer (callout, text, image) directly on the preview instead of only through the Properties panel's sliders.
+
+> Requested 2026-08-08. Depends on the Ben.Video.Editor QA sweep's remaining layer-animation gaps being resolved first (resize handles, color/shape-over-time — see [[project_video_editor_qa_sweep]] item #14), per the user's own sequencing. Related to item #8's preview-placement work.
+
+---
+
+## 12. Real-time preview rendering pipeline, decoupled from output resolution (not started)
+
+Build the actual pipeline behind item #11's live preview:
+- Preview can render at a lower resolution than the real output — it doesn't need a full-resolution render to be useful while scrubbing/editing.
+- Add a dropdown (near wherever the output/screen size is already configured) to pick the on-screen preview's render resolution — affects only what's shown while editing, never the exported file's actual resolution.
+
+> Requested 2026-08-08, same session as item #11 — split out separately since #11 is the editing UX and #12 is how it's actually rendered under the hood.
+
+---
+
+## 13. Timeline render-progress bar, Premiere-style (not started)
+
+A thin (1–2px) bar just above the timeline tracks showing which frames of the live preview have been
+rendered vs. not yet rendered — non-blocking, purely a visual indicator. When an edit changes part of the
+timeline, the affected span turns gray again (unrendered) while background rendering catches up there.
+Modeled directly on Adobe Premiere Pro's render bar.
+
+> Requested 2026-08-09. Depends on item #12 (a real-time preview rendering pipeline) existing first —
+> there's nothing to show progress *for* until frames are actually being generated incrementally in the
+> background rather than as one blocking render.
+
+---
+
+## 14. In-app preview: placement, resizing, and a popout window (not started)
+
+Several related asks about the in-app timeline preview:
+- **Placement:** below the toolbar row (where Initialize lives) and above the timeline tracks, centered
+  horizontally within its row.
+- **Resizing:** that row should be resizable (drag to resize), and the preview's displayed size follows the
+  row's height — up to a max height/width capped at the final export resolution's actual pixel size (never
+  upscale the preview past the real output's 1:1 size). Resizing the preview triggers a re-render, since the
+  quality/scaling calculations change with size.
+- **Context menu:** right-click on the preview opens a menu for common preview actions. One specific item
+  requested: **Popout**, which moves the preview into its own Telerik window.
+  - The popout window is movable/draggable.
+  - It always keeps the export's aspect ratio when resized.
+  - Its max resize size is capped as a *percentage of the user's screen/window size*, not a fixed pixel
+    value — e.g. a 300×300px export could pop out at up to its full 300×300 if that fits on screen, but a
+    4000×4000px export on a 1920×1080 screen should cap at some percentage of the available screen space,
+    never attempt to render at full native resolution on screen.
+
+> Requested 2026-08-09. Overlaps with and refines item #8's preview-placement note (already superseded once,
+> 2026-08-07: "own height-adjustable div... not a tab inside the floating panel") — this adds the
+> resize-triggers-re-render behavior and the popout window on top of that placement decision.
+
+---
+
+## 15. Project save/load as JSON, local-vs-server choice, project list + delete (not started)
+
+- Save the full project (settings, layers/clips, edits) to a JSON file so a user can come back later and
+  rebuild it — assuming the referenced media files are still present on the user's machine.
+- On export, the project is saved locally by default; the user should be able to choose to also/instead push
+  it to the configured "server."
+- A UI to list existing saved projects, so the user can decide whether to delete any of them.
+- The JSON format explicitly does **not** persist undo/redo history — only the end-state settings/layers.
+
+> Requested 2026-08-09. Note: `ProjectService`/`ProjectStore` already exist and do *some* of this — see
+> [[project_video_editor_qa_sweep]] item #24 (File→Save persists to `localStorage`; a separate `.benvideo`
+> JSON download also exists). Scope this as a review/audit of what's already built against these specific
+> requirements (server-push choice, list+delete UI, explicit non-persistence of undo/redo) rather than
+> assuming it needs building from scratch.
+
+---
+
+## 16. Rich text properties for text overlays and callout text (not started)
+
+Text — both a standalone text overlay and text inside a callout — should support:
+- Size and color.
+- Font selection: standard fonts common to all computers, plus an option to pick a font from Google Fonts or
+  another common free font library.
+- Font weight/bold, underline, subscript, superscript — ideally applicable *inline* while typing (mixed
+  formatting within one text block), not just as a single style for the whole block.
+- Direct in-preview editing — click into the text on the canvas and type/format it there, not only through a
+  side-panel form.
+
+> Requested 2026-08-09.
