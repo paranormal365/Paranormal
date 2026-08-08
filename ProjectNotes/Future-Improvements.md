@@ -340,7 +340,7 @@ the same class of bug phase 59 already fixed in the other direction (`ActivateMo
 
 ---
 
-## 19. Configurable, animatable drop shadow for text/callouts/other objects — 🟡 Phase 1 complete (2026-08-08)
+## 19. Configurable, animatable drop shadow for text/callouts/other objects — ✅ Complete (2026-08-08)
 
 Text overlays, shape callouts, and any other object type that could reasonably have one should support a
 configurable drop shadow in the Properties panel:
@@ -370,13 +370,17 @@ ffmpeg's native `drawtext` shadow params, plus full Shadow UI in both the layer 
 motion-keyframe editor. Bounds-clipping is satisfied by construction (both the SVG-raster and native
 ffmpeg paths inherently clip to the frame) — no extra work needed there.
 
-**Phase 2 — not started.** Getting animated text shadows to real export-time parity with callouts (blurred,
-eased, moving) needs a brand-new per-frame text rasterization pipeline (text currently renders via one
-static ffmpeg `drawtext` filter with no per-frame infrastructure) — mirrors the one per-frame SVG loop
-callouts already use for their own animated shadows. Real, flagged risk: SVG-rendered text uses the
-browser's font-shaping engine, not ffmpeg's freetype rasterizer, so animated text position/size may drift
-a few pixels from the static rendering of the same text — same class of imprecision already accepted for
-item #14's on-canvas text-drag positioning.
+**Phase 2 shipped 2026-08-08** (`feature/phase-71-animated-text-shadow-pipeline`): gave `TextOverlay` the
+same per-frame SVG animated-export pipeline callouts already had — once a text overlay has any motion
+path, its position, size, opacity, and shadow are all now driven by it (eased, not just linear), rendered
+via a new SVG `<text>` renderer and composited the same way animated callouts already are. A real
+simplification found versus the original design: SVG's own `text-anchor`/`dominant-baseline` attributes
+are resolved by the browser's own SVG renderer, so no JS text-measurement infrastructure was needed at
+all (the originally-flagged font-metric-parity risk turned out to be avoidable, not just acceptable). Also
+a beneficial side effect: existing animated text now renders with correctly eased motion in the exported
+video, not just the live preview, matching callouts. Not click-verified end-to-end (a Telerik "Add
+keyframe" button couldn't be driven through browser automation in this session, same limitation hit in
+phase 1) — correctness relies on 22 new unit tests exercising the real production code directly.
 
 ---
 
