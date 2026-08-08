@@ -150,13 +150,23 @@ Ben.Video's audio editing should support separating left and right audio channel
 
 ---
 
-## 11. Real-time, editable preview window (not started)
+## 11. Real-time, editable preview window — 🟡 Partially complete (2026-08-08)
 
 Once every layer type (video, audio, image, text overlays, callouts, transitions, motion keyframes) is rendering correctly and passing all tests, revisit the preview window's location and purpose:
 - The preview should regenerate live as changes are made on the timeline, rather than requiring an explicit render/"Preview" step.
 - The preview should become interactive — usable to make changes directly with the mouse on the canvas itself, e.g. dragging a motion keyframe placed at a marker, or resizing a layer (callout, text, image) directly on the preview instead of only through the Properties panel's sliders.
 
 > Requested 2026-08-08. Depends on the Ben.Video.Editor QA sweep's remaining layer-animation gaps being resolved first (resize handles, color/shape-over-time — see [[project_video_editor_qa_sweep]] item #14), per the user's own sequencing. Related to item #8's preview-placement work.
+>
+> **Shipped on `feature/phase-65-auto-preview-refresh`: the "no explicit render step" half only.** A new
+> opt-in (default off) toolbar toggle debounces `ClipStore.OnChange` (which fires unthrottled on every
+> mutation, including every pointermove during a drag) and auto-triggers the existing Preview render ~1s
+> after edits settle, collapsing a whole burst of edits into one re-encode instead of one per edit.
+> **Still open**: the on-canvas interactivity half (drag a motion keyframe to reposition it — only
+> selection and Bezier-handle dragging exist today; resize a text overlay or image clip directly on the
+> preview — neither has any position/size model in `TextOverlay`/`ImageClip` at all yet, so that needs new
+> data-model work first, not just a new overlay component). Depended on item #12 (now shipped, phase 64)
+> for a cheap-enough render path to make auto-refresh viable at all.
 
 ---
 
