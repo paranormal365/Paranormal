@@ -284,18 +284,31 @@ Several related asks about the in-app timeline preview:
 
 ---
 
-## 16. Rich text properties for text overlays and callout text (not started)
+## 16. Rich text properties for text overlays and callout text — 🟡 Slice A complete (2026-08-08)
 
 Text — both a standalone text overlay and text inside a callout — should support:
-- Size and color.
-- Font selection: standard fonts common to all computers, plus an option to pick a font from Google Fonts or
-  another common free font library.
-- Font weight/bold, underline, subscript, superscript — ideally applicable *inline* while typing (mixed
-  formatting within one text block), not just as a single style for the whole block.
-- Direct in-preview editing — click into the text on the canvas and type/format it there, not only through a
-  side-panel form.
+- ~~Size and color~~ + font family — **✅ Slice A shipped** (`feature/phase-74-rich-text-fonts-slice-a`):
+  callout text is a brand-new capability (`CalloutClip` previously had no text at all) — `Text`/
+  `FontFamily`/`FontSize`/`FontColor` fields, rendered centered on the shape's bounding box (multi-line via
+  `<tspan>`), full persistence, live `OnChange` UI in `CalloutEditor`. Text overlays' size/color/font-family
+  already existed but font selection was **silently broken on every OS** — `ToDrawtextFilter()`'s
+  `fontfile=/System/Library/Fonts/{FontFamily}.ttf` was a literal macOS path that ffmpeg.wasm's in-memory
+  filesystem never had a file at. Fixed by unifying all text-overlay export (static + animated) onto the
+  per-frame SVG rasterization pipeline — the browser resolves font names against its own installed fonts,
+  no bundled font file needed on any OS. Also closed item #23 (background box now renders on the SVG path,
+  approximate padding-based sizing) as a side effect. 22 new unit tests.
+- **Still open:** Font selection from Google Fonts or another common free font library — needs its own
+  design: the SVG-as-image rasterization path can't reliably fetch external `@font-face` resources, so
+  fonts would likely need embedding as base64 data-URIs inside the SVG or pre-registering via the
+  `FontFace` API.
+- **Still open:** Font weight/bold, underline, subscript, superscript — ideally applicable *inline* while
+  typing (mixed formatting within one text block), not just as a single style for the whole block. Forces
+  a runs/spans data model; SVG `<tspan>` supports per-run styling natively.
+- **Still open:** Direct in-preview editing — click into the text on the canvas and type/format it there,
+  not only through a side-panel form. Requires first building a live text/callout rendering layer in the
+  preview — today their real appearance only exists in exported output, not the editor preview.
 
-> Requested 2026-08-09.
+> Requested 2026-08-09. Slice A (phase 74) shipped 2026-08-08.
 
 ---
 
@@ -445,7 +458,15 @@ pass.
 
 ---
 
-## 23. Animated text overlays don't render their background box (BoxColor) (not started)
+## 23. Animated text overlays don't render their background box (BoxColor) ✅ Fixed (2026-08-08)
+
+**Fixed as part of phase 74** (backlog item #16 slice A): `TextOverlayRenderer` now renders `BoxColor` as a
+`<rect>` behind the text with approximate padding-based sizing (average-character-width heuristic × text
+length) — deliberately approximate rather than glyph-measured, strictly better than the previous
+nothing-at-all. Applies to every overlay now that phase 74 unified static AND animated text export onto the
+SVG pipeline. Exact `getBBox()`-measured sizing remains a possible future refinement.
+
+Original description:
 
 Deliberate scope cut from phase 71 (backlog item #19's animated-text-shadow pipeline): the new
 `TextOverlayRenderer` (used only once a text overlay has a motion path) doesn't draw `TextOverlay.BoxColor`
@@ -530,4 +551,39 @@ extend/shrink the item's duration, with a resize cursor (e.g. east-west/left-rig
 hovering over an extendable edge to signal the interaction is available.
 
 > Requested by the user 2026-08-08. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+
+---
+
+## 29. 🔴 ffmpeg.wasm aborts (OOM) during SVG-overlay export — output silently loses its video track (not started, HIGH PRIORITY)
+
+Found live-testing phase 74, **confirmed by the user**: exporting a timeline with a callout produced an
+"audio-only" output file. Direct MP4 box-structure inspection of the captured export blob confirmed it —
+the file has an audio `trak` (`smhd` handler) but **no video track at all**. The browser console shows
+`Aborted()` (Emscripten's fatal-crash message, typically WASM out-of-memory) **9 times during a single
+export**, reproduced in a completely fresh browser tab on the very first export after page load — not
+session-accumulated state. Yet the UI reports "✓ Export complete" and hands the user a broken file.
+
+Two compounding problems:
+
+1. **The crash itself** — likely memory exhaustion in the single-threaded ffmpeg.wasm build
+   (`crossOriginIsolated: false` in the Playground, so the multi-threaded core never loads). A callout's
+   default 5s duration at 30fps = 150 full-canvas 1920×1080 PNG frames rasterized and composited in one
+   `image2`-demuxer pass. This is the *pre-existing* SVG-overlay pipeline (Arrow/Line/Star callouts,
+   animated text overlays since phase 71) — not new phase-74 code; phase 74's callout-text just made
+   Rectangle callouts take this path too, which is how it surfaced. Possible directions: render only the
+   overlay's own bounding box per frame instead of the full canvas (huge memory reduction), chunk the
+   per-overlay composite into shorter segments, enable COOP/COEP in the Playground so the multi-threaded
+   core loads, or investigate whether `exec` calls leak MEMFS/heap across passes.
+2. **Silent failure** — `FfmpegService.OnFfmpegLog` (`Services/FfmpegService.cs:73`) is a no-op that
+   discards every ffmpeg log line, so fatal aborts are invisible to both the UI and the export pipeline;
+   `ExportService` happily continues compositing with a broken intermediate. Phase 74 added a temporary
+   `console.log` passthrough in `ffmpegInterop.js` so the abort is at least visible in dev tools; a real
+   fix should detect `Aborted()`/non-zero exit and fail the export loudly instead of reporting success.
+
+Also fixed during the same investigation (already committed on the phase-74 branch): `svgFrameRenderer.js`'s
+`svgToPng` did an unnecessary `Blob → ObjectURL → fetch → Blob → createImageBitmap` round-trip that was an
+intermittent source of "InvalidStateError: The source image could not be decoded" — now decodes the Blob
+directly with one retry.
+
+> Found 2026-08-08 during phase 74 live verification; user confirmed the audio-only symptom independently.
 > Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
