@@ -493,4 +493,41 @@ coverage should expand. No specific gap identified yet — flagged for future in
 known bug.
 
 > Noted by the user 2026-08-08, no specific complaint yet — revisit and scope precisely before starting.
+
+---
+
+## 26. Removed item leaves stale Properties-tab content (not started)
+
+Right-click → remove a layer (callout, text overlay, etc.) while the Media & Properties window's Properties
+tab is open and showing that layer: the tab keeps displaying the removed item's editor/fields instead of
+clearing to the empty state. The selection-clearing logic needs to also fire on removal via the context-menu
+path, not only on ordinary re-selection.
+
+> Found by the user 2026-08-08 during manual testing. Lives in the separate Ben.Video.Editor repo
+> (Github-BenVideo remote).
+
+---
+
+## 27. Timeline item drag doesn't stop on mouse-button release (not started)
+
+Clicking to move an item on the timeline should stop moving the instant the mouse button is released — the
+user reports it currently keeps going past release. Needs investigation: reproduce precisely (which item
+type, mouse vs. touch/pointer input) and trace against the existing pointer-drag mechanism
+(`_movingItem`/`OnChipPointerDown`/`OnTrimPointerMove`/`OnTrimPointerUp` in `VideoTimeline.razor`) to find
+where release isn't being caught.
+
+> Found by the user 2026-08-08 during manual testing, right after phase 73's swap-reorder-parity fix
+> shipped — check whether it's a new regression from that change or pre-existing. Lives in the separate
+> Ben.Video.Editor repo (Github-BenVideo remote).
+
+---
+
+## 28. Callout/text overlay: drag-to-extend start/end on the timeline (not started)
+
+Callouts and text overlays should support the same click-and-drag start/end trim behavior video/image clips
+already have on the timeline — dragging the start edge (when there's room before it) or the end edge to
+extend/shrink the item's duration, with a resize cursor (e.g. east-west/left-right arrow) shown when
+hovering over an extendable edge to signal the interaction is available.
+
+> Requested by the user 2026-08-08. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
 > Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
