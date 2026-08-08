@@ -423,3 +423,39 @@ keyframe afterward.
 > interpolated preview, not yet a committed keyframe value" more visible before/while adding. Applies to
 > the whole motion-keyframe system generically (position, scale, color, and now shadow), not just shadow
 > specifically. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+
+---
+
+## 22. Unescaped FontColor in animated-text SVG export — a real, low-severity XML injection gap (not started)
+
+Code-review finding from phase 71/72's wrap-up: `TextOverlayRenderer.Render()` (the SVG renderer used for
+text overlays with a motion path) interpolates `TextOverlay.FontColor` directly into the `fill="..."`
+attribute unescaped, while the sibling `FontFamily` and `Text` values two lines away are both passed
+through the same method's `EscapeXml()` helper. `FontColor` is a plain `string` with no format validation
+on the model itself — today's color picker UI always writes a safe `#RRGGBB` hex string, so there's no
+live exploit path via normal editing. But if `FontColor` ever contains a `"` character (a hand-edited or
+otherwise-tampered `.benvideo` project file reloaded via `ProjectService`, or any future direct-input path
+that bypasses the color picker), the value breaks out of the SVG attribute and injects arbitrary markup
+into the string that gets rasterized via `createImageBitmap` for animated-text export. Small, mechanical
+fix: wrap `overlay.FontColor` in the same `EscapeXml()` call already used for the other two string fields.
+
+> Found 2026-08-08 via a post-phase-72 code review of the session's shadow/preview work. Lives in the
+> separate Ben.Video.Editor repo (Github-BenVideo remote), `Models/TextOverlayRenderer.cs`.
+
+---
+
+## 23. Animated text overlays don't render their background box (BoxColor) (not started)
+
+Deliberate scope cut from phase 71 (backlog item #19's animated-text-shadow pipeline): the new
+`TextOverlayRenderer` (used only once a text overlay has a motion path) doesn't draw `TextOverlay.BoxColor`
+— the optional background box behind text — at all. The *static* (non-animated) `drawtext`-based rendering
+path still supports it correctly; only text overlays that are both animated (any motion path) and have a
+background box enabled are affected, silently losing the box the moment the overlay starts animating.
+Deliberately scoped out at the time to avoid needing text-measurement infrastructure for correctly sizing
+the box — worth reconsidering now that a simpler, no-measurement approach exists (see item #22's file):
+`TextOverlayRenderer` could measure the SVG `<text>` element's own rendered bounding box via `getBBox()`
+after inserting it into the DOM/canvas context, rather than needing to replicate ffmpeg's `text_w`/`text_h`
+calculation by hand.
+
+> Found 2026-08-08 during phase 71 planning, deliberately deferred rather than fixed at the time. Lives in
+> the separate Ben.Video.Editor repo (Github-BenVideo remote).
