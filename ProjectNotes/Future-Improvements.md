@@ -384,7 +384,7 @@ phase 1) — correctness relies on 22 new unit tests exercising the real product
 
 ---
 
-## 20. Preview doesn't reflect video-clip trim or effects (not started)
+## 20. Preview doesn't reflect video-clip trim or effects — ✅ Complete (2026-08-08)
 
 Bug found while scoping item #13: `PreviewTimelineAsync` (the ffmpeg pipeline behind the editor's own
 "Preview" button) concatenates each `VideoClip`'s **raw, untrimmed** source file directly — no `-ss`/`-t`
@@ -395,6 +395,13 @@ actually shows — only the real Export pipeline (a separate code path) reflects
 confusing/misleading for anyone trimming or grading a clip and expecting to see it in Preview.
 
 > Found 2026-08-09 during phase 69. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+
+**Shipped 2026-08-08** (`feature/phase-72-preview-trim-effects`): `PreviewTimelineAsync` now builds a real
+per-clip trimmed segment for each video clip before concatenating, the same way image clips already did —
+live-verified directly: a 13.8s test clip trimmed to 10.8s now renders a 10.8s preview. Also found and
+fixed a second, deeper bug while tracing this: the extensible `AppliedEffects` system was never applied to
+video clips in the real Export pipeline either, not just Preview — fixed there too, so both pipelines
+reach real parity.
 
 ---
 
