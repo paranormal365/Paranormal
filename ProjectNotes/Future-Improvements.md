@@ -287,3 +287,18 @@ Bug: in the video editor, resize the floating "Media & Properties" window (`Vide
 width/height once moved.
 
 > Requested 2026-08-08. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+
+---
+
+## 18. Selecting a layer while a motion path is active keeps showing the motion editor (not started)
+
+Bug found during phase 67's live verification: in `VideoEditor.razor`'s Properties-panel if/else-if
+selection chain, `_motionLayerId.HasValue` is checked before `_selectedTextOverlay` (and likely before
+other post-motion branches too). Once a layer's motion path is activated ("⏱ Animate"), selecting a
+*different* layer on the timeline (tested with a text overlay) doesn't clear `_motionLayerId` — the
+Properties panel keeps showing "No keyframes yet for this layer" / the motion keyframe editor instead of
+switching to the newly-selected layer's own editor, until the motion editor is explicitly closed. This is
+the same class of bug phase 59 already fixed in the other direction (`ActivateMotionPath` not clearing
+`_selectedCallout`/`_selectedClipArt`/`_selectedTextOverlay`) — this is the reverse case, not yet fixed.
+
+> Found 2026-08-08. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
