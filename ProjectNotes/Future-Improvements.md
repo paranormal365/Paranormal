@@ -150,7 +150,7 @@ Ben.Video's audio editing should support separating left and right audio channel
 
 ---
 
-## 11. Real-time, editable preview window — 🟡 Partially complete (2026-08-08)
+## 11. Real-time, editable preview window ✅ Complete (2026-08-08)
 
 Once every layer type (video, audio, image, text overlays, callouts, transitions, motion keyframes) is rendering correctly and passing all tests, revisit the preview window's location and purpose:
 - The preview should regenerate live as changes are made on the timeline, rather than requiring an explicit render/"Preview" step.
@@ -167,6 +167,19 @@ Once every layer type (video, audio, image, text overlays, callouts, transitions
 > preview — neither has any position/size model in `TextOverlay`/`ImageClip` at all yet, so that needs new
 > data-model work first, not just a new overlay component). Depended on item #12 (now shipped, phase 64)
 > for a cheap-enough render path to make auto-refresh viable at all.
+>
+> **Shipped the rest on `feature/phase-67-preview-interactivity`.** Fixed a real, pre-existing coordinate
+> bug shared by every on-canvas overlay first (neither the callout nor motion-path overlay accounted for
+> `object-fit: contain` letterboxing — one used the native export resolution instead of the actual
+> rendered size, the other a hardcoded 800×450 guess). Then: `ClipArtClip` already had `CalloutClip`'s
+> exact geometry and was already live in export, just missing an overlay — added one reusing the existing
+> resize math as-is (not independently click-tested live — no clip-art catalog configured in the demo
+> environment, but same verified code path as callouts). Motion keyframes can now be dragged by their dot
+> to reposition (previously selection/Bezier-handles only), plus a bonus fix: double-click-to-add now
+> lands where you actually click instead of always at dead-center. Text overlays gained an additive,
+> optional on-canvas position override that doesn't touch existing alignment-based projects unless
+> dragged. Two unrelated pre-existing bugs found and logged (not fixed) along the way — see items #17
+> and #18.
 
 ---
 
