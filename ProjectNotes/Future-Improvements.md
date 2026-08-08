@@ -96,17 +96,14 @@ This is the largest item here — likely its own multi-phase effort (data model 
 
 ---
 
-## 8. Media & Properties panel — dedicated Preview tab + real thumbnails — 🟡 Partially complete (2026-08-08)
+## 8. Media & Properties panel — dedicated Preview tab + real thumbnails — ✅ Complete (2026-08-08)
 
 In the video editor's floating "Media & Properties" window (`Ben.Video.Editor/Components/VideoEditor.razor`):
 - ~~Add a third tab and move the preview window into it~~ — **superseded 2026-08-07**: instead of moving the preview into the Media & Properties window, put it in its own height-adjustable `div` positioned below the toolbar and directly above the timeline (i.e. its own resizable region in the main editor layout, not a tab inside the floating panel). It still renders a **small**/compact version of the composition — export/final render stays at the normal/full canvas size regardless of how small this preview area is resized to. **✅ Shipped** as item #14.
 - `ClipBrowser.razor`'s Video/Audio/Image/Server tabs currently show icon-only placeholder rows (`SvgIcon.FileVideo`/`FileAudio`/`Image`) for every clip — replace with small thumbnails or a list view like the main website's media library (`MediaLibraryGrid.razor`, `Ben.Web.Library/Media/`) already does: eager-load thumbnails for images, lazy-load-on-click for video/audio (since there's no dedicated thumbnail endpoint yet — same constraint noted in item #6). **No voting UI** — unlike `MediaLibraryGrid`'s optional `ShowVoting`/`EvidenceVoteWidget`, this bin is media-only, no vote controls or vote results. **✅ Shipped** (`feature/phase-60-clipbrowser-thumbnails`) — imported Video/Image clips already had real thumbnails; only the Server tab (files not yet downloaded) needed new work.
-- **Still open:** The Properties tab's content (`ClipEditor`/`AudioClipEditor`/`ImageClipEditor`/etc.) doesn't dynamically expand when the user resizes the Media & Properties window larger — needs to reflow/fill the available space rather than staying a fixed size.
-- **Still open:** Override native HTML5 drag-and-drop on the timeline with a custom pointer-based system (matching the pattern already used for `WaveSurferPlayer.razor.js`'s unified drag mode, see item #7) so:
-  - The playhead can be dragged directly by mouse.
-  - Clips can be trimmed by dragging their start/end edges directly on the timeline (not only via the Properties panel's trim sliders).
-  - This would also make automated/Playwright testing of drag-to-reposition possible — native HTML5 DnD doesn't respond to synthetic mouse events, which blocked verifying that interaction during item #9's test pass.
-- **Still open:** Minor visual polish: when the window is minimized, the titlebar's bottom-left/bottom-right corners don't get the same border-radius as the rest of the window outline.
+- ~~The Properties tab's content doesn't dynamically expand when the user resizes the Media & Properties window larger~~ — **✅ Shipped** (`feature/phase-73-...`): removed stale `min-width`/`max-width`/fixed-`width` CSS left over from when `ClipEditor`/`AudioClipEditor`/`ImageClipEditor`/`CalloutEditor`/`MotionKeyframeEditor` were built as fixed-width side panels — they now reflow to fill the window like `TextOverlayEditor`/`TransitionEditor` always did.
+- ~~Override native HTML5 drag-and-drop on the timeline with a custom pointer-based system~~ — **mostly already done, rest ✅ shipped 2026-08-08**: research found playhead drag-to-scrub and clip-edge trim were already fully pointer-based from earlier phases (not native DnD at all — this bullet was stale). Clip **repositioning** was also already pointer-based but only reachable for `VideoClip`/`ImageClip`; `AudioClip` (and any other non-Video/Image chip) could still fall through to the old native-DnD swap-reorder path because the `draggable`-suppression condition was type-gated. **Fixed**: widened the condition so any chip with an active pointer-drag suppresses native `draggable`, regardless of item type — live-verified the audio clip's `draggable` attribute now toggles correctly and the chip moves continuously like video/image clips. **Deferred, logged separately as item #24**: the one remaining native-DnD spot — dragging a *new* clip from `ClipBrowser` onto a timeline track — is a genuinely cross-component rebuild, out of scope for this cleanup pass. The `WaveSurferPlayer.razor.js` reference in the old text was stale — that file doesn't exist in this repo; audio waveforms use `AudioWaveform.razor` + `waveformInterop.js` instead.
+- ~~Minor visual polish: minimized titlebar corners~~ — **✅ Shipped 2026-08-08**: Telerik's theme only ever gave `.k-window-titlebar` top-corner radius (relies on the outer window's own radius+overflow for the bottom edge while content shows); added the missing bottom-corner override for the minimized state, where the titlebar rectangle *is* the whole visible window.
 
 > Requested 2026-08-06, right after the panel's drag/resize/fill-height crash was fixed (see item #6's follow-up above) — the user wants this done once that panel is confirmed working correctly, which it now is. Confirmed already working as of item #9's test pass and does *not* need further work: splitting a clip produces two independently selectable/deletable clips on the timeline.
 
@@ -463,3 +460,37 @@ calculation by hand.
 
 > Found 2026-08-08 during phase 71 planning, deliberately deferred rather than fixed at the time. Lives in
 > the separate Ben.Video.Editor repo (Github-BenVideo remote).
+
+---
+
+## 24. Convert ClipBrowser→timeline-track drop to pointer events (not started)
+
+The last remaining spot of native HTML5 drag-and-drop on the timeline: dragging a *new* clip from
+`ClipBrowser` onto a timeline track (`window.__bvDragClipId` global handoff, `ClipBrowser.razor:686-693`,
+consumed via `OnTrackDragEnterAsync`/`OnTrackDragOver`/`OnDropAsync` in `VideoTimeline.razor:1167-1280`).
+Unlike the playhead-scrub, clip-trim, and clip-reposition mechanisms (all already pointer-based, and the
+same-track swap-reorder path fixed alongside this item — see item #8), this one is genuinely
+cross-component: `ClipBrowser` and `VideoTimeline` are separate sibling components under `VideoEditor.razor`
+with no shared DOM ancestor, so converting it needs new infrastructure — global pointer tracking, JS-side
+`document.elementFromPoint` hit-testing to find which track is under the cursor mid-drag, and a new
+cross-component callback bridge. A currently-working, currently-clean feature with no concrete consumer
+today (no Playwright/browser-test infra exists in this repo to benefit from synthetic-event compatibility).
+`VideoTimeline.razor.js`'s existing (currently unused) `capturePointer(el, pointerId)` helper is the
+primitive a rebuild would use.
+
+> Found and deliberately deferred 2026-08-08 during phase 73 (backlog item #8's cleanup). Lives in the
+> separate Ben.Video.Editor repo (Github-BenVideo remote).
+
+---
+
+## 25. Timeline snapping — expand/verify coverage (not started)
+
+`Snapping` already exists as a feature flag and has real implementation (`_snapGuidePx` in
+`VideoTimeline.razor`, a visible snap-guide line) — not a from-scratch feature. Noted as worth a fresh look:
+confirm snap points cover the cases users actually want (clip edges, playhead, markers, other clips'
+start/end) during the various drag interactions (clip reposition, trim, marker drag), and consider whether
+coverage should expand. No specific gap identified yet — flagged for future investigation rather than a
+known bug.
+
+> Noted by the user 2026-08-08, no specific complaint yet — revisit and scope precisely before starting.
+> Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
