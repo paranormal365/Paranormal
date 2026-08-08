@@ -315,3 +315,23 @@ the same class of bug phase 59 already fixed in the other direction (`ActivateMo
 `_selectedCallout`/`_selectedClipArt`/`_selectedTextOverlay`) — this is the reverse case, not yet fixed.
 
 > Found 2026-08-08. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+
+---
+
+## 19. Configurable, animatable drop shadow for text/callouts/other objects (not started)
+
+Text overlays, shape callouts, and any other object type that could reasonably have one should support a
+configurable drop shadow in the Properties panel:
+- The shadow never affects the shape/text's own size (it's a separate rendered layer, not part of the
+  bounding box).
+- If the shadow falls outside the video's own frame bounds, only the portion inside the bounds renders —
+  it clips at the edges rather than being visible outside the video.
+- The shadow itself should be animatable over time (via the existing motion-keyframe system) — at least
+  opacity, color, and size/blur, possibly other shadow settings too.
+
+> Requested 2026-08-08. Note: `CalloutClip` already has static shadow fields (`ShadowColor`/
+> `ShadowOffsetX`/`ShadowOffsetY`/`ShadowBlur`) per the existing model — this item is about extending
+> shadow support to other layer types that don't have it yet (text overlays at least), confirming/adding
+> the clip-to-video-bounds rendering behavior, and making shadow properties keyframe-animatable, not
+> necessarily building shadow support from scratch. Lives in the separate Ben.Video.Editor repo
+> (Github-BenVideo remote).
