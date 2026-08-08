@@ -203,7 +203,7 @@ Build the actual pipeline behind item #11's live preview:
 
 ---
 
-## 13. Timeline render-progress bar, Premiere-style (not started)
+## 13. Timeline render-progress bar, Premiere-style — ✅ Shipped, scoped down (2026-08-09)
 
 A thin (1–2px) bar just above the timeline tracks showing which frames of the live preview have been
 rendered vs. not yet rendered — non-blocking, purely a visual indicator. When an edit changes part of the
@@ -213,6 +213,15 @@ Modeled directly on Adobe Premiere Pro's render bar.
 > Requested 2026-08-09. Depends on item #12 (a real-time preview rendering pipeline) existing first —
 > there's nothing to show progress *for* until frames are actually being generated incrementally in the
 > background rather than as one blocking render.
+>
+> **Shipped on `feature/phase-69-render-progress-indicator`, deliberately scoped down.** True per-region
+> tracking turned out not to be honestly buildable: `ClipStore.OnChange` carries no information about
+> *which* clip changed (would mean instrumenting ~40 mutation call sites), and it wouldn't even be
+> accurate — the preview currently concatenates each video clip's raw, untrimmed source file, so trim/
+> effects edits don't actually change the render at all today (see item #20). Shipped instead as a
+> whole-timeline binary indicator: one bar, green/"up to date" right after a successful Preview render,
+> gray/"stale" the instant any edit happens. Live-verified end to end including staying pixel-aligned
+> with the ruler across zoom changes.
 
 ---
 
@@ -348,3 +357,17 @@ configurable drop shadow in the Properties panel:
 > the clip-to-video-bounds rendering behavior, and making shadow properties keyframe-animatable, not
 > necessarily building shadow support from scratch. Lives in the separate Ben.Video.Editor repo
 > (Github-BenVideo remote).
+
+---
+
+## 20. Preview doesn't reflect video-clip trim or effects (not started)
+
+Bug found while scoping item #13: `PreviewTimelineAsync` (the ffmpeg pipeline behind the editor's own
+"Preview" button) concatenates each `VideoClip`'s **raw, untrimmed** source file directly — no `-ss`/`-t`
+trim step is applied before the concat, unlike image clips, which do get a proper per-clip segment build.
+Effects/color grading are similarly never referenced anywhere in that pipeline. Practical effect: trimming
+a video clip's start/end, or applying an effect to it, changes nothing about what the in-app Preview
+actually shows — only the real Export pipeline (a separate code path) reflects those edits. Likely
+confusing/misleading for anyone trimming or grading a clip and expecting to see it in Preview.
+
+> Found 2026-08-09 during phase 69. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
