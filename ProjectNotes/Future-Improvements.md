@@ -587,3 +587,15 @@ directly with one retry.
 
 > Found 2026-08-08 during phase 74 live verification; user confirmed the audio-only symptom independently.
 > Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+
+---
+
+## 30. Slider tick-label numbers bunch up and become unreadable (not started)
+
+In many of the editor's Telerik sliders (Properties panels — position/size/corner-radius/fade/etc.), the
+tick-label numbers under the track render bunched together and overlapping, unreadable at typical panel
+widths. Likely fix: much smaller label font and/or showing only every Nth label (Telerik's
+`LargeStep`/tick configuration, or CSS hiding intermediate labels) — needs a pass over all editor sliders,
+not just one.
+
+> Noted by the user 2026-08-08. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
