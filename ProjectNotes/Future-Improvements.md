@@ -183,7 +183,7 @@ Modeled directly on Adobe Premiere Pro's render bar.
 
 ---
 
-## 14. In-app preview: placement, resizing, and a popout window (not started)
+## 14. In-app preview: placement, resizing, and a popout window ✅ Complete (2026-08-08)
 
 Several related asks about the in-app timeline preview:
 - **Placement:** below the toolbar row (where Initialize lives) and above the timeline tracks, centered
@@ -204,6 +204,16 @@ Several related asks about the in-app timeline preview:
 > Requested 2026-08-09. Overlaps with and refines item #8's preview-placement note (already superseded once,
 > 2026-08-07: "own height-adjustable div... not a tab inside the floating panel") — this adds the
 > resize-triggers-re-render behavior and the popout window on top of that placement decision.
+>
+> **Shipped on `feature/phase-62-preview-placement-resize-popout`.** Placement and resize both revived
+> existing-but-dead plumbing from an earlier phase (`LayoutService`, `ResizableDivider.razor`) that had
+> been built but never wired up. Size cap required a new small shared service, since the export resolution
+> previously lived only on a private field inside the Export dialog. Popout reuses the existing
+> `VideoPreview` component wholesale inside a floating window rather than building a second synced player.
+> **Not built**: resize-triggered re-rendering — the preview already scales for free via CSS, and nothing
+> in the render pipeline is resolution-dependent yet, so that's properly item #12's job once it exists.
+> See [[project_video_editor_phase62_preview_placement_resize_popout]] for the full detail, including a
+> real bug (missing close button) caught by live verification, not by the build.
 
 ---
 
