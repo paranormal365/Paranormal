@@ -426,7 +426,7 @@ keyframe afterward.
 
 ---
 
-## 22. Unescaped FontColor in animated-text SVG export — a real, low-severity XML injection gap (not started)
+## 22. Unescaped FontColor in animated-text SVG export — ✅ Fixed (2026-08-08)
 
 Code-review finding from phase 71/72's wrap-up: `TextOverlayRenderer.Render()` (the SVG renderer used for
 text overlays with a motion path) interpolates `TextOverlay.FontColor` directly into the `fill="..."`
@@ -441,6 +441,10 @@ fix: wrap `overlay.FontColor` in the same `EscapeXml()` call already used for th
 
 > Found 2026-08-08 via a post-phase-72 code review of the session's shadow/preview work. Lives in the
 > separate Ben.Video.Editor repo (Github-BenVideo remote), `Models/TextOverlayRenderer.cs`.
+
+**Fixed same day**: `fill="{overlay.FontColor}"` → `fill="{EscapeXml(overlay.FontColor)}"`, one-line change,
+matching the escaping already applied to `FontFamily`/`Text` in the same method. Build + all 1058 tests
+pass.
 
 ---
 
