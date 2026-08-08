@@ -207,7 +207,7 @@ Several related asks about the in-app timeline preview:
 
 ---
 
-## 15. Project save/load as JSON, local-vs-server choice, project list + delete (not started)
+## 15. Project save/load as JSON, local-vs-server choice, project list + delete ✅ Complete (2026-08-08)
 
 - Save the full project (settings, layers/clips, edits) to a JSON file so a user can come back later and
   rebuild it — assuming the referenced media files are still present on the user's machine.
@@ -221,6 +221,17 @@ Several related asks about the in-app timeline preview:
 > JSON download also exists). Scope this as a review/audit of what's already built against these specific
 > requirements (server-push choice, list+delete UI, explicit non-persistence of undo/redo) rather than
 > assuming it needs building from scratch.
+>
+> **Shipped on `feature/phase-61-project-json-audit`.** The audit confirmed nearly everything was already
+> built: full serialization (every clip type, tracks, markers, motion paths — undo/redo correctly never
+> included), local save (in-app Project Manager + `.benvideo` file download), and server save/load (gated on
+> a configured `DocumentPostUrl`) were all already wired into the File menu and a toolbar button; the list
+> UI already had open/delete/rename. Found and fixed two real gaps: (1) renaming a saved project in the list
+> didn't persist — it mutated the in-memory row only, never wrote back to `localStorage` — added
+> `ProjectStore.RenameAsync`. (2) Export and Save were fully disconnected flows; added a small post-export
+> prompt (`ExportSavePrompt.razor`) offering Save Locally/Save to Server/Skip, shown only after an immediate
+> "Export Now" completes (a pre-existing timing quirk means "Add to Queue" fires the same completion event at
+> enqueue time, not job-finish time, so the prompt doesn't yet fire for queued exports — left for later).
 
 ---
 
