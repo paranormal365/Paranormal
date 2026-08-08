@@ -277,3 +277,13 @@ Text — both a standalone text overlay and text inside a callout — should sup
   side-panel form.
 
 > Requested 2026-08-09.
+
+---
+
+## 17. Media & Properties window loses its resized dimensions when dragged (not started)
+
+Bug: in the video editor, resize the floating "Media & Properties" window (`VideoEditor.razor`'s
+`TelerikWindow`), then drag it to reposition — the resize doesn't stick, the window reverts to its prior
+width/height once moved.
+
+> Requested 2026-08-08. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
