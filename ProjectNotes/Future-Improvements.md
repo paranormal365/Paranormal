@@ -160,13 +160,23 @@ Once every layer type (video, audio, image, text overlays, callouts, transitions
 
 ---
 
-## 12. Real-time preview rendering pipeline, decoupled from output resolution (not started)
+## 12. Real-time preview rendering pipeline, decoupled from output resolution ✅ Complete (2026-08-08)
 
 Build the actual pipeline behind item #11's live preview:
 - Preview can render at a lower resolution than the real output — it doesn't need a full-resolution render to be useful while scrubbing/editing.
 - Add a dropdown (near wherever the output/screen size is already configured) to pick the on-screen preview's render resolution — affects only what's shown while editing, never the exported file's actual resolution.
 
 > Requested 2026-08-08, same session as item #11 — split out separately since #11 is the editing UX and #12 is how it's actually rendered under the hood.
+>
+> **Shipped on `feature/phase-64-preview-render-resolution`.** Repurposed an existing-but-decorative
+> "canvas size" dropdown in the preview controls (it looked functional but did nothing real — a latent
+> bug fixed along the way) into a real preview-quality picker (Full/75%/50%/25%, default Full = unchanged
+> behavior). Below 100%, the export resolution is scaled down and a `scale`+`pad` filter is appended to
+> the existing concat/re-encode step that already builds the Preview output — no new ffmpeg pass. Live-
+> verified with a real clip: 50% quality measured exactly 960×540 against a 1920×1080 export setting.
+> Deliberately does not wire anything to auto-refresh on edits — that's item #11's "no explicit render
+> step" half, still open, and now genuinely unblocked (has both this phase's resolution-decoupled render
+> path and phase 59's resize-handle code, merged into develop by phase 63).
 
 ---
 
