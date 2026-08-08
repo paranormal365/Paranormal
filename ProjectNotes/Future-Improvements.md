@@ -96,17 +96,17 @@ This is the largest item here — likely its own multi-phase effort (data model 
 
 ---
 
-## 8. Media & Properties panel — dedicated Preview tab + real thumbnails (not started)
+## 8. Media & Properties panel — dedicated Preview tab + real thumbnails — 🟡 Partially complete (2026-08-08)
 
 In the video editor's floating "Media & Properties" window (`Ben.Video.Editor/Components/VideoEditor.razor`):
-- ~~Add a third tab and move the preview window into it~~ — **superseded 2026-08-07**: instead of moving the preview into the Media & Properties window, put it in its own height-adjustable `div` positioned below the toolbar and directly above the timeline (i.e. its own resizable region in the main editor layout, not a tab inside the floating panel). It still renders a **small**/compact version of the composition — export/final render stays at the normal/full canvas size regardless of how small this preview area is resized to.
-- `ClipBrowser.razor`'s Video/Audio/Image/Server tabs currently show icon-only placeholder rows (`SvgIcon.FileVideo`/`FileAudio`/`Image`) for every clip — replace with small thumbnails or a list view like the main website's media library (`MediaLibraryGrid.razor`, `Ben.Web.Library/Media/`) already does: eager-load thumbnails for images, lazy-load-on-click for video/audio (since there's no dedicated thumbnail endpoint yet — same constraint noted in item #6). **No voting UI** — unlike `MediaLibraryGrid`'s optional `ShowVoting`/`EvidenceVoteWidget`, this bin is media-only, no vote controls or vote results.
-- The Properties tab's content (`ClipEditor`/`AudioClipEditor`/`ImageClipEditor`/etc.) doesn't dynamically expand when the user resizes the Media & Properties window larger — needs to reflow/fill the available space rather than staying a fixed size.
-- Override native HTML5 drag-and-drop on the timeline with a custom pointer-based system (matching the pattern already used for `WaveSurferPlayer.razor.js`'s unified drag mode, see item #7) so:
+- ~~Add a third tab and move the preview window into it~~ — **superseded 2026-08-07**: instead of moving the preview into the Media & Properties window, put it in its own height-adjustable `div` positioned below the toolbar and directly above the timeline (i.e. its own resizable region in the main editor layout, not a tab inside the floating panel). It still renders a **small**/compact version of the composition — export/final render stays at the normal/full canvas size regardless of how small this preview area is resized to. **✅ Shipped** as item #14.
+- `ClipBrowser.razor`'s Video/Audio/Image/Server tabs currently show icon-only placeholder rows (`SvgIcon.FileVideo`/`FileAudio`/`Image`) for every clip — replace with small thumbnails or a list view like the main website's media library (`MediaLibraryGrid.razor`, `Ben.Web.Library/Media/`) already does: eager-load thumbnails for images, lazy-load-on-click for video/audio (since there's no dedicated thumbnail endpoint yet — same constraint noted in item #6). **No voting UI** — unlike `MediaLibraryGrid`'s optional `ShowVoting`/`EvidenceVoteWidget`, this bin is media-only, no vote controls or vote results. **✅ Shipped** (`feature/phase-60-clipbrowser-thumbnails`) — imported Video/Image clips already had real thumbnails; only the Server tab (files not yet downloaded) needed new work.
+- **Still open:** The Properties tab's content (`ClipEditor`/`AudioClipEditor`/`ImageClipEditor`/etc.) doesn't dynamically expand when the user resizes the Media & Properties window larger — needs to reflow/fill the available space rather than staying a fixed size.
+- **Still open:** Override native HTML5 drag-and-drop on the timeline with a custom pointer-based system (matching the pattern already used for `WaveSurferPlayer.razor.js`'s unified drag mode, see item #7) so:
   - The playhead can be dragged directly by mouse.
   - Clips can be trimmed by dragging their start/end edges directly on the timeline (not only via the Properties panel's trim sliders).
   - This would also make automated/Playwright testing of drag-to-reposition possible — native HTML5 DnD doesn't respond to synthetic mouse events, which blocked verifying that interaction during item #9's test pass.
-- Minor visual polish: when the window is minimized, the titlebar's bottom-left/bottom-right corners don't get the same border-radius as the rest of the window outline.
+- **Still open:** Minor visual polish: when the window is minimized, the titlebar's bottom-left/bottom-right corners don't get the same border-radius as the rest of the window outline.
 
 > Requested 2026-08-06, right after the panel's drag/resize/fill-height crash was fixed (see item #6's follow-up above) — the user wants this done once that panel is confirmed working correctly, which it now is. Confirmed already working as of item #9's test pass and does *not* need further work: splitting a clip produces two independently selectable/deletable clips on the timeline.
 
@@ -340,7 +340,7 @@ the same class of bug phase 59 already fixed in the other direction (`ActivateMo
 
 ---
 
-## 19. Configurable, animatable drop shadow for text/callouts/other objects (not started)
+## 19. Configurable, animatable drop shadow for text/callouts/other objects — 🟡 Phase 1 complete (2026-08-08)
 
 Text overlays, shape callouts, and any other object type that could reasonably have one should support a
 configurable drop shadow in the Properties panel:
@@ -358,6 +358,26 @@ configurable drop shadow in the Properties panel:
 > necessarily building shadow support from scratch. Lives in the separate Ben.Video.Editor repo
 > (Github-BenVideo remote).
 
+**Phase 1 shipped 2026-08-08** (`feature/phase-70-shadow-foundation-callout-fixes`): Shadow fields added
+to the motion-keyframe system (`MotionKeyframe`/`MotionFrame`), interpolated with full easing support for
+free (reuses the same eased-progress value already computed for position/scale/color). Fixed a real bug
+found during this work — `CalloutClip`'s shadow rendered on Arrow/Line shapes only; Rectangle/Ellipse/Star
+built the SVG filter but never applied it, so they silently had zero shadow despite full UI support — now
+fixed across all 5 shapes. Also fixed a pre-existing persistence bug where `FillColor`/`StrokeColor`/
+`ControlPointValues` keyframe values silently didn't survive project save/reload (the new Shadow fields
+would have inherited the same bug). Text overlays gained static shadow config (color/offset/blur) via
+ffmpeg's native `drawtext` shadow params, plus full Shadow UI in both the layer editor and the
+motion-keyframe editor. Bounds-clipping is satisfied by construction (both the SVG-raster and native
+ffmpeg paths inherently clip to the frame) — no extra work needed there.
+
+**Phase 2 — not started.** Getting animated text shadows to real export-time parity with callouts (blurred,
+eased, moving) needs a brand-new per-frame text rasterization pipeline (text currently renders via one
+static ffmpeg `drawtext` filter with no per-frame infrastructure) — mirrors the one per-frame SVG loop
+callouts already use for their own animated shadows. Real, flagged risk: SVG-rendered text uses the
+browser's font-shaping engine, not ffmpeg's freetype rasterizer, so animated text position/size may drift
+a few pixels from the static rendering of the same text — same class of imprecision already accepted for
+item #14's on-canvas text-drag positioning.
+
 ---
 
 ## 20. Preview doesn't reflect video-clip trim or effects (not started)
@@ -371,3 +391,24 @@ actually shows — only the real Export pipeline (a separate code path) reflects
 confusing/misleading for anyone trimming or grading a clip and expecting to see it in Preview.
 
 > Found 2026-08-09 during phase 69. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+
+---
+
+## 21. Adding a keyframe mid-scrub silently captures the interpolated value, not a fresh target (not started)
+
+When scrubbing between two keyframes, the Properties panel shows the live *interpolated* value at the
+playhead (e.g. a shadow animating 5px → 10px shows ~7px at the halfway frame). If the user adds a new
+keyframe at that scrubbed position without changing anything, `MotionKeyframeEditor.AddKeyframeAtPlayhead`
+seeds the new keyframe from that displayed interpolated value (by design — this avoids the layer visibly
+"jumping" the instant a keyframe is added). The surprising part: since the new keyframe's value equals
+what was already showing, there's no visible change at that instant, but everything *after* it now holds
+flat at that captured value instead of continuing to interpolate toward the original end keyframe — a
+silent, easy-to-miss change to the animation curve unless the user explicitly edits the value at the new
+keyframe afterward.
+
+> Requested 2026-08-08, described using a shadow going 5px → 10px animated over 5 frames as the example:
+> adding a keyframe at frame 1 (interpolated ~7px) locks the animation at 7px onward unless the user also
+> changes that keyframe's value to 10px. Worth considering some UI affordance that makes "this is an
+> interpolated preview, not yet a committed keyframe value" more visible before/while adding. Applies to
+> the whole motion-keyframe system generically (position, scale, color, and now shadow), not just shadow
+> specifically. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
