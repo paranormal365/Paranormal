@@ -293,17 +293,25 @@ Text — both a standalone text overlay and text inside a callout — should sup
 
 ---
 
-## 17. Media & Properties window loses its resized dimensions when dragged (not started)
+## 17. Media & Properties window loses its resized dimensions when dragged ✅ Fixed (2026-08-08)
 
 Bug: in the video editor, resize the floating "Media & Properties" window (`VideoEditor.razor`'s
 `TelerikWindow`), then drag it to reposition — the resize doesn't stick, the window reverts to its prior
 width/height once moved.
 
 > Requested 2026-08-08. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+>
+> **Fixed on `feature/phase-68-panel-and-selection-fixes`.** Root cause: `Top`/`Left` were two-way bound
+> but `Width`/`Height` were plain literal attributes — dragging (which updates the bound `Top`/`Left`)
+> triggered a re-render that reapplied the literal size. Fixed by two-way binding `Width`/`Height` too,
+> the same pattern already working for `Top`/`Left`. Not independently live-verified via the actual
+> resize gesture — Kendo's native resize handles don't respond to synthetic pointer events in this
+> session's browser tooling (same limitation as the phase-62 popout window and native HTML5 drag-and-drop
+> elsewhere); high confidence by construction, but flagging the live-test gap.
 
 ---
 
-## 18. Selecting a layer while a motion path is active keeps showing the motion editor (not started)
+## 18. Selecting a layer while a motion path is active keeps showing the motion editor ✅ Fixed (2026-08-08)
 
 Bug found during phase 67's live verification: in `VideoEditor.razor`'s Properties-panel if/else-if
 selection chain, `_motionLayerId.HasValue` is checked before `_selectedTextOverlay` (and likely before
@@ -315,6 +323,11 @@ the same class of bug phase 59 already fixed in the other direction (`ActivateMo
 `_selectedCallout`/`_selectedClipArt`/`_selectedTextOverlay`) — this is the reverse case, not yet fixed.
 
 > Found 2026-08-08. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+>
+> **Fixed on `feature/phase-68-panel-and-selection-fixes`.** `_motionLayerId`/`_motionLayerType` now
+> clear once at the top of `OnTimelineItemSelected`, covering every selection path uniformly instead of
+> duplicating the clear into each branch. Live-verified: activated a motion path on a callout, selected a
+> text overlay, confirmed the Properties panel correctly switched away from the motion editor.
 
 ---
 
