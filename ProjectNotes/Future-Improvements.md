@@ -415,7 +415,7 @@ reach real parity.
 
 ---
 
-## 21. Adding a keyframe mid-scrub silently captures the interpolated value, not a fresh target (not started)
+## 21. Adding a keyframe mid-scrub silently captures the interpolated value, not a fresh target (✅ shipped)
 
 When scrubbing between two keyframes, the Properties panel shows the live *interpolated* value at the
 playhead (e.g. a shadow animating 5px → 10px shows ~7px at the halfway frame). If the user adds a new
@@ -427,12 +427,21 @@ flat at that captured value instead of continuing to interpolate toward the orig
 silent, easy-to-miss change to the animation curve unless the user explicitly edits the value at the new
 keyframe afterward.
 
+Fixed 2026-08-09 (phase 78, `feature/phase-78-midscrub-keyframe-warning`, merged to `develop`) with the
+UI affordance the backlog text asked for, rather than removing the by-design capture behavior: a new
+`IsAddingMidInterpolation()` check (true when the playhead sits strictly between two existing
+keyframes) shows a warning above the "+ Keyframe" button — *"Adding here captures the interpolated
+value — the curve will hold flat past this point until you adjust it."* Made it live as the user
+scrubs (not just on next panel open) by subscribing to `PlaybackService.OnStateChanged`, which the
+component didn't previously do at all. Live-verified with real playhead scrubbing: hint shows strictly
+between keyframes, correctly absent exactly on a keyframe or past the last one, updates live without
+reopening the panel.
+
 > Requested 2026-08-08, described using a shadow going 5px → 10px animated over 5 frames as the example:
 > adding a keyframe at frame 1 (interpolated ~7px) locks the animation at 7px onward unless the user also
-> changes that keyframe's value to 10px. Worth considering some UI affordance that makes "this is an
-> interpolated preview, not yet a committed keyframe value" more visible before/while adding. Applies to
-> the whole motion-keyframe system generically (position, scale, color, and now shadow), not just shadow
-> specifically. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+> changes that keyframe's value to 10px. Applies to the whole motion-keyframe system generically
+> (position, scale, color, shadow), not just shadow specifically. Shipped 2026-08-09 (phase 78). Lives
+> in the separate Ben.Video.Editor repo (Github-BenVideo remote).
 
 ---
 
