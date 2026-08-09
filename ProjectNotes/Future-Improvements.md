@@ -644,11 +644,26 @@ single-PNG was exercised) and clipart (not wired into any Playground demo's feat
 
 In many of the editor's Telerik sliders (Properties panels — position/size/corner-radius/fade/etc.), the
 tick-label numbers under the track render bunched together and overlapping, unreadable at typical panel
-widths. Likely fix: much smaller label font and/or showing only every Nth label (Telerik's
-`LargeStep`/tick configuration, or CSS hiding intermediate labels) — needs a pass over all editor sliders,
-not just one.
+widths. Needs a pass over all editor sliders, not just one — and per the user 2026-08-09, not a uniform
+fix: some sliders (e.g. the video preview's scrub bar, fixed during item #36 phase 84) should just hide
+labels entirely; others (Properties-panel sliders like position/size) may still find the numbers useful,
+so each needs its own judgment call rather than one blanket treatment.
 
-> Noted by the user 2026-08-08. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+**Real fix confirmed 2026-08-09** (found via reflection on `Telerik.Blazor.dll` while fixing the preview
+scrub bar) — do NOT reach for CSS hacks first, matching [[feedback_prefer_telerik_native_components]]:
+`TelerikSlider<T>` inherits `TickPosition` (`SliderTickPosition`: `Before`/`After`/`Both`/`None`) and
+`LabelTemplate` (`RenderFragment<T>`) from `Telerik.Blazor.Components.Common.TelerikSliderBase<TValue>` —
+neither is in the component's own IntelliSense-visible declared members (only on the base class), which
+is likely why this wasn't found earlier. `TickPosition="SliderTickPosition.None"` removes labels/ticks
+entirely (used for the scrub bar); `LabelTemplate` lets a slider keep labels but reformat/thin them out
+(e.g. round to fewer decimals, or only render the template for values that are multiples of `LargeStep`)
+for the sliders where the user said numbers are still useful. Also note: `TelerikSlider`'s own rendered
+root doesn't carry the Blazor CSS-isolation scope attribute (same as `TelerikWindow`/`TelerikTabStrip`
+elsewhere in this codebase) — if a CSS approach is ever needed for something `TickPosition`/`LabelTemplate`
+can't do, it must be rooted via `::deep` at a real scoped ancestor, not the slider's own class name.
+
+> Noted by the user 2026-08-08, refined 2026-08-09. Lives in the separate Ben.Video.Editor repo
+> (Github-BenVideo remote).
 
 ---
 
@@ -751,7 +766,7 @@ one another).
 
 ---
 
-## 36. Dedicated async rendering service + progressive rough/fine preview + per-region timeline progress (🟡 phases A-D shipped, in progress)
+## 36. Dedicated async rendering service + progressive rough/fine preview + per-region timeline progress (🟡 phases A-84 shipped, in progress)
 
 Pull preview rendering out of the Blazor UI thread into its own service that runs asynchronously
 alongside the app, rendering timeline clips in the order requested, at the editing (preview) resolution
@@ -866,6 +881,29 @@ button should become a full-resolution render played in the existing phase-62 po
 distinct from the live-editing "Working Window" — scoped as its own phase 84 rather than folded
 into this already-large phase. 18 new tests, 1195/1195 total passing. Full detail in
 `README-phase-83.md`.
+
+**Phase 84 shipped 2026-08-09** (`feature/phase-84-fullres-preview-popout`, merged to `develop`):
+the toolbar Preview button is now the full-resolution/quality output preview confirmed at the end
+of phase 83 — it calls `ExportService.ExportAsync(settings, downloadToDisk: false)` (a new mode
+sharing 100% of the real export pipeline, just swapping the final download step for an in-memory
+blob URL) and plays the result in its own popout window, genuinely separate from the Working
+Window. The Working Window's own auto-refresh is now unconditional — the opt-in toggle from phase
+65 is gone, fulfilling item #11's original "no explicit render step" ask for real now that
+background rendering makes each refresh cheap. Found and fixed two real bugs live: the pre-existing
+relocate-popout blanked its content on toggle (component-instance swap dropped the loaded blob URL
+— fixed via a new `VideoPreview.DetachWithoutRevoking()` + rehydrate flag); and a cross-component
+`OnAfterRenderAsync` timing race (a parent calling `LoadUrlAsync` right after a `VideoPreview`
+first mounts isn't guaranteed to run after that child's own JS module finishes initializing) — fixed
+by having `VideoPreview` own applying its own deferred load via an internal pending-load queue
+instead of relying on any cross-component ordering. Also from live UI feedback in the same session:
+default export resolution/fps lowered to 1280×720/24fps (from 1920×1080/30fps) and the Working
+Window's own preview-scale default lowered to 75% (from 100%) for faster defaults throughout;
+the output window's now-unused quality/fps dropdowns replaced with a compact inline scrub bar;
+its tick labels fixed via Telerik's native `TickPosition="None"` (found via DLL reflection — it's
+declared on a base class, `TelerikSliderBase<TValue>`, not on `TelerikSlider<T>` itself, feeding a
+confirmed-mechanism update into item #30 below); the audio level meter (`DbMeter`) fixed to stretch
+to the video's actual height and its unreadable "L R" label removed entirely (it had no CSS at all
+before this). Full detail in `README-phase-84.md`.
 
 > Requested by the user 2026-08-09. Depends on / revisits items #12 (preview rendering pipeline,
 > shipped phase 64) and #13 (render-progress bar, shipped phase 69 with per-region tracking
