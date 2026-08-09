@@ -554,39 +554,64 @@ hovering over an extendable edge to signal the interaction is available.
 
 ---
 
-## 29. 🔴 ffmpeg.wasm aborts (OOM) during SVG-overlay export — output silently loses its video track (not started, HIGH PRIORITY)
+## 29. ✅ ffmpeg.wasm aborts (OOM) during SVG-overlay export — output silently loses its video track (shipped 2026-08-09, phase 75)
 
 Found live-testing phase 74, **confirmed by the user**: exporting a timeline with a callout produced an
 "audio-only" output file. Direct MP4 box-structure inspection of the captured export blob confirmed it —
-the file has an audio `trak` (`smhd` handler) but **no video track at all**. The browser console shows
-`Aborted()` (Emscripten's fatal-crash message, typically WASM out-of-memory) **9 times during a single
-export**, reproduced in a completely fresh browser tab on the very first export after page load — not
-session-accumulated state. Yet the UI reports "✓ Export complete" and hands the user a broken file.
+the file has an audio `trak` (`smhd` handler) but **no video track at all**. The browser console showed
+`Aborted()` 9 times during a single export, which looked like an Emscripten OOM crash.
 
-Two compounding problems:
+**That diagnosis turned out to be wrong.** Live testing in phase 75 disproved it: the single-threaded
+ffmpeg.wasm core prints `Aborted()` as part of *every* command's normal exit path, success or failure —
+not a crash signal at all. A first attempt at fixing this (treating `Aborted(` as fatal and tearing down
+the core) was reverted once that was discovered.
 
-1. **The crash itself** — likely memory exhaustion in the single-threaded ffmpeg.wasm build
-   (`crossOriginIsolated: false` in the Playground, so the multi-threaded core never loads). A callout's
-   default 5s duration at 30fps = 150 full-canvas 1920×1080 PNG frames rasterized and composited in one
-   `image2`-demuxer pass. This is the *pre-existing* SVG-overlay pipeline (Arrow/Line/Star callouts,
-   animated text overlays since phase 71) — not new phase-74 code; phase 74's callout-text just made
-   Rectangle callouts take this path too, which is how it surfaced. Possible directions: render only the
-   overlay's own bounding box per frame instead of the full canvas (huge memory reduction), chunk the
-   per-overlay composite into shorter segments, enable COOP/COEP in the Playground so the multi-threaded
-   core loads, or investigate whether `exec` calls leak MEMFS/heap across passes.
-2. **Silent failure** — `FfmpegService.OnFfmpegLog` (`Services/FfmpegService.cs:73`) is a no-op that
-   discards every ffmpeg log line, so fatal aborts are invisible to both the UI and the export pipeline;
-   `ExportService` happily continues compositing with a broken intermediate. Phase 74 added a temporary
-   `console.log` passthrough in `ffmpegInterop.js` so the abort is at least visible in dev tools; a real
-   fix should detect `Aborted()`/non-zero exit and fail the export loudly instead of reporting success.
+**The real root cause**, found by reproducing the bug with a plain default callout (no OOM involved): three
+independent bugs stacked in the native-callout compositing pass, which had — in effect — never actually
+run before:
+1. The `drawbox` pass emitted `-vf <chain>` next to the audio pass's explicit `-map 0:a?`. An explicit
+   `-map` disables ffmpeg's default stream selection, so the output contained *only* audio and exited 0.
+   Fixed by wrapping the chain in a `filter_complex` with the video output explicitly mapped, matching
+   every sibling composite pass (`ExportArgBuilders.BuildFilteredVideoArgs`).
+2. With video actually mapped, the filter ran for the first time and failed: `BuildCalloutFilter` used
+   `W`/`H` (overlay-filter variables) where `drawbox` needs `iw`/`ih`.
+3. Once running, the shape was invisible: `ColorHelper.ToFfmpegColor` emitted alpha **first**
+   (`0xAARRGGBB`, CSS convention) but ffmpeg's colour parser takes alpha **last** (`0xRRGGBBAA`) — the
+   default callout fill parsed with alpha `0x00`.
 
-Also fixed during the same investigation (already committed on the phase-74 branch): `svgFrameRenderer.js`'s
-`svgToPng` did an unnecessary `Blob → ObjectURL → fetch → Blob → createImageBitmap` round-trip that was an
-intermittent source of "InvalidStateError: The source image could not be decoded" — now decodes the Blob
-directly with one retry.
+A belt-and-braces fix was added too: `ExportAsync` now ffprobes the final output and throws if it has no
+video stream, so this class of silent "success" can't reach the download step again. `FfmpegService`
+now keeps a ring buffer of ffmpeg log lines and throws on any non-zero exit code (the log-line content
+itself is never inspected for crash signals, per the `Aborted()` finding above).
+
+**Three more real bugs found during the broader "verify text/callout/transitions/shadows/alpha/motion
+actually export" pass the user asked for afterward** (not just "a video track exists"):
+- `createImageBitmap(svgBlob)` failed consistently in this dev environment (reproducible on a plain
+  `<rect>`, not content-specific) — `svgFrameRenderer.js` now falls back to an `Image()`+canvas decode.
+- The Playground's demo pages each pass their own `EditorOptions` parameter, but `ExportService` (and
+  everything else reading `IOptions<VideoEditorOptions>`) only ever sees the *one* options object
+  registered once at host startup, which the Playground left at all-defaults — so Transitions and
+  TextOverlays silently never exported in any Playground demo regardless of what its UI showed. Real
+  users are unaffected (`Ben.Web.WebApp/Program.cs` already configures these flags globally and its
+  pages don't use the per-page override). Fixed by configuring the Playground's global options to match
+  production — this also means every *previous* phase that "live-verified" export via the Playground
+  never actually exercised Transitions or TextOverlays export, only their UI.
+- Video clips were never scaled to the export's selected Resolution setting — only image clips and
+  overlay PNGs were. A source clip smaller than the target resolution left overlays composited against
+  a canvas-size mismatch (a callout at "10% from top" of a 1080-tall canvas landed past the bottom edge
+  of an actual 360-tall frame, fully clipped). `BuildTrimArgs` gained the same scale+pad
+  `BuildImageSegmentArgs` already had.
+
+All four fixes were live-verified end-to-end with direct pixel inspection of exported frames (not just
+"export succeeded, video track exists") — a video clip + text overlay + Arrow-shape callout (SVG path,
+default drop shadow) now exports correctly at the real target resolution with both overlays visible at
+their intended positions. **Not verified**: the animated/motion-keyframe overlay path (only static
+single-PNG was exercised) and clipart (not wired into any Playground demo's feature flags) — see items
+#32 and #33.
 
 > Found 2026-08-08 during phase 74 live verification; user confirmed the audio-only symptom independently.
-> Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+> Root-caused and fixed 2026-08-09 (phase 75, `feature/phase-75-ffmpeg-oom-silent-failure`, merged to
+> `develop`). Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
 
 ---
 
@@ -613,3 +638,47 @@ a link id between track items, grouped selection/drag on the timeline and canvas
 motion-path/fade application.
 
 > Requested by the user 2026-08-08. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+
+---
+
+## 32. Animated/motion-keyframe overlay export path unverified (not started)
+
+Phase 75's live export verification only exercised the *static* (no motion path) single-PNG overlay
+path for text overlays and callouts. The animated path (per-frame SVG rasterization for a callout/text
+with a motion keyframe) shares the same underlying SVG-decode pipeline (fixed in phase 75 — see item
+#29) but was never itself live-tested end-to-end after that fix. Should be low-risk given the shared
+code path, but hasn't been directly confirmed.
+
+> Found 2026-08-09 during phase 75 verification, deferred due to time. Lives in the separate
+> Ben.Video.Editor repo (Github-BenVideo remote).
+
+---
+
+## 33. Clipart export path unverified — not wired into any Playground demo (not started)
+
+None of the Playground's demo pages (Default/Multi-Track/Full-Featured/Audio Only) expose the asset
+browser's clipart feature via their `EditorOptions`, so the clipart export path (`ApplyClipArtClipsAsync`
+in `ExportService.cs`) couldn't be live-tested during phase 75's verification pass without first adding
+a demo page or wiring the flag. Worth adding a flag/demo page for this the next time clipart needs
+live verification.
+
+> Found 2026-08-09 during phase 75 verification. Lives in the separate Ben.Video.Editor repo
+> (Github-BenVideo remote).
+
+---
+
+## 34. `VolumeAutomationLane` JS-interop crash under rapid UI interaction (not started)
+
+Observed during phase 75's scripted browser testing (not necessarily reachable at normal human
+interaction speed): `VolumeAutomationLane.OnAfterRenderAsync` calls `volumeAutomationLane.js`'s
+`init()`, which does `_ensureElements()` → `.querySelector(...)` on an element reference that was
+sometimes still `null`, throwing `TypeError: Cannot read properties of null (reading 'querySelector')`.
+In Blazor WASM this only breaks that one component's render (not the whole circuit, unlike Blazor
+Server), so the app kept working, but the audio track's volume-automation lane was left broken for
+the rest of the session. Reproduced twice with scripted rapid-fire add-track/add-clip clicks; unclear
+whether a real user's slower interaction pace can trigger the same race. Needs the JS side to guard
+against a null element (retry/defer `init()` until the DOM node exists) rather than assuming
+`OnAfterRenderAsync` always fires after the element is mounted.
+
+> Found 2026-08-09 during phase 75 verification (scripted browser automation). Lives in the separate
+> Ben.Video.Editor repo (Github-BenVideo remote).
