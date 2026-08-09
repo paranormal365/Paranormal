@@ -1010,17 +1010,18 @@ timeline issues:
 
 Lives in the separate Ben.Video.Editor repo.
 
-## 40. MotionKeyframeEditor doesn't refresh after adding a layer's first keyframe (not started)
+## 40. MotionKeyframeEditor doesn't refresh after adding a layer's first keyframe — ✅ Fixed (2026-08-09, phase 88)
 
 Found 2026-08-09 while verifying item #32/phase 86. Clicking "Add keyframe at playhead" from the
-empty "No keyframes yet for this layer" state genuinely adds the keyframe to
-`MotionKeyframeService` (confirmed — closing and reopening the panel immediately shows it), but the
-panel itself keeps showing the empty state until it's closed and reopened. Root cause:
-`MotionKeyframeEditor._path`/`_kf` are only recomputed in `OnParametersSet` (fired by the *parent*
-passing new `LayerId`/`KeyframeIndex` parameters); the component subscribes to
+empty "No keyframes yet for this layer" state genuinely added the keyframe to
+`MotionKeyframeService` (confirmed — closing and reopening the panel immediately showed it), but
+the panel itself kept showing the empty state until closed and reopened. Root cause:
+`MotionKeyframeEditor._path`/`_kf` were only recomputed in `OnParametersSet` (fired by the *parent*
+passing new `LayerId`/`KeyframeIndex` parameters); the component subscribed to
 `Playback.OnStateChanged` (for the mid-interpolation warning, item #21) but never to
-`MotionKeyframeService.OnChanged`, so its own internal `AddKeyframeAtPlayhead()` call updates the
-service but never re-renders itself with the fresh state. Purely a first-use UI paper cut — the
-underlying keyframe data and every subsequent operation (switching between existing keyframes via
-on-canvas dots, editing values) work correctly; only the very first keyframe on an empty layer needs
-a manual close/reopen to become visible. Lives in the separate Ben.Video.Editor repo.
+`MotionKeyframeService.OnChanged`, so its own internal `AddKeyframeAtPlayhead()` call updated the
+service but never re-rendered itself with the fresh state. Fixed by subscribing to
+`Motion.OnChanged`, matching the existing `Playback.OnStateChanged` pattern, and extracting the
+field-refresh logic into a reusable method both handlers call. Live-verified: "Add keyframe at
+playhead" now shows the real keyframe editor immediately, no close/reopen needed; delete and re-add
+still behave correctly. See `README-phase-88.md` in the Ben.Video.Editor repo.
