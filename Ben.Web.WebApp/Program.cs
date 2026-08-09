@@ -43,6 +43,8 @@ builder.Services.AddBenVideoEditor(options =>
     options.ProjectPersistence = true;
     options.ErrorLog        = true;
     options.RippleEdit      = true;
+    // Item #36 phase E rollout: background render worker + rough/fine two-pass preview.
+    options.BackgroundRendering = true;
     options.MediaLibraryBaseUrl = builder.Configuration["WebApi:BaseUrl"];
     options.DocumentPostUrl = $"{builder.Configuration["WebApi:BaseUrl"]}/api/video-projects";
 });
