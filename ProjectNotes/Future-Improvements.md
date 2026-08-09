@@ -529,17 +529,33 @@ path, not only on ordinary re-selection.
 
 ---
 
-## 27. Timeline item drag doesn't stop on mouse-button release (not started)
+## 27. Timeline item drag doesn't stop on mouse-button release (✅ shipped)
 
-Clicking to move an item on the timeline should stop moving the instant the mouse button is released — the
-user reports it currently keeps going past release. Needs investigation: reproduce precisely (which item
-type, mouse vs. touch/pointer input) and trace against the existing pointer-drag mechanism
-(`_movingItem`/`OnChipPointerDown`/`OnTrimPointerMove`/`OnTrimPointerUp` in `VideoTimeline.razor`) to find
-where release isn't being caught.
+Root cause: the clip-chip `<div>` in `VideoTimeline.razor` does double duty — pointer-based free-move
+(`OnChipPointerDown`/`_movingItem`) AND native HTML5 drag-and-drop (`draggable="true"` +
+`ondragstart`/`ondragover`/`ondragend`, a separate, older same-track swap-reorder mechanism) — and
+neither ever took real pointer capture. A fast drag could let native drag hijack the gesture before the
+async Blazor render flipped `draggable="false"` (once native drag wins, the browser stops delivering
+`pointerup` to the chip at all), or simply move the cursor off the element/trim handle before mouse-up.
+Either way, `OnTrimPointerUp` — which clears `_movingItem` and commits the position — never ran, leaving
+the clip visibly stuck in "moving" state (and undraggable again) until page reload. A `capturePointer`
+JS helper already existed with a doc comment describing exactly this fix, but was never called from
+anywhere. Fixed 2026-08-09 (phase 77, `feature/phase-77-clip-drag-stuck`, merged to `develop`): wired the
+helper (renamed `capturePointerAt`, using `elementFromPoint` + `closest` instead of needing an
+`ElementReference` per chip) into all four drag-initiating pointerdown handlers, and added a
+`FinalizeMove` safety net called from `OnDragEnd` so a residual native-DnD win still cleans up state
+instead of leaving it stuck.
+
+No automated regression test was feasible — this is a real-OS-pointer-timing race, and synthetic
+`PointerEvent`s dispatched via `element.dispatchEvent()` can't establish genuine pointer capture
+(confirmed directly: `setPointerCapture` throws `NotFoundError` for them). Live-verified instead with
+real OS-level mouse drags via the Claude in Chrome extension (not the Electron-embedded harness
+browser, which has the same synthetic-input limitation): three separate drags (two body-move, one
+start-trim) all committed cleanly with no stuck state.
 
 > Found by the user 2026-08-08 during manual testing, right after phase 73's swap-reorder-parity fix
-> shipped — check whether it's a new regression from that change or pre-existing. Lives in the separate
-> Ben.Video.Editor repo (Github-BenVideo remote).
+> shipped. Shipped 2026-08-09 (phase 77). Lives in the separate Ben.Video.Editor repo (Github-BenVideo
+> remote).
 
 ---
 
