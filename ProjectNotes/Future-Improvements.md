@@ -879,3 +879,30 @@ correct: if the *last* clip on the timeline gets trimmed shorter, every lane sho
 the new, shorter overall extent (since `Clips.TotalDuration` presumably already recomputes correctly
 today — worth confirming as part of this fix, not assuming).
 Lives in the separate Ben.Video.Editor repo.
+
+## 38. Long-form project memory budget — e.g. three 20-minute 1080p clips (not started)
+
+Raised by the user 2026-08-09 while item #36 phase D was being planned: what happens when someone
+edits three 20-minute 1080p clips? Honest answer: today that breaks. The whole pipeline lives in
+ffmpeg.wasm's 32-bit WASM memory (2–4 GB hard ceiling), and ~60 minutes of 1080p source is roughly
+1–3.5 GB of bytes before any encode output. Known contributing gaps, in priority order:
+
+1. **Server/media-library imports land in main-instance MEMFS, not OPFS** (found in phase 81) —
+   local file-picker imports are already fine (OPFS + zero-copy WORKERFS mounts, no WASM memory
+   cost), but server-imported clips occupy WASM memory outright, so large server clips can blow the
+   ceiling at import time. Root fix: make `ClipBrowser.ImportFromLibraryAsync` write to OPFS like
+   the local path does, then let everything mount from there.
+2. **The item #36 design's 256 MB segment-cache cap + LRU eviction (design doc §8) was never
+   implemented** in phases C/82 — background-rendered preview segments (worker MEMFS), their
+   transferred copies (main MEMFS), and `PreviewSegmentCache` entries all accumulate unbounded
+   within a session. For long clips at preview resolution these are tens-to-hundreds of MB each.
+3. **Full-length outputs**: a full-quality export (or the planned full-quality in-memory Preview,
+   phase 84) of 60 minutes of 1080p is itself a 1–2 GB MEMFS file before the blob/download step —
+   a ceiling today's Export already has for long content; not newly introduced, but worth solving
+   in the same pass (e.g. streaming output to OPFS and creating the blob URL from the OPFS File
+   handle rather than a MEMFS byte copy).
+
+Longer-term: this is exactly the scenario the item #36 design's rejected-for-now **native sidecar
+backend** (real ffmpeg outside the browser, behind the existing `IRenderBackend` seam) was kept
+open for — in-browser mitigations raise the ceiling but cannot remove it. Lives in the separate
+Ben.Video.Editor repo.
