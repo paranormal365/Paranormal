@@ -739,3 +739,31 @@ one another).
 
 > Requested by the user 2026-08-09. Lives in the separate Ben.Video.Editor repo (Github-BenVideo
 > remote).
+
+---
+
+## 36. Dedicated async rendering service + progressive rough/fine preview + per-region timeline progress (not started)
+
+Pull preview rendering out of the Blazor UI thread into its own service that runs asynchronously
+alongside the app, rendering timeline clips in the order requested, at the editing (preview) resolution
+— not the full export resolution. To avoid long delays on a single request, it should support a
+two-pass strategy: a fast, rough render first, then a finer-quality pass afterward, so the preview
+becomes usable quickly and then sharpens.
+
+As each region of the timeline renders, the thin status bar above the timeline tracks (from item #13,
+shipped phase 69 as whole-timeline binary freshness only — true per-region tracking was explicitly
+deferred then as "not honestly buildable yet") should reflect real per-region progress: gray while a
+clip's region is queued/not yet rendered, a lighter shade of green while that region is actively
+rendering, and full green (filling like a progress bar) as it completes. This is the deferred
+per-region half of item #13, now revisited with a concrete architecture (dedicated async render
+service) to make it buildable.
+
+Needs design before implementation: how the render service queues/cancels/reorders work as the user
+keeps editing (a region being rendered can become stale mid-render if the user edits it again), how
+"rough" vs "fine" passes are defined technically for ffmpeg.wasm-based rendering, and how the service
+communicates per-region state back to the timeline UI (likely an event/notification pattern, matching
+`PlaybackService.OnStateChanged`'s existing style elsewhere in this codebase).
+
+> Requested by the user 2026-08-09. Depends on / revisits items #12 (preview rendering pipeline,
+> shipped phase 64) and #13 (render-progress bar, shipped phase 69 with per-region tracking
+> explicitly deferred). Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
