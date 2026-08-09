@@ -977,7 +977,7 @@ backend** (real ffmpeg outside the browser, behind the existing `IRenderBackend`
 open for — in-browser mitigations raise the ceiling but cannot remove it. Lives in the separate
 Ben.Video.Editor repo.
 
-## 39. New callout doesn't land at the playhead — ✅ Fixed (2026-08-09, phase 85); default zoom scrolling still open
+## 39. New callout doesn't land at the playhead — ✅ Fixed in full (2026-08-09, phases 85 + 87)
 
 Found by the user 2026-08-09 while live-verifying a callout animation scenario. Two related
 timeline issues:
@@ -999,10 +999,14 @@ timeline issues:
    `NormalizeLayerIndices()` backward-compat pass keeps projects saved before this field existed
    from collapsing every overlay onto one lane. See `README-phase-85.md` in the Ben.Video.Editor
    repo.
-2. **Still open.** Default zoom requires horizontal scrolling to see a ~13 second clip in full,
-   even at a normal (non-4K) window size — per the user, this shouldn't need a huge screen. The
-   "Fit" zoom toggle exists but isn't solving this by default; needs a look at whether "Fit" should
-   simply be the default zoom mode, or whether its own fit-to-width math is off.
+2. **✅ Fixed (phase 87).** Default zoom required horizontal scrolling to see a ~13 second clip in
+   full, even at a normal (non-4K) window size. Root cause: `TimelineViewState.ZoomScale` started
+   at a fixed `1.0` regardless of content length; the "Fit" button's own fit-to-width math was
+   already correct, it just never ran automatically. Fixed by auto-fitting once, the first time
+   real content appears (empty timeline → has a duration), without ever overriding a user's own
+   manual zoom on later edits. Live-verified: a 13.9s clip now renders with zero horizontal
+   overflow (`scrollWidth === clientWidth`) at a computed `1.1×` zoom, no scrolling needed. See
+   `README-phase-87.md` in the Ben.Video.Editor repo.
 
 Lives in the separate Ben.Video.Editor repo.
 
