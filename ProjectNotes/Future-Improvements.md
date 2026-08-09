@@ -751,7 +751,7 @@ one another).
 
 ---
 
-## 36. Dedicated async rendering service + progressive rough/fine preview + per-region timeline progress (🟡 phases A-C fully wired, in progress)
+## 36. Dedicated async rendering service + progressive rough/fine preview + per-region timeline progress (🟡 phases A-D shipped, in progress)
 
 Pull preview rendering out of the Blazor UI thread into its own service that runs asynchronously
 alongside the app, rendering timeline clips in the order requested, at the editing (preview) resolution
@@ -845,6 +845,27 @@ concat, ~90s at full 1080p quality since the background worker had rendered at f
 second click hit the resulting cache entry (~6s). Full detail in `README-phase-82.md`. Phases A, B,
 and C are now fully wired end to end. Phase D (rough/fine two-pass) and phase E (rollout) remain
 open.
+
+**Phase D shipped 2026-08-09** (phase 83, `feature/phase-83-rough-fine-two-pass`, merged to
+`develop`): every region now renders rough (ultrafast/CRF 35) before fine (current preview
+quality) — the whole timeline becomes watchable fast, then sharpens per-clip, with all rough
+passes prioritized ahead of any fine pass. The render bar's fill color now distinguishes the two
+passes exactly per the user's spec: muted green fills with rough-pass progress, bright green fills
+with fine-pass progress. Assembly also switched to stream-copy concat (`-c copy`, zero re-encode)
+whenever every segment is background-pinned — the user's "only re-render where changes occur, not
+when putting it together" requirement, made literal at the assembly step too. Two real races found
+and fixed before either shipped as a live bug: reading a segment out of the render worker while
+it's mid-encode blocks until that encode finishes (ffmpeg.wasm serializes all calls through one
+queue) — would have deadlocked the entire "consume rough while fine renders" behavior — fixed by
+transferring completed segments to the main instance's MEMFS at job completion instead of at
+consumption time; and a fine pass completing mid-Preview-assembly could delete the rough segment
+the concat was about to read — fixed with a re-entrant deletion hold around assembly. Also closes
+one symptom of item #38 below (unbounded segment memory growth within a session) via orphaned-
+segment collection and deletion. Confirmed with the user along the way: the toolbar's Preview
+button should become a full-resolution render played in the existing phase-62 popout window,
+distinct from the live-editing "Working Window" — scoped as its own phase 84 rather than folded
+into this already-large phase. 18 new tests, 1195/1195 total passing. Full detail in
+`README-phase-83.md`.
 
 > Requested by the user 2026-08-09. Depends on / revisits items #12 (preview rendering pipeline,
 > shipped phase 64) and #13 (render-progress bar, shipped phase 69 with per-region tracking
