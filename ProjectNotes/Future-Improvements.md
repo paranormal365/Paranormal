@@ -696,3 +696,30 @@ against a null element (retry/defer `init()` until the DOM node exists) rather t
 
 > Found 2026-08-09 during phase 75 verification (scripted browser automation). Lives in the separate
 > Ben.Video.Editor repo (Github-BenVideo remote).
+
+---
+
+## 35. Direct on-canvas motion-keyframe editing — bezier handles, resize, type-in values, drag-to-move (not started)
+
+Motion keyframes (position/scale/rotation/alpha/shadow, etc.) are currently edited only through the
+Properties-panel form (sliders/number fields, add-keyframe-at-playhead button). Wanted: a true
+on-canvas editing experience, similar to the Pen tool in Photoshop/Illustrator —
+- Click-drag a keyframe's bezier handles directly on the motion path to shape the interpolation curve
+  between two points, not just pick an easing preset.
+- Resize the object directly on-canvas (drag a corner/edge handle) and have that recorded as the
+  keyframe's scale value at the current time.
+- Type a value directly (e.g. click a position/size number and edit it inline) instead of only via a
+  slider.
+- Drag the object itself to a new position on-canvas, with that becoming the keyframe's stored
+  position — building on the on-canvas drag support already shipped for the *current frame* (item #11,
+  phase 67) but extending it to keyframe-authoring specifically, not just live preview interaction.
+
+Depends on/extends item #11 (preview on-canvas interactivity, shipped phase 67) and the existing
+`MotionKeyframeEditor`/`MotionKeyframeService` (linear + bezier interpolation, easing curves already
+exist server-side — this is about giving them a direct-manipulation UI). Needs design: how bezier
+handles render/hit-test on the timeline-relative motion path overlaid on the preview canvas, and how
+that interacts with the existing Properties-panel form (likely both should stay in sync, not replace
+one another).
+
+> Requested by the user 2026-08-09. Lives in the separate Ben.Video.Editor repo (Github-BenVideo
+> remote).
