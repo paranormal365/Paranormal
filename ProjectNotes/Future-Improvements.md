@@ -751,7 +751,7 @@ one another).
 
 ---
 
-## 36. Dedicated async rendering service + progressive rough/fine preview + per-region timeline progress (not started)
+## 36. Dedicated async rendering service + progressive rough/fine preview + per-region timeline progress (🟡 phase A shipped, in progress)
 
 Pull preview rendering out of the Blazor UI thread into its own service that runs asynchronously
 alongside the app, rendering timeline clips in the order requested, at the editing (preview) resolution
@@ -783,6 +783,16 @@ drag-reordering never invalidates cached segments); rough pass = same dimensions
 ultrafast/CRF-35 so mixed rough/fine segments stream-copy concat; WORKERFS zero-copy source mounts
 + 256 MB LRU segment cache for memory; five implementation phases A–E, each independently
 shippable, with a post-Phase-C reassessment gate.
+
+**Phase A shipped 2026-08-09** (phase 79, `feature/phase-79-render-service-phase-a`, merged to
+`develop`): new `Ben.Video.RenderService` class library (zero Blazor dependency — the pure region
+model + signature-reconciliation engine, referenced by `Ben.Video.Editor` which adapts `ClipStore`
+into it) plus a real per-region gray/green timeline bar, replacing the old whole-timeline
+fresh/stale boolean. No second worker yet — after a (still whole-pipeline) Preview render, every
+region matching its current signature is marked rendered; edits after that only gray out the
+region(s) actually touched. Found and fixed a real pre-existing CSS bug along the way (the stale
+bar's color variable resolved to solid white in this theme, not muted gray). 33 new unit tests;
+live-verified both transitions in a real browser. Phase B (segment caching) is next.
 
 > Requested by the user 2026-08-09. Depends on / revisits items #12 (preview rendering pipeline,
 > shipped phase 64) and #13 (render-progress bar, shipped phase 69 with per-region tracking
