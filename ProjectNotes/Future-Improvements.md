@@ -792,7 +792,21 @@ fresh/stale boolean. No second worker yet — after a (still whole-pipeline) Pre
 region matching its current signature is marked rendered; edits after that only gray out the
 region(s) actually touched. Found and fixed a real pre-existing CSS bug along the way (the stale
 bar's color variable resolved to solid white in this theme, not muted gray). 33 new unit tests;
-live-verified both transitions in a real browser. Phase B (segment caching) is next.
+live-verified both transitions in a real browser.
+
+**Phase B shipped 2026-08-09** (phase 80, `feature/phase-80-render-service-phase-b`, merged to
+`develop`): `PreviewTimelineAsync` now caches each clip's encoded preview segment keyed by its
+region signature (`PreviewSegmentCache`) — editing one clip in a multi-clip timeline no longer
+re-encodes every clip on the next Preview click, only the one(s) actually changed. Orphaned cache
+entries (a clip's pre-edit state) are evicted and deleted from MEMFS after each render. Scoped down
+from the design doc's "instant" stream-copy concat for this phase specifically: investigating the
+arg builders found frame rate and audio-stream presence aren't pinned across segments, both real
+correctness risks for blind `-c copy` concat — deferred to when that pinning gets built anyway
+(phase C/D's rough-pass work), rather than retrofitting a narrower fix under time pressure. Final
+concat still re-encodes (cheap, since it's a small number of already-short preview segments, not
+original sources). 11 new tests; live-verified via the ffmpeg console log — editing one of two
+clips produced exactly one new encode command, the other clip's segment reused untouched. Phase C
+(the actual background render worker) is next.
 
 > Requested by the user 2026-08-09. Depends on / revisits items #12 (preview rendering pipeline,
 > shipped phase 64) and #13 (render-progress bar, shipped phase 69 with per-region tracking
