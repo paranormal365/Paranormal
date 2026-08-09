@@ -773,6 +773,17 @@ keeps editing (a region being rendered can become stale mid-render if the user e
 communicates per-region state back to the timeline UI (likely an event/notification pattern, matching
 `PlaybackService.OnStateChanged`'s existing style elsewhere in this codebase).
 
+**Design complete 2026-08-09** — full implementation plan in the Ben.Video repo:
+`DESIGN-item36-background-render-service.md` (committed to `develop`). Key decisions: stays fully
+client-side (second ffmpeg.wasm Web Worker, no native sidecar — but an `IRenderBackend` seam keeps
+that open); queue-based single-consumer loop with hybrid priority (explicit requests FIFO, ambient
+work playhead-outward); per-region staleness via content signatures (sidesteps phase 69's
+"ClipStore.OnChange carries no change info" blocker — `TimelinePosition` deliberately excluded so
+drag-reordering never invalidates cached segments); rough pass = same dimensions/fps at
+ultrafast/CRF-35 so mixed rough/fine segments stream-copy concat; WORKERFS zero-copy source mounts
++ 256 MB LRU segment cache for memory; five implementation phases A–E, each independently
+shippable, with a post-Phase-C reassessment gate.
+
 > Requested by the user 2026-08-09. Depends on / revisits items #12 (preview rendering pipeline,
 > shipped phase 64) and #13 (render-progress bar, shipped phase 69 with per-region tracking
 > explicitly deferred). Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
