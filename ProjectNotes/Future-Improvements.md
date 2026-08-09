@@ -966,26 +966,31 @@ backend** (real ffmpeg outside the browser, behind the existing `IRenderBackend`
 open for — in-browser mitigations raise the ceiling but cannot remove it. Lives in the separate
 Ben.Video.Editor repo.
 
-## 39. New callout doesn't land at the playhead; default zoom forces horizontal scrolling for a short clip (not started)
+## 39. New callout doesn't land at the playhead — ✅ Fixed (2026-08-09, phase 85); default zoom scrolling still open
 
 Found by the user 2026-08-09 while live-verifying a callout animation scenario. Two related
 timeline issues:
 
-1. **A new callout should appear at the playhead's current time, but can land far from it.**
-   `VideoTimeline.AddCalloutClip` sets `TimelinePosition = Playback.State.CurrentTime` — correct
-   in principle — but `Playback.State.CurrentTime` is only updated by
-   `VideoPreview.RewindAsync`/seek indirectly: `RewindAsync` calls the JS `seek()` on the real
-   `<video>` element and relies on the browser's resulting `timeupdate` event to call back into
-   `Playback.NotifyTimeUpdate`, which is what actually updates `CurrentTime` — not synchronous
-   with the seek call itself. Clicking "Add Callout" immediately after Rewind (or any other seek)
-   can race and read a stale, pre-seek `CurrentTime`, landing the new callout far from where the
-   playhead visually is. Needs investigation into whether this is the sole cause or whether other
-   timeline interactions have a similar async-seek gap; a synchronous/optimistic `CurrentTime`
-   update at the moment of the seek call (rather than only via the round-trip event) is the likely
-   fix.
-2. **Default zoom requires horizontal scrolling to see a ~13 second clip in full**, even at a
-   normal (non-4K) window size — per the user, this shouldn't need a huge screen. The "Fit" zoom
-   toggle exists but isn't solving this by default; needs a look at whether "Fit" should simply be
-   the default zoom mode, or whether its own fit-to-width math is off.
+1. **✅ Fixed.** A new callout should appear at the playhead's current time, but landed far from
+   it. The initial hypothesis (an async-seek race in `Playback.State.CurrentTime`) was
+   investigated and disproven live — `CurrentTime` was confirmed genuinely `0` at the moment of
+   adding, yet the callout still landed away from it. Real root cause: a **layout** bug, not a
+   timing bug. `VideoTimeline.razor` rendered every track item — video/audio clips *and*
+   callouts/text/clip-art — in one sequential flex row spaced by
+   `Math.Max(0, (item.TimelinePosition - runningEndSeconds) * PxPerSecond)`; the `Math.Max(0, ...)`
+   clamp silently discarded any negative "overlap," so an overlay item whose `TimelinePosition`
+   fell inside an already-placed clip rendered packed right after it instead of at its own
+   position. Fixed by giving every Callout/TextOverlay/ClipArt item its own stacking lane
+   (`TrackItem.LayerIndex`, insertion-ordered, independent of `TimelinePosition`) — which the user
+   specified should go further than a one-row fix: "everything added gets its own layer, each
+   layer higher than any added before it" (confirmed via AskUserQuestion over a minimal
+   single-shared-row alternative). Export compositing order updated to match; a
+   `NormalizeLayerIndices()` backward-compat pass keeps projects saved before this field existed
+   from collapsing every overlay onto one lane. See `README-phase-85.md` in the Ben.Video.Editor
+   repo.
+2. **Still open.** Default zoom requires horizontal scrolling to see a ~13 second clip in full,
+   even at a normal (non-4K) window size — per the user, this shouldn't need a huge screen. The
+   "Fit" zoom toggle exists but isn't solving this by default; needs a look at whether "Fit" should
+   simply be the default zoom mode, or whether its own fit-to-width math is off.
 
 Lives in the separate Ben.Video.Editor repo.
