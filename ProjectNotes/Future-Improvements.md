@@ -681,13 +681,24 @@ motion-path/fade application.
 
 ---
 
-## 32. Animated/motion-keyframe overlay export path unverified (not started)
+## 32. Animated/motion-keyframe overlay export path unverified — ✅ verified, and a real bug fixed (2026-08-09, phase 86)
 
 Phase 75's live export verification only exercised the *static* (no motion path) single-PNG overlay
 path for text overlays and callouts. The animated path (per-frame SVG rasterization for a callout/text
 with a motion keyframe) shares the same underlying SVG-decode pipeline (fixed in phase 75 — see item
-#29) but was never itself live-tested end-to-end after that fix. Should be low-risk given the shared
-code path, but hasn't been directly confirmed.
+#29) but was never itself live-tested end-to-end after that fix.
+
+**Turned out not to be low-risk** — actually verifying it (building a real callout with 3 keyframes,
+bezier handles, and animated shadow, then sampling pixels from the actual exported video) found the
+animation was **completely frozen**: `ExportService`'s per-frame elapsed-time calculation,
+`i / s.Fps`, divides two `int`s — for any clip under 1 second at typical fps (e.g. 24 frames at
+24fps), this truncates to `0` for every frame, so every animated overlay silently exported using
+only its first keyframe's values, no matter how many keyframes existed. A second bug found in the
+same pass: `ApplyMotionFrame(CalloutClip, MotionFrame)` never copied the frame's shadow fields, so
+even after the freeze was fixed, an animated callout's shadow still wouldn't animate. Both fixed;
+live-verified by direct pixel sampling of real rendered frames before (locked position the whole
+clip) and after (position sweeps continuously through all 3 keyframes, ending exactly at the last
+one). Full detail in `README-phase-86.md` in the Ben.Video.Editor repo.
 
 > Found 2026-08-09 during phase 75 verification, deferred due to time. Lives in the separate
 > Ben.Video.Editor repo (Github-BenVideo remote).
@@ -994,3 +1005,18 @@ timeline issues:
    simply be the default zoom mode, or whether its own fit-to-width math is off.
 
 Lives in the separate Ben.Video.Editor repo.
+
+## 40. MotionKeyframeEditor doesn't refresh after adding a layer's first keyframe (not started)
+
+Found 2026-08-09 while verifying item #32/phase 86. Clicking "Add keyframe at playhead" from the
+empty "No keyframes yet for this layer" state genuinely adds the keyframe to
+`MotionKeyframeService` (confirmed — closing and reopening the panel immediately shows it), but the
+panel itself keeps showing the empty state until it's closed and reopened. Root cause:
+`MotionKeyframeEditor._path`/`_kf` are only recomputed in `OnParametersSet` (fired by the *parent*
+passing new `LayerId`/`KeyframeIndex` parameters); the component subscribes to
+`Playback.OnStateChanged` (for the mid-interpolation warning, item #21) but never to
+`MotionKeyframeService.OnChanged`, so its own internal `AddKeyframeAtPlayhead()` call updates the
+service but never re-renders itself with the fresh state. Purely a first-use UI paper cut — the
+underlying keyframe data and every subsequent operation (switching between existing keyframes via
+on-canvas dots, editing values) work correctly; only the very first keyframe on an empty layer needs
+a manual close/reopen to become visible. Lives in the separate Ben.Video.Editor repo.
