@@ -751,7 +751,7 @@ one another).
 
 ---
 
-## 36. Dedicated async rendering service + progressive rough/fine preview + per-region timeline progress (🟡 phase C shipped, in progress)
+## 36. Dedicated async rendering service + progressive rough/fine preview + per-region timeline progress (🟡 phases A-C fully wired, in progress)
 
 Pull preview rendering out of the Blazor UI thread into its own service that runs asynchronously
 alongside the app, rendering timeline clips in the order requested, at the editing (preview) resolution
@@ -828,6 +828,54 @@ at fast preview quality with no stuck state. Wiring the Preview button to actual
 worker's cached segments (`AssembleAsync` + stream-copy concat) is deliberately deferred to a
 focused follow-up — see `README-phase-81.md`.
 
+**Follow-up shipped 2026-08-09** (phase 82, `feature/phase-82-preview-background-consumption`,
+merged to `develop`): Preview now actually consumes a clip's background-rendered segment when
+one's ready — reading its bytes out of the worker's independent MEMFS and writing them into the
+main instance's, then registering it in the existing `PreviewSegmentCache` so later clicks hit the
+ordinary cache path. Chose immediate fallback (skip straight to the normal synchronous encode) over
+a wait-with-timeout scheme when nothing's ready yet, so Preview can never be made slower or
+hang-prone by background-render state; a clip that falls through nudges the background queue to
+prioritize it next. Found and fixed a real bug along the way: `RenderStatusService.MarkAllCurrentRendered`
+was calling `MarkRendered` without a segment name, silently nulling out every region's `SegmentName`
+on every Preview completion — meaning consumption only ever worked on the very first Preview click
+after a background render, then silently regressed to full re-encodes forever after. Caught via a
+unit test before it could cause a confusing live-session false negative. Live-verified: first
+Preview click consumed the background segment (zero trim command in the ffmpeg log, only the final
+concat, ~90s at full 1080p quality since the background worker had rendered at full quality);
+second click hit the resulting cache entry (~6s). Full detail in `README-phase-82.md`. Phases A, B,
+and C are now fully wired end to end. Phase D (rough/fine two-pass) and phase E (rollout) remain
+open.
+
 > Requested by the user 2026-08-09. Depends on / revisits items #12 (preview rendering pipeline,
 > shipped phase 64) and #13 (render-progress bar, shipped phase 69 with per-region tracking
 > explicitly deferred). Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+
+## 37. Track row border doesn't extend to the full timeline width (not started)
+
+Found by the user 2026-08-09 while looking at a 13.8s imported clip on a wide/zoomed timeline: each
+track row's bottom border (and the row's own background/hit area generally) stops at roughly the
+initial visible-viewport width instead of extending across the full scrollable timeline width. The
+clip content itself and horizontal scrolling both work correctly — confirmed live via
+`getBoundingClientRect()`: `.bv-track__items` (the clip-holding area) correctly reports its full
+content width (2219px for a 13.8s clip at the active zoom level, matching
+`Timeline.CanvasWidth(Clips.TotalDuration)`), but its parent `.bv-track` (the flex row carrying the
+`border-bottom` — `VideoTimeline.razor.css`) only reports ~939px, capped near the viewport's visible
+width. Root cause looks like `.bv-track__items { overflow-x: visible; flex: 1; min-width: 0 }`
+(`VideoTimeline.razor.css` line ~392) letting its content overflow visually without the overflowing
+width counting toward `.bv-track`'s own flex-computed box size, even though the more distant
+scrollable ancestor (`.bv-timeline__tracks`, `overflow-x: auto`) does correctly expand to allow
+scrolling that far. Every track row is affected equally (video and audio, populated and empty) — not
+specific to audio tracks, just easiest to notice on an empty one since there's no clip content
+visually distracting from the short border. Needs its own pass: the fix (likely giving `.bv-track` a
+`width: max-content` or equivalent so its own box actually grows to match its overflowing child) has
+to be checked against the several other elements in this timeline that are positioned via the same
+width formulas (ruler, playhead, snap guide, render-progress bar) so nothing drifts out of alignment.
+
+**Intended behavior, per the user 2026-08-09**: every lane's background should extend across the
+full shared timeline width (i.e. `Clips.TotalDuration`/`Timeline.CanvasWidth`), not just each lane's
+own content. A gap between two clips mid-timeline is just empty background within that shared width
+— nothing wrong, no separate fix needed there. But the shared width itself must stay dynamically
+correct: if the *last* clip on the timeline gets trimmed shorter, every lane should shrink to match
+the new, shorter overall extent (since `Clips.TotalDuration` presumably already recomputes correctly
+today — worth confirming as part of this fix, not assuming).
+Lives in the separate Ben.Video.Editor repo.
