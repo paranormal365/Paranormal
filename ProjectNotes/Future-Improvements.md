@@ -654,16 +654,30 @@ code path, but hasn't been directly confirmed.
 
 ---
 
-## 33. Clipart export path unverified — not wired into any Playground demo (not started)
+## 33. Clipart export path unverified — not wired into any Playground demo (✅ shipped)
 
-None of the Playground's demo pages (Default/Multi-Track/Full-Featured/Audio Only) expose the asset
-browser's clipart feature via their `EditorOptions`, so the clipart export path (`ApplyClipArtClipsAsync`
-in `ExportService.cs`) couldn't be live-tested during phase 75's verification pass without first adding
-a demo page or wiring the flag. Worth adding a flag/demo page for this the next time clipart needs
-live verification.
+None of the Playground's demo pages (Default/Multi-Track/Full-Featured/Audio Only) exposed the asset
+browser's clipart feature with a real asset source, so the clipart export path
+(`ApplyClipArtClipsAsync` in `ExportService.cs`) couldn't be live-tested during phase 75's verification
+pass. Fixed in phase 76: added `DemoAssetProvider` (a static PNG clipart fixture, registered in
+`Ben.Video.Playground/Program.cs`), then live-verified — added the demo clipart + a video clip to a
+timeline, exported, and confirmed via extracted frames that the clipart composites correctly over real
+video content during its own time window and correctly disappears afterward.
 
-> Found 2026-08-09 during phase 75 verification. Lives in the separate Ben.Video.Editor repo
-> (Github-BenVideo remote).
+Three real bugs were found and fixed along the way, all previously unreachable because clipart had
+never been exercised in the Playground:
+- `AssetBrowser.razor` had a double-`else` block (two unconditional `else` branches on the same `@if`
+  chain) — the asset grid could never render.
+- `ClipArtEditor.razor`'s "Animate position / scale" button had `Width="100%"` set on a `TelerikButton`,
+  which has no such parameter — selecting any clipart clip with `AllowMotion` crashed the render tree
+  and took down the whole asset browser tab. Fixed with a CSS class instead.
+- The asset browser's inner source tab strip (`Demo Clipart` / `My Imported Files`) never selected a
+  default tab (`_activeTabId` started empty, matching neither), so neither sub-tab showed content until
+  manually clicked.
+
+> Found 2026-08-09 during phase 75 verification. Shipped 2026-08-09 (phase 76,
+> `feature/phase-76-clipart-verification`, merged to `develop`). Lives in the separate
+> Ben.Video.Editor repo (Github-BenVideo remote).
 
 ---
 
