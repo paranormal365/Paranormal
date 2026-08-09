@@ -751,7 +751,7 @@ one another).
 
 ---
 
-## 36. Dedicated async rendering service + progressive rough/fine preview + per-region timeline progress (🟡 phase A shipped, in progress)
+## 36. Dedicated async rendering service + progressive rough/fine preview + per-region timeline progress (🟡 phase C shipped, in progress)
 
 Pull preview rendering out of the Blazor UI thread into its own service that runs asynchronously
 alongside the app, rendering timeline clips in the order requested, at the editing (preview) resolution
@@ -807,6 +807,26 @@ concat still re-encodes (cheap, since it's a small number of already-short previ
 original sources). 11 new tests; live-verified via the ffmpeg console log — editing one of two
 clips produced exactly one new encode command, the other clip's segment reused untouched. Phase C
 (the actual background render worker) is next.
+
+**Phase C shipped 2026-08-09** (phase 81, `feature/phase-81-render-service-phase-c`, merged to
+`develop`): a real second, independent ffmpeg.wasm instance (`renderWorkerInterop.js` +
+`RenderWorkerService`/`RenderWorkerBackend`) now autonomously renders stale preview regions in the
+background — no Preview click needed — via `BackgroundRenderService`'s hybrid-priority queue
+(explicit requests FIFO, then stale regions ordered by distance from the playhead), with
+pause/resume around Export, discard-stale-result handling for edits landing mid-render, and
+back-off on repeated failure. Found and fixed two real gaps: Server-tab-imported clips have no
+OPFS entry at all (only the local file-picker import path populates OPFS), needing a MEMFS
+byte-copy fallback; and worker-rendered segments could omit an audio stream entirely, which would
+have silently broken the stream-copy concat this whole design is building toward (frame rate,
+unlike stated in phase B's notes above, turns out to already be pinned — only audio needed
+fixing). Also found and fixed a live-reproduced race where a missed wake-up signal could stall the
+queue for 20+ seconds, via a bounded idle-poll fallback with a dedicated regression test. 27 new
+tests (1180/1180 total passing); live-verified in the Playground — autonomous background rendering
+confirmed via distinct console log tags for the second ffmpeg core, both the OPFS-fallback and
+pinned-audio paths engaged correctly, and rapid successive edits all picked up within 1-3 seconds
+at fast preview quality with no stuck state. Wiring the Preview button to actually consume the
+worker's cached segments (`AssembleAsync` + stream-copy concat) is deliberately deferred to a
+focused follow-up — see `README-phase-81.md`.
 
 > Requested by the user 2026-08-09. Depends on / revisits items #12 (preview rendering pipeline,
 > shipped phase 64) and #13 (render-progress bar, shipped phase 69 with per-region tracking
