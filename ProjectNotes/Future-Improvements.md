@@ -777,7 +777,7 @@ one another).
 
 ---
 
-## 36. Dedicated async rendering service + progressive rough/fine preview + per-region timeline progress (🟡 phases A-84 shipped, in progress)
+## 36. Dedicated async rendering service + progressive rough/fine preview + per-region timeline progress — ✅ Complete (2026-08-09, phases A-89)
 
 Pull preview rendering out of the Blazor UI thread into its own service that runs asynchronously
 alongside the app, rendering timeline clips in the order requested, at the editing (preview) resolution
@@ -915,6 +915,26 @@ declared on a base class, `TelerikSliderBase<TValue>`, not on `TelerikSlider<T>`
 confirmed-mechanism update into item #30 below); the audio level meter (`DbMeter`) fixed to stretch
 to the video's actual height and its unreadable "L R" label removed entirely (it had no CSS at all
 before this). Full detail in `README-phase-84.md`.
+
+**Phase E shipped 2026-08-09** (phase 89, `feature/phase-89-item36-phase-e-rollout`, merged to
+`develop`): the design doc's final "polish + rollout" phase. `Ben.Web.WebApp` now sets
+`options.BackgroundRendering = true` — the real host app gets the background render worker and
+rough/fine two-pass preview by default, not just the Playground demos. Added a genuinely new
+`EnableRoughPass` toggle (`BackgroundRenderService`, runtime-mutable) — no such on/off existed
+before; when off, a stale region renders straight to its fine pass, skipping rough entirely.
+Playground's Settings Lab gained checkboxes for `BackgroundRendering`/`EnableRoughPass`/
+`PauseBackgroundRenderDuringExport`, which surfaced and fixed a real gap: `VideoEditor.razor` read
+those three flags directly from the DI-registered default, completely bypassing the per-page
+`EditorOptions` parameter every other setting already respects — meaning the new checkboxes could
+never have worked without this fix, and fixing it in turn surfaced a latent bug where the
+Full-Featured demo's own options object never set `BackgroundRendering`, silently relying on the
+old DI-only behavior (now made explicit on that page). The design doc's "cap" knob (256MB
+segment-cache eviction) was **not** built — it was never actually implemented in the first place,
+confirmed while investigating this phase, and building it now would duplicate the separate,
+still-open item #38. Live-verified end-to-end: importing a clip into the real-host-app-configured
+demo triggered two separate ffmpeg core loads (main + background worker) and the exact expected
+rough-then-fine command sequence, with no explicit Preview click. Full detail in
+`README-phase-89.md`.
 
 > Requested by the user 2026-08-09. Depends on / revisits items #12 (preview rendering pipeline,
 > shipped phase 64) and #13 (render-progress bar, shipped phase 69 with per-region tracking
