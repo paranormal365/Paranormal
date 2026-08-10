@@ -1103,7 +1103,7 @@ shadow, etc. via the motion-keyframe system).
 
 ---
 
-## 42. Overlay timeline rows need named lanes with correct height (not started)
+## 42. Overlay timeline rows need named lanes with correct height — ✅ Fixed (2026-08-10, phase 94)
 
 Found by the user 2026-08-10 while looking at a callout and text overlay stacked in their own
 timeline rows (item #39's per-item overlay lanes). Each overlay row is a fixed 40px tall
@@ -1114,10 +1114,19 @@ content instead of clipping/overflowing a fixed 40px height.
 
 > Requested by the user 2026-08-10, found while live-verifying item #28 (drag-to-extend trim
 > handles). Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+>
+> Shipped: root cause was `.bv-clip-chip` never setting `box-sizing: border-box`, so
+> `height: 40px` + padding + border rendered at 50px — 10px taller than the 40px slot each item
+> gets, bleeding into the next row. Fixed with `box-sizing: border-box` (per the user's own
+> suggested option — shrink the chip to fit, rather than growing every row). The gutter (previously
+> a blank spacer) now shows a per-row named-lane label — icon + type name ("Callout"/"Text"/
+> "Clipart") — mirroring a real track's own label. Live-verified with two simultaneous text
+> overlays: both chips measured exactly 40px, both lane labels landed exactly 40px apart, no
+> overlap, still one row per item (item #39's model unchanged).
 
 ---
 
-## 43. Callout/text overlays don't appear in the small "Timeline Preview" thumbnail (not started)
+## 43. Callout/text overlays don't appear in the small "Timeline Preview" thumbnail — ✅ Fixed (2026-08-10, phase 95)
 
 Found by the user 2026-08-10 alongside item #42: scrubbing to a point where a callout and text
 overlay are both active, neither renders in the small "Timeline Preview" scrub thumbnail near the
@@ -1133,6 +1142,25 @@ confirmed yet.
 > Requested by the user 2026-08-10, found while live-verifying item #28. Confirmed unrelated to
 > item #28's actual code change (`git diff --stat` showed only `VideoTimeline.razor`, no preview/
 > compositing files touched). Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+>
+> Investigation first confirmed the full-quality "Preview" popout already composites overlays
+> correctly (real ffmpeg SVG-rasterization passes, verified via its command log) — the gap was
+> specifically the Working Window (small thumbnail + main editing canvas share one component),
+> which only ever drew a position-handle dot, never the real visual, for whichever item was
+> selected. Also resolved the z-order question directly: the video and text track's row order in
+> the timeline *panel* has no bearing on compositing order — overlays are, by design, always
+> layered on top of the video in the real render, not a bug. Shipped: new `LiveOverlayPreview`
+> component reusing the exact same SVG-generation code the real export uses
+> (`CalloutShapeRenderer`/`TextOverlayRenderer`) plus the same motion-frame interpolation and
+> fade-alpha logic `ExportService` uses for animated overlays, so the live preview matches the real
+> render pixel-for-pixel — including mid-fade opacity and interpolated motion-path position. Gated
+> on `ShowWorkingWindowControls` so it never double-renders next to the full-quality popout. Found
+> and fixed a real bug during verification: the first version only recomputed on `CurrentTime`
+> changes, so a newly-added overlay never appeared until the next timeupdate tick — fixed by
+> subscribing directly to `ClipStore.OnChange`/`MotionKeyframeService.OnChanged`. Live-verified via
+> direct SVG/DOM inspection: correct 0.000→1.000 opacity across the fade-in window, a real
+> `<rect>` with fill/stroke/shadow for a callout, and confirmed no duplicate overlay layer on the
+> full-quality popout.
 
 ---
 
