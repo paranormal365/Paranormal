@@ -1402,3 +1402,65 @@ for Callout/TextOverlay, but with an added async asset-loading step neither of t
 > Found 2026-08-10 while investigating whether to extend phase 98's Properties-panel live-value
 > sync to `ClipArtEditor` — deliberately not built on top of this, since there'd be nothing real to
 > sync. Lives in the separate Ben.Video.Editor repo.
+
+---
+
+## 49. Insert vs. Overwrite edit modes — 🟡 in progress (2026-08-10)
+
+Item #25's ripple-insert (phase 106) only covers half of standard NLE overlap handling: when a
+new/moved clip overlaps existing timeline content, it always *ripples* (shifts everything after
+the insertion point later). Every mainstream editor (Premiere, Resolve, Final Cut, Kdenlive) also
+offers *overwrite*: drop a clip on top of existing content and it trims/replaces whatever's
+underneath instead of pushing subsequent clips later. Currently there's no way to do the
+overwrite-style edit at all.
+
+> User-requested 2026-08-10 after comparing this editor's timeline behavior against standard NLE
+> patterns — asked to build the concrete gaps identified, most relevant first. This is #1 of 4
+> (Insert/Overwrite, Slip/Slide/Roll trims, three-point editing, J/L-cuts), prioritized highest
+> since it directly extends the ripple-insert-confirmation dialog just shipped in phase 106.
+
+---
+
+## 50. Slip / Slide / Roll trim edits — ⬜ not started
+
+Beyond basic trim (drag a clip's edge to change its in/out point) and ripple-move, standard NLEs
+offer three more trim variants: **slip** (change a clip's in/out source-media offset without
+moving the clip or changing its on-timeline duration — the clip's position and length stay fixed,
+only what portion of the source media it shows changes), **slide** (move a clip along the timeline
+without changing its own trim points, absorbing the gap by adjusting the neighbors' visible
+duration on either side), and **roll** (move the shared edit point between two adjacent clips —
+one clip's out-point and the next clip's in-point move together — without changing the total
+timeline duration). None of these exist today; only single-clip edge-trim and whole-clip
+ripple-move are supported.
+
+> User-requested 2026-08-10, #2 of 4 in priority order (see item #49). Lives in the separate
+> Ben.Video.Editor repo.
+
+---
+
+## 51. Three-point editing (mark in/out on source, insert/overwrite at playhead) — ⬜ not started
+
+Standard professional editing workflow: mark an in-point and out-point on a clip *in the media
+library* (before it's on the timeline), then insert or overwrite it into the timeline at the
+current playhead position — rather than dragging whole, untrimmed clips onto the timeline and
+trimming them afterward. Needs new mark-in/mark-out UI on the ClipBrowser's preview, and for
+`AddClipToTimeline` to respect the marked range instead of always using the source clip's full
+duration.
+
+> User-requested 2026-08-10, #3 of 4 in priority order (see item #49). Lives in the separate
+> Ben.Video.Editor repo.
+
+---
+
+## 52. J-cuts / L-cuts (split audio/video edit points) — ⬜ not started
+
+A split edit where a clip's audio and video tracks lead or trail each other at a cut — e.g. the
+next scene's audio starts before its video appears (J-cut), or the current scene's audio continues
+after its video has cut away (L-cut). Needs linked-but-independently-trimmable audio/video per
+clip, which doesn't exist today (audio is a fully separate `AudioClip`/track, not a linked
+component of a `VideoClip` that can be trimmed asymmetrically from the same edit UI). Most
+infrastructure-heavy of the four gap items — likely needs the underlying linked-clip model before
+the edit UI itself.
+
+> User-requested 2026-08-10, #4 of 4 in priority order (see item #49). Lives in the separate
+> Ben.Video.Editor repo.
