@@ -529,16 +529,37 @@ primitive a rebuild would use.
 
 ---
 
-## 25. Timeline snapping — expand/verify coverage (not started)
+## 25. Timeline snapping — expand/verify coverage — 🟡 in progress (2026-08-10)
 
 `Snapping` already exists as a feature flag and has real implementation (`_snapGuidePx` in
 `VideoTimeline.razor`, a visible snap-guide line) — not a from-scratch feature. Noted as worth a fresh look:
 confirm snap points cover the cases users actually want (clip edges, playhead, markers, other clips'
 start/end) during the various drag interactions (clip reposition, trim, marker drag), and consider whether
-coverage should expand. No specific gap identified yet — flagged for future investigation rather than a
-known bug.
+coverage should expand.
 
-> Noted by the user 2026-08-08, no specific complaint yet — revisit and scope precisely before starting.
+> Noted by the user 2026-08-08, no specific complaint yet. Scoped precisely by the user 2026-08-10 into
+> 5 concrete parts:
+> 1. Dragging a clip to a different track/lane moves it there ("higher" = a different row).
+> 2. Dragging a clip near another clip on the timeline snaps to that clip's end (or start, if closer).
+> 3. After a placement, the timeline auto-scrolls into view if the result isn't already visible.
+> 4. A new clip that fits in existing timeline space (given playhead position / clip-edge proximity)
+>    just drops in there directly.
+> 5. A new clip that doesn't fit where it would land prompts to make room (ripple subsequent clips)
+>    before placing; a new clip dropped in an empty lane past the current end just extends the timeline.
+>
+> Investigation found the underlying gap is bigger than "snapping": neither drag system (native-HTML5
+> reorder-swap, nor the pointer-based body-drag everyone actually uses) supported cross-track moves at
+> all, body-drag had zero snapping AND zero collision detection (`ClipStore.CommitDraggedPosition` just
+> accepted whatever raw position the drag landed on), there was no auto-scroll-into-view anywhere in the
+> codebase, and new-clip-drop's overlap fallback just dumped the clip at the end of the whole track with
+> no "make room" option. Being worked in 5 verified steps matching the scope above.
+>
+> **Part 1 shipped**: phase 103 (`feature/phase-103-snap-while-dragging`, merged to `develop`, pushed).
+> `SnapEngine.CollectSnapTargets` gained an `excludeItemId` param (a dragged clip's own edges otherwise
+> always out-snap everything else), wired into body-drag's position computation + the existing snap-guide
+> line. Live-verified: dragging a clip to ~0.3s past another clip's end landed it exactly touching (27.7s
+> total for two 13.8s clips), not at the raw ~27.9s an unsnapped drag would produce. Found and logged a
+> real, separate pre-existing bug along the way — item #48.
 
 ---
 
@@ -1231,6 +1252,29 @@ grids (not just thumbnail sizing — flex layout, padding, border-radius, hover/
 > every native-HTML element built via `__builder` across all four grids. Live-verified: Server-tab
 > thumbnail went from 600×600px to the intended 64×40px with `object-fit:cover`, and the whole card
 > row now shows correct `display:flex`/`padding`/`border-radius`.
+
+---
+
+## 48. "Add to timeline" from the Video library tab duplicates a clip's Id instead of cloning it (not started)
+
+Found 2026-08-10 while debugging item #25's snap-while-dragging work — a confusing "snap targets
+computed as empty" symptom traced back to this. `ClipBrowser.AddToTimelineAsync(VideoClip clip)`
+passes the *same clip object* (same `Id`) up to `VideoEditor.AddClipToTimeline`, which adds it
+directly to the target track's `Items` list with no cloning and no new `Guid`. The "Video" tab in
+the Media Library lists clips from `Clips.AllVideoClips` — i.e. *every* video clip already known to
+the app, including ones already placed on the timeline. Clicking "Add to timeline" on a card for a
+clip that's already on the timeline (the normal case once you've imported it once) creates a
+**second timeline entry sharing the identical `Id`** as the first, rather than either doing nothing
+(it's already there) or creating a genuine duplicate with a fresh Id.
+
+This is a real identity bug with likely-broad blast radius, since `Id` equality is used pervasively
+across the codebase (selection, removal, snap-target exclusion, undo commands, motion-keyframe
+association, etc.) — any of those could misbehave silently when two timeline items share one Id.
+Not yet characterized beyond the snap-exclusion symptom that surfaced it.
+
+> Found while working item #25 (`feature/phase-103-snap-while-dragging`). Lives in the separate
+> Ben.Video.Editor repo, `Components/ClipBrowser.razor` (`AddToTimelineAsync`) and
+> `Components/VideoEditor.razor` (`AddClipToTimeline`).
 
 ---
 
