@@ -135,7 +135,16 @@ Need a dedicated pass to thoroughly test the Ben.Video.Editor component and veri
 >
 > Confirmed working: import (video/audio/image via media-library), multi-track add (video + audio tracks), timeline fit-to-width, clip select/delete/undo/redo, split (all 3 types)/undo, spacebar play/pause wiring, preview of an image-only timeline. **Not verifiable via browser automation:** native HTML5 drag-to-reposition on the timeline — synthetic mouse events don't trigger it; needs manual or Playwright-based testing with real drag simulation.
 >
-> Still to test: preview scrubbing, mixed video+image timeline preview/export, volume automation UI, text overlays, callouts, clip art, transitions, motion keyframes, export dialog/queue, project save/open (device + server), subtitle export, error log panel, asset browser, remaining keyboard shortcuts. Also noted but not yet investigated: `ImageClip.Width`/`Height` are never populated on import, so image clips always render at their native resolution in Preview/Export instead of being scaled/padded to match the project's output resolution — fine for a single image matching project aspect ratio, but will look wrong once a mismatched-aspect image is mixed into a real project.
+> **2026-08-10 pass:** confirmed frame-accurate preview scrubbing works — stepping via the
+> "Step forward one frame" button advanced `<video>.currentTime` from `0` to exactly `0.041666…s`
+> (1/24s at the project's 24fps setting), i.e. real frame-accurate seeking, not just a UI counter.
+> The Telerik scrub slider itself couldn't be reliably drag-tested via browser automation this
+> pass (same drag-unreliability already noted for other Telerik sliders this session — frame-step
+> is a reliable proxy for the same underlying seek path). Volume automation UI testing was
+> attempted but blocked by a slow/stuck audio import in the Playground this pass (recurring
+> environment flakiness, not a product bug) — still open for a future pass.
+>
+> Still to test: mixed video+image timeline preview/export, volume automation UI, text overlays, callouts, clip art, transitions, motion keyframes, export dialog/queue, project save/open (device + server), subtitle export, error log panel, asset browser, remaining keyboard shortcuts. Also noted but not yet investigated: `ImageClip.Width`/`Height` are never populated on import, so image clips always render at their native resolution in Preview/Export instead of being scaled/padded to match the project's output resolution — fine for a single image matching project aspect ratio, but will look wrong once a mismatched-aspect image is mixed into a real project.
 
 ---
 
