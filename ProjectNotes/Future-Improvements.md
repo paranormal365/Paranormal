@@ -1090,3 +1090,36 @@ shown in the Properties panel that has animatable/keyframed properties (position
 shadow, etc. via the motion-keyframe system).
 
 > Requested by the user 2026-08-09. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+
+---
+
+## 42. Overlay timeline rows need named lanes with correct height (not started)
+
+Found by the user 2026-08-10 while looking at a callout and text overlay stacked in their own
+timeline rows (item #39's per-item overlay lanes). Each overlay row is a fixed 40px tall
+(`.bv-track__overlays`, `VideoTimeline.razor`), but the actual rendered chip content is taller than
+that — the user specifically called out the callout's row, then confirmed "same with the text lane."
+The row should be an actual **named lane** (not just an anonymous stacked row) sized to fit its
+content instead of clipping/overflowing a fixed 40px height.
+
+> Requested by the user 2026-08-10, found while live-verifying item #28 (drag-to-extend trim
+> handles). Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+
+---
+
+## 43. Callout/text overlays don't appear in the small "Timeline Preview" thumbnail (not started)
+
+Found by the user 2026-08-10 alongside item #42: scrubbing to a point where a callout and text
+overlay are both active, neither renders in the small "Timeline Preview" scrub thumbnail near the
+top of the editor — only the raw video frame shows. Confirmed live: no callout/text-related DOM
+elements exist anywhere inside that preview area at all (not a z-order/stacking bug — they're
+simply not composited into that specific preview surface). Unclear whether this is a by-design
+limitation of that lightweight scrub thumbnail (as opposed to the full-quality "Preview" popout,
+which runs the real ffmpeg compositing pipeline) or a genuine gap — needs scoping before starting.
+The user suggested possible directions (fade the video out before the overlay, or reorder video
+below the overlay in z-order) but those assume a compositing/z-order cause that hasn't been
+confirmed yet.
+
+> Requested by the user 2026-08-10, found while live-verifying item #28. Confirmed unrelated to
+> item #28's actual code change (`git diff --stat` showed only `VideoTimeline.razor`, no preview/
+> compositing files touched). Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
