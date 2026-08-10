@@ -299,7 +299,7 @@ Several related asks about the in-app timeline preview:
 
 ---
 
-## 16. Rich text properties for text overlays and callout text — 🟡 Slice A complete (2026-08-08)
+## 16. Rich text properties for text overlays and callout text — 🟡 Slice B complete (2026-08-10)
 
 Text — both a standalone text overlay and text inside a callout — should support:
 - ~~Size and color~~ + font family — **✅ Slice A shipped** (`feature/phase-74-rich-text-fonts-slice-a`):
@@ -312,18 +312,27 @@ Text — both a standalone text overlay and text inside a callout — should sup
   per-frame SVG rasterization pipeline — the browser resolves font names against its own installed fonts,
   no bundled font file needed on any OS. Also closed item #23 (background box now renders on the SVG path,
   approximate padding-based sizing) as a side effect. 22 new unit tests.
+- ~~Font weight/bold, underline~~ — **✅ Slice B shipped** (`feature/phase-111-bold-underline-text`):
+  whole-block `FontBold`/`FontUnderline` on both `TextOverlay` and `CalloutClip`, rendered via SVG
+  `font-weight`/`text-decoration` on the same shared per-frame pipeline (so both live preview and export
+  get it for free). Found and fixed a real bug live-testing: `ClipStore.UpdateTextOverlay()` copies fields
+  onto the existing instance via a whitelist that predated these two fields, so the Apply button was
+  silently dropping them — the checkboxes ticked but nothing was actually saved. 9 new unit tests, 2 more
+  added to the pre-existing `UpdateTextOverlay_UpdatesAllProperties` test to guard against the same class
+  of bug recurring for a future field.
+- **Still open:** Subscript/superscript.
 - **Still open:** Font selection from Google Fonts or another common free font library — needs its own
   design: the SVG-as-image rasterization path can't reliably fetch external `@font-face` resources, so
   fonts would likely need embedding as base64 data-URIs inside the SVG or pre-registering via the
   `FontFace` API.
-- **Still open:** Font weight/bold, underline, subscript, superscript — ideally applicable *inline* while
-  typing (mixed formatting within one text block), not just as a single style for the whole block. Forces
-  a runs/spans data model; SVG `<tspan>` supports per-run styling natively.
+- **Still open:** All of the above are *whole-block* — ideally applicable *inline* while typing (mixed
+  formatting within one text block), not just as a single style for the whole block. Forces a runs/spans
+  data model; SVG `<tspan>` supports per-run styling natively.
 - **Still open:** Direct in-preview editing — click into the text on the canvas and type/format it there,
   not only through a side-panel form. Requires first building a live text/callout rendering layer in the
   preview — today their real appearance only exists in exported output, not the editor preview.
 
-> Requested 2026-08-09. Slice A (phase 74) shipped 2026-08-08.
+> Requested 2026-08-09. Slice A (phase 74) shipped 2026-08-08. Slice B (phase 111) shipped 2026-08-10.
 
 ---
 
@@ -1540,3 +1549,24 @@ way to see their relative offset or treat them as a pair.
 > offset. Live-verified end to end: linked a video and audio clip, saw the correct offset readout
 > and Undo label ("Undo: Link test-video.mp4 + test-audio.mp3"), both chips gained the linked
 > border, and Unlink correctly removed it from both.
+
+---
+
+## 53. "Media & Properties" floating window resets to a mostly off-screen position (not started)
+
+Found live-testing phase 111 (item #16 slice B) in the Playground. The floating `Media &
+Properties` window (`bv-media-panel-window`, a `TelerikWindow`) opened with its `left`/`top`
+already computed as strongly negative — e.g. `x: -29, y: -149` for a 240×200 default size —
+leaving only a small sliver of the header visible/clickable in the bottom-right corner of where
+it should be. This is distinct from item #17 (resize-then-drag reverting size, fixed phase 68):
+here the *position itself* is wrong from first render, before any user drag. It also appeared to
+reset back toward that same off-screen position after some re-renders even after being manually
+repositioned (observed after clicking a tab inside the window), though that part wasn't isolated
+carefully enough this session to be certain it's the same root cause rather than a second bug.
+
+> Found 2026-08-10 during phase 111 live verification (Ben.Video.Editor repo). Not investigated —
+> flagging for a future pass. Worth checking whether the default position is computed from
+> `window.innerWidth`/`innerHeight` before Blazor's layout has stabilized (a similar race to other
+> "default position wrong on first render" bugs), and whether anything re-triggers that same
+> computation later. Workaround used for testing: `document.querySelector('.bv-media-panel-window').style.left/top`
+> via JS to force it back on-screen.
