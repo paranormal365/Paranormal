@@ -589,6 +589,21 @@ coverage should expand.
 > foreground/visible tab. Confirmed the full call chain was correct throughout by temporarily
 > switching to `behavior: 'instant'`, which immediately showed the container's `scrollLeft` jump to
 > the expected value.
+>
+> **Part 4 shipped**: phase 106 (`feature/phase-106-ripple-insert-confirmation`, merged to
+> `develop`, pushed). `VideoEditor.AddClipToTimeline` now anchors a newly-added clip to the
+> playhead (new `TimelineDropCalculator.ResolvePlayheadAnchoredPosition`), snapping to touch an
+> adjacent clip's edge when the playhead sits right at one, instead of always appending at the end
+> of the track. When the resolved position would overlap an existing clip (new
+> `TimelineDropCalculator.Overlaps`), a new `RippleInsertPrompt` dialog asks whether to shift the
+> clips after that point later to make room; confirming calls a new, undoable
+> `ClipStore.InsertClipWithRipple`. Live-verified end to end in the Playground: importing a second
+> clip while the playhead sat squarely inside the first clip showed the "Not Enough Room" dialog
+> with the correct clip name; **Make Room** placed it touching the first clip's end with no
+> overlap/gap and a correct "Undo: Insert test-video.mp4 (ripple)" undo entry that reverted
+> cleanly; a later import with the playhead sitting at that clip's edge landed touching it with no
+> dialog at all, confirming the edge-snap branch too. Remaining part (auto-extend on empty-lane
+> drop) open.
 
 ---
 
