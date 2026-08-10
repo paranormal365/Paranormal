@@ -1254,13 +1254,15 @@ anywhere, export or preview. Either wire `Motion.Evaluate` into `ApplyClipArtCli
 `ApplyMotionFrame` for Callout/TextOverlay) and into `LiveOverlayPreview`, or remove/hide the
 "Animate" button for ClipArt until it's real.
 
-> In progress: `ApplyMotionFrame(ClipArtClip, MotionFrame)` added (mirrors the Callout/TextOverlay
-> overloads — X/Y direct, Scale multiplies Width/Height respecting the -1 aspect-ratio sentinel,
-> Alpha multiplies Opacity), 5 new unit tests passing. Extending `LiveOverlayPreview` turned out to
-> require solving a bigger, separate problem first — see item #47 — so that part is deferred; moving
-> on to Properties-panel sync and the real export-time fix (raster clipart only; SVG-clipart's
-> position/scale-path stays a documented gap, separate from its existing `ControlPoints` animation).
-> Lives in the separate Ben.Video.Editor repo.
+> Phase 101 shipped (`feature/phase-101-clipart-motion-panel-sync`, merged to `develop`, pushed):
+> `ApplyMotionFrame(ClipArtClip, MotionFrame)` added (mirrors the Callout/TextOverlay overloads —
+> X/Y direct, Scale multiplies Width/Height respecting the -1 aspect-ratio sentinel, Alpha
+> multiplies Opacity), 5 new unit tests, plus `ClipArtEditor` Properties-panel live-value sync
+> (same pattern as phases 98/100) — live-verified: Position/Size/Opacity all show "● Live" with
+> correct interpolated values. Extending `LiveOverlayPreview` turned out to require solving a
+> bigger, separate problem first — see item #47 — so that part is deferred. Still open: the real
+> export-time fix (raster clipart only; SVG-clipart's position/scale-path stays a documented gap,
+> separate from its existing `ControlPoints` animation). Lives in the separate Ben.Video.Editor repo.
 
 ---
 
