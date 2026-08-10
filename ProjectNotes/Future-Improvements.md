@@ -1308,7 +1308,7 @@ grids (not just thumbnail sizing — flex layout, padding, border-radius, hover/
 
 ---
 
-## 48. "Add to timeline" from the Video library tab duplicates a clip's Id instead of cloning it (not started)
+## 48. "Add to timeline" from the Video library tab duplicates a clip's Id instead of cloning it — ✅ Fixed (2026-08-10, phase 109)
 
 Found 2026-08-10 while debugging item #25's snap-while-dragging work — a confusing "snap targets
 computed as empty" symptom traced back to this. `ClipBrowser.AddToTimelineAsync(VideoClip clip)`
@@ -1316,18 +1316,27 @@ passes the *same clip object* (same `Id`) up to `VideoEditor.AddClipToTimeline`,
 directly to the target track's `Items` list with no cloning and no new `Guid`. The "Video" tab in
 the Media Library lists clips from `Clips.AllVideoClips` — i.e. *every* video clip already known to
 the app, including ones already placed on the timeline. Clicking "Add to timeline" on a card for a
-clip that's already on the timeline (the normal case once you've imported it once) creates a
+clip that's already on the timeline (the normal case once you've imported it once) created a
 **second timeline entry sharing the identical `Id`** as the first, rather than either doing nothing
 (it's already there) or creating a genuine duplicate with a fresh Id.
 
-This is a real identity bug with likely-broad blast radius, since `Id` equality is used pervasively
+This was a real identity bug with broad blast radius, since `Id` equality is used pervasively
 across the codebase (selection, removal, snap-target exclusion, undo commands, motion-keyframe
-association, etc.) — any of those could misbehave silently when two timeline items share one Id.
-Not yet characterized beyond the snap-exclusion symptom that surfaced it.
+association, etc.) — any of those could misbehave silently when two timeline items shared one Id.
 
 > Found while working item #25 (`feature/phase-103-snap-while-dragging`). Lives in the separate
 > Ben.Video.Editor repo, `Components/ClipBrowser.razor` (`AddToTimelineAsync`) and
 > `Components/VideoEditor.razor` (`AddClipToTimeline`).
+>
+> Fixed as a direct prerequisite of item #51 (phase 109, `feature/phase-109-three-point-editing`,
+> merged to `develop`, pushed) — discovered while scoping #51 that this app has no separate
+> unplaced-clip library at all (every import lands straight on the timeline; the Video tab is just
+> a view of already-placed clips), which is exactly what made this bug possible. `AddClipToTimeline`
+> now clones (new `Id`, independent copies of `ThumbnailUrls`/`VolumeAutomation`/`AppliedEffects`)
+> whenever the incoming clip is already present in `Clips.AllVideoClips`. Live-verified: added the
+> same clip to the timeline twice via its library card, confirmed via `data-item-id` that the two
+> resulting chips have genuinely distinct Guids, and that removing/trimming one has no effect on
+> the other.
 
 ---
 
@@ -1468,17 +1477,31 @@ were supported.
 
 ---
 
-## 51. Three-point editing (mark in/out on source, insert/overwrite at playhead) — ⬜ not started
+## 51. Three-point editing (mark in/out on source, insert/overwrite at playhead) — ✅ Fixed (2026-08-10, phase 109)
 
 Standard professional editing workflow: mark an in-point and out-point on a clip *in the media
 library* (before it's on the timeline), then insert or overwrite it into the timeline at the
 current playhead position — rather than dragging whole, untrimmed clips onto the timeline and
-trimming them afterward. Needs new mark-in/mark-out UI on the ClipBrowser's preview, and for
+trimming them afterward. Needed new mark-in/mark-out UI on the ClipBrowser's preview, and for
 `AddClipToTimeline` to respect the marked range instead of always using the source clip's full
 duration.
 
 > User-requested 2026-08-10, #3 of 4 in priority order (see item #49). Lives in the separate
 > Ben.Video.Editor repo.
+>
+> Shipped as phase 109 (`feature/phase-109-three-point-editing`, merged to `develop`, pushed).
+> Mid-phase discovery reshaped the plan: this app has no separate unplaced-clip library — every
+> import lands directly on the timeline, and the Video tab is a view of already-placed clips —
+> which meant item #48 (duplicate-Id bug) had to be fixed first as a hard prerequisite (see that
+> item's entry; fixed in this same phase). Three-point editing itself: a "Mark In"/"Mark Out" bar
+> appears while previewing a clip from its library card; marks are held in new component-level
+> state (not written onto the clip's own trim, which would corrupt its existing timeline
+> placement) and applied to the *clone* the next time "Add to Timeline" runs for that clip, feeding
+> the existing playhead-anchored/insert-overwrite pipeline (items #25/#49) unchanged. Live-verified
+> end to end: marked in/out via real preview scrubbing (summary correctly showed "0:02 → 0:08"),
+> re-added the clip — the original stayed at its full 13.8s (proving no corruption) and the new
+> clip landed at ~5.5s (matching the marked range), with the overlap-confirmation dialog and Undo
+> label both behaving correctly against the trimmed sub-range.
 
 ---
 
