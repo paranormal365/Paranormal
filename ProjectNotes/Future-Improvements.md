@@ -764,7 +764,7 @@ never been exercised in the Playground:
 
 ---
 
-## 34. `VolumeAutomationLane` JS-interop crash under rapid UI interaction (not started)
+## 34. `VolumeAutomationLane` JS-interop crash under rapid UI interaction — ✅ Fixed (2026-08-10, phase 97)
 
 Observed during phase 75's scripted browser testing (not necessarily reachable at normal human
 interaction speed): `VolumeAutomationLane.OnAfterRenderAsync` calls `volumeAutomationLane.js`'s
@@ -779,6 +779,14 @@ against a null element (retry/defer `init()` until the DOM node exists) rather t
 
 > Found 2026-08-09 during phase 75 verification (scripted browser automation). Lives in the separate
 > Ben.Video.Editor repo (Github-BenVideo remote).
+>
+> Shipped: `volumeAutomationLane.js`'s `init`/`updateKeyframes`/`destroy` now guard against a null
+> `svg` element (Blazor resolves an `ElementReference` lazily at JS-call time — a stale reference
+> from `Clip` going null while the module's first-time import was still in flight resolved to
+> `null`), turning the crash into a silent no-op. Also re-checks `Clip is null` in C# right after the
+> import await, closing off the actual race at its source. Live-verified by calling the fixed JS
+> module directly with `svg: null` (exactly what a stale reference resolves to) — all three
+> functions now return cleanly where `init` used to throw immediately.
 
 ---
 
