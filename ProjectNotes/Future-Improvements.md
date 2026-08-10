@@ -1405,19 +1405,34 @@ for Callout/TextOverlay, but with an added async asset-loading step neither of t
 
 ---
 
-## 49. Insert vs. Overwrite edit modes — 🟡 in progress (2026-08-10)
+## 49. Insert vs. Overwrite edit modes — ✅ Fixed (2026-08-10, phase 107)
 
-Item #25's ripple-insert (phase 106) only covers half of standard NLE overlap handling: when a
+Item #25's ripple-insert (phase 106) only covered half of standard NLE overlap handling: when a
 new/moved clip overlaps existing timeline content, it always *ripples* (shifts everything after
 the insertion point later). Every mainstream editor (Premiere, Resolve, Final Cut, Kdenlive) also
 offers *overwrite*: drop a clip on top of existing content and it trims/replaces whatever's
-underneath instead of pushing subsequent clips later. Currently there's no way to do the
-overwrite-style edit at all.
+underneath instead of pushing subsequent clips later. There was no way to do the overwrite-style
+edit at all.
 
 > User-requested 2026-08-10 after comparing this editor's timeline behavior against standard NLE
 > patterns — asked to build the concrete gaps identified, most relevant first. This is #1 of 4
 > (Insert/Overwrite, Slip/Slide/Roll trims, three-point editing, J/L-cuts), prioritized highest
 > since it directly extends the ripple-insert-confirmation dialog just shipped in phase 106.
+>
+> Shipped as phase 107 (`feature/phase-107-insert-overwrite-modes`, merged to `develop`, pushed).
+> New pure `OverwriteEditCalculator.Resolve` resolves what happens to one existing clip when a new
+> clip is placed on top of it in overwrite mode — unchanged, removed (fully covered), trimmed at
+> one edge, or split into a front/back remainder if the new clip lands entirely inside it. New
+> `ClipStore.OverwriteInsert` runs every overlapping clip on the track through that and applies the
+> result as one atomic undoable `OverwriteInsertCommand`. The "Not Enough Room" dialog (phase 106)
+> now offers **Insert (Make Room)** / **Overwrite** / **Cancel**. Live-verified: importing a second,
+> identical-duration clip on top of the first showed the 3-button dialog; **Overwrite** correctly
+> removed the fully-covered original (since it exactly matched the new clip's span) leaving only
+> the new one, with the Undo button correctly reading "Undo: Overwrite with test-video.mp4" and
+> reverting cleanly. The partial-trim and mid-clip-split code paths weren't separately click-driven
+> through the UI (this session's Playground import flakiness made constructing a precise partial-
+> overlap scenario impractical to automate) but are exhaustively covered by 17 new unit tests at
+> both the pure-calculator and `ClipStore` levels.
 
 ---
 
