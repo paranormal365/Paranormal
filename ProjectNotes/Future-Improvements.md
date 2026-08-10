@@ -1133,3 +1133,16 @@ confirmed yet.
 > Requested by the user 2026-08-10, found while live-verifying item #28. Confirmed unrelated to
 > item #28's actual code change (`git diff --stat` showed only `VideoTimeline.razor`, no preview/
 > compositing files touched). Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+
+---
+
+## 44. Resizable and collapsible timeline row heights (not started)
+
+Timeline track rows should be resizable (drag to make a row taller/shorter), and collapsible down to
+just the height of the row's name text in the track header, to reclaim vertical working room. The
+collapse toggle should be a small button next to the existing three-dot track-options button in each
+row's left-side header, not a separate control elsewhere. Collapsing is purely visual (row height
+only) — doesn't affect the row's content or data.
+
+> Requested by the user 2026-08-10, found while live-verifying items #42/#43. Lives in the separate
+> Ben.Video.Editor repo (Github-BenVideo remote).
