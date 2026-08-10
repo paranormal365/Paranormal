@@ -139,11 +139,17 @@ Need a dedicated pass to thoroughly test the Ben.Video.Editor component and veri
 
 ---
 
-## 10. Stereo channel separation for audio editing (not started)
+## 10. Stereo channel separation for audio editing — ✅ Fixed (2026-08-09, phase 90)
 
 Ben.Video's audio editing should support separating left and right audio channels so each can be edited independently.
 
-> Requested 2026-08-06, during the item #9 test pass.
+> Requested 2026-08-06, during the item #9 test pass. Scoped, per the user, to independent per-channel
+> **volume/gain** (not full independent trim/effects/waveform-UI per channel). Shipped as
+> `AudioClip.LeftVolume`/`RightVolume`, applied via a `pan=stereo|c0=<L>*c0|c1=<R>*c1` ffmpeg filter
+> layered on top of the existing scalar/automated `Volume`, with new `AudioClipEditor` sliders and full
+> project-JSON round-trip. Along the way, fixed a much bigger pre-existing bug: standalone `AudioClip`s
+> on an Audio track weren't being trimmed, filtered, faded, or positioned at export at all — every clip
+> played raw from `t=0` regardless of its actual timeline position. See [[project_video_editor_phase90_audio_channel_volume]].
 
 ---
 
@@ -493,7 +499,7 @@ calculation by hand.
 
 ---
 
-## 24. Convert ClipBrowser→timeline-track drop to pointer events (not started)
+## 24. Convert ClipBrowser→timeline-track drop to pointer events — ✅ Fixed (2026-08-09, phase 91)
 
 The last remaining spot of native HTML5 drag-and-drop on the timeline: dragging a *new* clip from
 `ClipBrowser` onto a timeline track (`window.__bvDragClipId` global handoff, `ClipBrowser.razor:686-693`,
@@ -507,6 +513,16 @@ cross-component callback bridge. A currently-working, currently-clean feature wi
 today (no Playwright/browser-test infra exists in this repo to benefit from synthetic-event compatibility).
 `VideoTimeline.razor.js`'s existing (currently unused) `capturePointer(el, pointerId)` helper is the
 primitive a rebuild would use.
+
+> Shipped as a new module-scoped JS bridge (`clipDragBridge.js`) mediating between the two sibling
+> components via `DotNetObjectReference`: `ClipBrowser` calls `startClipDrag()` on `pointerdown`,
+> `VideoTimeline` registers as the drop target and receives `HandlePointerDropFromJs` on release, reusing
+> the same `TimelineDropCalculator`/`SnapEngine` pipeline as before. The same-track reorder gesture (native
+> drag) was left untouched. Found and fixed a real bug along the way: the clip thumbnail `<img>` is
+> natively draggable by default in Chrome, which silently hijacked the gesture via a native image-drag
+> before the pointer bridge ever saw a `pointerup` — fixed with an explicit `draggable="false"`. Live-verified
+> via claude-in-chrome with real pointer events (traced actual Blazor JS-interop calls). See
+> [[project_video_editor_phase91_clipbrowser_pointer_drag]].
 
 > Found and deliberately deferred 2026-08-08 during phase 73 (backlog item #8's cleanup). Lives in the
 > separate Ben.Video.Editor repo (Github-BenVideo remote).
