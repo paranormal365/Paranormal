@@ -560,6 +560,20 @@ coverage should expand.
 > line. Live-verified: dragging a clip to ~0.3s past another clip's end landed it exactly touching (27.7s
 > total for two 13.8s clips), not at the raw ~27.9s an unsnapped drag would produce. Found and logged a
 > real, separate pre-existing bug along the way — item #48.
+>
+> **Part 2 shipped**: phase 104 (`feature/phase-104-cross-track-move`, merged to `develop`, pushed).
+> Neither existing drag system supported cross-track moves at all before this. New
+> `ClipStore.CommitDraggedPositionAndTrack(targetTrackId)` + `MoveClipToTrackCommand` give the track
+> change its own undo/redo entry, gated to `VideoClip`/`AudioClip` moving between same-type tracks
+> (MultiTrack only — overlay items stay pinned to their owning video track's lane). First
+> implementation attempt moved the item's track membership *live* during the drag and immediately
+> broke — relocating a `TrackItem` into a different track's `Items` list moves its chip into a
+> different `@foreach`, so Blazor destroys/recreates its DOM element and silently kills the pointer
+> capture the rest of the drag needs (same underlying bug class as item #27, a new trigger). Fixed by
+> only tracking the hovered row for a visual highlight during the drag and doing the actual move once,
+> at drop. Live-verified: chip stays on its original track's DOM during the drag (hover highlight
+> shown on the target row), moves to the target track exactly on drop, Undo button correctly reads
+> "Undo: Move clip to another track" and correctly reverts.
 
 ---
 
