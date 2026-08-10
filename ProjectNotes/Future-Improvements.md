@@ -1164,7 +1164,7 @@ confirmed yet.
 
 ---
 
-## 44. Resizable and collapsible timeline row heights (not started)
+## 44. Resizable and collapsible timeline row heights — ✅ Fixed (2026-08-10, phase 96)
 
 Timeline track rows should be resizable (drag to make a row taller/shorter), and collapsible down to
 just the height of the row's name text in the track header, to reclaim vertical working room. The
@@ -1174,3 +1174,13 @@ only) — doesn't affect the row's content or data.
 
 > Requested by the user 2026-08-10, found while live-verifying items #42/#43. Lives in the separate
 > Ben.Video.Editor repo (Github-BenVideo remote).
+>
+> Shipped: reused `ResizableDivider` (already used for the preview-panel divider) for the drag-resize
+> handle between rows — no new drag mechanics, just a new per-track clamp-and-store callback. New
+> collapse toggle button sits immediately before the existing "⋮" menu button as requested. Both are
+> purely visual, UI-only state — untouched tracks get no inline style override at all, so the default
+> CSS `min-height:56px` behavior is completely unaffected for any track nobody has touched, avoiding
+> any risk of a phase-94-style content-overflow regression. Live-verified: collapse toggles 57px↔29px
+> correctly; resize-drag grew a row from 57px to 98px matching the exact pixel math; collapsing a
+> resized row correctly overrides to 28px while preserving the custom height underneath for when it's
+> re-expanded.
