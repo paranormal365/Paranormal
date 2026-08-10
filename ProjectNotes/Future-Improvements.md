@@ -790,27 +790,34 @@ against a null element (retry/defer `init()` until the DOM node exists) rather t
 
 ---
 
-## 35. Direct on-canvas motion-keyframe editing — bezier handles, resize, type-in values, drag-to-move (not started)
+## 35. Direct on-canvas motion-keyframe editing — bezier handles, resize, type-in values, drag-to-move — 🟡 Partial (panel sync shipped 2026-08-10, phase 98)
 
 Motion keyframes (position/scale/rotation/alpha/shadow, etc.) are currently edited only through the
 Properties-panel form (sliders/number fields, add-keyframe-at-playhead button). Wanted: a true
 on-canvas editing experience, similar to the Pen tool in Photoshop/Illustrator —
 - Click-drag a keyframe's bezier handles directly on the motion path to shape the interpolation curve
-  between two points, not just pick an easing preset.
-- Resize the object directly on-canvas (drag a corner/edge handle) and have that recorded as the
-  keyframe's scale value at the current time.
-- Type a value directly (e.g. click a position/size number and edit it inline) instead of only via a
-  slider.
+  between two points, not just pick an easing preset. — **already existed** (`MotionPathOverlay`,
+  pre-dates this item) before this item was even logged; not new work.
 - Drag the object itself to a new position on-canvas, with that becoming the keyframe's stored
-  position — building on the on-canvas drag support already shipped for the *current frame* (item #11,
-  phase 67) but extending it to keyframe-authoring specifically, not just live preview interaction.
-
-Depends on/extends item #11 (preview on-canvas interactivity, shipped phase 67) and the existing
-`MotionKeyframeEditor`/`MotionKeyframeService` (linear + bezier interpolation, easing curves already
-exist server-side — this is about giving them a direct-manipulation UI). Needs design: how bezier
-handles render/hit-test on the timeline-relative motion path overlaid on the preview canvas, and how
-that interacts with the existing Properties-panel form (likely both should stay in sync, not replace
-one another).
+  position. — **already existed** (`MotionPathOverlay`'s keyframe-dot dragging calls
+  `Motion.UpsertKeyframe` directly).
+- The user's real, explicit ask when scoping this item (2026-08-10): canvas edits and playhead
+  movement should both drive live values in the Properties panel. — **shipped phase 98**.
+  `CalloutEditor.razor` now subscribes to `ClipStore.OnChange`/`MotionKeyframeService.OnChanged`/
+  `PlaybackService.OnStateChanged` and shows the motion-interpolated X/Y/Opacity/colors (with a
+  "● Live" badge) instead of always showing the clip's static values. Live-verified: playhead
+  scrubbing shows genuine smooth interpolation between keyframes, and dragging a keyframe dot on
+  canvas immediately updates the panel.
+- Resize the object directly on-canvas (drag a corner/edge handle) and have that recorded as the
+  keyframe's scale value at the current time. — **still open**. Deliberately not bundled into
+  phase 98: `MotionFrame.Scale` is a single uniform multiplier but `CalloutControlPointOverlay`'s
+  edge handles resize width/height independently, and that overlay has no "which keyframe does
+  this affect" concept (unlike `MotionPathOverlay`, which always acts on an explicitly-selected
+  keyframe) — needs a real design decision, not a guess.
+- Type a value directly (e.g. click a position/size number and edit it inline) instead of only via a
+  slider. — still open, not attempted.
+- Extend the phase-98 panel-sync treatment to `TextOverlayEditor`/`ClipArtEditor` for parity with
+  `CalloutEditor` — not attempted, not confirmed in-scope by the user.
 
 > Requested by the user 2026-08-09. Lives in the separate Ben.Video.Editor repo (Github-BenVideo
 > remote).
@@ -1097,7 +1104,7 @@ still behave correctly. See `README-phase-88.md` in the Ben.Video.Editor repo.
 
 ---
 
-## 41. Properties panel should show live per-frame interpolated values, not just keyframe values (not started)
+## 41. Properties panel should show live per-frame interpolated values, not just keyframe values — ✅ Fixed (2026-08-10, phase 98)
 
 As the playhead moves or the video plays, values shown in the Properties panel (and elsewhere) for
 an animated layer should update on a per-frame basis to reflect the actual interpolated value at
@@ -1106,6 +1113,12 @@ the playhead sits partway between them, the panel should show the true in-betwee
 frame (like "X = A+2"), not just the value at the nearest keyframe. Applies to any item currently
 shown in the Properties panel that has animatable/keyframed properties (position, size, color,
 shadow, etc. via the motion-keyframe system).
+
+Shipped for `CalloutEditor` as part of phase 98 (see item #35) — subscribes to
+`PlaybackService.OnStateChanged` and overlays the evaluated `MotionFrame` on the static field
+values, badged "● Live". Live-verified: scrubbing the playhead between two keyframes showed
+genuine smooth interpolation, not snapping. Not yet extended to `TextOverlayEditor`/`ClipArtEditor`
+— same treatment, not yet applied, would need to be done for full parity.
 
 > Requested by the user 2026-08-09. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
 
@@ -1192,3 +1205,27 @@ only) — doesn't affect the row's content or data.
 > correctly; resize-drag grew a row from 57px to 98px matching the exact pixel math; collapsing a
 > resized row correctly overrides to 28px while preserving the custom height underneath for when it's
 > re-expanded.
+
+---
+
+## 45. Media Library card thumbnails render at full native size instead of the intended small box — ✅ Fixed (2026-08-10, phase 99)
+
+Server-tab (and Video/Audio/Image tab) media thumbnails in the Media Library rendered at their
+native image resolution (e.g. 600×600px) instead of the intended small thumbnail box, blowing out
+the panel layout.
+
+Root cause was bigger than the thumbnail: `ClipBrowser.razor`'s four card grids are built with raw
+`RenderTreeBuilder` (`__builder.OpenElement(...)`) calls instead of declarative Razor markup, so
+Blazor's compile-time CSS-isolation scope-attribute injection — which only recognizes elements in
+the parsed markup syntax tree — never stamped those elements with the component's scope attribute.
+Every rule in `ClipBrowser.razor.css` targeting `.bv-clip-card*` was silently dead for all four
+grids (not just thumbnail sizing — flex layout, padding, border-radius, hover/selected states too).
+
+> Requested by the user 2026-08-10, found while working item #35. Lives in the separate
+> Ben.Video.Editor repo (Github-BenVideo remote).
+>
+> Shipped: added a `CssScope` const holding the file's real scope value (confirmed live via
+> devtools against a normally-authored element in the same file) and manually stamped it onto
+> every native-HTML element built via `__builder` across all four grids. Live-verified: Server-tab
+> thumbnail went from 600×600px to the intended 64×40px with `object-fit:cover`, and the whole card
+> row now shows correct `display:flex`/`padding`/`border-radius`.
