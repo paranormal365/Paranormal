@@ -542,7 +542,7 @@ known bug.
 
 ---
 
-## 26. Removed item leaves stale Properties-tab content (not started)
+## 26. Removed item leaves stale Properties-tab content — ✅ Fixed (2026-08-09, phase 92)
 
 Right-click → remove a layer (callout, text overlay, etc.) while the Media & Properties window's Properties
 tab is open and showing that layer: the tab keeps displaying the removed item's editor/fields instead of
@@ -551,6 +551,12 @@ path, not only on ordinary re-selection.
 
 > Found by the user 2026-08-08 during manual testing. Lives in the separate Ben.Video.Editor repo
 > (Github-BenVideo remote).
+>
+> Shipped: new `VideoTimeline.OnItemRemoved` callback fired from all three single-item removal paths
+> (context-menu Remove, Ripple Delete, per-chip trash button), clearing whichever of `VideoEditor`'s 7
+> selection fields matches the removed id. Same gap fixed in the multi-select bulk-delete path, which
+> only cleared 2 of 7 fields. Live-verified: selecting a clip, removing it via right-click and via the
+> trash button, confirmed the Properties tab reverts to its empty state both times.
 
 ---
 
@@ -956,7 +962,7 @@ rough-then-fine command sequence, with no explicit Preview click. Full detail in
 > shipped phase 64) and #13 (render-progress bar, shipped phase 69 with per-region tracking
 > explicitly deferred). Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
 
-## 37. Track row border doesn't extend to the full timeline width (not started)
+## 37. Track row border doesn't extend to the full timeline width — ✅ Fixed (2026-08-09, phase 92)
 
 Found by the user 2026-08-09 while looking at a 13.8s imported clip on a wide/zoomed timeline: each
 track row's bottom border (and the row's own background/hit area generally) stops at roughly the
@@ -976,6 +982,15 @@ visually distracting from the short border. Needs its own pass: the fix (likely 
 `width: max-content` or equivalent so its own box actually grows to match its overflowing child) has
 to be checked against the several other elements in this timeline that are positioned via the same
 width formulas (ruler, playhead, snap guide, render-progress bar) so nothing drifts out of alignment.
+
+> Shipped: `.bv-track` got `width: max-content; min-width: 100%` — lets it size from its children's
+> real content width (already correct, via the existing child min-width) instead of being clamped by
+> default flex cross-axis stretch, while still filling the visible area when there's nothing to
+> overflow. Applies equally to the item #39-era overlay row, which reuses the same `.bv-track` class.
+> Live-verified: narrowed the viewport below the clip's canvas width and confirmed via
+> `getBoundingClientRect()` that `.bv-track`'s width now matches `.bv-timeline__tracks.scrollWidth`
+> exactly (previously clamped to `clientWidth`), and the border-bottom now visibly extends flush to
+> the right edge after scrolling to the end.
 
 **Intended behavior, per the user 2026-08-09**: every lane's background should extend across the
 full shared timeline width (i.e. `Clips.TotalDuration`/`Timeline.CanvasWidth`), not just each lane's
