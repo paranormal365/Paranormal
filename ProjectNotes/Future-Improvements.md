@@ -1234,7 +1234,7 @@ grids (not just thumbnail sizing — flex layout, padding, border-radius, hover/
 
 ---
 
-## 46. ClipArt motion-keyframe animation has no effect at export or in preview (not started)
+## 46. ClipArt motion-keyframe animation has no effect at export or in preview — 🟡 in progress (2026-08-10)
 
 `ClipArtEditor.razor` has a working "⏱ Animate position / scale" button (when
 `Clip.Settings.AllowMotion`) that lets a user create motion keyframes for a clipart layer via the
@@ -1253,6 +1253,41 @@ Net effect: adding motion keyframes to a clipart layer today is a dead end — n
 anywhere, export or preview. Either wire `Motion.Evaluate` into `ApplyClipArtClipsAsync` (mirroring
 `ApplyMotionFrame` for Callout/TextOverlay) and into `LiveOverlayPreview`, or remove/hide the
 "Animate" button for ClipArt until it's real.
+
+> In progress: `ApplyMotionFrame(ClipArtClip, MotionFrame)` added (mirrors the Callout/TextOverlay
+> overloads — X/Y direct, Scale multiplies Width/Height respecting the -1 aspect-ratio sentinel,
+> Alpha multiplies Opacity), 5 new unit tests passing. Extending `LiveOverlayPreview` turned out to
+> require solving a bigger, separate problem first — see item #47 — so that part is deferred; moving
+> on to Properties-panel sync and the real export-time fix (raster clipart only; SVG-clipart's
+> position/scale-path stays a documented gap, separate from its existing `ControlPoints` animation).
+> Lives in the separate Ben.Video.Editor repo.
+
+---
+
+## 47. ClipArt has no live visual representation in the Working Window preview at all (not started)
+
+Found 2026-08-10 while working item #46. Unlike `CalloutClip`/`TextOverlay` (which render as
+self-contained SVG strings computed purely from clip properties, no asset loading needed),
+`ClipArtClip` references an external asset (raster image or SVG file) cached in OPFS by
+`AssetId`. There is currently no code path anywhere that resolves a placed `ClipArtClip`'s cached
+asset into a displayable blob URL — `ClipArtControlPointOverlay` (the on-canvas editing overlay)
+only draws resize/position handles, never the actual image; `VideoTimeline`'s clip chip shows a
+generic 🖼 emoji icon, not a real thumbnail; `LiveOverlayPreview` (phase 95, item #43) doesn't
+handle `ClipArtClip` at all. The asset only ever gets rendered for real at export time (via
+`ExportService.WriteClipArtToMemFsAsync` + ffmpeg overlay) and in the full-quality Preview popout
+(which shares the export pipeline) — so today, a clipart layer is entirely invisible in the raw
+Working Window canvas, motion or no motion.
+
+Fixing this needs a new OPFS-asset-to-blob-URL resolution helper (read via
+`OPFSService.ReadAsJSFileAsync`, then a small JS interop `URL.createObjectURL` call), cached per
+clip/asset so it's only resolved once, with `LiveOverlayPreview` (or a new sibling component)
+rendering an absolutely-positioned `<img>` (raster) or inlined SVG markup at the clip's current
+(possibly motion-interpolated) X/Y/Width/Height/Opacity — the same general shape as phase 95's fix
+for Callout/TextOverlay, but with an added async asset-loading step neither of those needed.
+
+> Found while scoping item #46's `LiveOverlayPreview` extension — deliberately not built as a side
+> effect of that fix, since it's a separate, larger, pre-existing gap unrelated to motion
+> specifically. Lives in the separate Ben.Video.Editor repo.
 
 > Found 2026-08-10 while investigating whether to extend phase 98's Properties-panel live-value
 > sync to `ClipArtEditor` — deliberately not built on top of this, since there'd be nothing real to
