@@ -590,7 +590,7 @@ start-trim) all committed cleanly with no stuck state.
 
 ---
 
-## 28. Callout/text overlay: drag-to-extend start/end on the timeline (not started)
+## 28. Callout/text overlay: drag-to-extend start/end on the timeline — ✅ Fixed (2026-08-10, phase 93)
 
 Callouts and text overlays should support the same click-and-drag start/end trim behavior video/image clips
 already have on the timeline — dragging the start edge (when there's room before it) or the end edge to
@@ -598,6 +598,16 @@ extend/shrink the item's duration, with a resize cursor (e.g. east-west/left-rig
 hovering over an extendable edge to signal the interaction is available.
 
 > Requested by the user 2026-08-08. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+>
+> Shipped: new start/end trim handles on `CalloutClip`/`TextOverlay` chips, mirroring `ImageClip`'s
+> existing handles exactly (no source in/out points — just `TimelinePosition`+`Duration`). End handle
+> extends/shrinks duration; start handle shifts position forward and shrinks duration to compensate,
+> keeping the end position fixed. Reuses the already-generic `.bv-trim-handle` CSS and existing
+> no-undo "live drag" `ClipStore` mutators (`UpdateCallout`/`UpdateTextOverlay`). Live-verified via
+> claude-in-chrome: end-drag and start-drag both confirmed by exact pixel/duration math, plus a
+> regression check that whole-chip body-move still works. Found and logged two unrelated things along
+> the way — see items #42 (overlay row height) and #43 (overlays missing from the small Timeline
+> Preview thumbnail).
 
 ---
 
