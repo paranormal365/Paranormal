@@ -1076,3 +1076,17 @@ service but never re-rendered itself with the fresh state. Fixed by subscribing 
 field-refresh logic into a reusable method both handlers call. Live-verified: "Add keyframe at
 playhead" now shows the real keyframe editor immediately, no close/reopen needed; delete and re-add
 still behave correctly. See `README-phase-88.md` in the Ben.Video.Editor repo.
+
+---
+
+## 41. Properties panel should show live per-frame interpolated values, not just keyframe values (not started)
+
+As the playhead moves or the video plays, values shown in the Properties panel (and elsewhere) for
+an animated layer should update on a per-frame basis to reflect the actual interpolated value at
+that point in the show — e.g. if a layer's X position animates from keyframe A to keyframe B, and
+the playhead sits partway between them, the panel should show the true in-between value at that
+frame (like "X = A+2"), not just the value at the nearest keyframe. Applies to any item currently
+shown in the Properties panel that has animatable/keyframed properties (position, size, color,
+shadow, etc. via the motion-keyframe system).
+
+> Requested by the user 2026-08-09. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
