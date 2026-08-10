@@ -1505,15 +1505,29 @@ duration.
 
 ---
 
-## 52. J-cuts / L-cuts (split audio/video edit points) — ⬜ not started
+## 52. J-cuts / L-cuts (split audio/video edit points) — ✅ Fixed (2026-08-10, phase 110)
 
 A split edit where a clip's audio and video tracks lead or trail each other at a cut — e.g. the
 next scene's audio starts before its video appears (J-cut), or the current scene's audio continues
-after its video has cut away (L-cut). Needs linked-but-independently-trimmable audio/video per
-clip, which doesn't exist today (audio is a fully separate `AudioClip`/track, not a linked
-component of a `VideoClip` that can be trimmed asymmetrically from the same edit UI). Most
-infrastructure-heavy of the four gap items — likely needs the underlying linked-clip model before
-the edit UI itself.
+after its video has cut away (L-cut). Video and audio clips already had fully independent
+`TimelinePosition`/trim, so the mechanics of *creating* the offset already existed — what was
+missing was the *concept*: nothing recorded that two clips were "the same take," so there was no
+way to see their relative offset or treat them as a pair.
 
 > User-requested 2026-08-10, #4 of 4 in priority order (see item #49). Lives in the separate
 > Ben.Video.Editor repo.
+>
+> Shipped as phase 110 (`feature/phase-110-j-l-cuts-clip-linking`, merged to `develop`, pushed) —
+> **this closes out all 4 of the standard-NLE gap items scoped this session (#49-52)**. New
+> `TrackItem.LinkedClipId` (symmetric — both sides point at each other) + undoable
+> `ClipStore.LinkClips`/`UnlinkClip`. New `FindNearbyLinkCandidate` auto-suggests the closest
+> unlinked audio clip within ~1s of a video clip's edges, reusing phase 108's proximity-detection
+> pattern instead of needing dual-type selection. New Link/Unlink button + live offset readout in
+> the clip Properties panel, and a `bv-clip-chip--linked` border in the timeline. Deliberate scope
+> cut, documented in the README: linking never moves either clip and doesn't keep a pair in sync
+> during later drags — extending that risk to a new "move two items in lockstep" gesture would
+> touch the same cross-`@foreach` DOM-relocation hazard fixed in phase 104, so each side stays
+> independently trimmable and the link's job is purely to label the relationship + show the
+> offset. Live-verified end to end: linked a video and audio clip, saw the correct offset readout
+> and Undo label ("Undo: Link test-video.mp4 + test-audio.mp3"), both chips gained the linked
+> border, and Unlink correctly removed it from both.
