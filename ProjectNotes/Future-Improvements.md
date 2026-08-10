@@ -574,6 +574,21 @@ coverage should expand.
 > at drop. Live-verified: chip stays on its original track's DOM during the drag (hover highlight
 > shown on the target row), moves to the target track exactly on drop, Undo button correctly reads
 > "Undo: Move clip to another track" and correctly reverts.
+>
+> **Part 3 shipped**: phase 105 (`feature/phase-105-auto-scroll-into-view`, merged to `develop`,
+> pushed). New `scrollItemIntoView` JS helper + `ScrollItemIntoViewAsync` C# wrapper, called
+> fire-and-forget from both the ClipBrowser-drop path and the existing-clip move path, scrolls the
+> affected chip back into view (smooth, both axes) if it landed outside the visible timeline area.
+> Live verification initially showed no scroll happening at all; root-caused via DOM-attribute
+> breadcrumbs (not console logs — the console tool was returning stale/cached messages this
+> session) to two compounding browser behaviors under the test tab's persistent `document.hidden`
+> state: `requestAnimationFrame` never fires while hidden, and `scrollIntoView`'s `smooth` animation
+> makes no progress while hidden either, even once the callback itself fires. Fixed by deferring
+> via `setTimeout` instead of `requestAnimationFrame` (a macrotask isn't gated on the rendering
+> pipeline); kept `smooth` for the actual scroll since real drag gestures only complete in a
+> foreground/visible tab. Confirmed the full call chain was correct throughout by temporarily
+> switching to `behavior: 'instant'`, which immediately showed the container's `scrollLeft` jump to
+> the expected value.
 
 ---
 
