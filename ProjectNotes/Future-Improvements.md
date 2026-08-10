@@ -529,7 +529,7 @@ primitive a rebuild would use.
 
 ---
 
-## 25. Timeline snapping — expand/verify coverage — 🟡 in progress (2026-08-10)
+## 25. Timeline snapping — expand/verify coverage — ✅ Fixed (2026-08-10)
 
 `Snapping` already exists as a feature flag and has real implementation (`_snapGuidePx` in
 `VideoTimeline.razor`, a visible snap-guide line) — not a from-scratch feature. Noted as worth a fresh look:
@@ -602,8 +602,17 @@ coverage should expand.
 > with the correct clip name; **Make Room** placed it touching the first clip's end with no
 > overlap/gap and a correct "Undo: Insert test-video.mp4 (ripple)" undo entry that reverted
 > cleanly; a later import with the playhead sitting at that clip's edge landed touching it with no
-> dialog at all, confirming the edge-snap branch too. Remaining part (auto-extend on empty-lane
-> drop) open.
+> dialog at all, confirming the edge-snap branch too.
+>
+> **Part 5 verified (no code change needed)**: "a new clip dropped in an empty lane past the current
+> end just extends the timeline." `TimelineTrack.TotalDuration`/`ClipStore.TotalDuration` are plain
+> computed properties (`max(item.TimelinePosition + effective duration)`, no cap anywhere in the
+> codebase) — any placement past the current end already grows the reported total automatically,
+> with no separate "extend" step required. Live-confirmed in the same Playground session as part 4:
+> after the two-clip ripple-insert above, the toolbar read "TIMELINE 0:27.7", the ruler correctly
+> extended through 27.0s, and the zoom auto-fit to 0.8× to fit the new total — all without any
+> further action. All 5 parts of this item are now shipped. Lives in the separate Ben.Video.Editor
+> repo.
 
 ---
 
