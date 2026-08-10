@@ -1229,3 +1229,29 @@ grids (not just thumbnail sizing — flex layout, padding, border-radius, hover/
 > every native-HTML element built via `__builder` across all four grids. Live-verified: Server-tab
 > thumbnail went from 600×600px to the intended 64×40px with `object-fit:cover`, and the whole card
 > row now shows correct `display:flex`/`padding`/`border-radius`.
+
+---
+
+## 46. ClipArt motion-keyframe animation has no effect at export or in preview (not started)
+
+`ClipArtEditor.razor` has a working "⏱ Animate position / scale" button (when
+`Clip.Settings.AllowMotion`) that lets a user create motion keyframes for a clipart layer via the
+same generic `MotionKeyframeService`/`MotionKeyframeEditor` that Callout and TextOverlay use
+(`OnAnimate.InvokeAsync((Clip.Id, "ClipArtClip"))`, and `VideoEditor.razor`'s own
+double-click-to-add-keyframe handler works generically for any layer type). Keyframes get created
+and stored fine. But nothing downstream ever reads them for ClipArt:
+- `ExportService.ApplyClipArtClipsAsync` never calls `Motion.Evaluate` — the raster/static overlay
+  branch uses only the clip's static `X`/`Y`/`Width`/`Height`, and the SVG branch
+  (`SvgAnimationExporter`) animates via a completely separate `ClipArtClip.ControlPoints`
+  mechanism, unrelated to `MotionKeyframeService`.
+- `LiveOverlayPreview` (phase 95) only handles `CalloutClip`/`TextOverlay` — ClipArt isn't in its
+  type filter at all, so it doesn't show live in the small preview either.
+
+Net effect: adding motion keyframes to a clipart layer today is a dead end — no visible effect
+anywhere, export or preview. Either wire `Motion.Evaluate` into `ApplyClipArtClipsAsync` (mirroring
+`ApplyMotionFrame` for Callout/TextOverlay) and into `LiveOverlayPreview`, or remove/hide the
+"Animate" button for ClipArt until it's real.
+
+> Found 2026-08-10 while investigating whether to extend phase 98's Properties-panel live-value
+> sync to `ClipArtEditor` — deliberately not built on top of this, since there'd be nothing real to
+> sync. Lives in the separate Ben.Video.Editor repo.
