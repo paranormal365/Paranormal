@@ -1234,7 +1234,7 @@ grids (not just thumbnail sizing — flex layout, padding, border-radius, hover/
 
 ---
 
-## 46. ClipArt motion-keyframe animation has no effect at export or in preview — 🟡 in progress (2026-08-10)
+## 46. ClipArt motion-keyframe animation has no effect at export or in preview — ✅ Fixed (2026-08-10, phases 101-102)
 
 `ClipArtEditor.razor` has a working "⏱ Animate position / scale" button (when
 `Clip.Settings.AllowMotion`) that lets a user create motion keyframes for a clipart layer via the
@@ -1254,15 +1254,26 @@ anywhere, export or preview. Either wire `Motion.Evaluate` into `ApplyClipArtCli
 `ApplyMotionFrame` for Callout/TextOverlay) and into `LiveOverlayPreview`, or remove/hide the
 "Animate" button for ClipArt until it's real.
 
-> Phase 101 shipped (`feature/phase-101-clipart-motion-panel-sync`, merged to `develop`, pushed):
+> Phase 101 (`feature/phase-101-clipart-motion-panel-sync`, merged to `develop`, pushed):
 > `ApplyMotionFrame(ClipArtClip, MotionFrame)` added (mirrors the Callout/TextOverlay overloads —
 > X/Y direct, Scale multiplies Width/Height respecting the -1 aspect-ratio sentinel, Alpha
 > multiplies Opacity), 5 new unit tests, plus `ClipArtEditor` Properties-panel live-value sync
 > (same pattern as phases 98/100) — live-verified: Position/Size/Opacity all show "● Live" with
 > correct interpolated values. Extending `LiveOverlayPreview` turned out to require solving a
-> bigger, separate problem first — see item #47 — so that part is deferred. Still open: the real
-> export-time fix (raster clipart only; SVG-clipart's position/scale-path stays a documented gap,
-> separate from its existing `ControlPoints` animation). Lives in the separate Ben.Video.Editor repo.
+> bigger, separate problem first — see item #47 — so that part is deferred.
+>
+> Phase 102 (`feature/phase-102-clipart-export-animation`, merged to `develop`, pushed): the actual
+> export-time fix. New `RasterClipArtAnimationExporter` + `rasterClipArtRenderer.js` render one
+> full-canvas PNG per output frame (source image decoded once, redrawn per frame at the
+> Motion-Evaluate'd geometry) instead of trying to express the full easing/bezier math as ffmpeg
+> time-expressions — mirrors `SvgAnimationExporter`'s proven pattern. `ApplyClipArtClipsAsync` now
+> checks `Motion.HasPath` before falling into the old static-overlay branch. Covers "simple SVG
+> without control points" too, for free (same image-decode path handles SVG blobs fine). Verified
+> in three independent parts rather than one end-to-end pixel-sampled export — see
+> `README-phase-102.md` / [[project_video_editor_phase102_clipart_export_animation]] for exactly
+> why (a timeline-drag environment limitation, not a fix limitation) and what each part proved.
+> SVG-clipart's own position/scale-path (as opposed to its existing `ControlPoints` animation)
+> remains a narrower, documented gap — not attempted. Lives in the separate Ben.Video.Editor repo.
 
 ---
 
