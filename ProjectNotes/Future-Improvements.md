@@ -817,7 +817,9 @@ on-canvas editing experience, similar to the Pen tool in Photoshop/Illustrator �
 - Type a value directly (e.g. click a position/size number and edit it inline) instead of only via a
   slider. — still open, not attempted.
 - Extend the phase-98 panel-sync treatment to `TextOverlayEditor`/`ClipArtEditor` for parity with
-  `CalloutEditor` — not attempted, not confirmed in-scope by the user.
+  `CalloutEditor` — **`TextOverlayEditor` done, phase 100** (Size/Position/Shadow badges, live
+  values matching `ApplyMotionFrame(TextOverlay, MotionFrame)`). `ClipArtEditor` deliberately
+  skipped — its motion keyframes have no effect anywhere currently, see item #46.
 
 > Requested by the user 2026-08-09. Lives in the separate Ben.Video.Editor repo (Github-BenVideo
 > remote).
@@ -1117,8 +1119,8 @@ shadow, etc. via the motion-keyframe system).
 Shipped for `CalloutEditor` as part of phase 98 (see item #35) — subscribes to
 `PlaybackService.OnStateChanged` and overlays the evaluated `MotionFrame` on the static field
 values, badged "● Live". Live-verified: scrubbing the playhead between two keyframes showed
-genuine smooth interpolation, not snapping. Not yet extended to `TextOverlayEditor`/`ClipArtEditor`
-— same treatment, not yet applied, would need to be done for full parity.
+genuine smooth interpolation, not snapping. Extended to `TextOverlayEditor` in phase 100
+(Size/Position/Shadow badges). `ClipArtEditor` deliberately skipped — see item #46.
 
 > Requested by the user 2026-08-09. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
 
