@@ -1436,7 +1436,7 @@ edit at all.
 
 ---
 
-## 50. Slip / Slide / Roll trim edits — ⬜ not started
+## 50. Slip / Slide / Roll trim edits — ✅ Fixed (2026-08-10, phase 108)
 
 Beyond basic trim (drag a clip's edge to change its in/out point) and ripple-move, standard NLEs
 offer three more trim variants: **slip** (change a clip's in/out source-media offset without
@@ -1445,11 +1445,26 @@ only what portion of the source media it shows changes), **slide** (move a clip 
 without changing its own trim points, absorbing the gap by adjusting the neighbors' visible
 duration on either side), and **roll** (move the shared edit point between two adjacent clips —
 one clip's out-point and the next clip's in-point move together — without changing the total
-timeline duration). None of these exist today; only single-clip edge-trim and whole-clip
-ripple-move are supported.
+timeline duration). None of these existed; only single-clip edge-trim and whole-clip ripple-move
+were supported.
 
 > User-requested 2026-08-10, #2 of 4 in priority order (see item #49). Lives in the separate
 > Ben.Video.Editor repo.
+>
+> Shipped as phase 108 (`feature/phase-108-slip-roll-slide-trims`, merged to `develop`, pushed).
+> New pure `TrimEditCalculator` — `ClampSlipDelta` for slip, `ClampBoundaryShift` for roll/slide
+> (they share the same "extend one side, shrink the other" math — slide is really "roll the
+> boundary with each neighbor by the same delta, while the moved clip just shifts position"). New
+> `ClipStore.SlipClip`/`RollEdit`/`SlideClip`, each an undoable command; `RollEdit`/`SlideClip`
+> auto-find the adjacent touching clip(s) rather than needing them passed in. New lightweight
+> nudge-button UI (◀/▶, 0.5s steps) in the clip Properties panel — deliberately not a new drag
+> gesture, which was out of scope for this pass. Live-verified all three with real before/after
+> pixel measurements in the Playground: slip shifted a clip's in/out points by exactly the nudge
+> amount with zero change to its timeline position/width; roll grew one adjacent clip and shrank
+> the other by the same on-screen amount with the combined span pixel-identical before/after; slide
+> moved the middle of three adjacent clips while both neighbors absorbed the change and the full
+> three-clip span stayed pixel-identical. All three showed correct Undo button labels
+> ("Undo: Roll edit", "Undo: Slide test-video.mp4 B A", etc.) and reverted cleanly.
 
 ---
 
