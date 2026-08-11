@@ -1422,7 +1422,7 @@ anywhere, export or preview. Either wire `Motion.Evaluate` into `ApplyClipArtCli
 
 ---
 
-## 47. ClipArt has no live visual representation in the Working Window preview at all (not started)
+## 47. ClipArt has no live visual representation in the Working Window preview at all — ✅ Fixed (2026-08-11, phase 112)
 
 Found 2026-08-10 while working item #46. Unlike `CalloutClip`/`TextOverlay` (which render as
 self-contained SVG strings computed purely from clip properties, no asset loading needed),
@@ -1450,6 +1450,63 @@ for Callout/TextOverlay, but with an added async asset-loading step neither of t
 > Found 2026-08-10 while investigating whether to extend phase 98's Properties-panel live-value
 > sync to `ClipArtEditor` — deliberately not built on top of this, since there'd be nothing real to
 > sync. Lives in the separate Ben.Video.Editor repo.
+
+> **Shipped on `feature/phase-112-clipart-live-visual`, merged to `develop`.** `LiveOverlayPreview`
+> now also resolves and renders active `ClipArtClip`s: raster formats (Png/Avif/WebP/Gif) via a new
+> OPFS-to-blob-URL path (`opfsReadAsBlobUrl` + `OPFSService.ReadAsBlobUrlAsync`), SVG format via the
+> existing `ReadAsTextAsync` inlined directly and stretched to fill via a new `SvgStretchHelper`
+> (since `ClipArtClip.Width`/`Height` are independent, non-aspect-preserving fractions — matching
+> the export overlay filter's own non-uniform ffmpeg `scale`). Resolution is async and cached per
+> `AssetId` (not per clip instance — two placements of the same asset resolve it once), with an
+> in-flight guard against duplicate concurrent resolves. Motion-path interpolation reuses the
+> existing `ExportArgBuilders.ApplyMotionFrame(ClipArtClip, ...)` overload, same as Callout/
+> TextOverlay already do. 6 new unit tests for `SvgStretchHelper`; full existing suite (1317 tests)
+> stayed green.
+>
+> **Deliberately excluded: `Rotation` and `TintColor`.** Found while scoping this fix that *neither*
+> is actually applied anywhere in the real export pipeline today — both are copied between models
+> (`ClipStore`/`ProjectService` serialization) but never fed into an ffmpeg filter or the
+> animated-raster canvas renderer (`RasterClipArtAnimationExporter`'s per-frame DTO only carries
+> X/Y/Width/Height/Alpha). Reproducing them in the live preview would make it *less* accurate to
+> real output, not more — so this fix intentionally matches export's current (incomplete) behavior.
+> Logged separately as item #56 rather than silently expanding this item's scope.
+>
+> **Not live-verified interactively** — no clip-art catalog is configured in this dev environment
+> (same constraint noted during the earlier item #46 motion work), and the change lives in a
+> separate git repo (`Ben.Video.Editor`) consumed by `Ben.Web.WebApp` as a project reference;
+> verified via a clean end-to-end build of the whole `Ben.Web.WebApp` project against the updated
+> reference, plus the full `Ben.Video.Tests` suite.
+
+---
+
+## 56. ClipArt `Rotation` and `TintColor` are set in the editor but never actually rendered anywhere (not started)
+
+Found 2026-08-11 while shipping item #47's live-preview fix. `ClipArtClip.Rotation` and `TintColor`
+are real, user-settable fields (`ClipArtEditor.razor` presumably exposes controls for them, and
+they round-trip through project save/load via `ClipStore`/`ProjectService`), but nothing in the
+actual rendering pipeline ever applies them:
+
+- The static raster export overlay (`ExportService`'s `overlay` ffmpeg filter) only does a plain
+  `scale`+`overlay`, no rotation or color-matrix/tint filter.
+- The animated-raster canvas renderer (`RasterClipArtAnimationExporter`/`rasterClipArtRenderer.js`,
+  used for a clip with a motion path) only carries X/Y/Width/Height/Alpha per frame — no rotation or
+  tint fields at all in `RasterClipArtFrame`.
+- `ExportArgBuilders.ApplyMotionFrame(ClipArtClip, MotionFrame)`'s own doc comment already notes
+  "`Rotation`/`TintColor` are not part of `MotionFrame` and are left untouched" — confirming this
+  isn't a bug in the motion path specifically, they're just never wired up anywhere, static or
+  animated.
+- Item #47's new live-preview visual (`LiveOverlayPreview`) also deliberately does not apply them,
+  to stay consistent with the above rather than showing something export can't reproduce.
+
+So today, turning either control feels like it does something in the editor's own state, but has
+zero visible effect anywhere — preview, export, or otherwise. Needs: a rotation transform (CSS
+`transform: rotate()` for the live preview + an ffmpeg `rotate`/`transpose` filter or per-frame
+canvas rotation for export) and a tint filter (CSS `filter` for preview + an ffmpeg color-matrix
+filter or canvas composite-mode draw for export), applied consistently across all three rendering
+paths (static export, animated export, live preview) the way position/size/opacity already are.
+
+> Found 2026-08-11 while scoping [[project_video_editor_phase112_clipart_live_visual|phase 112]]
+> (item #47). Lives in the separate Ben.Video.Editor repo.
 
 ---
 
