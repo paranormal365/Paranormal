@@ -95,7 +95,6 @@ else
                 <div class="mb-2">
                     <span class="font-monospace small text-muted">@_selectedCase.CaseReference</span>
                     @if (_selectedCase.IsHaunted) { <span class="ms-1 badge bg-warning text-dark">Haunted 👻</span> }
-                    else { <span class="ms-1 badge bg-info text-dark">Public</span> }
                 </div>
                 <h6 class="mb-1">@_selectedCase.Title</h6>
                 <p class="text-secondary small mb-2">@_selectedCase.City, @_selectedCase.State · @_selectedCase.OrgName</p>
@@ -146,8 +145,6 @@ else
                                     <span class="font-monospace text-muted" style="font-size:.75rem;">@item.CaseReference</span>
                                     @if (item.IsHaunted)
                                     { <span class="badge bg-warning text-dark">👻 Haunted</span> }
-                                    else
-                                    { <span class="badge bg-info text-dark">Public</span> }
                                 </div>
                                 <h6 class="card-title mb-1">@item.Title</h6>
                                 <p class="card-text text-secondary mb-1" style="font-size:.8rem;">@item.City, @item.State</p>

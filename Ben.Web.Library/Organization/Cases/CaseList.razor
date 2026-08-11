@@ -73,7 +73,7 @@
                         <div>
                             <div class="d-flex align-items-center gap-2 mb-1">
                                 <span class="badge @StatusBadgeClass(c.Status)">@StatusLabel(c.Status)</span>
-                                @if (c.IsPublic) { <span class="badge bg-info text-dark">Public</span> }
+                                @if (c.IsPublic && c.Status != CaseStatus.Public) { <span class="badge bg-info text-dark">Public</span> }
                                 <strong>@c.DisplayLabel</strong>
                             </div>
                             <div class="text-secondary small">
