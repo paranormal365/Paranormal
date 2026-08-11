@@ -63,44 +63,85 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         Dictionary<Guid, int> memberCounts = [];
         Dictionary<Guid, int> caseCounts = [];
         Dictionary<Guid, int> investigationCounts = [];
-        if (isSuperAdmin && orgs.Count > 0)
+
+        // Edit/delete permission per org, batched: previously called HasAccessAsync (which opens its
+        // own DbContext and issues up to 4 queries) twice per org in a loop -- up to 8N queries for N
+        // orgs. Resolved here with 3 fixed queries total, regardless of org count.
+        Dictionary<Guid, bool> canEditMap = [];
+        Dictionary<Guid, bool> canDeleteMap = [];
+
+        if (orgs.Count > 0)
         {
             await using var db = await _dbFactory.CreateDbContextAsync(ct);
             var orgIds = orgs.Select(o => o.Id).ToList();
 
-            memberCounts = await db.OrganizationUserMemberships.AsNoTracking()
-                .Where(m => orgIds.Contains(m.OrganizationId) && m.IsActive)
-                .GroupBy(m => m.OrganizationId)
-                .Select(g => new { g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
+            if (isSuperAdmin)
+            {
+                memberCounts = await db.OrganizationUserMemberships.AsNoTracking()
+                    .Where(m => orgIds.Contains(m.OrganizationId) && m.IsActive)
+                    .GroupBy(m => m.OrganizationId)
+                    .Select(g => new { g.Key, Count = g.Count() })
+                    .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
 
-            caseCounts = await db.Cases.AsNoTracking()
-                .Where(c => orgIds.Contains(c.OrganizationId))
-                .GroupBy(c => c.OrganizationId)
-                .Select(g => new { g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
+                caseCounts = await db.Cases.AsNoTracking()
+                    .Where(c => orgIds.Contains(c.OrganizationId))
+                    .GroupBy(c => c.OrganizationId)
+                    .Select(g => new { g.Key, Count = g.Count() })
+                    .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
 
-            investigationCounts = await db.Investigations.AsNoTracking()
-                .Where(i => orgIds.Contains(i.Case.OrganizationId))
-                .GroupBy(i => i.Case.OrganizationId)
-                .Select(g => new { g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
+                investigationCounts = await db.Investigations.AsNoTracking()
+                    .Where(i => orgIds.Contains(i.Case.OrganizationId))
+                    .GroupBy(i => i.Case.OrganizationId)
+                    .Select(g => new { g.Key, Count = g.Count() })
+                    .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
+            }
+            else
+            {
+                var memberships = await db.OrganizationUserMemberships.AsNoTracking()
+                    .Where(m => orgIds.Contains(m.OrganizationId) && m.AppUserId == userId.Value && m.IsActive)
+                    .ToDictionaryAsync(m => m.OrganizationId, ct);
+
+                var directGrants = await db.OrganizationAccessGrants.AsNoTracking()
+                    .Where(g => orgIds.Contains(g.OrganizationId) && g.AppUserId == userId.Value
+                             && g.TableName == OrganizationSecurityTable.Organization)
+                    .ToListAsync(ct);
+                var directGrantsByOrg = directGrants.ToLookup(g => g.OrganizationId);
+
+                var rolePermissions = await (
+                    from roleMembership in db.OrganizationRoleMemberships
+                    join role in db.OrganizationRoles on roleMembership.OrganizationRoleId equals role.Id
+                    join permission in db.OrganizationRolePermissions on role.Id equals permission.OrganizationRoleId
+                    join userMembership in db.OrganizationUserMemberships on roleMembership.OrganizationUserMembershipId equals userMembership.Id
+                    where orgIds.Contains(userMembership.OrganizationId)
+                        && userMembership.AppUserId == userId.Value
+                        && userMembership.IsActive
+                        && role.IsActive
+                        && permission.TableName == OrganizationSecurityTable.Organization
+                    select new { userMembership.OrganizationId, permission.Actions }
+                ).ToListAsync(ct);
+                var rolePermissionsByOrg = rolePermissions.ToLookup(x => x.OrganizationId);
+
+                bool HasAction(Guid orgId, OrganizationSecurityAction action)
+                {
+                    if (!memberships.TryGetValue(orgId, out var membership)) return false;
+                    if (membership.Role is OrganizationMemberRole.Owner or OrganizationMemberRole.Administrator) return true;
+                    if (directGrantsByOrg[orgId].Any(g => (g.Actions & action) != OrganizationSecurityAction.None)) return true;
+                    return rolePermissionsByOrg[orgId].Any(x => (x.Actions & action) != OrganizationSecurityAction.None);
+                }
+
+                foreach (var orgId in orgIds)
+                {
+                    canEditMap[orgId]   = HasAction(orgId, OrganizationSecurityAction.Update);
+                    canDeleteMap[orgId] = HasAction(orgId, OrganizationSecurityAction.Delete);
+                }
+            }
         }
 
         var result = new List<OrganizationListItemResponse>(orgs.Count);
         foreach (var org in orgs)
         {
-            bool canEdit, canDelete;
-            if (isSuperAdmin)
-            {
-                canEdit   = true;
-                canDelete = true;
-            }
-            else
-            {
-                canEdit   = await _security.HasAccessAsync(userId.Value, org.Id, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Update, ct);
-                canDelete = await _security.HasAccessAsync(userId.Value, org.Id, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Delete, ct);
-            }
+            var canEdit   = isSuperAdmin || canEditMap.GetValueOrDefault(org.Id);
+            var canDelete = isSuperAdmin || canDeleteMap.GetValueOrDefault(org.Id);
             result.Add(new OrganizationListItemResponse(org.Id, org.Name, org.UrlName, org.DateCreated, org.IsAcceptingApplications, canEdit, canDelete,
                 memberCounts.GetValueOrDefault(org.Id), caseCounts.GetValueOrDefault(org.Id), investigationCounts.GetValueOrDefault(org.Id)));
         }

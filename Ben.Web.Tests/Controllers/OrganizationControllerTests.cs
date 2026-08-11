@@ -247,18 +247,33 @@ public class OrganizationControllerTests
         var userId  = Guid.NewGuid();
         var org     = await SeedOrgAsync(factory);
 
+        // GetAllWithPermissions resolves edit/delete flags via a batched query directly against
+        // OrganizationAccessGrants (not IOrganizationSecurityService.HasAccessAsync, which would
+        // reintroduce the N+1 this endpoint was fixed to avoid). A direct grant only counts for an
+        // active member (matching HasAccessAsync's own real behavior), so seed both a non-admin
+        // membership and a grant row.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = userId,
+                Role = OrganizationMemberRole.Member, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            db.OrganizationAccessGrants.Add(new OrganizationAccessGrant
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = userId,
+                TableName = OrganizationSecurityTable.Organization,
+                Actions = OrganizationSecurityAction.Update | OrganizationSecurityAction.Delete,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
         var securityMock = new Mock<IOrganizationSecurityService>();
         securityMock
             .Setup(s => s.GetOrganizationsForUserAsync(userId, It.IsAny<CancellationToken>()))
             .ReturnsAsync([org]);
-        securityMock
-            .Setup(s => s.HasAccessAsync(userId, org.Id, OrganizationSecurityTable.Organization,
-                OrganizationSecurityAction.Update, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        securityMock
-            .Setup(s => s.HasAccessAsync(userId, org.Id, OrganizationSecurityTable.Organization,
-                OrganizationSecurityAction.Delete, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
 
         var controller = BuildController(factory, UserPrincipal(userId), securityMock);
 
@@ -278,18 +293,28 @@ public class OrganizationControllerTests
         var userId  = Guid.NewGuid();
         var org     = await SeedOrgAsync(factory);
 
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = userId,
+                Role = OrganizationMemberRole.Member, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            db.OrganizationAccessGrants.Add(new OrganizationAccessGrant
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = userId,
+                TableName = OrganizationSecurityTable.Organization,
+                Actions = OrganizationSecurityAction.Update,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
         var securityMock = new Mock<IOrganizationSecurityService>();
         securityMock
             .Setup(s => s.GetOrganizationsForUserAsync(userId, It.IsAny<CancellationToken>()))
             .ReturnsAsync([org]);
-        securityMock
-            .Setup(s => s.HasAccessAsync(userId, org.Id, OrganizationSecurityTable.Organization,
-                OrganizationSecurityAction.Update, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        securityMock
-            .Setup(s => s.HasAccessAsync(userId, org.Id, OrganizationSecurityTable.Organization,
-                OrganizationSecurityAction.Delete, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
 
         var controller = BuildController(factory, UserPrincipal(userId), securityMock);
 
@@ -300,6 +325,42 @@ public class OrganizationControllerTests
         var item = Assert.Single(list);
         Assert.True(item.CanEdit);
         Assert.False(item.CanDelete);
+    }
+
+    [Fact]
+    public async Task GetAll_AsOwnerMembership_ReturnsBothFlagsTrue_WithNoExplicitGrant()
+    {
+        var factory = CreateFactory();
+        var userId  = Guid.NewGuid();
+        var org     = await SeedOrgAsync(factory);
+
+        // Owner/Administrator membership implies full access with no OrganizationAccessGrant row
+        // at all -- the most common real-world path, distinct from the direct-grant tests above.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = userId,
+                Role = OrganizationMemberRole.Owner, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var securityMock = new Mock<IOrganizationSecurityService>();
+        securityMock
+            .Setup(s => s.GetOrganizationsForUserAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([org]);
+
+        var controller = BuildController(factory, UserPrincipal(userId), securityMock);
+
+        var result = await controller.GetAllWithPermissions(default);
+
+        var ok   = Assert.IsType<OkObjectResult>(result.Result);
+        var list = Assert.IsAssignableFrom<IEnumerable<OrganizationListItemResponse>>(ok.Value);
+        var item = Assert.Single(list);
+        Assert.True(item.CanEdit);
+        Assert.True(item.CanDelete);
     }
 
     [Fact]
