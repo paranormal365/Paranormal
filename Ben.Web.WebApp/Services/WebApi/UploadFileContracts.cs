@@ -31,16 +31,16 @@ public sealed class UploadFileOrgShareResponse
 }
 
 // ── Permission Requests ──────────────────────────────────────────────────────
+// RequestedByAppUserId/ReviewedByAppUserId dropped — the server derives the acting user from the
+// bearer token, never from client input; see UploadFilePermissionRequestController.
 public sealed record SubmitPermissionRequestRequest(
     Guid? OrganizationId,
-    Guid RequestedByAppUserId,
     FilePermissionType PermissionType,
     string? RequestNotes);
 
 public sealed record ReviewPermissionRequestRequest(
     FilePermissionRequestStatus RequestStatus,
-    string? ReviewNotes,
-    Guid ReviewedByAppUserId);
+    string? ReviewNotes);
 
 public sealed class UploadFilePermissionRequestResponse
 {

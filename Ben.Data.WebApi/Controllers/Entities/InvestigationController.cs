@@ -28,6 +28,7 @@ public sealed class InvestigationController : BenControllerBase
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var list = await db.Investigations.AsNoTracking()
             .Include(i => i.Attendees)
             .Where(i => i.CaseId == caseId)
@@ -42,6 +43,7 @@ public sealed class InvestigationController : BenControllerBase
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var inv = await db.Investigations.AsNoTracking()
             .Include(i => i.Attendees)
             .FirstOrDefaultAsync(i => i.Id == id && i.CaseId == caseId, ct);
@@ -55,7 +57,7 @@ public sealed class InvestigationController : BenControllerBase
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct))
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct))
             return NotFound("Case not found.");
 
         var entity = new Investigation
@@ -107,6 +109,7 @@ public sealed class InvestigationController : BenControllerBase
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var entity = await db.Investigations.FirstOrDefaultAsync(i => i.Id == id && i.CaseId == caseId, ct);
         if (entity is null) return NotFound();
         entity.OrgCalendarEventId  = request.OrgCalendarEventId;
@@ -132,6 +135,7 @@ public sealed class InvestigationController : BenControllerBase
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var entity = await db.Investigations.FirstOrDefaultAsync(i => i.Id == id && i.CaseId == caseId, ct);
         if (entity is null) return NotFound();
         db.Investigations.Remove(entity);
@@ -146,6 +150,7 @@ public sealed class InvestigationController : BenControllerBase
         var userId = GetCurrentUserId();
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var investigation = await db.Investigations.FirstOrDefaultAsync(i => i.Id == id && i.CaseId == caseId, ct);
         if (investigation is null) return NotFound();
@@ -177,6 +182,7 @@ public sealed class InvestigationController : BenControllerBase
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var attendees = await db.InvestigationAttendees.AsNoTracking()
             .Include(a => a.AppUser)
             .Where(a => a.InvestigationId == id)
@@ -191,6 +197,7 @@ public sealed class InvestigationController : BenControllerBase
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         if (!await db.Investigations.AnyAsync(i => i.Id == id && i.CaseId == caseId, ct))
             return NotFound();
         var attendee = new InvestigationAttendee
@@ -213,6 +220,7 @@ public sealed class InvestigationController : BenControllerBase
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var attendee = await db.InvestigationAttendees
             .FirstOrDefaultAsync(a => a.Id == attendeeId && a.InvestigationId == id, ct);
         if (attendee is null) return NotFound();
@@ -231,6 +239,7 @@ public sealed class InvestigationController : BenControllerBase
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var attendee = await db.InvestigationAttendees
             .FirstOrDefaultAsync(a => a.Id == attendeeId && a.InvestigationId == id, ct);
         if (attendee is null) return NotFound();
@@ -244,8 +253,7 @@ public sealed class InvestigationController : BenControllerBase
         if (User.IsInRole(RoleNames.SuperAdmin)) return true;
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        return await db.OrganizationUserMemberships.AnyAsync(
-            m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
+        return await FileAudienceAccess.IsOrgMemberAsync(db, orgId, userId, ct);
     }
 }
 
@@ -289,13 +297,21 @@ public sealed class EvidenceVoteController : BenControllerBase
             CurrentUserVote:   myVote));
     }
 
-    /// <summary>Returns all votes with voter identities. Requires authentication.</summary>
+    /// <summary>Returns all votes with voter identities. Requires org membership (any active
+    /// organization — this route has no case/org context of its own to scope more narrowly), not
+    /// just authentication; the summary endpoint above is the public-facing (counts-only) view.</summary>
     [HttpGet("{uploadFileId:guid}")]
     [Authorize]
     public async Task<ActionResult<IEnumerable<EvidenceVoteRecord>>> GetAll(
         Guid uploadFileId, CancellationToken ct)
     {
+        var userId = GetCurrentUserIdOrThrow();
         await using var db = await _db.CreateDbContextAsync(ct);
+
+        var isOrgMember = User.IsInRole(RoleNames.SuperAdmin)
+            || await db.OrganizationUserMemberships.AnyAsync(m => m.AppUserId == userId && m.IsActive, ct);
+        if (!isOrgMember) return Forbid();
+
         var votes = await db.EvidenceVotes.AsNoTracking()
             .Include(v => v.VoterAppUser)
             .Include(v => v.VoterOrganization)

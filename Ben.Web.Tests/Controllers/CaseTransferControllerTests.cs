@@ -281,4 +281,20 @@ public class CaseTransferControllerTests
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
+
+    // ── Cross-org chain (Phase B) ────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetAll_CaseBelongsToDifferentOrg_ReturnsNotFound()
+    {
+        // toUserId is a real, active member of toOrgId — but caseId belongs to fromOrgId, and
+        // GetAll previously checked only "is caller a member of the route org," never that the
+        // case actually belonged to it.
+        var (factory, _, toOrgId, caseId, _, toUserId) = await SeedAsync();
+        var ctrl = BuildController(factory, toUserId);
+
+        var result = await ctrl.GetAll(toOrgId, caseId, default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
 }

@@ -1,4 +1,5 @@
 using AutoMapper;
+using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
@@ -18,7 +19,7 @@ public class EvidenceVoteControllerTests
 {
     private static EvidenceVoteController Build(
         IDbContextFactory<BenDataContext> factory,
-        Guid? userId = null)
+        Guid? userId = null, bool isSuperAdmin = false)
     {
         var mapper = new Mock<IMapper>();
         mapper.Setup(m => m.Map<IEnumerable<EvidenceVoteRecord>>(It.IsAny<object>()))
@@ -41,6 +42,8 @@ public class EvidenceVoteControllerTests
         var claims = new List<Claim>();
         if (userId.HasValue)
             claims.Add(new Claim("app_user_id", userId.Value.ToString()));
+        if (isSuperAdmin)
+            claims.Add(new Claim(ClaimTypes.Role, RoleNames.SuperAdmin));
 
         ctrl.ControllerContext = new ControllerContext
         {
@@ -50,6 +53,18 @@ public class EvidenceVoteControllerTests
             },
         };
         return ctrl;
+    }
+
+    private static async Task AddMembershipAsync(IDbContextFactory<BenDataContext> factory, Guid userId)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+        {
+            Id = Guid.NewGuid(), OrganizationId = Guid.NewGuid(), AppUserId = userId,
+            Role = OrganizationMemberRole.Member, IsActive = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        await db.SaveChangesAsync();
     }
 
     private static async Task<Guid> SeedFileAsync(IDbContextFactory<BenDataContext> factory)
@@ -171,7 +186,7 @@ public class EvidenceVoteControllerTests
     // ── GetAll ────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetAll_ReturnsAllVotesForFile()
+    public async Task GetAll_OrgMember_ReturnsAllVotesForFile()
     {
         var factory  = TestDbFactory.Create();
         var fileId   = await SeedFileAsync(factory);
@@ -180,7 +195,9 @@ public class EvidenceVoteControllerTests
         await SeedVoteAsync(factory, fileId, voter1, EvidenceVoteType.Confirms);
         await SeedVoteAsync(factory, fileId, voter2, EvidenceVoteType.Disputes);
 
-        var result = await Build(factory, Guid.NewGuid()).GetAll(fileId, CancellationToken.None);
+        var callerId = Guid.NewGuid();
+        await AddMembershipAsync(factory, callerId);
+        var result = await Build(factory, callerId).GetAll(fileId, CancellationToken.None);
         var ok     = Assert.IsType<OkObjectResult>(result.Result);
         var list   = Assert.IsAssignableFrom<IEnumerable<EvidenceVoteRecord>>(ok.Value).ToList();
 
@@ -188,7 +205,7 @@ public class EvidenceVoteControllerTests
     }
 
     [Fact]
-    public async Task GetAll_OnlyReturnsVotesForRequestedFile()
+    public async Task GetAll_OrgMember_OnlyReturnsVotesForRequestedFile()
     {
         var factory  = TestDbFactory.Create();
         var fileId1  = await SeedFileAsync(factory);
@@ -198,12 +215,43 @@ public class EvidenceVoteControllerTests
         await SeedVoteAsync(factory, fileId1, voter1, EvidenceVoteType.Confirms);
         await SeedVoteAsync(factory, fileId2, voter2, EvidenceVoteType.Disputes);
 
-        var result = await Build(factory, Guid.NewGuid()).GetAll(fileId1, CancellationToken.None);
+        var callerId = Guid.NewGuid();
+        await AddMembershipAsync(factory, callerId);
+        var result = await Build(factory, callerId).GetAll(fileId1, CancellationToken.None);
         var ok     = Assert.IsType<OkObjectResult>(result.Result);
         var list   = Assert.IsAssignableFrom<IEnumerable<EvidenceVoteRecord>>(ok.Value).ToList();
 
         Assert.Single(list);
         Assert.All(list, v => Assert.Equal(fileId1, v.UploadFileId));
+    }
+
+    [Fact]
+    public async Task GetAll_NotAnOrgMember_ReturnsForbid()
+    {
+        // The core of the fix: the doc comment promises "full voter details require org
+        // membership," but the code previously enforced only [Authorize] — any authenticated,
+        // org-less caller could see every voter's identity.
+        var factory = TestDbFactory.Create();
+        var fileId  = await SeedFileAsync(factory);
+        var voter   = await SeedVoterAsync(factory);
+        await SeedVoteAsync(factory, fileId, voter, EvidenceVoteType.Confirms);
+
+        var result = await Build(factory, Guid.NewGuid()).GetAll(fileId, CancellationToken.None);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetAll_SuperAdmin_DoesNotNeedOrgMembership()
+    {
+        var factory = TestDbFactory.Create();
+        var fileId  = await SeedFileAsync(factory);
+        var voter   = await SeedVoterAsync(factory);
+        await SeedVoteAsync(factory, fileId, voter, EvidenceVoteType.Confirms);
+
+        var result = await Build(factory, Guid.NewGuid(), isSuperAdmin: true).GetAll(fileId, CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result.Result);
     }
 
     // ── CastVote ──────────────────────────────────────────────────────────────

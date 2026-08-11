@@ -193,4 +193,37 @@ public class OrgMessageControllerTests
         var viewCount = await db.OrgMessageViews.CountAsync(v => v.OrgMessageId == msgId && v.ViewerAppUserId == recipientId);
         Assert.Equal(1, viewCount);
     }
+
+    [Fact]
+    public async Task GetById_NeitherAuthorNorRecipient_ReturnsForbid()
+    {
+        // The core of the fix: this used to check only OrganizationId == orgId — any authenticated
+        // user could read another org's private internal message by id, with a side effect
+        // (marks read, increments ViewCount) for a "viewer" who was never a recipient.
+        var (factory, orgId, senderId, recipientId) = await SeedAsync();
+        var sender   = Build(factory, senderId);
+        var msgId = ((OrgMessageRecord)((CreatedAtActionResult)(await sender.Send(orgId, new SendOrgMessageRequest(OrgMessageChannel.DirectMessage, null, "Private", false, null, null, [recipientId]), default)).Result!).Value!).Id;
+
+        var outsider = Build(factory, Guid.NewGuid());
+        var result = await outsider.GetById(orgId, msgId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var msg = await db.OrgMessages.FirstAsync(m => m.Id == msgId);
+        Assert.Equal(0, msg.ViewCount); // the Forbid'd attempt must not have side-effected the count
+    }
+
+    [Fact]
+    public async Task GetById_PublicFeedMessage_AnyoneCanView()
+    {
+        var (factory, orgId, senderId, _) = await SeedAsync();
+        var sender = Build(factory, senderId);
+        var msgId = ((OrgMessageRecord)((CreatedAtActionResult)(await sender.Send(orgId, new SendOrgMessageRequest(OrgMessageChannel.PublicFeed, null, "Public post", false, null, null, []), default)).Result!).Value!).Id;
+
+        var outsider = Build(factory, Guid.NewGuid());
+        var result = await outsider.GetById(orgId, msgId, default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
 }

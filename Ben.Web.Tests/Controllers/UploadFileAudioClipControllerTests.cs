@@ -117,21 +117,22 @@ public class UploadFileAudioClipControllerTests
         return typeId;
     }
 
-    private static async Task<Guid> SeedFileAsync(
+    private static async Task<(Guid FileId, Guid OwnerId)> SeedFileAsync(
         IDbContextFactory<BenDataContext> factory,
         byte[]? fileData = null, string contentType = "audio/wav")
     {
-        var fileId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
         await using var db = await factory.CreateDbContextAsync();
         db.UploadFiles.Add(new UploadFile
         {
-            Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = Guid.NewGuid(),
+            Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
             FileName = "audio.wav", StoredFileName = "s.wav", ContentType = contentType,
             FileSize = fileData?.Length ?? 4, FileData = fileData ?? new byte[4],
-            DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
         });
         await db.SaveChangesAsync();
-        return fileId;
+        return (fileId, ownerId);
     }
 
     // ── Validation ────────────────────────────────────────────────────────────
@@ -177,8 +178,8 @@ public class UploadFileAudioClipControllerTests
     public async Task Clip_ReturnsBadRequest_WhenFileTypeNotFound()
     {
         var factory = CreateFactory();
-        var fileId  = await SeedFileAsync(factory, CreateSilentWav());
-        var ctrl    = Build(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav());
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Clip(fileId,
             new ClipAudioRequest(0, 1, null, false, Guid.NewGuid()), default);  // random file type
@@ -191,14 +192,30 @@ public class UploadFileAudioClipControllerTests
     {
         var factory  = CreateFactory();
         var typeId   = await SeedTypeAsync(factory);
-        var fileId   = await SeedFileAsync(factory, new byte[100], "audio/ogg");
-        var ctrl     = Build(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory, new byte[100], "audio/ogg");
+        var ctrl     = Build(factory, ownerId);
 
         var result   = await ctrl.Clip(fileId,
             new ClipAudioRequest(0, 0.5, null, false, typeId), default);
 
         var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
         Assert.Contains("WAV", bad.Value?.ToString());
+    }
+
+    [Fact]
+    public async Task Clip_UnrelatedCaller_ReturnsForbid()
+    {
+        // The core of the fix: this used to let any authenticated user extract audio from
+        // someone else's private file and persist it as a new file they own.
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, _) = await SeedFileAsync(factory, CreateSilentWav());
+        var ctrl    = Build(factory, Guid.NewGuid());
+
+        var result  = await ctrl.Clip(fileId,
+            new ClipAudioRequest(0.0, 1.0, null, false, typeId), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
     }
 
     // ── Success — parent-file tracking ────────────────────────────────────────
@@ -208,9 +225,8 @@ public class UploadFileAudioClipControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
-        var userId  = Guid.NewGuid();
-        var ctrl    = Build(factory, userId);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Clip(fileId,
             new ClipAudioRequest(0.0, 1.0, null, false, typeId), default);
@@ -223,9 +239,8 @@ public class UploadFileAudioClipControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
-        var userId  = Guid.NewGuid();
-        var ctrl    = Build(factory, userId);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Clip(fileId,
             new ClipAudioRequest(0.0, 1.0, null, false, typeId), default);
@@ -240,9 +255,8 @@ public class UploadFileAudioClipControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
-        var userId  = Guid.NewGuid();
-        var ctrl    = Build(factory, userId);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Clip(fileId,
             new ClipAudioRequest(0.25, 0.75, null, false, typeId), default);
@@ -258,9 +272,8 @@ public class UploadFileAudioClipControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
-        var userId  = Guid.NewGuid();
-        var ctrl    = Build(factory, userId);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Clip(fileId,
             new ClipAudioRequest(0.0, 1.0, "My Clip", false, typeId), default);
@@ -275,9 +288,8 @@ public class UploadFileAudioClipControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
-        var userId  = Guid.NewGuid();
-        var ctrl    = Build(factory, userId);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Clip(fileId,
             new ClipAudioRequest(0.0, 1.0, null, true, typeId), default);
@@ -292,9 +304,8 @@ public class UploadFileAudioClipControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
-        var userId  = Guid.NewGuid();
-        var ctrl    = Build(factory, userId);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Clip(fileId,
             new ClipAudioRequest(0.0, 1.0, null, false, typeId), default);
@@ -309,9 +320,8 @@ public class UploadFileAudioClipControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
-        var userId  = Guid.NewGuid();
-        var ctrl    = Build(factory, userId);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Clip(fileId,
             new ClipAudioRequest(0.0, 1.0, null, false, typeId), default);
@@ -326,9 +336,8 @@ public class UploadFileAudioClipControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
-        var userId  = Guid.NewGuid();
-        var ctrl    = Build(factory, userId);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Clip(fileId,
             new ClipAudioRequest(0.0, 1.0, null, false, typeId), default);
@@ -369,11 +378,25 @@ public class UploadFileAudioClipControllerTests
     }
 
     [Fact]
+    public async Task ClipPreview_UnrelatedCaller_ReturnsForbid()
+    {
+        // The core of the fix: this used to let any authenticated user preview-clip audio out
+        // of someone else's private file.
+        var factory = CreateFactory();
+        var (fileId, _) = await SeedFileAsync(factory, CreateSilentWav());
+        var ctrl    = Build(factory, Guid.NewGuid());
+
+        var result  = await ctrl.ClipPreview(fileId, start: 0.0, end: 1.0, default);
+
+        Assert.IsType<ForbidResult>(result);
+    }
+
+    [Fact]
     public async Task ClipPreview_ReturnsBadRequest_ForUnsupportedFormat()
     {
         var factory  = CreateFactory();
-        var fileId   = await SeedFileAsync(factory, new byte[100], "audio/ogg");
-        var ctrl     = Build(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory, new byte[100], "audio/ogg");
+        var ctrl     = Build(factory, ownerId);
 
         var result   = await ctrl.ClipPreview(fileId, start: 0, end: 0.5, default);
 
@@ -384,8 +407,8 @@ public class UploadFileAudioClipControllerTests
     public async Task ClipPreview_ReturnsWavBytes_WithoutPersistingToDatabase()
     {
         var factory = CreateFactory();
-        var fileId  = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
-        var ctrl    = Build(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.ClipPreview(fileId, start: 0.0, end: 1.0, default);
 

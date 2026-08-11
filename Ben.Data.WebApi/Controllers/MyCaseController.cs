@@ -191,11 +191,7 @@ public sealed class MyCaseController : BenControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
-        var c = await db.Cases.AsNoTracking()
-            .Include(x => x.ClientRequest)
-            .FirstOrDefaultAsync(x => x.Id == caseId
-                && x.ClientRequest != null && x.ClientRequest.AppUserId == userId, ct);
-        if (c is null) return NotFound();
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
 
         var entry = new CaseTimelineEntry
         {
@@ -241,7 +237,7 @@ public sealed class MyCaseController : BenControllerBase
                 && e.AuthorAppUserId == userId
                 && e.EntryType == CaseTimelineEntryType.ClientReport, ct);
         if (entry is null || before is null) return NotFound();
-        if (entry.Case.ClientRequest?.AppUserId != userId) return Forbid();
+        if (!await IsCaseClient(db, caseId, userId, ct)) return Forbid();
 
         entry.EventDateTime      = request.EventDateTime;
         entry.Title              = request.Title?.Trim();
@@ -272,7 +268,7 @@ public sealed class MyCaseController : BenControllerBase
                 && e.AuthorAppUserId == userId
                 && e.EntryType == CaseTimelineEntryType.ClientReport, ct);
         if (entry is null) return NotFound();
-        if (entry.Case.ClientRequest?.AppUserId != userId) return Forbid();
+        if (!await IsCaseClient(db, caseId, userId, ct)) return Forbid();
 
         db.CaseTimelineEntries.Remove(entry);
         await db.SaveChangesAsync(ct);
