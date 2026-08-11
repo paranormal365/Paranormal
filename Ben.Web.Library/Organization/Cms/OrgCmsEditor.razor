@@ -605,7 +605,7 @@
     private Guid _addMemberMembershipId;
     private string? _membersDialogError;
     private IReadOnlyList<OrgMembershipItem>? _orgMemberships;
-    private IReadOnlyList<AppUserRecord>? _orgUsers;
+    private IReadOnlyList<OrgUserDirectoryItem>? _orgUsers;
 
     // Preview
     private bool _showPreview;
@@ -638,7 +638,7 @@
 
             // Pre-load org membership + user list for member management
             _orgMemberships = await AdminClient.GetOrganizationMembersAsync(OrgId);
-            _orgUsers = await AdminClient.GetAllUsersAsync();
+            _orgUsers = await AdminClient.GetOrgUserDirectoryAsync(OrgId);
 
             // Try to get org name
             var org = await AdminClient.GetOrganizationAsync(OrgId);
@@ -1040,7 +1040,7 @@
             var membership = memberships.FirstOrDefault(ms => ms.MembershipId == m.OrganizationUserMembershipId);
             var user = membership is not null ? users.FirstOrDefault(u => u.Id == membership.AppUserId) : null;
             return new GroupMemberRow(m.Id, m.OrganizationUserMembershipId,
-                user?.DisplayName ?? user?.Email ?? membership?.AppUserId.ToString() ?? "Unknown",
+                user?.DisplayName ?? membership?.AppUserId.ToString() ?? "Unknown",
                 membership?.Role.ToString() ?? "");
         }).ToList();
 
@@ -1050,7 +1050,7 @@
             .Select(m =>
             {
                 var user = users.FirstOrDefault(u => u.Id == m.AppUserId);
-                return new OrgMemberOption(m.MembershipId, user?.DisplayName ?? user?.Email ?? m.AppUserId.ToString());
+                return new OrgMemberOption(m.MembershipId, user?.DisplayName ?? m.AppUserId.ToString());
             })
             .OrderBy(o => o.DisplayName)
             .ToList();

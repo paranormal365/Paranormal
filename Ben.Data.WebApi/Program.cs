@@ -191,6 +191,22 @@ builder.Services.AddAuthorization(options =>
             .AddAuthenticationSchemes(schemes)
             .RequireAuthenticatedUser()
             .AddRequirements(new Ben.Data.WebApi.Authorization.SuperAdminRequirement()));
+
+    // "EntraOnly" policy used by [Authorize(Policy = AuthPolicyNames.EntraOnly)] on
+    // EntraAuthController's Register/Link actions — those need to read the caller's OID/email
+    // from a *validated Entra JWT's own claims* rather than trusting the request body, so they
+    // must pin the "Entra" scheme specifically rather than accepting the default multi-scheme
+    // policy. Referencing the scheme by name only when it's actually registered (entraEnabled)
+    // avoids the "no authentication handler registered for scheme 'Entra'" crash that pinning an
+    // unregistered scheme name would cause; when Entra isn't configured, deny outright instead —
+    // no Entra JWT could ever be presented in that environment anyway.
+    options.AddPolicy(AuthPolicyNames.EntraOnly, policy =>
+    {
+        if (entraEnabled)
+            policy.AddAuthenticationSchemes(EntraScheme).RequireAuthenticatedUser();
+        else
+            policy.RequireAssertion(_ => false);
+    });
 });
 
 var app = builder.Build();

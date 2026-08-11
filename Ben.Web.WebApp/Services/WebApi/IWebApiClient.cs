@@ -36,6 +36,11 @@ public interface IWebApiClient
     Task<OrganizationUserMembershipResponse?> UpsertOrganizationMembershipAsync(Guid organizationId, Guid targetUserId, UpsertOrganizationMembershipRequest request, CancellationToken token = default);
     Task<OrganizationAccessGrantResponse?> SetOrganizationGrantAsync(Guid organizationId, Guid targetUserId, SetOrganizationGrantRequest request, CancellationToken token = default);
 
+    /// <summary>Minimal Id+DisplayName directory of an org's active members — see
+    /// OrganizationController.GetUserDirectory's doc comment for why this exists instead of the
+    /// full AppUserRecord (now SuperAdmin-only).</summary>
+    Task<IReadOnlyList<OrgUserDirectoryEntryResponse>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default);
+
     // Upload Files
     Task<IReadOnlyList<UploadFileTypeRecord>> GetUploadFileTypesAsync(CancellationToken token = default);
     Task<IReadOnlyList<UploadFileRecord>> GetUploadFilesAsync(CancellationToken token = default);
@@ -101,28 +106,27 @@ public interface IWebApiClient
     // Impersonation (SuperAdmin only)
     Task<WebApiTokenResponse?> ImpersonateAsync(Guid targetUserId, CancellationToken token = default);
 
-    // Entra account registration and linking
-    Task<EntraRegisterResponse?> EntraRegisterAsync(EntraRegisterPayload request, CancellationToken token = default);
-    Task<bool> EntraLinkAsync(EntraLinkPayload request, CancellationToken token = default);
+    // Entra account registration and linking — both take the Entra access token explicitly
+    // (rather than reading IWebApiTokenStore) so the caller is never at the mercy of whatever
+    // token happens to be sitting in the store at call time; the server validates it via the
+    // "Entra" JWT scheme and reads OID/email from its own claims, never from the payload.
+    Task<EntraRegisterResponse?> EntraRegisterAsync(string entraAccessToken, EntraRegisterPayload request, CancellationToken token = default);
+    Task<bool> EntraLinkAsync(string entraAccessToken, EntraLinkPayload request, CancellationToken token = default);
 }
 
 // ── Entra request/response records ───────────────────────────────────────────
 
-/// <summary>Sent to POST /api/auth/entra/register — creates a local AppUser linked to an Entra identity.</summary>
-public sealed record EntraRegisterPayload(
-    string EntraOid,
-    string EntraEmail,
-    string DisplayName,
-    string? ProviderDisplayName = null);
+/// <summary>Sent to POST /api/auth/entra/register — creates a local AppUser linked to the caller's
+/// (validated, token-derived) Entra identity. Carries only what the server can't determine itself.</summary>
+public sealed record EntraRegisterPayload(string DisplayName);
 
 /// <summary>Response from POST /api/auth/entra/register.</summary>
 public sealed record EntraRegisterResponse(Guid UserId, string Email);
 
-/// <summary>Sent to POST /api/auth/entra/link — links an Entra identity to the current local user.</summary>
-public sealed record EntraLinkPayload(
-    string EntraOid,
-    string EntraEmail,
-    string? ProviderDisplayName = null);
+/// <summary>Sent to POST /api/auth/entra/link — identifies the target local account to link the
+/// caller's (validated, token-derived) Entra identity to; ownership of that account is proven by
+/// <see cref="Password"/>, checked server-side.</summary>
+public sealed record EntraLinkPayload(string Email, string Password);
 
 // ── Sub-client invite accept-flow records (item #4) — mirrors api/case-invites' shapes; this
 // project has no reference to Ben.Data.WebApi (HTTP-only boundary), so the DTOs are duplicated

@@ -145,13 +145,11 @@
 
         try
         {
-            var payload = new EntraRegisterPayload(
-                EntraOid:             EntraTokenHolder.EntraOid ?? string.Empty,
-                EntraEmail:           EntraTokenHolder.Email    ?? string.Empty,
-                DisplayName:          _displayName,
-                ProviderDisplayName:  EntraTokenHolder.Email);
+            var payload = new EntraRegisterPayload(DisplayName: _displayName);
 
-            var result = await WebApiClient.EntraRegisterAsync(payload);
+            // The Entra access token is sent explicitly — the server validates it and reads OID/
+            // email from its own claims, never from this payload (see IWebApiClient.EntraRegisterAsync).
+            var result = await WebApiClient.EntraRegisterAsync(EntraTokenHolder.AccessToken ?? string.Empty, payload);
 
             if (result is null)
             {
@@ -182,24 +180,24 @@
 
         try
         {
-            // Step 1: sign in with local credentials → sets TokenStore with local bearer token
-            var loginOk = await AuthService.LoginAsync(_linkEmail, _linkPassword);
-            if (!loginOk)
+            // Step 1: link the caller's Entra identity (proven by the Entra access token, sent
+            // explicitly) to the target local account (proven by password, checked server-side).
+            // No local session is needed yet — that's the whole point of this endpoint.
+            var linkPayload = new EntraLinkPayload(Email: _linkEmail, Password: _linkPassword);
+            var linkOk = await WebApiClient.EntraLinkAsync(EntraTokenHolder.AccessToken ?? string.Empty, linkPayload);
+            if (!linkOk)
             {
-                _error = "Invalid email or password.";
+                _error = "Account linking failed. Check your email and password, or this Microsoft identity may already be linked elsewhere.";
                 return;
             }
 
-            // Step 2: link the Entra OID to the now-authenticated local account
-            var linkPayload = new EntraLinkPayload(
-                EntraOid:            EntraTokenHolder.EntraOid ?? string.Empty,
-                EntraEmail:          EntraTokenHolder.Email    ?? string.Empty,
-                ProviderDisplayName: EntraTokenHolder.Email);
-
-            var linkOk = await WebApiClient.EntraLinkAsync(linkPayload);
-            if (!linkOk)
+            // Step 2: now establish the actual local session.
+            var loginOk = await AuthService.LoginAsync(_linkEmail, _linkPassword);
+            if (!loginOk)
             {
-                _error = "Account linking failed. This Microsoft identity may already be linked elsewhere.";
+                // Link succeeded but the follow-up sign-in didn't — shouldn't happen since Link
+                // just verified the same credentials, but send them to /login rather than stall here.
+                NavManager.NavigateTo("/login");
                 return;
             }
 

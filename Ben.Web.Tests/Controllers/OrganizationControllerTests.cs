@@ -666,4 +666,126 @@ public class OrganizationControllerTests
         Assert.Equal("info@neworg.com", created.PublicEmail);
         Assert.Equal("https://neworg.com", created.PublicWebsite);
     }
+
+    // ── GetUserDirectory (Phase A: replaces GetAllUsersAsync for org-admin CMS surfaces) ──────
+
+    [Fact]
+    public async Task GetUserDirectory_ActiveMember_ReturnsOtherActiveMembers()
+    {
+        var factory = CreateFactory();
+        var orgId   = Guid.NewGuid();
+        var callerId = Guid.NewGuid();
+        var otherId  = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.AppUsers.Add(new AppUser { Id = callerId, Email = "caller@test.com", UserName = "caller@test.com", DisplayName = "Caller" });
+            db.AppUsers.Add(new AppUser { Id = otherId, Email = "other@test.com", UserName = "other@test.com", DisplayName = "Other Member" });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = callerId,
+                Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = callerId
+            });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = otherId,
+                Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = callerId
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var controller = BuildController(factory, UserPrincipal(callerId));
+        var result = await controller.GetUserDirectory(orgId, default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var entries = Assert.IsAssignableFrom<IEnumerable<OrgUserDirectoryEntry>>(ok.Value).ToList();
+        Assert.Equal(2, entries.Count);
+        Assert.Contains(entries, e => e.Id == callerId && e.DisplayName == "Caller");
+        Assert.Contains(entries, e => e.Id == otherId && e.DisplayName == "Other Member");
+    }
+
+    [Fact]
+    public async Task GetUserDirectory_NotAMember_ReturnsForbid()
+    {
+        // The actual fix under test: a caller who isn't a member of this org — even if they're
+        // an active member of some *other* org — cannot pull this org's member directory.
+        var factory = CreateFactory();
+        var orgId       = Guid.NewGuid();
+        var otherOrgId  = Guid.NewGuid();
+        var callerId    = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.AppUsers.Add(new AppUser { Id = callerId, Email = "caller@test.com", UserName = "caller@test.com" });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = otherOrgId, AppUserId = callerId,
+                Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = callerId
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var controller = BuildController(factory, UserPrincipal(callerId));
+        var result = await controller.GetUserDirectory(orgId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetUserDirectory_InactiveMembership_ReturnsForbid()
+    {
+        var factory = CreateFactory();
+        var orgId    = Guid.NewGuid();
+        var callerId = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.AppUsers.Add(new AppUser { Id = callerId, Email = "caller@test.com", UserName = "caller@test.com" });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = callerId,
+                Role = OrganizationMemberRole.Member, IsActive = false, DateCreated = DateTime.UtcNow, CreatedByAppUserId = callerId
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var controller = BuildController(factory, UserPrincipal(callerId));
+        var result = await controller.GetUserDirectory(orgId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetUserDirectory_ExcludesInactiveMembers()
+    {
+        var factory  = CreateFactory();
+        var orgId    = Guid.NewGuid();
+        var callerId = Guid.NewGuid();
+        var formerMemberId = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.AppUsers.Add(new AppUser { Id = callerId, Email = "caller@test.com", UserName = "caller@test.com", DisplayName = "Caller" });
+            db.AppUsers.Add(new AppUser { Id = formerMemberId, Email = "former@test.com", UserName = "former@test.com", DisplayName = "Former Member" });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = callerId,
+                Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = callerId
+            });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = formerMemberId,
+                Role = OrganizationMemberRole.Member, IsActive = false, DateCreated = DateTime.UtcNow, CreatedByAppUserId = callerId
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var controller = BuildController(factory, UserPrincipal(callerId));
+        var result = await controller.GetUserDirectory(orgId, default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var entries = Assert.IsAssignableFrom<IEnumerable<OrgUserDirectoryEntry>>(ok.Value).ToList();
+        Assert.Single(entries);
+        Assert.DoesNotContain(entries, e => e.Id == formerMemberId);
+    }
 }

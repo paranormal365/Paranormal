@@ -115,6 +115,12 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public async Task<IReadOnlyList<AppUserRecord>> GetAllUsersAsync(CancellationToken token = default)
         => await _api.GetUsersAsync(token);
 
+    public async Task<IReadOnlyList<OrgUserDirectoryItem>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default)
+    {
+        var entries = await _api.GetOrgUserDirectoryAsync(organizationId, token);
+        return entries.Select(e => new OrgUserDirectoryItem(e.Id, e.DisplayName)).ToList();
+    }
+
     public Task<AppUserDetailAdminRecord?> GetUserDetailAsync(Guid userId, CancellationToken token = default)
         => _api.GetAsync<AppUserDetailAdminRecord>($"/api/admin/app-users/{userId}/detail", token);
 
