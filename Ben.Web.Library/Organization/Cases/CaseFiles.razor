@@ -46,7 +46,7 @@ else
                                 <div class="small text-secondary mt-1">@f.Description</div>
                             }
                             <div class="text-muted mt-1" style="font-size:.7rem;">
-                                @FormatSize(f.FileSize) · Added @f.DateCreated.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                                @FormatSize(f.FileSize) · Added @f.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
                             </div>
                             <div @onclick:stopPropagation="true">
                                 <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Comment"

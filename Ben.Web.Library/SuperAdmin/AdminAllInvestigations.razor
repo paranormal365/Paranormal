@@ -34,7 +34,12 @@
                 <GridColumn Field="@nameof(AdminInvestigationSummaryRecord.CaseReference)" Title="Case" Width="120px" />
                 <GridColumn Field="@nameof(AdminInvestigationSummaryRecord.Title)" Title="Investigation" />
                 <GridColumn Field="@nameof(AdminInvestigationSummaryRecord.Status)" Title="Status" Width="130px" />
-                <GridColumn Field="@nameof(AdminInvestigationSummaryRecord.ScheduledDateTime)" Title="Scheduled" DisplayFormat="{0:MMM d, yyyy h:mm tt}" Width="180px" />
+                <GridColumn Field="@nameof(AdminInvestigationSummaryRecord.ScheduledDateTime)" Title="Scheduled" Width="180px">
+                    <Template>
+                        @{ var inv = (AdminInvestigationSummaryRecord)context; }
+                        @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+                    </Template>
+                </GridColumn>
                 <GridCommandColumn Width="90px">
                     <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenCase((AdminInvestigationSummaryRecord)e.Items.First()))">
                         Open

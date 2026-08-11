@@ -40,7 +40,12 @@
                         @c.City, @c.State
                     </Template>
                 </GridColumn>
-                <GridColumn Field="@nameof(AdminCaseSummaryRecord.DateCaseOpened)" Title="Opened" DisplayFormat="{0:MMM d, yyyy}" Width="120px" />
+                <GridColumn Field="@nameof(AdminCaseSummaryRecord.DateCaseOpened)" Title="Opened" Width="120px">
+                    <Template>
+                        @{ var cs = (AdminCaseSummaryRecord)context; }
+                        @cs.DateCaseOpened.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")
+                    </Template>
+                </GridColumn>
                 <GridCommandColumn Width="90px">
                     <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenCase((AdminCaseSummaryRecord)e.Items.First()))">
                         Open

@@ -217,8 +217,11 @@ else
                         </GridColumn>
                         <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.Role)" Title="Role" Width="130px" />
                         <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.IsActive)" Title="Active" Width="70px" />
-                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.DateCreated)" Title="Joined"
-                                    DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.DateCreated)" Title="Joined" Width="110px">
+                            <Template>
+                                @(((OrganizationUserMembershipAdminRecord)context).DateCreated.ToViewerLocalTime(UserState).ToString("yyyy-MM-dd"))
+                            </Template>
+                        </GridColumn>
                         <GridCommandColumn Width="80px">
                             <GridCommandButton Icon="@SvgIcon.Eye"
                                 OnClick="@((GridCommandEventArgs e) => ViewOrganization((OrganizationUserMembershipAdminRecord)e.Items.First()))">

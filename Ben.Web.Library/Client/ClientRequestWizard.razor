@@ -140,7 +140,7 @@
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Birth Year (optional)</label>
                         <TelerikNumericTextBox @bind-Value="@_birthYear"
-                                              Min="1900" Max="@(DateTime.Now.Year)"
+                                              Min="1900" Max="@(UserState.NowInViewerTimeZone().Year)"
                                               Width="100%"
                                               Placeholder="e.g. 1985" />
                         <div class="form-text">Leave blank if you prefer not to share.</div>

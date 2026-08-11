@@ -41,7 +41,7 @@
             <div class="mb-2 d-flex align-items-center gap-2 text-secondary small">
                 <strong>From:</strong> @(_openMessage.AuthorDisplayName ?? "Unknown")
                 <span>·</span>
-                @_openMessage.DateCreated.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                @_openMessage.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
                 @if (_openMessage.IsEncrypted)
                 {
                     <span class="badge bg-secondary ms-1">🔒 Encrypted</span>

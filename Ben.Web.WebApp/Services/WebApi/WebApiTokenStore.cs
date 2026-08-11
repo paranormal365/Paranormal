@@ -21,6 +21,8 @@ public sealed class WebApiTokenStore : IWebApiTokenStore, IBenUserState
 
     public bool IsEntraSession { get; set; }
 
+    public TimeZoneInfo BrowserTimeZone { get; set; } = TimeZoneInfo.Utc;
+
     // IBenUserState (computed)
     bool IBenUserState.IsAuthenticated => !string.IsNullOrWhiteSpace(AccessToken);
 

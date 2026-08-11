@@ -52,13 +52,13 @@
                             </div>
                         }
                         <div class="text-secondary small mt-1">
-                            Opened @c.DateCaseOpened.ToLocalTime().ToString("MMMM d, yyyy")
+                            Opened @c.DateCaseOpened.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy")
                         </div>
                         @if (c.NextInvestigationDate.HasValue)
                         {
                             <div class="small mt-1 text-primary fw-semibold">
                                 <TelerikSvgIcon Icon="@SvgIcon.Calendar" />
-                                Next visit: @c.NextInvestigationDate.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                                Next visit: @c.NextInvestigationDate.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
                             </div>
                         }
                     </div>

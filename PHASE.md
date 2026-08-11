@@ -1,71 +1,47 @@
-# Phase D — Blazor Client Correctness
+# Viewer-Correct Date/Time Display
 
-Branch: `feature/webapp-phase-d-client-correctness`
+Branch: `feature/webapp-viewer-timezone`
 
 ## Why
 
-Phase D closes out the fourth and final tier of this session's WebApi/WebApp audit — client-side
-silent-failure UX patterns in `Ben.Web.Library`/`Ben.Web.WebApp`. Unlike Phases A-C, nothing here is
-a security hole: the bugs are all "the user did something, it silently failed, and nothing told
-them" — a missing-AuthReady race that shows a false "not signed in" screen, mutations whose failure
-path is a no-op, double-submit windows, and one latent same-route navigation gap.
+All dates are stored as UTC. Many Razor components display them via `.ToLocalTime()` — but this is
+server-side Blazor (Interactive Server render mode), so that call converts to the **server's** OS
+timezone, not the viewing browser's. Anyone not in the server's timezone sees wrong times with no
+indication anything is off. An Explore pass confirmed 23 files / 51 call sites, plus two related
+bugs from the same root cause: `DateTime.Now` used for scheduling defaults/comparisons (server-clock
+biased), and several Telerik grid columns bound directly to raw UTC with zero conversion attempted
+at all.
 
-## What shipped
+The fix: detect each viewer's actual browser timezone via JS interop once per circuit, and convert
+every displayed/edited date consistently, per the standing principle that date/time should always
+be shown in the format and timezone the viewer actually expects.
 
-**Missing `AuthReady` await (2 instances).** `MyVideosPage.razor` checked `IsAuthenticated` directly
-in both its top-level markup gate and `OnInitializedAsync`, racing ahead of the async auth-state
-resolution — a hard nav could show "you must be signed in" to a genuinely signed-in user, and even
-once past that render, the project list silently never loaded. Fixed by adding a `_authReady` gate
-(loading spinner until `AuthReady` resolves, mirroring the same-file pattern already used in
-`CaseVideoEditorPage.razor`) and awaiting `AuthReady` in `OnInitializedAsync` behind the established
-`RendererInfo.IsInteractive` guard. `ClientRequestWizard.razor`'s `OnAfterRenderAsync` checked
-`IsAuthenticated` without ever awaiting `AuthReady` in that method — relying on a separate, earlier
-`OnInitializedAsync` await that doesn't always run first — so a hard nav could silently skip loading
-an existing draft for good, since `firstRender` only fires once. Fixed by awaiting `AuthReady`
-directly in `OnAfterRenderAsync` before the check.
+## Approach
 
-**Silent-failure mutations (9 components).** `WebApiClient`'s helpers return `null`/`false` on any
-non-2xx rather than throwing, so "it didn't throw" was never proof of success — several call sites
-treated a null/false result as if nothing happened, with the surrounding UI (dialog, form) closing
-or navigating away regardless:
-- `ClientRequestWizard.razor` — "Save & Exit" navigated away unconditionally even when the save
-  failed; `SaveDraftSilent` now returns success/failure, checked by both `SaveDraft` and
-  `SubmitRequest` (submitting on top of a silently-failed draft update would have transitioned a
-  stale server-side draft instead of what the user actually typed).
-- `OrganizationFiles.razor` — publish/edit/delete dialogs all closed silently on failure with zero
-  feedback; added error toasts to all three.
-- `OrganizationMembershipRequests.razor` — accept/deny silently no-op'd on failure; added error
-  toasts.
-- `MyVideosPage.razor` / `CaseVideoEditorPage.razor` (twins) — delete-project silently cleared
-  `_deleteTarget` with no notification on failure; added error notifications to both copies.
-- `EvidenceVoteWidget.razor` / `CaseVoteWidget.razor` (twins) — three empty `catch { }` blocks each,
-  and neither component had an error field at all; added `_error` (initial load) and `_actionError`
-  (cast/remove vote) fields, both rendered inline.
-- `WsRegionExplorer.razor` — reload-notes, save-edit, and delete-note all silently ignored failure;
-  reused the existing (already-wired-up) `_noteError` field for all three instead of leaving them
-  silent.
+- **Resolve once per circuit, reusing the existing `AuthReady` bootstrap** in `MainLayout.razor`
+  rather than inventing a second readiness gate — a new `window.benGetBrowserTimeZone()` JS function
+  (`Intl.DateTimeFormat().resolvedOptions().timeZone`) is called during the same first-render
+  sequence that already signals `AuthReady`, storing the result on `IBenUserState.BrowserTimeZone`
+  (default `TimeZoneInfo.Utc` until resolved or on failure).
+- **One reusable extension helper**, `DateTimeViewerExtensions` (`ToViewerLocalTime`,
+  `ToUtcFromViewerLocal`, `NowInViewerTimeZone`), used as a mechanical drop-in replacement for
+  `.ToLocalTime()` at display sites.
+- **`DateTime.Now` misuse** splits into two different fixes depending on whether the value round-trips
+  through an editable field (needs the full local↔UTC round trip) or is a pure comparison against a
+  stored UTC value (needs `DateTime.UtcNow`, not a viewer-local conversion).
+- **Raw-UTC grid columns** (`GridColumn DisplayFormat=...`) can't have a conversion injected into a
+  bound format string, so those become `<Template>` blocks, matching the pattern already used for
+  `OrganizationList.razor`'s "Applications" column.
 
-**Double-submit gap.** `OrganizationFiles.razor`'s publish/edit/delete dialog buttons had no busy
-guard, unlike the file's own upload/copy buttons which already disable + relabel during their
-request — added matching `_publishing`/`_savingEdit`/`_deleting` flags to all three.
-
-**Validation.** `MyCaseDetail.razor`'s co-client invite gated only on non-empty; added an
-email-format check (`System.Net.Mail.MailAddress` round-trip) as UX polish — server-side validation
-was already correct.
-
-**Latent same-route navigation gap.** `CaseDetail.razor` only loaded `_case` in
-`OnAfterRenderAsync(firstRender)` and read `InitialTab` in `OnInitialized` — both fire once per
-component instance, so a future same-route link that changes `CaseId` in place (Blazor reuses the
-instance) would have silently kept showing the previous case. Added `OnParametersSetAsync` tracking
-the last-loaded `CaseId`, reloading when it changes, without touching the existing first-render path.
+Explicitly out of scope: `OrganizationView.razor`'s intentional "(server)"-labeled Central-time audit
+timestamps, and `AdminUserDetail.razor`'s editable raw-UTC pickers (SuperAdmin-only raw-data tool —
+left as a documented follow-up rather than risking a round-trip bug there).
 
 ## Verification
 
-Full suite green (1262 total, no change — none of these fixes touch server code covered by unit
-tests). Live interactive verification (the AuthReady hard-nav fix in particular needs a real signed-in
-session to observe) hit this sandbox's known Blazor Server SignalR/circuit-negotiation limitation —
-the page loads and prerenders but the interactive circuit can't connect, so login and true hard-nav
-behavior can't be exercised here. Verified instead via: (1) matching the exact fix shape already
-proven correct elsewhere in this codebase (`MyCases.razor`'s `OnAfterRenderAsync` + `AuthReady`
-pattern, `CaseVideoEditorPage.razor`'s loading-gate pattern), and (2) clean compilation with no new
-warnings.
+- New `DateTimeViewerExtensionsTests` — round-trip conversion across several IANA zones (including a
+  non-hour-aligned offset and a UTC+14 zone), DST gap/overlap cases, `Kind=Unspecified` input.
+- `dotnet build` clean and the full test suite green after each commit.
+- Live-verify a 6-page sample spanning every bug pattern, including the two riskiest cases:
+  `OrgScheduler.razor`'s full picker+grid round trip, and `AdminUserDetail.razor` as a negative
+  control (confirm it's unchanged).

@@ -81,8 +81,12 @@
                             <span class="text-muted small">You</span>
                         </Template>
                     </GridColumn>
-                    <GridColumn Field="@nameof(VideoProjectRecord.DateCreated)" Title="Saved"
-                                DisplayFormat="{0:MMM d, yyyy}" Width="110px" />
+                    <GridColumn Title="Saved" Width="110px">
+                        <Template>
+                            @{ var proj = (VideoProjectRecord)context; }
+                            @proj.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")
+                        </Template>
+                    </GridColumn>
                     <GridColumn Width="160px">
                         <Template>
                             @{ var row2 = (VideoProjectRecord)context; }

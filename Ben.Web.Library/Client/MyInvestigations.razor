@@ -32,7 +32,7 @@
         var upcoming = _items.Where(i => i.Status is InvestigationStatus.Scheduled or InvestigationStatus.InProgress)
                              .OrderBy(i => i.ScheduledDateTime).ToList();
         var past     = _items.Where(i => i.Status is InvestigationStatus.Completed or InvestigationStatus.Cancelled
-                                      || i.ScheduledDateTime < DateTime.Now)
+                                      || i.ScheduledDateTime < DateTime.UtcNow)
                              .OrderByDescending(i => i.ScheduledDateTime).ToList();
 
         @if (upcoming.Count > 0)
@@ -136,10 +136,10 @@
                 </div>
                 <div class="small mt-1">
                     <TelerikSvgIcon Icon="@SvgIcon.Calendar" />
-                    @inv.ScheduledDateTime.ToLocalTime().ToString("ddd MMM d, yyyy h:mm tt")
+                    @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToString("ddd MMM d, yyyy h:mm tt")
                     @if (inv.EndDateTime.HasValue)
                     {
-                        <span class="text-secondary"> – @inv.EndDateTime.Value.ToLocalTime().ToString("h:mm tt")</span>
+                        <span class="text-secondary"> – @inv.EndDateTime.Value.ToViewerLocalTime(UserState).ToString("h:mm tt")</span>
                     }
                 </div>
                 @if (!string.IsNullOrWhiteSpace(inv.Location))
@@ -151,7 +151,7 @@
                 @if (inv.EvidenceDueDate.HasValue)
                 {
                     <div class="text-warning small mt-1">
-                        Evidence due: @inv.EvidenceDueDate.Value.ToLocalTime().ToString("MMM d, yyyy")
+                        Evidence due: @inv.EvidenceDueDate.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")
                     </div>
                 }
             </div>

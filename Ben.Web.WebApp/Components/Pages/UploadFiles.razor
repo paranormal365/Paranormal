@@ -2,6 +2,7 @@
 
 @inject IWebApiClient Api
 @inject IWebApiTokenStore TokenStore
+@inject IBenUserState UserState
 @inject NavigationManager NavManager
 @inject IJSRuntime JS
 
@@ -91,8 +92,11 @@
                     }
                 </Template>
             </GridColumn>
-            <GridColumn Field="@nameof(UploadFileRecord.DateCreated)" Title="Uploaded" Width="140px"
-                        DisplayFormat="{0:yyyy-MM-dd}" />
+            <GridColumn Field="@nameof(UploadFileRecord.DateCreated)" Title="Uploaded" Width="140px">
+                <Template>
+                    @(((UploadFileRecord)context).DateCreated.ToViewerLocalTime(UserState).ToString("yyyy-MM-dd"))
+                </Template>
+            </GridColumn>
             <GridCommandColumn Width="300px">
                 <GridCommandButton Command="Download" Icon="@SvgIcon.Download"
                                    OnClick="@((GridCommandEventArgs e) => DownloadFile((UploadFileRecord)e.Items.First()))">

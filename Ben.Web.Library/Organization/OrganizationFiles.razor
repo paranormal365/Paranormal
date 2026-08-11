@@ -12,6 +12,7 @@
 @page "/organizations/{OrgId:guid}/files"
 @namespace Ben.Web.Library.Organization
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 
 <div class="container-fluid py-3">
     @if (_loading)
@@ -73,9 +74,9 @@
                         @{ var fa = (OrganizationFileRecord)context; }
                         @if (fa.DatePublished.HasValue)
                         {
-                            <span class="small text-success" title="@fa.DatePublished.Value.ToString("g")">
+                            <span class="small text-success" title="@fa.DatePublished.Value.ToViewerLocalTime(UserState).ToString("g")">
                                 @fa.PublishedByDisplayName<br/>
-                                <em class="text-secondary">@fa.DatePublished.Value.ToString("d")</em>
+                                <em class="text-secondary">@fa.DatePublished.Value.ToViewerLocalTime(UserState).ToString("d")</em>
                             </span>
                         }
                         else { <span class="text-secondary small">—</span> }
@@ -143,7 +144,12 @@
                                     </Template>
                                 </GridColumn>
                                 <GridColumn Field="@nameof(OrganizationFileDeleteLogRecord.DeletedByDisplayName)" Title="Deleted By" Width="130px" />
-                                <GridColumn Field="@nameof(OrganizationFileDeleteLogRecord.DateDeleted)" Title="Deleted" DisplayFormat="{0:g}" Width="130px" />
+                                <GridColumn Title="Deleted" Width="130px">
+                                    <Template>
+                                        @{ var log = (OrganizationFileDeleteLogRecord)context; }
+                                        @log.DateDeleted.ToViewerLocalTime(UserState).ToString("g")
+                                    </Template>
+                                </GridColumn>
                             </GridColumns>
                         </TelerikGrid>
                     }

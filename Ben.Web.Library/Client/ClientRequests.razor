@@ -75,7 +75,7 @@
                                 @((MarkupString)TruncateHtml(r.Description, 120))
                             </div>
                         }
-                        <div class="text-secondary small mt-2">Submitted @r.DateCreated.ToLocalTime().ToString("MMM d, yyyy")</div>
+                        <div class="text-secondary small mt-2">Submitted @r.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")</div>
                     </div>
                 </div>
             }
