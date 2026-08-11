@@ -64,7 +64,7 @@
                     <TelerikCalendar Value="@_selectedDate"
                                      ValueChanged="@((DateTime d) => _selectedDate = d)"
                                      Min="@_case.DateCaseOpened.ToViewerLocalTime(UserState).Date"
-                                     Max="@(_case.DateCaseClosed?.ToViewerLocalTime(UserState).Date ?? DateTime.Today)"
+                                     Max="@(_case.DateCaseClosed?.ToViewerLocalTime(UserState).Date ?? UserState.NowInViewerTimeZone().Date)"
                                      ShowOtherMonthDays="false">
                     </TelerikCalendar>
                 </div>
