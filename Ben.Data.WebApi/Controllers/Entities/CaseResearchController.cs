@@ -25,6 +25,7 @@ public sealed class CaseResearchController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var entries = await db.CaseResearchEntries.AsNoTracking()
             .Include(e => e.UploadFile)
@@ -42,7 +43,7 @@ public sealed class CaseResearchController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
-        if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct)) return NotFound();
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var maxOrder = await db.CaseResearchEntries.Where(e => e.CaseId == caseId).MaxAsync(e => (int?)e.SortOrder, ct) ?? 0;
         var entry = new CaseResearchEntry
@@ -68,7 +69,7 @@ public sealed class CaseResearchController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
-        if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct)) return NotFound();
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         using var ms = new MemoryStream();
         await file.CopyToAsync(ms, ct);
@@ -113,6 +114,7 @@ public sealed class CaseResearchController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var entry = await db.CaseResearchEntries.Include(e => e.UploadFile)
             .FirstOrDefaultAsync(e => e.Id == entryId && e.CaseId == caseId, ct);
@@ -133,6 +135,7 @@ public sealed class CaseResearchController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var entry = await db.CaseResearchEntries.Include(e => e.UploadFile)
             .FirstOrDefaultAsync(e => e.Id == entryId && e.CaseId == caseId, ct);

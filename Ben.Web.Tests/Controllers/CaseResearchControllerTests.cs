@@ -234,4 +234,37 @@ public class CaseResearchControllerTests
 
         Assert.IsType<ForbidResult>(result);
     }
+
+    // ── Cross-org chain (Phase B) ────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetAllUpdateDelete_CaseBelongsToDifferentOrg_ReturnsNotFound()
+    {
+        // The core of the fix: GetAll/Update/Delete checked org membership but never that caseId
+        // actually belonged to the route orgId — a member of their OWN org could reach another
+        // org's research entries just by knowing the caseId/entryId.
+        var (factory, victimOrgId, victimCaseId, victimUserId) = await SeedAsync();
+        var victim  = BuildController(factory, victimUserId);
+        var created = await victim.Create(victimOrgId, victimCaseId,
+            new UpsertResearchRequest(CaseResearchType.Note, "Private", "Secret", null), default);
+        var entryId = ((CaseResearchEntryDto)((OkObjectResult)created.Result!).Value!).Id;
+
+        var attackerOrgId = Guid.NewGuid();
+        var attackerId    = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization { Id = attackerOrgId, Name = "Attacker Org", UrlName = "attacker", DateCreated = DateTime.UtcNow, CreatedByAppUserId = attackerId });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = attackerOrgId, AppUserId = attackerId, Role = OrganizationMemberRole.Manager, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = attackerId });
+            await db.SaveChangesAsync();
+        }
+        var attacker = BuildController(factory, attackerId);
+
+        Assert.IsType<NotFoundResult>((await attacker.GetAll(attackerOrgId, victimCaseId, default)).Result);
+        Assert.IsType<NotFoundResult>((await attacker.Update(attackerOrgId, victimCaseId, entryId,
+            new UpsertResearchRequest(CaseResearchType.Note, "Hijacked", null, null), default)).Result);
+        Assert.IsType<NotFoundResult>(await attacker.Delete(attackerOrgId, victimCaseId, entryId, default));
+
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        Assert.True(await verifyDb.CaseResearchEntries.AnyAsync(e => e.Id == entryId && e.Title == "Private"));
+    }
 }

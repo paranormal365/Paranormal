@@ -28,6 +28,7 @@ public sealed class CaseTransferController : BenControllerBase
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var logs = await db.CaseTransferLogs.AsNoTracking()
             .Include(l => l.FromOrganization).Include(l => l.ToOrganization).Include(l => l.ProposedByAppUser)
             .Where(l => l.CaseId == caseId)
@@ -147,8 +148,7 @@ public sealed class CaseTransferController : BenControllerBase
         if (User.IsInRole(RoleNames.SuperAdmin)) return true;
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        return await db.OrganizationUserMemberships.AnyAsync(
-            m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
+        return await FileAudienceAccess.IsOrgMemberAsync(db, orgId, userId, ct);
     }
 
     private async Task<bool> IsOrgAdminAsync(Guid orgId, CancellationToken ct)

@@ -376,6 +376,7 @@ public sealed class CaseController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var entry = await db.CaseTimelineEntries
             .Include(e => e.ExperienceTypes)
             .FirstOrDefaultAsync(e => e.Id == entryId && e.CaseId == caseId, ct);
@@ -419,6 +420,7 @@ public sealed class CaseController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var entry = await db.CaseTimelineEntries
             .FirstOrDefaultAsync(e => e.Id == entryId && e.CaseId == caseId, ct);
         if (entry is null) return NotFound();

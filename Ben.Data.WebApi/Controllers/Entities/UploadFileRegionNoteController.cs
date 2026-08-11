@@ -8,7 +8,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
-/// <summary>CRUD for region notes attached to an UploadFile.</summary>
+/// <summary>
+/// CRUD for region notes attached to an UploadFile.
+/// </summary>
+/// <remarks>
+/// Previously none of these five actions tied the caller to the file at all — any authenticated
+/// user could read, add, edit, or delete region notes on any file, and <c>Delete</c> didn't even
+/// resolve the caller's identity for authorization (only for the audit call). Reads and
+/// <c>Create</c> now require <see cref="FileAudienceAccess.CanViewFileAsync"/> (the same
+/// visibility check used elsewhere in the app); <c>Update</c>/<c>Delete</c> additionally require
+/// the caller be the note's own author, the file's owner, or SuperAdmin.
+/// </remarks>
 [ApiController]
 [Route("api/upload-files/{fileId:guid}/region-notes")]
 [Authorize]
@@ -29,7 +39,10 @@ public sealed class UploadFileRegionNoteController : BenControllerBase
     public async Task<ActionResult<IEnumerable<UploadFileRegionNoteRecord>>> GetAll(
         Guid fileId, CancellationToken ct)
     {
+        var userId = GetCurrentUserIdOrThrow();
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, userId, ct)) return Forbid();
+
         var notes = await db.UploadFileRegionNotes
             .AsNoTracking()
             .Where(n => n.UploadFileId == fileId)
@@ -42,7 +55,10 @@ public sealed class UploadFileRegionNoteController : BenControllerBase
     public async Task<ActionResult<UploadFileRegionNoteRecord>> GetById(
         Guid fileId, Guid noteId, CancellationToken ct)
     {
+        var userId = GetCurrentUserIdOrThrow();
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, userId, ct)) return Forbid();
+
         var note = await db.UploadFileRegionNotes.AsNoTracking()
             .FirstOrDefaultAsync(n => n.Id == noteId && n.UploadFileId == fileId, ct);
         if (note is null) return NotFound();
@@ -55,12 +71,11 @@ public sealed class UploadFileRegionNoteController : BenControllerBase
         [FromBody] CreateRegionNoteRequest request,
         CancellationToken ct)
     {
-        var userId = GetCurrentUserId();
-        if (userId == Guid.Empty) return Unauthorized();
-
+        var userId = GetCurrentUserIdOrThrow();
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         if (!await db.UploadFiles.AnyAsync(f => f.Id == fileId, ct))
             return NotFound("File not found.");
+        if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, userId, ct)) return Forbid();
 
         var entity = new UploadFileRegionNote
         {
@@ -88,11 +103,13 @@ public sealed class UploadFileRegionNoteController : BenControllerBase
         [FromBody] UpdateRegionNoteRequest request,
         CancellationToken ct)
     {
-        var userId = GetCurrentUserId();
+        var userId = GetCurrentUserIdOrThrow();
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         var before = await db.UploadFileRegionNotes.AsNoTracking()
             .FirstOrDefaultAsync(n => n.Id == noteId && n.UploadFileId == fileId, ct);
         if (before is null) return NotFound();
+        if (!await CanModifyNoteAsync(db, fileId, before.CreatedByAppUserId, userId, ct)) return Forbid();
+
         var entity = await db.UploadFileRegionNotes
             .FirstOrDefaultAsync(n => n.Id == noteId && n.UploadFileId == fileId, ct);
 
@@ -100,21 +117,35 @@ public sealed class UploadFileRegionNoteController : BenControllerBase
         entity.NoteHtml           = request.NoteHtml;
         entity.IsPublic           = request.IsPublic;
         entity.DateUpdated        = DateTime.UtcNow;
-        entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
+        entity.UpdatedByAppUserId = userId;
 
-        await db.SaveChangesAsync(ct);        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileRegionNote), noteId, before, entity, userId, AppSources.WebApi, ct));        return Ok(_mapper.Map<UploadFileRegionNoteRecord>(entity));
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileRegionNote), noteId, before, entity, userId, AppSources.WebApi, ct));
+        return Ok(_mapper.Map<UploadFileRegionNoteRecord>(entity));
     }
 
     [HttpDelete("{noteId:guid}")]
     public async Task<IActionResult> Delete(Guid fileId, Guid noteId, CancellationToken ct)
     {
+        var userId = GetCurrentUserIdOrThrow();
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         var entity = await db.UploadFileRegionNotes
             .FirstOrDefaultAsync(n => n.Id == noteId && n.UploadFileId == fileId, ct);
         if (entity is null) return NotFound();
+        if (!await CanModifyNoteAsync(db, fileId, entity.CreatedByAppUserId, userId, ct)) return Forbid();
+
         db.UploadFileRegionNotes.Remove(entity);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFileRegionNote), noteId, entity, GetCurrentUserId(), AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFileRegionNote), noteId, entity, userId, AppSources.WebApi, ct));
         return NoContent();
+    }
+
+    /// <summary>The note's own author, the file's owner, or SuperAdmin.</summary>
+    private async Task<bool> CanModifyNoteAsync(BenDataContext db, Guid fileId, Guid noteAuthorId, Guid userId, CancellationToken ct)
+    {
+        if (noteAuthorId == userId || User.IsInRole(RoleNames.SuperAdmin)) return true;
+        var fileOwnerId = await db.UploadFiles.AsNoTracking()
+            .Where(f => f.Id == fileId).Select(f => f.AppUserId).FirstOrDefaultAsync(ct);
+        return fileOwnerId == userId;
     }
 }

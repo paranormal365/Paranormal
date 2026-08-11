@@ -76,12 +76,15 @@ public sealed class OrgMessageController : BenControllerBase
         return Ok(_mapper.Map<IEnumerable<OrgMessageRecord>>(messages));
     }
 
-    /// <summary>Gets a single message + increments ViewCount and records the view.</summary>
+    /// <summary>Gets a single message + increments ViewCount and records the view. Visible to the
+    /// message's author, a recipient, or (for the PublicFeed channel) anyone — the same scoping
+    /// <see cref="GetInbox"/>/<see cref="GetSent"/> already apply, plus the channel's own
+    /// <c>IsPublic</c> flag.</summary>
     [HttpGet("{messageId:guid}")]
     public async Task<ActionResult<OrgMessageRecord>> GetById(
         Guid orgId, Guid messageId, CancellationToken ct)
     {
-        var userId = GetCurrentUserId();
+        var userId = GetCurrentUserIdOrThrow();
         await using var db = await _db.CreateDbContextAsync(ct);
         var message = await db.OrgMessages
             .Include(m => m.AuthorAppUser)
@@ -89,6 +92,11 @@ public sealed class OrgMessageController : BenControllerBase
             .Include(m => m.Recipients)
             .FirstOrDefaultAsync(m => m.Id == messageId && m.OrganizationId == orgId, ct);
         if (message is null) return NotFound();
+
+        var isRecipient = message.Recipients.Any(r => r.RecipientAppUserId == userId);
+        var canView = message.IsPublic || message.AuthorAppUserId == userId || isRecipient
+                      || User.IsInRole(RoleNames.SuperAdmin);
+        if (!canView) return Forbid();
 
         // Record view if not already recorded
         var alreadyViewed = await db.OrgMessageViews.AnyAsync(

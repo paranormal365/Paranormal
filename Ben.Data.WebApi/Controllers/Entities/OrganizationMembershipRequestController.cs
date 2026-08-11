@@ -408,6 +408,10 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
             if (!ok) return Forbid();
         }
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        if (!await db.OrganizationMembershipRequests.AsNoTracking()
+                .AnyAsync(r => r.Id == id && r.OrganizationId == orgId, ct))
+            return NotFound();
+
         var votes = await db.MembershipReviewVotes
             .AsNoTracking()
             .Include(v => v.VoterAppUser)

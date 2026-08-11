@@ -307,6 +307,40 @@ public class CaseControllerTests
         Assert.IsType<ForbidResult>(await member.DeleteTimelineEntry(orgId, caseId, entryId, default));
     }
 
+    [Fact]
+    public async Task UpdateTimelineEntry_CaseBelongsToDifferentOrg_ReturnsNotFound()
+    {
+        // The core of the fix: neither action verified caseId belonged to the route orgId at
+        // all — an org admin of THEIR OWN org could edit/delete another org's timeline entries
+        // just by knowing the entryId, since entry.AuthorAppUserId != userId always falls through
+        // to IsOrgAdminOrSuperAsync(orgId) — which only checks the CALLER's own org.
+        var (factory, victimOrgId, victimAdminId) = await SeedAsync();
+        var victim  = Build(factory, victimAdminId);
+        var caseId  = ((CaseRecord)((CreatedAtActionResult)(await victim.Create(victimOrgId, MakeCreateRequest(), default)).Result!).Value!).Id;
+        var entryId = ((CaseTimelineEntryRecord)((CreatedAtActionResult)(await victim.AddTimelineEntry(victimOrgId, caseId, new UpsertTimelineEntryRequest(CaseTimelineEntryType.Evidence, null, "Private", null, false, []), default)).Result!).Value!).Id;
+
+        var (attackerFactory, attackerOrgId, attackerId) = (factory, Guid.NewGuid(), Guid.NewGuid());
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser { Id = attackerId, UserName = "atk@t.com", NormalizedUserName = "ATK@T.COM", Email = "atk@t.com", NormalizedEmail = "ATK@T.COM", DateCreated = DateTime.UtcNow });
+            db.Organizations.Add(new Organization { Id = attackerOrgId, Name = "Attacker Org", UrlName = "attacker", DateCreated = DateTime.UtcNow, CreatedByAppUserId = attackerId });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = attackerOrgId, AppUserId = attackerId, Role = OrganizationMemberRole.Owner, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = attackerId });
+            await db.SaveChangesAsync();
+        }
+        var attacker = Build(attackerFactory, attackerId);
+
+        var updateResult = await attacker.UpdateTimelineEntry(attackerOrgId, caseId, entryId,
+            new UpsertTimelineEntryRequest(CaseTimelineEntryType.Evidence, null, "Hijacked", null, false, []), default);
+        Assert.IsType<NotFoundResult>(updateResult.Result);
+
+        var deleteResult = await attacker.DeleteTimelineEntry(attackerOrgId, caseId, entryId, default);
+        Assert.IsType<NotFoundResult>(deleteResult);
+
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        var stillThere = await verifyDb.CaseTimelineEntries.FirstAsync(e => e.Id == entryId);
+        Assert.Equal("Private", stillThere.Title);
+    }
+
     // ── Pending requests ──────────────────────────────────────────────────────
 
     [Fact]

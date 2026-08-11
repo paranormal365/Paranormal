@@ -90,8 +90,7 @@ public sealed class OrgCalendarEventTypeController : BenControllerBase
         if (User.IsInRole(RoleNames.SuperAdmin)) return true;
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        return await db.OrganizationUserMemberships.AnyAsync(
-            m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
+        return await FileAudienceAccess.IsOrgMemberAsync(db, orgId, userId, ct);
     }
 
     private async Task<bool> IsOrgAdminAsync(Guid orgId, CancellationToken ct)
@@ -222,6 +221,8 @@ public sealed class OrgCalendarEventController : BenControllerBase
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await db.OrgCalendarEvents.AnyAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct))
+            return NotFound();
         var attendees = await db.OrgCalendarEventAttendees.AsNoTracking()
             .Include(a => a.AppUser)
             .Where(a => a.OrgCalendarEventId == eventId)
@@ -291,8 +292,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         if (User.IsInRole(RoleNames.SuperAdmin)) return true;
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        return await db.OrganizationUserMemberships.AnyAsync(
-            m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
+        return await FileAudienceAccess.IsOrgMemberAsync(db, orgId, userId, ct);
     }
 
     private async Task<bool> IsOrgAdminAsync(Guid orgId, CancellationToken ct)

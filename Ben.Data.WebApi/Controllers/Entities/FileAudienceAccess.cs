@@ -139,6 +139,37 @@ public static class FileAudienceAccess
                || await db.VideoProjects.AsNoTracking()
                    .AnyAsync(p => p.PublishedUploadFileId == uploadFileId && p.CaseId.HasValue && caseIds.Contains(p.CaseId.Value), ct);
     }
+
+    /// <summary>
+    /// True if <paramref name="userId"/> is an active admin-tier (Owner or Administrator) member
+    /// of <paramref name="organizationId"/>. Shared helper for the several Phase-B controllers
+    /// that gate an org-scoped management action on "admin of this org" — mirrors the same
+    /// <c>Role &lt;= OrganizationMemberRole.Administrator</c> tiering <see cref="GetMembershipAsync"/>
+    /// already uses for the org-comment audience (line ~65 of this file).
+    /// </summary>
+    public static async Task<bool> IsOrgAdminAsync(
+        BenDataContext db, Guid organizationId, Guid userId, CancellationToken ct)
+    {
+        return await db.OrganizationUserMemberships.AsNoTracking()
+            .AnyAsync(m => m.OrganizationId == organizationId && m.AppUserId == userId && m.IsActive
+                        && m.Role <= OrganizationMemberRole.Administrator, ct);
+    }
+
+    /// <summary>
+    /// True if <paramref name="userId"/> is an active member (any role) of
+    /// <paramref name="organizationId"/>. The DB-query half of the "is org member" check five
+    /// controllers previously each hand-rolled their own private copy of
+    /// (<c>CaseNoteController</c>, <c>OrgCalendarController</c> ×2, <c>InvestigationController</c>,
+    /// <c>CaseTransferController</c>) — consolidated here. Callers still do their own
+    /// <c>User.IsInRole(RoleNames.SuperAdmin)</c> bypass check first, since that reads the
+    /// controller's own <c>ClaimsPrincipal</c> rather than the database.
+    /// </summary>
+    public static async Task<bool> IsOrgMemberAsync(
+        BenDataContext db, Guid organizationId, Guid userId, CancellationToken ct)
+    {
+        return await db.OrganizationUserMemberships.AsNoTracking()
+            .AnyAsync(m => m.OrganizationId == organizationId && m.AppUserId == userId && m.IsActive, ct);
+    }
 }
 
 /// <summary>Snapshot of which audiences a user currently belongs to for one file.</summary>

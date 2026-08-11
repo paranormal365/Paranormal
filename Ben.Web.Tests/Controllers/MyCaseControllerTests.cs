@@ -169,6 +169,7 @@ public class MyCaseControllerTests
         var coClientId = Guid.NewGuid();
         await using (var db = await factory.CreateDbContextAsync())
         {
+            db.Users.Add(new AppUser { Id = coClientId, UserName = "co@t.com", NormalizedUserName = "CO@T.COM", Email = "co@t.com", NormalizedEmail = "CO@T.COM", DateCreated = DateTime.UtcNow });
             db.CaseClientAccesses.Add(new CaseClientAccess
             {
                 Id = Guid.NewGuid(), CaseId = caseId, AppUserId = coClientId,
@@ -203,6 +204,7 @@ public class MyCaseControllerTests
         var coClientId = Guid.NewGuid();
         await using (var db = await factory.CreateDbContextAsync())
         {
+            db.Users.Add(new AppUser { Id = coClientId, UserName = "co@t.com", NormalizedUserName = "CO@T.COM", Email = "co@t.com", NormalizedEmail = "CO@T.COM", DateCreated = DateTime.UtcNow });
             db.CaseClientAccesses.Add(new CaseClientAccess
             {
                 Id = Guid.NewGuid(), CaseId = caseId, AppUserId = coClientId,
@@ -225,6 +227,7 @@ public class MyCaseControllerTests
         var coClientId = Guid.NewGuid();
         await using (var db = await factory.CreateDbContextAsync())
         {
+            db.Users.Add(new AppUser { Id = coClientId, UserName = "co@t.com", NormalizedUserName = "CO@T.COM", Email = "co@t.com", NormalizedEmail = "CO@T.COM", DateCreated = DateTime.UtcNow });
             db.CaseClientAccesses.Add(new CaseClientAccess
             {
                 Id = Guid.NewGuid(), CaseId = caseId, AppUserId = coClientId,
@@ -262,6 +265,32 @@ public class MyCaseControllerTests
         Assert.IsType<NotFoundResult>((await ctrl.LogOccurrence(caseId, new LogOccurrenceRequest(null, "X", null), default)).Result);
     }
 
+    [Fact]
+    public async Task LogOccurrence_CoClient_CreatesEntry()
+    {
+        // Regression: LogOccurrence previously checked only ClientRequest.AppUserId (primary
+        // client), while its own IsCaseClient helper (used elsewhere in this controller) already
+        // supported co-clients — a real co-client got NotFound trying to log an occurrence.
+        var (factory, caseId, _, _) = await SeedClientCaseAsync();
+        var coClientId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser { Id = coClientId, UserName = "co@t.com", NormalizedUserName = "CO@T.COM", Email = "co@t.com", NormalizedEmail = "CO@T.COM", DateCreated = DateTime.UtcNow });
+            db.CaseClientAccesses.Add(new CaseClientAccess
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, AppUserId = coClientId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = coClientId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl = Build(factory, coClientId);
+        var result = await ctrl.LogOccurrence(caseId, new LogOccurrenceRequest(null, "Co-client report", null), default);
+
+        var ok  = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal("Co-client report", Assert.IsType<CaseTimelineEntryRecord>(ok.Value).Title);
+    }
+
     // ── UpdateOccurrence ──────────────────────────────────────────────────────
 
     [Fact]
@@ -288,6 +317,34 @@ public class MyCaseControllerTests
         Assert.IsType<NotFoundResult>((await other.UpdateOccurrence(caseId, entry.Id, new LogOccurrenceRequest(null, "Hack", null), default)).Result);
     }
 
+    [Fact]
+    public async Task UpdateOccurrence_CoClient_UpdatesOwnEntry()
+    {
+        // Regression: entry.Case.ClientRequest?.AppUserId != userId rejected any caller who
+        // wasn't the primary client — even though the query filter already guaranteed the
+        // caller was the entry's own author (AuthorAppUserId == userId), so a co-client editing
+        // an occurrence they themselves logged was wrongly Forbidden.
+        var (factory, caseId, _, _) = await SeedClientCaseAsync();
+        var coClientId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser { Id = coClientId, UserName = "co@t.com", NormalizedUserName = "CO@T.COM", Email = "co@t.com", NormalizedEmail = "CO@T.COM", DateCreated = DateTime.UtcNow });
+            db.CaseClientAccesses.Add(new CaseClientAccess
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, AppUserId = coClientId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = coClientId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var ctrl  = Build(factory, coClientId);
+        var entry = (CaseTimelineEntryRecord)((OkObjectResult)(await ctrl.LogOccurrence(caseId, new LogOccurrenceRequest(null, "Original", "Body"), default)).Result!).Value!;
+
+        var result = await ctrl.UpdateOccurrence(caseId, entry.Id, new LogOccurrenceRequest(null, "Updated", "New body"), default);
+
+        var ok  = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal("Updated", Assert.IsType<CaseTimelineEntryRecord>(ok.Value).Title);
+    }
+
     // ── DeleteOccurrence ──────────────────────────────────────────────────────
 
     [Fact]
@@ -301,6 +358,30 @@ public class MyCaseControllerTests
 
         await using var db = await factory.CreateDbContextAsync();
         Assert.False(await db.CaseTimelineEntries.AnyAsync(e => e.Id == entry.Id));
+    }
+
+    [Fact]
+    public async Task DeleteOccurrence_CoClient_DeletesOwnEntry()
+    {
+        var (factory, caseId, _, _) = await SeedClientCaseAsync();
+        var coClientId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser { Id = coClientId, UserName = "co@t.com", NormalizedUserName = "CO@T.COM", Email = "co@t.com", NormalizedEmail = "CO@T.COM", DateCreated = DateTime.UtcNow });
+            db.CaseClientAccesses.Add(new CaseClientAccess
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, AppUserId = coClientId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = coClientId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var ctrl  = Build(factory, coClientId);
+        var entry = (CaseTimelineEntryRecord)((OkObjectResult)(await ctrl.LogOccurrence(caseId, new LogOccurrenceRequest(null, "X", null), default)).Result!).Value!;
+
+        Assert.IsType<NoContentResult>(await ctrl.DeleteOccurrence(caseId, entry.Id, default));
+
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        Assert.False(await verifyDb.CaseTimelineEntries.AnyAsync(e => e.Id == entry.Id));
     }
 
     // ── Schedule proposals ────────────────────────────────────────────────────
