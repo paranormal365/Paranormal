@@ -1,4 +1,5 @@
 @page "/admin/lookup-types"
+@using Ben.Web.Library.Shared
 
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -165,19 +166,10 @@
 </TelerikDialog>
 
 @* ── Delete confirm dialog ────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showDeleteDialog"
-               Title="Confirm Delete"
-               Width="400px">
-    <DialogContent>
-        <p>Delete <strong>@_deletingItem?.Name</strong>? This cannot be undone.</p>
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                       OnClick="ExecuteDeleteAsync">Delete</TelerikButton>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="@(() => _showDeleteDialog = false)">Cancel</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+<ConfirmDialog @bind-Visible="@_showDeleteDialog" Title="Confirm Delete" Width="400px"
+               OnConfirm="ExecuteDeleteAsync" OnCancel="@(() => _deletingItem = null)">
+    <p>Delete <strong>@_deletingItem?.Name</strong>? This cannot be undone.</p>
+</ConfirmDialog>
 @code {
 
     // ── Family catalog ────────────────────────────────────────────────────────

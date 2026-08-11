@@ -1,4 +1,5 @@
 @page "/organizations"
+@using Ben.Web.Library.Shared
 
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -133,25 +134,18 @@
 </div>
 
 @* ── Delete Confirmation ── *@
-<TelerikDialog @bind-Visible="@_showDeleteDialog"
+<ConfirmDialog @bind-Visible="@_showDeleteDialog"
                Title="Delete Organization"
-               Width="400px">
-    <DialogContent>
-        @if (_pendingDelete is not null)
-        {
-            <p>Permanently delete <strong>@_pendingDelete.Name</strong>?</p>
-            <p class="text-secondary small mb-0">This cannot be undone. All associated data will be removed.</p>
-        }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="CancelDelete">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                       OnClick="ConfirmDelete"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Deleting…" : "Delete")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+               Busy="@_isBusy"
+               BusyText="Deleting…"
+               OnConfirm="ConfirmDelete"
+               OnCancel="@(() => _pendingDelete = null)">
+    @if (_pendingDelete is not null)
+    {
+        <p>Permanently delete <strong>@_pendingDelete.Name</strong>?</p>
+        <p class="text-secondary small mb-0">This cannot be undone. All associated data will be removed.</p>
+    }
+</ConfirmDialog>
 
 @code {
     private IReadOnlyList<OrganizationListItemResponse>? _orgs;
@@ -186,12 +180,6 @@
         _successMessage   = null;
         _pendingDelete    = org;
         _showDeleteDialog = true;
-    }
-
-    private void CancelDelete()
-    {
-        _showDeleteDialog = false;
-        _pendingDelete    = null;
     }
 
     private async Task ConfirmDelete()
