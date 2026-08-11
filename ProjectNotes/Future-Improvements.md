@@ -1591,3 +1591,49 @@ carefully enough this session to be certain it's the same root cause rather than
 > "default position wrong on first render" bugs), and whether anything re-triggers that same
 > computation later. Workaround used for testing: `document.querySelector('.bv-media-panel-window').style.left/top`
 > via JS to force it back on-screen.
+
+---
+
+## 54. Member photos (not started)
+
+Let members add a profile photo, with a per-photo choice of visibility: public (visible to anyone,
+e.g. on a public case page or org roster) or members-only (visible only to other active members of
+the same organization).
+
+> Raised 2026-08-11 alongside item #55 (equipment tracking) — Ben WebApi/WebApp, not Ben.Video.Editor.
+> Not scoped: needs a storage decision (reuse the existing `UploadFile`/Media Library pipeline
+> rather than a bespoke upload path — item #6 already built a general-purpose, audience-aware file
+> system with public/org/private visibility tiers via `FileAudienceAccess`, which is very likely the
+> right mechanism to reuse here rather than inventing a second one), plus a profile-photo field on
+> `AppUser` or a dedicated join, and UI for setting/changing the visibility choice.
+
+## 55. Equipment inventory & checkout tracking (not started)
+
+Two related but distinct systems:
+
+**Personal equipment list** — any user with an account can log their own paranormal-investigation
+equipment: photos, brand, model #, serial #, display name, and acquisition date. Entries are
+categorized (e.g. by equipment type/brand/model), and the catalog of brands/models that accumulates
+as users add gear becomes browsable/searchable by anyone — but each individual entry's *ownership*
+(whose it is) and *serial number* stay private to the owner. A user can optionally share their own
+equipment list with a specific organization so fellow members can see what gear is available for an
+investigation.
+
+**Organization-owned equipment** — a separate but similar catalog for gear the org itself owns
+(same category/brand/model/serial/photo shape). For org-owned items, the org can track who
+currently has a given piece, and support a checkout/loan workflow: members can request to check
+out equipment, a new org-creatable role called **Equipment Management** (using the existing
+org-roles/permissions system — see `OrgRolesManager`) manages approvals and hand-offs, and the
+system tracks who has it now, when it was last serviced, and any noted defects. Checkouts can also
+be logged against a specific investigation, so it's recorded which gear was actually in use on a
+given visit.
+
+> Raised 2026-08-11 alongside item #54 (member photos) — Ben WebApi/WebApp, not Ben.Video.Editor.
+> Not scoped: this is the biggest item in the backlog by far — needs new entities for equipment
+> items, categories/brand-model taxonomy, ownership + serial-number field-level privacy (a
+> narrower, per-field version of what item #54 needs at the record level), a checkout/loan state
+> machine (requested → approved → checked out → returned, plus condition/defect notes and a
+> new "Equipment Management" org role wired into the existing `OrganizationSecurityService`
+> role-hierarchy model from Phase A), and a link from a checkout record to an `Investigation`.
+> Worth splitting into its own multi-phase plan (personal list first, sharing-to-org second,
+> org-owned + checkout workflow third) rather than attempting as one piece, given the scope.
