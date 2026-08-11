@@ -54,8 +54,8 @@
                 </div>
             </div>
             <div class="d-flex gap-2">
-                <span class="badge fs-6 @CaseList.StatusBadgeClass(_case.Status)">
-                    @CaseList.StatusLabel(_case.Status)
+                <span class="badge fs-6 @_case.Status.BadgeClass()">
+                    @_case.Status.Label()
                 </span>
                 <TelerikButton Size="@ThemeConstants.Button.Size.Small"
                                FillMode="@ThemeConstants.Button.FillMode.Outline"
@@ -284,7 +284,7 @@
 
     private static readonly List<StatusOption> _statusOptions = Enum
         .GetValues<CaseStatus>()
-        .Select(s => new StatusOption(s, CaseList.StatusLabel(s)))
+        .Select(s => new StatusOption(s, s.Label()))
         .ToList();
 
     private Guid _loadedCaseId;

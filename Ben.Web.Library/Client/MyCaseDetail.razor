@@ -34,7 +34,7 @@
             <a href="/my-cases" class="text-secondary small">← My Cases</a>
             <div class="d-flex align-items-center gap-2 mt-1">
                 <span class="font-monospace text-muted">@_case.CaseReference</span>
-                <span class="badge @StatusBadge(_case.Status)">@StatusLabel(_case.Status)</span>
+                <span class="badge @_case.Status.BadgeClass()">@_case.Status.Label()</span>
             </div>
             <h3 class="mb-0 mt-1">@_case.Title</h3>
             <div class="text-secondary small">@_case.City, @_case.State · Opened @_case.DateCaseOpened.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy")</div>
@@ -761,27 +761,6 @@
         catch { _error = "Delete failed."; }
         finally { _isBusy = false; }
     }
-
-    private static string StatusBadge(CaseStatus s) => s switch
-    {
-        CaseStatus.Accepted  => "bg-primary",
-        CaseStatus.Active    => "bg-success",
-        CaseStatus.Public    => "bg-info text-dark",
-        CaseStatus.Haunted   => "bg-warning text-dark",
-        CaseStatus.Closed    => "bg-dark",
-        _                    => "bg-secondary",
-    };
-
-    private static string StatusLabel(CaseStatus s) => s switch
-    {
-        CaseStatus.Accepted    => "Accepted",
-        CaseStatus.Active      => "Active",
-        CaseStatus.Public      => "Public",
-        CaseStatus.Haunted     => "Haunted",
-        CaseStatus.Closed      => "Closed",
-        CaseStatus.Transferred => "Transferred",
-        _                      => s.ToString(),
-    };
 
     private static string InvStatusBadge(InvestigationStatus s) => s switch
     {
