@@ -6,6 +6,7 @@
 @inject IWebApiClient WebApiClient
 @inject IWebApiTokenStore TokenStore
 @inject IWebApiAuthService AuthService
+@inject IJSRuntime JS
 @inject ProtectedLocalStorage LocalStorage
 @inject EntraTokenHolder EntraTokenHolder
 @inject PersistentComponentState AppState
@@ -154,6 +155,14 @@
                 {
                     await RefreshPendingRequestCountAsync();
                 }
+
+                try
+                {
+                    var tzId = await JS.InvokeAsync<string?>("benGetBrowserTimeZone");
+                    if (!string.IsNullOrWhiteSpace(tzId) && TokenStore is WebApiTokenStore concreteStore)
+                        concreteStore.BrowserTimeZone = TimeZoneInfo.FindSystemTimeZoneById(tzId);
+                }
+                catch { /* JS interop unavailable, or an IANA id .NET's ICU doesn't recognize — fall back to UTC */ }
             }
             finally
             {

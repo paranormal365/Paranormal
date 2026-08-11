@@ -37,4 +37,12 @@ public interface IBenUserState
     /// or OnAfterRenderAsync(firstRender).
     /// </summary>
     Task AuthReady { get; }
+
+    /// <summary>
+    /// The viewer's browser-resolved IANA timezone, populated once via JS interop during
+    /// MainLayout's first-render bootstrap (the same sequence that signals <see cref="AuthReady"/>).
+    /// Defaults to UTC until resolved, or if resolution fails — components should await
+    /// <see cref="AuthReady"/> before reading this, exactly as they already do for auth state.
+    /// </summary>
+    TimeZoneInfo BrowserTimeZone { get; }
 }
