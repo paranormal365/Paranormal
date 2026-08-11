@@ -88,8 +88,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (!RendererInfo.IsInteractive) return;
-        await UserState.AuthReady;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated)
         {
             NavManager.NavigateTo("/login");

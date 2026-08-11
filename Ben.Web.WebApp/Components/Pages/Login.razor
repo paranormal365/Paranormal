@@ -88,8 +88,7 @@
             _model.Password = Configuration["DevLogin:Password"] ?? string.Empty;
         }
 
-        if (!RendererInfo.IsInteractive) return;
-        await TokenStore.AuthReady;
+        if (!await TokenStore.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
 
         // Only redirect if truly authenticated (has a resolved UserId).
         // AccessToken alone may be set from a partial Entra bridge state (no UserId yet).
