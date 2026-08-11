@@ -96,6 +96,23 @@ public class UploadFileControllerTests
         return ctrl;
     }
 
+    /// <summary>An unauthenticated caller — Download is [AllowAnonymous], so it needs its own builder.</summary>
+    private static UploadFileController BuildAnonymousController(IDbContextFactory<BenDataContext> factory,
+        Mock<Ben.Data.Common.Interfaces.IFileStorageService>? storageMock = null)
+    {
+        var storage = storageMock ?? new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        var ctrl = new UploadFileController(factory, new Mock<IMapper>().Object, storage.Object,
+            new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService());
+        ctrl.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity()) // no authenticationType → IsAuthenticated == false
+            }
+        };
+        return ctrl;
+    }
+
     private static IFormFile MakeFile(string fileName, long size = 256)
     {
         var fileMock = new Mock<IFormFile>();
@@ -603,5 +620,205 @@ public class UploadFileControllerTests
         var result = await ctrl.GetReplaceImpact(fileId, default);
 
         Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    // ── GetAll / GetById / Download authorization gap fix ────────────────────────
+    // GetAll previously had no owner filter (returned every UploadFile row in the system);
+    // GetById had no visibility check at all; Download only checked IsPublic. All three now
+    // require FileAudienceAccess.CanViewFileAsync (GetAll additionally scopes to the caller's own
+    // files, since it backs a personal "my files" page, not a browse-everything view).
+
+    [Fact]
+    public async Task GetAll_OnlyReturnsCallersOwnFiles()
+    {
+        var factory  = CreateFactory();
+        var ownerId  = Guid.NewGuid();
+        var otherId  = Guid.NewGuid();
+        var ownFileId = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = ownFileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "mine.jpg", StoredFileName = "mine.jpg", ContentType = "image/jpeg", FileSize = 1,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            db.UploadFiles.Add(new UploadFile // someone else's file — must NOT appear
+            {
+                Id = Guid.NewGuid(), UploadFileTypeId = Guid.NewGuid(), AppUserId = otherId,
+                FileName = "theirs.jpg", StoredFileName = "theirs.jpg", ContentType = "image/jpeg", FileSize = 1,
+                IsPublic = true, // even public files aren't "mine" — this page is the caller's own file cabinet
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = otherId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = BuildController(factory, ownerId);
+        var result = await ctrl.GetAll(default);
+
+        var ok    = Assert.IsType<OkObjectResult>(result.Result);
+        var files = Assert.IsAssignableFrom<IEnumerable<UploadFileRecord>>(ok.Value).ToList();
+        Assert.Single(files);
+        Assert.Equal(ownFileId, files[0].Id);
+    }
+
+    [Fact]
+    public async Task GetById_NonOwnerWithoutAccess_ReturnsNotFound()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "private.jpg", StoredFileName = "private.jpg", ContentType = "image/jpeg", FileSize = 1,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = BuildController(factory, Guid.NewGuid()); // unrelated user, no share/org/case link
+        var result = await ctrl.GetById(fileId, default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetById_Owner_ReturnsFile()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "private.jpg", StoredFileName = "private.jpg", ContentType = "image/jpeg", FileSize = 1,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = BuildController(factory, ownerId);
+        var result = await ctrl.GetById(fileId, default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal(fileId, Assert.IsType<UploadFileRecord>(ok.Value).Id);
+    }
+
+    [Fact]
+    public async Task Download_PrivateFile_UnrelatedAuthenticatedUser_ReturnsForbid()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "private.jpg", StoredFileName = "private.jpg", ContentType = "image/jpeg", FileSize = 1,
+                StoragePath = "users/owner/private.jpg", IsPublic = false,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = BuildController(factory, Guid.NewGuid(), storage); // unrelated user
+        var result = await ctrl.Download(fileId, default);
+
+        Assert.IsType<ForbidResult>(result);
+        storage.Verify(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Download_PrivateFile_Anonymous_ReturnsUnauthorized()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "private.jpg", StoredFileName = "private.jpg", ContentType = "image/jpeg", FileSize = 1,
+                StoragePath = "users/owner/private.jpg", IsPublic = false,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = BuildAnonymousController(factory, storage);
+        var result = await ctrl.Download(fileId, default);
+
+        Assert.IsType<UnauthorizedResult>(result);
+        storage.Verify(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Download_PublicFile_Anonymous_ReturnsFileContent()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        storage.Setup(s => s.OpenReadAsync("users/owner/public.jpg", It.IsAny<CancellationToken>()))
+               .ReturnsAsync(new MemoryStream([1, 2, 3]));
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "public.jpg", StoredFileName = "public.jpg", ContentType = "image/jpeg", FileSize = 3,
+                StoragePath = "users/owner/public.jpg", IsPublic = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = BuildAnonymousController(factory, storage);
+        var result = await ctrl.Download(fileId, default);
+
+        Assert.IsType<FileStreamResult>(result);
+    }
+
+    [Fact]
+    public async Task Download_PrivateFile_Owner_ReturnsFileContent()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        storage.Setup(s => s.OpenReadAsync("users/owner/private.jpg", It.IsAny<CancellationToken>()))
+               .ReturnsAsync(new MemoryStream([1, 2, 3]));
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "private.jpg", StoredFileName = "private.jpg", ContentType = "image/jpeg", FileSize = 3,
+                StoragePath = "users/owner/private.jpg", IsPublic = false,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = BuildController(factory, ownerId, storage);
+        var result = await ctrl.Download(fileId, default);
+
+        Assert.IsType<FileStreamResult>(result);
     }
 }

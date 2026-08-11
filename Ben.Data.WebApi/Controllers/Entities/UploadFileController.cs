@@ -42,27 +42,50 @@ public sealed class UploadFileController : BenControllerBase
         _metadataExtractor = metadataExtractor;
     }
 
+    /// <summary>
+    /// Returns the current user's own files — backs the personal "Upload Files" management page.
+    /// Deliberately owner-only, not the broader audience union: this is the caller's own file
+    /// cabinet (with Download/Share/Delete/Replace actions), not a browse-everything-I-can-see
+    /// view — that's <see cref="MediaLibraryController.GetFiles"/>. Previously had no owner filter
+    /// at all (returned every UploadFile row in the system to any authenticated caller) — fixed
+    /// as a follow-up to item #6 phase 3.
+    /// </summary>
     [HttpGet]
     public async Task<ActionResult<IEnumerable<UploadFileRecord>>> GetAll(CancellationToken cancellationToken)
     {
+        var userId = GetCurrentUserIdOrThrow();
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var entities = await db.UploadFiles.AsNoTracking()
-            .Where(f => f.ArchivedFromUploadFileId == null) // archived prior versions (item #6 phase 3) aren't real listings
+            .Where(f => f.AppUserId == userId && f.ArchivedFromUploadFileId == null) // archived prior versions (item #6 phase 3) aren't real listings
             .OrderByDescending(f => f.DateCreated)
             .ToListAsync(cancellationToken);
         return Ok(_mapper.Map<IEnumerable<UploadFileRecord>>(entities));
     }
 
+    /// <summary>
+    /// Returns one file's metadata, gated the same way <see cref="Download"/> gates its bytes —
+    /// see <see cref="FileAudienceAccess.CanViewFileAsync"/>. Previously had no visibility check at
+    /// all; fixed as a follow-up to item #6 phase 3.
+    /// </summary>
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<UploadFileRecord>> GetById(Guid id, CancellationToken cancellationToken)
     {
+        var userId = GetCurrentUserIdOrThrow();
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var entity = await db.UploadFiles.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
         if (entity is null) return NotFound();
+        if (!await FileAudienceAccess.CanViewFileAsync(db, id, userId, cancellationToken)) return NotFound();
         return Ok(_mapper.Map<UploadFileRecord>(entity));
     }
 
+    /// <summary>
+    /// Streams a file's bytes. Gated by <see cref="FileAudienceAccess.CanViewFileAsync"/> — the
+    /// same owner/sharing/audience union every other read path in this app respects. Previously
+    /// only checked <c>IsPublic</c>, so any authenticated user (or anonymous caller, for public
+    /// files) could download any file by ID regardless of ownership or sharing; fixed as a
+    /// follow-up to item #6 phase 3.
+    /// </summary>
     [HttpGet("{id:guid}/download")]
     [AllowAnonymous]
     public async Task<IActionResult> Download(Guid id, CancellationToken cancellationToken)
@@ -72,9 +95,10 @@ public sealed class UploadFileController : BenControllerBase
             .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
         if (entity is null) return NotFound();
 
-        // Public files are served to anyone; private files require authentication.
-        if (!entity.IsPublic && !(User.Identity?.IsAuthenticated ?? false))
-            return Unauthorized();
+        var isAuthenticated = User.Identity?.IsAuthenticated ?? false;
+        var userId = isAuthenticated ? GetCurrentUserId() : Guid.Empty;
+        if (!await FileAudienceAccess.CanViewFileAsync(db, id, userId, cancellationToken))
+            return isAuthenticated ? Forbid() : Unauthorized();
 
         // Prefer disk; fall back to FileData for rows not yet migrated
         if (!string.IsNullOrEmpty(entity.StoragePath))
