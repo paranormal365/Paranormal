@@ -11,6 +11,7 @@
 
 @page "/organizations/{OrgId:guid}/files"
 @namespace Ben.Web.Library.Organization
+@using Ben.Web.Library.Shared
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 
@@ -286,18 +287,11 @@
 </TelerikDialog>
 
 @* ── Delete confirm ──────────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showDeleteDialog" Title="Delete File" Width="400px">
-    <DialogContent>
-        <p>Delete <strong>@_pendingDelete?.FileName</strong>? (@FormatSize(_pendingDelete?.FileSize ?? 0))</p>
-        <p class="small text-secondary mb-0">This action is permanent. An audit record will be saved before deletion.</p>
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       Enabled="@(!_deleting)"
-                       OnClick="@(() => _showDeleteDialog = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error" Enabled="@(!_deleting)" OnClick="DeleteAsync">@(_deleting ? "Deleting…" : "Delete")</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+<ConfirmDialog @bind-Visible="@_showDeleteDialog" Title="Delete File" Width="400px"
+               Busy="@_deleting" BusyText="Deleting…" OnConfirm="DeleteAsync">
+    <p>Delete <strong>@_pendingDelete?.FileName</strong>? (@FormatSize(_pendingDelete?.FileSize ?? 0))</p>
+    <p class="small text-secondary mb-0">This action is permanent. An audit record will be saved before deletion.</p>
+</ConfirmDialog>
 
 <TelerikNotification @ref="_toast" HorizontalPosition="@NotificationHorizontalPosition.Right"
                      VerticalPosition="@NotificationVerticalPosition.Top" />

@@ -142,10 +142,12 @@ public static class FileAudienceAccess
 
     /// <summary>
     /// True if <paramref name="userId"/> is an active admin-tier (Owner or Administrator) member
-    /// of <paramref name="organizationId"/>. Shared helper for the several Phase-B controllers
-    /// that gate an org-scoped management action on "admin of this org" — mirrors the same
-    /// <c>Role &lt;= OrganizationMemberRole.Administrator</c> tiering <see cref="GetMembershipAsync"/>
-    /// already uses for the org-comment audience (line ~65 of this file).
+    /// of <paramref name="organizationId"/>. Consolidated here from four hand-rolled private copies
+    /// (<c>CaseNoteController</c>, <c>CaseTransferController</c>, <c>OrgCalendarController</c> ×2) —
+    /// mirrors the same <c>Role &lt;= OrganizationMemberRole.Administrator</c> tiering
+    /// <see cref="GetMembershipAsync"/> already uses for the org-comment audience (line ~65 of this
+    /// file). Callers still do their own <c>User.IsInRole(RoleNames.SuperAdmin)</c> bypass check
+    /// first, since that reads the controller's own <c>ClaimsPrincipal</c> rather than the database.
     /// </summary>
     public static async Task<bool> IsOrgAdminAsync(
         BenDataContext db, Guid organizationId, Guid userId, CancellationToken ct)

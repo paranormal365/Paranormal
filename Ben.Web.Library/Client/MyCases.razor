@@ -38,7 +38,7 @@
                             <div>
                                 <div class="d-flex align-items-center gap-2 mb-1">
                                     <span class="font-monospace text-muted" style="font-size:.8rem;">@c.CaseReference</span>
-                                    <span class="badge @StatusBadge(c.Status)">@StatusLabel(c.Status)</span>
+                                    <span class="badge @c.Status.BadgeClass()">@c.Status.Label()</span>
                                 </div>
                                 <div class="fw-semibold">@c.Title</div>
                                 <div class="text-secondary small">@c.City, @c.State</div>
@@ -75,32 +75,11 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        if (!RendererInfo.IsInteractive) return;
-        await UserState.AuthReady;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
         try { _cases = (await AdminClient.GetMyCasesAsync()).ToList(); }
         catch { _error = "Failed to load cases."; _cases = []; }
         StateHasChanged();
     }
 
-    private static string StatusBadge(CaseStatus s) => s switch
-    {
-        CaseStatus.Accepted  => "bg-primary",
-        CaseStatus.Active    => "bg-success",
-        CaseStatus.Public    => "bg-info text-dark",
-        CaseStatus.Haunted   => "bg-warning text-dark",
-        CaseStatus.Closed    => "bg-dark",
-        _                    => "bg-secondary",
-    };
-
-    private static string StatusLabel(CaseStatus s) => s switch
-    {
-        CaseStatus.Accepted    => "Accepted",
-        CaseStatus.Active      => "Active",
-        CaseStatus.Public      => "Public",
-        CaseStatus.Haunted     => "Haunted",
-        CaseStatus.Closed      => "Closed",
-        CaseStatus.Transferred => "Transferred",
-        _                      => s.ToString(),
-    };
 }

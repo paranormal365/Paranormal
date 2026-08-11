@@ -156,9 +156,7 @@ public sealed class CaseTransferController : BenControllerBase
         if (User.IsInRole(RoleNames.SuperAdmin)) return true;
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        return await db.OrganizationUserMemberships.AnyAsync(
-            m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive
-              && (m.Role == OrganizationMemberRole.Owner || m.Role == OrganizationMemberRole.Administrator), ct);
+        return await FileAudienceAccess.IsOrgAdminAsync(db, orgId, userId, ct);
     }
 }
 

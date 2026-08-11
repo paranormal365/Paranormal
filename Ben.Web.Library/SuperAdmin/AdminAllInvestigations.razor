@@ -1,6 +1,7 @@
 @page "/admin/investigations"
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
+@using Ben.Web.Library.Shared
 
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -10,12 +11,7 @@
 
 <div class="container-fluid px-3">
 
-    <div class="row mb-3 align-items-center">
-        <div class="col">
-            <h3 class="mb-0">All Investigations</h3>
-            <p class="text-secondary small mb-0">Every scheduled investigation across every organization.</p>
-        </div>
-    </div>
+    <AdminPageHeader Title="All Investigations" Subtitle="Every scheduled investigation across every organization." />
 
     @if (_investigations is null)
     {
@@ -55,8 +51,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (!RendererInfo.IsInteractive) return;
-        await UserState.AuthReady;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
             NavManager.NavigateTo("/");
     }

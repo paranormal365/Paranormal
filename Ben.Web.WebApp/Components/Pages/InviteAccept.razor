@@ -108,8 +108,7 @@
         catch { _info = null; }
         _loading = false;
 
-        if (!RendererInfo.IsInteractive) return;
-        await TokenStore.AuthReady;
+        if (!await TokenStore.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         _authReady = true;
     }
 
