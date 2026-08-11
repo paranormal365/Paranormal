@@ -247,10 +247,12 @@
     </DialogContent>
     <DialogButtons>
         <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       Enabled="@(!_publishing)"
                        OnClick="@(() => _showPublishDialog = false)">Cancel</TelerikButton>
         <TelerikButton ThemeColor="@(_publishTarget?.IsPublic == true ? ThemeConstants.Button.ThemeColor.Warning : ThemeConstants.Button.ThemeColor.Success)"
+                       Enabled="@(!_publishing)"
                        OnClick="ConfirmPublishAsync">
-            @(_publishTarget?.IsPublic == true ? "Unpublish" : "Approve & Publish")
+            @(_publishing ? "Working…" : (_publishTarget?.IsPublic == true ? "Unpublish" : "Approve & Publish"))
         </TelerikButton>
     </DialogButtons>
 </TelerikDialog>
@@ -271,8 +273,9 @@
     </DialogContent>
     <DialogButtons>
         <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       Enabled="@(!_savingEdit)"
                        OnClick="@(() => _showEditDialog = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" OnClick="SaveEditAsync">Save</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" Enabled="@(!_savingEdit)" OnClick="SaveEditAsync">@(_savingEdit ? "Saving…" : "Save")</TelerikButton>
     </DialogButtons>
 </TelerikDialog>
 
@@ -284,8 +287,9 @@
     </DialogContent>
     <DialogButtons>
         <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       Enabled="@(!_deleting)"
                        OnClick="@(() => _showDeleteDialog = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error" OnClick="DeleteAsync">Delete</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error" Enabled="@(!_deleting)" OnClick="DeleteAsync">@(_deleting ? "Deleting…" : "Delete")</TelerikButton>
     </DialogButtons>
 </TelerikDialog>
 
@@ -345,16 +349,19 @@
     // Publish
     private bool _showPublishDialog;
     private OrganizationFileRecord? _publishTarget;
+    private bool _publishing;
 
     // Edit
     private bool   _showEditDialog;
     private OrganizationFileRecord? _editingFile;
     private string _editDescription = string.Empty;
     private int    _editSortOrder;
+    private bool   _savingEdit;
 
     // Delete
     private bool _showDeleteDialog;
     private OrganizationFileRecord? _pendingDelete;
+    private bool _deleting;
 
     private TelerikNotification? _toast;
 
@@ -435,15 +442,24 @@
     private async Task ConfirmPublishAsync()
     {
         if (_publishTarget is null) return;
-        var newState = !_publishTarget.IsPublic;
-        var result   = await AdminClient.PublishOrgFileAsync(OrgId, _publishTarget.Id, newState);
-        _showPublishDialog = false;
-        if (result is not null)
+        _publishing = true;
+        try
         {
-            await ReloadAsync();
-            var msg = newState ? $"✓ {result.FileName} is now public." : $"{result.FileName} set to private.";
-            _toast?.Show(new NotificationModel { Text = msg, ThemeColor = ThemeConstants.Notification.ThemeColor.Success, CloseAfter = 3000 });
+            var newState = !_publishTarget.IsPublic;
+            var result   = await AdminClient.PublishOrgFileAsync(OrgId, _publishTarget.Id, newState);
+            _showPublishDialog = false;
+            if (result is not null)
+            {
+                await ReloadAsync();
+                var msg = newState ? $"✓ {result.FileName} is now public." : $"{result.FileName} set to private.";
+                _toast?.Show(new NotificationModel { Text = msg, ThemeColor = ThemeConstants.Notification.ThemeColor.Success, CloseAfter = 3000 });
+            }
+            else
+            {
+                _toast?.Show(new NotificationModel { Text = "Failed to update visibility. Please try again.", ThemeColor = ThemeConstants.Notification.ThemeColor.Error, CloseAfter = 4000 });
+            }
         }
+        finally { _publishing = false; }
     }
 
     private void OpenEdit(OrganizationFileRecord f)
@@ -457,13 +473,22 @@
     private async Task SaveEditAsync()
     {
         if (_editingFile is null) return;
-        var result = await AdminClient.UpdateOrgFileAsync(OrgId, _editingFile.Id, _editDescription, _editSortOrder);
-        _showEditDialog = false;
-        if (result is not null)
+        _savingEdit = true;
+        try
         {
-            await ReloadAsync();
-            _toast?.Show(new NotificationModel { Text = "Saved.", ThemeColor = ThemeConstants.Notification.ThemeColor.Success, CloseAfter = 3000 });
+            var result = await AdminClient.UpdateOrgFileAsync(OrgId, _editingFile.Id, _editDescription, _editSortOrder);
+            _showEditDialog = false;
+            if (result is not null)
+            {
+                await ReloadAsync();
+                _toast?.Show(new NotificationModel { Text = "Saved.", ThemeColor = ThemeConstants.Notification.ThemeColor.Success, CloseAfter = 3000 });
+            }
+            else
+            {
+                _toast?.Show(new NotificationModel { Text = "Failed to save changes. Please try again.", ThemeColor = ThemeConstants.Notification.ThemeColor.Error, CloseAfter = 4000 });
+            }
         }
+        finally { _savingEdit = false; }
     }
 
     private void ConfirmDelete(OrganizationFileRecord f) { _pendingDelete = f; _showDeleteDialog = true; }
@@ -471,13 +496,22 @@
     private async Task DeleteAsync()
     {
         if (_pendingDelete is null) return;
-        var ok = await AdminClient.DeleteOrgFileAsync(OrgId, _pendingDelete.Id);
-        _showDeleteDialog = false;
-        if (ok)
+        _deleting = true;
+        try
         {
-            await ReloadAsync();
-            _toast?.Show(new NotificationModel { Text = "Deleted. Audit record saved.", ThemeColor = ThemeConstants.Notification.ThemeColor.Error, CloseAfter = 4000 });
+            var ok = await AdminClient.DeleteOrgFileAsync(OrgId, _pendingDelete.Id);
+            _showDeleteDialog = false;
+            if (ok)
+            {
+                await ReloadAsync();
+                _toast?.Show(new NotificationModel { Text = "Deleted. Audit record saved.", ThemeColor = ThemeConstants.Notification.ThemeColor.Error, CloseAfter = 4000 });
+            }
+            else
+            {
+                _toast?.Show(new NotificationModel { Text = "Failed to delete the file. Please try again.", ThemeColor = ThemeConstants.Notification.ThemeColor.Error, CloseAfter = 4000 });
+            }
         }
+        finally { _deleting = false; }
     }
 
     private static string FormatSize(long bytes)

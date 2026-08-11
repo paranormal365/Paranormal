@@ -493,6 +493,10 @@
                     <TelerikTextBox @bind-Value="@_addCoClientEmail" Width="100%"
                                     Placeholder="person@example.com" />
                     <div class="form-text">If they don't have an account yet, we'll send them an invite to create one.</div>
+                    @if (!string.IsNullOrWhiteSpace(_addCoClientEmail) && !IsValidEmailFormat(_addCoClientEmail))
+                    {
+                        <div class="text-danger small mt-1">Enter a valid email address.</div>
+                    }
                 </div>
                 @if (_inviteError is not null)
                 {
@@ -531,7 +535,7 @@
             @if (_inviteResult is null)
             {
                 <TelerikButton OnClick="CloseAddCoClientDialog">Cancel</TelerikButton>
-                <TelerikButton ThemeColor="primary" OnClick="AddCoClient" Enabled="@(!string.IsNullOrWhiteSpace(_addCoClientEmail) && !_isInviting)">
+                <TelerikButton ThemeColor="primary" OnClick="AddCoClient" Enabled="@(IsValidEmailFormat(_addCoClientEmail) && !_isInviting)">
                     @(_isInviting ? "Sending..." : "Add")
                 </TelerikButton>
             }
@@ -810,9 +814,18 @@
         StateHasChanged();
     }
 
+    /// <summary>Server-side validation is already correct; this is UX polish only — catches an
+    /// obviously malformed address before round-tripping to the API.</summary>
+    private static bool IsValidEmailFormat(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return false;
+        try { return new System.Net.Mail.MailAddress(email.Trim()).Address == email.Trim(); }
+        catch { return false; }
+    }
+
     private async Task AddCoClient()
     {
-        if (string.IsNullOrWhiteSpace(_addCoClientEmail) || _isInviting) return;
+        if (!IsValidEmailFormat(_addCoClientEmail) || _isInviting) return;
         _isInviting = true;
         _inviteError = null;
         try

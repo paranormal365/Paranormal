@@ -15,6 +15,10 @@
     {
         <span class="text-secondary small">Loading votes…</span>
     }
+    else if (_summary is null && _error is not null)
+    {
+        <span class="text-danger small">@_error</span>
+    }
     else if (_summary is not null)
     {
         @* ── Vote counts ─────────────────────────────────────────────────── *@
@@ -57,6 +61,10 @@
                     </TelerikButton>
                 }
             </div>
+            @if (_actionError is not null)
+            {
+                <span class="text-danger small">@_actionError</span>
+            }
         }
         else
         {
@@ -71,32 +79,41 @@
     private EvidenceVoteSummary? _summary;
     private bool _loading = true;
     private bool _isBusy;
+    private string? _error;
+    private string? _actionError;
 
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
         try { _summary = await AdminClient.GetEvidenceVoteSummaryAsync(UploadFileId); }
-        catch { }
+        catch { _error = "Failed to load votes."; }
         _loading = false;
     }
 
     private async Task CastVote(EvidenceVoteType voteType)
     {
         _isBusy = true;
-        try { _summary = await AdminClient.CastEvidenceVoteAsync(UploadFileId, voteType, null) ?? _summary; }
-        catch { }
+        _actionError = null;
+        try
+        {
+            var updated = await AdminClient.CastEvidenceVoteAsync(UploadFileId, voteType, null);
+            if (updated is not null) _summary = updated;
+            else _actionError = "Failed to cast your vote. Please try again.";
+        }
+        catch { _actionError = "Failed to cast your vote. Please try again."; }
         finally { _isBusy = false; }
     }
 
     private async Task RemoveVote()
     {
         _isBusy = true;
+        _actionError = null;
         try
         {
             await AdminClient.RemoveEvidenceVoteAsync(UploadFileId);
             _summary = await AdminClient.GetEvidenceVoteSummaryAsync(UploadFileId);
         }
-        catch { }
+        catch { _actionError = "Failed to remove your vote. Please try again."; }
         finally { _isBusy = false; }
     }
 

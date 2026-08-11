@@ -287,14 +287,37 @@
         .Select(s => new StatusOption(s, CaseList.StatusLabel(s)))
         .ToList();
 
+    private Guid _loadedCaseId;
+
     protected override void OnInitialized()
     {
         _activeTabId = TabIdFor(InitialTab);
     }
 
+    protected override async Task OnParametersSetAsync()
+    {
+        // Guards against a same-route navigation (e.g. a "next case" link) reusing this component
+        // instance for a different CaseId — OnInitialized/OnAfterRenderAsync(firstRender) only fire
+        // once per instance, so without this the page would silently keep showing the previous case.
+        if (!_loaded || CaseId == _loadedCaseId) return;
+        await LoadCaseAsync();
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        await LoadCaseAsync();
+    }
+
+    private async Task LoadCaseAsync()
+    {
+        _loadedCaseId = CaseId;
+        _loaded = false;
+        _case   = null;
+        _error  = null;
+        _activeTabId = TabIdFor(InitialTab);
+        StateHasChanged();
+
         try { _case = await AdminClient.GetOrgCaseAsync(OrgId, CaseId); }
         catch { _error = "Failed to load case."; }
         _loaded = true;

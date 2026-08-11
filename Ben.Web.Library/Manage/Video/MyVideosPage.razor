@@ -8,6 +8,12 @@
 
 <PageTitle>My Videos</PageTitle>
 
+@if (!_authReady)
+{
+    <TelerikLoaderContainer Visible="true" Text="Loading…" />
+    return;
+}
+
 @if (!UserState.IsAuthenticated)
 {
     <div class="container py-4"><p class="text-muted">You must be signed in to use the video editor.</p></div>
@@ -116,9 +122,16 @@
     private VideoProjectRecord? _deleteTarget;
     private VideoProjectRecord? _publishTarget;
     private TelerikNotification? _notifications;
+    private bool _authReady;
 
     protected override async Task OnInitializedAsync()
     {
+        // Gated so the prerender pass — where AuthReady can never resolve — just shows the
+        // loading state above instead of racing IsAuthenticated and flashing "not signed in"
+        // on a hard nav for a genuinely signed-in user.
+        if (!RendererInfo.IsInteractive) return;
+        await UserState.AuthReady;
+        _authReady = true;
         if (!UserState.IsAuthenticated) return;
         await LoadProjectListAsync();
     }
@@ -186,6 +199,10 @@
         {
             _projects.Remove(_deleteTarget);
             _notifications?.Show("Project deleted.", ThemeConstants.Notification.ThemeColor.Success);
+        }
+        else
+        {
+            _notifications?.Show("Failed to delete the project. Please try again.", ThemeConstants.Notification.ThemeColor.Error);
         }
         _deleteTarget = null;
     }

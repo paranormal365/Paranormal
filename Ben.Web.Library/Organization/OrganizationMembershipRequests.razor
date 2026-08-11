@@ -172,6 +172,10 @@
             _toast?.Show(new NotificationModel { Text = $"Accepted {r.ApplicantDisplayName}", ThemeColor = ThemeConstants.Notification.ThemeColor.Success, CloseAfter = 4000 });
             await ReloadAsync();
         }
+        else
+        {
+            _toast?.Show(new NotificationModel { Text = $"Failed to accept {r.ApplicantDisplayName}. Please try again.", ThemeColor = ThemeConstants.Notification.ThemeColor.Error, CloseAfter = 4000 });
+        }
     }
 
     private void DenyAsync(OrganizationMembershipRequestRecord r)
@@ -195,6 +199,10 @@
             _toast?.Show(new NotificationModel { Text = $"Denied {_pendingDeny.ApplicantDisplayName}", ThemeColor = ThemeConstants.Notification.ThemeColor.Error, CloseAfter = 4000 });
             _pendingDeny = null;
             await ReloadAsync();
+        }
+        else
+        {
+            _toast?.Show(new NotificationModel { Text = "Failed to deny the request. Please try again.", ThemeColor = ThemeConstants.Notification.ThemeColor.Error, CloseAfter = 4000 });
         }
     }
 
