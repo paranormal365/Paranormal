@@ -1,0 +1,17 @@
+/* Same layout as Login.razor.css — Blazor's CSS isolation is per-component, so a shared class
+   name doesn't share styles across components; duplicated rather than factored out for two rules. */
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 60vh;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 420px;
+    padding: 2rem;
+    border: 1px solid var(--kendo-color-border, #dee2e6);
+    border-radius: 8px;
+    background: var(--kendo-color-surface, #fff);
+}

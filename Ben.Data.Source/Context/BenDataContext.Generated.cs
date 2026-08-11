@@ -83,6 +83,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<CaseTransferLog> CaseTransferLogs { get; set; }
         public virtual DbSet<CaseMessage> CaseMessages { get; set; }
         public virtual DbSet<CaseClientAccess> CaseClientAccesses { get; set; }
+        public virtual DbSet<CaseClientInvite> CaseClientInvites { get; set; }
         public virtual DbSet<UploadFileMetadata> UploadFileMetadata { get; set; }
         public virtual DbSet<CaseReport> CaseReports { get; set; }
         public virtual DbSet<CaseReportSection> CaseReportSections { get; set; }
@@ -1386,6 +1387,28 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<CaseClientAccess>()
                 .HasIndex(e => new { e.CaseId, e.AppUserId }).IsUnique();
+
+            // ── CaseClientInvite (item #4 remaining piece) ───────────────────
+            modelBuilder.Entity<CaseClientInvite>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseClientInvite>()
+                .HasOne(e => e.AcceptedByAppUser).WithMany()
+                .HasForeignKey(e => e.AcceptedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseClientInvite>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseClientInvite>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseClientInvite>()
+                .Property(e => e.Email).HasMaxLength(320); // RFC 5321 max
+            modelBuilder.Entity<CaseClientInvite>()
+                .Property(e => e.Token).HasMaxLength(64);
+            modelBuilder.Entity<CaseClientInvite>()
+                .HasIndex(e => e.Token).IsUnique();
+            modelBuilder.Entity<CaseClientInvite>()
+                .HasIndex(e => new { e.CaseId, e.Email });
 
             // ── CaseTimelineEntry.IpAddress ─────────────────────────────────
             modelBuilder.Entity<CaseTimelineEntry>()

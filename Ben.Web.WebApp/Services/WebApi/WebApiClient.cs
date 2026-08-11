@@ -56,6 +56,14 @@ public sealed class WebApiClient : IWebApiClient
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
     }
 
+    public async Task<TResponse?> PostAnonymousAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = JsonContent.Create(payload) };
+        using var response = await _httpClient.SendAsync(req, token);
+        if (!response.IsSuccessStatusCode) return default;
+        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
+    }
+
     public async Task<TResponse?> PutAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Put, relativeUrl);
@@ -367,4 +375,14 @@ public sealed class WebApiClient : IWebApiClient
         using var response = await _httpClient.SendAsync(req, token);
         return response.IsSuccessStatusCode;
     }
+
+    // ── Sub-client invite accept flow (item #4) ───────────────────────────────
+    public Task<InviteInfoRecord?> GetInviteInfoAsync(string token, CancellationToken cancellationToken = default)
+        => GetAnonymousAsync<InviteInfoRecord>($"/api/case-invites/{Uri.EscapeDataString(token)}", cancellationToken);
+
+    public Task<AcceptInviteResult?> AcceptInviteAsync(string token, AcceptInviteRequest request, CancellationToken cancellationToken = default)
+        => PostAnonymousAsync<AcceptInviteRequest, AcceptInviteResult>($"/api/case-invites/{Uri.EscapeDataString(token)}/accept", request, cancellationToken);
+
+    public Task<AcceptInviteResult?> AcceptInviteExistingAsync(string token, CancellationToken cancellationToken = default)
+        => PostAsync<object, AcceptInviteResult>($"/api/case-invites/{Uri.EscapeDataString(token)}/accept-existing", new { }, cancellationToken);
 }

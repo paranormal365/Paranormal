@@ -285,7 +285,7 @@
                 <TelerikButton Size="sm" Icon="@SvgIcon.Plus" OnClick="@(() => _showAddCoClient = true)">Add Person</TelerikButton>
             </div>
             <div class="card-body">
-                @if (_coClients.Count == 0)
+                @if (_coClients.Count == 0 && _pendingInvites.Count == 0)
                 {
                     <div class="text-secondary small">Only you have access. Use 'Add Person' to share this case with another account.</div>
                 }
@@ -299,6 +299,28 @@
                         </div>
                     }
                 </div>
+
+                @if (_pendingInvites.Count > 0)
+                {
+                    <div class="text-secondary small fw-semibold mt-3 mb-1">Pending Invites</div>
+                    <div class="d-flex flex-column gap-1">
+                        @foreach (var inv in _pendingInvites)
+                        {
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span class="small">
+                                    @inv.Email
+                                    <span class="text-secondary"> · expires @inv.DateExpires.ToLocalTime().ToString("MMM d, yyyy")</span>
+                                </span>
+                                <div class="d-flex gap-1">
+                                    <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Copy"
+                                                   OnClick="@(() => CopyInviteLink(inv))">Copy Link</TelerikButton>
+                                    <TelerikButton Size="sm" FillMode="flat" ThemeColor="error" Icon="@SvgIcon.X"
+                                                   OnClick="@(async () => await RevokeInvite(inv.Id))" />
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
             </div>
         </div>
     }
@@ -459,25 +481,64 @@
     </TelerikWindow>
 }
 
-@* ── Add co-client dialog ─────────────────────────────────────────────────────── *@
-<TelerikWindow @bind-Visible="@_showAddCoClient" Width="400px" Modal="true">
+@* ── Add co-client / invite dialog ────────────────────────────────────────────── *@
+<TelerikWindow @bind-Visible="@_showAddCoClient" Width="440px" Modal="true">
     <WindowTitle>Share Case Access</WindowTitle>
     <WindowContent>
-        <div class="row g-3">
-            <div class="col-12">
-                <label class="form-label fw-semibold">Email address of person to add</label>
-                <TelerikTextBox @bind-Value="@_addCoClientEmail" Width="100%"
-                                Placeholder="person@example.com" />
-                <div class="form-text">They must already have an account on this platform.</div>
+        @if (_inviteResult is null)
+        {
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Email address of person to add</label>
+                    <TelerikTextBox @bind-Value="@_addCoClientEmail" Width="100%"
+                                    Placeholder="person@example.com" />
+                    <div class="form-text">If they don't have an account yet, we'll send them an invite to create one.</div>
+                </div>
+                @if (_inviteError is not null)
+                {
+                    <div class="col-12"><div class="alert alert-danger py-2 mb-0">@_inviteError</div></div>
+                }
             </div>
-        </div>
+        }
+        else if (_inviteResult.LinkedExistingAccount)
+        {
+            <div class="alert alert-success mb-0">
+                <strong>@_inviteResult.CoClient?.DisplayName</strong> already has an account and now has access to this case.
+            </div>
+        }
+        else
+        {
+            <p class="mb-2">
+                @if (_inviteResult.EmailSent)
+                {
+                    <text>An invite email is on its way to <strong>@_inviteResult.Invite?.Email</strong>. You can also share this link directly:</text>
+                }
+                else
+                {
+                    <text>Email isn't set up on this server yet — share this link with <strong>@_inviteResult.Invite?.Email</strong> yourself:</text>
+                }
+            </p>
+            <div class="d-flex gap-2">
+                <TelerikTextBox Value="@InviteLink(_inviteResult.Invite)" ReadOnly="true" Width="100%" />
+                <TelerikButton Icon="@SvgIcon.Copy" OnClick="@(() => CopyToClipboard(InviteLink(_inviteResult.Invite)))" />
+            </div>
+            <div class="text-secondary small mt-2">This link expires @_inviteResult.Invite?.DateExpires.ToLocalTime().ToString("MMMM d, yyyy").</div>
+        }
     </WindowContent>
-    <WindowActions><WindowAction Name="Close" OnClick="@(() => _showAddCoClient = false)" /></WindowActions>
+    <WindowActions><WindowAction Name="Close" OnClick="CloseAddCoClientDialog" /></WindowActions>
     <WindowFooter>
         <div class="d-flex gap-2 justify-content-end w-100">
-            <TelerikButton OnClick="@(() => _showAddCoClient = false)">Cancel</TelerikButton>
-            <TelerikButton ThemeColor="primary" OnClick="AddCoClient"
-                           Enabled="@(!string.IsNullOrWhiteSpace(_addCoClientEmail))">Add</TelerikButton>
+            @if (_inviteResult is null)
+            {
+                <TelerikButton OnClick="CloseAddCoClientDialog">Cancel</TelerikButton>
+                <TelerikButton ThemeColor="primary" OnClick="AddCoClient" Enabled="@(!string.IsNullOrWhiteSpace(_addCoClientEmail) && !_isInviting)">
+                    @(_isInviting ? "Sending..." : "Add")
+                </TelerikButton>
+            }
+            else
+            {
+                <TelerikButton ThemeColor="primary" OnClick="CloseAddCoClientDialog">Done</TelerikButton>
+            }
         </div>
     </WindowFooter>
 </TelerikWindow>
@@ -574,6 +635,10 @@
     private bool _cancelling;
     private bool _showAddCoClient;
     private string _addCoClientEmail = "";
+    private List<CaseClientInviteRecord> _pendingInvites = [];
+    private InviteCoClientResult? _inviteResult;
+    private string? _inviteError;
+    private bool _isInviting;
     private List<CaseRelatedPersonRecord> _relatedPeople = [];
     private bool _showAddRelatedPerson;
     private string _newPersonName = "";
@@ -612,15 +677,21 @@
         try { _pendingProposals = (await AdminClient.GetMyScheduleProposalsAsync(CaseId)).ToList(); StateHasChanged(); }
         catch { /* silent */ }
 
-        // Co-clients — only load for primary client
-        _isPrimaryClient = _case?.CaseManagerDisplayName is not null || true; // will check via API result
-        try
+        // Co-clients — only load (and only shown) for the primary client. IsPrimaryClient comes
+        // from the case detail response itself, not from whether GetCoClients happens not to
+        // throw: the generic HTTP client returns an empty list on a 403 rather than throwing, so
+        // that inference silently showed every co-client the primary-only admin controls too.
+        _isPrimaryClient = _case?.IsPrimaryClient ?? false;
+        if (_isPrimaryClient)
         {
-            _coClients = (await AdminClient.GetCoClientsAsync(CaseId)).ToList();
-            _isPrimaryClient = true; // if this call succeeds, user is primary client
-            StateHasChanged();
+            try
+            {
+                _coClients = (await AdminClient.GetCoClientsAsync(CaseId)).ToList();
+                _pendingInvites = (await AdminClient.GetCaseInvitesAsync(CaseId)).ToList();
+                StateHasChanged();
+            }
+            catch { /* silent — Shared Access card just shows its empty state */ }
         }
-        catch { _isPrimaryClient = false; }
 
         try { _relatedPeople = (await AdminClient.GetRelatedPeopleAsync(CaseId)).ToList(); StateHasChanged(); }
         catch { /* silent */ }
@@ -741,9 +812,59 @@
 
     private async Task AddCoClient()
     {
-        if (string.IsNullOrWhiteSpace(_addCoClientEmail)) return;
-        var result = await AdminClient.AddCoClientAsync(CaseId, _addCoClientEmail.Trim());
-        if (result is not null) { _coClients.Add(result); _showAddCoClient = false; _addCoClientEmail = ""; }
+        if (string.IsNullOrWhiteSpace(_addCoClientEmail) || _isInviting) return;
+        _isInviting = true;
+        _inviteError = null;
+        try
+        {
+            var result = await AdminClient.InviteCoClientAsync(CaseId, _addCoClientEmail.Trim());
+            if (result is null)
+            {
+                _inviteError = "Something went wrong. Please try again.";
+                return;
+            }
+
+            if (result.LinkedExistingAccount && result.CoClient is not null)
+                _coClients.Add(result.CoClient);
+            else if (result.Invite is not null)
+                _pendingInvites.Insert(0, result.Invite);
+
+            _inviteResult = result;
+        }
+        catch
+        {
+            _inviteError = "Something went wrong. Please try again.";
+        }
+        finally
+        {
+            _isInviting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CloseAddCoClientDialog()
+    {
+        _showAddCoClient = false;
+        _addCoClientEmail = "";
+        _inviteResult = null;
+        _inviteError = null;
+    }
+
+    private string InviteLink(CaseClientInviteRecord? invite) =>
+        invite is null ? "" : $"{NavManager.BaseUri.TrimEnd('/')}/invite/{invite.Token}";
+
+    private async Task CopyToClipboard(string text)
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", text); }
+        catch { /* clipboard access can be denied by the browser — link is still visible/selectable */ }
+    }
+
+    private Task CopyInviteLink(CaseClientInviteRecord invite) => CopyToClipboard(InviteLink(invite));
+
+    private async Task RevokeInvite(Guid inviteId)
+    {
+        await AdminClient.RevokeCaseInviteAsync(CaseId, inviteId);
+        _pendingInvites.RemoveAll(i => i.Id == inviteId);
         StateHasChanged();
     }
 

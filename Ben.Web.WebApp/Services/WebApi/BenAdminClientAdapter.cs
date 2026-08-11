@@ -1145,6 +1145,17 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> RemoveCoClientAsync(Guid caseId, Guid accessId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/my-cases/{caseId}/co-clients/{accessId}", token);
 
+    // ── Sub-client invites (item #4) ──────────────────────────────────────────
+
+    public async Task<IReadOnlyList<CaseClientInviteRecord>> GetCaseInvitesAsync(Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<CaseClientInviteRecord>>($"/api/my-cases/{caseId}/invites", token) ?? [];
+
+    public Task<InviteCoClientResult?> InviteCoClientAsync(Guid caseId, string email, CancellationToken token = default)
+        => _api.PostAsync<object, InviteCoClientResult>($"/api/my-cases/{caseId}/invites", new { Email = email }, token);
+
+    public Task<bool> RevokeCaseInviteAsync(Guid caseId, Guid inviteId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/my-cases/{caseId}/invites/{inviteId}", token);
+
     // ── Related people (basic-info, no account) ─────────────────────────────────
 
     public async Task<IReadOnlyList<CaseRelatedPersonRecord>> GetRelatedPeopleAsync(Guid caseId, CancellationToken token = default)

@@ -9,6 +9,7 @@ public interface IWebApiClient
     Task<TResponse?> GetAsync<TResponse>(string relativeUrl, CancellationToken token = default);
     Task<TResponse?> GetAnonymousAsync<TResponse>(string relativeUrl, CancellationToken token = default);
     Task<TResponse?> PostAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);
+    Task<TResponse?> PostAnonymousAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<TResponse?> PostMultipartAsync<TResponse>(string relativeUrl, MultipartFormDataContent content, CancellationToken token = default);
     Task<TResponse?> PutAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> PutVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
@@ -17,6 +18,11 @@ public interface IWebApiClient
 
     /// <summary>Downloads raw bytes from any authenticated endpoint (e.g. PDF export).</summary>
     Task<(byte[] Data, string ContentType, string FileName)?> GetBytesAsync(string relativeUrl, string fallbackFileName, CancellationToken token = default);
+
+    // ── Sub-client invite accept flow (item #4) — consumed by InviteAccept.razor, anonymous by necessity ──
+    Task<InviteInfoRecord?> GetInviteInfoAsync(string token, CancellationToken cancellationToken = default);
+    Task<AcceptInviteResult?> AcceptInviteAsync(string token, AcceptInviteRequest request, CancellationToken cancellationToken = default);
+    Task<AcceptInviteResult?> AcceptInviteExistingAsync(string token, CancellationToken cancellationToken = default);
 
     // Example typed endpoint usage using service models.
     Task<IReadOnlyList<AppUserRecord>> GetUsersAsync(CancellationToken token = default);
@@ -117,3 +123,13 @@ public sealed record EntraLinkPayload(
     string EntraOid,
     string EntraEmail,
     string? ProviderDisplayName = null);
+
+// ── Sub-client invite accept-flow records (item #4) — mirrors api/case-invites' shapes; this
+// project has no reference to Ben.Data.WebApi (HTTP-only boundary), so the DTOs are duplicated
+// here rather than shared, same convention as CoClientItem in Ben.Web.Library's IBenAdminClient.cs. ──
+
+public enum InviteStatus { Valid, Used, Expired, Revoked }
+
+public sealed record InviteInfoRecord(Guid CaseId, string CaseTitle, string InviterDisplayName, string Email, InviteStatus Status, bool AccountExists);
+public sealed record AcceptInviteRequest(string DisplayName, string Password);
+public sealed record AcceptInviteResult(Guid CaseId);

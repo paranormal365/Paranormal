@@ -585,6 +585,20 @@ public interface IBenAdminClient
     Task<CoClientItem?> AddCoClientAsync(Guid caseId, string email, CancellationToken token = default);
     Task<bool> RemoveCoClientAsync(Guid caseId, Guid accessId, CancellationToken token = default);
 
+    // ── Sub-client invites (item #4) — for people with no account yet ───────────
+
+    /// <summary>Returns this case's pending (not accepted/revoked/expired) invites.</summary>
+    Task<IReadOnlyList<CaseClientInviteRecord>> GetCaseInvitesAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>
+    /// Single entry point for adding a secondary user: an existing account is linked immediately
+    /// (see <see cref="InviteCoClientResult.LinkedExistingAccount"/>); no account yet mints an
+    /// invite instead.
+    /// </summary>
+    Task<InviteCoClientResult?> InviteCoClientAsync(Guid caseId, string email, CancellationToken token = default);
+
+    Task<bool> RevokeCaseInviteAsync(Guid caseId, Guid inviteId, CancellationToken token = default);
+
     // ── Related people (basic-info, no account) ─────────────────────────────────
 
     /// <summary>Returns people referenced on this case who are not platform users.</summary>
@@ -1346,7 +1360,8 @@ public sealed record ClientCaseDetail(
     DateTime? DateCaseClosed,
     IReadOnlyList<ClientCaseOccurrence>    Occurrences,
     IReadOnlyList<ClientCaseInvestigation> Investigations,
-    int       UnreadMessageCount = 0);
+    int       UnreadMessageCount = 0,
+    bool      IsPrimaryClient = false);
 
 public sealed record ClientCaseOccurrence(
     Guid      Id,
@@ -1503,6 +1518,10 @@ public sealed record SlotDto(Guid Id, DateTime StartDateTime, DateTime? EndDateT
 
 // ── Co-client access records ──────────────────────────────────────────────────
 public sealed record CoClientItem(Guid AccessId, Guid AppUserId, string DisplayName);
+
+// ── Sub-client invite records (item #4) ─────────────────────────────────────────
+public sealed record CaseClientInviteRecord(Guid Id, Guid CaseId, string Email, string Token, DateTime DateExpires, DateTime DateCreated);
+public sealed record InviteCoClientResult(bool LinkedExistingAccount, CoClientItem? CoClient, CaseClientInviteRecord? Invite, bool EmailSent);
 
 // ── Case note records ─────────────────────────────────────────────────────────
 public sealed record CaseNoteDto(

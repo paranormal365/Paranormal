@@ -1,0 +1,200 @@
+@page "/invite/{Token}"
+
+@inject IWebApiClient Api
+@inject IWebApiAuthService AuthService
+@inject IWebApiTokenStore TokenStore
+@inject NavigationManager NavManager
+
+<PageTitle>Accept Invitation</PageTitle>
+
+<div class="login-container">
+    <div class="login-card">
+        @if (_loading)
+        {
+            <TelerikLoaderContainer Visible="true" Text="Loading invitation..." />
+        }
+        else if (_info is null)
+        {
+            <h2 class="mb-3">Invitation Not Found</h2>
+            <p class="text-secondary">This invite link isn't valid. Double-check the link, or ask the person who invited you to send a new one.</p>
+        }
+        else if (_info.Status != InviteStatus.Valid)
+        {
+            <h2 class="mb-3">Invitation @StatusLabel(_info.Status)</h2>
+            <p class="text-secondary">@StatusMessage(_info.Status)</p>
+        }
+        else
+        {
+            <h2 class="mb-1">You're Invited</h2>
+            <p class="text-secondary mb-4">
+                <strong>@_info.InviterDisplayName</strong> invited you to collaborate on the case
+                "<strong>@_info.CaseTitle</strong>" on IsHaunted.com.
+            </p>
+
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger py-2 mb-3">@_error</div>
+            }
+
+            @if (_info.AccountExists)
+            {
+                @if (!_authReady)
+                {
+                    <TelerikLoaderContainer Visible="true" Text="Checking sign-in status..." />
+                }
+                else if (TokenStore.IsAuthenticated && TokenStore.UserId.HasValue)
+                {
+                    <p>Signed in as <strong>@(TokenStore.UserDisplayName ?? TokenStore.UserEmail)</strong>.</p>
+                    <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" Class="w-100"
+                                   Enabled="@(!_submitting)" OnClick="AcceptAsSignedInUser">
+                        @(_submitting ? "Accepting..." : "Accept Invitation")
+                    </TelerikButton>
+                }
+                else
+                {
+                    <p class="text-secondary">An account already exists for <strong>@_info.Email</strong>. Sign in to accept this invitation.</p>
+                    <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" Class="w-100"
+                                   OnClick="GoToSignIn">
+                        Sign In
+                    </TelerikButton>
+                }
+            }
+            else
+            {
+                <EditForm Model="@_model" OnValidSubmit="Register" FormName="InviteAcceptForm">
+                    <DataAnnotationsValidator />
+
+                    <div class="mb-3">
+                        <label class="form-label">Your Name</label>
+                        <TelerikTextBox @bind-Value="@_model.DisplayName" Placeholder="Jane Doe" Width="100%" />
+                        <ValidationMessage For="@(() => _model.DisplayName)" class="text-danger small" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <TelerikTextBox @bind-Value="@_model.Password" Password="true" Placeholder="••••••••" Width="100%" />
+                        <ValidationMessage For="@(() => _model.Password)" class="text-danger small" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Confirm Password</label>
+                        <TelerikTextBox @bind-Value="@_model.ConfirmPassword" Password="true" Placeholder="••••••••" Width="100%" />
+                        <ValidationMessage For="@(() => _model.ConfirmPassword)" class="text-danger small" />
+                    </div>
+
+                    <TelerikButton ButtonType="@ButtonType.Submit" ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                   Class="w-100" Enabled="@(!_submitting)">
+                        @(_submitting ? "Creating account..." : "Create Account & Accept")
+                    </TelerikButton>
+                </EditForm>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Token { get; set; } = string.Empty;
+
+    private InviteInfoRecord? _info;
+    private bool _loading = true;
+    private bool _authReady;
+    private bool _submitting;
+    private string? _error;
+    private readonly RegisterModel _model = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _info = await Api.GetInviteInfoAsync(Token); }
+        catch { _info = null; }
+        _loading = false;
+
+        if (!RendererInfo.IsInteractive) return;
+        await TokenStore.AuthReady;
+        _authReady = true;
+    }
+
+    private async Task Register()
+    {
+        if (_info is null) return;
+        _submitting = true;
+        _error = null;
+        try
+        {
+            var result = await Api.AcceptInviteAsync(Token, new AcceptInviteRequest(_model.DisplayName.Trim(), _model.Password));
+            if (result is null)
+            {
+                _error = "Couldn't create your account. The invitation may have just expired or been used — refresh and try again.";
+                return;
+            }
+
+            // Auto-sign-in with the credentials just set, then land on the case.
+            var signedIn = await AuthService.LoginAsync(_info.Email, _model.Password);
+            NavManager.NavigateTo(signedIn ? $"/my-cases/{result.CaseId}" : "/login");
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private async Task AcceptAsSignedInUser()
+    {
+        _submitting = true;
+        _error = null;
+        try
+        {
+            var result = await Api.AcceptInviteExistingAsync(Token);
+            if (result is null)
+            {
+                _error = "Couldn't accept this invitation. It may have just expired, been revoked, or already been used.";
+                return;
+            }
+            NavManager.NavigateTo($"/my-cases/{result.CaseId}");
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private void GoToSignIn() => NavManager.NavigateTo($"/login?ReturnUrl={Uri.EscapeDataString($"/invite/{Token}")}");
+
+    private static string StatusLabel(InviteStatus status) => status switch
+    {
+        InviteStatus.Used    => "Already Accepted",
+        InviteStatus.Expired => "Expired",
+        InviteStatus.Revoked => "Revoked",
+        _                    => "Unavailable",
+    };
+
+    private static string StatusMessage(InviteStatus status) => status switch
+    {
+        InviteStatus.Used    => "This invitation has already been accepted.",
+        InviteStatus.Expired => "This invitation has expired. Ask the person who invited you to send a new one.",
+        InviteStatus.Revoked => "This invitation was revoked by the person who sent it.",
+        _                    => "This invitation isn't available.",
+    };
+
+    private sealed class RegisterModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.StringLength(200, MinimumLength = 1)]
+        public string DisplayName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(6)]
+        public string Password { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.Compare(nameof(Password), ErrorMessage = "Passwords do not match.")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+}

@@ -64,10 +64,18 @@
 </div>
 
 @code {
+    /// <summary>Where to land after a successful sign-in — e.g. an invite link. Only a relative,
+    /// local path is honored (never an absolute URL) to avoid an open-redirect via a crafted link.</summary>
+    [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
+
     private LoginModel _model = new();
     private string? _errorMessage;
     private bool _isLoading;
     private bool _entraEnabled;
+
+    private string RedirectTarget =>
+        !string.IsNullOrWhiteSpace(ReturnUrl) && ReturnUrl.StartsWith('/') && !ReturnUrl.StartsWith("//")
+            ? ReturnUrl : "/";
 
     protected override async Task OnInitializedAsync()
     {
@@ -86,7 +94,7 @@
         // Only redirect if truly authenticated (has a resolved UserId).
         // AccessToken alone may be set from a partial Entra bridge state (no UserId yet).
         if (TokenStore.IsAuthenticated && TokenStore.UserId.HasValue)
-            NavManager.NavigateTo("/");
+            NavManager.NavigateTo(RedirectTarget);
     }
 
     private async Task HandleLogin()
@@ -98,7 +106,7 @@
 
         if (success)
         {
-            NavManager.NavigateTo("/");
+            NavManager.NavigateTo(RedirectTarget);
         }
         else
         {
