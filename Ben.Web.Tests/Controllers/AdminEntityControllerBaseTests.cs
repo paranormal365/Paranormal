@@ -91,6 +91,15 @@ public class AdminEntityControllerBaseTests
         DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
     };
 
+    /// <summary>
+    /// Simulates the raw JSON body model binding already consumed, so
+    /// <c>WasJsonPropertySetAsync</c> has something real to re-read.
+    /// </summary>
+    private static void SetJsonBody(ControllerBase ctrl, string json)
+    {
+        ctrl.ControllerContext.HttpContext.Request.Body = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
+    }
+
     // ── GetAll ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -190,6 +199,57 @@ public class AdminEntityControllerBaseTests
         await ctrl.Create(entity, default);
 
         Assert.NotEqual(Guid.Empty, entity.Id);
+    }
+
+    [Fact]
+    public async Task Create_PersistsExplicitFalse_WhenJsonBodyIncludesIsActiveFalse()
+    {
+        var factory = CreateFactory();
+        var ctrl    = Build(factory, Guid.NewGuid());
+        var entity  = MakeType("Explicit");
+        entity.IsActive = false; // what model binding would have already produced from the JSON below
+        SetJsonBody(ctrl, """{"isActive": false, "name": "Explicit"}""");
+
+        await ctrl.Create(entity, default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var saved = await db.UserAddressTypes.FindAsync(entity.Id);
+        Assert.NotNull(saved);
+        Assert.False(saved!.IsActive);
+    }
+
+    [Fact]
+    public async Task Create_PersistsExplicitFalse_WhenJsonKeyIsPascalCase()
+    {
+        var factory = CreateFactory();
+        var ctrl    = Build(factory, Guid.NewGuid());
+        var entity  = MakeType("PascalCase");
+        entity.IsActive = false;
+        SetJsonBody(ctrl, """{"IsActive": false, "Name": "PascalCase"}""");
+
+        await ctrl.Create(entity, default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var saved = await db.UserAddressTypes.FindAsync(entity.Id);
+        Assert.NotNull(saved);
+        Assert.False(saved!.IsActive);
+    }
+
+    [Fact]
+    public async Task Create_DefaultsToTrue_WhenIsActiveOmittedFromJsonBody()
+    {
+        var factory = CreateFactory();
+        var ctrl    = Build(factory, Guid.NewGuid());
+        var entity  = MakeType("Omitted");
+        entity.IsActive = false; // the type's default when the JSON never mentioned the field
+        SetJsonBody(ctrl, """{"name": "Omitted"}""");
+
+        await ctrl.Create(entity, default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var saved = await db.UserAddressTypes.FindAsync(entity.Id);
+        Assert.NotNull(saved);
+        Assert.True(saved!.IsActive);
     }
 
     // ── Update ────────────────────────────────────────────────────────────────

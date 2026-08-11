@@ -217,6 +217,27 @@ public class AdminUploadFileTypeControllerTests
         Assert.True(record.AllowAllExtensions);
     }
 
+    [Fact]
+    public async Task Update_ConcurrentWithDelete_NeverThrows()
+    {
+        // Regression: Update fetches "before" (untracked), then re-fetches the tracked row and
+        // used to dereference it with `!` — if a concurrent Delete won that race, the second
+        // fetch returned null and the unchecked `!` threw an unhandled NullReferenceException
+        // (raw 500) instead of a clean NotFound.
+        var factory     = CreateFactory();
+        var (typeId, _) = await SeedTypeWithExtensionAsync(factory, "Racy");
+        var updateCtrl  = Build(factory);
+        var deleteCtrl  = Build(factory);
+
+        var updateTask = updateCtrl.Update(typeId,
+            new AdminUpdateUploadFileTypeRequest("New", "New desc", null, null, true, true, 1, true, null), default);
+        var deleteTask = deleteCtrl.Delete(typeId, default);
+        var (updateResult, deleteResult) = (await updateTask, await deleteTask);
+
+        Assert.True(updateResult.Result is OkObjectResult or NotFoundResult);
+        Assert.True(deleteResult is NoContentResult or NotFoundResult);
+    }
+
     // ── Delete ────────────────────────────────────────────────────────────────
 
     [Fact]

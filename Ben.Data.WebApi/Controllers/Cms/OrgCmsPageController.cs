@@ -45,23 +45,28 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
             .ToListAsync(ct);
 
         var isSuperAdmin = User.IsInRole(Data.Common.Constants.RoleNames.SuperAdmin);
-        var result = new List<CmsPageListItemResponse>(pages.Count);
-
-        foreach (var p in pages)
+        bool canEdit, canDelete;
+        if (isSuperAdmin)
         {
-            bool canEdit, canDelete;
-            if (isSuperAdmin)
-            {
-                canEdit = canDelete = true;
-            }
-            else
-            {
-                canEdit   = await Security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationPage, OrganizationSecurityAction.Update, ct);
-                canDelete = await Security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationPage, OrganizationSecurityAction.Delete, ct);
-            }
-            var sectionCount = await db.CmsSections.CountAsync(s => s.OrganizationPageId == p.Id, ct);
-            result.Add(new CmsPageListItemResponse(p.Id, p.OrganizationId, p.ParentPageId, p.PageTitle, p.UrlName, p.IsHome, p.IsPublished, p.IsPublic, p.SortOrder, sectionCount, canEdit, canDelete, p.DateCreated));
+            canEdit = canDelete = true;
         }
+        else
+        {
+            // userId/orgId/table are loop-invariant — these were previously re-checked once per page.
+            canEdit   = await Security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationPage, OrganizationSecurityAction.Update, ct);
+            canDelete = await Security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationPage, OrganizationSecurityAction.Delete, ct);
+        }
+
+        var pageIds = pages.Select(p => p.Id).ToList();
+        var sectionCounts = await db.CmsSections
+            .Where(s => pageIds.Contains(s.OrganizationPageId))
+            .GroupBy(s => s.OrganizationPageId)
+            .Select(g => new { PageId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.PageId, x => x.Count, ct);
+
+        var result = pages.Select(p => new CmsPageListItemResponse(
+            p.Id, p.OrganizationId, p.ParentPageId, p.PageTitle, p.UrlName, p.IsHome, p.IsPublished, p.IsPublic,
+            p.SortOrder, sectionCounts.GetValueOrDefault(p.Id), canEdit, canDelete, p.DateCreated)).ToList();
 
         return Ok(result);
     }

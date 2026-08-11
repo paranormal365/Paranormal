@@ -57,7 +57,8 @@ public class MyCaseControllerTests
         storage.Setup(s => s.CaseFilePath(It.IsAny<Guid>(), It.IsAny<string>())).Returns("fake/path");
         var ctrl = new MyCaseController(factory, CreateMapper(), storage.Object, new FileMetadataExtractorService(),
             auditLog ?? new Mock<IAuditLogService>().Object,
-            emailService ?? CreateUnconfiguredEmailService(), new ConfigurationBuilder().Build());
+            emailService ?? CreateUnconfiguredEmailService(), new ConfigurationBuilder().Build(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -73,7 +74,8 @@ public class MyCaseControllerTests
     {
         var ctrl = new MyCaseController(factory, CreateMapper(),
             new Mock<IFileStorageService>().Object, new FileMetadataExtractorService(), new Mock<IAuditLogService>().Object,
-            CreateUnconfiguredEmailService(), new ConfigurationBuilder().Build());
+            CreateUnconfiguredEmailService(), new ConfigurationBuilder().Build(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }

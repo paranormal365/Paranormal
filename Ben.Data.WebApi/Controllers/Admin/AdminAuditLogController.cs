@@ -108,7 +108,17 @@ public sealed class AdminAuditLogController : BenControllerBase
                 CreatedByAppUserId = senderId
             };
             db.UserMessageTypes.Add(msgType);
-            await db.SaveChangesAsync(ct);
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                // Lost the race — another request just created the same type. Use theirs.
+                db.Entry(msgType).State = EntityState.Detached;
+                msgType = await db.UserMessageTypes
+                    .FirstAsync(t => t.Name == "System Notification" && t.IsActive, ct);
+            }
         }
 
         var message = new UserMessage
@@ -122,11 +132,14 @@ public sealed class AdminAuditLogController : BenControllerBase
         };
         db.UserMessages.Add(message);
 
-        foreach (var recipientId in request.RecipientUserIds.Distinct())
-        {
-            // Verify the recipient exists
-            if (!await db.AppUsers.AnyAsync(u => u.Id == recipientId, ct)) continue;
+        var requestedIds = request.RecipientUserIds.Distinct().ToList();
+        var validRecipientIds = await db.AppUsers.AsNoTracking()
+            .Where(u => requestedIds.Contains(u.Id))
+            .Select(u => u.Id)
+            .ToListAsync(ct);
 
+        foreach (var recipientId in validRecipientIds)
+        {
             db.UserMessageTos.Add(new UserMessageTo
             {
                 Id           = Guid.NewGuid(),

@@ -71,8 +71,9 @@ public sealed class AdminUploadFileTypeExtensionController : BenControllerBase
         var before = await db.UploadFileTypeExtensions.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
         if (before is null) return NotFound();
         var entity = await db.UploadFileTypeExtensions.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+        if (entity is null) return NotFound();
 
-        entity!.Pattern = request.Pattern.Trim().ToLowerInvariant();
+        entity.Pattern = request.Pattern.Trim().ToLowerInvariant();
         await db.SaveChangesAsync(cancellationToken);
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileTypeExtension), id, before, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
 

@@ -8,6 +8,7 @@ using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Ben.Data.WebApi.Controllers;
 
@@ -28,16 +29,17 @@ public sealed class MyCaseController : BenControllerBase
     private readonly IAuditLogService _auditLog;
     private readonly IEmailService _emailService;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<MyCaseController> _logger;
 
     // Fixed Guid for the 'Case Evidence' upload file type seeded by UploadFileTypeSeeder
     private static readonly Guid EvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
 
     public MyCaseController(IDbContextFactory<BenDataContext> db, IMapper mapper,
         IFileStorageService fileStorage, FileMetadataExtractorService metadataExtractor, IAuditLogService auditLog,
-        IEmailService emailService, IConfiguration configuration)
+        IEmailService emailService, IConfiguration configuration, ILogger<MyCaseController> logger)
     {
         _db = db; _mapper = mapper; _fileStorage = fileStorage; _metadataExtractor = metadataExtractor; _auditLog = auditLog;
-        _emailService = emailService; _configuration = configuration;
+        _emailService = emailService; _configuration = configuration; _logger = logger;
     }
 
     /// <summary>
@@ -500,7 +502,13 @@ public sealed class MyCaseController : BenControllerBase
                 dbMeta.UploadFileMetadata.Add(meta);
                 await dbMeta.SaveChangesAsync(CancellationToken.None);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Extraction is best-effort — never surface this to the caller — but a silent
+                // failure here previously meant a systemic breakage was invisible until someone
+                // noticed missing metadata.
+                _logger.LogWarning(ex, "Metadata extraction failed for upload file {UploadFileId}", capturedId);
+            }
         });
 
         return Ok(new OccurrenceFileItem(uploadFile.Id, uploadFile.FileName, uploadFile.ContentType, uploadFile.FileSize));

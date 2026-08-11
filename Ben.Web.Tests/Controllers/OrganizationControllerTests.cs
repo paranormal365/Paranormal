@@ -433,6 +433,27 @@ public class OrganizationControllerTests
         Assert.IsType<NotFoundResult>(result.Result);
     }
 
+    [Fact]
+    public async Task Update_ConcurrentWithDelete_NeverThrows()
+    {
+        // Regression: Update fetches "before" (untracked), then re-fetches the tracked row and
+        // used to dereference it with `!` — if a concurrent Delete won that race, the second
+        // fetch returned null and the unchecked `!` threw an unhandled NullReferenceException
+        // (raw 500) instead of a clean NotFound.
+        var factory     = CreateFactory();
+        var userId      = Guid.NewGuid();
+        var org         = await SeedOrgAsync(factory);
+        var updateCtrl  = BuildController(factory, UserPrincipal(userId, isSuperAdmin: true));
+        var deleteCtrl  = BuildController(factory, UserPrincipal(userId, isSuperAdmin: true));
+
+        var updateTask = updateCtrl.Update(org.Id, new AdminUpdateOrganizationRequest("Renamed", "renamed"), default);
+        var deleteTask = deleteCtrl.Delete(org.Id, default);
+        var (updateResult, deleteResult) = (await updateTask, await deleteTask);
+
+        Assert.True(updateResult.Result is OkObjectResult or NotFoundResult);
+        Assert.True(deleteResult is NoContentResult or NotFoundResult);
+    }
+
     // ── Delete ────────────────────────────────────────────────────────────────
 
     [Fact]

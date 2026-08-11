@@ -45,7 +45,8 @@ public class UploadFileControllerTests
         var ctrl = new UploadFileController(factory, mapperMock.Object,
             new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object,
             new Moq.Mock<IAuditLogService>().Object,
-            new Ben.Data.WebApi.Services.FileMetadataExtractorService());
+            new Ben.Data.WebApi.Services.FileMetadataExtractorService(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<UploadFileController>.Instance);
         ctrl.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
         {
             HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
@@ -84,7 +85,8 @@ public class UploadFileControllerTests
             }));
 
         var ctrl = new UploadFileController(factory, mapperMock.Object, storage.Object,
-            new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService());
+            new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<UploadFileController>.Instance);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -102,7 +104,8 @@ public class UploadFileControllerTests
     {
         var storage = storageMock ?? new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
         var ctrl = new UploadFileController(factory, new Mock<IMapper>().Object, storage.Object,
-            new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService());
+            new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<UploadFileController>.Instance);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -277,7 +280,8 @@ public class UploadFileControllerTests
         var ctrl = new UploadFileController(factory, mapperMock.Object,
             new Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object,
             new Mock<IAuditLogService>().Object,
-            new Ben.Data.WebApi.Services.FileMetadataExtractorService());
+            new Ben.Data.WebApi.Services.FileMetadataExtractorService(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<UploadFileController>.Instance);
 
         var result = await ctrl.GetChildClips(sourceId, default);
 
@@ -820,5 +824,80 @@ public class UploadFileControllerTests
         var result = await ctrl.Download(fileId, default);
 
         Assert.IsType<FileStreamResult>(result);
+    }
+
+    // ── Update / Delete ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Update_PersistsChanges_AndReturnsOk()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "a.jpg", StoredFileName = "a.jpg", ContentType = "image/jpeg", FileSize = 1,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var newTypeId = Guid.NewGuid();
+        var ctrl      = BuildController(factory, ownerId);
+
+        var result = await ctrl.Update(fileId,
+            new UpdateUploadFileRequest(newTypeId, "New description", true, 5, ownerId), default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        await using var verify = await factory.CreateDbContextAsync();
+        var updated = await verify.UploadFiles.FindAsync(fileId);
+        Assert.Equal(newTypeId, updated!.UploadFileTypeId);
+        Assert.Equal("New description", updated.Description);
+    }
+
+    [Fact]
+    public async Task Update_FileNotFound_ReturnsNotFound()
+    {
+        var factory = CreateFactory();
+        var ctrl    = BuildController(factory, Guid.NewGuid());
+
+        var result = await ctrl.Update(Guid.NewGuid(),
+            new UpdateUploadFileRequest(Guid.NewGuid(), null, false, 0, null), default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Update_ConcurrentWithDelete_NeverThrows()
+    {
+        // Regression: Update fetches "before" (untracked), then re-fetches the tracked row and
+        // used to dereference it with `!` — if a concurrent Delete won that race, the second
+        // fetch returned null and the unchecked `!` threw an unhandled NullReferenceException
+        // (raw 500) instead of a clean NotFound.
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "a.jpg", StoredFileName = "a.jpg", ContentType = "image/jpeg", FileSize = 1,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var updateCtrl = BuildController(factory, ownerId);
+        var deleteCtrl = BuildController(factory, ownerId);
+
+        var updateTask = updateCtrl.Update(fileId,
+            new UpdateUploadFileRequest(Guid.NewGuid(), "Renamed", true, 1, ownerId), default);
+        var deleteTask = deleteCtrl.Delete(fileId, default);
+        var (updateResult, deleteResult) = (await updateTask, await deleteTask);
+
+        Assert.True(updateResult.Result is OkObjectResult or NotFoundResult);
+        Assert.True(deleteResult is NoContentResult or NotFoundResult);
     }
 }

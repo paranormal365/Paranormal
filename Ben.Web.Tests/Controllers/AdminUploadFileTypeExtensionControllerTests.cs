@@ -130,6 +130,29 @@ public class AdminUploadFileTypeExtensionControllerTests
         Assert.IsType<NotFoundResult>((await Build(factory, userId).Update(Guid.NewGuid(), new UpdateUploadFileTypeExtensionRequest(".pdf"), default)).Result);
     }
 
+    [Fact]
+    public async Task Update_ConcurrentWithDelete_NeverThrows()
+    {
+        // Regression: Update fetches "before" (untracked), then re-fetches the tracked row and
+        // used to dereference it with `!` — if a concurrent Delete won that race, the second
+        // fetch returned null and the unchecked `!` threw an unhandled NullReferenceException
+        // (raw 500) instead of a clean NotFound.
+        var (factory, fileTypeId, userId) = await SeedAsync();
+        var seedCtrl = Build(factory, userId);
+        var extId = ((UploadFileTypeExtensionRecord)((CreatedAtActionResult)(await seedCtrl.Create(
+            new CreateUploadFileTypeExtensionRequest(fileTypeId, ".pdf", userId), default)).Result!).Value!).Id;
+
+        var updateCtrl = Build(factory, userId);
+        var deleteCtrl = Build(factory, userId);
+
+        var updateTask = updateCtrl.Update(extId, new UpdateUploadFileTypeExtensionRequest(".docx"), default);
+        var deleteTask = deleteCtrl.Delete(extId, default);
+        var (updateResult, deleteResult) = (await updateTask, await deleteTask);
+
+        Assert.True(updateResult.Result is OkObjectResult or NotFoundResult);
+        Assert.True(deleteResult is NoContentResult or NotFoundResult);
+    }
+
     // ── Delete ────────────────────────────────────────────────────────────────
 
     [Fact]

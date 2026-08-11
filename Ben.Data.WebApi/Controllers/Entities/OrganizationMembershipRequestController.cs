@@ -136,7 +136,16 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         };
 
         db.OrganizationMembershipRequests.Add(membershipRequest);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Lost the race against a concurrent Apply for the same (org, user) — the unique
+            // filtered index on Pending requests caught what the AnyAsync check above couldn't.
+            return Conflict("You already have a pending application for this organization.");
+        }
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationMembershipRequest), membershipRequest.Id, membershipRequest, membershipRequest.AppUserId, AppSources.WebApi, ct));
 
         var created = await db.OrganizationMembershipRequests

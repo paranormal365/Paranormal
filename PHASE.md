@@ -1,66 +1,86 @@
-# Phase B — High-Severity: File Controllers, Org Messages, Cross-Org Chain
+# Phase C — Correctness, Performance, Consistency
 
-Branch: `feature/security-phase-b-file-and-cross-org`
+Branch: `feature/webapi-phase-c-correctness`
 
 ## Why
 
-Phase B closes out the second tier of this session's WebApi/WebApp security audit — high-severity
-findings that require an authenticated user with SOME legitimate relationship to the app (unlike
-Phase A's unauthenticated/any-user holes), but that still let that user reach data or actions well
-outside what they should ever see.
+Phase C closes out the third tier of this session's WebApi/WebApp audit — not authorization holes
+like Phases A and B, but real correctness and performance bugs: a structural bug that silently
+overrides caller intent, a transaction gap that can leave data half-written, N+1 query patterns
+(one of them on an unauthenticated public endpoint), check-then-insert races that surfaced as raw
+500s, unchecked re-fetches that could NRE under a concurrent delete, and a couple of minor
+async/logging gaps.
 
 ## What shipped
 
-**B1 — Per-controller ownership checks**, each independently exploitable by any authenticated user:
-- `UploadFilePermissionRequestController.Review` let anyone self-approve their own (or anyone's)
-  access request — `ReviewedByAppUserId` was read from the request body, not the caller. `Submit`
-  had the same body-spoofing issue for `RequestedByAppUserId`. `GetForFile` and the previously
-  unaudited `GetPendingForReviewer` (a route parameter never checked against the caller) had no
-  ownership check at all.
-- `UploadFileRegionNoteController` — none of its five actions tied the caller to the file;
-  `Delete` didn't even resolve the caller's identity.
-- `UploadFileAudioClipController` — `ClipPreview`/`Clip` let any user extract audio out of
-  someone else's private file, with `Clip` persisting it as a new file the caller owns (permanent
-  exfiltration bypassing the source's visibility).
-- `UploadFileAudioConfigController.Upsert`/`Delete` — no ownership check.
-- `OrgMessageController.GetById` — checked only the route `orgId`, never that the caller was the
-  message's author, a recipient, or (for the public-feed channel) anyone; the read has a side
-  effect (marks read, increments `ViewCount`).
-- `EvidenceVoteController.GetAll` — its own doc comment promised org-membership gating for full
-  voter identities; the code enforced only `[Authorize]`.
+**C1 — `AdminEntityControllerBase.Create`'s `IsActive` bug.** `GetPropertyIfNotSet<T>`'s "was it
+set" heuristic was `!val.Equals(default(T))` — for `bool`, `default` is `false`, so a caller-supplied
+`IsActive: false` was indistinguishable from "unset" and silently forced to `true`. It was
+structurally impossible to create an inactive entity through **any of the 28** generic admin
+controllers. Fixed by making caller intent explicit instead of inferring it from the value: a new
+scoped `EnableRequestBufferingFilter` (`Ben.Data.WebApi/Filters/`) lets `Create` re-read the raw
+JSON body and check whether `isActive` was actually present (case-insensitively), falling back to
+`true` only when it truly wasn't sent. Live-verified: created a real `UserAddressType` with
+`isActive: false` via a SuperAdmin bearer token, confirmed it persisted as inactive on a fresh GET,
+then cleaned up.
 
-**B2 — The systemic cross-org "broken ID chain."** A recurring shape across ~9 controllers: an
-action checks `IsOrgMemberAsync(routeOrgId)` — is the caller a member of the org named in the
-route — then queries the target resource by `caseId` (or another nested id) alone, without ever
-confirming that id actually belongs to `routeOrgId`. A legitimate member of their own org could
-supply their own `orgId` to pass the membership check, then pair it with any other org's real
-`caseId` they know or can guess, and reach that org's data. Fixed via a new shared
-`CaseOrgAccess.CaseBelongsToOrgAsync` helper (and the five duplicated private `IsOrgMemberAsync`
-copies were consolidated into `FileAudienceAccess.IsOrgMemberAsync`) across:
+**C2 — Missing transactions.** `CaseController.AcceptClientRequest` and `CaseReportController.Publish`
+each had two `SaveChangesAsync` calls with nothing tying them together — a failure between them
+left a Case with no CMS pages (unretriable, since the guard rejects an already-Accepted
+application) or a Published report with no client notification message. Both now wrap their two
+saves in `db.Database.BeginTransactionAsync()`, guarded by `db.Database.IsRelational()` since the
+in-memory provider used by tests doesn't support transactions and would fail every test otherwise.
 
-`CaseReportController` (11 of 12 actions), `InvestigationController` (9), `CaseController`
-(`UpdateTimelineEntry`/`DeleteTimelineEntry`), `CaseResearchController` (3),
-`ScheduleProposalController` (3), `CaseTransferController.GetAll`,
-`OrganizationMembershipRequestController.GetVotes`, `OrgCalendarController.GetAttendees`, and
-`OrganizationAddressCrudController` (`GetMemberAccess` — plus `RemoveMemberAccess`, found while
-verifying the file against source, not in the original audit list).
+**C3 — N+1 / latency.**
+- `OrgCmsPageController.GetAll` re-checked the same loop-invariant `HasAccessAsync` permission
+  twice per page and ran a separate `CountAsync` per page (~150 queries for a 50-page org) — hoisted
+  the permission checks out of the loop and replaced the per-page counts with one grouped query.
+- `PublicCaseDiscoveryController.GetAll` — an **unauthenticated public** endpoint — serially awaited
+  an external geocoding HTTP call per unique city on every request, with no cap on the underlying
+  case set. Removed the per-request geocoding entirely; the endpoint now reads whatever coordinates
+  are already stored on the `Case` (already has `Latitude`/`Longitude` columns, populated at intake)
+  instead of resolving them live, eliminating both the external call and its latency/rate-limit risk.
+- `AdminAuditLogController.SendMessage` checked `AppUsers.AnyAsync` once per recipient in a loop —
+  replaced with one batched existence query.
+- `AdminRoleController.GetAll` used blocking, synchronous `_roleManager.Roles.ToList()` inside an
+  async action — switched to `ToListAsync()`.
 
-**B3 — `MyCaseController` under-privilege fix.** `LogOccurrence`/`UpdateOccurrence`/
-`DeleteOccurrence` used a primary-client-only check while their siblings already supported
-co-clients via the controller's own `IsCaseClient` helper — a real co-client got rejected trying
-to log or edit their own occurrence entries. (`GetMyCase` and `AttachFile`, also named in the
-original audit, turned out already fixed by this session's earlier item #4 work — reconfirmed
-against current source rather than assumed.)
+**C4 — Races surfacing as raw 500s.** Two check-then-insert races: `OrganizationMembershipRequestController.Apply`
+could create duplicate pending requests for the same (org, user), and `AdminAuditLogController.SendMessage`'s
+get-or-create for the "System Notification" `UserMessageType` could create duplicates. Added a
+filtered unique index (`WHERE [Status] = 0`) on the former and a unique index on `UserMessageType.Name`
+for the latter (new migration `AddRaceConditionUniqueIndexes`, applied to the dedicated SQL Server —
+confirmed no existing duplicate data before applying). Both actions, plus `UploadFileVoteController.UpsertMyVote`
+and `UploadFileShareController.ShareWithOrg` (whose unique indexes already existed but had no
+`DbUpdateException` handling), now catch the race and either return the pre-existing Conflict
+response or reconcile onto the row that won, since both of those are upserts by design.
 
-## Approach
+**C5 — Null-after-refetch → 500 instead of 404.** Six `Update` actions fetched a `before` snapshot
+(correctly null-checked), then re-fetched the same row *without* checking it and dereferenced it
+with `!` — a delete landing between the two fetches threw an unhandled `NullReferenceException`.
+Added the missing null check to all six: `AdminAppUserController.UpdateProfile`,
+`OrganizationController.Update`, `OrganizationSettingsController.Update`, `UploadFileController.Update`,
+`AdminUploadFileTypeController.Update`, `AdminUploadFileTypeExtensionController.Update`.
 
-Every fix follows the pattern already proven correct elsewhere in the codebase for the same
-resource type — file-visibility checks reuse `FileAudienceAccess.CanViewFileAsync`, org-scoped
-checks reuse the new `CaseOrgAccess`/`FileAudienceAccess.IsOrgMemberAsync` helpers, and actor IDs
-are taken from `GetCurrentUserIdOrThrow()` rather than trusted from the request body throughout.
+**C6 — Minor.** The two fire-and-forget metadata-extraction background tasks
+(`MyCaseController.cs`, `UploadFileController.cs`) swallowed every exception with an empty `catch { }`,
+so a systemic extractor breakage would have been invisible — both now log via a newly-injected
+`ILogger<T>`. (`AdminRoleController`'s blocking `Roles.ToList()` was folded into the C3 fix above,
+since it's the exact same line as that N+1 change.)
+
+## Incidental finding (not fixed here)
+
+While fixing C5's NRE bug in `UploadFileController.Update`, found that the action has **no ownership
+check at all** — any authenticated user can edit any other user's file metadata via
+`PUT /api/upload-files/{id}`. Out of scope for a correctness-only phase; flagged as a follow-up task
+rather than fixed inline.
 
 ## Verification
 
-95 new/updated tests, each proving the exact previously-working attacker shape is now rejected
-(same-org membership + a different org's real resource id → 404/403) while the legitimate path
-still succeeds. Full suite green (1239 total, up from 1188 after Phase A).
+129 new/updated tests (concurrency regression tests use real `Task.WhenAll` races against the
+in-memory provider's genuine unique-index enforcement rather than mocking the failure, so they
+exercise the actual catch-and-recover code path). Full suite green (1262 total, up from 1239 after
+Phase B). Migration applied to the dedicated SQL Server after confirming no existing duplicate data
+would violate the new unique indexes. Live-verified C1 via a real SuperAdmin bearer token: created an
+admin entity with `isActive: false`, confirmed it persisted as inactive on a fresh GET (not just
+echoed from the request), then cleaned up.

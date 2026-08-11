@@ -2,6 +2,7 @@ using AutoMapper;
 using Ben.Service.Models.Admin;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.WebApi.Controllers.Admin;
 
@@ -29,7 +30,7 @@ public sealed class AdminRoleController : BenControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<AdminRoleWithCountResponse>>> GetAll(CancellationToken ct)
     {
-        var roles = _roleManager.Roles.ToList();
+        var roles = await _roleManager.Roles.ToListAsync(ct);
 
         var result = new List<AdminRoleWithCountResponse>(roles.Count);
         foreach (var role in roles.OrderBy(r => r.Name))

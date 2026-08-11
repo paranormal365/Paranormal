@@ -122,6 +122,14 @@ public sealed class CaseReportController : BenControllerBase
         report.PublishedByAppUserId = userId;
         report.DateUpdated          = DateTime.UtcNow;
         report.UpdatedByAppUserId   = userId;
+
+        // Both saves must land together — otherwise a failure between them leaves the report
+        // Published with no client notification. The in-memory provider used by tests doesn't
+        // support transactions, so skip it there rather than fail every test.
+        var transaction = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(ct)
+            : null;
+        await using var _ = transaction;
         await db.SaveChangesAsync(ct);
 
         // Notify client via case message so unread badge and message panel both update
@@ -138,6 +146,8 @@ public sealed class CaseReportController : BenControllerBase
             CreatedByAppUserId = userId,
         });
         await db.SaveChangesAsync(ct);
+        if (transaction is not null)
+            await transaction.CommitAsync(ct);
         return Ok(ToDetail(report));
     }
 
