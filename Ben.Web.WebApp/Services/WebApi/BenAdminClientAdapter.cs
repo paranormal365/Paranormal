@@ -290,7 +290,7 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     }
 
     public Task<GeocodingPreviewResponse?> SearchGeocodingAsync(string query, CancellationToken token = default)
-        => _api.GetAsync<GeocodingPreviewResponse>($"/api/geocode/search?q={Uri.EscapeDataString(query)}", token);
+        => _api.GetAnonymousAsync<GeocodingPreviewResponse>($"/api/geocode/search?q={Uri.EscapeDataString(query)}", token);
 
     public Task<ReverseGeocodingResponse?> ReverseGeocodeAsync(double latitude, double longitude, CancellationToken token = default)
     {

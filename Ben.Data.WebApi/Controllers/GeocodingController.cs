@@ -64,9 +64,12 @@ public sealed class GeocodingController : ControllerBase
 
     /// <summary>
     /// Geocodes a freeform address string without requiring individual components.
-    /// Used by the Directions modal when the user types a starting address.
+    /// Used by the Directions modal when the user types a starting address, and by
+    /// the anonymous home-page "Find Groups" search box -- must stay reachable
+    /// without a bearer token, unlike the rest of this controller.
     /// </summary>
     [HttpGet("search")]
+    [AllowAnonymous]
     public async Task<ActionResult<GeocodingPreviewResponse>> Search(
         [FromQuery] string q,
         CancellationToken ct)
