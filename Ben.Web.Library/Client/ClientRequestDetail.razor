@@ -61,12 +61,12 @@
                     }
 
                     <dt class="col-sm-3">Submitted</dt>
-                    <dd class="col-sm-9">@_request.DateCreated.ToLocalTime().ToString("MMMM d, yyyy h:mm tt")</dd>
+                    <dd class="col-sm-9">@_request.DateCreated.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy h:mm tt")</dd>
 
                     @if (_request.DateUpdated.HasValue)
                     {
                         <dt class="col-sm-3">Last Updated</dt>
-                        <dd class="col-sm-9">@_request.DateUpdated.Value.ToLocalTime().ToString("MMMM d, yyyy h:mm tt")</dd>
+                        <dd class="col-sm-9">@_request.DateUpdated.Value.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy h:mm tt")</dd>
                     }
                 </dl>
 
@@ -124,10 +124,10 @@
                                 <div>
                                     <div class="fw-semibold small">@o.OrganizationName</div>
                                     <div class="text-secondary" style="font-size:.75rem;">
-                                        Submitted @o.DateApplied.ToLocalTime().ToString("MMM d, yyyy")
+                                        Submitted @o.DateApplied.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")
                                         @if (o.DateResponded.HasValue)
                                         {
-                                            <span> · Response @o.DateResponded.Value.ToLocalTime().ToString("MMM d, yyyy")</span>
+                                            <span> · Response @o.DateResponded.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")</span>
                                         }
                                     </div>
                                 </div>

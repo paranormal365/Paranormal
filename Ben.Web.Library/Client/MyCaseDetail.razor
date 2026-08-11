@@ -37,7 +37,7 @@
                 <span class="badge @StatusBadge(_case.Status)">@StatusLabel(_case.Status)</span>
             </div>
             <h3 class="mb-0 mt-1">@_case.Title</h3>
-            <div class="text-secondary small">@_case.City, @_case.State · Opened @_case.DateCaseOpened.ToLocalTime().ToString("MMMM d, yyyy")</div>
+            <div class="text-secondary small">@_case.City, @_case.State · Opened @_case.DateCaseOpened.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy")</div>
             @if (!string.IsNullOrWhiteSpace(_case.CaseManagerDisplayName))
             {
                 <div class="text-secondary small mt-1">Case Manager: <strong>@_case.CaseManagerDisplayName</strong></div>
@@ -63,8 +63,8 @@
                 <div class="card-body">
                     <TelerikCalendar Value="@_selectedDate"
                                      ValueChanged="@((DateTime d) => _selectedDate = d)"
-                                     Min="@_case.DateCaseOpened.ToLocalTime().Date"
-                                     Max="@(_case.DateCaseClosed?.ToLocalTime().Date ?? DateTime.Today)"
+                                     Min="@_case.DateCaseOpened.ToViewerLocalTime(UserState).Date"
+                                     Max="@(_case.DateCaseClosed?.ToViewerLocalTime(UserState).Date ?? DateTime.Today)"
                                      ShowOtherMonthDays="false">
                     </TelerikCalendar>
                 </div>
@@ -95,7 +95,7 @@
                                             <div class="text-secondary small mt-1">@((MarkupString)o.Body)</div>
                                         }
                                         <div class="text-muted" style="font-size:.72rem;">
-                                            @((o.EventDateTime ?? o.DateCreated).ToLocalTime().ToString("h:mm tt"))
+                                            @((o.EventDateTime ?? o.DateCreated).ToViewerLocalTime(UserState).ToString("h:mm tt"))
                                         </div>
                                         @* Attached files *@
                                         @if (o.Files.Count > 0)
@@ -181,9 +181,9 @@
                                     <div>
                                         <div class="fw-semibold small">@inv.Title</div>
                                         <div class="text-secondary small">
-                                            @inv.ScheduledDateTime.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                                            @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
                                             @if (inv.EndDateTime.HasValue)
-                                            { <span> – @inv.EndDateTime.Value.ToLocalTime().ToString("h:mm tt")</span> }
+                                            { <span> – @inv.EndDateTime.Value.ToViewerLocalTime(UserState).ToString("h:mm tt")</span> }
                                         </div>
                                         @if (!string.IsNullOrEmpty(inv.Location))
                                         {
@@ -191,18 +191,18 @@
                                         }
                                         @if (inv.EvidenceDueDate.HasValue)
                                         {
-                                            var isPastDue = inv.EvidenceDueDate.Value.ToLocalTime() < DateTime.Now;
-                                            var isSoon    = !isPastDue && inv.EvidenceDueDate.Value.ToLocalTime() < DateTime.Now.AddDays(7);
+                                            var isPastDue = inv.EvidenceDueDate.Value < DateTime.UtcNow;
+                                            var isSoon    = !isPastDue && inv.EvidenceDueDate.Value < DateTime.UtcNow.AddDays(7);
                                             <div class="small mt-1 @(isPastDue ? "text-danger" : isSoon ? "text-warning" : "text-secondary")">
                                                 Evidence @(isPastDue ? "was due" : "due"):
-                                                @inv.EvidenceDueDate.Value.ToLocalTime().ToString("MMM d, yyyy")
+                                                @inv.EvidenceDueDate.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")
                                                 @if (isPastDue) { <strong> (closed)</strong> }
                                             </div>
                                         }
                                         @if (canCancel)
                                         {
                                             <div class="text-secondary small mt-1">
-                                                Cancel by: @inv.CancellationDeadlineUtc!.Value.ToLocalTime().ToString("MMM d h:mm tt")
+                                                Cancel by: @inv.CancellationDeadlineUtc!.Value.ToViewerLocalTime(UserState).ToString("MMM d h:mm tt")
                                             </div>
                                         }
                                         @if (deadlinePassed && inv.Status == Ben.Data.Common.Enums.InvestigationStatus.Scheduled)
@@ -253,8 +253,8 @@
                                 var s = slot;
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="small">
-                                        @s.StartDateTime.ToLocalTime().ToString("ddd MMM d, yyyy h:mm tt")
-                                        @if (s.EndDateTime.HasValue) { <span> – @s.EndDateTime.Value.ToLocalTime().ToString("h:mm tt")</span> }
+                                        @s.StartDateTime.ToViewerLocalTime(UserState).ToString("ddd MMM d, yyyy h:mm tt")
+                                        @if (s.EndDateTime.HasValue) { <span> – @s.EndDateTime.Value.ToViewerLocalTime(UserState).ToString("h:mm tt")</span> }
                                     </span>
                                     <TelerikButton Size="sm" ThemeColor="success"
                                                    OnClick="@(async () => await AcceptProposal(p.Id, s.Id))"
@@ -309,7 +309,7 @@
                             <div class="d-flex align-items-center justify-content-between">
                                 <span class="small">
                                     @inv.Email
-                                    <span class="text-secondary"> · expires @inv.DateExpires.ToLocalTime().ToString("MMM d, yyyy")</span>
+                                    <span class="text-secondary"> · expires @inv.DateExpires.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")</span>
                                 </span>
                                 <div class="d-flex gap-1">
                                     <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Copy"
@@ -401,7 +401,7 @@
                             <div class="fw-semibold small">@r.Title</div>
                             @if (r.PublishedAt.HasValue)
                             {
-                                <div class="text-secondary small">Published @r.PublishedAt.Value.ToLocalTime().ToString("MMM d, yyyy")</div>
+                                <div class="text-secondary small">Published @r.PublishedAt.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")</div>
                             }
                         </div>
                         <TelerikButton Size="sm" FillMode="outline" Icon="@SvgIcon.FilePdf"
@@ -526,7 +526,7 @@
                 <TelerikTextBox Value="@InviteLink(_inviteResult.Invite)" ReadOnly="true" Width="100%" />
                 <TelerikButton Icon="@SvgIcon.Copy" OnClick="@(() => CopyToClipboard(InviteLink(_inviteResult.Invite)))" />
             </div>
-            <div class="text-secondary small mt-2">This link expires @_inviteResult.Invite?.DateExpires.ToLocalTime().ToString("MMMM d, yyyy").</div>
+            <div class="text-secondary small mt-2">This link expires @_inviteResult.Invite?.DateExpires.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy").</div>
         }
     </WindowContent>
     <WindowActions><WindowAction Name="Close" OnClick="CloseAddCoClientDialog" /></WindowActions>
@@ -703,14 +703,14 @@
 
     private List<ClientCaseOccurrence> OccurrencesForDate(DateTime date) =>
         _case?.Occurrences
-            .Where(o => (o.EventDateTime ?? o.DateCreated).ToLocalTime().Date == date.Date)
+            .Where(o => (o.EventDateTime ?? o.DateCreated).ToViewerLocalTime(UserState).Date == date.Date)
             .OrderBy(o => o.EventDateTime ?? o.DateCreated)
             .ToList() ?? [];
 
     private void OpenLogDialog()
     {
         _editOcc = null;
-        _form = new OccForm { EventDateTime = _selectedDate.Date.AddHours(DateTime.Now.Hour) };
+        _form = new OccForm { EventDateTime = _selectedDate.Date.AddHours(UserState.NowInViewerTimeZone().Hour) };
         _dialogError = null;
         _showDialog = true;
     }
@@ -720,7 +720,7 @@
         _editOcc = occ;
         _form = new OccForm
         {
-            EventDateTime = occ.EventDateTime ?? occ.DateCreated,
+            EventDateTime = (occ.EventDateTime ?? occ.DateCreated).ToViewerLocalTime(UserState),
             Title         = occ.Title ?? "",
             Body          = occ.Body ?? "",
         };
@@ -736,7 +736,7 @@
         _isBusy = true; _dialogError = null;
         try
         {
-            var req = new LogOccurrenceRequest(_form.EventDateTime, _form.Title?.Trim(), _form.Body.Trim());
+            var req = new LogOccurrenceRequest(_form.EventDateTime!.Value.ToUtcFromViewerLocal(UserState), _form.Title?.Trim(), _form.Body.Trim());
             if (_editOcc is null)
                 await AdminClient.LogOccurrenceAsync(CaseId, req);
             else
