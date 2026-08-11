@@ -368,7 +368,12 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender || Id is null) return;
-        if (!UserState.IsAuthenticated) return;
+        // Without this, a hard nav could reach this pass before OnInitializedAsync's own
+        // (interactive-only) await had a chance to resolve AuthReady, reading a stale
+        // IsAuthenticated=false and silently skipping the draft load for good — firstRender
+        // only fires once, so nothing would ever retry it.
+        await UserState.AuthReady;
+        if (!UserState.IsAuthenticated) { StateHasChanged(); return; }
         try
         {
             var existing = await AdminClient.GetClientRequestAsync(Id.Value);
@@ -463,11 +468,18 @@
 
     private async Task SaveDraft()
     {
-        await SaveDraftSilent();
-        NavManager.NavigateTo("/my-requests");
+        // Used to navigate away unconditionally even when the save silently failed — the user
+        // would leave the wizard believing their draft was saved when it wasn't.
+        if (await SaveDraftSilent())
+            NavManager.NavigateTo("/my-requests");
+        else
+            _error = "Failed to save your draft. Please try again.";
     }
 
-    private async Task SaveDraftSilent()
+    /// <summary>Saves the current draft without navigating. Returns whether it actually succeeded —
+    /// callers that proceed regardless (auto-save between wizard steps) can ignore the result, but
+    /// anything user-facing (SaveDraft, SubmitRequest) must check it.</summary>
+    private async Task<bool> SaveDraftSilent()
     {
         try
         {
@@ -476,13 +488,15 @@
             {
                 var created = await AdminClient.CreateClientRequestAsync(req);
                 _draftId = created?.Id;
+                return created is not null;
             }
             else
             {
-                await AdminClient.UpdateClientRequestAsync(_draftId.Value, req);
+                var updated = await AdminClient.UpdateClientRequestAsync(_draftId.Value, req);
+                return updated is not null;
             }
         }
-        catch { /* silent — don't block navigation */ }
+        catch { return false; }
     }
 
     private async Task SubmitRequest()
@@ -492,9 +506,13 @@
         _error  = null;
         try
         {
-            // Ensure draft is saved first
-            await SaveDraftSilent();
-            if (_draftId is null) { _error = "Failed to save request. Please try again."; return; }
+            // Ensure the latest edits are saved first — if this silently failed, submitting now
+            // would transition a stale server-side draft instead of what the user actually typed.
+            if (!await SaveDraftSilent() || _draftId is null)
+            {
+                _error = "Failed to save request. Please try again.";
+                return;
+            }
 
             var result = await AdminClient.SubmitClientRequestAsync(
                 _draftId.Value, _selectedOrgIds.ToList());

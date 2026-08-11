@@ -1,86 +1,71 @@
-# Phase C — Correctness, Performance, Consistency
+# Phase D — Blazor Client Correctness
 
-Branch: `feature/webapi-phase-c-correctness`
+Branch: `feature/webapp-phase-d-client-correctness`
 
 ## Why
 
-Phase C closes out the third tier of this session's WebApi/WebApp audit — not authorization holes
-like Phases A and B, but real correctness and performance bugs: a structural bug that silently
-overrides caller intent, a transaction gap that can leave data half-written, N+1 query patterns
-(one of them on an unauthenticated public endpoint), check-then-insert races that surfaced as raw
-500s, unchecked re-fetches that could NRE under a concurrent delete, and a couple of minor
-async/logging gaps.
+Phase D closes out the fourth and final tier of this session's WebApi/WebApp audit — client-side
+silent-failure UX patterns in `Ben.Web.Library`/`Ben.Web.WebApp`. Unlike Phases A-C, nothing here is
+a security hole: the bugs are all "the user did something, it silently failed, and nothing told
+them" — a missing-AuthReady race that shows a false "not signed in" screen, mutations whose failure
+path is a no-op, double-submit windows, and one latent same-route navigation gap.
 
 ## What shipped
 
-**C1 — `AdminEntityControllerBase.Create`'s `IsActive` bug.** `GetPropertyIfNotSet<T>`'s "was it
-set" heuristic was `!val.Equals(default(T))` — for `bool`, `default` is `false`, so a caller-supplied
-`IsActive: false` was indistinguishable from "unset" and silently forced to `true`. It was
-structurally impossible to create an inactive entity through **any of the 28** generic admin
-controllers. Fixed by making caller intent explicit instead of inferring it from the value: a new
-scoped `EnableRequestBufferingFilter` (`Ben.Data.WebApi/Filters/`) lets `Create` re-read the raw
-JSON body and check whether `isActive` was actually present (case-insensitively), falling back to
-`true` only when it truly wasn't sent. Live-verified: created a real `UserAddressType` with
-`isActive: false` via a SuperAdmin bearer token, confirmed it persisted as inactive on a fresh GET,
-then cleaned up.
+**Missing `AuthReady` await (2 instances).** `MyVideosPage.razor` checked `IsAuthenticated` directly
+in both its top-level markup gate and `OnInitializedAsync`, racing ahead of the async auth-state
+resolution — a hard nav could show "you must be signed in" to a genuinely signed-in user, and even
+once past that render, the project list silently never loaded. Fixed by adding a `_authReady` gate
+(loading spinner until `AuthReady` resolves, mirroring the same-file pattern already used in
+`CaseVideoEditorPage.razor`) and awaiting `AuthReady` in `OnInitializedAsync` behind the established
+`RendererInfo.IsInteractive` guard. `ClientRequestWizard.razor`'s `OnAfterRenderAsync` checked
+`IsAuthenticated` without ever awaiting `AuthReady` in that method — relying on a separate, earlier
+`OnInitializedAsync` await that doesn't always run first — so a hard nav could silently skip loading
+an existing draft for good, since `firstRender` only fires once. Fixed by awaiting `AuthReady`
+directly in `OnAfterRenderAsync` before the check.
 
-**C2 — Missing transactions.** `CaseController.AcceptClientRequest` and `CaseReportController.Publish`
-each had two `SaveChangesAsync` calls with nothing tying them together — a failure between them
-left a Case with no CMS pages (unretriable, since the guard rejects an already-Accepted
-application) or a Published report with no client notification message. Both now wrap their two
-saves in `db.Database.BeginTransactionAsync()`, guarded by `db.Database.IsRelational()` since the
-in-memory provider used by tests doesn't support transactions and would fail every test otherwise.
+**Silent-failure mutations (9 components).** `WebApiClient`'s helpers return `null`/`false` on any
+non-2xx rather than throwing, so "it didn't throw" was never proof of success — several call sites
+treated a null/false result as if nothing happened, with the surrounding UI (dialog, form) closing
+or navigating away regardless:
+- `ClientRequestWizard.razor` — "Save & Exit" navigated away unconditionally even when the save
+  failed; `SaveDraftSilent` now returns success/failure, checked by both `SaveDraft` and
+  `SubmitRequest` (submitting on top of a silently-failed draft update would have transitioned a
+  stale server-side draft instead of what the user actually typed).
+- `OrganizationFiles.razor` — publish/edit/delete dialogs all closed silently on failure with zero
+  feedback; added error toasts to all three.
+- `OrganizationMembershipRequests.razor` — accept/deny silently no-op'd on failure; added error
+  toasts.
+- `MyVideosPage.razor` / `CaseVideoEditorPage.razor` (twins) — delete-project silently cleared
+  `_deleteTarget` with no notification on failure; added error notifications to both copies.
+- `EvidenceVoteWidget.razor` / `CaseVoteWidget.razor` (twins) — three empty `catch { }` blocks each,
+  and neither component had an error field at all; added `_error` (initial load) and `_actionError`
+  (cast/remove vote) fields, both rendered inline.
+- `WsRegionExplorer.razor` — reload-notes, save-edit, and delete-note all silently ignored failure;
+  reused the existing (already-wired-up) `_noteError` field for all three instead of leaving them
+  silent.
 
-**C3 — N+1 / latency.**
-- `OrgCmsPageController.GetAll` re-checked the same loop-invariant `HasAccessAsync` permission
-  twice per page and ran a separate `CountAsync` per page (~150 queries for a 50-page org) — hoisted
-  the permission checks out of the loop and replaced the per-page counts with one grouped query.
-- `PublicCaseDiscoveryController.GetAll` — an **unauthenticated public** endpoint — serially awaited
-  an external geocoding HTTP call per unique city on every request, with no cap on the underlying
-  case set. Removed the per-request geocoding entirely; the endpoint now reads whatever coordinates
-  are already stored on the `Case` (already has `Latitude`/`Longitude` columns, populated at intake)
-  instead of resolving them live, eliminating both the external call and its latency/rate-limit risk.
-- `AdminAuditLogController.SendMessage` checked `AppUsers.AnyAsync` once per recipient in a loop —
-  replaced with one batched existence query.
-- `AdminRoleController.GetAll` used blocking, synchronous `_roleManager.Roles.ToList()` inside an
-  async action — switched to `ToListAsync()`.
+**Double-submit gap.** `OrganizationFiles.razor`'s publish/edit/delete dialog buttons had no busy
+guard, unlike the file's own upload/copy buttons which already disable + relabel during their
+request — added matching `_publishing`/`_savingEdit`/`_deleting` flags to all three.
 
-**C4 — Races surfacing as raw 500s.** Two check-then-insert races: `OrganizationMembershipRequestController.Apply`
-could create duplicate pending requests for the same (org, user), and `AdminAuditLogController.SendMessage`'s
-get-or-create for the "System Notification" `UserMessageType` could create duplicates. Added a
-filtered unique index (`WHERE [Status] = 0`) on the former and a unique index on `UserMessageType.Name`
-for the latter (new migration `AddRaceConditionUniqueIndexes`, applied to the dedicated SQL Server —
-confirmed no existing duplicate data before applying). Both actions, plus `UploadFileVoteController.UpsertMyVote`
-and `UploadFileShareController.ShareWithOrg` (whose unique indexes already existed but had no
-`DbUpdateException` handling), now catch the race and either return the pre-existing Conflict
-response or reconcile onto the row that won, since both of those are upserts by design.
+**Validation.** `MyCaseDetail.razor`'s co-client invite gated only on non-empty; added an
+email-format check (`System.Net.Mail.MailAddress` round-trip) as UX polish — server-side validation
+was already correct.
 
-**C5 — Null-after-refetch → 500 instead of 404.** Six `Update` actions fetched a `before` snapshot
-(correctly null-checked), then re-fetched the same row *without* checking it and dereferenced it
-with `!` — a delete landing between the two fetches threw an unhandled `NullReferenceException`.
-Added the missing null check to all six: `AdminAppUserController.UpdateProfile`,
-`OrganizationController.Update`, `OrganizationSettingsController.Update`, `UploadFileController.Update`,
-`AdminUploadFileTypeController.Update`, `AdminUploadFileTypeExtensionController.Update`.
-
-**C6 — Minor.** The two fire-and-forget metadata-extraction background tasks
-(`MyCaseController.cs`, `UploadFileController.cs`) swallowed every exception with an empty `catch { }`,
-so a systemic extractor breakage would have been invisible — both now log via a newly-injected
-`ILogger<T>`. (`AdminRoleController`'s blocking `Roles.ToList()` was folded into the C3 fix above,
-since it's the exact same line as that N+1 change.)
-
-## Incidental finding (not fixed here)
-
-While fixing C5's NRE bug in `UploadFileController.Update`, found that the action has **no ownership
-check at all** — any authenticated user can edit any other user's file metadata via
-`PUT /api/upload-files/{id}`. Out of scope for a correctness-only phase; flagged as a follow-up task
-rather than fixed inline.
+**Latent same-route navigation gap.** `CaseDetail.razor` only loaded `_case` in
+`OnAfterRenderAsync(firstRender)` and read `InitialTab` in `OnInitialized` — both fire once per
+component instance, so a future same-route link that changes `CaseId` in place (Blazor reuses the
+instance) would have silently kept showing the previous case. Added `OnParametersSetAsync` tracking
+the last-loaded `CaseId`, reloading when it changes, without touching the existing first-render path.
 
 ## Verification
 
-129 new/updated tests (concurrency regression tests use real `Task.WhenAll` races against the
-in-memory provider's genuine unique-index enforcement rather than mocking the failure, so they
-exercise the actual catch-and-recover code path). Full suite green (1262 total, up from 1239 after
-Phase B). Migration applied to the dedicated SQL Server after confirming no existing duplicate data
-would violate the new unique indexes. Live-verified C1 via a real SuperAdmin bearer token: created an
-admin entity with `isActive: false`, confirmed it persisted as inactive on a fresh GET (not just
-echoed from the request), then cleaned up.
+Full suite green (1262 total, no change — none of these fixes touch server code covered by unit
+tests). Live interactive verification (the AuthReady hard-nav fix in particular needs a real signed-in
+session to observe) hit this sandbox's known Blazor Server SignalR/circuit-negotiation limitation —
+the page loads and prerenders but the interactive circuit can't connect, so login and true hard-nav
+behavior can't be exercised here. Verified instead via: (1) matching the exact fix shape already
+proven correct elsewhere in this codebase (`MyCases.razor`'s `OnAfterRenderAsync` + `AuthReady`
+pattern, `CaseVideoEditorPage.razor`'s loading-gate pattern), and (2) clean compilation with no new
+warnings.

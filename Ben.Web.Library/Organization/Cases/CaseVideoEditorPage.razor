@@ -235,6 +235,10 @@
             _caseProjects.Remove(_deleteTarget);
             _notifications?.Show("Project deleted.", ThemeConstants.Notification.ThemeColor.Success);
         }
+        else
+        {
+            _notifications?.Show("Failed to delete the project. Please try again.", ThemeConstants.Notification.ThemeColor.Error);
+        }
         _deleteTarget = null;
     }
 
