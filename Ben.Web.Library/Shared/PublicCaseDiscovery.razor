@@ -219,17 +219,30 @@ else
     // ── JS interop ───────────────────────────────────────────────────────────
     private IJSObjectReference? _module;
     private DotNetObjectReference<PublicCaseDiscovery>? _dotnetRef;
+    private bool _mapResized;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender) return;
+        if (firstRender)
+        {
+            _module     = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Ben.Web.Library/Shared/PublicCaseDiscovery.razor.js");
+            _dotnetRef  = DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("init", _dotnetRef);
+            await _module.InvokeVoidAsync("tryGetUserLocation", _dotnetRef);
 
-        _module     = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Ben.Web.Library/Shared/PublicCaseDiscovery.razor.js");
-        _dotnetRef  = DotNetObjectReference.Create(this);
-        await _module.InvokeVoidAsync("init", _dotnetRef);
-        await _module.InvokeVoidAsync("tryGetUserLocation", _dotnetRef);
+            await LoadAsync();
+            return;
+        }
 
-        await LoadAsync();
+        // The map is first mounted on the render where _loading flips false — its
+        // container wasn't in the DOM yet during firstRender above, so Kendo would
+        // have measured a stale/zero width if we asked it to redraw any earlier.
+        // Resize once, now that the real container is actually laid out.
+        if (!_loading && !_mapResized && _module is not null)
+        {
+            _mapResized = true;
+            await _module.InvokeVoidAsync("resizeMap");
+        }
     }
 
     private async Task LoadAsync()
