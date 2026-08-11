@@ -62,7 +62,7 @@
                                     @if (e.EventDateTime.HasValue)
                                     {
                                         <small class="text-secondary">
-                                            @e.EventDateTime.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                                            @e.EventDateTime.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
                                         </small>
                                     }
                                     @if (!string.IsNullOrEmpty(e.AuthorDisplayName))

@@ -2,6 +2,7 @@
 @using Ben.Web.Library.Services
 @using Microsoft.JSInterop
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 @inject NavigationManager NavManager
 @inject IJSRuntime JS
 
@@ -39,11 +40,11 @@ else if (_editingReport is null)
                     </div>
                     @if (r.ExpectedDeliveryDate.HasValue)
                     {
-                        <div class="text-secondary small">Expected: @r.ExpectedDeliveryDate.Value.ToLocalTime().ToString("MMM d, yyyy")</div>
+                        <div class="text-secondary small">Expected: @r.ExpectedDeliveryDate.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")</div>
                     }
                     @if (r.PublishedAt.HasValue)
                     {
-                        <div class="text-secondary small">Published: @r.PublishedAt.Value.ToLocalTime().ToString("MMM d, yyyy")</div>
+                        <div class="text-secondary small">Published: @r.PublishedAt.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")</div>
                     }
                 </div>
                 <div class="d-flex gap-1">

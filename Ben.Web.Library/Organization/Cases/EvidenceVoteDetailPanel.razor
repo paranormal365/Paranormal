@@ -3,6 +3,7 @@
 @using Ben.Service.Models.Entities
 @using Ben.Web.Library.Services
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 
 @if (_loading)
 {
@@ -51,7 +52,7 @@ else
                         <div class="text-secondary mt-1">@v.Comment</div>
                     }
                     <div class="text-muted mt-1" style="font-size:.7rem;">
-                        @v.DateVoted.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                        @v.DateVoted.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
                         @if (v.CaseReference is not null)
                         {
                             <span class="ms-2">Case @v.CaseReference</span>

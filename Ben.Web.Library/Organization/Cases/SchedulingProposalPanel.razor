@@ -2,6 +2,7 @@
 @using Ben.Data.Common.Enums
 @using Ben.Web.Library.Services
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 
 @if (_loading) { <TelerikLoaderContainer Visible="true" Text="Loading proposals…" /> }
 else
@@ -22,7 +23,7 @@ else
                 <div class="d-flex align-items-start justify-content-between">
                     <div class="flex-grow-1">
                         <span class="badge @StatusBadge(prop.Status) me-2">@prop.Status</span>
-                        <span class="text-secondary small">Sent @prop.DateCreated.ToLocalTime().ToString("MMM d")</span>
+                        <span class="text-secondary small">Sent @prop.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d")</span>
                         @if (!string.IsNullOrWhiteSpace(prop.Notes))
                         {
                             <div class="text-secondary small mt-1">@prop.Notes</div>
@@ -33,15 +34,15 @@ else
                                 var isAccepted = prop.AcceptedSlotId == slot.Id;
                                 <div class="small @(isAccepted ? "text-success fw-semibold" : "")">
                                     @(isAccepted ? "✓ " : "• ")
-                                    @slot.StartDateTime.ToLocalTime().ToString("ddd MMM d, yyyy h:mm tt")
-                                    @if (slot.EndDateTime.HasValue) { <span> – @slot.EndDateTime.Value.ToLocalTime().ToString("h:mm tt")</span> }
+                                    @slot.StartDateTime.ToViewerLocalTime(UserState).ToString("ddd MMM d, yyyy h:mm tt")
+                                    @if (slot.EndDateTime.HasValue) { <span> – @slot.EndDateTime.Value.ToViewerLocalTime(UserState).ToString("h:mm tt")</span> }
                                 </div>
                             }
                         </div>
                         @if (prop.Status == ScheduleProposalStatus.Countered && prop.ClientCounterDateTime.HasValue)
                         {
                             <div class="text-warning small mt-1">
-                                Client proposed: @prop.ClientCounterDateTime.Value.ToLocalTime().ToString("ddd MMM d, yyyy h:mm tt")
+                                Client proposed: @prop.ClientCounterDateTime.Value.ToViewerLocalTime(UserState).ToString("ddd MMM d, yyyy h:mm tt")
                                 @if (!string.IsNullOrEmpty(prop.ClientResponseNotes)) { <span> — @prop.ClientResponseNotes</span> }
                             </div>
                         }

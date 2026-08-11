@@ -81,7 +81,7 @@
                             </div>
                             <div class="small text-truncate fw-semibold" title="@file.FileName">@file.FileName</div>
                             <div class="text-secondary" style="font-size:.72rem;">
-                                @FormatSize(file.FileSize) · @file.DateCreated.ToLocalTime().ToString("MMM d, yyyy")
+                                @FormatSize(file.FileSize) · @file.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")
                             </div>
                             @if (ShowVoting)
                             {

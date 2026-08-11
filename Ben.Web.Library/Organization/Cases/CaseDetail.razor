@@ -34,7 +34,7 @@
                 <h3 class="mb-0">@_case.DisplayLabel</h3>
                 <div class="text-secondary small mt-1">
                     @_case.City, @_case.State ·
-                    Opened @_case.DateCaseOpened.ToLocalTime().ToString("MMMM d, yyyy")
+                    Opened @_case.DateCaseOpened.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy")
                     @if (_case.IsPublic) { <span class="badge bg-info text-dark ms-2">Public</span> }
                     @if (!string.IsNullOrEmpty(_case.PublicPseudonym))
                     {
@@ -107,7 +107,7 @@
                                     @if (_case.DateCaseClosed.HasValue)
                                     {
                                         <dt class="col-5">Closed</dt>
-                                        <dd class="col-7">@_case.DateCaseClosed.Value.ToLocalTime().ToString("MMM d, yyyy")</dd>
+                                        <dd class="col-7">@_case.DateCaseClosed.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")</dd>
                                     }
                                 </dl>
                             </div>

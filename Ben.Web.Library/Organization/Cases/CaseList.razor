@@ -78,10 +78,10 @@
                             </div>
                             <div class="text-secondary small">
                                 @c.City, @c.State ·
-                                Opened @c.DateCaseOpened.ToLocalTime().ToString("MMM d, yyyy")
+                                Opened @c.DateCaseOpened.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")
                                 @if (c.DateCaseClosed.HasValue)
                                 {
-                                    <span> · Closed @c.DateCaseClosed.Value.ToLocalTime().ToString("MMM d, yyyy")</span>
+                                    <span> · Closed @c.DateCaseClosed.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")</span>
                                 }
                             </div>
                             <div class="text-secondary small mt-1">
