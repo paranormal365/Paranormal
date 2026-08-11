@@ -4,7 +4,9 @@ using Ben.Data.WebApi.Controllers.Admin;
 using Ben.Service.Models.Admin;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore.Query;
 using Moq;
+using System.Linq.Expressions;
 using Xunit;
 
 namespace Ben.Web.Tests.Controllers;
@@ -14,6 +16,46 @@ namespace Ben.Web.Tests.Controllers;
 /// </summary>
 public class AdminRoleControllerTests
 {
+    // ── Async-queryable test doubles ─────────────────────────────────────────
+    // RoleManager.Roles is EF's real DbSet in production (IAsyncEnumerable-capable), so the
+    // controller's ToListAsync() needs a queryable that actually supports it — a plain
+    // .AsQueryable() over an in-memory array does not. This is the standard EF Core
+    // async-mocking shim (per Microsoft's own unit-testing docs).
+    private sealed class TestAsyncEnumerable<T>(IEnumerable<T> enumerable)
+        : EnumerableQuery<T>(enumerable), IAsyncEnumerable<T>, IQueryable<T>
+    {
+        IQueryProvider IQueryable.Provider => new TestAsyncQueryProvider<T>(this);
+
+        public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+            => new TestAsyncEnumerator<T>(((IEnumerable<T>)this).GetEnumerator());
+    }
+
+    private sealed class TestAsyncEnumerator<T>(IEnumerator<T> inner) : IAsyncEnumerator<T>
+    {
+        public T Current => inner.Current;
+        public ValueTask<bool> MoveNextAsync() => ValueTask.FromResult(inner.MoveNext());
+        public ValueTask DisposeAsync() { inner.Dispose(); return ValueTask.CompletedTask; }
+    }
+
+    private sealed class TestAsyncQueryProvider<T>(IQueryProvider inner) : IAsyncQueryProvider
+    {
+        public IQueryable CreateQuery(Expression expression) => new TestAsyncEnumerable<T>(inner.CreateQuery<T>(expression));
+        public IQueryable<TElement> CreateQuery<TElement>(Expression expression) => new TestAsyncEnumerable<TElement>(inner.CreateQuery<TElement>(expression));
+        public object? Execute(Expression expression) => inner.Execute(expression);
+        public TResult Execute<TResult>(Expression expression) => inner.Execute<TResult>(expression);
+        public TResult ExecuteAsync<TResult>(Expression expression, CancellationToken cancellationToken = default)
+        {
+            var expected = typeof(TResult).GetGenericArguments()[0];
+            var executionResult = typeof(IQueryProvider)
+                .GetMethod(nameof(IQueryProvider.Execute), 1, [typeof(Expression)])!
+                .MakeGenericMethod(expected)
+                .Invoke(inner, [expression]);
+            return (TResult)typeof(Task).GetMethod(nameof(Task.FromResult))!
+                .MakeGenericMethod(expected)
+                .Invoke(null, [executionResult])!;
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static Mock<RoleManager<IdentityRole<Guid>>> CreateRoleManagerMock()
@@ -70,7 +112,7 @@ public class AdminRoleControllerTests
         var userManagerMock  = CreateUserManagerMock();
 
         roleManagerMock.Setup(m => m.Roles)
-            .Returns(new[] { superRole, adminRole }.AsQueryable());
+            .Returns(new TestAsyncEnumerable<IdentityRole<Guid>>([superRole, adminRole]));
 
         userManagerMock
             .Setup(m => m.GetUsersInRoleAsync("Admin"))
@@ -98,7 +140,7 @@ public class AdminRoleControllerTests
     {
         var roleManagerMock = CreateRoleManagerMock();
         roleManagerMock.Setup(m => m.Roles)
-            .Returns(Array.Empty<IdentityRole<Guid>>().AsQueryable());
+            .Returns(new TestAsyncEnumerable<IdentityRole<Guid>>(Array.Empty<IdentityRole<Guid>>()));
 
         var controller = BuildController(roleManagerMock);
 

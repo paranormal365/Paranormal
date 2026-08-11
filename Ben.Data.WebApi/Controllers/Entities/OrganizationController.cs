@@ -121,8 +121,9 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         var before = await db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.Id == id, ct);
         if (before is null) return NotFound();
         var org = await db.Organizations.FirstOrDefaultAsync(o => o.Id == id, ct);
+        if (org is null) return NotFound();
 
-        org!.Name                   = request.Name.Trim();
+        org.Name                   = request.Name.Trim();
         org.UrlName                = request.UrlName.Trim().ToLowerInvariant();
         org.IsAcceptingApplications = request.IsAcceptingApplications;
         org.PublicPhone             = request.PublicPhone?.Trim();
@@ -132,7 +133,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         org.UpdatedByAppUserId     = userId.Value;
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Organization), id, before, org!, GetCurrentUserId(), AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Organization), id, before, org, GetCurrentUserId(), AppSources.WebApi, ct));
         return Ok(_mapper2.Map<OrganizationAdminRecord>(org));
     }
 

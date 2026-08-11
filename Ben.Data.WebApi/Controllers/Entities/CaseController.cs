@@ -262,11 +262,22 @@ public sealed class CaseController : BenControllerBase
         newCase.CaseYear      = yr;
         newCase.OrgCaseNumber = num;
         db.Cases.Add(newCase);
+
+        // Both saves must land together — otherwise a failure between them leaves an
+        // Accepted Case with no CMS pages, and the guard above rejects retrying an
+        // already-Accepted application. The in-memory provider used by tests doesn't
+        // support transactions, so skip it there rather than fail every test.
+        var transaction = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(ct)
+            : null;
+        await using var _ = transaction;
         await db.SaveChangesAsync(ct);
 
         // Auto-generate standard CMS pages
         await AutoGenerateCmsPagesAsync(db, orgId, newCase.Id, caseTitle, newCase.CaseYear, newCase.OrgCaseNumber, userId, ct);
         await db.SaveChangesAsync(ct);
+        if (transaction is not null)
+            await transaction.CommitAsync(ct);
 
         return CreatedAtAction(nameof(GetById), new { orgId, caseId = newCase.Id },
             _mapper.Map<CaseRecord>(newCase));

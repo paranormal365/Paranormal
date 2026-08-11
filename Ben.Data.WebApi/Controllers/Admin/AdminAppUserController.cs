@@ -100,8 +100,9 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         var before = await db.AppUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id, ct);
         if (before is null) return NotFound();
         var user = await db.AppUsers.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (user is null) return NotFound();
 
-        user!.DisplayName          = request.DisplayName;
+        user.DisplayName          = request.DisplayName;
         user.UserName             = request.UserName ?? user.UserName;
         user.NormalizedUserName   = request.UserName?.ToUpperInvariant() ?? user.NormalizedUserName;
         user.Email                = request.Email ?? user.Email;
@@ -115,7 +116,7 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         user.DateUpdated          = request.DateUpdated;
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(AppUser), id, before, user!, GetCurrentUserId(), AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(AppUser), id, before, user, GetCurrentUserId(), AppSources.WebApi, ct));
         return Ok(_mapper.Map<AppUserAdminRecord>(user));
     }
 }

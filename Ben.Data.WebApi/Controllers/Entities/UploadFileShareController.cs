@@ -145,7 +145,27 @@ public sealed class UploadFileShareController : BenControllerBase
         };
 
         db.UploadFileOrganizationShares.Add(share);
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // Lost the race against a concurrent share of the same file into the same org — this
+            // is effectively an upsert, so reactivate/update the row that won instead of erroring.
+            db.Entry(share).State = EntityState.Detached;
+            var winner = await db.UploadFileOrganizationShares
+                .FirstAsync(s => s.UploadFileId == fileId && s.OrganizationId == request.OrganizationId, cancellationToken);
+            winner.IsActive           = true;
+            winner.Visibility         = request.Visibility;
+            winner.RemovedByAppUserId = null;
+            winner.RemovalDate        = null;
+            winner.DateUpdated        = DateTime.UtcNow;
+            winner.UpdatedByAppUserId = userId;
+            await db.SaveChangesAsync(cancellationToken);
+            _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileOrganizationShare), winner.Id, winner, winner, userId, AppSources.WebApi, cancellationToken));
+            return Ok(_mapper.Map<UploadFileOrganizationShareRecord>(winner));
+        }
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileOrganizationShare), share.Id, share, userId, AppSources.WebApi, cancellationToken));
         return CreatedAtAction(nameof(GetSharesForFile), new { fileId }, _mapper.Map<UploadFileOrganizationShareRecord>(share));
     }

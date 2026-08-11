@@ -351,6 +351,31 @@ public class UploadFileShareControllerTests
         Assert.Equal(FileShareVisibility.Public, share.Visibility);
     }
 
+    [Fact]
+    public async Task ShareWithOrg_ConcurrentFirstShares_BothSucceedWithExactlyOneRow()
+    {
+        // Regression for the check-then-insert race on (UploadFileId, OrganizationId): two
+        // concurrent first-time shares used to be able to both pass the "not yet shared" check
+        // and both try to insert, so the loser hit an unhandled DbUpdateException (raw 500) from
+        // the unique index. The fix catches that and reconciles onto the winning row instead.
+        var (factory, ownerId, fileId) = await SeedFileAsync();
+        var orgId = Guid.NewGuid();
+        var ctrl1 = Build(factory, ownerId);
+        var ctrl2 = Build(factory, ownerId);
+
+        var results = await Task.WhenAll(
+            ctrl1.ShareWithOrg(fileId, new ShareWithOrgRequest(orgId, FileShareVisibility.OrgMembers), default),
+            ctrl2.ShareWithOrg(fileId, new ShareWithOrgRequest(orgId, FileShareVisibility.Public), default));
+
+        Assert.All(results, r => Assert.True(r.Result is CreatedAtActionResult or OkObjectResult));
+
+        await using var verify = await factory.CreateDbContextAsync();
+        var shares = await verify.UploadFileOrganizationShares
+            .Where(s => s.UploadFileId == fileId && s.OrganizationId == orgId)
+            .ToListAsync();
+        Assert.Single(shares);
+    }
+
     // ── UpdateVisibility ──────────────────────────────────────────────────────
 
     [Fact]

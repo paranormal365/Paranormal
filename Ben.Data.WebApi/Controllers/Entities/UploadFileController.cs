@@ -8,6 +8,7 @@ using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -27,19 +28,22 @@ public sealed class UploadFileController : BenControllerBase
     private readonly IFileStorageService _fileStorage;
     private readonly IAuditLogService _auditLog;
     private readonly FileMetadataExtractorService _metadataExtractor;
+    private readonly ILogger<UploadFileController> _logger;
 
     public UploadFileController(
         IDbContextFactory<BenDataContext> dbContextFactory,
         IMapper mapper,
         IFileStorageService fileStorage,
         IAuditLogService auditLog,
-        FileMetadataExtractorService metadataExtractor)
+        FileMetadataExtractorService metadataExtractor,
+        ILogger<UploadFileController> logger)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
         _fileStorage = fileStorage;
         _auditLog = auditLog;
         _metadataExtractor = metadataExtractor;
+        _logger = logger;
     }
 
     /// <summary>
@@ -203,7 +207,13 @@ public sealed class UploadFileController : BenControllerBase
                 dbMeta.UploadFileMetadata.Add(meta);
                 await dbMeta.SaveChangesAsync(CancellationToken.None);
             }
-            catch { /* extraction is best-effort */ }
+            catch (Exception ex)
+            {
+                // Extraction is best-effort — never surface this to the caller — but a silent
+                // failure here previously meant a systemic breakage (e.g. a bad extractor
+                // dependency) was invisible until someone noticed missing metadata.
+                _logger.LogWarning(ex, "Metadata extraction failed for upload file {UploadFileId}", entity.Id);
+            }
         });
 
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, _mapper.Map<UploadFileRecord>(entity));
@@ -219,8 +229,9 @@ public sealed class UploadFileController : BenControllerBase
         var before = await db.UploadFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
         if (before is null) return NotFound();
         var entity = await db.UploadFiles.FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+        if (entity is null) return NotFound();
 
-        entity!.UploadFileTypeId = request.UploadFileTypeId;
+        entity.UploadFileTypeId = request.UploadFileTypeId;
         entity.Description = request.Description;
         entity.IsPublic = request.IsPublic;
         entity.SortOrder = request.SortOrder;
@@ -228,7 +239,7 @@ public sealed class UploadFileController : BenControllerBase
         entity.UpdatedByAppUserId = request.UpdatedByAppUserId;
 
         await db.SaveChangesAsync(cancellationToken);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFile), id, before, entity!, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFile), id, before, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
         return Ok(_mapper.Map<UploadFileRecord>(entity));
     }
 
@@ -451,7 +462,10 @@ public sealed class UploadFileController : BenControllerBase
                     dbMeta.UploadFileMetadata.Add(_metadataExtractor.Extract(refreshId, contentType, fileBytes));
                 await dbMeta.SaveChangesAsync(CancellationToken.None);
             }
-            catch { /* extraction is best-effort */ }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Metadata refresh failed for upload file {UploadFileId} and its copies", id);
+            }
         });
 
         return Ok(_mapper.Map<UploadFileRecord>(entity));

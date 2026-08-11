@@ -147,6 +147,8 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<UserMessageType>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UserMessageType>()
+                .HasIndex(e => e.Name).IsUnique();
 
             // ── UserNoteType ─────────────────────────────────────────────────
             modelBuilder.Entity<UserNoteType>()
@@ -838,8 +840,12 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrganizationMembershipRequest>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // Only one Pending request per (org, user) at a time — filtered so a user can still
+            // re-apply after a prior request was Accepted/Denied/Withdrawn.
             modelBuilder.Entity<OrganizationMembershipRequest>()
-                .HasIndex(e => new { e.OrganizationId, e.AppUserId });
+                .HasIndex(e => new { e.OrganizationId, e.AppUserId })
+                .HasFilter("[Status] = 0")
+                .IsUnique();
             modelBuilder.Entity<OrganizationMembershipRequest>()
                 .Property(e => e.RequestMessage).HasMaxLength(2000).IsRequired(false);
             modelBuilder.Entity<OrganizationMembershipRequest>()

@@ -143,6 +143,32 @@ public class OrganizationMembershipRequestControllerTests
         Assert.IsType<ConflictObjectResult>((await ctrl.Apply(orgId, new ApplyForMembershipRequest(null), default)).Result);
     }
 
+    [Fact]
+    public async Task Apply_ConcurrentApplications_OnlyOneSucceeds()
+    {
+        // Regression for the check-then-insert race: two concurrent Apply calls for the same
+        // (org, user) used to both be able to pass the AnyAsync "no pending request" check before
+        // either inserted, so the loser hit an unhandled DbUpdateException (raw 500) once the
+        // filtered unique index was in place. The fix catches that and returns the same Conflict
+        // the pre-check already returns for the non-racing case.
+        var (factory, orgId, applicantId, _) = await SeedAsync();
+        var ctrl1 = Build(factory, applicantId);
+        var ctrl2 = Build(factory, applicantId);
+
+        var results = await Task.WhenAll(
+            ctrl1.Apply(orgId, new ApplyForMembershipRequest("First"), default),
+            ctrl2.Apply(orgId, new ApplyForMembershipRequest("Second"), default));
+
+        Assert.All(results, r => Assert.True(r.Result is CreatedAtActionResult or ConflictObjectResult));
+
+        await using var verify = await factory.CreateDbContextAsync();
+        var pending = await verify.OrganizationMembershipRequests
+            .Where(r => r.OrganizationId == orgId && r.AppUserId == applicantId
+                     && r.Status == OrganizationMembershipRequestStatus.Pending)
+            .ToListAsync();
+        Assert.Single(pending);
+    }
+
     // ── Respond (accept) ──────────────────────────────────────────────────────
 
     [Fact]
