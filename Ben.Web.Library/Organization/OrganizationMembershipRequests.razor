@@ -114,7 +114,7 @@
             When the deadline passes, votes are tallied: majority Approve → Accepted, otherwise → Denied.
         </p>
         <label class="form-label fw-semibold">Vote Deadline <span class="text-danger">*</span></label>
-        <TelerikDateTimePicker @bind-Value="@_voteDeadline" Width="100%" Min="@DateTime.Now.AddHours(1)" />
+        <TelerikDateTimePicker @bind-Value="@_voteDeadline" Width="100%" Min="@UserState.NowInViewerTimeZone().AddHours(1)" />
         @if (_voteDialogError is not null)
         {
             <div class="text-danger small mt-2">@_voteDialogError</div>
@@ -209,7 +209,7 @@
     private void OpenVoteDialog(OrganizationMembershipRequestRecord r)
     {
         _pendingVote     = r;
-        _voteDeadline    = DateTime.Now.AddDays(7);
+        _voteDeadline    = UserState.NowInViewerTimeZone().AddDays(7);
         _voteDialogError = null;
         _showVoteDialog  = true;
     }
@@ -217,7 +217,7 @@
     private async Task ConfirmOpenVoteAsync()
     {
         if (_pendingVote is null) return;
-        if (!_voteDeadline.HasValue || _voteDeadline.Value <= DateTime.Now)
+        if (!_voteDeadline.HasValue || _voteDeadline.Value <= UserState.NowInViewerTimeZone())
         {
             _voteDialogError = "Please select a future deadline.";
             return;
@@ -225,7 +225,7 @@
         _isBusy = true; _voteDialogError = null;
         try
         {
-            var result = await AdminClient.OpenMembershipVoteAsync(OrgId, _pendingVote.Id, _voteDeadline.Value.ToUniversalTime());
+            var result = await AdminClient.OpenMembershipVoteAsync(OrgId, _pendingVote.Id, _voteDeadline.Value.ToUtcFromViewerLocal(UserState));
             if (result is null) { _voteDialogError = "Failed to open vote. Please try again."; }
             else
             {
