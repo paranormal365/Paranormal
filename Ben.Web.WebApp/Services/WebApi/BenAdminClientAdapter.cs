@@ -1301,6 +1301,26 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteRegionNoteAsync(Guid fileId, Guid noteId, CancellationToken token = default)
         => _api.DeleteRegionNoteAsync(fileId, noteId, token);
 
+    // ── File Comments (item #6 phase 2) ───────────────────────────────────────
+
+    public Task<IReadOnlyList<UploadFileCommentRecord>> GetFileCommentsAsync(Guid fileId, CancellationToken token = default)
+        => _api.GetFileCommentsAsync(fileId, token);
+
+    public Task<UploadFileCommentRecord?> CreateFileCommentAsync(Guid fileId, CreateFileCommentRequest request, CancellationToken token = default)
+        => _api.CreateFileCommentAsync(fileId, request, token);
+
+    public Task<UploadFileCommentRecord?> UpdateFileCommentAsync(Guid fileId, Guid commentId, UpdateFileCommentRequest request, CancellationToken token = default)
+        => _api.UpdateFileCommentAsync(fileId, commentId, request, token);
+
+    public Task<bool> DeleteFileCommentAsync(Guid fileId, Guid commentId, CancellationToken token = default)
+        => _api.DeleteFileCommentAsync(fileId, commentId, token);
+
+    public Task<FileCommentSettingsRecord?> GetFileCommentSettingsAsync(Guid fileId, CancellationToken token = default)
+        => _api.GetFileCommentSettingsAsync(fileId, token);
+
+    public Task<FileCommentSettingsRecord?> UpdateFileCommentSettingsAsync(Guid fileId, FileCommentSettingsRecord request, CancellationToken token = default)
+        => _api.UpdateFileCommentSettingsAsync(fileId, request, token);
+
     // ── Audio Markers (EVP) ──────────────────────────────────────────────────
 
     public Task<IReadOnlyList<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default)

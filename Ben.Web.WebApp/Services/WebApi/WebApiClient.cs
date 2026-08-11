@@ -230,6 +230,28 @@ public sealed class WebApiClient : IWebApiClient
     public Task<bool> DeleteRegionNoteAsync(Guid fileId, Guid noteId, CancellationToken token = default)
         => DeleteAsync($"/api/upload-files/{fileId}/region-notes/{noteId}", token);
 
+    // ── File Comments (item #6 phase 2) ───────────────────────────────────────
+    public async Task<IReadOnlyList<UploadFileCommentRecord>> GetFileCommentsAsync(Guid fileId, CancellationToken token = default)
+    {
+        var result = await GetAsync<List<UploadFileCommentRecord>>($"/api/upload-files/{fileId}/comments", token);
+        return result ?? [];
+    }
+
+    public Task<UploadFileCommentRecord?> CreateFileCommentAsync(Guid fileId, CreateFileCommentRequest request, CancellationToken token = default)
+        => PostAsync<CreateFileCommentRequest, UploadFileCommentRecord>($"/api/upload-files/{fileId}/comments", request, token);
+
+    public Task<UploadFileCommentRecord?> UpdateFileCommentAsync(Guid fileId, Guid commentId, UpdateFileCommentRequest request, CancellationToken token = default)
+        => PutAsync<UpdateFileCommentRequest, UploadFileCommentRecord>($"/api/upload-files/{fileId}/comments/{commentId}", request, token);
+
+    public Task<bool> DeleteFileCommentAsync(Guid fileId, Guid commentId, CancellationToken token = default)
+        => DeleteAsync($"/api/upload-files/{fileId}/comments/{commentId}", token);
+
+    public Task<FileCommentSettingsRecord?> GetFileCommentSettingsAsync(Guid fileId, CancellationToken token = default)
+        => GetAsync<FileCommentSettingsRecord>($"/api/upload-files/{fileId}/comments/settings", token);
+
+    public Task<FileCommentSettingsRecord?> UpdateFileCommentSettingsAsync(Guid fileId, FileCommentSettingsRecord request, CancellationToken token = default)
+        => PutAsync<FileCommentSettingsRecord, FileCommentSettingsRecord>($"/api/upload-files/{fileId}/comments/settings", request, token);
+
     // ── Audio Markers (EVP) ──────────────────────────────────────────────────
     public async Task<IReadOnlyList<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default)
     {

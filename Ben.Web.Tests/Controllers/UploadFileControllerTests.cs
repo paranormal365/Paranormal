@@ -171,4 +171,63 @@ public class UploadFileControllerTests
         var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
         Assert.Contains(".png", bad.Value?.ToString(), StringComparison.OrdinalIgnoreCase);
     }
+
+    // ── GetChildClips regression (item #6 phase 2) ──────────────────────────────
+    // A case-copy (CaseCopyOfUploadFileId set, item #6 phase 2's copy-on-attach) must NOT show up
+    // as a "child clip" of its source file — ParentFileId and CaseCopyOfUploadFileId are
+    // deliberately separate fields specifically so this endpoint's existing, unfiltered
+    // `Where(f => f.ParentFileId == id)` query stays untouched by the new copy-on-attach feature.
+
+    [Fact]
+    public async Task GetChildClips_DoesNotIncludeCaseCopies()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var sourceId = Guid.NewGuid();
+        var realClipId = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = sourceId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "source.mp3", StoredFileName = "s.mp3", ContentType = "audio/mpeg", FileSize = 1,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            db.UploadFiles.Add(new UploadFile // a real region-clip of the source
+            {
+                Id = realClipId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "clip.mp3", StoredFileName = "c.mp3", ContentType = "audio/mpeg", FileSize = 1,
+                ParentFileId = sourceId, RegionStart = 0, RegionEnd = 5,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            db.UploadFiles.Add(new UploadFile // a case-copy of the source — must NOT appear below
+            {
+                Id = Guid.NewGuid(), UploadFileTypeId = Guid.NewGuid(), AppUserId = Guid.NewGuid(),
+                FileName = "source.mp3", StoredFileName = "copy.mp3", ContentType = "audio/mpeg", FileSize = 1,
+                CaseCopyOfUploadFileId = sourceId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var mapperMock = new Mock<IMapper>();
+        mapperMock.Setup(m => m.Map<IEnumerable<UploadFileRecord>>(It.IsAny<object>()))
+            .Returns<object>(o => ((IEnumerable<UploadFile>)o).Select(f => new UploadFileRecord
+            {
+                Id = f.Id, FileName = f.FileName, StoredFileName = f.StoredFileName, ContentType = f.ContentType,
+            }));
+        var ctrl = new UploadFileController(factory, mapperMock.Object,
+            new Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object,
+            new Mock<IAuditLogService>().Object,
+            new Ben.Data.WebApi.Services.FileMetadataExtractorService());
+
+        var result = await ctrl.GetChildClips(sourceId, default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var clips = Assert.IsAssignableFrom<IEnumerable<UploadFileRecord>>(ok.Value);
+        var clipList = clips.ToList();
+        Assert.Single(clipList);
+        Assert.Equal(realClipId, clipList[0].Id);
+    }
 }

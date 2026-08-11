@@ -61,6 +61,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UploadFile> UploadFiles { get; set; }
         public virtual DbSet<UploadFileOrganizationShare> UploadFileOrganizationShares { get; set; }
         public virtual DbSet<UploadFileShare> UploadFileShares { get; set; }
+        public virtual DbSet<UploadFileComment> UploadFileComments { get; set; }
         public virtual DbSet<UploadFilePermissionRequest> UploadFilePermissionRequests { get; set; }
         public virtual DbSet<ClientRequest> ClientRequests { get; set; }
         public virtual DbSet<ClientRequestOrganization> ClientRequestOrganizations { get; set; }
@@ -645,6 +646,24 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
+            // ── UploadFileComment ─────────────────────────────────────────────
+            modelBuilder.Entity<UploadFileComment>()
+                .HasIndex(e => new { e.UploadFileId, e.DateCreated });
+            modelBuilder.Entity<UploadFileComment>()
+                .Property(e => e.Text).HasColumnType("nvarchar(max)").IsRequired();
+            modelBuilder.Entity<UploadFileComment>()
+                .HasOne(e => e.UploadFile).WithMany(e => e.Comments)
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UploadFileComment>()
+                .HasOne(e => e.AuthorAppUser).WithMany()
+                .HasForeignKey(e => e.AuthorAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileComment>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileComment>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
             // ── UploadFilePermissionRequest ───────────────────────────────────
             modelBuilder.Entity<UploadFilePermissionRequest>()
                 .HasOne(e => e.UploadFile).WithMany(e => e.PermissionRequests)
@@ -708,6 +727,21 @@ namespace Ben.Data.Source.Context
                 .IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<UploadFile>()
                 .Property(e => e.EditStateJson).HasColumnType("nvarchar(max)");
+
+            // ── UploadFile self-reference (case-copy lineage, item #6 phase 2) ─
+            // Deliberately a separate FK from ParentFile above — see the field's doc comment.
+            modelBuilder.Entity<UploadFile>()
+                .HasOne(e => e.CaseCopySourceFile).WithMany(e => e.CaseCopies)
+                .HasForeignKey(e => e.CaseCopyOfUploadFileId)
+                .IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFile>()
+                .Property(e => e.AllowInvestigationTeamComments).HasDefaultValue(false);
+            modelBuilder.Entity<UploadFile>()
+                .Property(e => e.AllowClientComments).HasDefaultValue(false);
+            modelBuilder.Entity<UploadFile>()
+                .Property(e => e.AllowOrganizationComments).HasDefaultValue(false);
+            modelBuilder.Entity<UploadFile>()
+                .Property(e => e.AllowPublicComments).HasDefaultValue(false);
 
             // ── UploadFileAudioConfig ────────────────────────────────────────
             // One-to-one with UploadFile; cascade so config is deleted with the file.

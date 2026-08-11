@@ -30,4 +30,13 @@ public record UploadFileRecord
     /// <summary>Fabric.js JSON snapshot for the image editor — present when the file has been edited.</summary>
     public string? EditStateJson    { get; init; }
     public bool    IsEditedVersion  { get; init; }
+
+    // ── Comment settings (item #6 phase 2) ──────────────────────────────────
+    public bool AllowInvestigationTeamComments { get; init; }
+    public bool AllowClientComments { get; init; }
+    public bool AllowOrganizationComments { get; init; }
+    public bool AllowPublicComments { get; init; }
+
+    /// <summary>Set when this file is an independent copy made for a case's Files tab (copy-on-attach).</summary>
+    public Guid? CaseCopyOfUploadFileId { get; init; }
 }

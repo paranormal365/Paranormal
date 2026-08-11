@@ -89,6 +89,15 @@
                                     <EvidenceVoteWidget UploadFileId="@file.Id" />
                                 </div>
                             }
+                            @if (!PickerMode)
+                            {
+                                <div @onclick:stopPropagation="true">
+                                    <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Comment"
+                                                   OnClick="@(() => OpenDetail(file))">
+                                        Comments
+                                    </TelerikButton>
+                                </div>
+                            }
                         </div>
                     </div>
                 </div>
@@ -128,9 +137,54 @@
                         </Template>
                     </GridColumn>
                 }
+                @if (!PickerMode)
+                {
+                    <GridColumn Title="" Width="140px">
+                        <Template>
+                            @{ var row4 = (UploadFileRecord)context; }
+                            <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Comment"
+                                           OnClick="@(() => OpenDetail(row4))">
+                                Comments
+                            </TelerikButton>
+                        </Template>
+                    </GridColumn>
+                }
             </GridColumns>
         </TelerikGrid>
     }
+
+    @* ── File detail dialog: preview + comment thread + owner-only settings ────── *@
+    <TelerikWindow @bind-Visible="@_showDetail" Width="600px" Height="70vh" Modal="true">
+        <WindowTitle>@(_detailFile?.FileName ?? "File")</WindowTitle>
+        <WindowContent>
+            @if (_detailFile is not null)
+            {
+                <div class="d-flex flex-column gap-3">
+                    <div class="d-flex align-items-center justify-content-center">
+                        <UserMediaPreview FileId="@_detailFile.Id" FileName="@_detailFile.FileName"
+                                          ContentType="@_detailFile.ContentType" FileSize="@_detailFile.FileSize" />
+                    </div>
+                    @if (_detailFile.AppUserId == UserState.UserId)
+                    {
+                        <div>
+                            <TelerikButton Size="sm" FillMode="flat" OnClick="@(() => _showCommentSettings = !_showCommentSettings)">
+                                @(_showCommentSettings ? "▾" : "▸") Comment settings
+                            </TelerikButton>
+                            @if (_showCommentSettings)
+                            {
+                                <div class="mt-2">
+                                    <FileCommentSettings @key="@_detailFile.Id" FileId="@_detailFile.Id" />
+                                </div>
+                            }
+                        </div>
+                    }
+                    <hr class="my-0" />
+                    <FileCommentThread @key="@_detailFile.Id" FileId="@_detailFile.Id" CanModerate="@(_detailFile.AppUserId == UserState.UserId)" />
+                </div>
+            }
+        </WindowContent>
+        <WindowActions><WindowAction Name="Close" OnClick="@(() => _showDetail = false)" /></WindowActions>
+    </TelerikWindow>
 
     @if (_totalPages > 1)
     {
@@ -157,6 +211,9 @@
     private int _page = 1;
     private readonly HashSet<Guid> _selectedIds = [];
     private readonly HashSet<Guid> _previewLoaded = [];
+    private bool _showDetail;
+    private UploadFileRecord? _detailFile;
+    private bool _showCommentSettings;
 
     // "Shared"/"Org" aren't offered here — the response deliberately doesn't carry per-file scope
     // tags (see MediaLibraryController's doc comment), so only what's derivable from UploadFileRecord
@@ -202,6 +259,13 @@
             if (!MultiSelect) _selectedIds.Clear();
             _selectedIds.Add(file.Id);
         }
+    }
+
+    private void OpenDetail(UploadFileRecord file)
+    {
+        _detailFile = file;
+        _showDetail = true;
+        _showCommentSettings = false;
     }
 
     private async Task ConfirmSelectionAsync()

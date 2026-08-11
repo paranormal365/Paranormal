@@ -703,6 +703,26 @@ public interface IBenAdminClient
     /// <summary>Permanently deletes a region note.</summary>
     Task<bool> DeleteRegionNoteAsync(Guid fileId, Guid noteId, CancellationToken token = default);
 
+    // ── File Comments (item #6 phase 2) ────────────────────────────
+
+    /// <summary>Returns the full comment thread for a file — visible to anyone who can see the file.</summary>
+    Task<IReadOnlyList<UploadFileCommentRecord>> GetFileCommentsAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Posts a new comment. Fails (null) unless the caller is the file's owner or matches an enabled audience.</summary>
+    Task<UploadFileCommentRecord?> CreateFileCommentAsync(Guid fileId, CreateFileCommentRequest request, CancellationToken token = default);
+
+    /// <summary>Edits the text of the caller's own comment.</summary>
+    Task<UploadFileCommentRecord?> UpdateFileCommentAsync(Guid fileId, Guid commentId, UpdateFileCommentRequest request, CancellationToken token = default);
+
+    /// <summary>Deletes a comment — allowed for its author or the file's owner.</summary>
+    Task<bool> DeleteFileCommentAsync(Guid fileId, Guid commentId, CancellationToken token = default);
+
+    /// <summary>Returns the file's current per-audience commenting toggles.</summary>
+    Task<FileCommentSettingsRecord?> GetFileCommentSettingsAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Updates the file's per-audience commenting toggles. Owner-only.</summary>
+    Task<FileCommentSettingsRecord?> UpdateFileCommentSettingsAsync(Guid fileId, FileCommentSettingsRecord request, CancellationToken token = default);
+
     // ── Audio Markers (EVP) ───────────────────────────────────────
 
     /// <summary>Returns all EVP markers for the given file, ordered by time.</summary>

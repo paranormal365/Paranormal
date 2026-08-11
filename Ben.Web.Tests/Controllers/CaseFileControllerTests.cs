@@ -29,14 +29,15 @@ public class CaseFileControllerTests
         return new PooledDbContextFactory<BenDataContext>(options);
     }
 
-    private static CaseFileController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId)
+    private static CaseFileController BuildController(
+        IDbContextFactory<BenDataContext> factory, Guid userId, Mock<IFileStorageService>? storageMock = null)
     {
-        var storage = new Mock<IFileStorageService>();
+        var storage = storageMock ?? new Mock<IFileStorageService>();
         storage.Setup(s => s.CaseFilePath(It.IsAny<Guid>(), It.IsAny<string>())).Returns("fake/path");
         storage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
                .Returns(Task.CompletedTask);
 
-        var ctrl = new CaseFileController(factory, storage.Object);
+        var ctrl = new CaseFileController(factory, storage.Object, new Mock<IAuditLogService>().Object);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -219,5 +220,165 @@ public class CaseFileControllerTests
         var result = await nonMemberCtrl.Delete(orgId, caseId, uploaded.Id, default);
 
         Assert.IsType<ForbidResult>(result);
+    }
+
+    // ── Link (copy-on-attach, item #6 phase 2) ──────────────────────────────────
+
+    private static Mock<IFileStorageService> MakeReadableStorageMock(byte[] sourceBytes)
+    {
+        var storage = new Mock<IFileStorageService>();
+        storage.Setup(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+               .ReturnsAsync(() => new MemoryStream(sourceBytes));
+        return storage;
+    }
+
+    private static async Task<UploadFile> SeedSourceFileAsync(
+        IDbContextFactory<BenDataContext> factory, Guid ownerId,
+        bool isPublic = false, string? storagePath = "users/owner/source.jpg", byte[]? fileData = null)
+    {
+        var file = new UploadFile
+        {
+            Id = Guid.NewGuid(), UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+            FileName = "source.jpg", StoredFileName = "source-stored.jpg", ContentType = "image/jpeg",
+            FileSize = 4, StoragePath = storagePath, FileData = fileData, IsPublic = isPublic,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        };
+        await using var db = await factory.CreateDbContextAsync();
+        db.UploadFiles.Add(file);
+        await db.SaveChangesAsync();
+        return file;
+    }
+
+    [Fact]
+    public async Task Link_OwnFile_ReturnsOkWithNewCopyRecord()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var source = await SeedSourceFileAsync(factory, userId);
+        var ctrl = BuildController(factory, userId, MakeReadableStorageMock([1, 2, 3, 4]));
+
+        var result = await ctrl.Link(orgId, caseId, source.Id, null, default);
+
+        var ok  = Assert.IsType<OkObjectResult>(result.Result);
+        var rec = Assert.IsType<CaseFileRecord>(ok.Value);
+        Assert.NotEqual(source.Id, rec.UploadFileId);
+    }
+
+    [Fact]
+    public async Task Link_CreatesIndependentUploadFileCopy_WithLineageToSource()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var source = await SeedSourceFileAsync(factory, userId);
+        var ctrl = BuildController(factory, userId, MakeReadableStorageMock([1, 2, 3, 4]));
+
+        var result = await ctrl.Link(orgId, caseId, source.Id, null, default);
+        var rec = (CaseFileRecord)((OkObjectResult)result.Result!).Value!;
+
+        await using var db = await factory.CreateDbContextAsync();
+        var copy = await db.UploadFiles.FirstAsync(f => f.Id == rec.UploadFileId);
+        Assert.Equal(source.Id, copy.CaseCopyOfUploadFileId);
+        Assert.Null(copy.ParentFileId); // distinct lineage field — does not alias clip lineage
+        Assert.Equal(userId, copy.AppUserId); // owned by the linking user, not the source's owner
+        Assert.True(await db.UploadFiles.AnyAsync(f => f.Id == source.Id)); // source untouched
+    }
+
+    [Fact]
+    public async Task Link_CopyUsesFixedCaseEvidenceFileType()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var source = await SeedSourceFileAsync(factory, userId);
+        var ctrl = BuildController(factory, userId, MakeReadableStorageMock([1, 2, 3, 4]));
+
+        var result = await ctrl.Link(orgId, caseId, source.Id, null, default);
+        var rec = (CaseFileRecord)((OkObjectResult)result.Result!).Value!;
+
+        await using var db = await factory.CreateDbContextAsync();
+        var copy = await db.UploadFiles.FirstAsync(f => f.Id == rec.UploadFileId);
+        Assert.NotEqual(source.UploadFileTypeId, copy.UploadFileTypeId);
+        Assert.Equal(new Guid("20000000-0000-0000-0000-000000000001"), copy.UploadFileTypeId);
+    }
+
+    [Fact]
+    public async Task Link_SourceNotVisibleToLinkingUser_ReturnsForbid()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        // Private file owned by a stranger, not shared/public/case-linked anywhere.
+        var source = await SeedSourceFileAsync(factory, Guid.NewGuid(), isPublic: false);
+        var ctrl = BuildController(factory, userId, MakeReadableStorageMock([1, 2, 3, 4]));
+
+        var result = await ctrl.Link(orgId, caseId, source.Id, null, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Link_PublicSourceVisibleToLinkingUser_Succeeds()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var source = await SeedSourceFileAsync(factory, Guid.NewGuid(), isPublic: true);
+        var ctrl = BuildController(factory, userId, MakeReadableStorageMock([1, 2, 3, 4]));
+
+        var result = await ctrl.Link(orgId, caseId, source.Id, null, default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Link_AlreadyLinkedToThisCase_ReturnsConflict()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var source = await SeedSourceFileAsync(factory, userId);
+        var ctrl = BuildController(factory, userId, MakeReadableStorageMock([1, 2, 3, 4]));
+        await ctrl.Link(orgId, caseId, source.Id, null, default);
+
+        var second = await ctrl.Link(orgId, caseId, source.Id, null, default);
+
+        Assert.IsType<ConflictObjectResult>(second.Result);
+    }
+
+    [Fact]
+    public async Task Link_LegacyFileDataFallback_UsesFileDataWhenStoragePathMissing()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var source = await SeedSourceFileAsync(factory, userId, storagePath: null, fileData: [9, 9, 9]);
+        var ctrl = BuildController(factory, userId, new Mock<IFileStorageService>());
+
+        var result = await ctrl.Link(orgId, caseId, source.Id, null, default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Link_NoStoredContentAtAll_ReturnsUnprocessableEntity()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var source = await SeedSourceFileAsync(factory, userId, storagePath: null, fileData: null);
+        var ctrl = BuildController(factory, userId, new Mock<IFileStorageService>());
+
+        var result = await ctrl.Link(orgId, caseId, source.Id, null, default);
+
+        Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Link_NonMember_ReturnsForbid()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var source = await SeedSourceFileAsync(factory, userId, isPublic: true);
+        var ctrl = BuildController(factory, Guid.NewGuid(), MakeReadableStorageMock([1, 2, 3, 4]));
+
+        var result = await ctrl.Link(orgId, caseId, source.Id, null, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Link_SourceFileNotFound_ReturnsNotFound()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var ctrl = BuildController(factory, userId, MakeReadableStorageMock([1, 2, 3, 4]));
+
+        var result = await ctrl.Link(orgId, caseId, Guid.NewGuid(), null, default);
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
     }
 }

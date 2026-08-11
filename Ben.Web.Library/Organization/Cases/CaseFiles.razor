@@ -4,6 +4,7 @@
 @using Ben.Web.Library.User
 @using Microsoft.AspNetCore.Components.Forms
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 
 @if (_loading) { <TelerikLoaderContainer Visible="true" Text="Loading files…" /> }
 else
@@ -47,6 +48,33 @@ else
                             <div class="text-muted mt-1" style="font-size:.7rem;">
                                 @FormatSize(f.FileSize) · Added @f.DateCreated.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
                             </div>
+                            <div @onclick:stopPropagation="true">
+                                <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Comment"
+                                               OnClick="@(() => ToggleComments(f.Id))">
+                                    @(_expandedCommentsId == f.Id ? "Hide comments" : "Comments")
+                                </TelerikButton>
+                            </div>
+                            @if (_expandedCommentsId == f.Id)
+                            {
+                                <div class="mt-2 border-top pt-2">
+                                    @if (f.CreatedByAppUserId == UserState.UserId)
+                                    {
+                                        <div class="mb-2">
+                                            <TelerikButton Size="sm" FillMode="flat" OnClick="@(() => _showCommentSettingsId = _showCommentSettingsId == f.Id ? null : f.Id)">
+                                                @(_showCommentSettingsId == f.Id ? "▾" : "▸") Comment settings
+                                            </TelerikButton>
+                                            @if (_showCommentSettingsId == f.Id)
+                                            {
+                                                <div class="mt-2">
+                                                    <FileCommentSettings @key="@f.UploadFileId" FileId="@f.UploadFileId" />
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                    <FileCommentThread @key="@f.UploadFileId" FileId="@f.UploadFileId"
+                                                        CanModerate="@(f.CreatedByAppUserId == UserState.UserId)" />
+                                </div>
+                            }
                         </div>
                         <TelerikButton Size="sm" FillMode="flat" ThemeColor="error" Icon="@SvgIcon.Trash"
                                        OnClick="@(() => DeleteFile(f.Id))" />
@@ -75,6 +103,8 @@ else
     private bool _uploading;
     private string? _error;
     private bool _showLibraryPicker;
+    private Guid? _expandedCommentsId;
+    private Guid? _showCommentSettingsId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -113,6 +143,12 @@ else
             catch { _error = $"Failed to attach '{file.FileName}'."; }
         }
         StateHasChanged();
+    }
+
+    private void ToggleComments(Guid caseFileId)
+    {
+        _expandedCommentsId = _expandedCommentsId == caseFileId ? null : caseFileId;
+        _showCommentSettingsId = null;
     }
 
     private async Task DeleteFile(Guid caseFileId)
