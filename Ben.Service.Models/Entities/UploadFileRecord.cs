@@ -39,4 +39,7 @@ public record UploadFileRecord
 
     /// <summary>Set when this file is an independent copy made for a case's Files tab (copy-on-attach).</summary>
     public Guid? CaseCopyOfUploadFileId { get; init; }
+
+    /// <summary>Set when this row is an archived prior version kept by a replace (item #6 phase 3).</summary>
+    public Guid? ArchivedFromUploadFileId { get; init; }
 }

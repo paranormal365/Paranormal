@@ -743,6 +743,13 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<UploadFile>()
                 .Property(e => e.AllowPublicComments).HasDefaultValue(false);
 
+            // ── UploadFile self-reference (archived prior version, item #6 phase 3) ─
+            // Deliberately a separate FK from ParentFile/CaseCopySourceFile above — see the field's doc comment.
+            modelBuilder.Entity<UploadFile>()
+                .HasOne(e => e.ArchivedFromUploadFile).WithMany(e => e.ArchivedVersions)
+                .HasForeignKey(e => e.ArchivedFromUploadFileId)
+                .IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
             // ── UploadFileAudioConfig ────────────────────────────────────────
             // One-to-one with UploadFile; cascade so config is deleted with the file.
             modelBuilder.Entity<UploadFileAudioConfig>()

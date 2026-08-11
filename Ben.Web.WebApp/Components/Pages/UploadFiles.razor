@@ -93,7 +93,7 @@
             </GridColumn>
             <GridColumn Field="@nameof(UploadFileRecord.DateCreated)" Title="Uploaded" Width="140px"
                         DisplayFormat="{0:yyyy-MM-dd}" />
-            <GridCommandColumn Width="220px">
+            <GridCommandColumn Width="300px">
                 <GridCommandButton Command="Download" Icon="@SvgIcon.Download"
                                    OnClick="@((GridCommandEventArgs e) => DownloadFile((UploadFileRecord)e.Items.First()))">
                     Download
@@ -102,6 +102,10 @@
                                    OnClick="@((GridCommandEventArgs e) => OpenShareDialog((UploadFileRecord)e.Items.First()))">
                     Share
                 </GridCommandButton>
+                <GridCommandButton Command="Replace" Icon="@SvgIcon.Upload"
+                                   OnClick="@((GridCommandEventArgs e) => OpenReplaceDialog((UploadFileRecord)e.Items.First()))">
+                    Replace
+                </GridCommandButton>
                 <GridCommandButton Command="Delete" Icon="@SvgIcon.Trash"
                                    OnClick="@((GridCommandEventArgs e) => DeleteFile((UploadFileRecord)e.Items.First()))">
                 </GridCommandButton>
@@ -109,6 +113,90 @@
         </GridColumns>
     </TelerikGrid>
 </div>
+
+@* Same-filename-on-upload prompt (item #6 phase 3) *@
+<TelerikDialog @bind-Visible="@_showSameNameDialog" Title="File Already Exists" Width="440px">
+    <DialogContent>
+        @if (_sameNameMatch is not null)
+        {
+            <p>You already have a file named <strong>@_sameNameMatch.FileName</strong>.</p>
+            <p class="text-secondary small mb-0">
+                Replace it with the new file (keeps existing comments/votes/case links, updates every
+                case that holds a copy), or keep both as separate files?
+            </p>
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" OnClick="ConfirmReplaceFromSameName">Replace It</TelerikButton>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline" OnClick="ConfirmKeepBoth">Keep Both</TelerikButton>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat" OnClick="@(() => _showSameNameDialog = false)">Cancel</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* Replace File Dialog (item #6 phase 3) *@
+<TelerikDialog @bind-Visible="@_showReplaceDialog" Title="Replace File" Width="520px">
+    <DialogContent>
+        @if (_replaceTarget is not null)
+        {
+            <p class="text-secondary mb-3">Replacing: <strong>@_replaceTarget.FileName</strong></p>
+
+            @if (_replaceSelectedFile is null)
+            {
+                <label class="form-label">New file</label>
+                <InputFile OnChange="@OnReplaceFileSelected" class="form-control" />
+            }
+            else
+            {
+                <p class="mb-2">New file: <strong>@_replaceSelectedFile.Name</strong></p>
+
+                @if (_loadingImpact)
+                {
+                    <p class="text-secondary small">Checking which cases hold a copy...</p>
+                }
+                else if (_replaceImpact is not null)
+                {
+                    @if (_replaceImpact.Cases.Count == 0)
+                    {
+                        <p class="text-secondary small">No cases currently hold a copy of this file.</p>
+                    }
+                    else
+                    {
+                        <p class="small fw-semibold mb-1">This will also update the copy in:</p>
+                        <ul class="small mb-0">
+                            @foreach (var c in _replaceImpact.Cases)
+                            {
+                                <li>
+                                    @c.CaseTitle <span class="text-secondary">(@c.OrganizationName)</span>
+                                    @if (c.CommentCount > 0)
+                                    {
+                                        <span class="badge text-bg-warning ms-1">@c.CommentCount comment@(c.CommentCount == 1 ? "" : "s")</span>
+                                    }
+                                    @if (c.VoteCount > 0)
+                                    {
+                                        <span class="badge text-bg-warning ms-1">@c.VoteCount vote@(c.VoteCount == 1  ? "" : "s")</span>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+                }
+            }
+
+            @if (_replaceError is not null)
+            {
+                <div class="alert alert-danger py-2 mt-3 mb-0">@_replaceError</div>
+            }
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Enabled="@(_replaceSelectedFile is not null && !_loadingImpact && !_isReplacing)"
+                       OnClick="ConfirmReplace">
+            @(_isReplacing ? "Replacing..." : "Replace")
+        </TelerikButton>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline" OnClick="@(() => _showReplaceDialog = false)">Cancel</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
 
 @* Share with Org Dialog *@
 <TelerikDialog @bind-Visible="@_showShareDialog" Title="Share with Organization" Width="440px">
@@ -159,6 +247,19 @@
     private UploadFileRecord? _sharingFile;
     private Guid _shareOrgId;
     private FileShareVisibility _shareVisibility = FileShareVisibility.OrgAdminsOnly;
+
+    // Same-filename-on-upload prompt (item #6 phase 3)
+    private bool _showSameNameDialog;
+    private UploadFileRecord? _sameNameMatch;
+
+    // Replace dialog (item #6 phase 3)
+    private bool _showReplaceDialog;
+    private UploadFileRecord? _replaceTarget;
+    private IBrowserFile? _replaceSelectedFile;
+    private ReplaceImpactRecord? _replaceImpact;
+    private bool _loadingImpact;
+    private bool _isReplacing;
+    private string? _replaceError;
 
     private static readonly List<(string Label, FileShareVisibility Value)> _visibilityOptions =
     [
@@ -234,6 +335,45 @@
         _uploadError = GetExtensionError(_selectedFile);
         if (_uploadError is not null) return;
 
+        // Same-name-on-upload detection (item #6 phase 3) — only among files this user actually
+        // owns (GetUploadFilesAsync currently returns every user's files, tracked as a separate,
+        // pre-existing authorization gap — not something to widen scope fixing here).
+        var myUserId = TokenStore.UserId ?? Guid.Empty;
+        var existing = _files.FirstOrDefault(f =>
+            f.AppUserId == myUserId && string.Equals(f.FileName, _selectedFile.Name, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            _sameNameMatch = existing;
+            _showSameNameDialog = true;
+            return;
+        }
+
+        await DoUploadAsync();
+    }
+
+    private async Task ConfirmKeepBoth()
+    {
+        _showSameNameDialog = false;
+        await DoUploadAsync();
+    }
+
+    private void ConfirmReplaceFromSameName()
+    {
+        _showSameNameDialog = false;
+        if (_sameNameMatch is null || _selectedFile is null) return;
+
+        _replaceTarget = _sameNameMatch;
+        _replaceSelectedFile = _selectedFile;
+        _replaceImpact = null;
+        _replaceError = null;
+        _showReplaceDialog = true;
+        _ = LoadReplaceImpactAsync();
+    }
+
+    private async Task DoUploadAsync()
+    {
+        if (_selectedFile is null) return;
+
         _isUploading = true;
         _uploadError = null;
 
@@ -296,6 +436,71 @@
         if (!await JS.InvokeAsync<bool>("confirm", $"Delete '{file.FileName}'?")) return;
         if (await Api.DeleteUploadFileAsync(file.Id))
             _files = [.._files.Where(f => f.Id != file.Id)];
+    }
+
+    // ── Replace (item #6 phase 3) ───────────────────────────────────────────────
+    private void OpenReplaceDialog(UploadFileRecord file)
+    {
+        _replaceTarget = file;
+        _replaceSelectedFile = null;
+        _replaceImpact = null;
+        _replaceError = null;
+        _showReplaceDialog = true;
+    }
+
+    private async Task OnReplaceFileSelected(InputFileChangeEventArgs e)
+    {
+        _replaceSelectedFile = e.File;
+        await LoadReplaceImpactAsync();
+    }
+
+    private async Task LoadReplaceImpactAsync()
+    {
+        if (_replaceTarget is null) return;
+        _loadingImpact = true;
+        try { _replaceImpact = await Api.GetReplaceImpactAsync(_replaceTarget.Id); }
+        catch { _replaceImpact = null; }
+        finally { _loadingImpact = false; }
+    }
+
+    private async Task ConfirmReplace()
+    {
+        if (_replaceTarget is null || _replaceSelectedFile is null) return;
+
+        _isReplacing = true;
+        _replaceError = null;
+        try
+        {
+            var content = new MultipartFormDataContent();
+            var maxSize = 100 * 1024 * 1024; // 100 MB, matches the endpoint's RequestSizeLimit
+            await using var stream = _replaceSelectedFile.OpenReadStream(maxSize);
+            var fileContent = new StreamContent(stream);
+            var contentType = string.IsNullOrWhiteSpace(_replaceSelectedFile.ContentType)
+                ? "application/octet-stream"
+                : _replaceSelectedFile.ContentType;
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+            content.Add(fileContent, "file", _replaceSelectedFile.Name);
+
+            var result = await Api.ReplaceUploadFileAsync(_replaceTarget.Id, content);
+            if (result is not null)
+            {
+                _files = [.._files.Select(f => f.Id == result.Id ? result : f)];
+                _showReplaceDialog = false;
+                _selectedFile = null; // clears the upload panel's selection if this came from the same-name prompt
+            }
+            else
+            {
+                _replaceError = "Replace failed. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _replaceError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _isReplacing = false;
+        }
     }
 
     // ── Share ────────────────────────────────────────────────────────────────

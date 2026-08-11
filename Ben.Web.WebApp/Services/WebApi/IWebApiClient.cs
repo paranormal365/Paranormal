@@ -36,6 +36,10 @@ public interface IWebApiClient
     Task<UploadFileRecord?> UploadFileAsync(MultipartFormDataContent content, CancellationToken token = default);
     Task<UploadFileRecord?> UpdateUploadFileAsync(Guid id, UpdateUploadFileRequest request, CancellationToken token = default);
     Task<bool> DeleteUploadFileAsync(Guid id, CancellationToken token = default);
+
+    // Upload File — Replace (item #6 phase 3)
+    Task<UploadFileRecord?> ReplaceUploadFileAsync(Guid id, MultipartFormDataContent content, CancellationToken token = default);
+    Task<ReplaceImpactRecord?> GetReplaceImpactAsync(Guid id, CancellationToken token = default);
     Task<(byte[] Data, string ContentType, string FileName)?> DownloadFileAsync(Guid id, CancellationToken token = default);
 
     // Upload File — Audio Config

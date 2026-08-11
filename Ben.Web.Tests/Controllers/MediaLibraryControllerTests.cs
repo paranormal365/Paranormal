@@ -136,6 +136,31 @@ public class MediaLibraryControllerTests
     }
 
     [Fact]
+    public async Task GetFiles_ExcludesArchivedVersions()
+    {
+        // item #6 phase 3 — a replaced file's archived prior version must never surface in the
+        // library, even though it's still owned by the caller like any other row.
+        var (factory, userId, _, _) = await SeedAsync();
+        var liveId = Guid.NewGuid();
+        await using (var db = factory.CreateDbContext())
+        {
+            var live = MakeFile(userId, "video/mp4");
+            live.Id = liveId;
+            db.UploadFiles.Add(live);
+
+            var archived = MakeFile(userId, "video/mp4");
+            archived.ArchivedFromUploadFileId = liveId;
+            db.UploadFiles.Add(archived);
+
+            await db.SaveChangesAsync();
+        }
+
+        var files = await GetFilesAsync(Build(factory, userId));
+        Assert.Single(files);
+        Assert.Equal(liveId, files[0].Id);
+    }
+
+    [Fact]
     public async Task GetFiles_ContentTypePrefixes_FiltersToRequestedTypes()
     {
         var (factory, userId, _, _) = await SeedAsync();

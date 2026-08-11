@@ -63,6 +63,16 @@ namespace Ben.Data.Source.Entities
         /// </summary>
         public Guid? CaseCopyOfUploadFileId { get; set; }
 
+        /// <summary>
+        /// When this row is an archived prior version kept by a replace (item #6 phase 3), the live
+        /// file it was replaced on. Non-null IS the archived flag — deliberately no companion bool
+        /// (an IsArchived that can disagree with the FK is a bug surface), and deliberately NOT
+        /// <see cref="ParentFileId"/>: <c>UploadFileController.GetChildClips</c> queries ParentFileId
+        /// with no type filter, so archives would surface as selectable "clips" of the file — the
+        /// same trap <see cref="CaseCopyOfUploadFileId"/> already documents.
+        /// </summary>
+        public Guid? ArchivedFromUploadFileId { get; set; }
+
         public virtual UploadFileType UploadFileType { get; set; } = null!;
         public virtual AppUser AppUser { get; set; } = null!;
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
@@ -80,5 +90,7 @@ namespace Ben.Data.Source.Entities
         public virtual ICollection<UploadFileComment> Comments { get; set; } = new List<UploadFileComment>();
         public virtual UploadFile? CaseCopySourceFile { get; set; }
         public virtual ICollection<UploadFile> CaseCopies { get; set; } = new List<UploadFile>();
+        public virtual UploadFile? ArchivedFromUploadFile { get; set; }
+        public virtual ICollection<UploadFile> ArchivedVersions { get; set; } = new List<UploadFile>();
     }
 }

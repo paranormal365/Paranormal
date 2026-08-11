@@ -47,6 +47,7 @@ public sealed class UploadFileController : BenControllerBase
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var entities = await db.UploadFiles.AsNoTracking()
+            .Where(f => f.ArchivedFromUploadFileId == null) // archived prior versions (item #6 phase 3) aren't real listings
             .OrderByDescending(f => f.DateCreated)
             .ToListAsync(cancellationToken);
         return Ok(_mapper.Map<IEnumerable<UploadFileRecord>>(entities));
@@ -298,6 +299,182 @@ public sealed class UploadFileController : BenControllerBase
         db.UploadFiles.Add(entity);
         await db.SaveChangesAsync(cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, _mapper.Map<UploadFileRecord>(entity));
+    }
+
+    /// <summary>
+    /// Replaces this file's bytes in place (item #6 phase 3) — same <see cref="UploadFile.Id"/>, so
+    /// existing comments/votes/shares/case-links stay attached. The old bytes are archived, not
+    /// discarded: a new row inherits the current <c>StoragePath</c> (no byte copy needed — the file
+    /// on disk simply now belongs to the archive row) with <see cref="UploadFile.ArchivedFromUploadFileId"/>
+    /// pointing back here. Every case copy (<c>CaseCopyOfUploadFileId == id</c>, see
+    /// <see cref="CaseFileController.Link"/>) is overwritten in place too, at its own existing
+    /// <c>StoragePath</c>, so each copy's <c>CaseFile</c> pointer and any comments/votes on it also
+    /// survive untouched — only the source gets an archive row, not every copy.
+    /// </summary>
+    [HttpPost("{id:guid}/replace")]
+    [RequestSizeLimit(100_000_000)] // 100 MB
+    public async Task<ActionResult<UploadFileRecord>> Replace(
+        Guid id, IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file.Length == 0) return BadRequest("File is empty.");
+
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var before = await db.UploadFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+        if (before is null) return NotFound();
+        if (before.AppUserId != userId) return Forbid();
+
+        // Same extension only — "replace" means a new version of the same thing, and it's what
+        // makes overwriting each case copy at its existing StoragePath unambiguously safe (no
+        // path that used to hold a .png ending up with JPEG bytes under it).
+        var newExt = Path.GetExtension(file.FileName);
+        var oldExt = Path.GetExtension(before.FileName);
+        if (!string.Equals(newExt, oldExt, StringComparison.OrdinalIgnoreCase))
+            return BadRequest($"Replacement file must have the same extension ('{oldExt}') as the file being replaced.");
+
+        var fileType = await db.UploadFileTypes
+            .Include(t => t.AllowedExtensions)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == before.UploadFileTypeId, cancellationToken);
+        if (fileType is not null && !fileType.AllowAllExtensions)
+        {
+            var patterns = fileType.AllowedExtensions.Select(e => e.Pattern);
+            if (!FileExtensionPatternMatcher.IsAllowedByPatterns(patterns, newExt))
+                return BadRequest($"File extension '{newExt}' is not permitted for file type '{fileType.Name}'.");
+        }
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, cancellationToken);
+        var fileBytes   = ms.ToArray();
+        var contentType = file.ContentType;
+        var isSvg = contentType.Contains("svg", StringComparison.OrdinalIgnoreCase)
+                 || newExt.Equals(".svg", StringComparison.OrdinalIgnoreCase);
+        if (isSvg)
+        {
+            contentType = "image/svg+xml";
+            try { fileBytes = SvgSanitizer.Sanitize(fileBytes); }
+            catch (InvalidOperationException ex) { return BadRequest($"SVG rejected: {ex.Message}"); }
+        }
+
+        var entity = await db.UploadFiles.FirstAsync(f => f.Id == id, cancellationToken);
+
+        // Archive the old bytes before anything else moves.
+        var archive = new UploadFile
+        {
+            Id = Guid.NewGuid(), UploadFileTypeId = entity.UploadFileTypeId, AppUserId = entity.AppUserId,
+            FileName = entity.FileName, StoredFileName = entity.StoredFileName,
+            ContentType = entity.ContentType, FileSize = entity.FileSize, StoragePath = entity.StoragePath,
+            Description = entity.Description, IsPublic = false, // archives are never independently visible
+            ArchivedFromUploadFileId = id,
+            DateCreated = entity.DateCreated, // preserves the archived content's real vintage
+            DateUpdated = DateTime.UtcNow,     // when it was archived
+            CreatedByAppUserId = entity.CreatedByAppUserId, UpdatedByAppUserId = userId,
+        };
+        db.UploadFiles.Add(archive);
+
+        // Rewrite the source in place at a fresh path — the old path now belongs to the archive row above.
+        var newStoredName  = $"{Guid.NewGuid()}{newExt}";
+        var newStoragePath = _fileStorage.UserFilePath(entity.AppUserId, newStoredName);
+        using (var writeStream = new MemoryStream(fileBytes))
+            await _fileStorage.WriteAsync(newStoragePath, writeStream, cancellationToken);
+
+        entity.StoredFileName = newStoredName;
+        entity.StoragePath    = newStoragePath;
+        entity.FileName       = file.FileName;
+        entity.ContentType    = contentType;
+        entity.FileSize       = fileBytes.Length;
+        entity.DateUpdated    = DateTime.UtcNow;
+        entity.UpdatedByAppUserId = userId;
+
+        // Propagate to every case copy — overwrite bytes at each copy's OWN existing StoragePath
+        // (LocalFileStorageService.WriteAsync opens FileMode.Create, so this truncates in place)
+        // so its CaseFile pointer, comments, and votes all stay attached without any new rows.
+        var copies = await db.UploadFiles
+            .Where(f => f.CaseCopyOfUploadFileId == id)
+            .ToListAsync(cancellationToken);
+        foreach (var copy in copies)
+        {
+            if (string.IsNullOrEmpty(copy.StoragePath)) continue; // legacy FileData-blob row — nothing on disk to overwrite
+            using var copyStream = new MemoryStream(fileBytes);
+            await _fileStorage.WriteAsync(copy.StoragePath, copyStream, cancellationToken);
+            copy.FileName    = file.FileName;
+            copy.ContentType = contentType;
+            copy.FileSize    = fileBytes.Length;
+            copy.DateUpdated = DateTime.UtcNow;
+            copy.UpdatedByAppUserId = userId;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFile), id, before, entity, userId, AppSources.WebApi, cancellationToken));
+
+        // Refresh extracted metadata for the source and every updated copy — UploadFileMetadata is
+        // 1-to-1 with UploadFile and is normally only ever inserted once at upload time, so a
+        // replace must delete-then-add or stale EXIF/GPS/dimensions stay attached to bytes they no
+        // longer describe, which is actively misleading for evidence review. Fire-and-forget, same
+        // as the initial-upload extraction, so replace latency is unaffected.
+        var idsToRefresh = new List<Guid> { id };
+        idsToRefresh.AddRange(copies.Select(c => c.Id));
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var dbMeta = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
+                var stale = await dbMeta.UploadFileMetadata
+                    .Where(m => idsToRefresh.Contains(m.UploadFileId))
+                    .ToListAsync(CancellationToken.None);
+                dbMeta.UploadFileMetadata.RemoveRange(stale);
+                foreach (var refreshId in idsToRefresh)
+                    dbMeta.UploadFileMetadata.Add(_metadataExtractor.Extract(refreshId, contentType, fileBytes));
+                await dbMeta.SaveChangesAsync(CancellationToken.None);
+            }
+            catch { /* extraction is best-effort */ }
+        });
+
+        return Ok(_mapper.Map<UploadFileRecord>(entity));
+    }
+
+    /// <summary>
+    /// Preview of what <see cref="Replace"/> will touch — every case that currently holds a
+    /// byte-copy of this file, with its existing comment/vote counts, so the owner can see the
+    /// blast radius before confirming a replace.
+    /// </summary>
+    [HttpGet("{id:guid}/replace-impact")]
+    public async Task<ActionResult<ReplaceImpactRecord>> GetReplaceImpact(Guid id, CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var file = await db.UploadFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+        if (file is null) return NotFound();
+        if (file.AppUserId != userId) return Forbid();
+
+        var copyIds = await db.UploadFiles.AsNoTracking()
+            .Where(f => f.CaseCopyOfUploadFileId == id)
+            .Select(f => f.Id)
+            .ToListAsync(cancellationToken);
+
+        var caseFiles = await db.CaseFiles.AsNoTracking()
+            .Where(cf => copyIds.Contains(cf.UploadFileId))
+            .Include(cf => cf.Case).ThenInclude(c => c.Organization)
+            .ToListAsync(cancellationToken);
+
+        var commentCounts = await db.UploadFileComments.AsNoTracking()
+            .Where(c => copyIds.Contains(c.UploadFileId))
+            .GroupBy(c => c.UploadFileId)
+            .Select(g => new { UploadFileId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.UploadFileId, x => x.Count, cancellationToken);
+
+        var voteCounts = await db.EvidenceVotes.AsNoTracking()
+            .Where(v => copyIds.Contains(v.UploadFileId))
+            .GroupBy(v => v.UploadFileId)
+            .Select(g => new { UploadFileId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.UploadFileId, x => x.Count, cancellationToken);
+
+        var cases = caseFiles.Select(cf => new ReplaceImpactCaseRecord(
+            cf.CaseId, cf.Case.Title, cf.Case.Organization.Name, cf.UploadFileId,
+            commentCounts.GetValueOrDefault(cf.UploadFileId), voteCounts.GetValueOrDefault(cf.UploadFileId)
+        )).ToList();
+
+        return Ok(new ReplaceImpactRecord(id, file.FileName, cases));
     }
 }
 

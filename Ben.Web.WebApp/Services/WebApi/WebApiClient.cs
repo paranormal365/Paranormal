@@ -182,6 +182,13 @@ public sealed class WebApiClient : IWebApiClient
     public Task<bool> DeleteUploadFileAsync(Guid id, CancellationToken token = default)
         => DeleteAsync($"/api/upload-files/{id}", token);
 
+    // ── Upload File — Replace (item #6 phase 3) ─────────────────────────────────
+    public Task<UploadFileRecord?> ReplaceUploadFileAsync(Guid id, MultipartFormDataContent content, CancellationToken token = default)
+        => PostMultipartAsync<UploadFileRecord>($"/api/upload-files/{id}/replace", content, token);
+
+    public Task<ReplaceImpactRecord?> GetReplaceImpactAsync(Guid id, CancellationToken token = default)
+        => GetAsync<ReplaceImpactRecord>($"/api/upload-files/{id}/replace-impact", token);
+
     public async Task<(byte[] Data, string ContentType, string FileName)?> DownloadFileAsync(Guid id, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Get, $"/api/upload-files/{id}/download");

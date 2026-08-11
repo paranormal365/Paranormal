@@ -134,7 +134,10 @@ public sealed class MediaLibraryController : BenControllerBase
                 .ToListAsync(ct));
         }
 
-        var query = db.UploadFiles.AsNoTracking().Where(f => idSet.Contains(f.Id));
+        // Archived prior versions (item #6 phase 3) are implementation detail, not a real listing —
+        // excluded regardless of which scope above happened to surface their Id.
+        var query = db.UploadFiles.AsNoTracking()
+            .Where(f => idSet.Contains(f.Id) && f.ArchivedFromUploadFileId == null);
 
         var prefixes = contentTypePrefixes?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (prefixes is { Length: > 0 })
