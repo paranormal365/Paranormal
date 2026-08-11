@@ -874,7 +874,11 @@ public sealed record OrganizationListItemResponse(
     DateTime DateCreated,
     bool IsAcceptingApplications,
     bool CanEdit,
-    bool CanDelete);
+    bool CanDelete,
+    // 0 unless the caller is SuperAdmin — see OrganizationController.GetAllWithPermissions.
+    int MemberCount = 0,
+    int CaseCount = 0,
+    int InvestigationCount = 0);
 
 /// <summary>Request body for creating a new organization (SuperAdmin only).</summary>
 public sealed record AdminCreateOrganizationRequest(string Name, string UrlName,

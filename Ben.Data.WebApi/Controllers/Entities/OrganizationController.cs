@@ -57,6 +57,36 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
         var orgs = await _security.GetOrganizationsForUserAsync(userId.Value, ct);
 
+        // Member/case/investigation counts are only ever shown to SuperAdmins (the list view's own
+        // per-org visibility already scopes non-admins to orgs they belong to), so skip the extra
+        // grouped queries entirely for the common non-admin case.
+        Dictionary<Guid, int> memberCounts = [];
+        Dictionary<Guid, int> caseCounts = [];
+        Dictionary<Guid, int> investigationCounts = [];
+        if (isSuperAdmin && orgs.Count > 0)
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync(ct);
+            var orgIds = orgs.Select(o => o.Id).ToList();
+
+            memberCounts = await db.OrganizationUserMemberships.AsNoTracking()
+                .Where(m => orgIds.Contains(m.OrganizationId) && m.IsActive)
+                .GroupBy(m => m.OrganizationId)
+                .Select(g => new { g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
+
+            caseCounts = await db.Cases.AsNoTracking()
+                .Where(c => orgIds.Contains(c.OrganizationId))
+                .GroupBy(c => c.OrganizationId)
+                .Select(g => new { g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
+
+            investigationCounts = await db.Investigations.AsNoTracking()
+                .Where(i => orgIds.Contains(i.Case.OrganizationId))
+                .GroupBy(i => i.Case.OrganizationId)
+                .Select(g => new { g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
+        }
+
         var result = new List<OrganizationListItemResponse>(orgs.Count);
         foreach (var org in orgs)
         {
@@ -71,7 +101,8 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
                 canEdit   = await _security.HasAccessAsync(userId.Value, org.Id, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Update, ct);
                 canDelete = await _security.HasAccessAsync(userId.Value, org.Id, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Delete, ct);
             }
-            result.Add(new OrganizationListItemResponse(org.Id, org.Name, org.UrlName, org.DateCreated, org.IsAcceptingApplications, canEdit, canDelete));
+            result.Add(new OrganizationListItemResponse(org.Id, org.Name, org.UrlName, org.DateCreated, org.IsAcceptingApplications, canEdit, canDelete,
+                memberCounts.GetValueOrDefault(org.Id), caseCounts.GetValueOrDefault(org.Id), investigationCounts.GetValueOrDefault(org.Id)));
         }
         return Ok(result);
     }
@@ -240,7 +271,11 @@ public sealed record OrganizationListItemResponse(
     DateTime DateCreated,
     bool IsAcceptingApplications,
     bool CanEdit,
-    bool CanDelete);
+    bool CanDelete,
+    // 0 unless the caller is SuperAdmin — see GetAllWithPermissions.
+    int MemberCount = 0,
+    int CaseCount = 0,
+    int InvestigationCount = 0);
 
 public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName,
     bool IsAcceptingApplications = false,

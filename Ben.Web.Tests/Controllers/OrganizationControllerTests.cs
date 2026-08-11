@@ -151,6 +151,96 @@ public class OrganizationControllerTests
     }
 
     [Fact]
+    public async Task GetAll_AsSuperAdmin_IncludesMemberCaseInvestigationCounts()
+    {
+        var factory  = CreateFactory();
+        var userId   = Guid.NewGuid();
+        var org      = await SeedOrgAsync(factory, "Acme", "acme");
+        var otherOrg = await SeedOrgAsync(factory, "Other", "other");
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            // 2 active + 1 inactive member for org — inactive shouldn't count
+            db.OrganizationUserMemberships.AddRange(
+                new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = Guid.NewGuid(), Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId },
+                new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = Guid.NewGuid(), Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId },
+                new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = Guid.NewGuid(), Role = OrganizationMemberRole.Member, IsActive = false, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId },
+                new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = otherOrg.Id, AppUserId = Guid.NewGuid(), Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId });
+
+            var case1 = new Case
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, Title = "Case 1", CaseYear = 2026, OrgCaseNumber = 1,
+                StreetAddress1 = "1 Main St", City = "Nashville", State = "TN", ZipCode = "37201", Country = "US",
+                DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            };
+            db.Cases.Add(case1);
+            db.Cases.Add(new Case
+            {
+                Id = Guid.NewGuid(), OrganizationId = otherOrg.Id, Title = "Other Case", CaseYear = 2026, OrgCaseNumber = 1,
+                StreetAddress1 = "2 Main St", City = "Nashville", State = "TN", ZipCode = "37201", Country = "US",
+                DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+
+            db.Investigations.AddRange(
+                new Investigation { Id = Guid.NewGuid(), CaseId = case1.Id, Title = "Investigation 1", ScheduledDateTime = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId },
+                new Investigation { Id = Guid.NewGuid(), CaseId = case1.Id, Title = "Investigation 2", ScheduledDateTime = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId });
+
+            await db.SaveChangesAsync();
+        }
+
+        var securityMock = new Mock<IOrganizationSecurityService>();
+        securityMock
+            .Setup(s => s.GetOrganizationsForUserAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([org]);
+
+        var controller = BuildController(factory, UserPrincipal(userId, isSuperAdmin: true), securityMock);
+
+        var result = await controller.GetAllWithPermissions(default);
+
+        var ok   = Assert.IsType<OkObjectResult>(result.Result);
+        var list = Assert.IsAssignableFrom<IEnumerable<OrganizationListItemResponse>>(ok.Value);
+        var item = Assert.Single(list);
+        Assert.Equal(2, item.MemberCount);
+        Assert.Equal(1, item.CaseCount);
+        Assert.Equal(2, item.InvestigationCount);
+    }
+
+    [Fact]
+    public async Task GetAll_AsNonSuperAdmin_CountsAreZero()
+    {
+        var factory = CreateFactory();
+        var userId  = Guid.NewGuid();
+        var org     = await SeedOrgAsync(factory);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = Guid.NewGuid(), Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId });
+            await db.SaveChangesAsync();
+        }
+
+        var securityMock = new Mock<IOrganizationSecurityService>();
+        securityMock
+            .Setup(s => s.GetOrganizationsForUserAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([org]);
+        securityMock
+            .Setup(s => s.HasAccessAsync(It.IsAny<Guid>(), It.IsAny<Guid>(),
+                It.IsAny<OrganizationSecurityTable>(), It.IsAny<OrganizationSecurityAction>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var controller = BuildController(factory, UserPrincipal(userId), securityMock);
+
+        var result = await controller.GetAllWithPermissions(default);
+
+        var ok   = Assert.IsType<OkObjectResult>(result.Result);
+        var list = Assert.IsAssignableFrom<IEnumerable<OrganizationListItemResponse>>(ok.Value);
+        var item = Assert.Single(list);
+        Assert.Equal(0, item.MemberCount);
+        Assert.Equal(0, item.CaseCount);
+        Assert.Equal(0, item.InvestigationCount);
+    }
+
+    [Fact]
     public async Task GetAll_AsMember_WithBothGrantsTrue_ReturnsCorrectFlags()
     {
         var factory = CreateFactory();
