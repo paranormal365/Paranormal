@@ -50,6 +50,7 @@ public sealed class CaseFileController : BenControllerBase
 
     [HttpPost]
     [Consumes("multipart/form-data")]
+    [DisableRequestSizeLimit]
     public async Task<ActionResult<CaseFileRecord>> Upload(
         Guid orgId, Guid caseId, [FromForm] string? description, IFormFile file, CancellationToken ct)
     {

@@ -203,7 +203,9 @@
         StateHasChanged();
         try
         {
-            const long maxBytes = 600_000_000;
+            // No practical upload size limit for now — a future limit belongs at app-settings /
+            // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
+            const long maxBytes = long.MaxValue;
             using var ms = new System.IO.MemoryStream();
             await e.File.OpenReadStream(maxBytes).CopyToAsync(ms);
             var bytes  = ms.ToArray();

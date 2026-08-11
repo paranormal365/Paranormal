@@ -186,7 +186,9 @@ else
         {
             foreach (var f in e.GetMultipleFiles(5))
             {
-                using var stream = f.OpenReadStream(maxAllowedSize: 100_000_000); // 100 MB
+                // No practical upload size limit for now — a future limit belongs at app-settings /
+                // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
+                using var stream = f.OpenReadStream(maxAllowedSize: long.MaxValue);
                 var result = await AdminClient.UploadCaseResearchFileAsync(
                     OrgId, CaseId, f.Name, null, stream, f.Name, f.ContentType);
                 if (result is not null) _entries.Add(result);

@@ -437,6 +437,7 @@ public sealed class MyCaseController : BenControllerBase
     /// <summary>Attaches a file to an occurrence. Saved to cases/{caseId}/... path.</summary>
     [HttpPost("{caseId:guid}/occurrences/{entryId:guid}/files")]
     [Consumes("multipart/form-data")]
+    [DisableRequestSizeLimit]
     public async Task<ActionResult<OccurrenceFileItem>> AttachFile(
         Guid caseId, Guid entryId, IFormFile file, CancellationToken ct)
     {

@@ -387,7 +387,9 @@
             content.Add(new StringContent(_newUpload.Description ?? string.Empty), "description");
             content.Add(new StringContent(_newUpload.IsPublic.ToString()), "isPublic");
 
-            var maxSize = 50 * 1024 * 1024; // 50 MB
+            // No practical upload size limit for now — a future limit belongs at app-settings /
+            // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
+            var maxSize = long.MaxValue;
             await using var stream = _selectedFile.OpenReadStream(maxSize);
             var fileContent = new StreamContent(stream);
             var contentType = string.IsNullOrWhiteSpace(_selectedFile.ContentType)
@@ -472,7 +474,9 @@
         try
         {
             var content = new MultipartFormDataContent();
-            var maxSize = 100 * 1024 * 1024; // 100 MB, matches the endpoint's RequestSizeLimit
+            // No practical upload size limit for now — a future limit belongs at app-settings /
+            // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
+            var maxSize = long.MaxValue;
             await using var stream = _replaceSelectedFile.OpenReadStream(maxSize);
             var fileContent = new StreamContent(stream);
             var contentType = string.IsNullOrWhiteSpace(_replaceSelectedFile.ContentType)

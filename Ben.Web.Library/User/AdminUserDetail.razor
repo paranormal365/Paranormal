@@ -899,7 +899,9 @@ else
 
         try
         {
-            const long maxBytes = 200 * 1024 * 1024; // 200 MB guard
+            // No practical upload size limit for now — a future limit belongs at app-settings /
+            // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
+            const long maxBytes = long.MaxValue;
             using var ms = new System.IO.MemoryStream();
             await _selectedFile.OpenReadStream(maxBytes).CopyToAsync(ms);
             var bytes = ms.ToArray();

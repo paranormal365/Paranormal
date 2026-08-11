@@ -384,7 +384,9 @@
         try
         {
             using var content = new MultipartFormDataContent();
-            content.Add(new StreamContent(_selectedFile.OpenReadStream(200 * 1024 * 1024)), "File", _selectedFile.Name);
+            // No practical upload size limit for now — a future limit belongs at app-settings /
+            // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
+            content.Add(new StreamContent(_selectedFile.OpenReadStream(long.MaxValue)), "File", _selectedFile.Name);
             content.Add(new StringContent(_uploadTypeId.ToString()), "UploadFileTypeId");
             content.Add(new StringContent(_uploadDescription), "Description");
             content.Add(new StringContent(_uploadIsPublic.ToString()), "IsPublic");

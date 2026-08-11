@@ -118,6 +118,9 @@ public sealed class UploadFileController : BenControllerBase
     }
 
     [HttpPost]
+    // No practical upload size limit for now — a future limit belongs at app-settings / per-person /
+    // per-org / per-case / per-investigation scope, not a blanket cap baked into the endpoint.
+    [DisableRequestSizeLimit]
     public async Task<ActionResult<UploadFileRecord>> Upload(
         [FromForm] Guid uploadFileTypeId,
         [FromForm] Guid appUserId,
@@ -293,7 +296,7 @@ public sealed class UploadFileController : BenControllerBase
 
     // POST /api/upload-files/{id}/save-as-version — saves edited image bytes as a new UploadFile linked to original
     [HttpPost("{id:guid}/save-as-version")]
-    [RequestSizeLimit(100_000_000)] // 100 MB
+    [DisableRequestSizeLimit]
     public async Task<ActionResult<UploadFileRecord>> SaveAsVersion(
         Guid id, IFormFile file, CancellationToken cancellationToken)
     {
@@ -347,7 +350,7 @@ public sealed class UploadFileController : BenControllerBase
     /// survive untouched — only the source gets an archive row, not every copy.
     /// </summary>
     [HttpPost("{id:guid}/replace")]
-    [RequestSizeLimit(100_000_000)] // 100 MB
+    [DisableRequestSizeLimit]
     public async Task<ActionResult<UploadFileRecord>> Replace(
         Guid id, IFormFile file, CancellationToken cancellationToken)
     {

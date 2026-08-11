@@ -61,6 +61,7 @@ public sealed class CaseResearchController : BenControllerBase
 
     [HttpPost("files")]
     [Consumes("multipart/form-data")]
+    [DisableRequestSizeLimit]
     public async Task<ActionResult<CaseResearchEntryDto>> UploadFile(
         Guid orgId, Guid caseId, [FromForm] string title, [FromForm] string? description,
         IFormFile file, CancellationToken ct)

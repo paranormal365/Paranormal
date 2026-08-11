@@ -137,7 +137,7 @@ public sealed class VideoProjectController : BenControllerBase
     // POST /api/video-projects/{id}/publish
     // Stores the rendered video as an UploadFile and links it to the project.
     [HttpPost("{id:guid}/publish")]
-    [RequestSizeLimit(600_000_000)] // 600 MB
+    [DisableRequestSizeLimit]
     public async Task<ActionResult<VideoProjectRecord>> Publish(
         Guid id, IFormFile file, CancellationToken ct)
     {
