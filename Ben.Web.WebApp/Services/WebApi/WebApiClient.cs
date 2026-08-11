@@ -152,6 +152,12 @@ public sealed class WebApiClient : IWebApiClient
         return PutAsync<SetOrganizationGrantRequest, OrganizationAccessGrantResponse>(relativeUrl, request, token);
     }
 
+    public async Task<IReadOnlyList<OrgUserDirectoryEntryResponse>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default)
+    {
+        var entries = await GetAsync<List<OrgUserDirectoryEntryResponse>>($"/api/organizations/{organizationId}/user-directory", token);
+        return entries ?? [];
+    }
+
     // ── Upload File Types ────────────────────────────────────────────────────
     public async Task<IReadOnlyList<UploadFileTypeRecord>> GetUploadFileTypesAsync(CancellationToken token = default)
     {
@@ -364,16 +370,36 @@ public sealed class WebApiClient : IWebApiClient
         => PostAsync<object, WebApiTokenResponse>($"/api/admin/impersonate/{targetUserId}", new { }, token);
 
     // ── Entra registration and account linking ───────────────────────────────
+    // Both send the caller-supplied Entra access token explicitly rather than via Auth()/
+    // TokenStore — see IWebApiClient's doc comment on these two methods.
 
-    public Task<EntraRegisterResponse?> EntraRegisterAsync(EntraRegisterPayload request, CancellationToken token = default)
-        => PostAsync<EntraRegisterPayload, EntraRegisterResponse>("/api/auth/entra/register", request, token);
-
-    public async Task<bool> EntraLinkAsync(EntraLinkPayload request, CancellationToken token = default)
+    public async Task<EntraRegisterResponse?> EntraRegisterAsync(string entraAccessToken, EntraRegisterPayload request, CancellationToken token = default)
     {
-        using var req = Auth(HttpMethod.Post, "/api/auth/entra/link");
+        using var req = EntraAuth(HttpMethod.Post, "/api/auth/entra/register", entraAccessToken);
+        req.Content = JsonContent.Create(request);
+        using var response = await _httpClient.SendAsync(req, token);
+        if (!response.IsSuccessStatusCode) return default;
+        return await response.Content.ReadFromJsonAsync<EntraRegisterResponse>(cancellationToken: token);
+    }
+
+    public async Task<bool> EntraLinkAsync(string entraAccessToken, EntraLinkPayload request, CancellationToken token = default)
+    {
+        using var req = EntraAuth(HttpMethod.Post, "/api/auth/entra/link", entraAccessToken);
         req.Content = JsonContent.Create(request);
         using var response = await _httpClient.SendAsync(req, token);
         return response.IsSuccessStatusCode;
+    }
+
+    /// <summary>Like <see cref="Auth"/>, but attaches an explicitly-supplied bearer token instead
+    /// of reading <see cref="_tokenStore"/> — used only for the two Entra actions above, where the
+    /// caller must present the Entra access token specifically, which may not be what's currently
+    /// sitting in the token store (e.g. after a local sign-in has since overwritten it).</summary>
+    private static HttpRequestMessage EntraAuth(HttpMethod method, string url, string entraAccessToken)
+    {
+        var req = new HttpRequestMessage(method, url);
+        if (!string.IsNullOrWhiteSpace(entraAccessToken))
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", entraAccessToken);
+        return req;
     }
 
     // ── Sub-client invite accept flow (item #4) ───────────────────────────────

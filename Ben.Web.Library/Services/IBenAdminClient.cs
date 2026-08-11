@@ -85,9 +85,19 @@ public interface IBenAdminClient
 
     // ── Users ─────────────────────────────────────────────────────────────────
 
-    /// <summary>Returns a lightweight list of all application users.</summary>
+    /// <summary>Returns a lightweight list of all application users. SuperAdmin only — see
+    /// EntityReadControllerBase's doc comment. Org-admin surfaces that only need to resolve
+    /// member display names should use <see cref="GetOrgUserDirectoryAsync"/> instead.</summary>
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
     Task<IReadOnlyList<AppUserRecord>> GetAllUsersAsync(CancellationToken token = default);
+
+    /// <summary>Returns a minimal Id+DisplayName directory of one organization's active
+    /// members — for org-admin surfaces (e.g. CMS permission/member pickers) that only need to
+    /// resolve names, not the full <see cref="AppUserRecord"/>. Caller must be an active member
+    /// of <paramref name="organizationId"/> themselves.</summary>
+    /// <param name="organizationId">The organization whose member directory to return.</param>
+    /// <param name="token">Propagates cancellation from the Blazor component.</param>
+    Task<IReadOnlyList<OrgUserDirectoryItem>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default);
 
     /// <summary>Returns the full detail aggregate for a single user, including addresses, emails, phones, links, notes, memberships, and files.</summary>
     /// <param name="userId">The <see cref="Guid"/> primary key of the user.</param>
@@ -1069,6 +1079,9 @@ public sealed record PagePermissionCreateRequest(Guid? AppUserId, Guid? OrgMembe
 
 /// <summary>Org membership row from GET /api/organizations/{orgId}/security/users.</summary>
 public sealed record OrgMembershipItem(Guid MembershipId, Guid AppUserId, OrganizationMemberRole Role, bool IsActive, string? DisplayName = null);
+
+/// <summary>Minimal member-directory entry — see <c>IBenAdminClient.GetOrgUserDirectoryAsync</c>.</summary>
+public sealed record OrgUserDirectoryItem(Guid Id, string DisplayName);
 
 /// <summary>Computed display label: DisplayName → email → id.</summary>
 public static class OrgMembershipItemExtensions

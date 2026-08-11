@@ -199,6 +199,34 @@ public class OrganizationSecurityService : IOrganizationSecurityService
         return users;
     }
 
+    /// <summary>
+    /// Creates or updates a member's role/active status within an organization.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="EnsureCanManageOrganizationAsync"/> alone previously treated <c>Owner</c> and
+    /// <c>Administrator</c> as equally authorized to call this at all, with no further check on
+    /// what a non-Owner caller could actually set — letting an <c>Administrator</c> self-promote
+    /// to <c>Owner</c>, or demote/deactivate the real <c>Owner</c>. Since
+    /// <see cref="EnsureCanManageOrganizationAsync"/> only lets Owner/Administrator-tier members
+    /// (or SuperAdmin) reach this point at all, this method now additionally restricts the
+    /// <b>Administrator</b> case specifically — Owner and SuperAdmin callers retain full control:
+    /// <list type="bullet">
+    /// <item><description>An <c>Administrator</c> caller may not assign the
+    /// <see cref="OrganizationMemberRole.Owner"/> role to anyone — exactly one <c>Owner</c>
+    /// exists per org, set once at registration (<see cref="RegisterOrganizationAsync"/>); this
+    /// generic membership endpoint isn't an ownership-transfer feature.</description></item>
+    /// <item><description>An <c>Administrator</c> caller may only assign roles strictly below
+    /// <c>Administrator</c> — they cannot mint a peer <c>Administrator</c>, let alone an
+    /// <c>Owner</c>.</description></item>
+    /// <item><description>Symmetrically, an <c>Administrator</c> caller may not modify a
+    /// membership whose *current* role is already <c>Administrator</c> or <c>Owner</c> — no
+    /// touching peers or the real Owner.</description></item>
+    /// </list>
+    /// Independently of caller rank: an org's last active <c>Owner</c> membership can never be
+    /// deactivated or demoted through this method (including by SuperAdmin, or by that Owner
+    /// themselves) — that would leave the org with no Owner at all, a state nothing else in the
+    /// codebase expects or can recover from.
+    /// </remarks>
     public async Task<OrganizationUserMembership> UpsertMembershipAsync(Guid organizationId, Guid targetUserId, OrganizationMemberRole role, bool isActive, Guid actingUserId, CancellationToken token = default)
     {
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(token);
@@ -218,6 +246,43 @@ public class OrganizationSecurityService : IOrganizationSecurityService
 
         var existing = await dbContext.OrganizationUserMemberships
             .FirstOrDefaultAsync(m => m.OrganizationId == organizationId && m.AppUserId == targetUserId, token);
+
+        var isSuperAdmin = await IsSuperAdminAsync(dbContext, actingUserId, token);
+        if (!isSuperAdmin)
+        {
+            var actingRole = await dbContext.OrganizationUserMemberships
+                .AsNoTracking()
+                .Where(m => m.OrganizationId == organizationId && m.AppUserId == actingUserId && m.IsActive)
+                .Select(m => (OrganizationMemberRole?)m.Role)
+                .FirstOrDefaultAsync(token);
+
+            // EnsureCanManageOrganizationAsync only lets Owner or Administrator through; Owner
+            // callers get full control (matches the class's existing "Owner == Administrator for
+            // day-to-day management" stance everywhere else), so the restrictions below apply
+            // only to the Administrator case.
+            if (actingRole != OrganizationMemberRole.Owner)
+            {
+                // "Manage only roles strictly below Administrator" applies symmetrically: an
+                // Administrator can neither ASSIGN a role at-or-above their own rank, nor touch a
+                // membership whose CURRENT role is already at-or-above their own rank (a peer
+                // Administrator, or the Owner).
+                if (role <= OrganizationMemberRole.Administrator)
+                    throw new UnauthorizedAccessException("An Administrator can only grant roles below Administrator.");
+                if (existing?.Role <= OrganizationMemberRole.Administrator)
+                    throw new UnauthorizedAccessException("An Administrator cannot modify a membership at or above their own rank.");
+            }
+        }
+
+        if (existing is not null && existing.Role == OrganizationMemberRole.Owner && existing.IsActive
+            && (role != OrganizationMemberRole.Owner || !isActive))
+        {
+            var otherActiveOwnerExists = await dbContext.OrganizationUserMemberships
+                .AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == organizationId && m.Role == OrganizationMemberRole.Owner
+                            && m.IsActive && m.AppUserId != targetUserId, token);
+            if (!otherActiveOwnerExists)
+                throw new InvalidOperationException("Cannot remove or demote the organization's last active Owner.");
+        }
 
         if (existing is null)
         {

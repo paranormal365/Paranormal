@@ -514,10 +514,10 @@
     private async Task ConfirmShare()
     {
         if (_sharingFile is null) return;
-        var userId = _sharingFile.AppUserId;
 
+        // Who's sharing is now derived server-side from the caller's own token, not sent here.
         await Api.ShareFileWithOrgAsync(_sharingFile.Id, new ShareFileWithOrgRequest(
-            _shareOrgId, userId, _shareVisibility));
+            _shareOrgId, _shareVisibility));
 
         _showShareDialog = false;
     }

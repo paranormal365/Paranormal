@@ -71,3 +71,6 @@ public sealed class OrganizationAccessGrantResponse
     public DateTime DateCreated { get; set; }
     public DateTime? DateUpdated { get; set; }
 }
+
+/// <summary>Mirrors <c>OrgUserDirectoryEntry</c> from OrganizationController — Id+DisplayName only.</summary>
+public sealed record OrgUserDirectoryEntryResponse(Guid Id, string DisplayName);

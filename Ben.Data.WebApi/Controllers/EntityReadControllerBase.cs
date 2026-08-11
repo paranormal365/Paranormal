@@ -12,7 +12,20 @@ namespace Ben.Data.WebApi.Controllers;
 /// <typeparam name="TEntity">The EF Core entity class stored in <c>BenDataContext</c>.</typeparam>
 /// <typeparam name="TRecord">The AutoMapper projection record returned to callers.</typeparam>
 /// <remarks>
-/// Requires any authenticated user (<c>[Authorize]</c>) — no role restriction.
+/// <c>GetAll</c>/<c>GetById</c> return every row of <typeparamref name="TEntity"/>, completely
+/// unfiltered — there is no ownership/visibility check of any kind here, and can't reasonably be
+/// added generically (what "owns" a row varies per entity). <b>Every subclass MUST therefore
+/// declare its own class-level <c>[Authorize]</c> deciding who may reach these two actions</b> —
+/// this base class only requires <em>some</em> authenticated user, which is not an adequate bar
+/// on its own for anything containing personal or private data. Two acceptable patterns, both
+/// used in this codebase:
+/// <list type="bullet">
+/// <item><description>Add <c>[Authorize(Policy = RoleNames.SuperAdmin)]</c> at the subclass —
+/// correct when the entity has no real per-user visibility model (e.g. <c>UserAddressController</c>,
+/// <c>UserEmailController</c>, and the other thin subclasses in <c>Controllers/Entities/</c>).</description></item>
+/// <item><description>Override <c>GetAll</c>/<c>GetById</c> as <c>[NonAction]</c> and replace them
+/// with real permission-aware endpoints — see <see cref="Ben.Data.WebApi.Controllers.Entities.OrganizationController"/>.</description></item>
+/// </list>
 /// For SuperAdmin-only CRUD endpoints see <see cref="AdminEntityControllerBase{TEntity,TRecord}"/>.
 /// <para>
 /// Subclasses simply declare a route attribute and inject the two constructor

@@ -198,7 +198,39 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
             _mapper2.Map<OrganizationAdminRecord>(org));
     }
 
+    /// <summary>
+    /// Returns a minimal Id + DisplayName directory of this organization's active members — just
+    /// enough for org-admin surfaces (e.g. the CMS permission/member pickers) to resolve names,
+    /// without exposing full <c>AppUserRecord</c> (email, phone, 2FA/confirmation flags), which
+    /// is SuperAdmin-only via <c>AppUserController</c> (see <see cref="EntityReadControllerBase{TEntity,TRecord}"/>'s
+    /// doc comment on why that lockdown exists). Gated on the caller being an active member of
+    /// this same organization — not SuperAdmin — since regular org admins are the actual callers.
+    /// </summary>
+    [HttpGet("{organizationId:guid}/user-directory")]
+    public async Task<ActionResult<IEnumerable<OrgUserDirectoryEntry>>> GetUserDirectory(
+        Guid organizationId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var isActiveMember = await db.OrganizationUserMemberships.AsNoTracking()
+            .AnyAsync(m => m.OrganizationId == organizationId && m.AppUserId == userId && m.IsActive, ct);
+        if (!isActiveMember) return Forbid();
+
+        var entries = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.OrganizationId == organizationId && m.IsActive)
+            .Join(db.AppUsers.AsNoTracking(), m => m.AppUserId, u => u.Id,
+                (m, u) => new OrgUserDirectoryEntry(u.Id, u.DisplayName ?? u.Email ?? u.UserName ?? u.Id.ToString()))
+            .ToListAsync(ct);
+
+        return Ok(entries);
+    }
+
 }
+
+/// <summary>Minimal name-resolution entry for <see cref="OrganizationController.GetUserDirectory"/> —
+/// deliberately excludes everything <c>AppUserRecord</c> carries beyond Id/DisplayName.</summary>
+public sealed record OrgUserDirectoryEntry(Guid Id, string DisplayName);
 
 public sealed record OrganizationListItemResponse(
     Guid Id,
