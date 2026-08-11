@@ -35,7 +35,7 @@
                 <div class="text-secondary small mt-1">
                     @_case.City, @_case.State ·
                     Opened @_case.DateCaseOpened.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy")
-                    @if (_case.IsPublic) { <span class="badge bg-info text-dark ms-2">Public</span> }
+                    @if (_case.IsPublic && _case.Status != CaseStatus.Public) { <span class="badge bg-info text-dark ms-2">Public</span> }
                     @if (!string.IsNullOrEmpty(_case.PublicPseudonym))
                     {
                         <span class="ms-2 text-secondary">Public name: <em>@_case.PublicPseudonym</em></span>
