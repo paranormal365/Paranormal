@@ -62,7 +62,7 @@
                     </Template>
                 </GridColumn>
                 <GridColumn Field="@nameof(OrganizationListItemResponse.DateCreated)" Title="Created"
-                            DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+                            DisplayFormat="{0:MM/dd/yyyy}" Width="110px" />
                 @if (UserState.IsSuperAdmin)
                 {
                     <GridColumn Field="@nameof(OrganizationListItemResponse.MemberCount)" Title="Members" Width="90px" TextAlign="@ColumnTextAlign.Center" />
