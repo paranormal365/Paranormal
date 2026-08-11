@@ -1,4 +1,5 @@
 using AutoMapper;
+using Ben.Data.Common.Constants;
 using Ben.Data.Common.Helpers;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
@@ -231,6 +232,11 @@ public sealed class UploadFileController : BenControllerBase
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var before = await db.UploadFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
         if (before is null) return NotFound();
+
+        var userId = GetCurrentUserId();
+        if (before.AppUserId != userId && !User.IsInRole(RoleNames.SuperAdmin))
+            return Forbid();
+
         var entity = await db.UploadFiles.FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
         if (entity is null) return NotFound();
 

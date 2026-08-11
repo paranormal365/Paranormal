@@ -59,7 +59,7 @@ public class UploadFileControllerTests
     }
 
     private static UploadFileController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId,
-        Mock<Ben.Data.Common.Interfaces.IFileStorageService>? storageMock = null)
+        Mock<Ben.Data.Common.Interfaces.IFileStorageService>? storageMock = null, bool isSuperAdmin = false)
     {
         var storage = storageMock ?? new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
         storage.Setup(s => s.UserFilePath(It.IsAny<Guid>(), It.IsAny<string>()))
@@ -87,12 +87,15 @@ public class UploadFileControllerTests
         var ctrl = new UploadFileController(factory, mapperMock.Object, storage.Object,
             new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<UploadFileController>.Instance);
+
+        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, userId.ToString()) };
+        if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, Ben.Data.Common.Constants.RoleNames.SuperAdmin));
+
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
             {
-                User = new ClaimsPrincipal(new ClaimsIdentity(
-                    [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer"))
+                User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Bearer"))
             }
         };
         return ctrl;
@@ -855,6 +858,54 @@ public class UploadFileControllerTests
         var updated = await verify.UploadFiles.FindAsync(fileId);
         Assert.Equal(newTypeId, updated!.UploadFileTypeId);
         Assert.Equal("New description", updated.Description);
+    }
+
+    [Fact]
+    public async Task Update_ByNonOwner_ReturnsForbid()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "a.jpg", StoredFileName = "a.jpg", ContentType = "image/jpeg", FileSize = 1,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var ctrl = BuildController(factory, Guid.NewGuid());
+
+        var result = await ctrl.Update(fileId,
+            new UpdateUploadFileRequest(Guid.NewGuid(), "hacked", true, 5, null), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Update_BySuperAdmin_Succeeds()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "a.jpg", StoredFileName = "a.jpg", ContentType = "image/jpeg", FileSize = 1,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var ctrl = BuildController(factory, Guid.NewGuid(), isSuperAdmin: true);
+
+        var result = await ctrl.Update(fileId,
+            new UpdateUploadFileRequest(Guid.NewGuid(), "updated by admin", true, 5, null), default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
     }
 
     [Fact]
