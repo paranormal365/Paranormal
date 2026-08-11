@@ -45,8 +45,11 @@
         <GridColumns>
             <GridColumn Field="@nameof(AppUserRecord.DisplayName)" Title="Display Name" Width="180px" />
             <GridColumn Field="@nameof(AppUserRecord.Email)" Title="Email" />
-            <GridColumn Field="@nameof(AppUserRecord.DateCreated)" Title="Created"
-                        DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
+            <GridColumn Field="@nameof(AppUserRecord.DateCreated)" Title="Created" Width="110px">
+                <Template>
+                    @(((AppUserRecord)context).DateCreated.ToViewerLocalTime(UserState).ToString("yyyy-MM-dd"))
+                </Template>
+            </GridColumn>
             <GridColumn Field="@nameof(AppUserRecord.IsEmailConfirmed)" Title="Verified" Width="80px">
                 <Template>
                     @if (((AppUserRecord)context).IsEmailConfirmed)

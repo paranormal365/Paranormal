@@ -34,7 +34,12 @@
                     <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.ApplicantDisplayName)" Title="Applicant" />
                     <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.ApplicantEmail)" Title="Email" />
                     <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.RequestMessage)" Title="Message" />
-                    <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.DateCreated)" Title="Applied" DisplayFormat="{0:d}" Width="110px" />
+                    <GridColumn Title="Applied" Width="110px">
+                        <Template>
+                            @{ var applied = (OrganizationMembershipRequestRecord)context; }
+                            @applied.DateCreated.ToViewerLocalTime(UserState).ToString("d")
+                        </Template>
+                    </GridColumn>
                     <GridCommandColumn Width="260px">
                         <GridCommandButton OnClick="@(e => AcceptAsync((OrganizationMembershipRequestRecord)e.Items.First()))"
                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
@@ -67,7 +72,12 @@
                         </Template>
                     </GridColumn>
                     <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.RespondedByDisplayName)" Title="Responded By" />
-                    <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.DateResponded)" Title="Date" DisplayFormat="{0:d}" Width="110px" />
+                    <GridColumn Title="Date" Width="110px">
+                        <Template>
+                            @{ var responded = (OrganizationMembershipRequestRecord)context; }
+                            @responded.DateResponded?.ToViewerLocalTime(UserState).ToString("d")
+                        </Template>
+                    </GridColumn>
                 </GridColumns>
             </TelerikGrid>
         }

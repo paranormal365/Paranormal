@@ -61,8 +61,12 @@
                         }
                     </Template>
                 </GridColumn>
-                <GridColumn Field="@nameof(OrganizationListItemResponse.DateCreated)" Title="Created"
-                            DisplayFormat="{0:MM/dd/yyyy}" Width="110px" />
+                <GridColumn Field="@nameof(OrganizationListItemResponse.DateCreated)" Title="Created" Width="110px">
+                    <Template>
+                        @{ var item = (OrganizationListItemResponse)context; }
+                        @item.DateCreated.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")
+                    </Template>
+                </GridColumn>
                 @if (UserState.IsSuperAdmin)
                 {
                     <GridColumn Field="@nameof(OrganizationListItemResponse.MemberCount)" Title="Members" Width="90px" TextAlign="@ColumnTextAlign.Center" />

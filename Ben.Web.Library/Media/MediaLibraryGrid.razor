@@ -126,8 +126,12 @@
                         @FormatSize(row2.FileSize)
                     </Template>
                 </GridColumn>
-                <GridColumn Field="@nameof(UploadFileRecord.DateCreated)" Title="Uploaded" Width="140px"
-                            DisplayFormat="{0:MMM d, yyyy}" />
+                <GridColumn Title="Uploaded" Width="140px">
+                    <Template>
+                        @{ var row4 = (UploadFileRecord)context; }
+                        @row4.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")
+                    </Template>
+                </GridColumn>
                 @if (ShowVoting)
                 {
                     <GridColumn Title="Voting" Width="260px">

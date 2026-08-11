@@ -69,8 +69,12 @@
                          Height="360px">
                 <GridColumns>
                     <GridColumn Field="@nameof(VideoProjectRecord.Name)" Title="Name" />
-                    <GridColumn Field="@nameof(VideoProjectRecord.DateCreated)" Title="Saved"
-                                DisplayFormat="{0:MMM d, yyyy h:mm tt}" Width="170px" />
+                    <GridColumn Title="Saved" Width="170px">
+                        <Template>
+                            @{ var proj = (VideoProjectRecord)context; }
+                            @proj.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+                        </Template>
+                    </GridColumn>
                     <GridColumn Width="160px">
                         <Template>
                             @{ var row = (VideoProjectRecord)context; }
