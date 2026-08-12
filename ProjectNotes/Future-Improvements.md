@@ -185,14 +185,22 @@ Need a dedicated pass to thoroughly test the Ben.Video.Editor component and veri
 > session's other Telerik-widget-driving difficulties, not evidence of a product issue (this exact
 > feature already has 22+ dedicated automated tests from phases 115/116).
 >
-> **One real (minor) bug found, flagged as a separate background task, not fixed inline:** when
-> background rendering (item #36) and an export/native-clip-encode both need the single shared
-> main `FfmpegService` instance at the same moment, the loser's raw internal exception —
-> `"FfmpegService is not ready (current state: Processing). Call LoadAsync() first."` — leaks
+> **One real (minor) bug found — ✅ Fixed 2026-08-12.** When background rendering (item #36) and
+> an export/native-clip-encode both needed the single shared main `FfmpegService` instance at the
+> same moment, the loser's raw internal exception —
+> `"FfmpegService is not ready (current state: Processing). Call LoadAsync() first."` — leaked
 > directly into the user-visible warning banner instead of being retried/absorbed quietly like
 > background rendering's other transient-failure handling. Reproduced identically in both the
-> wasm-only and native-sidecar-paired runs; **the export itself still completed successfully both
-> times** despite the message — purely cosmetic, not a functional regression.
+> wasm-only and native-sidecar-paired runs; the export itself still completed successfully both
+> times despite the message — purely cosmetic, not a functional regression. Root cause:
+> `RenderWorkerBackend.ResolveSourceAsync`'s non-OPFS MEMFS-copy fallback called
+> `FfmpegService.ReadFileAsync` directly against the main instance, whose `EnsureReady()` guard
+> throws immediately rather than waiting. Fixed with a new `FfmpegService.ReadFileWhenReadyAsync`
+> (mirrors the existing `WriteFileWhenReadyAsync`) that retries every 250ms until Ready instead of
+> throwing. This fix was originally written and tested by an earlier background session that was
+> abandoned before committing — rescued from the orphaned working-tree diff, verified it matched
+> this bug's exact exception message/call site, confirmed 1420/1420 tests passing (including its
+> own pinned regression test), and committed directly to `develop`.
 >
 > Also hit, once, in a long single-tab session that had accumulated many consecutive operations
 > (split/undo/redo/overlay-add/audio-import-then-remove/effect-add/transition-add/marker-add)
@@ -1095,6 +1103,10 @@ on-canvas editing experience, similar to the Pen tool in Photoshop/Illustrator �
 
 > Requested by the user 2026-08-09. Lives in the separate Ben.Video.Editor repo (Github-BenVideo
 > remote).
+
+**Superseded by item #57 (2026-08-12)**, which fully subsumes this item's two remaining open
+bullets (canvas resize-as-keyframe, type-in values) as phases P3/P5 of a much larger,
+Camtasia-class GUI arc — see #57 below.
 
 ---
 
@@ -2068,3 +2080,55 @@ given visit.
 > role-hierarchy model from Phase A), and a link from a checkout record to an `Investigation`.
 > Worth splitting into its own multi-phase plan (personal list first, sharing-to-org second,
 > org-owned + checkout workflow third) rather than attempting as one piece, given the scope.
+
+---
+
+## 57. Camtasia-class direct-manipulation GUI — preview canvas + timeline transitions (🟡 In progress — T0 shipped 2026-08-12, phase 125)
+
+Full Camtasia-style direct manipulation: everything about an overlay's animation editable on the
+preview canvas itself (click to select, drag to move, resize, keyframes created/updated by
+manipulating the object at the playhead, bezier handles pulled out by dragging), plus
+Camtasia-style transitions (drag a style from a gallery onto a clip junction, a saddle-shaped chip
+overlapping the cut, drag its edges to change duration). Supersedes item #35's two remaining open
+bullets (canvas resize-as-keyframe, type-in values).
+
+Locked decisions (2026-08-12): full Camtasia overlap model for the timeline (transition chip
+overlays the junction; timeline width reflects true output duration, not clip-chip-width + gap);
+the Working Window preview renders transitions WYSIWYG (accepted junction re-encode cost);
+rotation keyframes for ClipArt only (callout/text SVG renderers have no rotation support at all).
+
+**Part 1 — preview canvas (6 phases, P1–P6):** click-to-select + unified body-drag; keyframe-aware
+editing semantics (drag at playhead upserts a keyframe when a motion path exists, instead of
+writing static fields); per-keyframe ScaleX/ScaleY (closes item #35) + ClipArt-only Rotation
+keyframes; bezier handle creation/editing on canvas (alt-drag, double-click-remove, right-click
+easing menu); canvas snapping/nudge/type-in HUD (closes item #35's last bullet); keyframe diamonds
+visible/draggable on the timeline chip.
+
+**Part 2 — transitions (5 phases, T0–T4, T5 stretch):** ~~T0~~ ✅ correctness prerequisites
+(below); the risky overlap visual model; WYSIWYG preview transitions; a drag-and-drop transitions
+gallery; transition chip edge-drag resize + editor polish; stretch: curated extra xfade styles.
+
+Sequencing: `T0 → P1 → P2 → P3 → T1 → T2 → T3 → T4 → P4 → P5 → P6 → (T5 stretch)`, with reassess
+points after T1 (the overlap model) and after P3 (ScaleX/Y/Rotation touch every render path).
+
+**T0 shipped 2026-08-12 (phase 125)** — standalone, GUI-independent correctness prerequisite,
+found during planning research (not assumed):
+- Fixed a real export bug: `ExportArgBuilders.BuildXfadeFilterComplex` hardcoded every timeline
+  segment as exactly 5 seconds long when computing chained xfade junction offsets
+  (`cumOffset += 5.0 - dur`) — any real project (i.e. every project) exported same-track
+  transitions at the wrong offset. Now threads real per-segment durations through from
+  `ExportService` and uses the correct chained-xfade recurrence. Pinned regression tests assert
+  the exact offset math.
+- Deleted `Transition.CustomFilterExpression` — a free-form ffmpeg filter string field, read
+  nowhere in the codebase, that violated the item-38 no-raw-filter-strings trust-boundary rule.
+- Made `AddTransition`/`UpdateTransition` undoable (`RemoveTransition` already was).
+- 1419/1419 tests passing. No live Playground verification this phase — pure backend logic, no
+  UI surface touched (`TransitionEditor.razor` unchanged).
+
+> Requested by the user 2026-08-12: "Can you create an accurate and detailed plan to create a GUI
+> for all aspects of the preview window such as adding keyframes and moving items and in the
+> timeline adding and modifying transitions like they do in Camtasia... And the bezier curve
+> handles etc... So, if a callout moves from one keyframe to another, it shows a dashed line and
+> it moves with the playhead. That is what the preview window is for." Full plan:
+> `also-the-sidecar-must-generic-whisper.md`. Lives in the separate Ben.Video.Editor repo
+> (Github-BenVideo remote).
