@@ -1183,7 +1183,7 @@ the new, shorter overall extent (since `Clips.TotalDuration` presumably already 
 today — worth confirming as part of this fix, not assuming).
 Lives in the separate Ben.Video.Editor repo.
 
-## 38. Long-form project memory budget — e.g. three 20-minute 1080p clips (🟡 in-browser mitigations (A-D) + full native sidecar (phases 121-124: foundation, render routing, real exports) shipped; whether a further phase is still needed is an open question)
+## 38. Long-form project memory budget — e.g. three 20-minute 1080p clips (✅ Complete — in-browser mitigations (A-D) + full native sidecar (phases 121-124: foundation, render routing, real exports) shipped; user confirmed 2026-08-12 no further phase is needed, since phase 124's hybrid design already collapsed the planned overlay-export split)
 
 Raised by the user 2026-08-09 while item #36 phase D was being planned: what happens when someone
 edits three 20-minute 1080p clips? Honest answer: today that breaks. The whole pipeline lives in
