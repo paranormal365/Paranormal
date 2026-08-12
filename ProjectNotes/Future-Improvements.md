@@ -1264,8 +1264,32 @@ Ben.Video.Editor repo.
 > cap with zero console errors.
 >
 > **This closes every in-browser mitigation in the plan (phases A–D).** What remains is the native
-> sidecar (phases E–G) — a genuinely different scope of work (a new standalone project, a network
-> protocol, a security model, four separate per-OS builds), not a phase-121-sized continuation.
+> sidecar (phases E–G).
+
+> **New hard requirement from the user (2026-08-12): "the sidecar MUST be secure. There can be no
+> case where it can be hacked or used to install malware or ransomware or a virus."** This
+> invalidated two pillars of the original sidecar design and triggered a full re-plan (see
+> `DESIGN-item38-long-form-memory.md` §5, to be rewritten with phase 122): (1) the browser will
+> never send ffmpeg argv/filter strings to the sidecar — only typed, structured job specs, which
+> the sidecar turns into argv itself using the same shared code the browser uses, so nothing
+> string-shaped that could be an injection ever crosses the wire; (2) a one-time pairing code
+> (user decision: yes, over a frictionless but weaker Origin-only design) adds a second,
+> independent layer of auth beyond the browser's Origin header. User also decided: ship v1
+> unsigned (documented Gatekeeper/SmartScreen bypass instructions), with real code signing
+> recorded as a requirement before any real user distribution. New phase numbers 121–125 (E-prep,
+> E, F, G1, G2) replace the original E/F/G split.
+>
+> **Phase 121 shipped 2026-08-12** — pure extraction, zero behavior change. New `Ben.Video.Core`
+> project (plain classlib, zero package references) now holds `ExportArgBuilders` and its full
+> transitive closure (effect plugins, clip effects, the model types they touch) moved out of
+> `Ben.Video.Editor`, whose Razor SDK + licensed Telerik package a non-Blazor sidecar process
+> can't reference. Original namespaces kept on every moved type, so zero `using` changes were
+> needed anywhere in Editor or its tests. Found+fixed a real bug in passing:
+> `EscapeMetadataValue` (chapter titles in exported ffmetadata) escaped `\=#;` per spec but not
+> newlines, letting a title inject a fabricated second chapter block. 1407/1407 tests passing,
+> live-verified end-to-end (import → effect pipeline → full export) with the code now split
+> across two assemblies. Next: phase 122, the sidecar app itself with the full security stack —
+> a substantially larger phase than 121, not yet started.
 
 ## 39. New callout doesn't land at the playhead — ✅ Fixed in full (2026-08-09, phases 85 + 87)
 
