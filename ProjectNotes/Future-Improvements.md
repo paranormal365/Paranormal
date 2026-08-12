@@ -1183,7 +1183,7 @@ the new, shorter overall extent (since `Clips.TotalDuration` presumably already 
 today — worth confirming as part of this fix, not assuming).
 Lives in the separate Ben.Video.Editor repo.
 
-## 38. Long-form project memory budget — e.g. three 20-minute 1080p clips (🟡 in progress, phases A+B shipped)
+## 38. Long-form project memory budget — e.g. three 20-minute 1080p clips (🟡 in progress, phases A+B+D shipped)
 
 Raised by the user 2026-08-09 while item #36 phase D was being planned: what happens when someone
 edits three 20-minute 1080p clips? Honest answer: today that breaks. The whole pipeline lives in
@@ -1229,8 +1229,22 @@ Ben.Video.Editor repo.
 > and fell back to a full copy; and `getMetadata`/`extractThumbnails` derived their temp output
 > filenames from the input path, which broke once mounting actually started working. Verified
 > end-to-end: import, preview, and a full export all succeed against a genuinely mounted source.
-> Next: phase D (export-output memory flattening), then C (segment-cache cap+LRU), then the native
-> sidecar (E–G).
+
+> **Phase D shipped 2026-08-12** (phase 119) — export-output memory flattening: native ffmpeg.wasm
+> `rename` replaces the old read/write/delete round trip, and eager intermediate deletion was
+> extended to every remaining pipeline stage that didn't already have it (per-clip segments,
+> cross-track transition intermediates, the clipart compositing loop and its SVG frame sequences,
+> pre-audio-mix video and per-clip audio segments, pre-chapter-embed video). Real bug found and
+> fixed along the way: the watermark stage runs *after* the pipeline's rename step, so its input
+> file was never tracked for cleanup at all — a watermarked export previously leaked the full
+> pre-watermark file for the rest of the process's lifetime. The finished output now moves from
+> MEMFS into a new OPFS `bv-exports/` area entirely JS-side (no bytes cross into .NET), and both
+> download and the full-quality Preview popout read directly from that OPFS copy via a zero-copy
+> blob URL instead of a second MEMFS read; falls back gracefully to the old direct-MEMFS path if
+> OPFS isn't available. Verified end-to-end: full export completed with a new byte-size readout,
+> the OPFS export area confirmed empty afterward (download path cleans up), and a separate
+> full-quality Preview run left its own export file in place for the popout as designed, playing
+> back a genuine blob URL. Next: phase C (segment-cache cap+LRU), then the native sidecar (E–G).
 
 ## 39. New callout doesn't land at the playhead — ✅ Fixed in full (2026-08-09, phases 85 + 87)
 
