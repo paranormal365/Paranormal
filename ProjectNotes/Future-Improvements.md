@@ -320,7 +320,7 @@ Several related asks about the in-app timeline preview:
 
 ---
 
-## 16. Rich text properties for text overlays and callout text — 🟡 Slice B complete (2026-08-10)
+## 16. Rich text properties for text overlays and callout text — 🟡 Slice D complete (2026-08-12)
 
 Text — both a standalone text overlay and text inside a callout — should support:
 - ~~Size and color~~ + font family — **✅ Slice A shipped** (`feature/phase-74-rich-text-fonts-slice-a`):
@@ -341,19 +341,61 @@ Text — both a standalone text overlay and text inside a callout — should sup
   silently dropping them — the checkboxes ticked but nothing was actually saved. 9 new unit tests, 2 more
   added to the pre-existing `UpdateTextOverlay_UpdatesAllProperties` test to guard against the same class
   of bug recurring for a future field.
-- **Still open:** Subscript/superscript.
-- **Still open:** Font selection from Google Fonts or another common free font library — needs its own
-  design: the SVG-as-image rasterization path can't reliably fetch external `@font-face` resources, so
-  fonts would likely need embedding as base64 data-URIs inside the SVG or pre-registering via the
-  `FontFace` API.
-- **Still open:** All of the above are *whole-block* — ideally applicable *inline* while typing (mixed
-  formatting within one text block), not just as a single style for the whole block. Forces a runs/spans
-  data model; SVG `<tspan>` supports per-run styling natively.
-- **Still open:** Direct in-preview editing — click into the text on the canvas and type/format it there,
-  not only through a side-panel form. Requires first building a live text/callout rendering layer in the
-  preview — today their real appearance only exists in exported output, not the editor preview.
+- ~~Subscript/superscript~~ + ~~inline mixed formatting~~ — **✅ Slice C shipped**
+  (`feature/phase-115-inline-rich-text-runs`): both close together, since the user chose a full
+  rich-text toolbar (not typed markup) for inline formatting, and a toolbar naturally includes
+  Subscript/Superscript buttons alongside Bold/Underline/Color. New `TextRun` model
+  (`Text`/`Bold`/`Underline`/`Subscript`/`Superscript`/`Color`) + `List<TextRun>? Runs` on both
+  `TextOverlay`/`CalloutClip` (`null`/empty = the exact prior whole-block path, fully backward
+  compatible, no migration). Both renderers now emit one `<tspan>` per (line, run) instead of per
+  line, using SVG's own text-chunk semantics (only the first run of each line needs an explicit
+  `x`) for correct multi-run alignment with zero client-side text measurement.
+  `TelerikEditor` (Telerik's own rich-text component, Bold/Underline/SubScript/SuperScript/ForeColor
+  tools) replaces the plain textarea in both editors; the now-redundant whole-block Bold/Underline
+  checkboxes are removed since the toolbar subsumes them. New `richTextRunsInterop.js`
+  (browser-`DOMParser`-based HTML→Runs, so parsing exactly matches what the editor produced) +
+  `RichTextRunParserService`; `TextRun.ToHtml` (pure C#) for the reverse direction, including a
+  synthetic single-run fallback so old saved content still displays its existing Bold/Underline the
+  first time it's reopened. 27 new tests; a real bug (raw C# string literals silently mis-escaping
+  SVG attribute quotes, truncating them one character early) was caught by the new renderer tests
+  before ever reaching the app. Live-verified two ways: the real shipped JS module called directly
+  against 8 representative HTML strings, and a full real UI pass (typed text, applied Bold to one
+  word and Subscript to another via the actual toolbar buttons, clicked Apply, read the live
+  preview's actual rendered SVG) confirming exactly the expected per-run `<tspan>` output.
+  **Found in passing, fixed in the same pass**: `ProjectTextOverlay`/`ProjectCalloutClip` never
+  actually included `FontBold`/`FontUnderline` in serialization — phase 111 shipped those fields
+  but never wired them into `ProjectFile`/`ProjectService`/`ClipStore`, so Bold/Underline was
+  silently lost on every project save/reload; fixed alongside adding `Runs` serialization in the
+  same DTOs/mapping methods. See README-phase-115.md in the Ben.Video.Editor repo.
+- ~~Font selection from Google Fonts~~ — **✅ Slice D shipped** (`feature/phase-116-google-fonts`).
+  Turned out simpler than the original 2026-08-09 note assumed ("needs base64-embedding or
+  FontFace-API design"): rasterization already happens in-browser (`createImageBitmap`/canvas in
+  `svgFrameRenderer.js`), so a normal dynamically-loaded web font is visible to it — no embedding
+  needed. New `GoogleFonts.cs` (curated ~15-font list, `IsGoogleFont`) concatenated into the
+  existing font dropdowns alongside `StandardFonts.Names`; new `googleFontsInterop.js`
+  (`ensureFontLoaded`: idempotent `<link>` injection, `document.fonts.load()` for both regular and
+  bold weight with a bounded 3s timeout so a slow/offline network degrades to the system fallback
+  font instead of hanging the UI) + `GoogleFontService` (a no-op for system fonts, so the common
+  case costs nothing); called from both editors' font dropdowns (so the live preview picks it up
+  immediately) and from `ExportService` right before rasterizing any frame using a Google Font
+  (what actually matters for correctness in a fresh session where the `<link>` was never injected).
+  13 new tests; 1373/1373 passing. Live-verified against the real Google Fonts CDN — the real
+  shipped JS module correctly injected the exact expected `<link>` URL (including correct
+  multi-word `+`-encoding for "Open Sans"), confirmed idempotent, and confirmed both font weights
+  genuinely loaded via `document.fonts.check()`; then a full real UI pass confirmed the dropdown
+  shows all 7 system fonts followed by all 15 Google Fonts in order, and selecting "Roboto" +
+  clicking Apply changed the live preview's actual rendered SVG `font-family` attribute end to end.
+  Real, stated-plainly constraint: Google Fonts export needs network access to
+  `fonts.googleapis.com` at render time, unlike the fully-offline system-font path. See
+  README-phase-116.md in the Ben.Video.Editor repo.
+- **Still open:** Direct in-preview editing — click into the text on the canvas and type/format it
+  there, not only through the side-panel form. Deliberately deferred (2026-08-12) as its own future
+  item — the largest, most different piece of this backlog entry (new canvas click-to-edit
+  interaction, caret handling, sync back to `ClipStore`), and nothing is broken without it since the
+  side-panel editor fully works today.
 
-> Requested 2026-08-09. Slice A (phase 74) shipped 2026-08-08. Slice B (phase 111) shipped 2026-08-10.
+> Requested 2026-08-09. Slice A (phase 74) shipped 2026-08-08. Slice B (phase 111) shipped
+> 2026-08-10. Slice C (phase 115) shipped 2026-08-12. Slice D (phase 116) shipped 2026-08-12.
 
 ---
 
@@ -1141,7 +1183,7 @@ the new, shorter overall extent (since `Clips.TotalDuration` presumably already 
 today — worth confirming as part of this fix, not assuming).
 Lives in the separate Ben.Video.Editor repo.
 
-## 38. Long-form project memory budget — e.g. three 20-minute 1080p clips (not started)
+## 38. Long-form project memory budget — e.g. three 20-minute 1080p clips (🟡 in progress, phases A+B shipped)
 
 Raised by the user 2026-08-09 while item #36 phase D was being planned: what happens when someone
 edits three 20-minute 1080p clips? Honest answer: today that breaks. The whole pipeline lives in
@@ -1167,6 +1209,28 @@ Longer-term: this is exactly the scenario the item #36 design's rejected-for-now
 backend** (real ffmpeg outside the browser, behind the existing `IRenderBackend` seam) was kept
 open for — in-browser mitigations raise the ceiling but cannot remove it. Lives in the separate
 Ben.Video.Editor repo.
+
+> **Planned 2026-08-12**: full design doc committed to `develop` —
+> `DESIGN-item38-long-form-memory.md` in the Ben.Video.Editor repo. Covers the full arc: phases
+> A (import OPFS parity) → B (WORKERFS-mounted sources, the headline memory win) → D (export-output
+> memory flattening) → C (the item #36 §8 segment-cache cap+LRU, finally built) → E/F/G (a native
+> local sidecar render backend + full-export orchestration, preserving the all-local
+> files-never-leave-the-machine promise via a `127.0.0.1`-bound companion process). Implementation
+> starting with phase A.
+
+> **Phase A shipped 2026-08-12** (phase 117): server/media-library imports now write to OPFS and
+> set `OpfsExt`, matching the local-picker path — fixes a reload bug for free and unblocks phase B.
+
+> **Phase B shipped 2026-08-12** (phase 118) — the headline memory win: source clips are now
+> zero-copy WORKERFS-mounted into the main ffmpeg instance instead of copied into MEMFS, via a new
+> `SourceMounter` service. Two real bugs only surfaced by live verification against a real
+> ffmpeg.wasm instance, both found and fixed: the mount directory was nested
+> (`/sources/{id}`, but ffmpeg.wasm's `createDir` is non-recursive) so every mount silently failed
+> and fell back to a full copy; and `getMetadata`/`extractThumbnails` derived their temp output
+> filenames from the input path, which broke once mounting actually started working. Verified
+> end-to-end: import, preview, and a full export all succeed against a genuinely mounted source.
+> Next: phase D (export-output memory flattening), then C (segment-cache cap+LRU), then the native
+> sidecar (E–G).
 
 ## 39. New callout doesn't land at the playhead — ✅ Fixed in full (2026-08-09, phases 85 + 87)
 
@@ -1479,7 +1543,7 @@ for Callout/TextOverlay, but with an added async asset-loading step neither of t
 
 ---
 
-## 56. ClipArt `Rotation` and `TintColor` are set in the editor but never actually rendered anywhere (not started)
+## 56. ClipArt `Rotation` and `TintColor` are set in the editor but never actually rendered anywhere — ✅ Fixed (2026-08-12, phase 113)
 
 Found 2026-08-11 while shipping item #47's live-preview fix. `ClipArtClip.Rotation` and `TintColor`
 are real, user-settable fields (`ClipArtEditor.razor` presumably exposes controls for them, and
@@ -1507,6 +1571,52 @@ paths (static export, animated export, live preview) the way position/size/opaci
 
 > Found 2026-08-11 while scoping [[project_video_editor_phase112_clipart_live_visual|phase 112]]
 > (item #47). Lives in the separate Ben.Video.Editor repo.
+
+> **Shipped on `feature/phase-113-clipart-rotation-tint`, merged to `develop`.** Applied both fields
+> across all three rendering paths, the same way position/size/opacity already are:
+> - **Static export overlay**: new `ExportArgBuilders.BuildClipArtStaticOverlayFilter` (extracted
+>   from `ExportService` for testability). Rotation uses ffmpeg's `rotate` filter with `ow=rotw(a):
+>   oh=roth(a)` (bounding box auto-expanded so corners aren't clipped), with the overlay's `x:y`
+>   recomputed in C# — `ComputeRotatedBounds` — to keep the same center once the box grows. Tint
+>   uses a `colorchannelmixer` linear blend (`BuildClipArtTintMixer`): each output channel is
+>   `original*(1-t) + (tintChannel/255)*alpha*t`, where `t` is the tint color's own alpha (0 = no
+>   tint, 1 = full recolor derived from the source's own alpha shape) — expressible directly as
+>   `colorchannelmixer` coefficients since the filter has no constant term, only per-input-channel
+>   multipliers.
+> - **Animated raster export**: `RasterClipArtFrame` gained `Rotation`/`TintColor` fields (constant
+>   per clip, carried per-frame since `renderBatch` has no separate "constant for this call"
+>   parameter); `rasterClipArtRenderer.js`'s canvas renderer rotates around the sprite's own center
+>   before drawing, then tints via the standard `source-atop` composite technique (draw sprite, then
+>   fill its already-drawn silhouette with the tint color at the tint's own alpha as blend strength)
+>   — the canvas analogue of the ffmpeg color-matrix approach.
+> - **Live preview** (`LiveOverlayPreview.razor`): CSS `transform: rotate()` on the clipart
+>   container; tint via a masked overlay div (`mask-image` sourced from the asset's own blob URL, or
+>   an inline SVG data-URI) at the tint's alpha — the CSS analogue of the same `source-atop`
+>   technique, so all three paths agree visually.
+> - `ApplyMotionFrame(ClipArtClip, MotionFrame)` deliberately untouched — both fields are static
+>   per-clip, not part of `MotionFrame`, exactly as its existing doc comment already said.
+> - 12 new unit tests (`BuildClipArtTintMixer`, `ComputeRotatedBounds`, `BuildClipArtStaticOverlayFilter`,
+>   `RasterClipArtFrame`); full suite 1330/1330 passing.
+> - Live-verified in the Playground (`DemoAssetProvider` temporarily granted `AllowRecolor` to
+>   surface the tint control): placed the demo star clipart, set Rotation to 25° and Tint to
+>   `#0078FFFF` via the Properties panel, confirmed the live preview showed a rotated, fully
+>   re-colored blue star, and inspected the actual applied DOM styles
+>   (`transform: rotate(25.00deg)` + a `mask-image`-driven tint div at `rgb(0,120,255)`) to confirm
+>   they matched the design exactly. Also exercised the real shipped `rasterClipArtRenderer.js`
+>   module directly against a synthetic sprite: a 45°-rotated frame showed a partially-transparent
+>   corner pixel exactly where rotation moves a square's corner outside its own axis-aligned
+>   bounding box (255,0,0,140 vs. a solid 255,0,0,255 with no rotation), and a full-alpha tint frame
+>   showed the sprite fully recolored (0,0,255,255) at both its center and corner — direct pixel
+>   proof the shipped JS, not a reimplementation, behaves correctly. A full ffmpeg-export pixel
+>   sample was not obtained — the Playground has no base video clip to export against without an OS
+>   file picker (a standing tool limitation), and the floating Media & Properties panel's item #53
+>   positioning bug made driving the Export dialog for a clipart-only project impractical this
+>   session — but the static overlay filter's exact string output is fully pinned by unit tests, and
+>   the animated path's canvas logic is directly pixel-verified above, so export-path confidence is
+>   high despite not sampling a final rendered .mp4.
+> - **Found in passing, not fixed here** (separate task spawned): the static (non-animated,
+>   non-motion-path) raster overlay branch never applied `ClipArtClip.Opacity` at all — a
+>   pre-existing, independent bug, distinct from this item.
 
 ---
 
@@ -1630,7 +1740,7 @@ way to see their relative offset or treat them as a pair.
 
 ---
 
-## 53. "Media & Properties" floating window resets to a mostly off-screen position (not started)
+## 53. "Media & Properties" floating window resets to a mostly off-screen position — ✅ Fixed (2026-08-12, phase 114)
 
 Found live-testing phase 111 (item #16 slice B) in the Playground. The floating `Media &
 Properties` window (`bv-media-panel-window`, a `TelerikWindow`) opened with its `left`/`top`
@@ -1648,6 +1758,28 @@ carefully enough this session to be certain it's the same root cause rather than
 > "default position wrong on first render" bugs), and whether anything re-triggers that same
 > computation later. Workaround used for testing: `document.querySelector('.bv-media-panel-window').style.left/top`
 > via JS to force it back on-screen.
+
+> **Shipped on `feature/phase-114-media-panel-position`, merged to `develop`.** Root cause
+> confirmed live: `TelerikWindow`'s `ContainmentSelector=".bv-editor"` drives its own mount-time
+> (and later, re-clamp-time) JS measurement of the containment element; when `.bv-editor` hasn't
+> settled to its real flex-computed size yet — reproduced this session as literally `0×0` — the
+> clamp result is nonsensical (`top:-200px; left:-240px; width:0px; height:0px`, i.e. the window's
+> own `MinWidth`/`MinHeight` negated) and flows straight back through the `@bind-Top`/`@bind-Left`/
+> `@bind-Width`/`@bind-Height` two-way bindings into the app's own default fields, overwriting them
+> — with nothing to ever reset it, the corruption stuck across every later render, which also
+> explains the original report's "resets again after manual repositioning" observation (any later
+> re-clamp against another bad transient measurement recorrupts the already-fixed state the same
+> way). Fixed with two defensive corrections in `VideoEditor.razor`'s `OnAfterRenderAsync`, both on
+> the existing bound fields, no new JS: (1) on `firstRender`, unconditionally reassert the intended
+> defaults — safe by construction, since there's no legitimate prior drag to preserve at that exact
+> point; (2) on every render, self-heal if width/height ever equal the unambiguous `"0px"` signature
+> (never a legitimate resting size given `MinWidth`/`MinHeight` of `240px`/`200px`), without needing
+> to guess at timing or risk fighting a deliberate later user drag. Live-verified by reading the
+> panel's actual `style` attribute (not just visually) across a fresh page load repeated multiple
+> times, a minimize→restore cycle, and a tab switch within the panel — all landed/stayed at the
+> correct `68px/8px/320px/420px`, vs. reliably reproducing the broken negative/zero state on the
+> same repro before the fix. See README-phase-114.md in the Ben.Video.Editor repo. Lives in the
+> separate Ben.Video.Editor repo.
 
 ---
 
