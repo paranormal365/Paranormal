@@ -2083,7 +2083,7 @@ given visit.
 
 ---
 
-## 57. Camtasia-class direct-manipulation GUI — preview canvas + timeline transitions (🟡 In progress — T0/P1/P2/P3 shipped 2026-08-12, phases 125–128; Part 1 preview-canvas work now closed except P4-P6)
+## 57. Camtasia-class direct-manipulation GUI — preview canvas + timeline transitions (🟡 In progress — T0/P1/P2/P3/T1 shipped 2026-08-12, phases 125–129; reassess point per plan, next is T2 WYSIWYG preview transitions)
 
 Full Camtasia-style direct manipulation: everything about an overlay's animation editable on the
 preview canvas itself (click to select, drag to move, resize, keyframes created/updated by
@@ -2187,6 +2187,24 @@ for Callout/ClipArt) and ClipArt-only rotation keyframes:
   fully covered by unit tests, which is where the real correctness risk lived.
 - Unblocks (but doesn't itself attempt) the resize-handle/control-point keyframe-awareness
   deferred from P2 — scoped to the model/evaluation/export layer only this phase.
+
+**T1 shipped 2026-08-12 (phase 129)** — the plan's own "risky one," Part 2 (transitions) begins:
+transitions now render as a saddle chip overlapping the real cut between their two clips (matching
+Camtasia), instead of the old inline pill that consumed its own flex-row space unrelated to its
+actual duration. `Transition` items excluded from the sequential gap-accumulation loop entirely;
+rendered separately, absolutely positioned from `TimelinePosition`/`Duration` directly, z-index
+tuned so the underlying clips' own trim handles stay grabbable exactly where a transition overlaps
+their edge (proven via `elementsFromPoint`, not assumed). Worked through the plan's own "must
+audit" list (`TotalDuration`, Fit, auto-fit, `RenderStatusService`, `SegmentBudget`) before
+touching anything — proved (and pinned with a regression test) that `TotalDuration`'s existing
+formula was already correct with transitions present, given `TransitionEditor`'s own duration
+clamp; **zero changes needed** anywhere on that list. 1483/1483 tests passing (+1). Live-verified
+cleanly: contiguous clips, correctly-overlapping/duration-proportional transition chip, trim-handle
+z-index priority, a real trim-handle drag, and transition select/remove/undo all confirmed working.
+Found and documented (not fixed, confirmed unrelated) a real pre-existing bug while setting up live
+verification: "Insert (Make Room)" doesn't renumber clip `Order` to match the new
+`TimelinePosition` after a ripple-insert, desyncing the rendered timeline layout — reproduced with
+zero transitions present, ruling out this phase's changes — item #59, below.
 
 > Requested by the user 2026-08-12: "Can you create an accurate and detailed plan to create a GUI
 > for all aspects of the preview window such as adding keyframes and moving items and in the
