@@ -165,7 +165,44 @@ Need a dedicated pass to thoroughly test the Ben.Video.Editor component and veri
 > attempted but blocked by a slow/stuck audio import in the Playground this pass (recurring
 > environment flakiness, not a product bug) — still open for a future pass.
 >
-> Still to test: mixed video+image timeline preview/export, volume automation UI, text overlays, callouts, clip art, transitions, motion keyframes, export dialog/queue, project save/open (device + server), subtitle export, error log panel, asset browser, remaining keyboard shortcuts. Also noted but not yet investigated: `ImageClip.Width`/`Height` are never populated on import, so image clips always render at their native resolution in Preview/Export instead of being scaled/padded to match the project's output resolution — fine for a single image matching project aspect ratio, but will look wrong once a mismatched-aspect image is mixed into a real project.
+> Still to test: mixed video+image timeline preview/export, volume automation UI details, clip art, motion keyframes, export dialog/queue, project save/open (server variant — device variant now confirmed, see below), subtitle export, error log panel, asset browser, remaining keyboard shortcuts. Also noted but not yet investigated: `ImageClip.Width`/`Height` are never populated on import, so image clips always render at their native resolution in Preview/Export instead of being scaled/padded to match the project's output resolution — fine for a single image matching project aspect ratio, but will look wrong once a mismatched-aspect image is mixed into a real project.
+>
+> **2026-08-12 pass** (right after item #38 closed — deliberately re-verified core paths since
+> phases 121-124 touched `ExportService`/`FfmpegService`/the render backends significantly).
+> Confirmed working: split + undo/redo (undo correctly reverted the split, redo correctly restored
+> it — clip count round-tripped 1→2→1→2), effects (added Grayscale via the effect dropdown +
+> "Add selected effect", chip appeared correctly), transitions (Fade transition chip placed
+> correctly between two clips), text overlay + callout (both add correctly, each renders in its
+> own stacked layer row per item #39's fix, still holding), audio import (real waveform rendered
+> from a real mp3), audio clip properties panel (trim in/out, volume, left/right balance sliders
+> all present and structurally correct), **export — both with and without the native sidecar
+> paired**, confirmed on a clean minimal project (both produced a genuine "Export Complete"), and
+> **project save/load round-trip** (File → Save, hard page reload, File → Open lists the saved
+> project with correct name/timestamp/size, Open restores the clip with the correct "media
+> missing, needs re-link" indicator — expected/correct since MEMFS doesn't survive a reload, not a
+> bug). Rich-text overlay content editing (typing into the Telerik/ProseMirror iframe editor)
+> couldn't be reliably driven via this session's browser-automation tool — consistent with this
+> session's other Telerik-widget-driving difficulties, not evidence of a product issue (this exact
+> feature already has 22+ dedicated automated tests from phases 115/116).
+>
+> **One real (minor) bug found, flagged as a separate background task, not fixed inline:** when
+> background rendering (item #36) and an export/native-clip-encode both need the single shared
+> main `FfmpegService` instance at the same moment, the loser's raw internal exception —
+> `"FfmpegService is not ready (current state: Processing). Call LoadAsync() first."` — leaks
+> directly into the user-visible warning banner instead of being retried/absorbed quietly like
+> background rendering's other transient-failure handling. Reproduced identically in both the
+> wasm-only and native-sidecar-paired runs; **the export itself still completed successfully both
+> times** despite the message — purely cosmetic, not a functional regression.
+>
+> Also hit, once, in a long single-tab session that had accumulated many consecutive operations
+> (split/undo/redo/overlay-add/audio-import-then-remove/effect-add/transition-add/marker-add)
+> without a reload: Export got stuck at "Processing… 0%" indefinitely alongside a burst of blob-URL
+> `net::ERR_FILE_NOT_FOUND` errors. A fresh tab + clean storage reset immediately made the exact
+> same export (and every other export this session) succeed normally, matching the
+> already-documented, not-yet-root-caused "Playground ffmpeg-Import Flakiness" pattern exactly
+> (recurring hangs only after several back-to-back operations in one tab, gone after a clean
+> reset) — treated as that known issue recurring, not a new regression, since both clean-baseline
+> export paths worked correctly on the first try.
 
 ---
 
