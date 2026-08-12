@@ -1183,7 +1183,7 @@ the new, shorter overall extent (since `Clips.TotalDuration` presumably already 
 today — worth confirming as part of this fix, not assuming).
 Lives in the separate Ben.Video.Editor repo.
 
-## 38. Long-form project memory budget — e.g. three 20-minute 1080p clips (🟡 in-browser mitigations (A-D) + sidecar foundation (phases 121-122) shipped; NativeSidecarBackend + real exports (phases 123-125) remain)
+## 38. Long-form project memory budget — e.g. three 20-minute 1080p clips (🟡 in-browser mitigations (A-D) + sidecar foundation + render routing (phases 121-123) shipped; real exports (phases 124-125) remain)
 
 Raised by the user 2026-08-09 while item #36 phase D was being planned: what happens when someone
 edits three 20-minute 1080p clips? Honest answer: today that breaks. The whole pipeline lives in
@@ -1308,9 +1308,34 @@ Ben.Video.Editor repo.
 > `Ben.Video.Tests` + 50/50 new `Ben.Video.Sidecar.Tests` passing. Live-verified full pairing flow
 > against a real running sidecar process from the Playground app: unpaired detection, pairing
 > success, token persistence across a hard reload with no re-prompt, and correct fallback to
-> disconnected when the sidecar process is killed. Next: phase 123, `NativeSidecarBackend` +
-> `FallbackRenderBackend` — the first phase that actually routes real render work through the
-> sidecar, with a benchmark-driven go/no-go reassessment point before phases 124/125.
+> disconnected when the sidecar process is killed.
+>
+> **Phase 123 shipped 2026-08-12** — the first phase that routes real render work through the
+> sidecar. Browser submits a typed `SegmentRenderSpec` (never argv, never a filter string); the
+> sidecar's new `ArgvFactory` rebuilds it into real ffmpeg argv using the *exact same*
+> `ExportArgBuilders` code the wasm render worker already calls, so a native segment and a wasm
+> segment are byte-compatible under the `bgseg_`-prefixed stream-copy concat gate regardless of
+> which backend produced them. New `FallbackRenderBackend` picks the sidecar when connected/paired
+> and falls back to the existing wasm worker otherwise, re-checked fresh per job — `NativeSidecar`
+> stays off by default, so nothing changes for anyone not opted in. Two deviations from the
+> original plan, both found while building/verifying it: dropped the planned SSE progress stream in
+> favor of plain ~400ms status polling (Blazor WASM's `HttpClient` can't stream a response without
+> a browser-only toggle that a plain `net10.0` Razor class library can't reference); and a real bug
+> — `NativeSidecarService` never noticed a dead connection on its own (only an explicit re-pair
+> ever updated its state), so a killed sidecar would silently strand every future job against it
+> forever instead of falling back. Fixed with `ReportConnectionLost()`, called from a deliberately
+> broad catch-all (the source-upload step goes through a JS `fetch()`, not the C# `HttpClient`, so
+> its failures are a different exception type entirely). Live-verified end to end against a real
+> sidecar process from the real Playground UI (OS file picker unavailable in this sandboxed browser
+> tool, so a `File`/`DataTransfer` injection fed the same `<input type="file">` change event a real
+> picker would, without touching any product code): a real clip's Rough and Fine background-render
+> passes both completed entirely through the sidecar (upload, submit, poll, result, cleanup, with
+> the second pass correctly reusing the already-cached source), then — after the
+> `ReportConnectionLost` fix — killing the sidecar mid-session produced exactly one failed request
+> against it, an immediate chip flip to "No sidecar," and zero further wasted requests for the rest
+> of the session, with the queue completing entirely via wasm. 1412/1412 `Ben.Video.Tests` (+5) and
+> 90/90 `Ben.Video.Sidecar.Tests` (+40) passing. Next: phase 124, sidecar full exports (no
+> overlays), the first phase with a benchmark-driven go/no-go reassessment point.
 
 ## 39. New callout doesn't land at the playhead — ✅ Fixed in full (2026-08-09, phases 85 + 87)
 
