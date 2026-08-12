@@ -2257,3 +2257,74 @@ after a fix, selecting either should produce no console errors and no error bann
 > Found 2026-08-12 during item #57 phase 125/P1 live verification. Lives in the separate
 > Ben.Video.Editor repo (Github-BenVideo remote), `Ben.Video.Editor/Components/CalloutEditor.razor`
 > and `TextOverlayEditor.razor`.
+
+---
+
+## 59. "Insert (Make Room)" doesn't renumber clip `Order` to match the new chronological arrangement, desyncing the timeline's rendered layout (found 2026-08-12, not fixed)
+
+Found incidentally while live-verifying item #57's phase 129/T1 (timeline transition overlap
+model) — **not caused by that work**: reproduces with plain video clips and no transitions
+involved at all, confirmed by reproducing the exact same layout corruption in a scenario with
+zero transitions present.
+
+**Repro (fresh session, minimal, reproduced cleanly twice):**
+1. Load `/demo/full`, click Initialize, wait for ffmpeg.wasm to load.
+2. Server tab → Import "test-video.mp4" to editor (lands as a single ~13.8s clip at
+   TimelinePosition 0).
+3. Import "test-video.mp4" again (same file, a second time). A "Not Enough Room" dialog appears:
+   *"'test-video.mp4' would land on top of an existing clip. Shift the clips after this point
+   later to make room (Insert), or trim/replace what's underneath instead (Overwrite)?"*
+4. Click **Insert (Make Room)**.
+
+**Observed:** `Clips.TotalDuration` correctly reports the true total (e.g. `0:27.7` for two 13.8s
+clips) — the *underlying data* is fine. But the **rendered timeline layout is corrupted**: the
+originally-imported clip (still `Order = 0`, so it renders *first* in the sequential flex-flow
+loop) visually renders with a large leading gap and appears to occupy the *second* time slot, while
+the newly-inserted clip (`Order = 1`, renders *second*) appears to render *after* it — even though
+the newly-inserted clip's real `TimelinePosition` should be the *earlier* one (it's the one that
+"made room" by going first). Concretely, in one captured repro: original clip rendered with
+`margin-left: 1206px` (≈ one full clip-width of leading gap it should not have) and the new clip
+rendered immediately after it with zero gap — i.e., the two clips render **in reverse chronological
+order**, with a phantom gap where clip 1 should visually start. The ruler/"Fit"/total-duration
+number itself stays numerically correct throughout (confirmed via `Clips.TotalDuration`) — this is
+a pure **rendering** desync, not silent data corruption — but the visible timeline is actively
+misleading about where each clip actually starts and in what order they play.
+
+**Root-cause hypothesis, narrowed by reading the code (not yet fixed):**
+`VideoTimeline.razor`'s sequential clip-rendering loop (`orderedItems = track.Items.OrderBy(i =>
+i.Order)...`) computes each chip's gap-margin from a **running total that assumes `Order` and
+`TimelinePosition` are chronologically consistent** (`gapPx = max(0, (item.TimelinePosition -
+runningEndSeconds) * PxPerSecond)`, then `runningEndSeconds = item.TimelinePosition +
+ItemDuration(item)`). Whatever command backs "Insert (Make Room)" (likely
+`InsertClipRippleCommand` in `Ben.Video.Editor/Models/IEditorCommand.cs`, given the label match)
+appears to **shift the existing clip's `TimelinePosition` later without renumbering its `Order`
+relative to the newly-inserted clip** — the new clip likely gets appended with a *higher* `Order`
+value (e.g. `Order = track.Items.Count`) despite ending up *chronologically first*. Since the
+render loop trusts `Order` for iteration sequence but `TimelinePosition` for gap math, an
+Order/TimelinePosition mismatch like this produces exactly the observed corrupted-but-numerically-
+correct layout.
+
+**Suggested fix, in order:**
+1. Confirm the hypothesis directly: log/inspect each item's `Order` and `TimelinePosition`
+   immediately after "Insert (Make Room)" completes, to verify the mismatch predicted above.
+2. Whatever command implements ripple-insert-at-a-colliding-position needs to renumber every
+   affected track's `Order` values to match the new `TimelinePosition` ordering afterward — the
+   codebase already has a `RenumberItems(track)` helper used elsewhere in `ClipStore.cs` for
+   exactly this kind of post-mutation cleanup; check whether the ripple-insert path is simply
+   missing a call to it (or an equivalent sort-then-renumber-by-TimelinePosition pass).
+3. Consider whether `VideoTimeline.razor`'s render loop should defensively sort by
+   `TimelinePosition` instead of (or in addition to) `Order` — `Order` existing as a *separate*
+   field from `TimelinePosition` at all is presumably intentional (drag-and-drop reordering UX,
+   ripple math elsewhere), so this may not be the right fix, but is worth ruling in/out.
+
+**How to verify a fix:** repro steps above; before a fix, the second (colliding) clip's rendered
+position visibly doesn't match its real chronological order; after a fix, both clips should render
+left-to-right in true chronological (`TimelinePosition`) order with zero unexpected gap, matching
+`Clips.TotalDuration`'s already-correct number.
+
+> Found 2026-08-12 during item #57 phase 129/T1 live verification — a plain video-clip scenario
+> (Server-tab import ×2 + "Insert (Make Room)") reproduced this with no transitions present at
+> all, conclusively ruling out T1's own changes as the cause. Lives in the separate
+> Ben.Video.Editor repo (Github-BenVideo remote), `Ben.Video.Editor/Components/VideoTimeline.razor`
+> (the render loop) and likely `Ben.Video.Editor/Models/IEditorCommand.cs`
+> (`InsertClipRippleCommand`).
