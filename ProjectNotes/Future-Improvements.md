@@ -203,6 +203,39 @@ Need a dedicated pass to thoroughly test the Ben.Video.Editor component and veri
 > (recurring hangs only after several back-to-back operations in one tab, gone after a clean
 > reset) — treated as that known issue recurring, not a new regression, since both clean-baseline
 > export paths worked correctly on the first try.
+>
+> **2026-08-12 pass, continued — clip art, motion keyframes, export queue, subtitles.** Confirmed
+> working: clip art add (built-in "Star" from the Game Icons asset browser tab lands on its own
+> timeline lane), its full properties panel (Duration, Position X/Y, Size, **Rotation** and **Tint
+> color** controls from item #56 both present and structurally intact), and motion keyframe
+> add-at-playhead (panel refreshed immediately showing the new keyframe's Position/Scale/Opacity/
+> Easing/Bezier-handle controls with no close-reopen needed — item #40's fix still holds).
+> Subtitle export confirmed gated correctly (`HasSubtitles` requires at least one text overlay,
+> derives from `TextOverlay` items via `SubtitleBuilder`) — not yet exercised end-to-end
+> (blocked by the bug below before a queue/subtitle test could run). Rich-text overlay content
+> editing again couldn't be reliably driven via this session's browser-automation tool (same
+> Telerik/ProseMirror iframe limitation as the first pass) — not attempted again.
+>
+> **One real bug found, functional not cosmetic, flagged as its own separate background task:**
+> adding a clip-art asset to the timeline permanently stalls the editor. Reproduced cleanly, twice,
+> in fresh minimal sessions (`Initialize` → import one plain clip → add the built-in "Star" —
+> nothing else): the toolbar correctly shows "Processing…" and disables Preview/Export while
+> `BackgroundRenderService`'s render worker does a real Rough-pass encode (confirmed via console —
+> genuine frame-by-frame libx264 progress, not hung), that encode completes normally, and then
+> **nothing else ever happens** — no further activity, no error, no exception anywhere — and
+> Preview/Export stay permanently disabled. Since the real host app (`Ben.Web.WebApp`) also runs
+> with `BackgroundRendering = true` (item #36 phase E's rollout), this isn't just a demo-page
+> quirk — it would block real users from previewing or exporting any project that uses clip art.
+> Not investigated further this pass (root-causing and fixing is out of scope for a testing pass) —
+> handed off with a specific starting hypothesis (whether `ClipArtClip` items even get synced into
+> `RenderRegionInput` the same way `VideoClip`/`ImageClip` do, which would explain a Rough pass
+> completing but the region never being picked up for a Fine pass or marked ready).
+>
+> Also noticed, unrelated to the app itself: the Playground's `dotnet run` process (this session's
+> test server) shut down on its own mid-session with a clean "Application is shutting down…" in its
+> log and no preceding error — happened once, right around when the stuck clip-art state above was
+> sitting idle for an extended period. Possibly environment resource pressure from the stuck
+> browser tab, possibly unrelated; noted in case it recurs and turns out to matter.
 
 ---
 
