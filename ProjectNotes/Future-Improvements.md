@@ -1183,7 +1183,7 @@ the new, shorter overall extent (since `Clips.TotalDuration` presumably already 
 today — worth confirming as part of this fix, not assuming).
 Lives in the separate Ben.Video.Editor repo.
 
-## 38. Long-form project memory budget — e.g. three 20-minute 1080p clips (🟡 in-browser mitigations (A-D) shipped; native sidecar E-G remains)
+## 38. Long-form project memory budget — e.g. three 20-minute 1080p clips (🟡 in-browser mitigations (A-D) + sidecar foundation (phases 121-122) shipped; NativeSidecarBackend + real exports (phases 123-125) remain)
 
 Raised by the user 2026-08-09 while item #36 phase D was being planned: what happens when someone
 edits three 20-minute 1080p clips? Honest answer: today that breaks. The whole pipeline lives in
@@ -1288,8 +1288,29 @@ Ben.Video.Editor repo.
 > `EscapeMetadataValue` (chapter titles in exported ffmetadata) escaped `\=#;` per spec but not
 > newlines, letting a title inject a fabricated second chapter block. 1407/1407 tests passing,
 > live-verified end-to-end (import → effect pipeline → full export) with the code now split
-> across two assemblies. Next: phase 122, the sidecar app itself with the full security stack —
-> a substantially larger phase than 121, not yet started.
+> across two assemblies.
+>
+> **Phase 122 shipped 2026-08-12** — the sidecar app itself: new `Ben.Video.Sidecar` (loopback-only
+> ASP.NET minimal API) with the full layered security stack the redesign called for — Host-header
+> validation (DNS-rebinding defense), a server-side Origin allowlist enforced on *every* request
+> (not just CORS preflight), PNA-aware preflight handling, a one-time pairing token
+> (`X-BenVideo-Sidecar-Token`, constant-time SHA-256 compared, rate-limited on repeated failure),
+> and ffmpeg supply-chain SHA-256 pinning verified at every startup. ffmpeg itself runs as a
+> properly sandboxed child process (`UseShellExecute=false`, real argv array never a shell string,
+> per-job working directory, kill-tree timeout) — deliberately process-isolated rather than
+> P/Invoked as an in-process library (a user question mid-phase), so a crash or bug in ffmpeg can't
+> take down the sidecar process holding the pairing token. Ships detection + pairing + the
+> source-upload cache only — **zero render-path behavior change**, job endpoints are phases
+> 123-125. Two real bugs found: a `HEAD /v1/sources/{id}` response missing `Content-Length` that
+> hung real HTTP/1.1 clients indefinitely, caught only by a genuine separate-process/real-socket
+> test (`WebApplicationFactory`'s in-memory `TestServer` can't model real HTTP wire framing); and
+> the phase-121 chapter-title newline-injection fix, confirmed still solid. 1407/1407
+> `Ben.Video.Tests` + 50/50 new `Ben.Video.Sidecar.Tests` passing. Live-verified full pairing flow
+> against a real running sidecar process from the Playground app: unpaired detection, pairing
+> success, token persistence across a hard reload with no re-prompt, and correct fallback to
+> disconnected when the sidecar process is killed. Next: phase 123, `NativeSidecarBackend` +
+> `FallbackRenderBackend` — the first phase that actually routes real render work through the
+> sidecar, with a benchmark-driven go/no-go reassessment point before phases 124/125.
 
 ## 39. New callout doesn't land at the playhead — ✅ Fixed in full (2026-08-09, phases 85 + 87)
 
