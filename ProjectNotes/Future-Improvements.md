@@ -1183,7 +1183,7 @@ the new, shorter overall extent (since `Clips.TotalDuration` presumably already 
 today — worth confirming as part of this fix, not assuming).
 Lives in the separate Ben.Video.Editor repo.
 
-## 38. Long-form project memory budget — e.g. three 20-minute 1080p clips (🟡 in progress, phases A+B+D shipped)
+## 38. Long-form project memory budget — e.g. three 20-minute 1080p clips (🟡 in-browser mitigations (A-D) shipped; native sidecar E-G remains)
 
 Raised by the user 2026-08-09 while item #36 phase D was being planned: what happens when someone
 edits three 20-minute 1080p clips? Honest answer: today that breaks. The whole pipeline lives in
@@ -1244,7 +1244,28 @@ Ben.Video.Editor repo.
 > OPFS isn't available. Verified end-to-end: full export completed with a new byte-size readout,
 > the OPFS export area confirmed empty afterward (download path cleans up), and a separate
 > full-quality Preview run left its own export file in place for the popout as designed, playing
-> back a genuine blob URL. Next: phase C (segment-cache cap+LRU), then the native sidecar (E–G).
+> back a genuine blob URL.
+
+> **Phase C shipped 2026-08-12** (phase 120) — segment-cache cap+LRU, the item #36 §8 design that
+> was specified but never built. New pure `SegmentBudget` tracks size/last-touch/pass per
+> background-rendered segment; `BackgroundRenderService` evicts least-recently-touched segments
+> once a configurable cap (default 256 MB, new `BackgroundRenderMemoryCapMb` option) is exceeded —
+> Rough-pass segments before Fine, never the region under the playhead, never a region mid-render,
+> deferred entirely while the existing Preview-assembly deletion hold is active. Also fixed a real,
+> previously-flagged leak: the render worker's OPFS-unavailable fallback path copied a source into
+> its own MEMFS and never deleted it. Deliberately scoped down from the original plan — the budget
+> covers background segments only, not `PreviewSegmentCache` (merging them correctly, given a
+> segment can be tracked in both simultaneously today, is a real design problem of its own that
+> outweighs the benefit, since `PreviewSegmentCache` isn't the actual unbounded-growth problem).
+> 24 new tests, 1406/1406 passing; two of them initially failed for a genuine reason (the test
+> harness's default playhead accidentally protected the very region being tested — a test-setup
+> bug, not an eviction-logic bug) before being fixed. Live-verified the new Settings-Lab control
+> wires end-to-end into the generated snippet, and background rendering runs cleanly under a 1 MB
+> cap with zero console errors.
+>
+> **This closes every in-browser mitigation in the plan (phases A–D).** What remains is the native
+> sidecar (phases E–G) — a genuinely different scope of work (a new standalone project, a network
+> protocol, a security model, four separate per-OS builds), not a phase-121-sized continuation.
 
 ## 39. New callout doesn't land at the playhead — ✅ Fixed in full (2026-08-09, phases 85 + 87)
 
