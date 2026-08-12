@@ -216,20 +216,67 @@ Need a dedicated pass to thoroughly test the Ben.Video.Editor component and veri
 > editing again couldn't be reliably driven via this session's browser-automation tool (same
 > Telerik/ProseMirror iframe limitation as the first pass) — not attempted again.
 >
-> **One real bug found, functional not cosmetic, flagged as its own separate background task:**
-> adding a clip-art asset to the timeline permanently stalls the editor. Reproduced cleanly, twice,
-> in fresh minimal sessions (`Initialize` → import one plain clip → add the built-in "Star" —
-> nothing else): the toolbar correctly shows "Processing…" and disables Preview/Export while
-> `BackgroundRenderService`'s render worker does a real Rough-pass encode (confirmed via console —
-> genuine frame-by-frame libx264 progress, not hung), that encode completes normally, and then
-> **nothing else ever happens** — no further activity, no error, no exception anywhere — and
-> Preview/Export stay permanently disabled. Since the real host app (`Ben.Web.WebApp`) also runs
-> with `BackgroundRendering = true` (item #36 phase E's rollout), this isn't just a demo-page
-> quirk — it would block real users from previewing or exporting any project that uses clip art.
-> Not investigated further this pass (root-causing and fixing is out of scope for a testing pass) —
-> handed off with a specific starting hypothesis (whether `ClipArtClip` items even get synced into
-> `RenderRegionInput` the same way `VideoClip`/`ImageClip` do, which would explain a Rough pass
-> completing but the region never being picked up for a Fine pass or marked ready).
+> **One real bug found, functional not cosmetic — documented here with a fix plan, not fixed yet:**
+> adding a clip-art asset to the timeline permanently stalls the editor.
+>
+> **Repro (fresh session, minimal — reproduced cleanly twice):**
+> 1. Load the editor (`/demo/full`), click Initialize, wait for ffmpeg.wasm to load.
+> 2. Import one plain video clip (any short mp4).
+> 3. Open the asset browser (toolbar toggle) → Assets tab → click "+ Add" on the built-in "Star"
+>    (Game Icons) — it lands on its own timeline lane.
+> 4. Watch the toolbar busy indicator and the Preview/Export buttons.
+>
+> **Observed:** toolbar shows "Processing…" and Preview/Export correctly disable while
+> `BackgroundRenderService`'s render worker runs a real Rough-pass encode (confirmed via
+> `[render-worker-cmd]` console logs — genuine frame-by-frame libx264 progress, not hung). That
+> encode completes normally. Then **nothing else ever happens** — no further console activity, no
+> error, no exception anywhere (checked with the console error filter — genuinely zero) — and
+> Preview/Export stay permanently disabled for the rest of the session. Since the real host app
+> (`Ben.Web.WebApp`) also runs with `BackgroundRendering = true` (item #36 phase E's rollout), this
+> would block real users from previewing or exporting any project that uses clip art, not just a
+> demo-page quirk.
+>
+> **Root-cause hypothesis, narrowed by actually reading the code (not yet fixed or live-tested):**
+> `RenderStatusService.Resync()` (`Ben.Video.Editor/Services/RenderStatusService.cs`) builds its
+> `RenderRegionInput` list from `PrimaryVideoTrack.VideoClips` and `.ImageClips` only — grepped the
+> whole file for `ClipArt`/`AllClipArtClips` and found zero matches, confirming `ClipArtClip` items
+> are never synced into `RenderRegionTracker` as their own region. That alone wouldn't explain the
+> *stall* though (a region that's never tracked would just never render, not break other regions).
+> The more likely mechanism: `BackgroundRenderService.LoopAsync`
+> (`Ben.Video.RenderService/BackgroundRenderService.cs`) only catches `OperationCanceledException`
+> at its outer `while` loop level — confirmed by reading the file directly, only one `catch
+> (OperationCanceledException)` guards the whole loop body. `ProcessOneAsync`'s own broader `catch
+> (Exception ex)` only wraps the `_backend.RenderAsync(...)` call specifically — it does **not**
+> wrap `PickNext()`, which `LoopAsync` calls directly and unguarded on every iteration. If adding a
+> `ClipArtClip` (a `TrackItem` type `RenderRegionTracker`/`PickNext()` was never written to expect)
+> triggers *any* exception in that unguarded path — most likely inside `PickNext()` itself while
+> evaluating `RenderRegionTracker.Regions` after a `ClipStore.OnChange`-triggered `Resync()`, or
+> inside `RenderRegionTracker.Sync()`'s own change-handling — the exception would propagate straight
+> out of `LoopAsync`, silently terminating `_loopTask` for the rest of the session. Nothing ever
+> observes that faulted task's exception (it's only awaited in `DisposeAsync()`, which normal
+> operation never calls), so it fails completely silently — exactly matching "one job completes,
+> then permanently nothing, zero errors anywhere."
+>
+> **Suggested fix, in order:** (1) confirm the hypothesis by wrapping `PickNext()`'s call site in
+> `LoopAsync` with a try/catch and logging/asserting whether it actually throws when a `ClipArtClip`
+> is added — this alone would prove or disprove the theory in one small, safe, temporary diagnostic
+> change. (2) If confirmed: make `LoopAsync`'s loop resilient to a single bad iteration instead of
+> dying — wrap the per-iteration body (or at minimum `PickNext()`) in a try/catch that logs via
+> `ErrorLogService` and continues the loop rather than letting any single exception kill the whole
+> background-render subsystem for the rest of the session; this is good defensive hardening
+> regardless of the specific clip-art trigger. (3) Separately, decide whether `ClipArtClip` items
+> *should* get their own tracked region (so their Rough/Fine background-render benefit actually
+> applies to clip art content too, not just video/image clips) or are deliberately out of scope for
+> item #36's region system (matching item #46/#102's existing pattern of raster clip art being
+> handled entirely at export time via `RasterClipArtAnimationExporter`, not through the background
+> preview pipeline) — if deliberately out of scope, `RenderRegionTracker`/`PickNext()` should
+> explicitly and safely ignore `ClipArtClip` `TrackItem`s rather than choke on them.
+>
+> **How to verify a fix:** re-run the exact repro above; confirm the toolbar returns to "Ready" and
+> both Preview and Export work normally after adding clip art (with and without a motion keyframe
+> on it too, per this session's separate keyframe test). Add a regression test if
+> `BackgroundRenderService`/`RenderRegionTracker` has a reasonable seam for constructing a
+> `ClipArtClip`-bearing project and asserting the loop survives a sync including one.
 >
 > Also noticed, unrelated to the app itself: the Playground's `dotnet run` process (this session's
 > test server) shut down on its own mid-session with a clean "Application is shutting down…" in its
