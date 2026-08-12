@@ -2083,7 +2083,7 @@ given visit.
 
 ---
 
-## 57. Camtasia-class direct-manipulation GUI — preview canvas + timeline transitions (🟡 In progress — T0/P1/P2 shipped 2026-08-12, phases 125–127)
+## 57. Camtasia-class direct-manipulation GUI — preview canvas + timeline transitions (🟡 In progress — T0/P1/P2/P3 shipped 2026-08-12, phases 125–128; Part 1 preview-canvas work now closed except P4-P6)
 
 Full Camtasia-style direct manipulation: everything about an overlay's animation editable on the
 preview canvas itself (click to select, drag to move, resize, keyframes created/updated by
@@ -2159,6 +2159,34 @@ for Callout/ClipArt/TextOverlay:
   ScaleX/Y work below, and a separate pre-existing effective-vs-static display gap in
   `CalloutControlPointOverlay`/`ClipArtControlPointOverlay`) and an on-canvas "⏱ Animate" toggle
   (panel-only today) — both small, cleanly separable follow-ups, not new blockers.
+
+**P3 shipped 2026-08-12 (phase 128)** — per-keyframe `ScaleX`/`ScaleY` (replacing uniform `Scale`
+for Callout/ClipArt) and ClipArt-only rotation keyframes:
+- Additive model change: nullable on `MotionKeyframe`, always-resolved on `MotionFrame` (defaults
+  to the legacy `Scale` via a record property initializer referencing the primary constructor
+  parameter) — every pre-P3 saved project and construction site behaves identically unless it
+  explicitly opts in.
+- **Zero changes needed anywhere in the export pipeline** (`ExportService.cs`,
+  `SvgAnimationExporter.cs`, `RasterClipArtAnimationExporter.cs`) or `LiveOverlayPreview.razor` —
+  every per-frame animated path already consumes `ApplyMotionFrame`'s output directly (confirmed
+  by reading each call site first), so updating the two `ApplyMotionFrame` overloads alone
+  threads ScaleX/Y/Rotation all the way through to real exported video, not just live preview.
+- `MotionKeyframeEditor.razor` gains conditional Scale X/Scale Y sliders (Callout/ClipArt) vs. the
+  unchanged single Scale slider (TextOverlay — one axis, FontSize), plus a ClipArt-only Rotation
+  slider. Caught and fixed a real bug during implementation, before it shipped: `Apply()` had to
+  explicitly guard `Rotation = null` for non-ClipArt layers — writing a spurious `0.0` instead
+  would have flipped `Evaluate()`'s "not animated on this path" signal to "animated, holds at 0,"
+  corrupting every future evaluation of that keyframe.
+- 1482/1482 tests passing (+17 new, covering the full ScaleX/Y/Rotation interpolation truth
+  table). Live Playground verification partial: confirmed the Properties panel correctly renders
+  the new conditional UI for a ClipArt keyframe (Scale X/Scale Y/Rotation all present, gated
+  correctly by layer type) — could not get a full end-to-end confirmation of a dragged slider
+  value taking visible effect, a pre-existing Telerik-slider automation limitation in this
+  environment (independently documented during phases 112/113's own work with the same
+  component), not something this phase's code introduced. The actual interpolation/export math is
+  fully covered by unit tests, which is where the real correctness risk lived.
+- Unblocks (but doesn't itself attempt) the resize-handle/control-point keyframe-awareness
+  deferred from P2 — scoped to the model/evaluation/export layer only this phase.
 
 > Requested by the user 2026-08-12: "Can you create an accurate and detailed plan to create a GUI
 > for all aspects of the preview window such as adding keyframes and moving items and in the
