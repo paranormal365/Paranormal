@@ -1183,7 +1183,7 @@ the new, shorter overall extent (since `Clips.TotalDuration` presumably already 
 today — worth confirming as part of this fix, not assuming).
 Lives in the separate Ben.Video.Editor repo.
 
-## 38. Long-form project memory budget — e.g. three 20-minute 1080p clips (🟡 in-browser mitigations (A-D) + sidecar foundation + render routing (phases 121-123) shipped; real exports (phases 124-125) remain)
+## 38. Long-form project memory budget — e.g. three 20-minute 1080p clips (🟡 in-browser mitigations (A-D) + full native sidecar (phases 121-124: foundation, render routing, real exports) shipped; whether a further phase is still needed is an open question)
 
 Raised by the user 2026-08-09 while item #36 phase D was being planned: what happens when someone
 edits three 20-minute 1080p clips? Honest answer: today that breaks. The whole pipeline lives in
@@ -1334,8 +1334,28 @@ Ben.Video.Editor repo.
 > `ReportConnectionLost` fix — killing the sidecar mid-session produced exactly one failed request
 > against it, an immediate chip flip to "No sidecar," and zero further wasted requests for the rest
 > of the session, with the queue completing entirely via wasm. 1412/1412 `Ben.Video.Tests` (+5) and
-> 90/90 `Ben.Video.Sidecar.Tests` (+40) passing. Next: phase 124, sidecar full exports (no
-> overlays), the first phase with a benchmark-driven go/no-go reassessment point.
+> 90/90 `Ben.Video.Sidecar.Tests` (+40) passing.
+>
+> **Phase 124 shipped 2026-08-12 — real exports, but a different design than planned.** Mid-build,
+> the user asked whether the export pipeline could be broken into tasks — sidecar renders what it
+> can, wasm handles the rest, wasm assembles the final file — instead of the plan's original
+> approach (sidecar replicates `ExportService`'s *entire* pipeline for overlay-free timelines only,
+> falling back 100% to wasm the instant a timeline has any overlay). Before writing code, an agent
+> mapped `ExportService`'s real 1340-line pipeline in detail: per-clip trim/encode is the dominant
+> CPU cost for long-form content, everything else (concat, transitions, overlay compositing, audio
+> mix, chapters, watermark) runs on small already-encoded intermediates. So only the per-clip step
+> is offloaded — reusing phase 123's segment-render machinery almost unchanged (`SegmentRenderSpec`
+> gained a third `RenderPassKind.Export` carrying explicit quality settings instead of deriving them
+> from a hardcoded rough/fine preset) — and every downstream stage stays exactly the existing wasm
+> code, unaware of which backend produced any given segment. New `NativeClipEncoder` never throws:
+> any failure falls straight through to the unchanged wasm path for that one clip, so a native
+> failure never fails the export. This collapses the plan's G1/G2 (no-overlay vs. overlay) split —
+> nothing gates on overlay presence anymore, since overlay compositing runs after segment trimming
+> and was never touched. Whether a further phase is still needed given that collapse is now an open
+> question, not a decided next step. 1412/1412 `Ben.Video.Tests` (unchanged) + 108/108
+> `Ben.Video.Sidecar.Tests` (+17) passing. Live-verified a real export end to end through the
+> Playground UI against a real sidecar process — new job traffic exactly at export time, source
+> reused from the earlier preview render (no re-upload), genuine "Export Complete" success.
 
 ## 39. New callout doesn't land at the playhead — ✅ Fixed in full (2026-08-09, phases 85 + 87)
 
