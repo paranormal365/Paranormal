@@ -2083,7 +2083,7 @@ given visit.
 
 ---
 
-## 57. Camtasia-class direct-manipulation GUI — preview canvas + timeline transitions (🟡 In progress — T0 shipped 2026-08-12, phase 125)
+## 57. Camtasia-class direct-manipulation GUI — preview canvas + timeline transitions (🟡 In progress — T0/P1/P2 shipped 2026-08-12, phases 125–127)
 
 Full Camtasia-style direct manipulation: everything about an overlay's animation editable on the
 preview canvas itself (click to select, drag to move, resize, keyframes created/updated by
@@ -2125,6 +2125,41 @@ found during planning research (not assumed):
 - 1419/1419 tests passing. No live Playground verification this phase — pure backend logic, no
   UI surface touched (`TransitionEditor.razor` unchanged).
 
+**P1 shipped 2026-08-12 (phase 126)** — click-to-select + unified body-drag on the preview canvas
+for Callout/ClipArt/TextOverlay:
+- New `CanvasSelectionOverlay.razor` (invisible full-body hit-rects, correctly layered below the
+  existing resize/bezier/keyframe overlays so their handles keep winning clicks at a layer's
+  edges — verified live via `elementsFromPoint`, not assumed). New shared
+  `MotionEffectiveGeometry` (extracted from 3 previously-duplicated inline copies) and
+  `CanvasHitTester` pure classes.
+- A JS pointer-capture helper the plan assumed would be needed turned out unnecessary — the
+  existing sibling overlays' plain full-canvas-SVG-catches-move/up pattern was already sufficient.
+- 1446/1446 tests passing. Live-verified end to end (select/drag/undo/deselect/resize-priority).
+- Found+documented (not fixed) a real pre-existing bug incidentally: selecting any Callout/
+  TextOverlay throws an unhandled `TelerikEditor.OnChange` cast exception — item #58, below.
+
+**P2 shipped 2026-08-12 (phase 127)** — keyframe-aware editing semantics, closing P1's known gap:
+- Canvas body-drag now upserts a keyframe at the playhead (seeded from the interpolated frame)
+  instead of writing a static field, whenever the layer already has a motion path — the actual
+  "Camtasia rule." New `MotionKeyframeService.EditLayer` is the single decision point; a lower-level
+  `UpsertKeyframeFromCurrent` also now backs `MotionKeyframeEditor.AddKeyframeAtPlayhead`,
+  consolidating three previously-independent "seed a keyframe from current values" implementations
+  and fixing a real bug found along the way: that panel method never resolved `ClipArtClip`, so a
+  ClipArt layer's first keyframe silently defaulted to X=Y=0.5 instead of its real position.
+- **Found and fixed a second real pre-existing bug live**: `VideoPreview._currentTime` never
+  updated on a timeline-ruler seek when no video clip was loaded (only overlay items) —
+  `SeekAsync` no-ops without a `<video>` element, and `OnSeekRequested` never set `_currentTime`
+  directly the way frame-stepping already did. This silently broke `LiveOverlayPreview`'s
+  time-accuracy too (latent since item #43), only became *visible* once P2 made canvas edits
+  actually write data based on the current time. Fixed to match the frame-stepping convention.
+- 1465/1465 tests passing. Live-verified: static drag unchanged from P1, animated drag at an
+  exact keyframe time updates that keyframe in place, animated drag mid-interpolation creates a
+  correctly-seeded new keyframe, both confirmed via the motion path overlay's live keyframe dots.
+- Deliberately deferred: resize-handle/shape-control-point keyframe-awareness (entangled with P3's
+  ScaleX/Y work below, and a separate pre-existing effective-vs-static display gap in
+  `CalloutControlPointOverlay`/`ClipArtControlPointOverlay`) and an on-canvas "⏱ Animate" toggle
+  (panel-only today) — both small, cleanly separable follow-ups, not new blockers.
+
 > Requested by the user 2026-08-12: "Can you create an accurate and detailed plan to create a GUI
 > for all aspects of the preview window such as adding keyframes and moving items and in the
 > timeline adding and modifying transitions like they do in Camtasia... And the bezier curve
@@ -2132,3 +2167,65 @@ found during planning research (not assumed):
 > it moves with the playhead. That is what the preview window is for." Full plan:
 > `also-the-sidecar-must-generic-whisper.md`. Lives in the separate Ben.Video.Editor repo
 > (Github-BenVideo remote).
+
+---
+
+## 58. Selecting a Callout or TextOverlay crashes the Properties panel with an unhandled `TelerikEditor.OnChange` cast exception (found 2026-08-12, not fixed)
+
+Found incidentally while live-verifying item #57's phase 125/P1 (canvas click-to-select) — **not
+caused by that work**: reproduces identically via the pre-existing, unmodified timeline-chip
+selection path too, confirmed by reproducing both ways in the same session.
+
+**Repro (fresh session, minimal):**
+1. Load `/demo/full`, click Initialize, wait for ffmpeg.wasm to load.
+2. Click "📌 Callout" (or "T + Text") in the timeline toolbar to add a new callout/text overlay.
+3. Select it — either by clicking its timeline chip, or (new, item #57 P1) clicking its body on
+   the preview canvas.
+
+**Observed:** the browser console logs a `crit`-level unhandled exception from
+`WebAssemblyRenderer`:
+```
+Unable to set property 'OnChange' on object of type 'Telerik.Blazor.Components.TelerikEditor'.
+The error was: Arg_InvalidCastException
+System.InvalidOperationException ... ---> System.InvalidCastException: Arg_InvalidCastException
+   at Microsoft.AspNetCore.Components.Reflection.PropertySetter.CallPropertySetter[TelerikEditor,EventCallback`1]
+   ...
+   at Telerik.Blazor.Components.TelerikEditor.SetParametersAsync(ParameterView parameters)
+```
+Blazor's `#blazor-error-ui` banner ("An unhandled error has occurred. Reload") appears at the
+bottom of the page. The Properties panel still renders and appears to work (Shape/Duration/
+Position/Size sliders all show correct live values, editing them still works) — the crash looks
+non-fatal to this component subtree, but it's still a real unhandled exception that should not be
+happening, and a user seeing the red error banner reasonably reads it as something being broken.
+
+**Root-cause hypothesis, narrowed by reading the code (not yet confirmed by fixing it):**
+`CalloutEditor.razor:144` and `TextOverlayEditor.razor:27` both write:
+```razor
+<TelerikEditor @bind-Value="_richTextHtml" Tools="@_editorTools" Height="90px" OnChange="Apply" />
+```
+`@bind-Value` on a Telerik input generates its own paired `ValueChanged`/value-binding
+infrastructure; explicitly also specifying `OnChange="Apply"` may be racing or colliding with
+that generated code — `TelerikEditor.OnChange`'s actual parameter type may not be the plain
+`EventCallback<string>` shape being supplied for it (per the exact wording "cannot cast" +
+`EventCallback\`1` in the trace), possibly a Telerik-version-specific change to `OnChange`'s
+signature since this code was originally written (item #16 phases 74/111/115/116). Both files use
+the identical pattern, so a fix likely applies to both call sites the same way.
+
+**Suggested fix, in order:**
+1. Check the installed Telerik UI for Blazor version's `TelerikEditor.OnChange` parameter type
+   signature directly (via decompilation/docs) and compare against what `Apply` (the method bound
+   here) actually returns/accepts.
+2. Try removing the explicit `OnChange="Apply"` and instead reacting to `@bind-Value`'s own
+   `_richTextHtml`-changed path (a `ValueChanged` callback param, or an `OnBlur`, depending on
+   what the installed Telerik version actually exposes) — `@bind-Value` already re-invokes on
+   every change, so `OnChange="Apply"` may be redundant/conflicting rather than necessary.
+3. Confirm the fix by reproducing this exact repro cleanly (console free of the `crit` log line,
+   no `#blazor-error-ui` banner) in both `CalloutEditor` and `TextOverlayEditor`.
+
+**How to verify a fix:** repro steps above; before a fix, `read_console_messages` shows the `crit`
+`WebAssemblyRenderer` log line every time a Callout/TextOverlay is first selected in a session;
+after a fix, selecting either should produce no console errors and no error banner.
+
+> Found 2026-08-12 during item #57 phase 125/P1 live verification. Lives in the separate
+> Ben.Video.Editor repo (Github-BenVideo remote), `Ben.Video.Editor/Components/CalloutEditor.razor`
+> and `TextOverlayEditor.razor`.
