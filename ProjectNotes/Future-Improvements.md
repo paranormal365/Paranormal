@@ -224,8 +224,19 @@ Need a dedicated pass to thoroughly test the Ben.Video.Editor component and veri
 > editing again couldn't be reliably driven via this session's browser-automation tool (same
 > Telerik/ProseMirror iframe limitation as the first pass) — not attempted again.
 >
-> **One real bug found, functional not cosmetic — documented here with a fix plan, not fixed yet:**
-> adding a clip-art asset to the timeline permanently stalls the editor.
+> **One real bug found, functional not cosmetic — ✅ hardened 2026-08-13, phase 138 (Github-BenVideo repo):**
+> adding a clip-art asset to the timeline permanently stalls the editor. `BackgroundRenderService.LoopAsync`
+> only caught `OperationCanceledException` at the outer loop level — any other unhandled exception in a
+> single iteration silently killed background rendering for the rest of the session, matching this
+> symptom exactly. Fixed to catch-log-continue per iteration (new `OnLoopError` event → `ErrorLogService`)
+> instead of dying; also found and fixed a second bug while writing the regression test (a region stuck
+> mid-render got permanently stuck in `RenderingRough` state, invisible to future work, on this exact
+> failure path). Verified via 2 new tests exercising the real production loop directly — **the exact
+> clip-art trigger itself could not be reproduced live** (blocked by the separate, already-tracked
+> Server-tab import flakiness below, persistent across two full clean-reset attempts this session), so
+> this targets the confirmed architectural weakness rather than a pinned-down clip-art-specific cause;
+> if the stall recurs, `OnLoopError` will now surface the real exception for the first time. Full
+> writeup: `README-phase-138.md`.
 >
 > **Repro (fresh session, minimal — reproduced cleanly twice):**
 > 1. Load the editor (`/demo/full`), click Initialize, wait for ffmpeg.wasm to load.
@@ -952,30 +963,34 @@ single-PNG was exercised) and clipart (not wired into any Playground demo's feat
 
 ---
 
-## 30. Slider tick-label numbers bunch up and become unreadable (not started)
+## 30. Slider tick-label numbers bunch up and become unreadable (✅ fixed 2026-08-13, phase 153)
 
-In many of the editor's Telerik sliders (Properties panels — position/size/corner-radius/fade/etc.), the
-tick-label numbers under the track render bunched together and overlapping, unreadable at typical panel
-widths. Needs a pass over all editor sliders, not just one — and per the user 2026-08-09, not a uniform
-fix: some sliders (e.g. the video preview's scrub bar, fixed during item #36 phase 84) should just hide
-labels entirely; others (Properties-panel sliders like position/size) may still find the numbers useful,
-so each needs its own judgment call rather than one blanket treatment.
+Fixed across all 70 `TelerikSlider` instances in the editor's Properties panels (8 files:
+`ClipEditor`, `AudioClipEditor`, `ImageClipEditor`, `CalloutEditor`, `ClipArtEditor`,
+`MotionKeyframeEditor`, `TransitionEditor`, `TextOverlayEditor`). User decision (asked before
+starting, since every slider already shows its live value in a label above the track): render only
+Min/Max tick labels via `LabelTemplate`, applied uniformly — not the bespoke per-slider treatment
+originally envisioned on 2026-08-09.
 
-**Real fix confirmed 2026-08-09** (found via reflection on `Telerik.Blazor.dll` while fixing the preview
-scrub bar) — do NOT reach for CSS hacks first, matching [[feedback_prefer_telerik_native_components]]:
-`TelerikSlider<T>` inherits `TickPosition` (`SliderTickPosition`: `Before`/`After`/`Both`/`None`) and
-`LabelTemplate` (`RenderFragment<T>`) from `Telerik.Blazor.Components.Common.TelerikSliderBase<TValue>` —
-neither is in the component's own IntelliSense-visible declared members (only on the base class), which
-is likely why this wasn't found earlier. `TickPosition="SliderTickPosition.None"` removes labels/ticks
-entirely (used for the scrub bar); `LabelTemplate` lets a slider keep labels but reformat/thin them out
-(e.g. round to fewer decimals, or only render the template for values that are multiples of `LargeStep`)
-for the sliders where the user said numbers are still useful. Also note: `TelerikSlider`'s own rendered
-root doesn't carry the Blazor CSS-isolation scope attribute (same as `TelerikWindow`/`TelerikTabStrip`
-elsewhere in this codebase) — if a CSS approach is ever needed for something `TickPosition`/`LabelTemplate`
-can't do, it must be rooted via `::deep` at a real scoped ancestor, not the slider's own class name.
+New `Services/SliderLabelTemplates.cs`: a naive `tick == max` check fails for any slider whose
+range isn't an exact multiple of `LargeStep` (true for nearly every duration-bound slider) — Kendo
+generates ticks at `Min + n*LargeStep` and stops at the last one ≤ `Max`, never adding a bonus tick
+exactly at `Max`. Fixed by labeling the highest tick Kendo actually generates
+(`tick + LargeStep > Max`) instead — a real position on the track, not a synthetic boundary.
+Generic over `TValue` (`IConvertible`) since the editor mixes `TelerikSlider<double>` and
+`TelerikSlider<int>` (font-size sliders).
 
-> Noted by the user 2026-08-08, refined 2026-08-09. Lives in the separate Ben.Video.Editor repo
-> (Github-BenVideo remote).
+Also fixed the 3 already-logged `::deep`-missing width bugs (`ClipEditor`/`AudioClipEditor`/
+`ImageClipEditor`), plus a 4th, previously-undiscovered instance found in
+`TransitionEditor.razor.css` while auditing every slider file for this phase — confirmed via the
+compiled `.bundle.scp.css` before/after.
+
+Live-verified: a 13.8s clip's trim sliders (non-step-aligned range) now show clean `["0","13"]`
+labels at 259px full-row width (was stuck at Kendo's 200px default); a Callout's 14 rendered
+sliders all show exactly 2 correct labels including non-aligned endpoints (`0.01`/`0.91`,
+`0.1`/`55.1`) and exact aligned ones (`-180`/`180`). 9 new unit tests. 1645/1645 suite passing.
+
+> See `README-phase-153.md` in Github-BenVideo for full detail.
 
 ---
 
@@ -2083,7 +2098,7 @@ given visit.
 
 ---
 
-## 57. Camtasia-class direct-manipulation GUI — preview canvas + timeline transitions (🟡 In progress — T0/P1/P2/P3/T1 shipped 2026-08-12, phases 125–129; reassess point per plan, next is T2 WYSIWYG preview transitions)
+## 57. Camtasia-class direct-manipulation GUI — preview canvas + timeline transitions (✅ Complete — all 11 phases shipped 2026-08-12, phases 125–136, including the optional T5 stretch)
 
 Full Camtasia-style direct manipulation: everything about an overlay's animation editable on the
 preview canvas itself (click to select, drag to move, resize, keyframes created/updated by
@@ -2216,7 +2231,18 @@ zero transitions present, ruling out this phase's changes — item #59, below.
 
 ---
 
-## 58. Selecting a Callout or TextOverlay crashes the Properties panel with an unhandled `TelerikEditor.OnChange` cast exception (found 2026-08-12, not fixed)
+## 58. Selecting a Callout crashes the Properties panel with an unhandled `TelerikEditor.OnChange` cast exception (✅ fixed 2026-08-13, phase 137)
+
+**Fixed.** Root cause confirmed via direct reflection against the real `Telerik.Blazor.dll`:
+`TelerikEditor.OnChange` is `EventCallback<object>`; pairing it with an explicit `OnChange="Apply"`
+alongside `@bind-Value` hit a struct-generic unboxing mismatch in Blazor's own parameter-setting
+code. Fixed by switching `CalloutEditor.razor` to `@bind-Value:after="Apply"` (Blazor's built-in
+post-bind-update hook), which never touches the `OnChange` parameter at all. TextOverlay was never
+actually affected — see the correction below. Full root-cause writeup in `README-phase-137.md`
+(Github-BenVideo repo). Found in passing: TextOverlayEditor's rich-text edits don't commit at all
+(different bug, logged as item #64).
+
+Original entry (kept for history):
 
 Found incidentally while live-verifying item #57's phase 125/P1 (canvas click-to-select) — **not
 caused by that work**: reproduces identically via the pre-existing, unmodified timeline-chip
@@ -2278,7 +2304,37 @@ after a fix, selecting either should produce no console errors and no error bann
 
 ---
 
-## 59. "Insert (Make Room)" doesn't renumber clip `Order` to match the new chronological arrangement, desyncing the timeline's rendered layout (found 2026-08-12, not fixed)
+## 59. "Insert (Make Room)" leaves clip `Order` chronologically inverted (✅ fixed 2026-08-13, phase 140)
+
+**Fixed — and two corrections to what's written below.**
+
+1. **The hypothesis below was wrong about the mechanism.** It guessed the ripple path was "missing
+   a `RenumberItems` call". It isn't — `InsertClipWithRipple` already calls it. The real cause:
+   `InsertClipRippleCommand.Execute()` *appended* the new clip (highest `Order`) even though
+   ripple-insert lands it chronologically **first**, and `RenumberItems` derives `Order` from list
+   index, so it faithfully preserved the inversion. Fixed by inserting at the correct index.
+2. **The severity below was understated.** It says this is "a pure **rendering** desync, not
+   silent data corruption". Not true: `TimelineTrack.VideoClips` sorts by `Order` and
+   `ExportService.RunPipelineAsync` consumes that ordering directly, so this **exported the video
+   with the clips concatenated in the wrong order**.
+
+**A second, worse bug was found underneath it:** `RenumberItems` did
+`Items[i] = Items[i] with { Order = i }`, replacing every entry with a *copy* and silently
+orphaning the object references every `IEditorCommand` holds to undo itself — so
+`InsertClipRippleCommand.Undo()` un-shifted detached objects while the clips actually on the track
+kept their shifted positions permanently. Record value-equality kept `Items.Remove` working, so
+the visible half of undo still worked, which is why it hid; the pre-existing undo test passed only
+because it asserted on the caller's own orphaned reference rather than through the track. Fixed by
+mutating `Order` in place (root fix across all 13 `RenumberItems` call sites).
+
+3 new regression tests, all confirmed failing pre-fix; 1525/1525 passing. Live-verified with the
+repro below. Full writeup: `README-phase-140.md`.
+
+> **Better repro path:** the Server-tab double-import below is unreliable (hits the tracked
+> Playground import flakiness). The **Video tab's "Add to timeline" button** reaches the identical
+> collision/prompt code path with no re-import needed.
+
+Original entry (kept for history):
 
 Found incidentally while live-verifying item #57's phase 129/T1 (timeline transition overlap
 model) — **not caused by that work**: reproduces with plain video clips and no transitions
@@ -2346,3 +2402,476 @@ left-to-right in true chronological (`TimelinePosition`) order with zero unexpec
 > Ben.Video.Editor repo (Github-BenVideo remote), `Ben.Video.Editor/Components/VideoTimeline.razor`
 > (the render loop) and likely `Ben.Video.Editor/Models/IEditorCommand.cs`
 > (`InsertClipRippleCommand`).
+
+## 60. Split audio out of a video track via right-click (✅ fixed 2026-08-13, phase 155)
+
+Turned out the backend (`ClipStore.DetachAudio` + `DetachAudioCommand` undo/redo +
+`VideoTimeline.SeparateAudioAsync`) was already fully built and already covered by 7 existing
+`ClipStoreTests` — it was simply dead code, never called from anywhere in the UI. Added a
+"Separate Audio" item to the clip right-click context menu, disabled via a guard mirroring
+`SeparateAudioAsync`'s own precondition (`MemFsName is not null && !MuteAudio`) exactly.
+
+This also settles the design question this item originally flagged as unscoped: the existing
+implementation already creates a fully **independent** `AudioClip`, not a linked pair matching
+item #52's J-cut/L-cut model — kept as-is (the user can always manually link it afterward via
+item #52's own gesture if J-cut/L-cut behavior is wanted later).
+
+Live-verified: imported a clip via the Server tab, right-clicked it, "Separate Audio" enabled
+(correctly disabled for a stale/unlinked clip), clicked it — new Audio track appeared with an
+independent, correctly-positioned `AudioClip` and a waveform. Ctrl+Z correctly undid it.
+
+> Noted by the user 2026-08-12, mid-session while item #57 (Camtasia GUI arc) was in progress;
+> fixed 2026-08-13 phase 155. See `README-phase-155.md` in Github-BenVideo for full detail.
+
+## 61. Multi-point volume envelope on the timeline (✅ fixed 2026-08-13, phase 156)
+
+Turned out this was already fully built: `VolumeAutomationLane.razor` + `volumeAutomationLane.js`
+implement a complete draggable-keyframe SVG automation editor (add/drag/delete, each with full
+undo/redo), already wired directly into every timeline clip row — not a separate panel, not
+behind a toggle. It just wasn't visible: `.bv-clip-chip`'s CSS hardcoded `height: 40px; overflow:
+hidden;` across icon+label+waveform+automation all squeezed into one horizontal row, clipping the
+lane's requested 40px almost entirely into invisibility.
+
+Fix (user confirmed scope first — "fix the clipping only," no marker-snapping): `.bv-clip-chip`
+now wraps, the automation lane (last child, `flex-basis: 100%`) drops to its own full-width row
+below the existing content instead of competing for horizontal space, and the chip grows via
+`height: auto` to fit both rows. Overlay items (Callout/ClipArt/TextOverlay) unaffected — inline
+`height: 40px` wins over the class, and they never render this child anyway (only `VideoClip`/
+`AudioClip` implement `IHasVolumeAutomation`). Also fixed a ~4px stray SVG inline-spacing gap via
+a new `VolumeAutomationLane.razor.css` (didn't exist before).
+
+Live-verified the full cycle via dispatched pointer events now that the lane is actually
+reachable: add a keyframe, drag it (position + volume both updated), delete via double-click,
+Ctrl+Z correctly undoes through `ClipStore`'s real undo stack. No marker-snapping added (matches
+the confirmed scope) — logged as a possible future enhancement if still wanted.
+
+> Noted by the user 2026-08-12, mid-session while item #57 (Camtasia GUI arc) was in progress;
+> fixed 2026-08-13 phase 156. See `README-phase-156.md` in Github-BenVideo for full detail.
+
+## 62. blob: URL "failed to load resource" — same untracked-down issue seen again, inspector-only this time
+
+Ben spotted another `Failed to load resource` error for a `blob:http://localhost:PORT/<guid>` URL
+during item #57 P5 live testing — no visible on-screen symptom this time, only caught in the
+Network/Console panel. Not the same as item #58's `TelerikEditor` crash.
+
+This is the **same class of issue already tracked** in memory
+`feedback_playground_ffmpeg_import_flakiness` (not a new bug): recurring `blob:` `ERR_FILE_NOT_FOUND`
+errors during long single-tab Playground sessions, previously seen bundled with a fully stuck
+Export ("Processing… 0%" forever) during item #9's testing pass, working theory a stale/dangling
+blob URL retry loop, **root cause still not found** despite several recent phase READMEs
+(130/131/132/133) calling it "already-documented benign" — that characterization was never
+actually earned; nobody has root-caused it yet. This occurrence is useful new data: it shows the
+error can surface with **no accompanying stuck/hung symptom** at all, just silently in the
+inspector — narrows out "always causes a visible hang" as a necessary condition.
+
+> Noted by the user 2026-08-12 during item #57 P5 live verification. User has already asked
+> (recorded in the memory above) to properly root-cause this later rather than keep routing around
+> it — not blocking P5.
+
+## 63. Keyframe-branch canvas edits bypass undo/redo entirely (✅ fixed 2026-08-13, phase 154)
+
+Once a Callout/ClipArt layer has a motion path, body-drag, HUD position/size type-in, and
+arrow-key nudge all route through `MotionKeyframeService.EditLayer`'s keyframe branch, which
+mutates the keyframe directly via `UpsertKeyframe` — a completely separate scoped service from
+`ClipStore`, never wired into `ClipStore`'s own `_undoStack`/`_redoStack`. New generic
+`CommitMotionKeyframeCommand` + `ClipStore.CommitMotionKeyframeEdit(description, apply, revert)`
+wires it in: a keyframe edit and an ordinary `ClipStore` mutation now interleave correctly on ONE
+shared undo history. Drag gestures still upsert a keyframe every frame during the drag (unchanged
+— never individually committed); a new `_dragOrigKeyframe` snapshot, captured once at drag-start
+(mirroring the pre-existing `_dragOrigX`/`_dragOrigY` pattern exactly), lets `OnPointerUp` commit
+the whole gesture as one undo entry at drag-end, matching the static-field branch's own behavior.
+
+`TextOverlay` deliberately excluded — its *static* branch has never had an undo tier either (a
+separate, pre-existing gap), so fixing only its keyframe branch would have introduced a new,
+backwards undo-only-when-animated asymmetry instead of removing one.
+
+Live-verified the exact repro scenario from this item's own original write-up: nudged a keyframed
+Callout 3× (X 10%→13%), one Ctrl+Z correctly reverted exactly the last nudge (→12%, not "nothing
+happens" and not a full-history wipe), two more Ctrl+Z unwound to the original 10%, Ctrl+Shift+Z
+(redo) correctly restored forward to 11%.
+
+**Found along the way, NOT fixed here — became item #73**: the on-canvas resize-handle and
+shape-control-point drag overlays (`CalloutControlPointOverlay`/`ClipArtControlPointOverlay`) don't
+call `Motion.EditLayer` at all — a deeper, separate bug (silently no-ops on animated layers, not
+merely non-undoable), this item's own original text incorrectly assumed they already routed
+through the keyframe branch.
+
+> Found live during item #57 P5 verification, 2026-08-12; fixed 2026-08-13 phase 154. See
+> `README-phase-154.md` in Github-BenVideo for full detail.
+
+## 64. TextOverlay Properties panel silently discards in-progress edits (✅ fixed 2026-08-13, phase 139)
+
+**The original description of this item was wrong** — corrected here, since the real bug turned
+out to be both broader and different from what was first assumed.
+
+**What was originally written (incorrect):** that `TextOverlayEditor.razor`'s `TelerikEditor` had
+no commit hook and its `Apply()` was "never called from anywhere," so rich-text edits were lost.
+**Actually false** — this panel has an explicit **"Apply" button** wired to `OnClick="Apply"`,
+unlike `CalloutEditor` which auto-commits per field. It's an edit-then-click-Apply design, so
+`Apply()` being absent from the editor's own change event is by design, not a bug.
+
+**The real bug (found while verifying the above, then fixed):** `RefreshFromSource()`
+unconditionally overwrote **every** local editing field from the source overlay — text, font,
+size, colour, alignment, offsets, position, duration, fades, shadow, everything — and it was
+wired to *three* external event sources (`Clips.OnChange`, `Motion.OnChanged`,
+`Playback.OnStateChanged`). Since this panel holds uncommitted edits until Apply is clicked, any
+of those firing mid-edit silently reverted the user's in-progress work. `Clips.OnChange` fires on
+*any* mutation anywhere in the project, and `Playback.OnStateChanged` fires **every frame during
+playback** — so simply having the panel open while the video played would continuously wipe
+whatever was being typed.
+
+Same bug class as `TransitionEditor.OnParametersSet` (found+fixed in phase 132), but more severe:
+three high-frequency triggers instead of one. Fixed the same way — `RefreshFromSource` now only
+reloads the editable fields when a *different* overlay becomes selected (tracked by `Id`); slider
+bounds still refresh live, since those can't discard an edit.
+
+Verified by direct A/B live testing using the panel's plain-Blazor-bound "Background box"
+checkbox (a real C#-level edit, unlike the Telerik inputs — see the testing note below): pre-fix,
+an unrelated project mutation reverted the pending edit (`true`→`false`); post-fix it survives.
+Also confirmed switching between two different overlays still correctly reloads the panel (no
+over-caching).
+
+> **Testing note for future Telerik work:** synthetic `element.value = x` + dispatched
+> `input`/`change` events do **not** reach a `TelerikNumericTextBox`'s bound C# field — per
+> Telerik's docs its `ValueChanged` "fires during typing" through Blazor's own handlers, so a
+> JS-set value updates only the DOM and silently no-ops the binding. This produced a misleading
+> first test result. Use a plain-Blazor-bound control (`<input @bind=...>`) or real typing when
+> proving C#-level state changes.
+
+> Found 2026-08-13 while fixing item #58 (`TelerikEditor.OnChange` crash) and reading
+> `TextOverlayEditor.razor` for comparison — the backlog's original #58 entry assumed both
+> `CalloutEditor.razor` and `TextOverlayEditor.razor` had the identical broken pattern; only
+> Callout actually did.
+
+## 65. Default the Media & Properties panel to minimized, docked right (✅ fixed 2026-08-13, phase 157)
+
+`VideoEditor.razor`'s panel now starts `WindowState.Minimized` and docks right via
+`Left: calc(100% - 328px)` instead of expanded/left-docked. The four default position/size values
+were extracted into `const string` fields referenced by both the field initializers *and* item
+#53/phase 114's two `OnAfterRenderAsync` self-heal blocks (which reassert these exact values to
+fix a `TelerikWindow` `ContainmentSelector` clamp bug) — exactly the interaction this item's own
+note warned about, now structurally impossible to drift out of sync rather than merely avoided by
+careful editing.
+
+Live-confirmed minimized isn't a dead end: `OnTimelineItemSelected` already restores
+Minimized→Default whenever a clip is selected (pre-existing, unchanged), and the title bar's own
+"Restore" button (Telerik's native `WindowAction`, unrelated to item #68's `WindowActions` bug)
+works correctly. Also confirmed — the user asked directly — that dragging the panel by its title
+bar still works normally from the new `calc()`-based default position (Telerik overwrites it with
+a plain pixel value on drag, same as always).
+
+> Noted by the user 2026-08-13; fixed 2026-08-13 phase 157. See `README-phase-157.md` in
+> Github-BenVideo for full detail.
+
+## 66. Intermittent "Downloading timed out" false-positive on server-library import (✅ CLOSED — mitigated phase 149, root cause structurally removed by item #70, 2026-08-13)
+
+Server-tab imports (`ClipBrowser.ImportFromLibraryAsync`) occasionally fail with "Downloading:
+`<file>` timed out." even though the underlying HTTP GET completes in well under 100 ms —
+confirmed via `DemoMediaLibraryProvider`'s own `HttpClient` logging showing a 68.5 ms round trip
+at the exact moment the UI reported a timeout.
+
+Phase 145 (item #57/#59-#65 flakiness arc) first saw this as a one-off during rapid live-clicking
+and hypothesized it was caused by interacting before ffmpeg's Initialize had fully settled;
+undiagnosed further at the time since it didn't reproduce on a clean retry in that session.
+
+**It reproduced again during phase 147's cross-browser verification** (see `README-phase-147.md`
+in Github-BenVideo), this time on a completely fresh page load with a single deliberate click —
+no rapid interaction, Initialize already fully "Ready" before the click. This rules out phase
+145's working hypothesis. A second fresh-session attempt with the identical single click succeeded
+normally (~19s). Genuinely intermittent, root cause unknown — worth instrumenting
+`DemoMediaLibraryProvider.DownloadFileAsync` / the shared `HttpClient`'s timeout wiring
+(`AddHttpClient<DemoMediaLibraryProvider>` in `Ben.Video.Playground/Program.cs`) to find why an
+`OperationCanceledException` is thrown when the request itself plainly succeeded.
+
+**Root cause, confirmed by live reproduction:** Blazor WASM's single main thread hosts both the
+`HttpClient` call's own continuations *and* all the JS-interop marshaling for ffmpeg's own worker
+traffic. Heavy concurrent ffmpeg activity — most commonly the editor's own debounced auto-preview
+timeline re-render, which fires whenever the clip list changes and is entirely unrelated to the
+import itself — can delay a normally-68ms download's completion callback long enough to trip the
+old 30s `HttpClient.Timeout`. Deliberately reproduced by firing the Server-tab card's "preview
+thumbnail" button (its own independent download + ffmpeg thumbnail extraction) at the same moment
+as an import click: a request that takes 68ms idle took **31.2 seconds** under that contention —
+just over the old timeout. This also explains phase 147's original no-double-click repro: the
+Server tab automatically kicks off an eager background thumbnail prefetch for any image files the
+instant the tab loads, so a single import click shortly after can race against that automatic
+background work with no deliberate concurrency needed.
+
+**Fix:** bumped `DemoMediaLibraryProvider`'s `HttpClient.Timeout` from 30s to 60s (Playground
+fixture only — a real host's `HttpMediaLibraryProvider` timeout is that host's own config, out of
+this repo's scope). Considered and rejected pausing the auto-preview render during an in-flight
+download (mirroring `PauseBackgroundRenderDuringExport`'s existing pattern) — that only guards
+against the ONE contention source proven here, not eager-thumbnail-prefetch or any other ffmpeg
+activity, so it's a partial fix dressed as a full one; the timeout bump is honest about what it
+actually does. Validated by repeating the identical deliberate-contention reproduction after the
+fix: 48.6s of contention completed cleanly under the new 60s ceiling, with zero errors in the
+ffmpeg diagnostics operation log.
+
+> Fixed phase 149, 2026-08-13 — see `README-phase-149.md` in Github-BenVideo for the full
+> reproduction and verification detail.
+
+> Found during phase 147 cross-browser stress verification, 2026-08-13.
+
+**Closed out 2026-08-13 by item #70's sidecar arc (phases 158–162).** Phase 149 fixed the symptom
+by raising a timeout while explicitly recording that the real cause was main-thread contention:
+ffmpeg's own JS-interop traffic delaying an unrelated HTTP download's completion callback by 30+
+seconds (live-measured at 31.2s and 48.6s for a normally-68ms request). Item #70 removed that
+contention structurally rather than tolerating it:
+
+- **phase 159** moved import-time probe + thumbnail extraction off the main thread — precisely the
+  operations that were contending *during an import*;
+- **phase 161** moved the auto-preview assembly (the other heavy main-thread consumer) off it;
+- **phase 162** moved export concat + audio mix, the heaviest of all.
+
+The phase-149 timeout stays as a **guard, not a fix**. Note the honest boundary: this is closed
+*when the sidecar is present*. A browser-only install still relies on the raised timeout, which is
+correct — there is no other thread to move the work to. See `README-phase-162.md`.
+
+## 67. Import rejected with misleading "Click Initialize" message while ffmpeg is merely busy (✅ fixed 2026-08-13, phase 151)
+
+`ClipBrowser.ImportFromLibraryAsync`'s upfront gate (`ClipBrowser.razor:914`,
+`if (Ffmpeg.State != FfmpegState.Ready)`) hard-rejects any import attempt with:
+
+> ⚠ Click Initialize in the toolbar before importing.
+
+whenever ffmpeg's state is `Processing` — including a perfectly healthy, legitimately slow
+background operation (e.g. an auto-preview `concatClips` re-render, confirmed live to take 44+
+seconds for two short clips). The message is actively misleading: it implies ffmpeg needs to be
+re-initialized, when nothing is wrong — the worker is just busy and will be `Ready` again shortly.
+
+This gate predates phase 142's worker-serialization mutex and was never updated to match phase
+145's own recorded design decision ("import-during-busy queues on the mutex, busy card shows
+'waiting for ffmpeg…'" — see the phase 141-147 plan). That queue-and-wait behavior was designed but
+never actually wired into this call site.
+
+Fix should replace the hard rejection with either: (a) queuing the import attempt until
+`FfmpegState` returns to `Ready` (matching the original design decision), or at minimum (b) a
+different, accurate message when `State == Processing` ("ffmpeg is busy — try again in a moment")
+versus the current message, which should be reserved for `State == Error` or `Unloaded`.
+
+> Found during phase 147 cross-browser stress verification, 2026-08-13, while testing "import
+> during churn" — see `README-phase-147.md` in Github-BenVideo.
+
+**Fix (option (a), queuing):** two separate fixes, since phase 150 (shipped the same day) had
+already split the old combined download+import flow in two. `DownloadAndCacheAsync` — the
+download step — turned out not to need ffmpeg at all anymore (it's HTTP GET + OPFS write only),
+so its copy of this gate was simply dead weight and was removed outright: downloading now works
+even before Initialize. `AddCachedFileToTimelineAsync` — the step that actually calls into ffmpeg
+— got the real fix: a new `WaitForFfmpegReadyAsync` that waits out a legitimate `Processing` state
+(shows the row's existing "Queued" stage, polls with a 60s ceiling and the phase-143 watchdog's
+wedge detection as a safety net) instead of rejecting immediately. Only `Idle`/`LoadingCore`/
+`Error` still fail immediately, each with its own accurate message now (not a blanket
+"Click Initialize" for every non-Ready state).
+
+New pure `FfmpegBusyPolicy` class encodes the state→message mapping (the actual crux of the bug —
+`Processing` must NOT be in the immediate-failure set) so it's unit-tested independent of the
+Blazor component. 6 new tests, 1632/1632 suite passing.
+
+Live-verified the core scenario: added one cached file to the timeline (triggering a debounced
+auto-preview re-render), then immediately clicked a second cached file — it showed "Queued" (not
+the old rejection) and resolved to "Done ✓" automatically once ffmpeg cleared, no manual retry.
+
+> Fixed phase 151, 2026-08-13 — see `README-phase-151.md` in Github-BenVideo.
+
+## 68. Export dialog's action buttons (Export Now / Add to Queue) can render off-screen (✅ fixed 2026-08-13, phase 152)
+
+Root cause confirmed live: `TelerikWindow`'s `WindowActions` footer renders as a **direct child of
+`#app`** (the document root), in ordinary document flow with `position: static` — not anchored to
+the window's own positioned box at all. Confirmed by walking the "Export Now" button's
+`parentElement` chain: `BUTTON → DIV#app → BODY → HTML`. Setting an explicit `Height` on the
+`TelerikWindow` correctly bounds the window's own content area but has zero effect on the footer,
+since it was never inside that box. Fix: moved the action buttons into `WindowContent` as an
+in-content flex footer instead of using `WindowActions` at all — matching the pattern
+`ProjectListDialog` (no reported bug) already uses. `WindowContent` became a flex column with the
+settings form scrolling internally (`flex: 1; overflow-y: auto`) and a non-scrolling footer pinned
+below it.
+
+Also fixed the 3 mojibake ellipses in `ExportService.cs` flagged when this item was found
+(`"Concatenating segmentsâ€¦"` etc. → correct `…`) — same double-encoding pattern still unfixed in
+`ClipStore.cs`.
+
+Also fixed, found live during this phase's own verification: the CRF quality slider was stuck at
+Kendo's 200px default width inside a much wider row, cramming all 11 tick labels together. The
+`width: 100%` CSS rule silently never matched because `TelerikSlider`'s root div is rendered by a
+child component and never receives the parent `.razor.css` file's Blazor CSS-isolation scope
+attribute — needed `::deep` (same pattern already used correctly elsewhere in
+`VideoPreview.razor.css`/`VideoTimeline.razor.css`). This is a concrete instance of item #30's own
+root-cause note below — the identical bug is very likely present, unverified, in three other
+editors' own sliders (`ClipEditor`, `AudioClipEditor`, `ImageClipEditor`).
+
+> See `README-phase-152.md` in Github-BenVideo for full detail.
+
+## 69. File → Save reports success but the project does not restore on reload (✅ fixed 2026-08-13, phase 148)
+
+`File → Save` shows a "Project saved." success toast, but a subsequent page reload does **not**
+restore the project: no clips on the timeline, no error message, no "restoring…" indicator,
+nothing in the console — indistinguishable from a session that was never saved at all. Live-
+reproduced twice with a clean, deliberate `File → Save` (not the export-completion "Save this
+project so you can come back later?" prompt, which was tested and correctly honored a Skip choice
+in an earlier, discarded test run). Confirmed the failure holds both immediately after reload and
+after re-clicking Initialize (ruling out "restore only runs post-Initialize" as an explanation).
+
+`ProjectPersistence` is one of the Full-Featured demo's explicitly enabled flags, and the File
+menu draws a clear distinction between "Save" (presumably in-app/OPFS-backed persisted state) and
+"Save to Device…" (presumably a download-to-disk action) — so this reads as a real, currently
+broken feature, not a documentation or expectation mismatch. Root cause not investigated (found
+during a no-production-code verification phase) — worth checking `ProjectStore`'s save path
+actually persists to OPFS/IndexedDB versus silently no-oping, and whether the restore-on-load path
+is wired up at all for this demo configuration.
+
+This is the most significant finding from phase 147's cross-browser stress verification — a user
+could reasonably believe their work is safe after seeing "Project saved." and lose it entirely on
+the next reload.
+
+**Root cause, confirmed via code research:** nothing anywhere ever called `ProjectStore.OpenAsync`
+(or any restore method) automatically on startup, in either the Playground or the real app —
+`VideoEditor.razor`'s startup only ever loaded the project *index* (for the Open dialog's list),
+never any actual project content. `SaveAsync`/`OpenAsync` themselves round-tripped correctly; the
+gap was purely "nobody ever calls restore." There was also no persisted "which project is active"
+pointer for a restore call to have used even if one existed.
+
+**Fix:** new `bv-proj-active` localStorage key (written on save/open, cleared on New/Delete-of-
+active) plus `ProjectStore.RestoreLastActiveAsync()`, called from `VideoEditor.razor`'s startup
+behind the `ProjectPersistence` flag. Live-verifying this turned up two more, smaller pre-existing
+bugs in the OPFS-restore path that only manual File → Open had been exercising until now — both
+fixed in the same phase: `RestoreOpfsFilesAsync` never called `OPFSService.EnsureInitAsync()`
+before checking `IsAvailable` (so on a truly fresh reload, with no prior OPFS operation to set it
+as a side effect, media never actually remounted — clips came back with correct metadata but a
+permanent "media missing" warning), and it never notified `ClipStore` after clearing that warning
+flag (so even once fixed, the icon stayed stale until an unrelated re-render happened to clear it).
+
+New `ProjectStoreRestoreTests.cs` (`ProjectStore` had zero prior test coverage) simulates a reload
+via two instances sharing one fake localStorage — 6 new tests, 1621/1621 suite passing. Live-
+verified end to end twice: Save → hard reload → clip metadata AND media both restore correctly,
+warning icon clears once ffmpeg initializes.
+
+> Found during phase 147 cross-browser stress verification, 2026-08-13; fixed phase 148,
+> 2026-08-13 — see `README-phase-147.md` and `README-phase-148.md` in Github-BenVideo.
+
+## 70. Extend the native sidecar beyond export rendering to free the main thread generally (✅ COMPLETE — all 5 phases 158–162 shipped 2026-08-13)
+
+The native sidecar (phases 121-124, `NativeSidecarBackend`/`RenderService`) currently only offloads
+the *final export render* (`IRenderBackend.RenderAsync`) to the native process. Everything else that
+runs heavy ffmpeg work — the auto-preview timeline re-render (`VideoEditor.RefreshWorkingWindowAsync`,
+via `Ffmpeg.ConcatCopyAsync`/`ConcatClipsAsync`), import metadata/thumbnail extraction
+(`Ffmpeg.GetMetadataAsync`/`ExtractThumbnailsAsync`), and general clip-art/effects processing — still
+runs through the main `FfmpegService` (ffmpeg.wasm) on Blazor WASM's single main thread, competing
+with everything else that thread does (HTTP calls, JS-interop marshaling, rendering).
+
+This is the direct, confirmed mechanism behind item #66 (fixed phase 149, but only with a timeout
+bump — see that item's writeup): the auto-preview render's own JS-interop traffic delayed an
+unrelated HTTP download's completion callback by 30+ seconds. If the sidecar handled *general*
+ffmpeg operations — not just export — that class of main-thread contention would be structurally
+eliminated rather than just tolerated with a longer timeout.
+
+Real, separate scope: would mean extending `IRenderBackend` (or a parallel abstraction) to cover
+probe/thumbnail/concat operations, not just full-timeline export, and deciding how/when the
+Playground and real hosts opt into it for non-export operations. Noted here as a future direction,
+not scoped or started.
+
+**Scoped 2026-08-13 into a 5-phase plan** (user chose the full multi-phase arc over a single
+surgical slice). Plan lives at `~/.claude/plans/also-the-sidecar-must-generic-whisper.md`.
+
+- **Phase 158 ✅ shipped** — protocol v3 foundation: `GET /v1/capabilities` handshake (so the
+  browser asks what a given sidecar build can do rather than assuming), ffprobe as a second
+  *optional, fails-soft* verified tool in `FfmpegLocator`, and the job model generalized beyond
+  one kind. Also added `SidecarJsonOptions.LenientResponses` — responses from a newer sidecar must
+  not be fatal to an older browser build (with strict `Disallow`, one additive field would throw
+  and read as "no sidecar here", silently losing a working connection).
+- **Phase 159 ✅ shipped** — the first real main-thread relief: import-time `ffprobe` metadata and
+  thumbnail-strip extraction now run in the sidecar when paired. `POST /v1/probe` is deliberately
+  *synchronous with its own concurrency limit* (a sub-second metadata read queued behind two long
+  encodes would be strictly worse than the wasm path it replaces); thumbnails go through the job
+  lifecycle with a manifest + per-file result endpoints, where the manifest doubles as the
+  authorization list so traversal never reaches the filesystem. Thumbnail bytes never enter the
+  WASM heap — `fetchAsBlobUrl` does fetch→Blob→objectURL entirely in JS. `SidecarMediaProbe`
+  returns null on every failure mode so an import never fails because a companion process is
+  unhealthy. 27 new tests incl. a fixture that reads the real `ffmpegInterop.js` to keep the
+  thumbnail argv in lock-step with the JS. See `README-phase-158.md`/`README-phase-159.md`.
+- **Phase 160 ✅ shipped** — remote segment retention ("dual residency") + a concat job kind.
+  Segments still land in MEMFS exactly as before and the sidecar *additionally* retains a copy, so
+  the wasm fallback survives the sidecar dying mid-session — losing retention costs a re-render,
+  never correctness. Concat takes ids the sidecar already holds, so no bytes cross the loopback for
+  inputs, and uses the *same* `ExportArgBuilders` method the browser calls (shared via
+  `InternalsVisibleTo`, so it can't drift). Every concat input is pinned for the job's duration —
+  without that the LRU could evict an input between the existence check and ffmpeg opening it.
+  Missing inputs return 409 with the full missing list so the caller re-renders exactly those.
+- **Phase 161 ✅ shipped** — auto-preview concat offload; the first phase a user can *feel*. When
+  the gate opens, the assembled Working Window preview never crosses the WASM heap, never takes the
+  worker mutex, and never touches MEMFS. `PreviewConcatGate` is pure/static and requires every
+  condition (no transitions, all-`bgseg_`, sidecar advertising concat, every segment in the remote
+  index); the conservative direction is always wasm, because a wrong "yes" drops footage while a
+  wrong "no" only costs speed. `PreviewUrlRevoker` routes revokes by origin now that a preview URL
+  can be JS-minted, defaulting unknown URLs to the worker route so pre-existing callers stay
+  correct.
+- **Phase 162 ✅ shipped** — export concat + audio mix offloaded as a single job, closing the arc.
+  The plan's gating design question was resolved first by audit: all three overlay passes emit
+  `-map 0:a? -c:a copy`, a pure stream copy, so moving the mix earlier is safe and the pre-planned
+  concat-only scope cut wasn't needed. `BuildAmixArgs` was extracted from `ExportService` with its
+  parity test transcribed from the inline code *before* the move. The audio `FilterChain` is
+  allowlisted by character class (it can't be range-checked and is machine-generated).
+  ⚠ **Audio sync of a sidecar-mixed export is untested** — deliberate, user-approved: this machine
+  has no real ffmpeg so the A/B was impossible. Do that A/B before relying on the mix path in
+  production (see `README-phase-162.md`).
+
+**Fallback guarantee (user-confirmed requirement, 2026-08-13):** if the sidecar isn't installed,
+everything falls back to the browser's ffmpeg. Enforced at four independent layers —
+`GetConnectionAsync()` returns null, `HasCapability()` is false, the gates return an
+unavailable/blocked decision, and every facade (`SidecarMediaProbe`, `SidecarPreviewAssembler`,
+`NativeClipEncoder`) returns null on *any* failure so the caller runs the existing `Ffmpeg.*` path
+in the same pass. The sidecar is opt-in and unpaired by default, so a user who never installs it
+gets exactly the pre-arc behavior.
+
+> Noted by the user 2026-08-13, while discussing item #66's fix and whether the sidecar already
+> covered this (it didn't — sidecar was export-only before this arc).
+
+## 71. Make the ffmpeg status badge's "busy" state more visually distinct (not started)
+
+User observation while live-verifying phase 151 (item #67's fix): after clicking Initialize, the
+toolbar's ffmpeg status badge (`Toolbar.razor:186`, `bv-status--@Ffmpeg.State...`) already
+distinguishes `Ready` (green, `#4caf89`) from `Processing… N%` (blue, `#7c9ef8`) via
+`Toolbar.razor.css:97-105` — but the user's read of it in the moment was that it just "says ready"
+without a clear enough signal of busy-vs-available. Requested: strengthen the visual distinction
+(the user specifically suggested an "info" color for busy) so it's unambiguous at a glance whether
+ffmpeg is available for a new operation right now.
+
+Worth checking as part of this: whether every operation that should count as "busy" actually flips
+`FfmpegState` to `Processing` — e.g. it's not yet confirmed whether lighter calls like
+`WriteFileAsync`/`GetMetadataAsync`/`Mounter.MountAsync` (used by phase 150/151's
+`AddCachedFileToTimelineAsync`) visibly reflect as busy in this badge the same way a full `exec`
+does.
+
+> Noted by the user 2026-08-13, while live-verifying phase 151. Explicitly framed as a future
+> enhancement, not for immediate implementation.
+
+## 73. Resize-handle and shape-control-point drag bypass the keyframe branch entirely (not started)
+
+While fixing item #63 (keyframe-branch canvas edits bypass undo/redo), traced every
+`Motion.EditLayer` call site to find which ones needed the new undo wiring. Found that
+`CalloutControlPointOverlay.razor`'s and `ClipArtControlPointOverlay.razor`'s on-canvas
+**resize-handle drag** (the draggable corner/edge squares) and, for Callout, **shape
+control-point drag** (Arrow/Line curve handle, Star outer/inner radius, Rectangle corner radius)
+never call `Motion.EditLayer` at all — confirmed by reading both files end to end. They write
+straight to the clip's static `X`/`Y`/`Width`/`Height`/`ControlPointValues` unconditionally via
+`Clips.UpdateCallout`/`Clips.CommitCalloutUpdate` (and the ClipArt equivalents), with no
+`Motion.HasPath` check anywhere in either file. Both overlays render unconditionally whenever the
+layer is the active selection (`VideoPreview.razor:81-97`), regardless of whether it's animated.
+
+**Real-world impact**: dragging a resize handle or a shape control point on a layer that already
+has a motion path silently has **no visible effect** at any keyframed time —
+`MotionKeyframeService.Evaluate()` overrides X/Y/Width/Height/control-points from the keyframe
+data whenever a path exists, so the static-field write these overlays make is invisible during
+playback at any time a keyframe governs. This is a missing-feature bug, not merely an undo gap —
+worse than item #63 was, which is why it's a separate item rather than folded into that fix.
+Item #63's own original text incorrectly assumed these two overlays already routed through the
+keyframe branch and only lacked undo; they don't route through it at all.
+
+**Scope for the real fix**: route both overlays' `OnPointerMove`/`OnPointerUp` through
+`Motion.EditLayer` exactly like `CanvasSelectionOverlay`'s body-drag and `SetSize` already do
+(writing to a keyframe's `ScaleX`/`ScaleY` — and, for Callout, `ControlPointValues` — relative to
+the clip's own base size, per `CanvasSelectionOverlay.SetSize`'s existing "edit the effective,
+keyframe-aware value" pattern), then apply item #63's same `CommitKeyframeEditIfAnimated`-shaped
+undo wiring on top once that's in place.
+
+> Found 2026-08-13 during phase 154 (item #63's fix) — see `README-phase-154.md` in
+> Github-BenVideo.
+
