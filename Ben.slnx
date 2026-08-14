@@ -22,6 +22,10 @@
   </Folder>
   <Folder Name="/Media Projects/">
     <Project Path="../Github-BenVideo/Ben.Video.Editor/Ben.Video.Editor.csproj" />
+    <Project Path="../Github-BenVideo/Ben.Video.Core/Ben.Video.Core.csproj" />
+    <Project Path="../Github-BenVideo/Ben.Video.RenderService/Ben.Video.RenderService.csproj" />
+    <Project Path="../Github-BenVideo/Ben.Video.Sidecar/Ben.Video.Sidecar.csproj" />
+    <Project Path="../Github-BenVideo/Ben.Video.Sidecar.FakeFfmpeg/Ben.Video.Sidecar.FakeFfmpeg.csproj" />
   </Folder>
   <Project Path="Ben.Web.Tests/Ben.Web.Tests.csproj" />
 </Solution>

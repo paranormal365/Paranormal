@@ -72,16 +72,38 @@ public sealed class BenMediaLibraryProvider : IMediaLibraryProvider
     }
 
     public async Task<byte[]> DownloadFileAsync(
-        Guid fileId, CancellationToken cancellationToken = default)
+        Guid fileId, CancellationToken cancellationToken = default, IProgress<double>? progress = null)
     {
-        var url      = $"{_apiOptions.BaseUrl.TrimEnd('/')}/api/upload-files/{fileId}/download";
-        var response = await SendAsync(HttpMethod.Get, url, cancellationToken);
+        var url = $"{_apiOptions.BaseUrl.TrimEnd('/')}/api/upload-files/{fileId}/download";
+
+        // Streamed rather than ReadAsByteArrayAsync so the Server tab's per-file progress bar
+        // gets real numbers. Best-effort by contract: when the WebApi doesn't send a
+        // Content-Length (chunked responses) there is nothing to compute a fraction against,
+        // so no intermediate report is made and only the terminal 1.0 fires.
+        using var response = await SendAsync(
+            HttpMethod.Get, url, cancellationToken, HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        var totalBytes = response.Content.Headers.ContentLength;
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var buffer = new MemoryStream(totalBytes is > 0 ? (int)totalBytes.Value : 81920);
+        var chunk = new byte[81920];
+        long readSoFar = 0;
+        int bytesRead;
+        while ((bytesRead = await stream.ReadAsync(chunk, cancellationToken)) > 0)
+        {
+            buffer.Write(chunk, 0, bytesRead);
+            readSoFar += bytesRead;
+            if (totalBytes is > 0)
+                progress?.Report(Math.Min(1.0, (double)readSoFar / totalBytes.Value));
+        }
+        progress?.Report(1.0);
+        return buffer.ToArray();
     }
 
     private async Task<HttpResponseMessage> SendAsync(
-        HttpMethod method, string url, CancellationToken ct)
+        HttpMethod method, string url, CancellationToken ct,
+        HttpCompletionOption completionOption = HttpCompletionOption.ResponseContentRead)
     {
         var client  = _httpClientFactory.CreateClient();
         var request = new HttpRequestMessage(method, url);
@@ -90,7 +112,7 @@ public sealed class BenMediaLibraryProvider : IMediaLibraryProvider
         if (!string.IsNullOrEmpty(token))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        return await client.SendAsync(request, ct);
+        return await client.SendAsync(request, completionOption, ct);
     }
 
     // ── Private DTO matching the UploadFileRecord fields we need ─────────────

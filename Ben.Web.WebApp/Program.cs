@@ -45,6 +45,12 @@ builder.Services.AddBenVideoEditor(options =>
     options.RippleEdit      = true;
     // Item #36 phase E rollout: background render worker + rough/fine two-pass preview.
     options.BackgroundRendering = true;
+    // Item #70 phase 173: show the "Native acceleration" panel so a user who has installed the
+    // sidecar can pair with it. Opt-in twice over — this only makes the editor probe the user's
+    // own loopback ports and render the pairing panel; nothing is routed anywhere until they
+    // paste that sidecar's one-time code. With no sidecar installed the probe finds nothing and
+    // every path stays on ffmpeg.wasm exactly as before.
+    options.NativeSidecar   = true;
     options.MediaLibraryBaseUrl = builder.Configuration["WebApi:BaseUrl"];
     options.DocumentPostUrl = $"{builder.Configuration["WebApi:BaseUrl"]}/api/video-projects";
 });
