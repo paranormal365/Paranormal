@@ -16,6 +16,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UserLinkType> UserLinkTypes { get; set; }
         public virtual DbSet<UserMessageType> UserMessageTypes { get; set; }
         public virtual DbSet<UserNoteType> UserNoteTypes { get; set; }
+        public virtual DbSet<AppUserPhoto> AppUserPhotos { get; set; }
         public virtual DbSet<UserAddress> UserAddresses { get; set; }
         public virtual DbSet<UserEmail> UserEmails { get; set; }
         public virtual DbSet<UserPhone> UserPhones { get; set; }
@@ -396,6 +397,29 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrganizationPage>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── AppUserPhoto ─────────────────────────────────────────────────
+            // The subject FK cascades: deleting a user takes their photo rows. The
+            // CreatedBy/UpdatedBy FKs to the same table must be NoAction or SQL Server sees
+            // multiple cascade paths into AppUserPhotos and refuses the migration (error 1785).
+            modelBuilder.Entity<AppUserPhoto>()
+                .HasOne(e => e.AppUser).WithMany(e => e.Photos)
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<AppUserPhoto>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<AppUserPhoto>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<AppUserPhoto>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // One active photo per slot is the invariant the whole feature rests on — enforced
+            // here rather than only in the controller, so a concurrent activate can't produce two.
+            modelBuilder.Entity<AppUserPhoto>()
+                .HasIndex(e => new { e.AppUserId, e.IsPublic })
+                .HasFilter("[IsActive] = 1")
+                .IsUnique();
 
             // ── OrganizationLogo ─────────────────────────────────────────────
             modelBuilder.Entity<OrganizationLogo>()

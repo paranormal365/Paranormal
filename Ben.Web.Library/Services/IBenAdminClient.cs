@@ -98,6 +98,30 @@ public interface IBenAdminClient
     /// <summary>Pending file-permission requests awaiting the current user, with names resolved.</summary>
     Task<List<PendingPermissionRequestRecord>> GetPendingPermissionRequestsForMeAsync(CancellationToken token = default);
 
+    // ── My profile (Area 4 / U1) ─────────────────────────────────────────────
+    // Everything here is implicitly scoped to the signed-in user; none of these take a user id.
+
+    /// <summary>The current user's own profile, including their active public/private photos.</summary>
+    Task<MyProfileRecord?> GetMyProfileAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// Updates the current user's profile. A null <c>DisplayName</c> leaves the existing name
+    /// untouched; an empty or whitespace one clears it.
+    /// </summary>
+    Task<MyProfileRecord?> UpdateMyProfileAsync(UpdateMyProfileRequest request, CancellationToken token = default);
+
+    /// <summary>Every photo the current user has set, newest first — including inactive ones.</summary>
+    Task<List<AppUserPhotoRecord>> GetMyPhotosAsync(CancellationToken token = default);
+
+    /// <summary>Makes an already-uploaded file the current user's photo for one slot.</summary>
+    Task<AppUserPhotoRecord?> SetMyPhotoAsync(SetMyPhotoRequest request, CancellationToken token = default);
+
+    /// <summary>Removes one of the current user's photos. The underlying file is kept.</summary>
+    Task<bool> DeleteMyPhotoAsync(Guid photoId, CancellationToken token = default);
+
+    /// <summary>The UploadFileType new profile-photo uploads belong to.</summary>
+    Task<Guid?> GetProfilePhotoFileTypeIdAsync(CancellationToken token = default);
+
     /// <summary>Approves or denies a file-permission request. Returns false when the API rejects it.</summary>
     Task<bool> ReviewPermissionRequestAsync(
         Guid requestId, FilePermissionRequestStatus status, string? reviewNotes, CancellationToken token = default);

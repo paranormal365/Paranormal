@@ -10,6 +10,7 @@ namespace Ben.Data.Source.Entities
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
 
+        public virtual ICollection<AppUserPhoto> Photos { get; set; } = new List<AppUserPhoto>();
         public virtual ICollection<UserAddress> UserAddresses { get; set; } = new List<UserAddress>();
         public virtual ICollection<UserEmail> UserEmails { get; set; } = new List<UserEmail>();
         public virtual ICollection<UserPhone> UserPhones { get; set; } = new List<UserPhone>();

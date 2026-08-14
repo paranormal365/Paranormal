@@ -16,6 +16,7 @@ internal static class UploadFileTypeSeeder
     internal const string EvidenceFileTypeName       = "Case Evidence";
     internal const string PublishedVideoFileTypeName = "Published Video";
     internal const string AudioMixFileTypeName       = "Audio Mix";
+    internal const string ProfilePhotoFileTypeName   = "Profile Photo";
 
     // Fixed GUID so VideoProjectController can reference it without a DB lookup.
     internal static readonly Guid PublishedVideoFileTypeId = new("30000000-0000-0000-0000-000000000001");
@@ -23,8 +24,15 @@ internal static class UploadFileTypeSeeder
     // Fixed GUID so CaseAudioMixController can reference it without a DB lookup.
     internal static readonly Guid AudioMixFileTypeId = new("40000000-0000-0000-0000-000000000001");
 
+    // Fixed GUID so MyProfileController can reference it without a DB lookup.
+    internal static readonly Guid ProfilePhotoFileTypeId = new("50000000-0000-0000-0000-000000000001");
+
     private static readonly string[] LogoExtensions =
         [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"];
+
+    /// <summary>Browser-displayable raster formats. No SVG — see SeedProfilePhotoFileTypeAsync.</summary>
+    private static readonly string[] ProfilePhotoExtensions =
+        [".jpg", ".jpeg", ".png", ".gif", ".webp"];
 
     /// <summary>
     /// Audio formats natively decoded by the Web Audio API / MediaElement backend
@@ -65,6 +73,8 @@ internal static class UploadFileTypeSeeder
         await SeedPublishedVideoFileTypeAsync(db, owner.Id);
 
         await SeedAudioMixFileTypeAsync(db, owner.Id);
+
+        await SeedProfilePhotoFileTypeAsync(db, owner.Id);
     }
 
     // ── Private helper ────────────────────────────────────────────────────────
@@ -178,6 +188,45 @@ internal static class UploadFileTypeSeeder
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = ownerId,
         });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Ensures the Profile Photo file type exists (fixed GUID so MyProfileController can use it
+    /// directly). Extension-restricted rather than AllowAllExtensions: these render in an
+    /// &lt;img&gt; across the whole site, so anything that isn't a browser-displayable image is a
+    /// broken avatar at best. SVG is deliberately excluded — unlike the org logo, profile photos
+    /// are user-supplied by every account, and SVG can carry script.
+    /// </summary>
+    private static async Task SeedProfilePhotoFileTypeAsync(BenDataContext db, Guid ownerId)
+    {
+        if (await db.UploadFileTypes.AnyAsync(t => t.Id == ProfilePhotoFileTypeId)) return;
+
+        db.UploadFileTypes.Add(new UploadFileType
+        {
+            Id                 = ProfilePhotoFileTypeId,
+            Name               = ProfilePhotoFileTypeName,
+            Description        = "User profile photos — JPEG, PNG, GIF, WebP",
+            IsActive           = true,
+            IsPublic           = false, // the per-photo slot decides visibility, not the type
+            SortOrder          = 7,
+            AllowAllExtensions = false,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+
+        foreach (var ext in ProfilePhotoExtensions)
+        {
+            db.UploadFileTypeExtensions.Add(new UploadFileTypeExtension
+            {
+                Id                 = Guid.NewGuid(),
+                UploadFileTypeId   = ProfilePhotoFileTypeId,
+                Pattern            = ext,
+                DateCreated        = DateTime.UtcNow,
+                CreatedByAppUserId = ownerId,
+            });
+        }
         await db.SaveChangesAsync();
     }
 }
