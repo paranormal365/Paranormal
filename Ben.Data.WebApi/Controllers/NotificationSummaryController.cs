@@ -98,8 +98,23 @@ public sealed class NotificationSummaryController : BenControllerBase
                        && db.UploadFiles.Any(f => f.Id == r.UploadFileId && f.AppUserId == userId))
               .Select(r => (DateTime?)r.DateCreated), ct);
 
+        // ── Investigation invites I haven't answered ─────────────────────────
+        // Only ones still ahead of me, and not cancelled: an unanswered RSVP for a visit that
+        // has already happened (or been called off) is history, not a task. Bucketed on the
+        // invite's DateCreated like everything else here — see the DTO for why the scheduled
+        // date can't be the bucket timestamp.
+        var nowUtc = DateTime.UtcNow;
+        var investigationInvites = await BucketAsync(
+            db.InvestigationAttendees.AsNoTracking()
+              .Where(a => a.AppUserId == userId
+                       && a.Rsvp == RsvpStatus.Invited
+                       && a.Investigation.ScheduledDateTime > nowUtc
+                       && a.Investigation.Status != InvestigationStatus.Cancelled)
+              .Select(a => (DateTime?)a.DateCreated), ct);
+
         return Ok(new NotificationSummaryResponse(
-            orgMessages, caseMessagesAsOrg, caseMessagesAsClient, systemMessages, pendingRequests));
+            orgMessages, caseMessagesAsOrg, caseMessagesAsClient, systemMessages, pendingRequests,
+            investigationInvites));
     }
 
     /// <summary>

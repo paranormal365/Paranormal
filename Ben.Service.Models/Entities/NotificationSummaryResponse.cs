@@ -23,21 +23,30 @@ public sealed record NotificationBucket(int Count, DateTime? OldestUnreadUtc)
 /// <param name="CaseMessagesAsClient">Org-sent case messages awaiting the caller on their own cases (including cases shared with them as a co-client).</param>
 /// <param name="SystemMessages">Platform/system messages sent to the caller (e.g. an audit record forwarded by a SuperAdmin).</param>
 /// <param name="PendingPermissionRequests">File-permission requests waiting on the caller as the file owner.</param>
+/// <param name="InvestigationInvites">
+/// Investigations the caller has been invited to but not yet answered, limited to ones still
+/// ahead of them. The bucket timestamp is when the <i>invite</i> was sent, not when the
+/// investigation is scheduled — every other bucket means "waiting since", and a future date fed
+/// to the shared age classifier would read as negative age and colour Fresh forever. A soon-but-
+/// recently-sent invite is therefore not escalated by colour; the row text carries the date.
+/// </param>
 public sealed record NotificationSummaryResponse(
     NotificationBucket OrgMessages,
     NotificationBucket CaseMessagesAsOrgMember,
     NotificationBucket CaseMessagesAsClient,
     NotificationBucket SystemMessages,
-    NotificationBucket PendingPermissionRequests)
+    NotificationBucket PendingPermissionRequests,
+    NotificationBucket InvestigationInvites)
 {
     public static readonly NotificationSummaryResponse Empty = new(
         NotificationBucket.Empty, NotificationBucket.Empty, NotificationBucket.Empty,
-        NotificationBucket.Empty, NotificationBucket.Empty);
+        NotificationBucket.Empty, NotificationBucket.Empty, NotificationBucket.Empty);
 
     /// <summary>All buckets, for callers that want to iterate rather than name each one.</summary>
     [JsonIgnore]
     public IReadOnlyList<NotificationBucket> AllBuckets =>
-        [OrgMessages, CaseMessagesAsOrgMember, CaseMessagesAsClient, SystemMessages, PendingPermissionRequests];
+        [OrgMessages, CaseMessagesAsOrgMember, CaseMessagesAsClient, SystemMessages,
+         PendingPermissionRequests, InvestigationInvites];
 
     /// <summary>Total across every bucket — the number on the bell.</summary>
     [JsonIgnore]

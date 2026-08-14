@@ -79,7 +79,7 @@
                 items.Add(new NavItem("Notifications",     SvgIcon.Bell,     "/notifications",
                                       Combine(s.SystemMessages, s.PendingPermissionRequests)));
                 items.Add(new NavItem("My Cases",          SvgIcon.Folder,   "/my-cases", s.CaseMessagesAsClient));
-                items.Add(new NavItem("My Investigations", SvgIcon.Calendar, "/my-investigations"));
+                items.Add(new NavItem("My Investigations", SvgIcon.Calendar, "/my-investigations", s.InvestigationInvites));
                 items.Add(new NavItem("My Requests",       SvgIcon.Inbox,    "/my-requests"));
                 items.Add(new NavItem("My Videos",         SvgIcon.Film,     "/my-videos"));
                 items.Add(new NavItem("Organizations",     SvgIcon.Globe,    "/organizations", orgSide));

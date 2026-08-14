@@ -64,7 +64,8 @@ public class NotificationBadgeTests
             CaseMessagesAsOrgMember:   NotificationBucket.Empty,
             CaseMessagesAsClient:      Aged(1, TimeSpan.FromDays(4)),
             SystemMessages:            NotificationBucket.Empty,
-            PendingPermissionRequests: Aged(3, TimeSpan.FromHours(2)));
+            PendingPermissionRequests: Aged(3, TimeSpan.FromHours(2)),
+            InvestigationInvites:      NotificationBucket.Empty);
 
         Assert.Equal(6, summary.TotalCount);
         Assert.Equal(Urgency.Overdue, Classify(summary, Now));

@@ -5,6 +5,7 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@inject NotificationState Notifications
 
 <PageTitle>My Investigations</PageTitle>
 
@@ -106,6 +107,11 @@
             await AdminClient.UpdateMyInvestigationRsvpAsync(inv.AttendeeId, rsvp);
             var idx = _items!.IndexOf(inv);
             if (idx >= 0) _items[idx] = inv with { Rsvp = rsvp };
+
+            // Answering the invite is exactly what the badge was counting, and the user is
+            // still looking at it. Without this the drawer keeps showing the old number until
+            // the next navigation or the 60s poll, which reads as "it didn't save".
+            await Notifications.RefreshAsync(force: true);
         }
         catch { _error = "Failed to save your RSVP. Please try again."; }
         finally { _saving.Remove(inv.AttendeeId); StateHasChanged(); }
