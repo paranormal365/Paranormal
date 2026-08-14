@@ -18,12 +18,6 @@
         </div>
     </div>
 
-    @if (!UserState.IsSuperAdmin)
-    {
-        <div class="alert alert-danger">Access restricted to SuperAdmins.</div>
-        return;
-    }
-
     @* ── Filter bar ─────────────────────────────────────────────────────────── *@
     <div class="card mb-3">
         <div class="card-body py-2">
@@ -300,7 +294,7 @@
     protected override async Task OnInitializedAsync()
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
         await Task.WhenAll(LoadEntityTypesAsync(), LoadDataAsync());
     }
 
