@@ -133,8 +133,8 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> ImpersonateUserAsync(Guid targetUserId, string targetUserEmail, CancellationToken token = default)
         => _auth.ImpersonateAsync(targetUserId, targetUserEmail, token);
 
-    public void StopImpersonating()
-        => _auth.StopImpersonating();
+    public Task StopImpersonatingAsync(CancellationToken token = default)
+        => _auth.StopImpersonatingAsync(token);
 
     // ── File Types ────────────────────────────────────────────────────────────
 

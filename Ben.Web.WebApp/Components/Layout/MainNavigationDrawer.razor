@@ -96,11 +96,11 @@
         InvokeAsync(StateHasChanged);
     }
 
-    private void ReturnToSuperAdmin()
+    private async Task ReturnToSuperAdmin()
     {
-        AuthService.StopImpersonating();
+        await AuthService.StopImpersonatingAsync();
         NavManager.NavigateTo("/admin/users");
-        InvokeAsync(StateHasChanged);
+        await InvokeAsync(StateHasChanged);
     }
 
     public void Dispose()

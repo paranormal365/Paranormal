@@ -133,8 +133,11 @@ public interface IBenAdminClient
     /// <summary>
     /// Ends the active impersonation session and restores the original SuperAdmin token.
     /// </summary>
-    /// <remarks>This is a synchronous in-memory operation; no HTTP call is made.</remarks>
-    void StopImpersonating();
+    /// <remarks>
+    /// Calls <c>/api/me</c> to re-establish IsSuperAdmin on the restored token — the Identity
+    /// API's opaque tokens can't have that claim read back out of them locally.
+    /// </remarks>
+    Task StopImpersonatingAsync(CancellationToken token = default);
 
     // ── File Types ────────────────────────────────────────────────────────────
 

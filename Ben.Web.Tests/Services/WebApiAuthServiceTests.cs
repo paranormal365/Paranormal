@@ -183,7 +183,13 @@ public class WebApiAuthServiceTests
                .ReturnsAsync(TokenResponse(TargetUserId, "Member"));
         await svc.ImpersonateAsync(TargetUserId, "target@test.com");
 
-        svc.StopImpersonating();
+        // The restored token is the Identity API's real opaque (non-JWT) shape in
+        // production, so StopImpersonatingAsync can only re-derive IsSuperAdmin via
+        // /api/me — assert that path is actually exercised, not a JWT re-parse.
+        apiMock.Setup(x => x.GetAsync<MeResult>("/api/me", default))
+               .ReturnsAsync(new MeResult(SuperAdminId, "admin@test.com", true));
+
+        await svc.StopImpersonatingAsync();
 
         Assert.Equal(adminToken, store.AccessToken);
         Assert.Equal("admin-refresh", store.RefreshToken);
@@ -194,12 +200,12 @@ public class WebApiAuthServiceTests
     }
 
     [Fact]
-    public void StopImpersonating_WhenNotImpersonating_DoesNothing()
+    public async Task StopImpersonating_WhenNotImpersonating_DoesNothing()
     {
         var (svc, store, _, _) = Build();
         store.AccessToken = "original";
 
-        svc.StopImpersonating(); // should not throw or change state
+        await svc.StopImpersonatingAsync(); // should not throw or change state
 
         Assert.Equal("original", store.AccessToken);
         Assert.False(store.IsImpersonating);
@@ -218,12 +224,39 @@ public class WebApiAuthServiceTests
                .ReturnsAsync(TokenResponse(TargetUserId, "Member"));
         await svc.ImpersonateAsync(TargetUserId, "target@test.com");
 
-        svc.StopImpersonating();
+        apiMock.Setup(x => x.GetAsync<MeResult>("/api/me", default))
+               .ReturnsAsync(new MeResult(SuperAdminId, "admin@test.com", true));
+
+        await svc.StopImpersonatingAsync();
 
         Assert.Null(store.OriginalAccessToken);
         Assert.Null(store.OriginalRefreshToken);
         Assert.Null(store.OriginalUserId);
         Assert.Null(store.OriginalUserEmail);
+    }
+
+    [Fact]
+    public async Task StopImpersonating_WhenMeCallFails_LeavesIsSuperAdminFalse()
+    {
+        // Regression guard for the real production bug: if /api/me can't be reached,
+        // IsSuperAdmin must not silently come back true from some other stale source.
+        var (svc, store, idMock, apiMock) = Build();
+
+        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(TokenResponse(SuperAdminId, "SuperAdmin"));
+        await svc.LoginAsync("admin@test.com", "pass");
+
+        apiMock.Setup(x => x.ImpersonateAsync(TargetUserId, default))
+               .ReturnsAsync(TokenResponse(TargetUserId, "Member"));
+        await svc.ImpersonateAsync(TargetUserId, "target@test.com");
+
+        apiMock.Setup(x => x.GetAsync<MeResult>("/api/me", default))
+               .ThrowsAsync(new HttpRequestException("network error"));
+
+        await svc.StopImpersonatingAsync();
+
+        Assert.False(store.IsSuperAdmin);
+        Assert.False(store.IsImpersonating);
     }
 
     // ── ImpersonateAsync failure ──────────────────────────────────────────────

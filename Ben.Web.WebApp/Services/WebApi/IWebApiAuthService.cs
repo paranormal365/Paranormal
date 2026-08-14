@@ -7,5 +7,5 @@ public interface IWebApiAuthService
     void Logout();
 
     Task<bool> ImpersonateAsync(Guid targetUserId, string targetUserEmail, CancellationToken token = default);
-    void StopImpersonating();
+    Task StopImpersonatingAsync(CancellationToken token = default);
 }
