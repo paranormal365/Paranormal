@@ -1036,8 +1036,7 @@ public sealed record ClientCaseOccurrence(
     DateTime? EventDateTime,
     string?   Title,
     string?   Body,
-    /// <summary>True when the org wrote this, false when the client did.</summary>
-    bool      FromInvestigators,
+    bool      FromInvestigators,   // true when the org wrote this, false when the client did
     DateTime  DateCreated,
     IReadOnlyList<OccurrenceFileItem> Files);
 

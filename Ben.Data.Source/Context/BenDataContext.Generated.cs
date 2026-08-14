@@ -1159,6 +1159,20 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Body).HasColumnType("nvarchar(max)");
             modelBuilder.Entity<CaseTimelineEntry>()
                 .Property(e => e.Title).HasMaxLength(256);
+            // NoAction rather than SetNull or Cascade. Cascade is wrong outright — deleting an
+            // investigation must not delete the notes and readings taken during it, since the
+            // findings outlive the visit. SetNull would express that, but SQL Server rejects it
+            // here: Case already cascades to both Investigations and CaseTimelineEntries, so a
+            // SetNull on this FK is a second path to the same rows ("may cause cycles or multiple
+            // cascade paths", error 1785). InvestigationController.Delete therefore detaches the
+            // entries explicitly before removing the investigation.
+            modelBuilder.Entity<CaseTimelineEntry>()
+                .HasOne(e => e.Investigation).WithMany()
+                .HasForeignKey(e => e.InvestigationId).IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+            // The binder query is always "this investigation's entries".
+            modelBuilder.Entity<CaseTimelineEntry>()
+                .HasIndex(e => e.InvestigationId);
 
             // ── CaseTimelineEntryExperienceType ───────────────────────────────
             modelBuilder.Entity<CaseTimelineEntryExperienceType>()

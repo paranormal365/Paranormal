@@ -14,4 +14,11 @@ public enum CaseTimelineEntryType
 
     /// <summary>Historical or contextual research on the location.</summary>
     ResearchNote      = 3,
+
+    /// <summary>
+    /// A device reading taken during an investigation — EMF, temperature, and so on. Distinct from
+    /// an investigator's note because it's a measurement rather than an interpretation, and it's
+    /// the slot imported device data will land in when that arrives.
+    /// </summary>
+    InstrumentReading = 4,
 }

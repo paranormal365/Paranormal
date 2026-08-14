@@ -14,6 +14,9 @@ public record CaseTimelineEntryRecord
     public string? Body { get; init; }
     /// <summary>Who can see this entry — org only, the client too, or public.</summary>
     public CaseTimelineVisibility Visibility { get; init; }
+
+    /// <summary>The investigation this entry was recorded during, or null if it wasn't.</summary>
+    public Guid? InvestigationId { get; init; }
     public IReadOnlyList<Guid> ExperienceTypeIds { get; init; } = [];
     public IReadOnlyList<CaseTimelineFileRecord> Files { get; init; } = [];
     public DateTime DateCreated { get; init; }

@@ -517,7 +517,11 @@ public interface IBenAdminClient
     /// <summary>Marks a pending request as Viewed or UnderReview without accepting or declining.</summary>
     Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default);
     Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default);
-    Task<IReadOnlyList<CaseTimelineEntryRecord>> GetCaseTimelineAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    /// <summary>
+    /// The case timeline. Pass <paramref name="investigationId"/> for the binder view — only the
+    /// entries recorded during that investigation.
+    /// </summary>
+    Task<IReadOnlyList<CaseTimelineEntryRecord>> GetCaseTimelineAsync(Guid orgId, Guid caseId, Guid? investigationId = null, CancellationToken token = default);
     Task<CaseTimelineEntryRecord?> AddCaseTimelineEntryAsync(Guid orgId, Guid caseId, UpsertTimelineEntryRequest request, CancellationToken token = default);
     Task<CaseTimelineEntryRecord?> UpdateCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, UpsertTimelineEntryRequest request, CancellationToken token = default);
     Task<bool> DeleteCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
@@ -1393,7 +1397,8 @@ public sealed record UpsertTimelineEntryRequest(
     string? Title,
     string? Body,
     Ben.Data.Common.Enums.CaseTimelineVisibility Visibility,
-    IList<Guid> ExperienceTypeIds);
+    IList<Guid> ExperienceTypeIds,
+    Guid? InvestigationId = null);
 
 // ── Client Request request records ────────────────────────────────────────────
 public sealed record UpsertClientRequestRequest(
@@ -1442,8 +1447,7 @@ public sealed record ClientCaseOccurrence(
     DateTime? EventDateTime,
     string?   Title,
     string?   Body,
-    /// <summary>True when the org wrote this and shared it, false when the client did.</summary>
-    bool      FromInvestigators,
+    bool      FromInvestigators,   // true when the org wrote this and shared it
     DateTime  DateCreated,
     IReadOnlyList<OccurrenceFileItem> Files);
 

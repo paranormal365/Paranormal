@@ -375,21 +375,37 @@ public sealed class CaseController : BenControllerBase
 
     // ── Timeline entries ──────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The case timeline, optionally narrowed to one investigation.
+    /// </summary>
+    /// <param name="orgId">Owning org.</param>
+    /// <param name="caseId">The case.</param>
+    /// <param name="investigationId">
+    /// When supplied, returns only entries recorded during that investigation — the "binder" view.
+    /// A binder is a filtered timeline rather than a separate store, so entries written in one show
+    /// up on the case timeline automatically and carry the same visibility rules and attachments.
+    /// </param>
+    /// <param name="ct">Cancellation token.</param>
     [HttpGet("{caseId:guid}/timeline")]
     public async Task<ActionResult<IEnumerable<CaseTimelineEntryRecord>>> GetTimeline(
-        Guid orgId, Guid caseId, CancellationToken ct)
+        Guid orgId, Guid caseId, [FromQuery] Guid? investigationId, CancellationToken ct)
     {
         if (!await CanReadAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
         var exists = await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct);
         if (!exists) return NotFound();
 
-        var entries = await db.CaseTimelineEntries
+        var query = db.CaseTimelineEntries
             .AsNoTracking()
             .Include(e => e.AuthorAppUser)
             .Include(e => e.ExperienceTypes)
             .Include(e => e.Files).ThenInclude(f => f.UploadFile)
-            .Where(e => e.CaseId == caseId)
+            .Where(e => e.CaseId == caseId);
+
+        if (investigationId is { } invId)
+            query = query.Where(e => e.InvestigationId == invId);
+
+        var entries = await query
             .OrderBy(e => e.EventDateTime ?? e.DateCreated)
             .ToListAsync(ct);
         return Ok(_mapper.Map<IEnumerable<CaseTimelineEntryRecord>>(entries));
@@ -415,6 +431,7 @@ public sealed class CaseController : BenControllerBase
             Title              = request.Title?.Trim(),
             Body               = request.Body?.Trim(),
             Visibility         = request.Visibility,
+            InvestigationId    = request.InvestigationId,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
@@ -462,6 +479,7 @@ public sealed class CaseController : BenControllerBase
         entry.Title              = request.Title?.Trim();
         entry.Body               = request.Body?.Trim();
         entry.Visibility         = request.Visibility;
+        entry.InvestigationId    = request.InvestigationId;
         entry.DateUpdated        = DateTime.UtcNow;
         entry.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
 
@@ -616,7 +634,8 @@ public sealed record UpsertTimelineEntryRequest(
     string? Title,
     string? Body,
     Ben.Data.Common.Enums.CaseTimelineVisibility Visibility,
-    IList<Guid> ExperienceTypeIds);
+    IList<Guid> ExperienceTypeIds,
+    Guid? InvestigationId = null);
 
 /// <summary>Updates a client-request org application to Viewed or UnderReview.</summary>
 public sealed record UpdateRequestStatusRequest(

@@ -923,9 +923,11 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default)
         => _api.PutAsync<UpdateCaseRequest, CaseRecord>($"/api/organizations/{orgId}/cases/{caseId}", request, token);
 
-    public async Task<IReadOnlyList<CaseTimelineEntryRecord>> GetCaseTimelineAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+    public async Task<IReadOnlyList<CaseTimelineEntryRecord>> GetCaseTimelineAsync(Guid orgId, Guid caseId, Guid? investigationId = null, CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<CaseTimelineEntryRecord>>($"/api/organizations/{orgId}/cases/{caseId}/timeline", token);
+        var url = $"/api/organizations/{orgId}/cases/{caseId}/timeline";
+        if (investigationId is { } id) url += $"?investigationId={id}";
+        var result = await _api.GetAsync<IReadOnlyList<CaseTimelineEntryRecord>>(url, token);
         return result ?? [];
     }
 

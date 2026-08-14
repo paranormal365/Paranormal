@@ -50,11 +50,11 @@ public class CaseControllerTests
                 : []);
         m.Setup(x => x.Map<CaseTimelineEntryRecord>(It.IsAny<object>()))
             .Returns<object>(o => o is CaseTimelineEntry e
-                ? new CaseTimelineEntryRecord { Id = e.Id, CaseId = e.CaseId, AuthorAppUserId = e.AuthorAppUserId, EntryType = e.EntryType, Title = e.Title, Body = e.Body, Visibility = e.Visibility, DateCreated = e.DateCreated }
+                ? new CaseTimelineEntryRecord { Id = e.Id, CaseId = e.CaseId, AuthorAppUserId = e.AuthorAppUserId, EntryType = e.EntryType, Title = e.Title, Body = e.Body, Visibility = e.Visibility, InvestigationId = e.InvestigationId, DateCreated = e.DateCreated }
                 : new CaseTimelineEntryRecord { DateCreated = DateTime.UtcNow });
         m.Setup(x => x.Map<IEnumerable<CaseTimelineEntryRecord>>(It.IsAny<object>()))
             .Returns<object>(o => o is IEnumerable<CaseTimelineEntry> list
-                ? list.Select(e => new CaseTimelineEntryRecord { Id = e.Id, CaseId = e.CaseId, EntryType = e.EntryType, Title = e.Title, DateCreated = e.DateCreated })
+                ? list.Select(e => new CaseTimelineEntryRecord { Id = e.Id, CaseId = e.CaseId, EntryType = e.EntryType, Title = e.Title, InvestigationId = e.InvestigationId, DateCreated = e.DateCreated })
                 : []);
         return m.Object;
     }
@@ -252,7 +252,7 @@ public class CaseControllerTests
         var (factory, orgId, userId) = await SeedAsync();
         var ctrl   = Build(factory, userId);
         var caseId = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
-        var ok = Assert.IsType<OkObjectResult>((await ctrl.GetTimeline(orgId, caseId, default)).Result);
+        var ok = Assert.IsType<OkObjectResult>((await ctrl.GetTimeline(orgId, caseId, null, default)).Result);
         Assert.Empty((IEnumerable<CaseTimelineEntryRecord>)ok.Value!);
     }
 
@@ -640,5 +640,136 @@ public class CaseControllerTests
         var result = await Build(factory, userId).GetClientRequest(orgId, caseId, default);
 
         Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    // ── Investigator binder (C3) ──────────────────────────────────────────────
+
+    private static async Task<Guid> SeedInvestigationAsync(
+        IDbContextFactory<BenDataContext> factory, Guid caseId, Guid userId, string title = "Night visit")
+    {
+        var invId = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.Investigations.Add(new Investigation
+        {
+            Id = invId, CaseId = caseId, Title = title,
+            ScheduledDateTime = DateTime.UtcNow.AddDays(1),
+            Status = InvestigationStatus.Scheduled,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        await db.SaveChangesAsync();
+        return invId;
+    }
+
+    private static async Task<Guid> SeedTimelineEntryAsync(
+        IDbContextFactory<BenDataContext> factory, Guid caseId, Guid userId,
+        string title, Guid? investigationId = null,
+        CaseTimelineEntryType type = CaseTimelineEntryType.InvestigatorNote)
+    {
+        var id = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.CaseTimelineEntries.Add(new CaseTimelineEntry
+        {
+            Id = id, CaseId = caseId, AuthorAppUserId = userId,
+            EntryType = type, Title = title,
+            Visibility = CaseTimelineVisibility.OrgOnly,
+            InvestigationId = investigationId,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    private static async Task<List<CaseTimelineEntryRecord>> TimelineAsync(
+        IDbContextFactory<BenDataContext> factory, Guid userId, Guid orgId, Guid caseId,
+        Guid? investigationId = null)
+    {
+        var result = await Build(factory, userId).GetTimeline(orgId, caseId, investigationId, default);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        return Assert.IsAssignableFrom<IEnumerable<CaseTimelineEntryRecord>>(ok.Value).ToList();
+    }
+
+    [Fact]
+    public async Task Timeline_FilteredByInvestigation_ReturnsOnlyThatBinder()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = (await CreateCaseAsync(factory, orgId, userId));
+        var invA = await SeedInvestigationAsync(factory, caseId, userId, "Visit A");
+        var invB = await SeedInvestigationAsync(factory, caseId, userId, "Visit B");
+        await SeedTimelineEntryAsync(factory, caseId, userId, "From A", invA);
+        await SeedTimelineEntryAsync(factory, caseId, userId, "From B", invB);
+        await SeedTimelineEntryAsync(factory, caseId, userId, "Unattached", null);
+
+        var binder = await TimelineAsync(factory, userId, orgId, caseId, invA);
+
+        Assert.Equal(["From A"], binder.Select(e => e.Title));
+    }
+
+    [Fact]
+    public async Task Timeline_Unfiltered_StillIncludesBinderEntries()
+    {
+        // The reason a binder reuses the timeline rather than a separate store: what an
+        // investigator records during a visit belongs on the case's history automatically.
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await CreateCaseAsync(factory, orgId, userId);
+        var invId = await SeedInvestigationAsync(factory, caseId, userId);
+        await SeedTimelineEntryAsync(factory, caseId, userId, "During the visit", invId);
+        await SeedTimelineEntryAsync(factory, caseId, userId, "Desk research", null);
+
+        var all = await TimelineAsync(factory, userId, orgId, caseId);
+
+        Assert.Contains(all, e => e.Title == "During the visit");
+        Assert.Contains(all, e => e.Title == "Desk research");
+    }
+
+    [Fact]
+    public async Task Timeline_EntryCarriesItsInvestigationId()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await CreateCaseAsync(factory, orgId, userId);
+        var invId = await SeedInvestigationAsync(factory, caseId, userId);
+        await SeedTimelineEntryAsync(factory, caseId, userId, "Tagged", invId);
+        await SeedTimelineEntryAsync(factory, caseId, userId, "Untagged", null);
+
+        var all = await TimelineAsync(factory, userId, orgId, caseId);
+
+        Assert.Equal(invId, Assert.Single(all, e => e.Title == "Tagged").InvestigationId);
+        Assert.Null(Assert.Single(all, e => e.Title == "Untagged").InvestigationId);
+    }
+
+    [Fact]
+    public async Task AddTimelineEntry_CanRecordAnInstrumentReadingAgainstAnInvestigation()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await CreateCaseAsync(factory, orgId, userId);
+        var invId = await SeedInvestigationAsync(factory, caseId, userId);
+
+        var result = await Build(factory, userId).AddTimelineEntry(orgId, caseId,
+            new UpsertTimelineEntryRequest(CaseTimelineEntryType.InstrumentReading,
+                DateTime.UtcNow, "EMF spike", "<p>4.2 mG at the stairwell.</p>",
+                CaseTimelineVisibility.OrgOnly, [], invId), default);
+
+        var created = Assert.IsType<CaseTimelineEntryRecord>(
+            Assert.IsType<CreatedAtActionResult>(result.Result).Value);
+        Assert.Equal(CaseTimelineEntryType.InstrumentReading, created.EntryType);
+        Assert.Equal(invId, created.InvestigationId);
+    }
+
+    /// <summary>Creates a case directly, avoiding the CMS-page side effects of the Create endpoint.</summary>
+    private static async Task<Guid> CreateCaseAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid userId)
+    {
+        var caseId = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.Cases.Add(new Case
+        {
+            Id = caseId, OrganizationId = orgId, Title = "Binder case",
+            CaseYear = DateTime.UtcNow.Year, OrgCaseNumber = 9,
+            StreetAddress1 = "1 Main", City = "Nashville", State = "TN",
+            ZipCode = "37201", Country = "US",
+            DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        });
+        await db.SaveChangesAsync();
+        return caseId;
     }
 }
