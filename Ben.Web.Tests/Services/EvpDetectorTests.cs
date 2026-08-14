@@ -1,4 +1,5 @@
 using Ben.Data.Common.Enums;
+using Ben.Service.Models.Entities;
 using Ben.Data.WebApi.Controllers.Entities;
 using Xunit;
 using Xunit.Abstractions;
@@ -24,6 +25,12 @@ namespace Ben.Web.Tests.Services;
 public class EvpDetectorTests(ITestOutputHelper output)
 {
     private const int SampleRate = 16000;
+
+    // The three presets, as the UI seeds them. Tests exercise the presets rather than raw numbers
+    // so a change to what "Medium" means is caught here.
+    private static readonly EvpDetectionOptions Low    = EvpDetectionOptions.FromSensitivity(EvpSensitivity.Low);
+    private static readonly EvpDetectionOptions Medium = EvpDetectionOptions.FromSensitivity(EvpSensitivity.Medium);
+    private static readonly EvpDetectionOptions High   = EvpDetectionOptions.FromSensitivity(EvpSensitivity.High);
 
     // ── Signal construction ───────────────────────────────────────────────────
 
@@ -130,7 +137,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
     [Fact]
     public void FindsEveryUtterance_WithinATenthOfASecond()
     {
-        var found = EvpDetector.Detect(BuildFixture(), SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate, Medium, 500);
         Dump("Medium", found);
 
         foreach (var expected in UtteranceStarts)
@@ -146,7 +153,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
     public void PadsEachCandidateWithContextEitherSide()
     {
         // Trimmed exactly to the gate, a candidate plays back as a fragment starting mid-sound.
-        var found = EvpDetector.Detect(BuildFixture(), SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate, Medium, 500);
 
         foreach (var expected in UtteranceStarts)
         {
@@ -168,7 +175,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
         AddUtterance(buffer, 0.05, 0.4, 0.050);
         AddUtterance(buffer, 2.40, 0.5, 0.050);
 
-        var found = EvpDetector.Detect(buffer, SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(buffer, SampleRate, Medium, 500);
         Dump("edges", found);
 
         Assert.NotEmpty(found);
@@ -184,7 +191,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
     {
         // The envelope dips to silence four times a second. Without gap merging each utterance
         // would arrive as a handful of 60 ms slivers, which is unreviewable.
-        var found = EvpDetector.Detect(BuildFixture(), SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate, Medium, 500);
 
         foreach (var expected in UtteranceStarts)
             Assert.Single(found, c => Covers(c, expected + 0.05));
@@ -193,7 +200,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
     [Fact]
     public void CoversTheWholeUtterance_NotJustItsOnset()
     {
-        var found = EvpDetector.Detect(BuildFixture(), SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate, Medium, 500);
 
         // The 13.0s utterance runs 1.2s; the *detected* portion should span most of it so listening
         // back plays the phrase rather than its first syllable. Measured inside the padding, or the
@@ -209,7 +216,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
         // 60 Hz at more than twice the utterances' amplitude. It is far louder than anything else
         // in the fixture, and it must produce nothing: it's below the band, and it's continuous, so
         // the adaptive floor rises to meet it.
-        var found = EvpDetector.Detect(BuildFixture(), SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate, Medium, 500);
 
         var duringHum = found.Where(c => c.StartSeconds >= 16.2 && c.EndSeconds <= 19.8).ToList();
         Dump("during hum", duringHum);
@@ -221,7 +228,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
     {
         // The 10 ms clap never reaches scoring — it's dropped by the minimum-length rule. Asserted
         // explicitly so this stays a deliberate outcome rather than a silent side effect.
-        var found = EvpDetector.Detect(BuildFixture(), SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate, Medium, 500);
         Assert.DoesNotContain(found, c => Covers(c, 9.0));
     }
 
@@ -246,7 +253,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
             buffer[start + i] += (float)((lowFreq * 0.7 + (rng.NextDouble() * 2 - 1) * 0.3) * 0.30 * decay);
         }
 
-        var found = EvpDetector.Detect(buffer, SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(buffer, SampleRate, Medium, 500);
         Dump("door slam vs utterance", found);
 
         var utterance = found.Single(c => Covers(c, 5.05));
@@ -261,7 +268,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
     {
         // Three real events in 30 seconds. Anything above a handful means the floor tracking is
         // wrong and every review queue would be mostly noise.
-        var found = EvpDetector.Detect(BuildFixture(), SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate, Medium, 500);
         Assert.InRange(found.Count, 3, 6);
     }
 
@@ -271,9 +278,9 @@ public class EvpDetectorTests(ITestOutputHelper output)
     public void SensitivityOrdersTheQueueLength()
     {
         var fixture = BuildFixture();
-        var low    = EvpDetector.Detect(fixture, SampleRate, EvpSensitivity.Low,    500);
-        var medium = EvpDetector.Detect(fixture, SampleRate, EvpSensitivity.Medium, 500);
-        var high   = EvpDetector.Detect(fixture, SampleRate, EvpSensitivity.High,   500);
+        var low    = EvpDetector.Detect(fixture, SampleRate, Low, 500);
+        var medium = EvpDetector.Detect(fixture, SampleRate, Medium, 500);
+        var high   = EvpDetector.Detect(fixture, SampleRate, High, 500);
 
         output.WriteLine($"low={low.Count} medium={medium.Count} high={high.Count}");
         Assert.True(low.Count <= medium.Count, "Low proposed more than Medium");
@@ -283,7 +290,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
     [Fact]
     public void HighSensitivityStillFindsEveryUtterance()
     {
-        var found = EvpDetector.Detect(BuildFixture(), SampleRate, EvpSensitivity.High, 500);
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate, High, 500);
         foreach (var expected in UtteranceStarts)
             Assert.Contains(found, c => Covers(c, expected + 0.05));
     }
@@ -296,7 +303,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
         var buffer = new float[30 * SampleRate];
         AddRoomTone(buffer, 0.004);
 
-        var found = EvpDetector.Detect(buffer, SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(buffer, SampleRate, Medium, 500);
         Dump("room tone only", found);
         Assert.Empty(found);
     }
@@ -304,7 +311,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
     [Fact]
     public void FindsNothingInDigitalSilence()
     {
-        var found = EvpDetector.Detect(new float[10 * SampleRate], SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(new float[10 * SampleRate], SampleRate, Medium, 500);
         Assert.Empty(found);
     }
 
@@ -317,7 +324,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
         AddRoomTone(buffer, 0.040);                       // ≈ 20 dB louder than the standard fixture
         AddUtterance(buffer, 10.0, 0.8, 0.300);           // scaled up to match
 
-        var found = EvpDetector.Detect(buffer, SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(buffer, SampleRate, Medium, 500);
         Dump("loud room", found);
         Assert.Contains(found, c => Covers(c, 10.05));
     }
@@ -335,7 +342,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
         AddRoomTone(buffer, 0.010);
         AddUtterance(buffer, 10.0, 0.7, 0.025);
 
-        var found = EvpDetector.Detect(buffer, SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(buffer, SampleRate, Medium, 500);
         Dump("faint utterance", found);
         Assert.Contains(found, c => Covers(c, 10.05));
     }
@@ -356,7 +363,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
             AddUtterance(buffer, t, 0.9, 0.150);          // the investigator, loud and near-continuous
         AddUtterance(buffer, 10.0, 0.5, 0.030);           // the faint event, buried inside it
 
-        var found = EvpDetector.Detect(buffer, SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(buffer, SampleRate, Medium, 500);
         Dump("during speech", found);
 
         Assert.Contains(found, c => c.EndSeconds >= 10.0 && c.StartSeconds <= 10.5);
@@ -382,7 +389,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
             buffer[start + i] += (float)((rng.NextDouble() * 2 - 1) * 0.05 * fade);
         }
 
-        var found = EvpDetector.Detect(buffer, SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(buffer, SampleRate, Medium, 500);
         Dump("broadband burst", found);
         Assert.Contains(found, c => Covers(c, 7.3));
     }
@@ -396,7 +403,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
         var buffer = new float[60 * SampleRate];
         AddRoomTone(buffer, 0.080, seed: 777);
 
-        var found = EvpDetector.Detect(buffer, SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(buffer, SampleRate, Medium, 500);
         output.WriteLine($"noisy 60s: {found.Count} candidate(s)");
         Assert.True(found.Count <= 5, $"proposed {found.Count} candidates on pure noise");
     }
@@ -414,7 +421,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
             buffer[i] += (float)((rng.NextDouble() * 2 - 1) * 0.040);
         AddUtterance(buffer, 30.0, 0.8, 0.200);           // an event inside the louder half
 
-        var found = EvpDetector.Detect(buffer, SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(buffer, SampleRate, Medium, 500);
         Dump("step change", found);
 
         Assert.Contains(found, c => Covers(c, 30.05));
@@ -435,7 +442,7 @@ public class EvpDetectorTests(ITestOutputHelper output)
         var wav = ToWav16BitMono(BuildFixture(), SampleRate);
         using var stream = new MemoryStream(wav);
 
-        var found = EvpDetector.Detect(stream, "audio/wav", EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(stream, "audio/wav", Medium, 500);
         Dump("via WAV", found);
 
         foreach (var expected in UtteranceStarts)
@@ -467,15 +474,15 @@ public class EvpDetectorTests(ITestOutputHelper output)
     public void IsDeterministic()
     {
         var fixture = BuildFixture();
-        var first  = EvpDetector.Detect(fixture, SampleRate, EvpSensitivity.Medium, 500);
-        var second = EvpDetector.Detect(fixture, SampleRate, EvpSensitivity.Medium, 500);
+        var first  = EvpDetector.Detect(fixture, SampleRate, Medium, 500);
+        var second = EvpDetector.Detect(fixture, SampleRate, Medium, 500);
         Assert.Equal(first, second);
     }
 
     [Fact]
     public void ReturnsCandidatesInPlaybackOrder()
     {
-        var found = EvpDetector.Detect(BuildFixture(), SampleRate, EvpSensitivity.High, 500);
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate, High, 500);
         Assert.Equal([.. found.OrderBy(c => c.StartSeconds)], found);
     }
 
@@ -483,8 +490,8 @@ public class EvpDetectorTests(ITestOutputHelper output)
     public void RespectsTheResultCap_KeepingTheHighestScoring()
     {
         var fixture = BuildFixture();
-        var all     = EvpDetector.Detect(fixture, SampleRate, EvpSensitivity.High, 500);
-        var capped  = EvpDetector.Detect(fixture, SampleRate, EvpSensitivity.High, 2);
+        var all     = EvpDetector.Detect(fixture, SampleRate, High, 500);
+        var capped  = EvpDetector.Detect(fixture, SampleRate, High, 2);
 
         Assert.Equal(2, capped.Count);
         var kept    = all.OrderByDescending(c => c.Score).Take(2).Select(c => c.StartSeconds).ToHashSet();
@@ -499,21 +506,21 @@ public class EvpDetectorTests(ITestOutputHelper output)
         AddRoomTone(buffer, 0.002);
         AddUtterance(buffer, 0.0, 0.6, 0.050);
 
-        var found = EvpDetector.Detect(buffer, SampleRate, EvpSensitivity.Medium, 500);
+        var found = EvpDetector.Detect(buffer, SampleRate, Medium, 500);
         Assert.All(found, c => Assert.True(c.StartSeconds >= 0, $"start was {c.StartSeconds}"));
     }
 
     [Fact]
     public void HandlesInputShorterThanOneFrame()
     {
-        Assert.Empty(EvpDetector.Detect(new float[10], SampleRate, EvpSensitivity.Medium, 500));
-        Assert.Empty(EvpDetector.Detect([], SampleRate, EvpSensitivity.Medium, 500));
+        Assert.Empty(EvpDetector.Detect(new float[10], SampleRate, Medium, 500));
+        Assert.Empty(EvpDetector.Detect([], SampleRate, Medium, 500));
     }
 
     [Fact]
     public void EveryScoreIsWithinRange()
     {
-        var found = EvpDetector.Detect(BuildFixture(), SampleRate, EvpSensitivity.High, 500);
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate, High, 500);
         Assert.All(found, c => Assert.InRange(c.Score, 0f, 100f));
     }
 }

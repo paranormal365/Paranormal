@@ -1382,8 +1382,8 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<AudioMarkerRecord?> ReviewAudioMarkerAsync(Guid fileId, Guid markerId, ReviewAudioMarkerRequest request, CancellationToken token = default)
         => _api.ReviewAudioMarkerAsync(fileId, markerId, request, token);
 
-    public Task<IReadOnlyList<AudioMarkerRecord>> ScanAudioForEvpAsync(Guid fileId, EvpSensitivity sensitivity, CancellationToken token = default)
-        => _api.ScanAudioForEvpAsync(fileId, sensitivity, token);
+    public Task<IReadOnlyList<AudioMarkerRecord>> ScanAudioForEvpAsync(Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default)
+        => _api.ScanAudioForEvpAsync(fileId, sensitivity, options, token);
 
     // ── Audio Clip ────────────────────────────────────────────────────────────
 

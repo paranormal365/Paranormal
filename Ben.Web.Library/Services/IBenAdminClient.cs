@@ -804,8 +804,11 @@ public interface IBenAdminClient
     /// Runs EVP detection over the stored audio and replaces this file's pending candidates with
     /// the results, skipping anything overlapping a marker already confirmed or dismissed.
     /// </summary>
+    /// <param name="options">
+    /// Per-scan overrides. Null uses <paramref name="sensitivity"/>'s preset unchanged.
+    /// </param>
     Task<IReadOnlyList<AudioMarkerRecord>> ScanAudioForEvpAsync(
-        Guid fileId, EvpSensitivity sensitivity, CancellationToken token = default);
+        Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default);
 
     // ── Audio Clip ─────────────────────────────────────────────────
 

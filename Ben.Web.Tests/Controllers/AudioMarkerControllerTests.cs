@@ -832,7 +832,7 @@ public class AudioMarkerControllerTests
         var factory = CreateFactory();
         var (fileId, ownerId) = await SeedWavFileAsync(factory);
 
-        var result = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+        var result = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var created = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(ok.Value).ToList();
@@ -857,14 +857,14 @@ public class AudioMarkerControllerTests
         var factory = CreateFactory();
         var (fileId, ownerId) = await SeedWavFileAsync(factory);
 
-        var first = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+        var first = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default);
         var firstList = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(
             Assert.IsType<OkObjectResult>(first.Result).Value).ToList();
 
         await Build(factory, ownerId).Review(fileId, firstList[0].Id,
             new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed), default);
 
-        var second = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+        var second = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default);
         var secondList = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(
             Assert.IsType<OkObjectResult>(second.Result).Value).ToList();
 
@@ -882,14 +882,14 @@ public class AudioMarkerControllerTests
         var factory = CreateFactory();
         var (fileId, ownerId) = await SeedWavFileAsync(factory);
 
-        var first = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+        var first = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default);
         var firstList = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(
             Assert.IsType<OkObjectResult>(first.Result).Value).ToList();
 
         await Build(factory, ownerId).Review(fileId, firstList[0].Id,
             new ReviewAudioMarkerRequest(EvpReviewStatus.Confirmed, "A voice"), default);
 
-        var second = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+        var second = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default);
         var secondList = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(
             Assert.IsType<OkObjectResult>(second.Result).Value).ToList();
 
@@ -907,7 +907,7 @@ public class AudioMarkerControllerTests
         var (fileId, ownerId) = await SeedWavFileAsync(factory);
         await SeedMarkerAsync(factory, fileId, timeSeconds: 5.2, label: "Heard it", createdBy: ownerId);
 
-        var result = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+        var result = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default);
         var created = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(
             Assert.IsType<OkObjectResult>(result.Result).Value).ToList();
 
@@ -921,8 +921,8 @@ public class AudioMarkerControllerTests
         var factory = CreateFactory();
         var (fileId, ownerId) = await SeedWavFileAsync(factory);
 
-        await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
-        await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+        await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default);
+        await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default);
 
         // Two scans, not four candidates.
         Assert.Equal(2, (await MarkersAsync(factory, fileId)).Count);
@@ -934,7 +934,7 @@ public class AudioMarkerControllerTests
         var factory = CreateFactory();
         var (fileId, ownerId) = await SeedWavFileAsync(factory, contentType: "image/png");
 
-        var result = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+        var result = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
@@ -958,7 +958,7 @@ public class AudioMarkerControllerTests
             await db.SaveChangesAsync();
         }
 
-        var result = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+        var result = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
@@ -969,7 +969,7 @@ public class AudioMarkerControllerTests
         var factory = CreateFactory();
         var (fileId, _) = await SeedWavFileAsync(factory);
 
-        var result = await Build(factory, Guid.NewGuid()).Scan(fileId, EvpSensitivity.Medium, default);
+        var result = await Build(factory, Guid.NewGuid()).Scan(fileId, EvpSensitivity.Medium, null, default);
 
         Assert.IsType<ForbidResult>(result.Result);
         Assert.Empty(await MarkersAsync(factory, fileId));
@@ -979,7 +979,7 @@ public class AudioMarkerControllerTests
     public async Task Scan_ReturnsNotFound_ForAnUnknownFile()
     {
         var result = await Build(CreateFactory(), Guid.NewGuid())
-            .Scan(Guid.NewGuid(), EvpSensitivity.Medium, default);
+            .Scan(Guid.NewGuid(), EvpSensitivity.Medium, null, default);
 
         Assert.IsType<NotFoundObjectResult>(result.Result);
     }
@@ -990,7 +990,7 @@ public class AudioMarkerControllerTests
         var factory = CreateFactory();
         var (fileId, ownerId) = await SeedWavFileAsync(factory);
 
-        var result = await Build(factory, ownerId).Scan(fileId, (EvpSensitivity)99, default);
+        var result = await Build(factory, ownerId).Scan(fileId, (EvpSensitivity)99, null, default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
@@ -999,7 +999,7 @@ public class AudioMarkerControllerTests
     public async Task Scan_ReturnsUnauthorized_WithoutAUserClaim()
     {
         var result = await Build(CreateFactory(), userId: null)
-            .Scan(Guid.NewGuid(), EvpSensitivity.Medium, default);
+            .Scan(Guid.NewGuid(), EvpSensitivity.Medium, null, default);
 
         Assert.IsType<UnauthorizedResult>(result.Result);
     }

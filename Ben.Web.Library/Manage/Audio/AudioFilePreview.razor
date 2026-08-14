@@ -324,8 +324,10 @@ else
                         @* ── Detector ────────────────────────────────────────── *@
                         <div class="mt-2 pt-2 border-top d-flex align-items-center gap-2 flex-wrap">
                             <span class="small fw-semibold">Detect</span>
+                            @* Nothing scans on its own — a scan only happens when this is clicked. *@
                             <TelerikDropDownList Data="@_sensitivityOptions"
-                                                 @bind-Value="_scanSensitivity"
+                                                 Value="@_scanSensitivity"
+                                                 ValueChanged="@((EvpSensitivity s) => ApplySensitivityPreset(s))"
                                                  Width="110px"
                                                  Enabled="@(!_scanning)" />
                             <TelerikButton Size="sm"
@@ -333,6 +335,11 @@ else
                                            Enabled="@(!_scanning)"
                                            OnClick="RunScanAsync">
                                 @(_scanning ? "Scanning…" : "Scan for EVP")
+                            </TelerikButton>
+                            <TelerikButton Size="sm"
+                                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                           OnClick="@(() => _showScanTuning = !_showScanTuning)">
+                                @(_showScanTuning ? "Hide settings" : "Fine-tune")
                             </TelerikButton>
                             @if (_scanMessage is not null)
                             {
@@ -346,15 +353,131 @@ else
                             the score is how much a sound stood out, not how likely it is to be a voice.
                         </div>
 
+                        @if (_showScanTuning)
+                        {
+                            @* The preset seeds these; from here they're yours. Every recording is
+                               different, and a threshold that suits a quiet bedroom floods the queue
+                               in a room with a furnace. *@
+                            <div class="mt-2 p-2 rounded border">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="small fw-semibold">Detector settings</span>
+                                    <TelerikButton Size="sm" FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                   OnClick="@(() => ApplySensitivityPreset(_scanSensitivity))">
+                                        Reset to @_scanSensitivity
+                                    </TelerikButton>
+                                </div>
+
+                                <div class="mb-2">
+                                    <label class="small d-block">
+                                        Tolerance — how far above the background a sound must rise:
+                                        <strong>@_scanOptions.ThresholdDb.ToString("0.0") dB</strong>
+                                    </label>
+                                    <input type="range" class="form-range"
+                                           min="@EvpDetectionOptions.ThresholdRange.Min"
+                                           max="@EvpDetectionOptions.ThresholdRange.Max"
+                                           step="0.5"
+                                           value="@_scanOptions.ThresholdDb"
+                                           @oninput="@(e => SetThreshold(e.Value))" />
+                                    <div class="d-flex justify-content-between small text-secondary">
+                                        <span>lower — finds more, more to review</span>
+                                        <span>higher — only the obvious</span>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex gap-3 flex-wrap">
+                                    <label class="small">
+                                        Shortest sound (s)
+                                        <input type="number" class="form-control form-control-sm" style="width:90px;"
+                                               min="@EvpDetectionOptions.MinDurationRange.Min"
+                                               max="@EvpDetectionOptions.MinDurationRange.Max"
+                                               step="0.05"
+                                               value="@_scanOptions.MinDurationSeconds"
+                                               @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MinDurationSeconds = v }))" />
+                                    </label>
+                                    <label class="small">
+                                        Join sounds within (s)
+                                        <input type="number" class="form-control form-control-sm" style="width:90px;"
+                                               min="@EvpDetectionOptions.MergeGapRange.Min"
+                                               max="@EvpDetectionOptions.MergeGapRange.Max"
+                                               step="0.05"
+                                               value="@_scanOptions.MergeGapSeconds"
+                                               @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MergeGapSeconds = v }))" />
+                                    </label>
+                                    <label class="small">
+                                        Context either side (s)
+                                        <input type="number" class="form-control form-control-sm" style="width:90px;"
+                                               min="@EvpDetectionOptions.ContextPadRange.Min"
+                                               max="@EvpDetectionOptions.ContextPadRange.Max"
+                                               step="0.1"
+                                               value="@_scanOptions.ContextPadSeconds"
+                                               @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { ContextPadSeconds = v }))" />
+                                    </label>
+                                    <label class="small">
+                                        Longest candidate (s)
+                                        <input type="number" class="form-control form-control-sm" style="width:90px;"
+                                               min="@EvpDetectionOptions.MaxEventRange.Min"
+                                               max="@EvpDetectionOptions.MaxEventRange.Max"
+                                               step="0.5"
+                                               value="@_scanOptions.MaxEventSeconds"
+                                               @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MaxEventSeconds = v }))" />
+                                    </label>
+                                </div>
+
+                                @if (_scanOptions.Validate() is { } settingsProblem)
+                                {
+                                    <div class="text-danger small mt-2">@settingsProblem</div>
+                                }
+                            </div>
+                        }
+
                         @if (PendingCandidates.Any())
                         {
-                            @* Candidates exist in the database the moment a scan runs, so say so
-                               here rather than leaving amber regions on the waveform with nothing
-                               in the panel explaining them. Reviewing them lands in phase E3. *@
-                            <div class="mt-2 pt-2 border-top text-secondary small">
-                                <span class="badge" style="background:rgba(245,158,11,0.75);">@PendingCandidates.Count()</span>
-                                detected @(PendingCandidates.Count() == 1 ? "candidate" : "candidates")
-                                awaiting review (shown in amber on the waveform).
+                            <div class="mt-2 pt-2 border-top">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <span class="badge" style="background:rgba(245,158,11,0.75);">@PendingCandidates.Count()</span>
+                                    <strong class="small">
+                                        @(PendingCandidates.Count() == 1 ? "candidate" : "candidates") to review
+                                    </strong>
+                                    <span class="ms-auto d-flex align-items-center gap-1 small text-secondary">
+                                        Sort
+                                        <TelerikButton Size="sm"
+                                                       FillMode="@(_candidatesByScore ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
+                                                       OnClick="@(() => _candidatesByScore = true)">Score</TelerikButton>
+                                        <TelerikButton Size="sm"
+                                                       FillMode="@(!_candidatesByScore ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
+                                                       OnClick="@(() => _candidatesByScore = false)">Time</TelerikButton>
+                                    </span>
+                                </div>
+
+                                <div style="max-height:180px; overflow-y:auto;">
+                                    @foreach (var candidate in SortedCandidates)
+                                    {
+                                        var c = candidate;
+                                        <div class="d-flex align-items-center gap-2 mb-1 p-1 rounded"
+                                             style="background:var(--kendo-color-surface,#f5f5f5);">
+                                            <span class="badge" style="background:rgba(245,158,11,0.75);"
+                                                  title="How much this stood out from the background — not a likelihood of speech">
+                                                @c.DetectionScore?.ToString("0")
+                                            </span>
+                                            <span class="small">@FormatMarkerRange(c)</span>
+                                            <span class="ms-auto d-flex gap-1">
+                                                <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Play"
+                                                               Title="Play this stretch with its surrounding context"
+                                                               OnClick="@(() => PlayCandidateAsync(c))" />
+                                                <TelerikButton Size="sm" FillMode="flat"
+                                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                                               Icon="@SvgIcon.Check"
+                                                               Title="Keep as an EVP marker"
+                                                               Enabled="@(_reviewingCandidateId != c.Id)"
+                                                               OnClick="@(() => OpenConfirmCandidateDialog(c))" />
+                                                <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.X"
+                                                               Title="Not an EVP — won't be proposed again"
+                                                               Enabled="@(_reviewingCandidateId != c.Id)"
+                                                               OnClick="@(() => DismissCandidateAsync(c))" />
+                                            </span>
+                                        </div>
+                                    }
+                                </div>
                             </div>
                         }
                     </div>
@@ -560,6 +683,54 @@ else
         <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                        Enabled="@(!string.IsNullOrWhiteSpace(_markerLabel))"
                        OnClick="SaveMarkerAsync">Save</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── Confirm a detected candidate ────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showConfirmCandidateDialog" Title="Keep this as an EVP" Width="420px">
+    <DialogContent>
+        @if (_confirmingCandidate is { } cc)
+        {
+            <div class="mb-2 small text-secondary">
+                @FormatMarkerRange(cc)
+                · detector score @cc.DetectionScore?.ToString("0")
+            </div>
+            <div class="mb-2">
+                <label class="form-label fw-semibold">What did you hear?</label>
+                @* A plain input bound on oninput, not a TelerikTextBox. Telerik's textbox only
+                   pushes its value on change/blur, which deadlocked this dialog: the Keep button
+                   is gated on the label, so the only thing left to click was disabled, focus never
+                   left the field, and the label never bound. *@
+                <input type="text" class="form-control form-control-sm"
+                       placeholder="e.g. Whispered name?"
+                       value="@_confirmLabel"
+                       @oninput="@(e => _confirmLabel = e.Value?.ToString() ?? string.Empty)" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label fw-semibold">Confidence</label>
+                <TelerikDropDownList Data="@_confidenceOptions" @bind-Value="_confirmConfidence" Width="100%" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label fw-semibold">Note</label>
+                <TelerikTextArea @bind-Value="@_confirmNote" Rows="2" Width="100%" />
+            </div>
+            @if (_confirmError is not null)
+            {
+                <div class="text-danger small">@_confirmError</div>
+            }
+            <div class="small text-secondary">
+                The detector's score and bounds are kept alongside your label.
+            </div>
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="@(() => _showConfirmCandidateDialog = false)">Cancel</TelerikButton>
+        @* Deliberately always enabled. Gating this on the label deadlocked the dialog: the field
+           only pushed its value on blur, and the one thing left to click was the disabled button,
+           so focus never left and the label never bound. Validation lives in the handler instead. *@
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       OnClick="ConfirmCandidateAsync">Keep it</TelerikButton>
     </DialogButtons>
 </TelerikDialog>
 
@@ -1342,20 +1513,145 @@ else
         EvpSensitivity.Low, EvpSensitivity.Medium, EvpSensitivity.High,
     ];
 
-    private EvpSensitivity _scanSensitivity = EvpSensitivity.Medium;
-    private bool           _scanning;
-    private string?        _scanMessage;
+    private EvpSensitivity      _scanSensitivity = EvpSensitivity.Medium;
+    private EvpDetectionOptions _scanOptions     = EvpDetectionOptions.FromSensitivity(EvpSensitivity.Medium);
+    private bool                _showScanTuning;
+    private bool                _scanning;
+    private string?             _scanMessage;
+
+    /// <summary>
+    /// Picking a preset reseeds every setting. That's the intent: the presets are starting points
+    /// you then adjust from, not a separate mode — so switching preset after fine-tuning gives you
+    /// a clean base again rather than a mix of the two.
+    /// </summary>
+    private void ApplySensitivityPreset(EvpSensitivity sensitivity)
+    {
+        _scanSensitivity = sensitivity;
+        _scanOptions     = EvpDetectionOptions.FromSensitivity(sensitivity);
+    }
+
+    private void SetThreshold(object? raw) =>
+        SetOption(raw, v => _scanOptions = _scanOptions with { ThresholdDb = v });
+
+    /// <summary>
+    /// Applies a numeric input, ignoring values mid-edit. A partially typed number ("0." or "")
+    /// parses to nothing useful, and writing it back would fight the user's cursor.
+    /// </summary>
+    private static void SetOption(object? raw, Action<double> apply)
+    {
+        if (double.TryParse(raw?.ToString(), out var value)) apply(value);
+    }
+
+    // ── Candidate review ──────────────────────────────────────────────────────
+
+    private bool                _candidatesByScore = true;
+    private Guid?               _reviewingCandidateId;
+    private bool                _showConfirmCandidateDialog;
+    private AudioMarkerRecord?  _confirmingCandidate;
+    private string              _confirmLabel      = string.Empty;
+    private EvpConfidenceLevel  _confirmConfidence = EvpConfidenceLevel.Possible;
+    private string              _confirmNote       = string.Empty;
+    private string?             _confirmError;
+
+    /// <summary>
+    /// Score order first by default — the strongest signals are the best use of the first few
+    /// minutes of review. Playback order is a click away for working straight through a recording.
+    /// </summary>
+    private IEnumerable<AudioMarkerRecord> SortedCandidates =>
+        _candidatesByScore
+            ? PendingCandidates.OrderByDescending(c => c.DetectionScore ?? 0).ThenBy(c => c.TimeSeconds)
+            : PendingCandidates;
+
+    /// <summary>
+    /// Plays just this candidate. The stored span already includes the detector's context padding,
+    /// so this plays the lead-in and tail too rather than starting mid-sound.
+    /// </summary>
+    private async Task PlayCandidateAsync(AudioMarkerRecord candidate)
+    {
+        if (_modalPlayer is null) return;
+        await _modalPlayer.PlayRegionAsync($"marker-{candidate.Id}");
+    }
+
+    private void OpenConfirmCandidateDialog(AudioMarkerRecord candidate)
+    {
+        _confirmingCandidate = candidate;
+        _confirmLabel        = string.Empty;   // never pre-fill "Detected signal" as a finding
+        _confirmConfidence   = EvpConfidenceLevel.Possible;
+        _confirmNote         = string.Empty;
+        _confirmError        = null;
+        _showConfirmCandidateDialog = true;
+    }
+
+    private async Task ConfirmCandidateAsync()
+    {
+        if (_confirmingCandidate is not { } candidate) return;
+        if (string.IsNullOrWhiteSpace(_confirmLabel))
+        {
+            _confirmError = "Say what you heard before keeping it — a marker with no description isn't a finding.";
+            return;
+        }
+
+        _confirmError = null;
+        _showConfirmCandidateDialog = false;
+        await ReviewCandidateAsync(candidate, new ReviewAudioMarkerRequest(
+            EvpReviewStatus.Confirmed,
+            _confirmLabel.Trim(),
+            _confirmConfidence,
+            string.IsNullOrWhiteSpace(_confirmNote) ? null : _confirmNote.Trim()));
+    }
+
+    private Task DismissCandidateAsync(AudioMarkerRecord candidate) =>
+        ReviewCandidateAsync(candidate, new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed));
+
+    /// <summary>
+    /// Sends a decision and re-draws the affected marker. Only that one region is touched — a full
+    /// reload would restart the waveform's region layer mid-review for no reason.
+    /// </summary>
+    private async Task ReviewCandidateAsync(AudioMarkerRecord candidate, ReviewAudioMarkerRequest request)
+    {
+        _reviewingCandidateId = candidate.Id;
+        try
+        {
+            var updated = await AdminClient.ReviewAudioMarkerAsync(FileId, candidate.Id, request);
+            if (updated is null) return;
+
+            _markers = [.. _markers.Where(m => m.Id != updated.Id), updated];
+
+            if (_modalPlayer is not null)
+            {
+                var id = $"marker-{updated.Id}";
+                await _modalPlayer.RemoveRegionAsync(id);
+                _programmaticRegionIds.Remove(id);
+                // Re-adds in confirmed colours, or draws nothing at all when dismissed.
+                await AddMarkerRegionAsync(updated);
+            }
+        }
+        catch { /* leave the candidate in the queue rather than pretending it was decided */ }
+        finally
+        {
+            _reviewingCandidateId = null;
+            _confirmingCandidate  = null;
+            StateHasChanged();
+        }
+    }
 
     private async Task RunScanAsync()
     {
         if (_scanning) return;
+
+        if (_scanOptions.Validate() is { } problem)
+        {
+            _scanMessage = problem;
+            return;
+        }
+
         _scanning    = true;
         _scanMessage = null;
         StateHasChanged();
 
         try
         {
-            var candidates = await AdminClient.ScanAudioForEvpAsync(FileId, _scanSensitivity);
+            var candidates = await AdminClient.ScanAudioForEvpAsync(FileId, _scanSensitivity, _scanOptions);
 
             // Reload everything rather than merging the response in: the scan replaces the previous
             // pending set server-side, so the local list is stale in ways the response alone

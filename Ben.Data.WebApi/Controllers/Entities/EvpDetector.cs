@@ -1,4 +1,5 @@
 using Ben.Data.Common.Enums;
+using Ben.Service.Models.Entities;
 using NAudio.Wave;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
@@ -62,45 +63,21 @@ internal static class EvpDetector
     // dozen fragments.
     private const double ReleaseHysteresisDb = 2.0;
 
-    // ── Event shaping ─────────────────────────────────────────────────────────
-    private const double MergeGapSeconds = 0.35;   // syllable gaps shouldn't split a phrase
-    private const double MinEventSeconds = 0.15;   // shorter than this is a click, not an utterance
-
-    /// <summary>
-    /// Context added either side of the detected energy. A span trimmed exactly to where the gate
-    /// opened and closed plays back as a fragment starting mid-sound, which is close to useless for
-    /// deciding what you're hearing — a reviewer needs a moment of the room before and after to
-    /// judge it against. Wide enough to give that, narrow enough that neighbouring events don't
-    /// dissolve into each other.
-    /// </summary>
-    private const double ContextPadSeconds = 0.40;
-
-    /// <summary>
-    /// Merging stops here even if the gate is still open. Continuous talking would otherwise merge
-    /// into one enormous candidate, and "listen to these ten seconds" is not a reviewable finding —
-    /// several bounded candidates at least give a reviewer somewhere to start.
-    /// </summary>
-    private const double MaxEventSeconds = 5.0;
+    // Event shaping is caller-tunable — see EvpDetectionOptions, which documents each value and
+    // the range it's clamped to. Recordings differ too much for one fixed set to serve them all.
 
     /// <summary>Quietest level considered; below this a frame is treated as digital silence.</summary>
     private const double SilenceFloorDb = -120.0;
-
-    private static double OnsetDeltaDb(EvpSensitivity s) => s switch
-    {
-        EvpSensitivity.High => 4.0,
-        EvpSensitivity.Low  => 9.0,
-        _                   => 6.0,
-    };
 
     /// <summary>
     /// Reads an audio stream (WAV or MP3, matching <see cref="AudioEditor"/>) and detects
     /// candidates in it.
     /// </summary>
     public static IReadOnlyList<EvpCandidate> Detect(
-        Stream sourceStream, string sourceContentType, EvpSensitivity sensitivity, int maxResults)
+        Stream sourceStream, string sourceContentType, EvpDetectionOptions options, int maxResults)
     {
         var (mono, sampleRate) = ReadMono(sourceStream, sourceContentType);
-        return Detect(mono, sampleRate, sensitivity, maxResults);
+        return Detect(mono, sampleRate, options, maxResults);
     }
 
     /// <summary>
@@ -109,10 +86,10 @@ internal static class EvpDetector
     /// </summary>
     /// <param name="mono">Mono samples in [-1, 1].</param>
     /// <param name="sampleRate">Samples per second.</param>
-    /// <param name="sensitivity">How far above the floor counts as an event.</param>
+    /// <param name="options">Tunable thresholds — see <see cref="EvpDetectionOptions"/>.</param>
     /// <param name="maxResults">Keep at most this many, highest-scoring first.</param>
     public static IReadOnlyList<EvpCandidate> Detect(
-        float[] mono, int sampleRate, EvpSensitivity sensitivity, int maxResults)
+        float[] mono, int sampleRate, EvpDetectionOptions options, int maxResults)
     {
         if (mono.Length == 0 || sampleRate <= 0 || maxResults <= 0) return [];
 
@@ -122,18 +99,18 @@ internal static class EvpDetector
         if (bandDb.Length == 0) return [];
 
         var floorDb = SlidingFloor(bandDb, sampleRate);
-        var runs    = GateRuns(bandDb, floorDb, OnsetDeltaDb(sensitivity));
-        var events  = ShapeEvents(runs, bandDb.Length, sampleRate);
+        var runs    = GateRuns(bandDb, floorDb, options.ThresholdDb);
+        var events  = ShapeEvents(runs, sampleRate, options);
 
         var totalSeconds = mono.Length / (double)sampleRate;
 
         // Length rules are applied to the detected energy, before padding — otherwise the context
         // itself would push a 60 ms click past the minimum and back into the queue.
         var scored = events
-            .Where(e => FrameToSeconds(e.End, sampleRate) - FrameToSeconds(e.Start, sampleRate) >= MinEventSeconds)
+            .Where(e => FrameToSeconds(e.End, sampleRate) - FrameToSeconds(e.Start, sampleRate) >= options.MinDurationSeconds)
             .Select(e => new EvpCandidate(
-                Math.Max(0,            FrameToSeconds(e.Start, sampleRate) - ContextPadSeconds),
-                Math.Min(totalSeconds, FrameToSeconds(e.End,   sampleRate) + ContextPadSeconds),
+                Math.Max(0,            FrameToSeconds(e.Start, sampleRate) - options.ContextPadSeconds),
+                Math.Min(totalSeconds, FrameToSeconds(e.End,   sampleRate) + options.ContextPadSeconds),
                 Score(e, bandDb, fullDb, floorDb, sampleRate)))
             .ToList();
 
@@ -268,12 +245,12 @@ internal static class EvpDetector
         return runs;
     }
 
-    private static List<Run> ShapeEvents(List<Run> runs, int frameCount, int sampleRate)
+    private static List<Run> ShapeEvents(List<Run> runs, int sampleRate, EvpDetectionOptions options)
     {
         if (runs.Count == 0) return runs;
 
-        var mergeFrames = (int)Math.Round(MergeGapSeconds / HopSeconds);
-        var maxFrames   = (int)Math.Round(MaxEventSeconds / HopSeconds);
+        var mergeFrames = (int)Math.Round(options.MergeGapSeconds / HopSeconds);
+        var maxFrames   = Math.Max(1, (int)Math.Round(options.MaxEventSeconds / HopSeconds));
         var merged = new List<Run>();
         var current = runs[0];
 
@@ -298,7 +275,7 @@ internal static class EvpDetector
                 bounded.Add(new Run(start, Math.Min(run.End, start + maxFrames - 1)));
         }
 
-        var minFrames = (int)Math.Round(MinEventSeconds / HopSeconds);
+        var minFrames = Math.Max(1, (int)Math.Round(options.MinDurationSeconds / HopSeconds));
         return bounded.Where(r => r.End - r.Start + 1 >= minFrames).ToList();
     }
 

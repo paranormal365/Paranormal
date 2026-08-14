@@ -264,17 +264,25 @@ public sealed class AudioMarkerController : BenControllerBase
     /// the background-render path rather than a longer request timeout.</para>
     /// </remarks>
     /// <param name="fileId">The audio file to scan.</param>
-    /// <param name="sensitivity">How far above the local noise floor counts as an event.</param>
+    /// <param name="sensitivity">Preset starting point for the thresholds.</param>
+    /// <param name="options">
+    /// Optional per-scan overrides. Omitted values fall back to <paramref name="sensitivity"/>'s
+    /// preset, so a caller can adjust just the tolerance and leave the rest alone.
+    /// </param>
     /// <param name="ct">Cancellation token.</param>
     [HttpPost("scan")]
     public async Task<ActionResult<IEnumerable<AudioMarkerRecord>>> Scan(
         Guid fileId,
         [FromQuery] EvpSensitivity sensitivity,
+        [FromBody] EvpDetectionOptions? options,
         CancellationToken ct)
     {
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
         if (!Enum.IsDefined(sensitivity)) return BadRequest("Unknown sensitivity.");
+
+        var settings = options ?? EvpDetectionOptions.FromSensitivity(sensitivity);
+        if (settings.Validate() is { } problem) return BadRequest(problem);
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
@@ -288,7 +296,7 @@ public sealed class AudioMarkerController : BenControllerBase
         try
         {
             await using var stream = await OpenSourceStreamAsync(source, ct);
-            detected = EvpDetector.Detect(stream, source.ContentType ?? "", sensitivity, MaxCandidatesPerScan);
+            detected = EvpDetector.Detect(stream, source.ContentType ?? "", settings, MaxCandidatesPerScan);
         }
         catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or FormatException)
         {
