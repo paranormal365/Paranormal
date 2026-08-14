@@ -38,6 +38,21 @@
                                         DefaultText="All actions"
                                         Width="100%" />
                 </div>
+                <div class="col-sm-3">
+                    <label class="form-label small mb-1">User</label>
+                    @* DropDownList rather than ComboBox: the two filters beside it already use this
+                       component with the same nullable-value / non-nullable-ValueField shape and
+                       bind correctly, whereas the ComboBox equivalent silently dropped the
+                       selection and snapped back to its placeholder. *@
+                    <TelerikDropDownList Data="@_allUsers"
+                                         @bind-Value="@_filterUserId"
+                                         TextField="@nameof(UserSearchResult.Display)"
+                                         ValueField="@nameof(UserSearchResult.Id)"
+                                         Filterable="true"
+                                         FilterOperator="@StringFilterOperator.Contains"
+                                         DefaultText="All users"
+                                         Width="100%" />
+                </div>
                 <div class="col-sm-2">
                     <label class="form-label small mb-1">From</label>
                     <TelerikDatePicker @bind-Value="@_filterDateFrom" Width="100%" />
@@ -46,7 +61,9 @@
                     <label class="form-label small mb-1">To</label>
                     <TelerikDatePicker @bind-Value="@_filterDateTo" Width="100%" />
                 </div>
-                <div class="col-sm-3 d-flex gap-2">
+            </div>
+            <div class="row g-2 mt-1">
+                <div class="col-12 d-flex gap-2 align-items-center">
                     <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                                    OnClick="ApplyFiltersAsync"
                                    Enabled="@(!_loading)">
@@ -56,6 +73,9 @@
                                    OnClick="ClearFilters">
                         Clear
                     </TelerikButton>
+                    <span class="text-secondary small ms-2">
+                        Dates are your local calendar days (@UserState.BrowserTimeZone.Id).
+                    </span>
                 </div>
             </div>
         </div>
@@ -66,14 +86,18 @@
         <div class="alert alert-danger mb-3">@_errorMessage</div>
     }
 
-    @* ── Grid ───────────────────────────────────────────────────────────────── *@
+    @* ── Grid ─────────────────────────────────────────────────────────────────
+       Server-driven via OnRead: the table is far too large to hold client-side, and
+       the endpoint already does the filtering/paging. Deliberately NOT Sortable and
+       with no FilterRow — both would only have reordered/filtered the 25 rows of the
+       current page while appearing to act on the whole log, silently contradicting
+       the server filter bar above. Order is fixed newest-first, which is what an
+       audit log wants. *@
     <TelerikGrid @ref="@_grid"
-                 Data="@_items"
                  TItem="AuditLogRecord"
+                 OnRead="@OnGridReadAsync"
                  Pageable="true"
                  PageSize="@_pageSize"
-                 Sortable="true"
-                 FilterMode="@GridFilterMode.FilterRow"
                  SelectionMode="@GridSelectionMode.Single"
                  @bind-SelectedItems="@_selectedItems"
                  OnRowClick="@OnRowClick"
@@ -82,13 +106,15 @@
         <GridToolBarTemplate>
             <TelerikButton Icon="@SvgIcon.FileExcel"
                            FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           Title="Exports the rows currently on screen"
                            OnClick="@ExportToExcel">
-                Excel
+                Excel (page)
             </TelerikButton>
             <TelerikButton Icon="@SvgIcon.FileCsv"
                            FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           Title="Exports the rows currently on screen"
                            OnClick="@ExportToCsv">
-                CSV
+                CSV (page)
             </TelerikButton>
             <span class="ms-3 text-secondary small">@_totalCount total records</span>
         </GridToolBarTemplate>
@@ -259,14 +285,20 @@
     private int     _currentPage = 1;
     private int     _pageSize    = 25;
     private bool    _loading     = false;
+    private bool    _initialReadRequested;
     private string? _errorMessage;
 
     // ── Filter state ───────────────────────────────────────────────────────────
 
     private string?   _filterEntityType;
     private AuditAction? _filterAction;
-    private DateTime? _filterDateFrom = DateTime.UtcNow.AddDays(-30);
+    private Guid?     _filterUserId;
+    // A calendar day in the viewer's zone (not a UTC instant) — see ToUtcBoundary.
+    private DateTime? _filterDateFrom = DateTime.Today.AddDays(-30);
     private DateTime? _filterDateTo;
+
+    /// <summary>All users, fetched once and shared by the User filter and the recipient picker.</summary>
+    private List<UserSearchResult> _allUsers = [];
 
     private IReadOnlyList<string>       _entityTypeOptions = [];
     private static readonly ActionOption[] _actionOptions = [
@@ -295,7 +327,25 @@
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
-        await Task.WhenAll(LoadEntityTypesAsync(), LoadDataAsync());
+        // The grid loads itself through OnRead; only the filter-bar sources are fetched here.
+        await Task.WhenAll(LoadEntityTypesAsync(), EnsureUsersLoadedAsync());
+    }
+
+    /// <summary>
+    /// Kicks off the grid's first read. The Telerik grid does not issue its initial OnRead during
+    /// static SSR prerender (there is no interactivity yet) and does not re-issue it on hydration,
+    /// so without this explicit rebind the grid sat permanently empty while the pager reported
+    /// "0 - 0 of 0" — even though the endpoint had rows. Waits for auth first, like every other
+    /// deferred fetch in this codebase, so the request goes out with a bearer token attached.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _initialReadRequested) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) return;
+
+        _initialReadRequested = true;
+        _grid?.Rebind();
     }
 
     private async Task LoadEntityTypesAsync()
@@ -304,44 +354,122 @@
         _entityTypeOptions = types;
     }
 
-    private async Task LoadDataAsync()
+    /// <summary>
+    /// Fetches the user list once per page visit and shares it between the User filter and the
+    /// send-as-message recipient picker. The picker used to re-fetch the whole table on every
+    /// keystroke.
+    /// </summary>
+    private async Task EnsureUsersLoadedAsync()
     {
+        if (_allUsers.Count > 0) return;
+        try
+        {
+            var users = await AdminClient.GetAllUsersAsync();
+            _allUsers = users
+                .Select(u => new UserSearchResult(u.Id, u.Email ?? "", u.DisplayName))
+                .OrderBy(u => u.Display)
+                .ToList();
+        }
+        catch { /* non-fatal — filter and picker just stay empty */ }
+    }
+
+    // ── Grid data (server-driven) ──────────────────────────────────────────────
+
+    /// <summary>
+    /// The grid is bound through OnRead so paging reaches the server. Previously it was bound to
+    /// a plain 25-row list with Pageable="true", so Telerik believed that page *was* the entire
+    /// result set: the pager rendered "1 of 1" and pages 2+ of the server result were unreachable.
+    /// </summary>
+    private async Task OnGridReadAsync(GridReadEventArgs args)
+    {
+        // A read can be raised before the bearer token is attached; without this the request
+        // would go out unauthenticated and the grid would render a silently empty page.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive))
+        {
+            args.Data  = Array.Empty<AuditLogRecord>();
+            args.Total = 0;
+            return;
+        }
+
         _loading      = true;
         _errorMessage = null;
-        StateHasChanged();
 
         try
         {
+            var page = args.Request.Page > 0 ? args.Request.Page : 1;
+            var size = args.Request.PageSize > 0 ? args.Request.PageSize : _pageSize;
+
             var result = await AdminClient.GetAuditLogsAsync(
-                page:       _currentPage,
-                pageSize:   _pageSize,
+                page:       page,
+                pageSize:   size,
                 entityType: _filterEntityType,
                 action:     _filterAction.HasValue ? (int)_filterAction.Value : null,
-                dateFrom:   _filterDateFrom,
-                dateTo:     _filterDateTo);
+                userId:     _filterUserId,
+                dateFrom:   ToUtcBoundary(_filterDateFrom, endOfDay: false),
+                dateTo:     ToUtcBoundary(_filterDateTo,   endOfDay: true));
 
-            _items      = result?.Items ?? [];
-            _totalCount = result?.TotalCount ?? 0;
+            _items       = result?.Items ?? [];
+            _totalCount  = result?.TotalCount ?? 0;
+            _currentPage = page;
+
+            args.Data  = _items;
+            args.Total = _totalCount;
         }
         catch
         {
             _errorMessage = "Failed to load audit log.";
+            args.Data  = Array.Empty<AuditLogRecord>();
+            args.Total = 0;
         }
-
-        _loading = false;
+        finally
+        {
+            _loading = false;
+        }
     }
 
+    /// <summary>
+    /// Converts a date picked in the viewer's calendar into the UTC instant that day starts or
+    /// ends at for them. <c>TelerikDatePicker</c> hands back midnight with
+    /// <see cref="DateTimeKind.Unspecified"/>, but <c>AuditLog.OccurredAt</c> is stored UTC, so
+    /// passing the raw value shifted the whole window by the viewer's offset — and a "To" date
+    /// excluded everything that happened during that day.
+    /// </summary>
+    private DateTime? ToUtcBoundary(DateTime? picked, bool endOfDay)
+    {
+        if (picked is null) return null;
+
+        var day  = picked.Value.Date;
+        var wall = DateTime.SpecifyKind(endOfDay ? day.AddDays(1).AddTicks(-1) : day,
+                                        DateTimeKind.Unspecified);
+
+        var tz = UserState.BrowserTimeZone;
+        // Spring-forward can make local midnight itself a non-existent instant; step past the gap.
+        if (tz.IsInvalidTime(wall)) wall = wall.AddHours(1);
+
+        return TimeZoneInfo.ConvertTimeToUtc(wall, tz);
+    }
+
+    /// <summary>
+    /// Re-runs the query with the current filter bar. Resets to page 1 through the grid's own
+    /// state rather than just calling Rebind(): under OnRead the grid owns the page number, so a
+    /// bare Rebind() would re-read whatever page you were on — narrowing a filter while on page 2
+    /// could land you past the end of the new result set and show nothing.
+    /// </summary>
     private async Task ApplyFiltersAsync()
     {
-        _currentPage = 1;
-        await LoadDataAsync();
+        if (_grid is null) return;
+
+        var state = _grid.GetState();
+        state.Page = 1;
+        await _grid.SetStateAsync(state);   // raises OnRead with the new filters at page 1
     }
 
     private async Task ClearFilters()
     {
         _filterEntityType = null;
         _filterAction     = null;
-        _filterDateFrom   = DateTime.UtcNow.AddDays(-30);
+        _filterUserId     = null;
+        _filterDateFrom   = DateTime.Today.AddDays(-30);
         _filterDateTo     = null;
         await ApplyFiltersAsync();
     }
@@ -382,13 +510,13 @@
     private async Task SearchUsersAsync()
     {
         if (string.IsNullOrWhiteSpace(_userSearchQuery)) { _userSearchResults = []; return; }
-        var users = await AdminClient.GetAllUsersAsync();
-        var q = _userSearchQuery.ToLowerInvariant();
-        _userSearchResults = users
-            .Where(u => (u.DisplayName ?? "").ToLowerInvariant().Contains(q)
-                     || (u.Email ?? "").ToLowerInvariant().Contains(q))
+
+        // Filters the cached list — this used to re-fetch the entire user table on every keystroke.
+        await EnsureUsersLoadedAsync();
+        var q = _userSearchQuery.Trim();
+        _userSearchResults = _allUsers
+            .Where(u => u.Display.Contains(q, StringComparison.OrdinalIgnoreCase))
             .Take(10)
-            .Select(u => new UserSearchResult(u.Id, u.Email ?? "", u.DisplayName))
             .ToList();
     }
 
@@ -478,5 +606,12 @@
     // ── Inner types ────────────────────────────────────────────────────────────
 
     private sealed record ActionOption(AuditAction Value, string Label);
-    private sealed record UserSearchResult(Guid Id, string Email, string? DisplayName);
+
+    private sealed record UserSearchResult(Guid Id, string Email, string? DisplayName)
+    {
+        /// <summary>Label used by both the User filter combobox and the recipient picker.</summary>
+        public string Display => string.IsNullOrWhiteSpace(DisplayName)
+            ? Email
+            : $"{DisplayName} ({Email})";
+    }
 }
