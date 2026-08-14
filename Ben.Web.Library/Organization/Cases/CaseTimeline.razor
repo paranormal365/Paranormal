@@ -44,10 +44,34 @@
             }
         </div>
 
+        @* ── Investigation filter ───────────────────────────────────────────
+           Entries recorded during a visit stay on the case timeline (that's the
+           point of reusing it), so this narrows the timeline to one binder
+           without hiding those entries from the case history. *@
+        @if (_investigations.Count > 0)
+        {
+            <div class="d-flex gap-2 flex-wrap mb-3 align-items-center">
+                <span class="small text-secondary">Investigation</span>
+                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                               FillMode="@(_investigationFilter is null ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Outline)"
+                               OnClick="@(() => _investigationFilter = null)">Any</TelerikButton>
+                @foreach (var investigation in _investigations)
+                {
+                    var inv = investigation;
+                    var active = _investigationFilter == inv.Id;
+                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                   FillMode="@(active ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Outline)"
+                                   ThemeColor="@(active ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                                   OnClick="@(() => _investigationFilter = inv.Id)">@inv.Title</TelerikButton>
+                }
+            </div>
+        }
+
         <div class="timeline d-flex flex-column gap-3">
-            @foreach (var entry in FilteredEntries)
+            @foreach (var row in RenderedRows())
             {
-                var e = entry;
+                var e = row.Entry;
+                var moment = row.Moment;
                 <div class="card @(e.Visibility == CaseTimelineVisibility.OrgOnly ? "border-0 bg-light" : "")">
                     <div class="card-body">
                         <div class="d-flex align-items-start justify-content-between gap-2">
@@ -65,6 +89,13 @@
                                         <small class="text-secondary">
                                             @e.EventDateTime.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
                                         </small>
+                                    }
+                                    @if (moment is { } mm)
+                                    {
+                                        <span class="badge bg-secondary-subtle text-secondary-emphasis fw-normal"
+                                              title="@($"{mm.Total} entries are logged at this exact time — they may be separate accounts of one event, or unrelated events that coincided.")">
+                                            @mm.Position of @mm.Total at this time
+                                        </span>
                                     }
                                     @if (!string.IsNullOrEmpty(e.AuthorDisplayName))
                                     {
@@ -199,10 +230,17 @@
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Who can see this</label>
-                <TelerikDropDownList Data="@_visibilityOptions"
-                                     @bind-Value="_form.Visibility"
-                                     TextField="Label" ValueField="Value"
-                                     Width="100%" />
+                @* A plain select, deliberately. The Telerik dropdown did not push its selection
+                   in either binding form, and a visibility control that silently keeps its default
+                   is a privacy bug — an investigator would believe they'd shared something with the
+                   client, or worse, published it. *@
+                <select class="form-select" 
+                        @onchange="@(e => _form.Visibility = (CaseTimelineVisibility)int.Parse(e.Value?.ToString() ?? "0"))">
+                    @foreach (var opt in _visibilityOptions)
+                    {
+                        <option value="@((int)opt.Value)" selected="@(opt.Value == _form.Visibility)">@opt.Label</option>
+                    }
+                </select>
                 <div class="form-text">@VisibilityHint(_form.Visibility)</div>
             </div>
         </div>
@@ -291,8 +329,62 @@
             new Telerik.Blazor.Components.Editor.Redo()),
     ];
 
-    private IEnumerable<CaseTimelineEntryRecord> FilteredEntries =>
-        _typeFilter is null ? _entries! : _entries!.Where(e => e.EntryType == _typeFilter);
+    private IEnumerable<CaseTimelineEntryRecord> FilteredEntries
+    {
+        get
+        {
+            var q = _entries!.AsEnumerable();
+            if (_typeFilter is { } t)           q = q.Where(e => e.EntryType == t);
+            if (_investigationFilter is { } inv) q = q.Where(e => e.InvestigationId == inv);
+            return q;
+        }
+    }
+
+    /// <summary>
+    /// The filtered entries in render order, each paired with its position among any entries
+    /// sharing its event time. Built in one pass so the annotation can't disagree with the
+    /// list it describes.
+    /// </summary>
+    private List<(CaseTimelineEntryRecord Entry, (int Position, int Total)? Moment)> RenderedRows()
+    {
+        var ordered = FilteredEntries.ToList();
+        var moments = BuildMomentGroups(ordered);
+        return ordered
+            .Select(e => (e, moments.TryGetValue(e.Id, out var m)
+                ? m
+                : default((int Position, int Total)?)))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Marks the entries that claim the same event time as at least one other entry, as
+    /// "position of total" within that moment. Several people can report one event, and
+    /// unrelated events can land on the same minute — a reader who assumes one entry per
+    /// moment would treat the second account as a duplicate, or miss it entirely.
+    /// Deliberately neutral about *why* they coincide; that's the investigator's call.
+    /// </summary>
+    /// <remarks>
+    /// Entries with no event time are skipped: they claim no moment, so they share none.
+    /// Relies on <paramref name="ordered"/> already being sorted, so positions read in the
+    /// same order they appear on screen.
+    /// </remarks>
+    private static Dictionary<Guid, (int Position, int Total)> BuildMomentGroups(
+        IReadOnlyList<CaseTimelineEntryRecord> ordered)
+    {
+        var map = new Dictionary<Guid, (int, int)>();
+        foreach (var g in ordered.Where(e => e.EventDateTime.HasValue)
+                                 .GroupBy(e => e.EventDateTime!.Value))
+        {
+            var members = g.ToList();
+            if (members.Count < 2) continue;
+            for (var i = 0; i < members.Count; i++)
+                map[members[i].Id] = (i + 1, members.Count);
+        }
+        return map;
+    }
+
+    private Guid? _investigationFilter;
+    private List<InvestigationRecord> _investigations = [];
 
     protected override async Task OnParametersSetAsync()
     {
@@ -307,6 +399,11 @@
     {
         try { _entries = (await AdminClient.GetCaseTimelineAsync(OrgId, CaseId)).ToList(); }
         catch { _error = "Failed to load timeline."; }
+
+        // Only needed to label the filter chips. Failing here shouldn't break the timeline — the
+        // chips just don't appear.
+        try { _investigations = (await AdminClient.GetInvestigationsAsync(OrgId, CaseId)).ToList(); }
+        catch { _investigations = []; }
     }
 
     private void OpenAddDialog()

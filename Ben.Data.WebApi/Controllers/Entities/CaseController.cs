@@ -405,8 +405,15 @@ public sealed class CaseController : BenControllerBase
         if (investigationId is { } invId)
             query = query.Where(e => e.InvestigationId == invId);
 
+        // Two people can report the same moment — or two unrelated things can happen at
+        // the same moment — so ties on event time are expected, not an edge case. Sorting
+        // on event time alone leaves tied entries in whatever order the provider returns,
+        // which can differ between requests; a timeline that reshuffles isn't citable.
+        // DateCreated breaks the tie by who logged it first, Id guarantees a total order.
         var entries = await query
             .OrderBy(e => e.EventDateTime ?? e.DateCreated)
+            .ThenBy(e => e.DateCreated)
+            .ThenBy(e => e.Id)
             .ToListAsync(ct);
         return Ok(_mapper.Map<IEnumerable<CaseTimelineEntryRecord>>(entries));
     }

@@ -710,6 +710,7 @@
         _case?.Occurrences
             .Where(o => (o.EventDateTime ?? o.DateCreated).ToViewerLocalTime(UserState).Date == date.Date)
             .OrderBy(o => o.EventDateTime ?? o.DateCreated)
+            .ThenBy(o => o.DateCreated).ThenBy(o => o.Id)
             .ToList() ?? [];
 
     private void OpenLogDialog()

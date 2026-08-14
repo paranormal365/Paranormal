@@ -44,6 +44,7 @@
             {
                 var i = inv;
                 var attendeesOpen = _activeAttendeeInvId == i.Id;
+                var binderOpen    = _activeBinderInvId   == i.Id;
                 <div class="card">
                     <div class="card-body d-flex align-items-start justify-content-between gap-3">
                         <div class="flex-grow-1">
@@ -68,14 +69,115 @@
                                     @((MarkupString)i.Notes)
                                 </div>
                             }
-                            <div class="mt-2">
+                            <div class="mt-2 d-flex gap-2 flex-wrap">
                                 <TelerikButton Size="@ThemeConstants.Button.Size.Small"
                                                FillMode="@(attendeesOpen ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Outline)"
                                                Icon="@SvgIcon.User"
                                                OnClick="@(() => ToggleAttendees(i))">
                                     Attendees (@i.AttendeeCount)
                                 </TelerikButton>
+                                @* The binder: what was actually recorded during this visit. *@
+                                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                               FillMode="@(binderOpen ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Outline)"
+                                               Icon="@SvgIcon.Folder"
+                                               OnClick="@(() => ToggleBinderAsync(i))">
+                                    Binder@(_binderCache.TryGetValue(i.Id, out var bc) ? $" ({bc.Count})" : "")
+                                </TelerikButton>
                             </div>
+
+                            @if (binderOpen)
+                            {
+                                <div class="mt-3 border rounded p-3 bg-body-secondary">
+                                    @{ var binder = _binderCache.GetValueOrDefault(i.Id); }
+                                    @if (binder is null)
+                                    {
+                                        <TelerikLoaderContainer Visible="true" Text="Loading binder…" />
+                                    }
+                                    else
+                                    {
+                                        @if (binder.Count == 0)
+                                        {
+                                            <p class="text-secondary small mb-2">
+                                                Nothing recorded for this investigation yet.
+                                            </p>
+                                        }
+                                        else
+                                        {
+                                            @* Grouped by who wrote it — a binder is read as
+                                               "what did each investigator find", not as a flat log. *@
+                                            @foreach (var group in binder
+                                                .GroupBy(e => e.AuthorDisplayName ?? "Unknown")
+                                                .OrderBy(g => g.Key))
+                                            {
+                                                <div class="mb-3">
+                                                    <div class="fw-semibold small mb-1">@group.Key</div>
+                                                    @foreach (var entry in group.OrderBy(e => e.EventDateTime ?? e.DateCreated).ThenBy(e => e.DateCreated).ThenBy(e => e.Id))
+                                                    {
+                                                        <div class="border-start ps-2 mb-2" style="border-width:3px !important;">
+                                                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                                <span class="badge @EntryTypeBadge(entry.EntryType)">
+                                                                    @EntryTypeLabel(entry.EntryType)
+                                                                </span>
+                                                                <span class="small fw-semibold">@entry.Title</span>
+                                                                <span class="text-secondary" style="font-size:.72rem;">
+                                                                    @((entry.EventDateTime ?? entry.DateCreated).ToViewerLocalTime(UserState).ToString("MMM d, h:mm tt"))
+                                                                </span>
+                                                            </div>
+                                                            @if (!string.IsNullOrWhiteSpace(entry.Body))
+                                                            {
+                                                                <div class="text-secondary small">@((MarkupString)entry.Body)</div>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        }
+
+                                        @* Add straight into this investigation — the whole point of
+                                           the binder is not having to remember to tag the entry. *@
+                                        <div class="border-top pt-2 mt-2">
+                                            <div class="d-flex gap-2 flex-wrap align-items-end">
+                                                <label class="small mb-0">
+                                                    Type
+                                                    @* A plain select, not a TelerikDropDownList.
+                                                       Neither @bind-Value nor Value/ValueChanged
+                                                       pushed the selection here, so every entry
+                                                       saved as the default type regardless of what
+                                                       was picked. *@
+                                                    <select class="form-select form-select-sm" style="width:170px;"
+                                                            value="@((int)_binderType)"
+                                                            @onchange="@(e => _binderType = (CaseTimelineEntryType)int.Parse(e.Value?.ToString() ?? "1"))">
+                                                        @foreach (var opt in _binderEntryTypes)
+                                                        {
+                                                            <option value="@((int)opt.Value)" selected="@(opt.Value == _binderType)">@opt.Label</option>
+                                                        }
+                                                    </select>
+                                                </label>
+                                                <label class="small mb-0 flex-grow-1">
+                                                    What happened
+                                                    <input type="text" class="form-control form-control-sm"
+                                                           placeholder="e.g. EMF spike at the stairwell"
+                                                           value="@_binderTitle"
+                                                           @oninput="@(e => _binderTitle = e.Value?.ToString() ?? string.Empty)" />
+                                                </label>
+                                                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                                               Enabled="@(!_binderSaving)"
+                                                               OnClick="@(() => AddBinderEntryAsync(i))">
+                                                    @(_binderSaving ? "Adding…" : "Add to binder")
+                                                </TelerikButton>
+                                            </div>
+                                            <div class="form-text">
+                                                Recorded as investigators-only and added to the case timeline.
+                                            </div>
+                                            @if (_binderError is not null)
+                                            {
+                                                <div class="text-danger small mt-1">@_binderError</div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
                             @if (attendeesOpen)
                             {
                                 <div class="mt-3 border rounded p-3 bg-body-secondary">
@@ -276,6 +378,109 @@
     private InvForm _form = new();
 
     // ── Attendee state ────────────────────────────────────────────────────────
+    // ── Binder (C3) ───────────────────────────────────────────────────────────
+    // The binder is this case's timeline filtered to one investigation, so everything recorded
+    // here also appears on the case timeline without anyone having to copy it across.
+
+    private Guid? _activeBinderInvId;
+    private readonly Dictionary<Guid, List<CaseTimelineEntryRecord>> _binderCache = [];
+    private CaseTimelineEntryType _binderType = CaseTimelineEntryType.InvestigatorNote;
+    private string  _binderTitle = string.Empty;
+    private bool    _binderSaving;
+    private string? _binderError;
+
+    private sealed record BinderTypeOption(string Label, CaseTimelineEntryType Value);
+
+    private static readonly List<BinderTypeOption> _binderEntryTypes =
+    [
+        new("Note",              CaseTimelineEntryType.InvestigatorNote),
+        new("Instrument reading", CaseTimelineEntryType.InstrumentReading),
+        new("Evidence",          CaseTimelineEntryType.Evidence),
+        new("Research",          CaseTimelineEntryType.ResearchNote),
+    ];
+
+    private async Task ToggleBinderAsync(InvestigationRecord inv)
+    {
+        _binderError = null;
+        if (_activeBinderInvId == inv.Id) { _activeBinderInvId = null; return; }
+
+        _activeBinderInvId = inv.Id;
+        await LoadBinderAsync(inv.Id);
+    }
+
+    private async Task LoadBinderAsync(Guid investigationId)
+    {
+        try
+        {
+            _binderCache[investigationId] =
+                (await AdminClient.GetCaseTimelineAsync(OrgId, CaseId, investigationId)).ToList();
+        }
+        catch
+        {
+            // Leave the cache unset so the panel keeps showing its loader rather than claiming the
+            // binder is empty — "nothing recorded" and "couldn't load" are very different claims.
+            _binderError = "Couldn't load this binder.";
+        }
+        StateHasChanged();
+    }
+
+    private async Task AddBinderEntryAsync(InvestigationRecord inv)
+    {
+        if (string.IsNullOrWhiteSpace(_binderTitle))
+        {
+            _binderError = "Say what happened before adding it.";
+            return;
+        }
+
+        _binderSaving = true;
+        _binderError  = null;
+        try
+        {
+            var created = await AdminClient.AddCaseTimelineEntryAsync(OrgId, CaseId,
+                new UpsertTimelineEntryRequest(
+                    _binderType,
+                    DateTime.UtcNow,
+                    _binderTitle.Trim(),
+                    null,
+                    // Investigators-only by default: field notes are working material, and sharing
+                    // them with the client is a deliberate act done from the timeline.
+                    CaseTimelineVisibility.OrgOnly,
+                    [],
+                    inv.Id));
+
+            if (created is null) { _binderError = "Couldn't add that entry."; return; }
+
+            _binderTitle = string.Empty;
+            await LoadBinderAsync(inv.Id);
+        }
+        catch { _binderError = "Couldn't add that entry."; }
+        finally
+        {
+            _binderSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string EntryTypeLabel(CaseTimelineEntryType t) => t switch
+    {
+        CaseTimelineEntryType.ClientReport      => "Client Report",
+        CaseTimelineEntryType.InvestigatorNote  => "Note",
+        CaseTimelineEntryType.Evidence          => "Evidence",
+        CaseTimelineEntryType.ResearchNote      => "Research",
+        CaseTimelineEntryType.InstrumentReading => "Reading",
+        _                                       => t.ToString(),
+    };
+
+    private static string EntryTypeBadge(CaseTimelineEntryType t) => t switch
+    {
+        CaseTimelineEntryType.ClientReport      => "bg-warning text-dark",
+        CaseTimelineEntryType.InvestigatorNote  => "bg-primary",
+        CaseTimelineEntryType.Evidence          => "bg-success",
+        CaseTimelineEntryType.ResearchNote      => "bg-secondary",
+        CaseTimelineEntryType.InstrumentReading => "bg-info text-dark",
+        _                                       => "bg-secondary",
+    };
+
     private Guid? _activeAttendeeInvId;
     private Dictionary<Guid, List<InvestigationAttendeeRecord>> _attendeeCache = [];
     private List<OrgMembershipItem> _orgMembers = [];

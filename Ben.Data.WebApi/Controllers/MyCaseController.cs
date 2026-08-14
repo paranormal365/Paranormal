@@ -121,7 +121,8 @@ public sealed class MyCaseController : BenControllerBase
             .Include(x => x.TimelineEntries.Where(e =>
                 e.EntryType == CaseTimelineEntryType.ClientReport ||
                 e.Visibility >= CaseTimelineVisibility.Client)
-                .OrderBy(e => e.EventDateTime ?? e.DateCreated))
+                .OrderBy(e => e.EventDateTime ?? e.DateCreated)
+                .ThenBy(e => e.DateCreated).ThenBy(e => e.Id))
                 .ThenInclude(e => e.Files)
                 .ThenInclude(f => f.UploadFile)
             .FirstOrDefaultAsync(x => x.Id == caseId, ct);

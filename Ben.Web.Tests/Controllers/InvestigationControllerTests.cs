@@ -221,6 +221,42 @@ public class InvestigationControllerTests
     }
 
     [Fact]
+    public async Task Delete_WithBinderEntries_DetachesThemInsteadOfDeleting()
+    {
+        var (factory, orgId, caseId, userId, _) = await SeedAsync();
+        var ctrl   = BuildController(factory, userId);
+        var create = await ctrl.Create(orgId, caseId, MakeRequest(), default);
+        var invId  = ((InvestigationRecord)((CreatedAtActionResult)create.Result!).Value!).Id;
+
+        var entryId = Guid.NewGuid();
+        await using (var seed = await factory.CreateDbContextAsync())
+        {
+            seed.CaseTimelineEntries.Add(new CaseTimelineEntry
+            {
+                Id = entryId, CaseId = caseId, AuthorAppUserId = userId,
+                EntryType = CaseTimelineEntryType.InstrumentReading,
+                Title = "EMF 4.2 mG at the stairwell",
+                Visibility = CaseTimelineVisibility.OrgOnly,
+                InvestigationId = invId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        var result = await ctrl.Delete(orgId, caseId, invId, default);
+
+        Assert.IsType<NoContentResult>(result);
+        await using var db = await factory.CreateDbContextAsync();
+        var entry = await db.CaseTimelineEntries.FindAsync(entryId);
+
+        // The FK is NoAction (SQL Server rejects SetNull here — error 1785, multiple cascade
+        // paths), so this detach is the controller's job. Observations outlive the calendar
+        // event that produced them: cancelling a visit must not erase what was recorded.
+        Assert.NotNull(entry);
+        Assert.Null(entry!.InvestigationId);
+    }
+
+    [Fact]
     public async Task Delete_MissingId_ReturnsNotFound()
     {
         var (factory, orgId, caseId, userId, _) = await SeedAsync();

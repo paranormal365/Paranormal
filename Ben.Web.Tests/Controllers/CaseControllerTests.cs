@@ -663,20 +663,22 @@ public class CaseControllerTests
     private static async Task<Guid> SeedTimelineEntryAsync(
         IDbContextFactory<BenDataContext> factory, Guid caseId, Guid userId,
         string title, Guid? investigationId = null,
-        CaseTimelineEntryType type = CaseTimelineEntryType.InvestigatorNote)
+        CaseTimelineEntryType type = CaseTimelineEntryType.InvestigatorNote,
+        DateTime? eventDateTime = null, DateTime? dateCreated = null, Guid? id = null)
     {
-        var id = Guid.NewGuid();
+        id ??= Guid.NewGuid();
         await using var db = await factory.CreateDbContextAsync();
         db.CaseTimelineEntries.Add(new CaseTimelineEntry
         {
-            Id = id, CaseId = caseId, AuthorAppUserId = userId,
+            Id = id.Value, CaseId = caseId, AuthorAppUserId = userId,
             EntryType = type, Title = title,
+            EventDateTime = eventDateTime,
             Visibility = CaseTimelineVisibility.OrgOnly,
             InvestigationId = investigationId,
-            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            DateCreated = dateCreated ?? DateTime.UtcNow, CreatedByAppUserId = userId,
         });
         await db.SaveChangesAsync();
-        return id;
+        return id.Value;
     }
 
     private static async Task<List<CaseTimelineEntryRecord>> TimelineAsync(
@@ -686,6 +688,56 @@ public class CaseControllerTests
         var result = await Build(factory, userId).GetTimeline(orgId, caseId, investigationId, default);
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         return Assert.IsAssignableFrom<IEnumerable<CaseTimelineEntryRecord>>(ok.Value).ToList();
+    }
+
+    [Fact]
+    public async Task Timeline_EntriesAtTheSameMoment_OrderedByWhoLoggedFirst()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await CreateCaseAsync(factory, orgId, userId);
+
+        // Two people reporting the same moment is normal, not an edge case. Both entries
+        // carry the identical EventDateTime, so event time alone can't order them.
+        var moment = new DateTime(2026, 3, 14, 21, 30, 0, DateTimeKind.Utc);
+
+        // Seeded in the OPPOSITE order to DateCreated on purpose: a single-key sort leaves
+        // ties in provider order (insertion order, under a stable sort), which would put
+        // "Logged second" first. Only the DateCreated tiebreaker gets this right, so this
+        // test fails against the old query rather than passing by luck.
+        await SeedTimelineEntryAsync(factory, caseId, userId, "Logged second",
+            eventDateTime: moment, dateCreated: moment.AddHours(2));
+        await SeedTimelineEntryAsync(factory, caseId, userId, "Logged first",
+            eventDateTime: moment, dateCreated: moment.AddHours(1));
+
+        var titles = (await TimelineAsync(factory, userId, orgId, caseId))
+            .Select(e => e.Title).ToList();
+
+        Assert.Equal(["Logged first", "Logged second"], titles);
+    }
+
+    [Fact]
+    public async Task Timeline_SameMomentOrdering_IsStableAcrossRequests()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await CreateCaseAsync(factory, orgId, userId);
+        var moment = new DateTime(2026, 3, 14, 21, 30, 0, DateTimeKind.Utc);
+
+        // Same event time AND same DateCreated — a simultaneous double-report, where Id is
+        // the only tiebreaker left. Seeded in descending Id order so insertion order can
+        // never coincide with the expected ascending order: without ThenBy(Id) the stable
+        // sort would hand back the seeded order and fail.
+        var ids = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+        foreach (var id in ids.OrderByDescending(x => x))
+            await SeedTimelineEntryAsync(factory, caseId, userId, $"Account {id:N}",
+                eventDateTime: moment, dateCreated: moment, id: id);
+
+        var returned = (await TimelineAsync(factory, userId, orgId, caseId)).Select(e => e.Id).ToList();
+
+        // Asserts .NET's Guid ordering because these tests run on the InMemory provider;
+        // SQL Server sorts uniqueidentifier differently, so the *sequence* would differ
+        // there. The guarantee that matters is the same either way — some fixed total
+        // order, so tied entries don't reshuffle between requests.
+        Assert.Equal(ids.OrderBy(x => x).ToList(), returned);
     }
 
     [Fact]
