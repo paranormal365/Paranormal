@@ -78,6 +78,7 @@ public interface IWebApiClient
     Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default);
     Task<IReadOnlyList<AudioMarkerRecord>> ReplaceAudioCandidatesAsync(Guid fileId, BulkCreateAudioCandidatesRequest request, CancellationToken token = default);
     Task<AudioMarkerRecord?> ReviewAudioMarkerAsync(Guid fileId, Guid markerId, ReviewAudioMarkerRequest request, CancellationToken token = default);
+    Task<IReadOnlyList<AudioMarkerRecord>> ScanAudioForEvpAsync(Guid fileId, EvpSensitivity sensitivity, CancellationToken token = default);
 
     // Upload File — Audio Clip
     Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default);

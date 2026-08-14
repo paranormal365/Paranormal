@@ -800,6 +800,13 @@ public interface IBenAdminClient
     Task<AudioMarkerRecord?> ReviewAudioMarkerAsync(
         Guid fileId, Guid markerId, ReviewAudioMarkerRequest request, CancellationToken token = default);
 
+    /// <summary>
+    /// Runs EVP detection over the stored audio and replaces this file's pending candidates with
+    /// the results, skipping anything overlapping a marker already confirmed or dismissed.
+    /// </summary>
+    Task<IReadOnlyList<AudioMarkerRecord>> ScanAudioForEvpAsync(
+        Guid fileId, EvpSensitivity sensitivity, CancellationToken token = default);
+
     // ── Audio Clip ─────────────────────────────────────────────────
 
     /// <summary>

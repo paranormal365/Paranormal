@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Data.WebApi.Controllers.Entities;
 using Xunit;
 using Xunit.Abstractions;

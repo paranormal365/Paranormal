@@ -1,17 +1,7 @@
+using Ben.Data.Common.Enums;
 using NAudio.Wave;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
-
-/// <summary>How far above the local noise floor a sound has to rise before it's proposed.</summary>
-public enum EvpSensitivity
-{
-    /// <summary>9 dB over the floor. Only obvious events; use on a noisy recording.</summary>
-    Low = 0,
-    /// <summary>6 dB over the floor. The default.</summary>
-    Medium = 1,
-    /// <summary>4 dB over the floor. Surfaces faint events, at the cost of more to review.</summary>
-    High = 2,
-}
 
 /// <summary>One stretch of audio the detector thinks is worth a listen.</summary>
 /// <param name="StartSeconds">Start of the span, already padded.</param>
@@ -360,7 +350,7 @@ internal static class EvpDetector
 
     private static (float[] Mono, int SampleRate) ReadMono(Stream sourceStream, string contentType)
     {
-        using var reader = CreateReader(sourceStream, contentType);
+        using var reader = AudioSourceReader.Open(sourceStream, contentType);
         var provider = reader.ToSampleProvider();
         var format = reader.WaveFormat;
 
@@ -384,13 +374,7 @@ internal static class EvpDetector
         return (mono, format.SampleRate);
     }
 
-    private static WaveStream CreateReader(Stream stream, string contentType)
-    {
-        stream.Position = 0;
-        var type = (contentType ?? string.Empty).ToLowerInvariant();
-        if (type.Contains("mpeg") || type.Contains("mp3")) return new Mp3FileReader(stream);
-        return new WaveFileReader(stream);
-    }
+
 
     // ── Biquad ────────────────────────────────────────────────────────────────
 

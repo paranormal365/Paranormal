@@ -300,6 +300,13 @@ public sealed class WebApiClient : IWebApiClient
         => PutAsync<ReviewAudioMarkerRequest, AudioMarkerRecord>(
             $"/api/upload-files/{fileId}/audio-markers/{markerId}/review", request, token);
 
+    public async Task<IReadOnlyList<AudioMarkerRecord>> ScanAudioForEvpAsync(Guid fileId, EvpSensitivity sensitivity, CancellationToken token = default)
+    {
+        var result = await PostAsync<object?, List<AudioMarkerRecord>>(
+            $"/api/upload-files/{fileId}/audio-markers/scan?sensitivity={sensitivity}", null, token);
+        return result ?? [];
+    }
+
     // ── Audio Clip ────────────────────────────────────────────────────────────
     public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)
         => PostAsync<ClipAudioRequest, UploadFileRecord>($"/api/upload-files/{fileId}/clip", request, token);

@@ -1,5 +1,6 @@
 using AutoMapper;
 using Ben.Data.Common.Enums;
+using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Service.Models.Entities;
@@ -29,15 +30,28 @@ public sealed class AudioMarkerController : BenControllerBase
     /// </summary>
     public const int MaxCandidatesPerScan = 500;
 
+    /// <summary>
+    /// How much a proposal must overlap an already-reviewed span to count as the same event.
+    /// Half is deliberately lenient: the detector's bounds shift slightly with sensitivity, and
+    /// re-proposing something the reviewer already dismissed is worse than missing a near-miss.
+    /// </summary>
+    private const double DuplicateOverlapFraction = 0.5;
+
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;
     private readonly IAuditLogService _auditLog;
+    private readonly IFileStorageService _fileStorage;
 
-    public AudioMarkerController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper, IAuditLogService auditLog)
+    public AudioMarkerController(
+        IDbContextFactory<BenDataContext> dbContextFactory,
+        IMapper mapper,
+        IAuditLogService auditLog,
+        IFileStorageService fileStorage)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
         _auditLog = auditLog;
+        _fileStorage = fileStorage;
     }
 
     [HttpGet]
@@ -235,6 +249,92 @@ public sealed class AudioMarkerController : BenControllerBase
             userId, AppSources.WebApi, ct));
 
         return Ok(_mapper.Map<IEnumerable<AudioMarkerRecord>>(fresh));
+    }
+
+    /// <summary>
+    /// Runs the detector over the stored audio and replaces this file's pending candidates with
+    /// what it finds.
+    /// </summary>
+    /// <remarks>
+    /// <para>Anything overlapping a marker the reviewer has already ruled on — confirmed or
+    /// dismissed — is dropped before saving. Without that, every re-scan hands back the same
+    /// rejected noise and the review queue never converges.</para>
+    /// <para>Runs synchronously. Detection is a couple of passes over the samples, so a long
+    /// recording costs seconds rather than minutes; if that stops being true this wants moving to
+    /// the background-render path rather than a longer request timeout.</para>
+    /// </remarks>
+    /// <param name="fileId">The audio file to scan.</param>
+    /// <param name="sensitivity">How far above the local noise floor counts as an event.</param>
+    /// <param name="ct">Cancellation token.</param>
+    [HttpPost("scan")]
+    public async Task<ActionResult<IEnumerable<AudioMarkerRecord>>> Scan(
+        Guid fileId,
+        [FromQuery] EvpSensitivity sensitivity,
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        if (!Enum.IsDefined(sensitivity)) return BadRequest("Unknown sensitivity.");
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+
+        var source = await db.UploadFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == fileId, ct);
+        if (source is null) return NotFound("File not found.");
+        if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, userId, ct)) return Forbid();
+        if (!(source.ContentType ?? "").StartsWith("audio", StringComparison.OrdinalIgnoreCase))
+            return BadRequest("That file isn't audio.");
+
+        IReadOnlyList<EvpCandidate> detected;
+        try
+        {
+            await using var stream = await OpenSourceStreamAsync(source, ct);
+            detected = EvpDetector.Detect(stream, source.ContentType ?? "", sensitivity, MaxCandidatesPerScan);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or FormatException)
+        {
+            // A file the decoder can't open is a bad request about this file, not a server fault.
+            return BadRequest($"Couldn't read that audio: {ex.Message}");
+        }
+
+        // Everything a person has already ruled on, so the scan doesn't re-propose it.
+        var reviewed = await db.AudioMarkers.AsNoTracking()
+            .Where(m => m.UploadFileId == fileId && m.ReviewStatus != EvpReviewStatus.Pending)
+            .Select(m => new { m.TimeSeconds, m.EndSeconds })
+            .ToListAsync(ct);
+
+        var fresh = detected
+            .Where(c => !reviewed.Any(r => OverlapsEnough(c, r.TimeSeconds, r.EndSeconds)))
+            .Select(c => new AudioCandidateRequest(c.StartSeconds, c.EndSeconds, c.Score))
+            .ToList();
+
+        return await ReplaceCandidates(fileId, new BulkCreateAudioCandidatesRequest(fresh), ct);
+    }
+
+    /// <summary>
+    /// True when a proposal covers enough of an already-reviewed marker to be the same event.
+    /// A reviewed point marker (no end) counts as a hit if the proposal simply contains it.
+    /// </summary>
+    private static bool OverlapsEnough(EvpCandidate candidate, double reviewedStart, double? reviewedEnd)
+    {
+        if (reviewedEnd is not { } end || end <= reviewedStart)
+            return candidate.StartSeconds <= reviewedStart && candidate.EndSeconds >= reviewedStart;
+
+        var overlap = Math.Min(candidate.EndSeconds, end) - Math.Max(candidate.StartSeconds, reviewedStart);
+        if (overlap <= 0) return false;
+
+        // Measured against the shorter of the two, so a long candidate can't dodge the check by
+        // dwarfing a short reviewed span (or the reverse).
+        var shortest = Math.Min(candidate.DurationSeconds, end - reviewedStart);
+        return shortest > 0 && overlap / shortest >= DuplicateOverlapFraction;
+    }
+
+    private async Task<Stream> OpenSourceStreamAsync(UploadFile file, CancellationToken ct)
+    {
+        if (!string.IsNullOrEmpty(file.StoragePath))
+            return await _fileStorage.OpenReadAsync(file.StoragePath, ct);
+        if (file.FileData is not null)
+            return new MemoryStream(file.FileData);
+        throw new InvalidOperationException($"File {file.Id} has no stored bytes.");
     }
 
     /// <summary>

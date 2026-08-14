@@ -1,5 +1,6 @@
 using AutoMapper;
 using Ben.Data.Common.Enums;
+using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Entities;
@@ -66,9 +67,11 @@ public class AudioMarkerControllerTests
 
     private static AudioMarkerController Build(
         IDbContextFactory<BenDataContext> factory,
-        Guid? userId = null)
+        Guid? userId = null,
+        IFileStorageService? storage = null)
     {
-        var ctrl = new AudioMarkerController(factory, CreateMapper(), new Mock<IAuditLogService>().Object);
+        var ctrl = new AudioMarkerController(
+            factory, CreateMapper(), new Mock<IAuditLogService>().Object, storage ?? new Mock<IFileStorageService>().Object);
         var claims = userId.HasValue
             ? new ClaimsPrincipal(new ClaimsIdentity([
                 new Claim(ClaimTypes.NameIdentifier, userId.Value.ToString())
@@ -759,5 +762,245 @@ public class AudioMarkerControllerTests
             new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed), default);
 
         Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    // ── Scan ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A real WAV with two clear voice-band utterances, so the scan path is exercised end to end
+    /// rather than against a stub detector.
+    /// </summary>
+    private static byte[] BuildScannableWav(int sampleRate = 16000)
+    {
+        var mono = new float[20 * sampleRate];
+        var rng = new Random(2024);
+        for (var i = 0; i < mono.Length; i++) mono[i] = (float)((rng.NextDouble() * 2 - 1) * 0.004);
+
+        void Utterance(double at, double seconds, double amplitude)
+        {
+            var start = (int)(at * sampleRate);
+            var count = (int)(seconds * sampleRate);
+            for (var i = 0; i < count && start + i < mono.Length; i++)
+            {
+                var t = i / (double)sampleRate;
+                var env = (0.5 + 0.5 * Math.Sin(2 * Math.PI * 4.0 * t))
+                        * Math.Min(1.0, Math.Min(i, count - i) / (0.02 * sampleRate));
+                var tone = (Math.Sin(2 * Math.PI * 500 * t) + Math.Sin(2 * Math.PI * 1500 * t)
+                          + Math.Sin(2 * Math.PI * 2500 * t)) / 3.0;
+                mono[start + i] += (float)(tone * amplitude * env);
+            }
+        }
+        Utterance(5.0, 0.8, 0.030);
+        Utterance(12.0, 0.7, 0.030);
+
+        using var ms = new MemoryStream();
+        using (var w = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true))
+        {
+            var dataBytes = mono.Length * 2;
+            w.Write("RIFF"u8);  w.Write(36 + dataBytes);  w.Write("WAVE"u8);
+            w.Write("fmt "u8);  w.Write(16);              w.Write((short)1);
+            w.Write((short)1);  w.Write(sampleRate);      w.Write(sampleRate * 2);
+            w.Write((short)2);  w.Write((short)16);       w.Write("data"u8);
+            w.Write(dataBytes);
+            foreach (var v in mono) w.Write((short)Math.Clamp(v * 32767f, short.MinValue, short.MaxValue));
+        }
+        return ms.ToArray();
+    }
+
+    /// <summary>Seeds a WAV whose bytes live inline, so no storage service is involved.</summary>
+    private static async Task<(Guid FileId, Guid OwnerId)> SeedWavFileAsync(
+        IDbContextFactory<BenDataContext> factory, string contentType = "audio/wav")
+    {
+        var fileId  = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var bytes   = BuildScannableWav();
+        await using var db = await factory.CreateDbContextAsync();
+        db.UploadFiles.Add(new UploadFile
+        {
+            Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+            FileName = "evp.wav", StoredFileName = "evp.wav", ContentType = contentType,
+            FileSize = bytes.Length, FileData = bytes,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+        return (fileId, ownerId);
+    }
+
+    [Fact]
+    public async Task Scan_FindsTheUtterancesAndStoresThemAsPendingCandidates()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+
+        var result = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var created = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(ok.Value).ToList();
+        Assert.Equal(2, created.Count);
+        Assert.All(created, c =>
+        {
+            Assert.True(c.IsAutoDetected);
+            Assert.Equal(EvpReviewStatus.Pending, c.ReviewStatus);
+            Assert.NotNull(c.DetectionScore);
+            Assert.True(c.IsSpan);
+        });
+        // Context padding means the span starts before the utterance and ends after it.
+        Assert.Contains(created, c => c.TimeSeconds < 5.0 && c.EndSeconds > 5.8);
+        Assert.Contains(created, c => c.TimeSeconds < 12.0 && c.EndSeconds > 12.7);
+    }
+
+    [Fact]
+    public async Task Scan_DoesNotReproposeSomethingAlreadyDismissed()
+    {
+        // Without this the review queue never converges: every re-scan hands back the same noise
+        // the reviewer just rejected.
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+
+        var first = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+        var firstList = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(
+            Assert.IsType<OkObjectResult>(first.Result).Value).ToList();
+
+        await Build(factory, ownerId).Review(fileId, firstList[0].Id,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed), default);
+
+        var second = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+        var secondList = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(
+            Assert.IsType<OkObjectResult>(second.Result).Value).ToList();
+
+        Assert.Single(secondList);
+        Assert.DoesNotContain(secondList, c => Math.Abs(c.TimeSeconds - firstList[0].TimeSeconds) < 0.5);
+
+        // The dismissed row survives the re-scan, which is what makes the dedupe possible.
+        var all = await MarkersAsync(factory, fileId);
+        Assert.Contains(all, m => m.ReviewStatus == EvpReviewStatus.Dismissed);
+    }
+
+    [Fact]
+    public async Task Scan_DoesNotReproposeSomethingAlreadyConfirmed()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+
+        var first = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+        var firstList = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(
+            Assert.IsType<OkObjectResult>(first.Result).Value).ToList();
+
+        await Build(factory, ownerId).Review(fileId, firstList[0].Id,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Confirmed, "A voice"), default);
+
+        var second = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+        var secondList = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(
+            Assert.IsType<OkObjectResult>(second.Result).Value).ToList();
+
+        Assert.Single(secondList);
+        var confirmed = (await MarkersAsync(factory, fileId))
+            .Single(m => m.ReviewStatus == EvpReviewStatus.Confirmed);
+        Assert.Equal("A voice", confirmed.Label);
+    }
+
+    [Fact]
+    public async Task Scan_SkipsAHandPlacedPointMarkerItWouldCover()
+    {
+        // A point marker has no span, so overlap is "does the proposal contain it".
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+        await SeedMarkerAsync(factory, fileId, timeSeconds: 5.2, label: "Heard it", createdBy: ownerId);
+
+        var result = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+        var created = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value).ToList();
+
+        Assert.Single(created);
+        Assert.True(created[0].TimeSeconds > 10.0, "the 5s utterance should have been skipped");
+    }
+
+    [Fact]
+    public async Task Scan_ReplacesThePreviousScansCandidates()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+
+        await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+        await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+
+        // Two scans, not four candidates.
+        Assert.Equal(2, (await MarkersAsync(factory, fileId)).Count);
+    }
+
+    [Fact]
+    public async Task Scan_RejectsANonAudioFile()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory, contentType: "image/png");
+
+        var result = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Scan_ReturnsBadRequest_WhenTheAudioCannotBeDecoded()
+    {
+        // Garbage bytes with an audio content type: a problem with this file, not a server fault.
+        var factory = CreateFactory();
+        var fileId  = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "broken.wav", StoredFileName = "broken.wav", ContentType = "audio/wav",
+                FileSize = 8, FileData = [1, 2, 3, 4, 5, 6, 7, 8],
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Scan_ReturnsForbid_ForSomeoneWhoCannotSeeTheFile()
+    {
+        var factory = CreateFactory();
+        var (fileId, _) = await SeedWavFileAsync(factory);
+
+        var result = await Build(factory, Guid.NewGuid()).Scan(fileId, EvpSensitivity.Medium, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+        Assert.Empty(await MarkersAsync(factory, fileId));
+    }
+
+    [Fact]
+    public async Task Scan_ReturnsNotFound_ForAnUnknownFile()
+    {
+        var result = await Build(CreateFactory(), Guid.NewGuid())
+            .Scan(Guid.NewGuid(), EvpSensitivity.Medium, default);
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Scan_RejectsAnUndefinedSensitivity()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+
+        var result = await Build(factory, ownerId).Scan(fileId, (EvpSensitivity)99, default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Scan_ReturnsUnauthorized_WithoutAUserClaim()
+    {
+        var result = await Build(CreateFactory(), userId: null)
+            .Scan(Guid.NewGuid(), EvpSensitivity.Medium, default);
+
+        Assert.IsType<UnauthorizedResult>(result.Result);
     }
 }

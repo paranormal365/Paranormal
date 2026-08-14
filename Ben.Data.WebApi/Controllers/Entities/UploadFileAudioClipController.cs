@@ -186,23 +186,8 @@ internal static class AudioClipper
     public static (byte[] Bytes, string ContentType, string Extension) Clip(
         Stream sourceStream, string sourceContentType, double startSeconds, double endSeconds)
     {
-        WaveStream waveStream;
-        if (sourceContentType.Contains("wav", StringComparison.OrdinalIgnoreCase))
-        {
-            waveStream = new WaveFileReader(sourceStream);
-        }
-        else if (sourceContentType.Contains("mp3", StringComparison.OrdinalIgnoreCase) ||
-                 sourceContentType.Contains("mpeg", StringComparison.OrdinalIgnoreCase))
-        {
-            waveStream = new Mp3FileReader(sourceStream);
-        }
-        else
-        {
-            throw new NotSupportedException(
-                $"Audio clipping is supported for WAV and MP3. " +
-                $"Received content-type: '{sourceContentType}'. " +
-                "For other formats, use the Download endpoint and clip locally.");
-        }
+        // See AudioSourceReader: the default NAudio MP3 reader is Windows-only.
+        var waveStream = AudioSourceReader.Open(sourceStream, sourceContentType);
 
         using (waveStream)
         {

@@ -321,6 +321,31 @@ else
                             }
                         }
 
+                        @* ── Detector ────────────────────────────────────────── *@
+                        <div class="mt-2 pt-2 border-top d-flex align-items-center gap-2 flex-wrap">
+                            <span class="small fw-semibold">Detect</span>
+                            <TelerikDropDownList Data="@_sensitivityOptions"
+                                                 @bind-Value="_scanSensitivity"
+                                                 Width="110px"
+                                                 Enabled="@(!_scanning)" />
+                            <TelerikButton Size="sm"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                           Enabled="@(!_scanning)"
+                                           OnClick="RunScanAsync">
+                                @(_scanning ? "Scanning…" : "Scan for EVP")
+                            </TelerikButton>
+                            @if (_scanMessage is not null)
+                            {
+                                <span class="small text-secondary">@_scanMessage</span>
+                            }
+                        </div>
+                        <div class="small text-secondary mt-1">
+                            @* Says plainly what the score is, so nobody reads it as "83% likely a voice". *@
+                            Finds sounds that rise above the recording's own background noise, in the
+                            frequency range speech occupies. Everything it finds needs listening to —
+                            the score is how much a sound stood out, not how likely it is to be a voice.
+                        </div>
+
                         @if (PendingCandidates.Any())
                         {
                             @* Candidates exist in the database the moment a scan runs, so say so
@@ -1303,6 +1328,67 @@ else
     [
         EvpConfidenceLevel.Possible, EvpConfidenceLevel.Probable, EvpConfidenceLevel.Confirmed,
     ];
+
+    // ── EVP detection ─────────────────────────────────────────────────────────
+
+    private static readonly List<EvpSensitivity> _sensitivityOptions =
+    [
+        EvpSensitivity.Low, EvpSensitivity.Medium, EvpSensitivity.High,
+    ];
+
+    private EvpSensitivity _scanSensitivity = EvpSensitivity.Medium;
+    private bool           _scanning;
+    private string?        _scanMessage;
+
+    private async Task RunScanAsync()
+    {
+        if (_scanning) return;
+        _scanning    = true;
+        _scanMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var candidates = await AdminClient.ScanAudioForEvpAsync(FileId, _scanSensitivity);
+
+            // Reload everything rather than merging the response in: the scan replaces the previous
+            // pending set server-side, so the local list is stale in ways the response alone
+            // doesn't describe.
+            await ClearMarkerRegionsAsync();
+            await OverlayMarkersAsync();
+
+            _scanMessage = candidates.Count switch
+            {
+                0 => "Nothing stood out from the background.",
+                1 => "1 candidate to review.",
+                _ => $"{candidates.Count} candidates to review.",
+            };
+        }
+        catch
+        {
+            _scanMessage = "The scan failed. The file may not be readable audio.";
+        }
+        finally
+        {
+            _scanning = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Removes the marker regions currently drawn, so a re-scan doesn't leave the previous scan's
+    /// candidates on the waveform as orphans with no row behind them.
+    /// </summary>
+    private async Task ClearMarkerRegionsAsync()
+    {
+        if (_modalPlayer is null) return;
+        foreach (var marker in _markers)
+        {
+            var id = $"marker-{marker.Id}";
+            await _modalPlayer.RemoveRegionAsync(id);
+            _programmaticRegionIds.Remove(id);
+        }
+    }
 
     // ── Phase D: destructive edit state ─────────────────────────────────────────
 
