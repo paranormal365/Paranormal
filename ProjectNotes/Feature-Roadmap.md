@@ -36,6 +36,34 @@ Notable exploration findings that reshaped the plan:
 
 ## Area 1 — Notifications & Unread Badges (TOP PRIORITY)
 
+### ✅ SHIPPED 2026-08-14 — N1, N2, N3 (N4 still deferred)
+
+Built as planned. What the plan didn't anticipate:
+
+- **Two features turned out to be write-only, and this work made them readable.**
+  `UserMessage`/`UserMessageTo` could be *sent* by the audit log's "send as message" but no
+  recipient could ever read one — both existing controllers over those tables are SuperAdmin-only
+  and return every row unfiltered. New `MyMessagesController` (`/api/me/messages`) is the
+  recipient-scoped view that was missing. Separately, file-permission requests were submittable
+  and reviewable by API but had no review UI anywhere; the notifications page now lists them with
+  file/requester names joined server-side (`GET /api/me/permission-requests/pending`) and wires
+  approve/deny to the existing review endpoint. The orphaned `_pendingRequestCount` in
+  `MainLayout` is gone, replaced by the bell.
+- **`NotificationState` lives in `Ben.Web.Library/Services`, not `Ben.Web.WebApp`** — the bell and
+  the drawer both inject it, and library components can't reference the WebApp project.
+  `IBenUserState` gained a `StateChanged` event so the service is self-contained (the concrete
+  `WebApiTokenStore` already had one for `IWebApiTokenStore`).
+- **No separate "Messages" nav entry.** A single "Notifications" entry pointing at the new
+  `/notifications` page covers system messages and permission requests; org messages stay per-org
+  and roll up under the existing "Organizations" item.
+- **`ExecuteUpdateAsync` is unusable in this codebase's tests** — every controller test uses the EF
+  InMemory provider, which doesn't support it. `MarkAllRead` loads and saves instead.
+- Badge colour thresholds live in `NotificationBadge` (`Ben.Web.Library/Services`), shared by both
+  badges. `DescribeAge` includes the word "ago" so a caller can't compose "just now ago" — which
+  is exactly what the first version rendered live.
+
+Commits: `c9e0c3e` (N1), `6827b13` (N2), `c05e35a` (N3). 45 new tests.
+
 ### What exists today (explored)
 
 Three independent messaging systems, differing in read-state granularity:
@@ -243,7 +271,7 @@ No `OrganizationType` concept exists anywhere — orgs are differentiated only g
 |---|---|---|---|
 | ~~1~~ | ~~Audio security fixes (E0)~~ ✅ **shipped 2026-08-14** | XS→S | — |
 | ~~2~~ | ~~Audit log grid fix (Area 3)~~ ✅ **shipped 2026-08-14** | XS→S | — |
-| 3 | Notifications N1–N3 (Area 1) | M | — |
+| ~~3~~ | ~~Notifications N1–N3 (Area 1)~~ ✅ **shipped 2026-08-14** (N4 push still deferred) | M | — |
 | 4 | EVP detection E1–E4 (Area 2) | L | E0 |
 | 5 | Case page C1 (original request) | S | — |
 | 6 | Timeline visibility C2 | M | — |
