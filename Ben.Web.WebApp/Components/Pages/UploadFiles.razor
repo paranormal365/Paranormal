@@ -284,6 +284,7 @@
     {
         if (firstRender)
         {
+            if (!await TokenStore.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
             await LoadDataAsync();
             StateHasChanged();
         }

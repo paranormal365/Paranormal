@@ -72,7 +72,8 @@
                     </GridCommandButton>
                     <GridCommandButton Command="Extensions"
                                        Icon="@SvgIcon.FileWrench"
-                                       OnClick="@((GridCommandEventArgs e) => OpenExtensions((AdminFileTypeWithExtensionsResponse)e.Items.First()))">\n                        Extensions
+                                       OnClick="@((GridCommandEventArgs e) => OpenExtensions((AdminFileTypeWithExtensionsResponse)e.Items.First()))">
+                        Extensions
                     </GridCommandButton>
                     <GridCommandButton Command="Delete"
                                        Icon="@SvgIcon.Trash"

@@ -219,21 +219,27 @@ public class UploadFileAudioEditControllerTests
         return typeId;
     }
 
-    private static async Task<Guid> SeedFileAsync(
+    /// <summary>
+    /// Seeds a private UploadFile and returns it with its owner. Callers must act as the owner
+    /// (or an audience the file is shared with) — Edit requires
+    /// <c>FileAudienceAccess.CanViewFileAsync</c> on the source.
+    /// </summary>
+    private static async Task<(Guid FileId, Guid OwnerId)> SeedFileAsync(
         IDbContextFactory<BenDataContext> factory,
         byte[]? fileData = null, string contentType = "audio/wav")
     {
-        var fileId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
         await using var db = await factory.CreateDbContextAsync();
         db.UploadFiles.Add(new UploadFile
         {
-            Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = Guid.NewGuid(),
+            Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
             FileName = "audio.wav", StoredFileName = "s.wav", ContentType = contentType,
             FileSize = fileData?.Length ?? 4, FileData = fileData ?? new byte[4],
-            DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
         });
         await db.SaveChangesAsync();
-        return fileId;
+        return (fileId, ownerId);
     }
 
     private static AudioEditRequest Request(
@@ -305,8 +311,8 @@ public class UploadFileAudioEditControllerTests
     public async Task Edit_ReturnsBadRequest_WhenFileTypeNotFound()
     {
         var factory = CreateFactory();
-        var fileId  = await SeedFileAsync(factory, CreateSilentWav());
-        var ctrl    = Build(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav());
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Edit(fileId, Request(AudioEditOperation.Normalize, Guid.NewGuid()), default);
 
@@ -318,13 +324,61 @@ public class UploadFileAudioEditControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, new byte[100], "audio/ogg");
-        var ctrl    = Build(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory, new byte[100], "audio/ogg");
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Edit(fileId, Request(AudioEditOperation.Reverse, typeId), default);
 
         var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
         Assert.Contains("WAV", bad.Value?.ToString());
+    }
+
+    // ── File-audience access ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Edit_UnrelatedCaller_ReturnsForbid()
+    {
+        // Edit had no check on the source file at all: because the result is persisted as a
+        // brand new file the caller owns, any authenticated user could launder someone else's
+        // private audio into their own library by "normalizing" it. Same exfiltration path
+        // UploadFileAudioClipController was already fixed for.
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, _) = await SeedFileAsync(factory, CreateSilentWav());
+        var ctrl    = Build(factory, Guid.NewGuid());
+
+        var result  = await ctrl.Edit(fileId, Request(AudioEditOperation.Normalize, typeId), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+
+        // and nothing was persisted for the caller
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(1, await db.UploadFiles.CountAsync());   // only the seeded source
+    }
+
+    [Fact]
+    public async Task Edit_PublicSourceFile_AllowsAnyAuthenticatedCaller()
+    {
+        // The guard must not over-reach: deriving from a public file stays allowed.
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var fileId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = Guid.NewGuid(),
+                FileName = "public.wav", StoredFileName = "p.wav", ContentType = "audio/wav",
+                FileSize = 100, FileData = CreateSilentWav(seconds: 1), IsPublic = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+            });
+            await db.SaveChangesAsync();
+        }
+        var ctrl = Build(factory, Guid.NewGuid());
+
+        var result = await ctrl.Edit(fileId, Request(AudioEditOperation.Normalize, typeId), default);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
     }
 
     // ── Success — one per operation ─────────────────────────────────────────────
@@ -336,8 +390,8 @@ public class UploadFileAudioEditControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, CreateSilentWav(seconds: 1));
-        var ctrl    = Build(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 1));
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Edit(fileId, Request(op, typeId), default);
 
@@ -351,8 +405,8 @@ public class UploadFileAudioEditControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
-        var ctrl    = Build(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Edit(fileId, Request(AudioEditOperation.Cut, typeId, start: 0.5, end: 1.0), default);
 
@@ -364,8 +418,8 @@ public class UploadFileAudioEditControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
-        var ctrl    = Build(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Edit(fileId, Request(AudioEditOperation.Silence, typeId, start: 0.5, end: 1.0), default);
 
@@ -377,8 +431,8 @@ public class UploadFileAudioEditControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, CreateSilentWav(seconds: 1));
-        var ctrl    = Build(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 1));
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Edit(fileId, Request(AudioEditOperation.Gain, typeId, gainDb: 6.0), default);
 
@@ -390,8 +444,8 @@ public class UploadFileAudioEditControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
-        var ctrl    = Build(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Edit(fileId, Request(AudioEditOperation.Fade, typeId, fadeIn: 0.5, fadeOut: 0.5), default);
 
@@ -451,8 +505,8 @@ public class UploadFileAudioEditControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, CreateSineWav(440.0, seconds: 1.5));
-        var (ctrl, getBytes) = BuildCapturing(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSineWav(440.0, seconds: 1.5));
+        var (ctrl, getBytes) = BuildCapturing(factory, ownerId);
 
         var result  = await ctrl.Edit(fileId, Request(AudioEditOperation.Pitch, typeId, pitchSemitones: 12), default);
 
@@ -468,8 +522,8 @@ public class UploadFileAudioEditControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, CreateSineWav(440.0, seconds: 1.5));
-        var (ctrl, getBytes) = BuildCapturing(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSineWav(440.0, seconds: 1.5));
+        var (ctrl, getBytes) = BuildCapturing(factory, ownerId);
 
         var result  = await ctrl.Edit(fileId, Request(AudioEditOperation.Pitch, typeId, pitchSemitones: -12), default);
 
@@ -485,8 +539,8 @@ public class UploadFileAudioEditControllerTests
     {
         var factory = CreateFactory();
         var typeId  = await SeedTypeAsync(factory);
-        var fileId  = await SeedFileAsync(factory, CreateSineWav(440.0, seconds: 2.0));
-        var (ctrl, getBytes) = BuildCapturing(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSineWav(440.0, seconds: 2.0));
+        var (ctrl, getBytes) = BuildCapturing(factory, ownerId);
 
         var result  = await ctrl.Edit(fileId, Request(AudioEditOperation.Speed, typeId, speedRatio: 2.0), default);
 

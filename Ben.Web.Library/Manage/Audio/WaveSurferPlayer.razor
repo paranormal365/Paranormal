@@ -393,6 +393,13 @@
 
     public async Task PlayRegionAsync(string id)      => await Invoke("playRegion", id);
 
+    /// <summary>
+    /// Makes one region editable and locks the rest; pass null to lock everything. Returns the
+    /// editable region's bounds, or null when there is no such region.
+    /// </summary>
+    public async Task<WsRegionData?> SetRegionEditableAsync(string? id)
+        => _module is null ? null : await _module.InvokeAsync<WsRegionData?>("setRegionEditable", _containerId, id);
+
     public async Task<List<WsRegionData>> GetRegionsAsync()
         => _module is null ? [] : await _module.InvokeAsync<List<WsRegionData>>("getRegions", _containerId);
 

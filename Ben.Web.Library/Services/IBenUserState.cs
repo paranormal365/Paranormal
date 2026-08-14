@@ -27,6 +27,14 @@ public interface IBenUserState
     Guid? UserId { get; }
 
     /// <summary>
+    /// Raised whenever sign-in state changes within this circuit — login, logout, or a SuperAdmin
+    /// starting/stopping impersonation. Anything caching per-user data (see
+    /// <see cref="NotificationState"/>) must discard it on this signal, because the circuit
+    /// outlives the session it was fetched for.
+    /// </summary>
+    event Action? StateChanged;
+
+    /// <summary>
     /// Completes once this circuit has finished resolving auth state for the current page
     /// load — i.e. after MainLayout has attempted to restore a persisted session (or bridge
     /// an Entra session) on first render. <see cref="IsAuthenticated"/> is unreliable before

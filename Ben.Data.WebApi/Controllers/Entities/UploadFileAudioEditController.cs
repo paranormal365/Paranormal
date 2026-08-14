@@ -13,6 +13,12 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 /// Applies a destructive audio edit (cut, silence, normalize, gain, fade, reverse) to an
 /// existing UploadFile and saves the result as a new UploadFile — the source is never modified.
 /// </summary>
+/// <remarks>
+/// Requires <see cref="FileAudienceAccess.CanViewFileAsync"/> on the source, for the same reason
+/// <see cref="UploadFileAudioClipController"/> does: the edit result is persisted as a brand new
+/// file the caller owns, so without the check any authenticated user could launder someone else's
+/// private audio into their own library by "editing" it.
+/// </remarks>
 [ApiController]
 [Route("api/upload-files/{fileId:guid}/audio-edit")]
 [Authorize]
@@ -64,6 +70,7 @@ public sealed class UploadFileAudioEditController : BenControllerBase
         var source = await db.UploadFiles.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == fileId, ct);
         if (source is null) return NotFound("Source file not found.");
+        if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, userId, ct)) return Forbid();
 
         if (!await db.UploadFileTypes.AnyAsync(t => t.Id == request.UploadFileTypeId, ct))
             return BadRequest("Upload file type not found.");

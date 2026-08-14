@@ -193,17 +193,10 @@ internal static class AudioEditor
         return (all.ToArray(), format);
     }
 
+    // Goes through AudioSourceReader so MP3 uses the managed decoder — the default NAudio path is
+    // Windows-only and threw DllNotFoundException on macOS/Linux for every MP3 edit.
     private static WaveStream OpenWaveStream(Stream sourceStream, string sourceContentType)
-    {
-        if (sourceContentType.Contains("wav", StringComparison.OrdinalIgnoreCase))
-            return new WaveFileReader(sourceStream);
-        if (sourceContentType.Contains("mp3", StringComparison.OrdinalIgnoreCase) ||
-            sourceContentType.Contains("mpeg", StringComparison.OrdinalIgnoreCase))
-            return new Mp3FileReader(sourceStream);
-
-        throw new NotSupportedException(
-            $"Audio editing is supported for WAV and MP3. Received content-type: '{sourceContentType}'.");
-    }
+        => AudioSourceReader.Open(sourceStream, sourceContentType);
 
     private static (byte[] Bytes, string ContentType, string Extension) WriteWav(float[] samples, WaveFormat sourceFormat)
     {

@@ -128,6 +128,7 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         try
         {
             _cases = (await AdminClient.GetOrgCasesAsync(OrgId)).ToList();

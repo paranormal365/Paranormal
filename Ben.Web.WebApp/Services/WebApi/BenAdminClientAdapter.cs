@@ -85,6 +85,30 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         return await _api.GetAsync<IReadOnlyList<UploadFileRecord>>(url, token) ?? [];
     }
 
+    // ── Notifications ─────────────────────────────────────────────────────────
+
+    public Task<NotificationSummaryResponse?> GetNotificationSummaryAsync(CancellationToken token = default)
+        => _api.GetAsync<NotificationSummaryResponse>("/api/me/notification-summary", token);
+
+    public async Task<List<MyMessageRecord>> GetMyMessagesAsync(bool unreadOnly = false, CancellationToken token = default)
+        => await _api.GetAsync<List<MyMessageRecord>>(
+               $"/api/me/messages?unreadOnly={(unreadOnly ? "true" : "false")}", token) ?? [];
+
+    public Task<bool> MarkMyMessageReadAsync(Guid id, CancellationToken token = default)
+        => _api.PutVoidAsync<object?>($"/api/me/messages/{id}/read", null, token);
+
+    public async Task<int> MarkAllMyMessagesReadAsync(CancellationToken token = default)
+        => await _api.PutAsync<object?, int>("/api/me/messages/read-all", null, token);
+
+    public async Task<List<PendingPermissionRequestRecord>> GetPendingPermissionRequestsForMeAsync(CancellationToken token = default)
+        => await _api.GetAsync<List<PendingPermissionRequestRecord>>("/api/me/permission-requests/pending", token) ?? [];
+
+    public async Task<bool> ReviewPermissionRequestAsync(
+        Guid requestId, FilePermissionRequestStatus status, string? reviewNotes, CancellationToken token = default)
+        => await _api.PutAsync<ReviewPermissionRequestRequest, UploadFilePermissionRequestResponse>(
+               $"/api/upload-file-permission-requests/{requestId}/review",
+               new ReviewPermissionRequestRequest(status, reviewNotes), token) is not null;
+
     // ── Audit Log ─────────────────────────────────────────────────────────────
 
     public async Task<AuditLogPagedResponse?> GetAuditLogsAsync(
@@ -133,8 +157,8 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> ImpersonateUserAsync(Guid targetUserId, string targetUserEmail, CancellationToken token = default)
         => _auth.ImpersonateAsync(targetUserId, targetUserEmail, token);
 
-    public void StopImpersonating()
-        => _auth.StopImpersonating();
+    public Task StopImpersonatingAsync(CancellationToken token = default)
+        => _auth.StopImpersonatingAsync(token);
 
     // ── File Types ────────────────────────────────────────────────────────────
 
@@ -1351,6 +1375,15 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default)
         => _api.DeleteAudioMarkerAsync(fileId, markerId, token);
+
+    public Task<IReadOnlyList<AudioMarkerRecord>> ReplaceAudioCandidatesAsync(Guid fileId, BulkCreateAudioCandidatesRequest request, CancellationToken token = default)
+        => _api.ReplaceAudioCandidatesAsync(fileId, request, token);
+
+    public Task<AudioMarkerRecord?> ReviewAudioMarkerAsync(Guid fileId, Guid markerId, ReviewAudioMarkerRequest request, CancellationToken token = default)
+        => _api.ReviewAudioMarkerAsync(fileId, markerId, request, token);
+
+    public Task<IReadOnlyList<AudioMarkerRecord>> ScanAudioForEvpAsync(Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default)
+        => _api.ScanAudioForEvpAsync(fileId, sensitivity, options, token);
 
     // ── Audio Clip ────────────────────────────────────────────────────────────
 

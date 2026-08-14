@@ -3047,3 +3047,106 @@ after setting `img.src`, so image dimensions were `[0,0]` essentially always.
 project dialog needs saved projects, and seeding them is what uncovered #7 instead.
 
 > See `README-phase-165.md` … `README-phase-169.md` in Github-BenVideo.
+
+---
+
+## 75. Native sidecar wired into the Ben solution (✅ COMPLETE 2026-08-14, Ben.Video phase 173)
+
+Item #70 finished the sidecar's *capability*; this covers making it usable from the Ben app rather
+than only from the WASM Playground.
+
+**The blocker, which was not obvious.** Everything sidecar-related had been built and verified
+under Blazor **WebAssembly**. `Ben.Web.WebApp` is Blazor **Server**, and the sidecar binds
+`127.0.0.1` on the *user's* machine. The JSON half of the protocol went out over a C# `HttpClient`,
+which resolves that address wherever the Blazor code executes — the browser under WASM (correct by
+accident), the **server** under Blazor Server. A server-side request also carries no `Origin`
+header, and `SecurityMiddleware` 403s every endpoint except bare `/v1/health`.
+
+The resulting symptom was worse than an outright failure: **health succeeded, so the toolbar chip
+reported a sidecar had been found, and only pairing failed** — reading as a mistyped pairing code
+rather than a request that never reached the user's machine. Measured against a real sidecar:
+`/v1/status` + valid token with no Origin → 403; the same request with an allowlisted Origin → 200.
+
+**Fixed** by routing every sidecar request through the browser (`SidecarTransport` →
+`sidecarInterop.js`); 7 call sites converted and the named `HttpClient` removed. A guard test greps
+the sidecar services for `IHttpClientFactory`/`CreateClient(` — nothing else catches a regression,
+because a new C# call site still works fine in the WASM Playground.
+
+**Also in this item:** `Ben.slnx` gained `Ben.Video.Sidecar` (+ `Core`, `RenderService`,
+`Sidecar.FakeFfmpeg`) under *Media Projects*; `options.NativeSidecar = true` in
+`Ben.Web.WebApp/Program.cs`; the Ben dev origins added to `SidecarOptions.AllowedOrigins`; and a
+build break fixed where `BenMediaLibraryProvider` had never implemented the `IProgress<double>`
+parameter `IMediaLibraryProvider.DownloadFileAsync` gained in Ben.Video phase 150.
+
+**⚠ Before this works off localhost:** the production origin must be added to
+`SidecarOptions.AllowedOrigins` (via appsettings). Nothing else is needed; without it every request
+past `/v1/health` is rejected.
+
+> See `README-phase-173.md` in Github-BenVideo.
+
+---
+
+## 76. A finished render can go to the server or the user's machine (✅ COMPLETE 2026-08-14, Ben.Video phase 176)
+
+**The user's model, stated explicitly:** the *rendered video* goes either to the server as a final
+video or to the user's machine. The *project* is a separate concern — JSON export to save, JSON
+open to resume. Two different questions; they now have two different prompts.
+
+**What existed before:** export → blob download to Downloads → the retained copy deleted.
+Publishing meant going to the project list, clicking Publish, and **re-selecting the exported file
+out of Downloads** through a hidden `<InputFile>`. Nothing connected the file the editor had just
+produced to the file the user picked back up.
+
+**Now:** `<VideoEditor OnPublishExport="…" />`. Supply a handler and "Export Now" ends with a
+destination prompt — *Upload to server* / *Save to my machine* / *Discard*. Leave it unset and
+export behaves exactly as before; the gate is `HasDelegate`, not a new options flag, because a host
+with no handler has no second destination to offer. Queued exports still download directly — nobody
+is present to answer a prompt for a job the user queued and walked away from.
+
+Host side: `VideoExportPublisher` (`Ben.Web.Library/Services/`) holds the two-step all three editor
+pages need. `POST /api/video-projects/{id}/publish` attaches to an *existing* project row and 404s
+without one, so a render made without ever saving to the server would have nowhere to go — it saves
+the project first in that case, then publishes to what it just created, and remembers the id so a
+second export updates that project rather than adding a row per render.
+
+**Two decisions that look like bugs and aren't:**
+- The retained-export discard is deliberately **not** in a `finally`. A host that throws keeps its
+  output, so the prompt can stay open and still offer "Save to my machine" instead of deleting the
+  only copy of a render the user just waited through. Handlers must therefore **throw** to report
+  failure — returning normally means "safely stored".
+- The bytes are read from the **blob URL, not OPFS**. A retained export always has a blob URL,
+  including on the OPFS-unavailable branch (Safari private browsing) where it is minted from MEMFS.
+  Reading OPFS would have uploaded an empty body in exactly the browser nobody tests.
+
+The old publish-from-Downloads flow stays, for files the user already has on disk.
+
+> See `README-phase-176.md` in Github-BenVideo.
+
+---
+
+## 77. Full end-to-end validation pass — main Ben solution ✅ Complete (2026-08-14)
+
+Comprehensive validation of the whole Ben solution (not Ben.Video, which had its own item #9 pass) — every user journey (public/anonymous, client, org staff, SuperAdmin, media), checking for bugs/gaps in the UI, plus a code-streamlining pass. Prompted by "let's start over" — a fresh, broader pass distinct from the earlier Ben.Video-only testing.
+
+> **In progress.** Bugs found and fixed so far:
+> - `bootstrap.bundle.min.js` was loaded on every page but never used — nothing in the codebase calls any Bootstrap JS API (no `data-bs-toggle`/dropdown/modal/etc.; Telerik owns all interactive components). The deferred script re-executing on Blazor's enhanced navigation threw an uncaught `Cannot redefine property: delegateTarget` on every soft page navigation. Removed the script tag; kept the Bootstrap CSS/icon links, which are genuinely used app-wide.
+> - **The entire Ben.Video editor was crashing on load, everywhere it's embedded** (`/my-videos`, `/video-editor`, every case's video editor) — a Razor comment (`@* ... *@`) was placed inside `<ExportDestinationPrompt>`'s opening tag, between two attributes. Razor comments aren't valid inside a tag's own attribute list, so the compiler passed the raw comment text through as a bogus component parameter name, throwing `InvalidOperationException` on first render. Fixed in the Ben.Video.Editor repo (commit `abd3bfd`) by moving the comment above the tag.
+> - **Accepting a client's investigation request into a case silently dropped the client's actual report** — `CaseController.AcceptClientRequest` copied every address field from the `ClientRequest` onto the new `Case` but never copied `Description`, so the client's submitted narrative (what they experienced, since when) vanished the moment staff accepted the request, with no UI path back to the original `ClientRequest` record. Fixed by copying `Description` across; verified live end-to-end (submitted a request with a marker string, accepted it, confirmed the new case's Overview tab shows a "Case Summary" panel with that text).
+> - **22-page AuthReady race left hard-navigated pages rendering empty with no error** — `OnInitializedAsync`'s `WaitUntilAuthReadyAsync` guard (the established pattern from an earlier session's 25-page audit) only protects that lifecycle method's own body; it doesn't carry over to the separate `OnAfterRenderAsync(firstRender)` hook these pages use for their actual data fetch (a deliberate split, to avoid firing authenticated API calls during static SSR prerender). On a hard navigation the bearer token isn't guaranteed attached by the time that later hook's first render completes, so the fetch can go out unauthenticated and quietly render an empty list/grid. Reproduced live on `OrganizationList` (Organizations page showed "No records available" on hard nav, fine via in-app link clicks) and `OrgPendingRequests` (a real pending request briefly vanished the same way). Swept every other page with the identical shape and applied the same guard, in two passes: first pass — `OrganizationList`, `OrganizationView`, `OrganizationClientSettings`, `OrganizationMembershipQuestions`, `CaseDetail`, `OrgPendingRequests`, `OrgCmsEditor`, `OrgCmsPageEdit`, `AdminExperienceTaxonomy`, `AdminLookupTypes`, `AdminRoles`, `OrgScheduler`, `OrgMessages`; a corrected, more thorough sweep caught 9 more the first pass missed — `OrganizationCreateEdit`, `AdminAllCases`, `AdminAllInvestigations`, `AdminUserDetail`, `AdminUsers`, `CaseList`, `CaseNotes`, `CaseAudioMixPage`, `UploadFiles` — live-confirmed `AdminAllCases`/`AdminAllInvestigations` genuinely showed 0 records on hard nav before the fix, 9/9 and 2/2 real rows after. (`PublicCaseDiscovery`, `ClientRequestWizard`, `MainLayout`, and the non-routed child component `AudioFilePreview` excluded — false positives or not independently navigable.)
+> - **SuperAdmin permanently lost "Administration" nav access after using "Return to SuperAdmin"** to exit impersonation, until logging out and back in. `StopImpersonating` tried to restore `IsSuperAdmin` by re-parsing the saved original access token with `JwtClaimsParser` — but the Identity API issues opaque, data-protected tokens, not JWTs (an existing code comment on `LoginAsync` already documents this), so the parse silently returned `false`. Traced from a missing nav button, through the layout, through the token store, to this parsing call — `LoginAsync` already had the correct fix (call `/api/me` server-side instead of parsing). Applied the same pattern to `StopImpersonating`, now async: `WebApiAuthService.cs`, `IWebApiAuthService.cs`, `IBenAdminClient.cs`, `BenAdminClientAdapter.cs`, `MainNavigationDrawer.razor`, plus 2 test files. Live-verified: impersonate → Return to SuperAdmin → Administration button present, `/admin/cases` no longer redirects to Home.
+> - **Audit Log page (`/admin/audit-log`) threw `InvalidOperationException` on every single load**, including anonymous/prerender requests — a bare `return;` inside a markup `@if (!UserState.IsSuperAdmin) { ...; return; }` block left the outer `<div>` element frame unclosed in Razor's render tree ("A frame of type 'Element' was left unclosed"). Fired unconditionally because `IsSuperAdmin` defaults false during static SSR prerender, before the real logged-in user's role is known. Removed the markup-time guard, replaced with the same `OnInitializedAsync` redirect-guard pattern every other SuperAdmin page already uses. Live-verified: 36 real audit records render with working filters.
+> - **File Types admin page**: a stray literal `\n` (two characters, not a real newline) had landed inside the "Extensions" grid button's markup text, rendering as `"\n Extensions"`. One-line fix.
+> - **The evidence Image Editor never worked at all, for six independent, stacked reasons** — every "Edit" click on an image file either crashed outright or silently rendered a black canvas: (1) `<TelerikWindow Title="...">` — no such parameter, needs `<WindowTitle>`; (2) `<TelerikTextBox PlaceholderText="...">` — the real parameter is `Placeholder`; (3) `image-editor.js` contained its entire ~800-line source duplicated back-to-back, so `const _instances` was declared twice — a `SyntaxError` that failed the module import outright (kept the newer, more complete copy with the Evidence Tools/Layers features the component actually calls); (4) even once the script parsed, the image still wouldn't load — the `UploadFile` download endpoint is `[Authorize]`-protected, but the editor handed Fabric.js's `fromURL()` that URL directly for an unauthenticated browser-side fetch, which always 401'd (fixed by fetching bytes server-side via the authenticated `HttpClient` and passing a base64 `data:` URL instead, matching every other media preview in the app); (5) Fabric.js v6 (loaded via CDN) rewrote `fromURL()`/`loadFromJSON()` from v5's callback signature to Promise-based, so the old callback was silently never invoked; (6) Fabric v6 also renamed the object-stacking API (`sendToBack`/`bringForward`/`sendBackwards` → `Canvas.sendObjectToBack`/`bringObjectForward`/`sendObjectBackwards`) — also fixed `destroy()` leaking the old `<canvas>` DOM element on every re-open. All six root-caused live via `DetailedErrors: true` surfacing the real .NET exceptions in the browser console (the WebApp's own log file carries almost no runtime output — Serilog is configured to write only to a SQL `Logs` table at `Error` level, not console) plus direct reflection against the installed `Telerik.Blazor.dll` to find real parameter names instead of guessing. Live-verified end-to-end: image loads, renders at correct aspect ratio, rotate/tool interactions work, clean console on a fresh load.
+>
+> **Found, reproduced, NOT yet fixed** — needs deeper Telerik-specific investigation beyond this pass's scope:
+> - **Both `TelerikDialog`-hosted forms with a Title-gated Save button are permanently stuck disabled, blocking two real workflows entirely**: the Calendar's "New Event" dialog (`OrgScheduler.razor`) and the case "Schedule Investigation" dialog (`InvestigationPanel.razor`). Both use the identical pattern `<TelerikTextBox @bind-Value="@_form.Title" />` for the input and `Enabled="@(!_isBusy && !string.IsNullOrWhiteSpace(_form.Title))"` on the Save button. Typing a real title (verified via direct DOM inspection — the underlying `<input class="k-input-inner">` genuinely holds the typed text, not a placeholder) never enables Save. Ruled out: automation-tool typing artifacts (per-key `key` presses reproduce it identically to bulk `type`; other `TelerikTextBox`/`TelerikWindow`-hosted forms elsewhere in the app — e.g. "Add a Person," "New Role" — work correctly with the same typing method); stale-render display only (toggling the unrelated "All Day" `TelerikCheckBox` in the same dialog *does* visibly update and *does* prove a fresh re-render occurred, yet Title still reads as empty in that same re-render, meaning the underlying `_form.Title` genuinely isn't being set — not just a UI staleness issue). Both affected dialogs share `<TelerikDialog>` specifically (as opposed to `<TelerikWindow>`, which works fine elsewhere) — the common factor is suspicious but unconfirmed as the actual root cause. **Currently a hard blocker**: there is no way to create a calendar event or schedule an investigation through the UI at all. Needs either a Telerik-version-specific fix or a workaround (e.g. switching these two dialogs from `@bind-Value` to explicit `Value`/`ValueChanged` with a manual `StateHasChanged()`, which was not attempted live in this pass to avoid guessing at a fix without being able to verify the root cause first).
+> - **Media Library grid's lazy "click-to-preview" for large audio/video files never completes** — clicking "Preview" on the 7.1 MB test mp3 in `/media-library` left the card permanently stuck (no waveform, no spinner, no error banner), while the browser's SignalR WebSocket connection repeatedly disconnected and silently reconnected underneath it (multiple new circuit IDs within ~15 seconds). The *same* file, rendered eagerly inside `AdminUserDetail`'s Files-tab grid (a different embedding of the identical `AudioFilePreview`/`WaveSurferPlayer` component), loads its waveform correctly — isolating the bug to `MediaLibraryGrid.razor`'s deferred-render path specifically, not `AudioFilePreview` itself. This is very likely the fetch-storm/large-payload risk the original Media Library Phase 1 plan explicitly flagged and deferred ("`UserMediaPreview` fetches full file bytes as base64 for both images and video/audio — there's no thumbnail endpoint... a real thumbnail endpoint is explicitly deferred to Phase 1.5/2") — this is that deferred risk now confirmed as a real, user-facing failure for files in the several-MB range, not just a theoretical one. Needs either the deferred thumbnail/streaming endpoint, or at minimum investigation into why the same component fails only when mounted via the grid's on-demand `RenderFragment` trigger.
+> - **Media Library shows no visual distinction between a file and its case-copy of the same name** — copy-on-attach (item #6 phase 2) creates a second `UploadFile` record with an identical filename/size but a different `Id`, owner, and `Allow*Comments` settings (linked via `CaseCopyOfUploadFileId`). The grid has no badge or indicator marking a card as a copy, so two visually-identical cards can sit side by side; clicking "Comments" on one and being told "You don't have permission" while the other (same name, "your" copy) allows it reads as a bug but is actually two different files behaving correctly. Not a functional defect — the permission check was verified correct via direct API calls — but a real UX clarity gap worth a small fix (e.g. a "Copy" badge, or grouping copies under the original).
+>
+> Confirmed working across a wide sweep: public org discovery + case voting, the full client request-submission wizard (address verification → org matching → submit → staff accept-into-case), My Cases/My Investigations/My Requests, case messaging, related-people management, Upload Files, Media Library (grid/list/voting/comments on owned files), org Members/Cases/Calendar-viewing/Messages/Files/CMS/Roles(list+create+delete)/Addresses/Settings tabs, dark/light theme toggle, full SuperAdmin journey (Users/impersonation round-trip/Roles/cross-org Cases+Investigations/File Types/Lookup Types/Experience Taxonomy/Audit Log/New Organization), image preview in Media Library, audio waveform preview in AdminUserDetail's Files tab, all case-detail tabs (Overview/Timeline/Investigations/Files/Transfers/Messages/Reports/Research/Notes/Video) including Notes create/edit/delete round-trip, Audio Mixer page, and the full Case creation flow (end-to-end: new case #2026-005 created successfully in BenCo).
+>
+> **Known remaining gap in the Image Editor fix above**: `OrganizationFiles.razor`'s embedding passes an `ImageUrl` override (`AdminClient.GetOrgFileDownloadUrl`) instead of `UploadFileId`, for editing org-scoped files — that URL is equally `[Authorize]`-protected and hits the identical unauthenticated-fetch failure, but there's no existing `GetOrgFileDataAsync`-style byte-fetch method to swap it for (only the URL-returning variant exists on `IBenAdminClient`). Out of scope for this pass; needs a new API endpoint + client method mirroring `GetFileDataAsync`, or an anonymous signed-URL scheme.
+>
+> **Phase 6 — code-streamlining pass.** Reviewed the full session diff (36 files) for cruft; almost all of it was already-minimal one-line `AuthReady` guards with nothing to trim. The one genuine finding: the build carried 4 pre-existing "unused field" (`CS0414`/`CS0649`) warnings, and every one of them turned out to be a real bug rather than dead code — `CaseVideoEditorPage._myUserId` was read in an ownership check but never assigned, so `row.CreatedByAppUserId == _myUserId` was always false and the Publish/Delete buttons never rendered for any video project, for any user (removed the check entirely — the list is already server-filtered to the caller's own projects, so it was redundant on top of broken); `CaseVideoEditorPage._publishing`/`MyVideosPage._publishing` were set during an in-flight publish but never read, leaving the Publish button clickable mid-upload with no double-submit guard (wired `Enabled="@(!_publishing)"`); `ImageEditorPlayer._saving` had the same shape around the two Save actions, fixed with a re-entrancy guard since `WindowAction` has no `Enabled` parameter to bind to. Build is now 0 warnings, 0 errors.
+>
+> Still to test: a code-streamlining pass over anything touched this session.

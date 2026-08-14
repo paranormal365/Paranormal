@@ -77,6 +77,31 @@ public interface IBenAdminClient
     /// </summary>
     Task<IReadOnlyList<UploadFileRecord>> GetMediaLibraryFilesAsync(string[]? contentTypePrefixes = null, CancellationToken token = default);
 
+    // ── Notifications ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Everything waiting on the current user, in one round trip: unread counts per bucket plus
+    /// the age of the oldest item in each. Backs the bell badge and the drawer counts.
+    /// </summary>
+    Task<NotificationSummaryResponse?> GetNotificationSummaryAsync(CancellationToken token = default);
+
+    /// <summary>Platform messages addressed to the current user, newest first.</summary>
+    /// <param name="unreadOnly">Restrict to messages never opened.</param>
+    Task<List<MyMessageRecord>> GetMyMessagesAsync(bool unreadOnly = false, CancellationToken token = default);
+
+    /// <summary>Marks one of the current user's messages read. <paramref name="id"/> is the record's Id.</summary>
+    Task<bool> MarkMyMessageReadAsync(Guid id, CancellationToken token = default);
+
+    /// <summary>Marks every unread message of the current user's read. Returns how many changed.</summary>
+    Task<int> MarkAllMyMessagesReadAsync(CancellationToken token = default);
+
+    /// <summary>Pending file-permission requests awaiting the current user, with names resolved.</summary>
+    Task<List<PendingPermissionRequestRecord>> GetPendingPermissionRequestsForMeAsync(CancellationToken token = default);
+
+    /// <summary>Approves or denies a file-permission request. Returns false when the API rejects it.</summary>
+    Task<bool> ReviewPermissionRequestAsync(
+        Guid requestId, FilePermissionRequestStatus status, string? reviewNotes, CancellationToken token = default);
+
     // ── Audit Log ─────────────────────────────────────────────────────────────
 
     Task<AuditLogPagedResponse?> GetAuditLogsAsync(int page = 1, int pageSize = 50, string? entityType = null, int? action = null, Guid? userId = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken token = default);
@@ -133,8 +158,11 @@ public interface IBenAdminClient
     /// <summary>
     /// Ends the active impersonation session and restores the original SuperAdmin token.
     /// </summary>
-    /// <remarks>This is a synchronous in-memory operation; no HTTP call is made.</remarks>
-    void StopImpersonating();
+    /// <remarks>
+    /// Calls <c>/api/me</c> to re-establish IsSuperAdmin on the restored token — the Identity
+    /// API's opaque tokens can't have that claim read back out of them locally.
+    /// </remarks>
+    Task StopImpersonatingAsync(CancellationToken token = default);
 
     // ── File Types ────────────────────────────────────────────────────────────
 
@@ -760,6 +788,27 @@ public interface IBenAdminClient
 
     /// <summary>Permanently deletes an EVP marker.</summary>
     Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default);
+
+    /// <summary>
+    /// Replaces this file's pending detector candidates with a fresh scan's results, leaving
+    /// confirmed and dismissed markers alone. Returns the newly-created candidates.
+    /// </summary>
+    Task<IReadOnlyList<AudioMarkerRecord>> ReplaceAudioCandidatesAsync(
+        Guid fileId, BulkCreateAudioCandidatesRequest request, CancellationToken token = default);
+
+    /// <summary>Records a reviewer's decision on a candidate — confirm (optionally relabelled and re-bounded) or dismiss.</summary>
+    Task<AudioMarkerRecord?> ReviewAudioMarkerAsync(
+        Guid fileId, Guid markerId, ReviewAudioMarkerRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// Runs EVP detection over the stored audio and replaces this file's pending candidates with
+    /// the results, skipping anything overlapping a marker already confirmed or dismissed.
+    /// </summary>
+    /// <param name="options">
+    /// Per-scan overrides. Null uses <paramref name="sensitivity"/>'s preset unchanged.
+    /// </param>
+    Task<IReadOnlyList<AudioMarkerRecord>> ScanAudioForEvpAsync(
+        Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default);
 
     // ── Audio Clip ─────────────────────────────────────────────────
 

@@ -113,17 +113,9 @@ internal static class AudioMixer
         return (all.ToArray(), format);
     }
 
+    // See AudioSourceReader: the default NAudio MP3 reader is Windows-only.
     private static WaveStream OpenWaveStream(Stream sourceStream, string sourceContentType)
-    {
-        if (sourceContentType.Contains("wav", StringComparison.OrdinalIgnoreCase))
-            return new WaveFileReader(sourceStream);
-        if (sourceContentType.Contains("mp3", StringComparison.OrdinalIgnoreCase) ||
-            sourceContentType.Contains("mpeg", StringComparison.OrdinalIgnoreCase))
-            return new Mp3FileReader(sourceStream);
-
-        throw new NotSupportedException(
-            $"Audio mixing is supported for WAV and MP3. Received content-type: '{sourceContentType}'.");
-    }
+        => AudioSourceReader.Open(sourceStream, sourceContentType);
 
     private static (byte[] Bytes, string ContentType, string Extension) WriteWav(float[] interleavedStereo, int sampleRate, int channels)
     {

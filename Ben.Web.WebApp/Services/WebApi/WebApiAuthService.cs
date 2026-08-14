@@ -95,25 +95,33 @@ public sealed class WebApiAuthService : IWebApiAuthService
         return true;
     }
 
-    public void StopImpersonating()
+    public async Task StopImpersonatingAsync(CancellationToken token = default)
     {
         if (!_tokenStore.IsImpersonating) return;
 
         _tokenStore.AccessToken = _tokenStore.OriginalAccessToken;
         _tokenStore.RefreshToken = _tokenStore.OriginalRefreshToken;
         _tokenStore.UserEmail = _tokenStore.OriginalUserEmail;
+        _tokenStore.UserId = _tokenStore.OriginalUserId;
+        _tokenStore.IsSuperAdmin = false;
 
-        // Re-parse the original token to restore UserId and IsSuperAdmin
+        // Same reason as LoginAsync: the Identity API's opaque data-protected tokens
+        // aren't JWTs, so JwtClaimsParser can't read IsSuperAdmin back out of the
+        // restored original token — it silently returns false, which used to leave a
+        // SuperAdmin permanently stripped of Administration access after returning
+        // from impersonation until they logged out and back in. Ask the server instead.
         if (_tokenStore.OriginalAccessToken is not null)
         {
-            var (userId, isSuperAdmin) = ParseJwtClaims(_tokenStore.OriginalAccessToken);
-            _tokenStore.UserId = userId;
-            _tokenStore.IsSuperAdmin = isSuperAdmin;
-        }
-        else
-        {
-            _tokenStore.UserId = _tokenStore.OriginalUserId;
-            _tokenStore.IsSuperAdmin = false;
+            try
+            {
+                var me = await _apiClient.GetAsync<MeResult>("/api/me", token);
+                if (me is not null)
+                {
+                    _tokenStore.IsSuperAdmin = me.IsSuperAdmin;
+                    _tokenStore.UserId = me.UserId;
+                }
+            }
+            catch { /* non-fatal — IsSuperAdmin stays false */ }
         }
 
         _tokenStore.IsImpersonating = false;
@@ -139,10 +147,6 @@ public sealed class WebApiAuthService : IWebApiAuthService
         _tokenStore.UserId = userId;
         _tokenStore.IsSuperAdmin = isSuperAdmin;
     }
-
-    // ParseJwtClaims is now in JwtClaimsParser — kept as a private shim for StopImpersonating
-    private static (Guid? UserId, bool IsSuperAdmin) ParseJwtClaims(string token)
-        => JwtClaimsParser.ParseClaims(token);
 }
 
 /// <summary>Matches the JSON shape of MeResponse in Ben.Data.WebApi.</summary>

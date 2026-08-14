@@ -1,8 +1,10 @@
 @implements IDisposable
+@using Ben.Service.Models.Entities
 
 @inject IWebApiTokenStore TokenStore
 @inject IWebApiAuthService AuthService
 @inject NavigationManager NavManager
+@inject NotificationState Notifications
 
 <TelerikDrawer Data="@DrawerData"
                Expanded="@DrawerExpanded"
@@ -11,6 +13,23 @@
                Mode="@DrawerMode.Push"
                MiniMode="true"
                Class="mainlayout-drawer">
+    <ItemTemplate Context="item">
+        @if (item is not null)
+        {
+            <div class="k-drawer-link drawer-item">
+                <TelerikSvgIcon Icon="@((ISvgIcon?)item.Icon)" Class="k-drawer-item-icon" />
+                @if (DrawerExpanded)
+                {
+                    <span class="k-item-text drawer-item-text">@item.Text</span>
+                }
+                @if (item.Count > 0)
+                {
+                    <span class="@($"drawer-item-badge {NotificationBadge.CssClass(item.Urgency)}")"
+                          title="@($"{item.Count} waiting")">@NotificationBadge.Text(item.Count)</span>
+                }
+            </div>
+        }
+    </ItemTemplate>
     <DrawerContent>
         @if (TokenStore.IsImpersonating)
         {
@@ -50,13 +69,22 @@
             };
             if (TokenStore.IsAuthenticated && !TokenStore.IsImpersonating)
             {
-                items.Add(new NavItem("My Cases",         SvgIcon.Folder,       "/my-cases"));
-                items.Add(new NavItem("My Investigations", SvgIcon.Calendar,     "/my-investigations"));
-                items.Add(new NavItem("My Requests",       SvgIcon.Inbox,        "/my-requests"));
-                items.Add(new NavItem("My Videos",         SvgIcon.Film,         "/my-videos"));
-                items.Add(new NavItem("Organizations", SvgIcon.Globe,   "/organizations"));
-                items.Add(new NavItem("Upload Files", SvgIcon.Upload,   "/upload-files"));
-                items.Add(new NavItem("Media Library", SvgIcon.Images,  "/media-library"));
+                var s = Notifications.Current;
+
+                // Buckets are rolled up to the page a user would actually go to. Group messages and
+                // client messages awaiting a reply both live under an organization, so they share
+                // the Organizations badge; the bell popover is what breaks them apart again.
+                var orgSide = Combine(s.OrgMessages, s.CaseMessagesAsOrgMember);
+
+                items.Add(new NavItem("Notifications",     SvgIcon.Bell,     "/notifications",
+                                      Combine(s.SystemMessages, s.PendingPermissionRequests)));
+                items.Add(new NavItem("My Cases",          SvgIcon.Folder,   "/my-cases", s.CaseMessagesAsClient));
+                items.Add(new NavItem("My Investigations", SvgIcon.Calendar, "/my-investigations"));
+                items.Add(new NavItem("My Requests",       SvgIcon.Inbox,    "/my-requests"));
+                items.Add(new NavItem("My Videos",         SvgIcon.Film,     "/my-videos"));
+                items.Add(new NavItem("Organizations",     SvgIcon.Globe,    "/organizations", orgSide));
+                items.Add(new NavItem("Upload Files",      SvgIcon.Upload,   "/upload-files"));
+                items.Add(new NavItem("Media Library",     SvgIcon.Images,   "/media-library"));
             }
             if (!TokenStore.IsAuthenticated)
                 items.Add(new NavItem("Login", SvgIcon.Login, "/login"));
@@ -70,7 +98,17 @@
     {
         SelectDrawerItem();
         NavManager.LocationChanged += OnLocationChanged;
+        // DrawerData is recomputed on every render, so the badges only need a re-render to update.
+        Notifications.Changed += OnNotificationsChanged;
     }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Notifications.EnsureStartedAsync(RendererInfo.IsInteractive);
+    }
+
+    // Raised off the renderer's synchronization context by NotificationState's poll.
+    private void OnNotificationsChanged() => InvokeAsync(StateHasChanged);
 
     private void OnMediaQueryChange(bool mediaQueryMatched)
     {
@@ -96,16 +134,30 @@
         InvokeAsync(StateHasChanged);
     }
 
-    private void ReturnToSuperAdmin()
+    private async Task ReturnToSuperAdmin()
     {
-        AuthService.StopImpersonating();
+        await AuthService.StopImpersonatingAsync();
         NavManager.NavigateTo("/admin/users");
-        InvokeAsync(StateHasChanged);
+        await InvokeAsync(StateHasChanged);
     }
 
     public void Dispose()
     {
         NavManager.LocationChanged -= OnLocationChanged;
+        Notifications.Changed -= OnNotificationsChanged;
+    }
+
+    /// <summary>Merges buckets that share one drawer destination, keeping the older timestamp.</summary>
+    private static NotificationBucket Combine(params NotificationBucket[] buckets)
+    {
+        var count = buckets.Sum(b => b.Count);
+        if (count == 0) return NotificationBucket.Empty;
+
+        var oldest = buckets.Where(b => b.Count > 0 && b.OldestUnreadUtc.HasValue)
+                            .Select(b => b.OldestUnreadUtc!.Value)
+                            .DefaultIfEmpty()
+                            .Min();
+        return new NotificationBucket(count, oldest == default ? null : oldest);
     }
 
     public sealed class NavItem
@@ -114,11 +166,19 @@
         public object? Icon { get; set; }
         public string Url { get; set; } = string.Empty;
 
-        public NavItem(string text, object? icon, string url)
+        /// <summary>Items waiting behind this destination, or 0 for a plain nav item.</summary>
+        public int Count { get; }
+
+        /// <summary>How overdue those items are — drives the badge colour.</summary>
+        public NotificationBadge.Urgency Urgency { get; }
+
+        public NavItem(string text, object? icon, string url, NotificationBucket? bucket = null)
         {
             Text = text;
             Icon = icon;
             Url = url;
+            Count = bucket?.Count ?? 0;
+            Urgency = bucket is null ? NotificationBadge.Urgency.None : NotificationBadge.Classify(bucket);
         }
     }
 }

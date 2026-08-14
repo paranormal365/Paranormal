@@ -93,16 +93,14 @@
                             @{ var row2 = (VideoProjectRecord)context; }
                             <TelerikButton Size="@ThemeConstants.Button.Size.Small"
                                            OnClick="@(() => OpenProjectAsync(row2))">Open</TelerikButton>
-                            @if (row2.CreatedByAppUserId == _myUserId)
-                            {
-                                <TelerikButton Icon="@SvgIcon.Upload" Size="@ThemeConstants.Button.Size.Small"
-                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
-                                               Title="Publish rendered video to case"
-                                               OnClick="@(() => TriggerPublish(row2))" />
-                                <TelerikButton Icon="@SvgIcon.Trash" Size="@ThemeConstants.Button.Size.Small"
-                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                               OnClick="@(() => ConfirmDelete(row2))" />
-                            }
+                            <TelerikButton Icon="@SvgIcon.Upload" Size="@ThemeConstants.Button.Size.Small"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
+                                           Title="Publish rendered video to case"
+                                           Enabled="@(!_publishing)"
+                                           OnClick="@(() => TriggerPublishAsync(row2))" />
+                            <TelerikButton Icon="@SvgIcon.Trash" Size="@ThemeConstants.Button.Size.Small"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                           OnClick="@(() => ConfirmDelete(row2))" />
                         </Template>
                     </GridColumn>
                 </GridColumns>
@@ -129,7 +127,7 @@
 <TelerikNotification @ref="_notifications" VerticalPosition="NotificationVerticalPosition.Bottom"
                      HorizontalPosition="NotificationHorizontalPosition.Right" />
 
-@* Hidden file input triggered by TriggerPublish — accepts the rendered export from the user's Downloads *@
+@* Hidden file input triggered by TriggerPublishAsync — accepts the rendered export from the user's Downloads *@
 <InputFile id="publish-input-case" OnChange="OnPublishFileSelectedAsync" accept="video/*" style="display:none" />
 
 @code {
@@ -147,7 +145,6 @@
     private bool _showDeleteConfirm;
     private VideoProjectRecord? _deleteTarget;
     private VideoProjectRecord? _publishTarget;
-    private Guid _myUserId;
     /// <summary>Server project id established by an earlier publish this session, so a second
     /// export updates the same project instead of creating a new row per render.</summary>
     private Guid? _publishedProjectId;
@@ -252,7 +249,7 @@
     /// <summary>
     /// The editor's own "Upload to server" destination — the render goes straight from the export
     /// to the case, with no trip through the user's Downloads folder and no re-selecting the file.
-    /// The <see cref="TriggerPublish"/> flow below stays for publishing a file the user already
+    /// The <see cref="TriggerPublishAsync"/> flow below stays for publishing a file the user already
     /// has on disk (an older export, or one made before this existed).
     /// </summary>
     private async Task OnPublishExportAsync(ExportedVideo exported)
@@ -271,10 +268,18 @@
         StateHasChanged();
     }
 
-    private void TriggerPublish(VideoProjectRecord record)
+    /// <summary>
+    /// Opens the hidden file input's native picker. Goes through a typed interop module rather
+    /// than <c>eval</c>: the id is a constant, so this was never an injection risk, but the eval
+    /// form required <c>unsafe-eval</c> in the CSP and threw an unhandled TypeError — fatal to the
+    /// whole circuit under Interactive Server — if the input ever wasn't on the page.
+    /// </summary>
+    private async Task TriggerPublishAsync(VideoProjectRecord record)
     {
         _publishTarget = record;
-        _ = JSRuntime.InvokeVoidAsync("eval", "document.getElementById('publish-input-case').click()");
+        await using var dom = await JSRuntime.InvokeAsync<IJSObjectReference>(
+            "import", "/_content/Ben.Web.Library/js/domInterop.js");
+        await dom.InvokeVoidAsync("clickElementById", "publish-input-case");
     }
 
     private async Task OnPublishFileSelectedAsync(InputFileChangeEventArgs e)

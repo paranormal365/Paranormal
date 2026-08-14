@@ -166,7 +166,9 @@ else
                                        Size="@ThemeConstants.Button.Size.Small"
                                        Enabled="@_modalReady"
                                        OnClick="@(() => _showMarkers = !_showMarkers)">
-                            🎯 @(_showMarkers ? "Hide Markers" : $"EVP Markers ({_markers.Count})")
+                            @* Counts confirmed findings only — dismissed candidates are kept solely
+                               for re-scan deduping, and counting them would inflate this. *@
+                            🎯 @(_showMarkers ? "Hide Markers" : $"EVP Markers ({ConfirmedMarkers.Count()})")
                         </TelerikButton>
                         @* Destructive edit toggle *@
                         <TelerikButton ThemeColor="@(_showEdit ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
@@ -286,19 +288,27 @@ else
                                 ➕ Add Marker at @FormatTime(_modalTime)
                             </TelerikButton>
                         </div>
-                        @if (!_markers.Any())
+                        @if (!ConfirmedMarkers.Any())
                         {
                             <div class="text-secondary small fst-italic">No markers yet — play the file and drop a marker where you hear something.</div>
                         }
                         else
                         {
-                            @foreach (var marker in _markers.OrderBy(m => m.TimeSeconds))
+                            @foreach (var marker in ConfirmedMarkers)
                             {
                                 var m = marker;
                                 <div class="d-flex align-items-center gap-2 mb-1 p-1 rounded" style="background:var(--kendo-color-surface,#f5f5f5);">
-                                    <span class="badge" style="background:@MarkerColor(m.ConfidenceLevel);">@FormatTime(m.TimeSeconds)</span>
+                                    <span class="badge" style="background:@MarkerColor(m);">@FormatMarkerRange(m)</span>
                                     <span class="fw-semibold">@m.Label</span>
                                     <span class="text-secondary small">@m.ConfidenceLevel</span>
+                                    @if (m.IsAutoDetected && m.DetectionScore is { } confirmedScore)
+                                    {
+                                        <span class="badge bg-secondary" title="Signal score from the detector that first proposed this">@confirmedScore.ToString("0")</span>
+                                    }
+                                    @if (m.LinkedClipUploadFileId is not null)
+                                    {
+                                        <span class="badge bg-success" title="A clip has been cut from this marker">🎧 clip</span>
+                                    }
                                     @if (!string.IsNullOrWhiteSpace(m.Note))
                                     {
                                         <span class="text-secondary small text-truncate" style="max-width:200px;" title="@m.Note">@m.Note</span>
@@ -306,6 +316,11 @@ else
                                     <span class="ms-auto d-flex gap-1">
                                         <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Play"
                                                        OnClick="@(() => SeekToMarkerAsync(m))" />
+                                        <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Crop"
+                                                       Title="@(m.LinkedClipUploadFileId is null
+                                                                 ? "Save this as its own audio file"
+                                                                 : "Save another clip from this marker")"
+                                                       OnClick="@(() => OpenClipFromMarkerDialog(m))" />
                                         <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Pencil"
                                                        OnClick="@(() => OpenEditMarkerDialog(m))" />
                                         <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Trash"
@@ -313,6 +328,197 @@ else
                                     </span>
                                 </div>
                             }
+                        }
+
+                        @* ── Detector ────────────────────────────────────────── *@
+                        <div class="mt-2 pt-2 border-top d-flex align-items-center gap-2 flex-wrap">
+                            <span class="small fw-semibold">Detect</span>
+                            @* Nothing scans on its own — a scan only happens when this is clicked. *@
+                            <TelerikDropDownList Data="@_sensitivityOptions"
+                                                 Value="@_scanSensitivity"
+                                                 ValueChanged="@((EvpSensitivity s) => ApplySensitivityPreset(s))"
+                                                 Width="110px"
+                                                 Enabled="@(!_scanning)" />
+                            <TelerikButton Size="sm"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                           Enabled="@(!_scanning)"
+                                           OnClick="RunScanAsync">
+                                @(_scanning ? "Scanning…" : "Scan for EVP")
+                            </TelerikButton>
+                            <TelerikButton Size="sm"
+                                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                           OnClick="@(() => _showScanTuning = !_showScanTuning)">
+                                @(_showScanTuning ? "Hide settings" : "Fine-tune")
+                            </TelerikButton>
+                            @if (_scanMessage is not null)
+                            {
+                                <span class="small text-secondary">@_scanMessage</span>
+                            }
+                        </div>
+                        <div class="small text-secondary mt-1">
+                            @* Says plainly what the score is, so nobody reads it as "83% likely a voice". *@
+                            Finds sounds that rise above the recording's own background noise, in the
+                            frequency range speech occupies. Everything it finds needs listening to —
+                            the score is how much a sound stood out, not how likely it is to be a voice.
+                        </div>
+
+                        @if (_showScanTuning)
+                        {
+                            @* The preset seeds these; from here they're yours. Every recording is
+                               different, and a threshold that suits a quiet bedroom floods the queue
+                               in a room with a furnace. *@
+                            <div class="mt-2 p-2 rounded border">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="small fw-semibold">Detector settings</span>
+                                    <TelerikButton Size="sm" FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                   OnClick="@(() => ApplySensitivityPreset(_scanSensitivity))">
+                                        Reset to @_scanSensitivity
+                                    </TelerikButton>
+                                </div>
+
+                                <div class="mb-2">
+                                    <label class="small d-block">
+                                        Tolerance — how far above the background a sound must rise:
+                                        <strong>@_scanOptions.ThresholdDb.ToString("0.0") dB</strong>
+                                    </label>
+                                    <input type="range" class="form-range"
+                                           min="@EvpDetectionOptions.ThresholdRange.Min"
+                                           max="@EvpDetectionOptions.ThresholdRange.Max"
+                                           step="0.5"
+                                           value="@_scanOptions.ThresholdDb"
+                                           @oninput="@(e => SetThreshold(e.Value))" />
+                                    <div class="d-flex justify-content-between small text-secondary">
+                                        <span>lower — finds more, more to review</span>
+                                        <span>higher — only the obvious</span>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex gap-3 flex-wrap">
+                                    <label class="small">
+                                        Shortest sound (s)
+                                        <input type="number" class="form-control form-control-sm" style="width:90px;"
+                                               min="@EvpDetectionOptions.MinDurationRange.Min"
+                                               max="@EvpDetectionOptions.MinDurationRange.Max"
+                                               step="0.05"
+                                               value="@_scanOptions.MinDurationSeconds"
+                                               @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MinDurationSeconds = v }))" />
+                                    </label>
+                                    <label class="small">
+                                        Join sounds within (s)
+                                        <input type="number" class="form-control form-control-sm" style="width:90px;"
+                                               min="@EvpDetectionOptions.MergeGapRange.Min"
+                                               max="@EvpDetectionOptions.MergeGapRange.Max"
+                                               step="0.05"
+                                               value="@_scanOptions.MergeGapSeconds"
+                                               @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MergeGapSeconds = v }))" />
+                                    </label>
+                                    <label class="small">
+                                        Context either side (s)
+                                        <input type="number" class="form-control form-control-sm" style="width:90px;"
+                                               min="@EvpDetectionOptions.ContextPadRange.Min"
+                                               max="@EvpDetectionOptions.ContextPadRange.Max"
+                                               step="0.1"
+                                               value="@_scanOptions.ContextPadSeconds"
+                                               @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { ContextPadSeconds = v }))" />
+                                    </label>
+                                    <label class="small">
+                                        Longest candidate (s)
+                                        <input type="number" class="form-control form-control-sm" style="width:90px;"
+                                               min="@EvpDetectionOptions.MaxEventRange.Min"
+                                               max="@EvpDetectionOptions.MaxEventRange.Max"
+                                               step="0.5"
+                                               value="@_scanOptions.MaxEventSeconds"
+                                               @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MaxEventSeconds = v }))" />
+                                    </label>
+                                </div>
+
+                                @if (_scanOptions.Validate() is { } settingsProblem)
+                                {
+                                    <div class="text-danger small mt-2">@settingsProblem</div>
+                                }
+                            </div>
+                        }
+
+                        @if (PendingCandidates.Any())
+                        {
+                            <div class="mt-2 pt-2 border-top">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <span class="badge" style="background:rgba(245,158,11,0.75);">@PendingCandidates.Count()</span>
+                                    <strong class="small">
+                                        @(PendingCandidates.Count() == 1 ? "candidate" : "candidates") to review
+                                    </strong>
+                                    <span class="ms-auto d-flex align-items-center gap-1 small text-secondary">
+                                        Sort
+                                        <TelerikButton Size="sm"
+                                                       FillMode="@(_candidatesByScore ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
+                                                       OnClick="@(() => _candidatesByScore = true)">Score</TelerikButton>
+                                        <TelerikButton Size="sm"
+                                                       FillMode="@(!_candidatesByScore ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
+                                                       OnClick="@(() => _candidatesByScore = false)">Time</TelerikButton>
+                                    </span>
+                                </div>
+
+                                <div style="max-height:180px; overflow-y:auto;">
+                                    @foreach (var candidate in SortedCandidates)
+                                    {
+                                        var c = candidate;
+                                        var isAdjusting = _adjustingCandidateId == c.Id;
+                                        <div class="d-flex align-items-center gap-2 mb-1 p-1 rounded"
+                                             style="background:@(isAdjusting ? "rgba(245,158,11,0.18)" : "var(--kendo-color-surface,#f5f5f5)");">
+                                            <span class="badge" style="background:rgba(245,158,11,0.75);"
+                                                  title="How much this stood out from the background — not a likelihood of speech">
+                                                @c.DetectionScore?.ToString("0")
+                                            </span>
+                                            @if (isAdjusting)
+                                            {
+                                                @* Live values, not the stored ones — the point is to see
+                                                   what you're about to save while dragging. *@
+                                                <span class="small fw-semibold">
+                                                    @FormatTime(_adjustedStart)–@FormatTime(_adjustedEnd)
+                                                    (@((_adjustedEnd - _adjustedStart).ToString("0.0"))s)
+                                                </span>
+                                                <span class="small text-secondary">
+                                                    drag the edges on the waveform, then save
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="small">@FormatMarkerRange(c)</span>
+                                            }
+                                            <span class="ms-auto d-flex gap-1">
+                                                <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Play"
+                                                               Title="Play this stretch with its surrounding context"
+                                                               OnClick="@(() => PlayCandidateAsync(c))" />
+                                                @if (isAdjusting)
+                                                {
+                                                    <TelerikButton Size="sm"
+                                                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                                                   OnClick="SaveAdjustedBoundsAsync">Save bounds</TelerikButton>
+                                                    <TelerikButton Size="sm" FillMode="flat"
+                                                                   OnClick="@(() => StopAdjustingAsync(revert: true))">Cancel</TelerikButton>
+                                                }
+                                                else
+                                                {
+                                                    <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Pencil"
+                                                                   Title="Adjust where this starts and ends"
+                                                                   Enabled="@(_reviewingCandidateId != c.Id)"
+                                                                   OnClick="@(() => StartAdjustingAsync(c))" />
+                                                    <TelerikButton Size="sm" FillMode="flat"
+                                                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                                                   Icon="@SvgIcon.Check"
+                                                                   Title="Keep as an EVP marker"
+                                                                   Enabled="@(_reviewingCandidateId != c.Id)"
+                                                                   OnClick="@(() => OpenConfirmCandidateDialog(c))" />
+                                                    <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.X"
+                                                                   Title="Not an EVP — won't be proposed again"
+                                                                   Enabled="@(_reviewingCandidateId != c.Id)"
+                                                                   OnClick="@(() => DismissCandidateAsync(c))" />
+                                                }
+                                            </span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
                         }
                     </div>
                 }
@@ -388,6 +594,7 @@ else
                                       OnFinish="@(() => { _modalTime = 0; StateHasChanged(); })"
                                       OnRegionContextMenu="@OnRegionRightClick"
                                       OnRegionCreated="@OnModalRegionCreated"
+                                      OnRegionUpdated="@OnModalRegionUpdated"
                                       OnSpectrogramReady="@(() => StateHasChanged())"
                                       OnSpectrogramContextMenu="@OnSpectrogramContextMenuFired" />
                 </div>
@@ -473,7 +680,27 @@ else
     <DialogContent>
         <div class="mb-2">
             <label class="form-label fw-semibold">Time</label>
-            <div>@FormatTime(_markerTimeSeconds)</div>
+            <div>
+                @FormatTime(_markerTimeSeconds)
+                @if (_markerIsSpan)
+                {
+                    <text> – @FormatTime(_markerEndSeconds) <span class="text-secondary">(@((_markerEndSeconds - _markerTimeSeconds).ToString("0.0"))s)</span></text>
+                }
+            </div>
+            <label class="d-flex align-items-center gap-2 mt-1 small">
+                <input type="checkbox" checked="@_markerIsSpan"
+                       @onchange="@(e => ToggleMarkerSpan((bool?)e.Value ?? false))" />
+                Mark a stretch of audio rather than an instant
+            </label>
+            @if (_markerIsSpan)
+            {
+                <div class="d-flex align-items-center gap-2 mt-1">
+                    <span class="small text-secondary">Ends at</span>
+                    <TelerikNumericTextBox @bind-Value="@_markerEndSeconds"
+                                           Min="0" Step="0.1" Format="N1" Width="110px" />
+                    <span class="small text-secondary">s</span>
+                </div>
+            }
         </div>
         <div class="mb-2">
             <label class="form-label fw-semibold">Label</label>
@@ -499,20 +726,105 @@ else
     </DialogButtons>
 </TelerikDialog>
 
+@* ── Confirm a detected candidate ────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showConfirmCandidateDialog" Title="Keep this as an EVP" Width="420px">
+    <DialogContent>
+        @if (_confirmingCandidate is { } cc)
+        {
+            <div class="mb-2 small text-secondary">
+                @FormatMarkerRange(cc)
+                · detector score @cc.DetectionScore?.ToString("0")
+            </div>
+            <div class="mb-2">
+                <label class="form-label fw-semibold">What did you hear?</label>
+                @* A plain input bound on oninput, not a TelerikTextBox. Telerik's textbox only
+                   pushes its value on change/blur, which deadlocked this dialog: the Keep button
+                   is gated on the label, so the only thing left to click was disabled, focus never
+                   left the field, and the label never bound. *@
+                <input type="text" class="form-control form-control-sm"
+                       placeholder="e.g. Whispered name?"
+                       value="@_confirmLabel"
+                       @oninput="@(e => _confirmLabel = e.Value?.ToString() ?? string.Empty)" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label fw-semibold">Confidence</label>
+                <TelerikDropDownList Data="@_confidenceOptions" @bind-Value="_confirmConfidence" Width="100%" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label fw-semibold">Note</label>
+                <TelerikTextArea @bind-Value="@_confirmNote" Rows="2" Width="100%" />
+            </div>
+            @if (_confirmError is not null)
+            {
+                <div class="text-danger small">@_confirmError</div>
+            }
+            <div class="small text-secondary">
+                The detector's score and bounds are kept alongside your label.
+            </div>
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="@(() => _showConfirmCandidateDialog = false)">Cancel</TelerikButton>
+        @* Deliberately always enabled. Gating this on the label deadlocked the dialog: the field
+           only pushed its value on blur, and the one thing left to click was the disabled button,
+           so focus never left and the label never bound. Validation lives in the handler instead. *@
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       OnClick="ConfirmCandidateAsync">Keep it</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
 @* ── Save region as clip dialog ──────────────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showSaveClipDialog"
                Title="Create Audio File from Region"
                Width="460px">
     <DialogContent>
-        @if (_newUserRegion is not null)
+        @if (_clipSourceMarker is { } clipMarker)
         {
             <p class="text-secondary small mb-3">
-                Clipping <strong>@FormatTime(_newUserRegion.Start)</strong>
-                &ndash; <strong>@FormatTime(_newUserRegion.End)</strong>
+                Clipping <strong>@clipMarker.Label</strong>
+                (@FormatMarkerRange(clipMarker)) from <em>@FileName</em>.
+                With padding: <strong>@FormatTime(ClipStart) &ndash; @FormatTime(ClipEnd)</strong>.
+                Output will be saved as WAV.
+            </p>
+        }
+        else if (_newUserRegion is not null)
+        {
+            <p class="text-secondary small mb-3">
+                Clipping <strong>@FormatTime(ClipStart)</strong>
+                &ndash; <strong>@FormatTime(ClipEnd)</strong>
                 from <em>@FileName</em>. Output will be saved as WAV.
             </p>
         }
         <div class="row g-3">
+            <div class="col-12 d-flex gap-3 flex-wrap align-items-end">
+                <label class="small mb-0">
+                    Lead-in (s)
+                    @* Extra room either side of the marked sound. A clip trimmed exactly to the
+                       words is hard to judge — you want a moment of the room before and after. *@
+                    <input type="number" class="form-control form-control-sm" style="width:90px;"
+                           min="0" max="10" step="0.1" value="@_clipPrePad"
+                           @oninput="@(e => SetOption(e.Value, v => _clipPrePad = Math.Clamp(v, 0, 10)))" />
+                </label>
+                <label class="small mb-0">
+                    Tail (s)
+                    <input type="number" class="form-control form-control-sm" style="width:90px;"
+                           min="0" max="10" step="0.1" value="@_clipPostPad"
+                           @oninput="@(e => SetOption(e.Value, v => _clipPostPad = Math.Clamp(v, 0, 10)))" />
+                </label>
+                <label class="small mb-0 d-flex align-items-center gap-2">
+                    <input type="checkbox" checked="@_clipNormalize"
+                           @onchange="@(e => _clipNormalize = (bool?)e.Value ?? false)" />
+                    Boost volume (normalize)
+                </label>
+            </div>
+            <div class="col-12">
+                <div class="small text-secondary">
+                    Normalizing raises the clip's loudest point to just under maximum. An EVP is
+                    usually far quieter than the rest of the recording, so without it the clip can be
+                    almost inaudible. The original is never modified — a clip can always be re-cut.
+                </div>
+            </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Label / Description</label>
                 <TelerikTextBox @bind-Value="@_saveClipLabel"
@@ -549,6 +861,12 @@ else
                        OnClick="SaveClipAsync">
             @(_isSavingClip ? "Saving…" : "Save as WAV")
         </TelerikButton>
+        @* Nothing else in this dialog is gated on the file type, so a missing type reads as a dead
+           button. Say why. *@
+        @if (_saveClipTypeId == Guid.Empty)
+        {
+            <span class="small text-secondary ms-2">Pick a file type first.</span>
+        }
     </DialogButtons>
 </TelerikDialog>
 @* ── Toast notifications ────────────────────────────────────────────── *@
@@ -613,6 +931,44 @@ else
     private WsRegionData? _newUserRegion;
 
     private bool   _showSaveClipDialog;      // save-as-clip form
+
+    // ── Clipping an EVP marker (phase E4) ─────────────────────────────────────
+
+    /// <summary>Set when the clip dialog was opened from a marker rather than a drawn region.</summary>
+    private AudioMarkerRecord? _clipSourceMarker;
+    private double _clipPrePad  = 1.0;
+    private double _clipPostPad = 1.0;
+    /// <summary>On by default — the usual reason to clip an EVP is to be able to hear it.</summary>
+    private bool   _clipNormalize = true;
+
+    /// <summary>Where the clip actually starts once padding is applied, never before the file does.</summary>
+    private double ClipStart => Math.Max(0, ClipSourceStart - _clipPrePad);
+
+    /// <summary>Where it ends, clamped to the recording so the request can't run past the audio.</summary>
+    private double ClipEnd =>
+        _modalDuration > 0
+            ? Math.Min(_modalDuration, ClipSourceEnd + _clipPostPad)
+            : ClipSourceEnd + _clipPostPad;
+
+    private double ClipSourceStart =>
+        _clipSourceMarker?.TimeSeconds ?? _newUserRegion?.Start ?? 0;
+
+    private double ClipSourceEnd =>
+        _clipSourceMarker is { } m
+            ? (m.EndSeconds ?? m.TimeSeconds)
+            : _newUserRegion?.End ?? 0;
+
+    /// <summary>Opens the clip dialog for a confirmed EVP marker, seeded with listening padding.</summary>
+    private void OpenClipFromMarkerDialog(AudioMarkerRecord marker)
+    {
+        _clipSourceMarker   = marker;
+        _saveClipLabel      = marker.Label;
+        _clipPrePad         = 1.0;
+        _clipPostPad        = 1.0;
+        _clipNormalize      = true;
+        _saveClipError      = null;
+        _showSaveClipDialog = true;
+    }
     private bool   _isSavingClip;
     private string? _saveClipError;
     private string  _saveClipLabel    = string.Empty;
@@ -766,6 +1122,14 @@ else
 
     // ── EVP markers ──────────────────────────────────────────────────────────
 
+    /// <summary>Markers a person stands behind — what the marker list shows and edits.</summary>
+    private IEnumerable<AudioMarkerRecord> ConfirmedMarkers =>
+        _markers.Where(m => m.ReviewStatus == EvpReviewStatus.Confirmed).OrderBy(m => m.TimeSeconds);
+
+    /// <summary>Detector proposals nobody has ruled on yet. Reviewed on the Candidates tab (phase E3).</summary>
+    private IEnumerable<AudioMarkerRecord> PendingCandidates =>
+        _markers.Where(m => m.ReviewStatus == EvpReviewStatus.Pending).OrderBy(m => m.TimeSeconds);
+
     private async Task OverlayMarkersAsync()
     {
         if (_modalPlayer is null) return;
@@ -782,19 +1146,36 @@ else
     private async Task AddMarkerRegionAsync(AudioMarkerRecord marker)
     {
         if (_modalPlayer is null) return;
+
+        // A dismissed candidate is kept in the database only so a re-scan can dedupe against it.
+        // Drawing it would put rejected noise back on the waveform.
+        if (marker.ReviewStatus == EvpReviewStatus.Dismissed) return;
+
         var id = $"marker-{marker.Id}";
         _programmaticRegionIds.Add(id);
         await _modalPlayer.AddRegionAsync(new WsRegionParams
         {
             Id      = id,
             Start   = marker.TimeSeconds,
-            End     = marker.TimeSeconds,
-            Color   = MarkerColor(marker.ConfidenceLevel),
+            // Equal start and end is how this plugin draws a point marker. A span passes its real
+            // end, so the region covers the audio the marker is actually a claim about.
+            End     = marker.IsSpan ? marker.EndSeconds : marker.TimeSeconds,
+            Color   = MarkerColor(marker),
             Drag    = false,
             Resize  = false,
-            Content = marker.Label,
+            Content = MarkerRegionLabel(marker),
         });
     }
+
+    /// <summary>
+    /// Candidates are amber regardless of confidence — they carry the detector's default
+    /// "Possible", which would otherwise render them identically to a human's least-certain
+    /// finding, and those are very different things to see on a waveform.
+    /// </summary>
+    private static string MarkerColor(AudioMarkerRecord marker) =>
+        marker.ReviewStatus == EvpReviewStatus.Pending
+            ? "rgba(245,158,11,0.75)"
+            : MarkerColor(marker.ConfidenceLevel);
 
     private static string MarkerColor(EvpConfidenceLevel level) => level switch
     {
@@ -803,10 +1184,43 @@ else
         _                            => "rgba(148,163,184,0.85)",
     };
 
+    /// <summary>
+    /// A candidate is labelled with its score alone. A scan can drop dozens of these onto one
+    /// waveform, and repeating "Detected signal" on every band produced overlapping text that hid
+    /// the waveform without telling the reader anything — they all say the same words. The number
+    /// is the only part that differs, and the panel below carries the full description.
+    /// </summary>
+    private static string MarkerRegionLabel(AudioMarkerRecord marker) =>
+        marker.ReviewStatus == EvpReviewStatus.Pending && marker.DetectionScore is { } score
+            ? score.ToString("0")
+            : marker.Label;
+
+    /// <summary>"0:03" for a point, "0:03–0:04 (0.6s)" for a span.</summary>
+    private static string FormatMarkerRange(AudioMarkerRecord marker) =>
+        marker.IsSpan
+            ? $"{FormatTime(marker.TimeSeconds)}–{FormatTime(marker.EndSeconds!.Value)} ({marker.EndSeconds!.Value - marker.TimeSeconds:0.0}s)"
+            : FormatTime(marker.TimeSeconds);
+
     private async Task AddMarkerAtCurrentTimeAsync()
     {
         _editingMarker      = null;
-        _markerTimeSeconds  = _modalTime;
+
+        // If the user has a region drawn, they've already shown us the stretch they mean — start
+        // from that rather than making them re-enter it as numbers.
+        var drawn = _newUserRegion ?? _lastDrawnRegion;
+        if (drawn is not null && drawn.End > drawn.Start)
+        {
+            _markerTimeSeconds = drawn.Start;
+            _markerEndSeconds  = drawn.End;
+            _markerIsSpan      = true;
+        }
+        else
+        {
+            _markerTimeSeconds = _modalTime;
+            _markerEndSeconds  = _modalTime + DefaultSpanSeconds;
+            _markerIsSpan      = false;
+        }
+
         _markerLabel        = string.Empty;
         _markerConfidence   = EvpConfidenceLevel.Possible;
         _markerNote         = string.Empty;
@@ -818,11 +1232,29 @@ else
     {
         _editingMarker     = marker;
         _markerTimeSeconds = marker.TimeSeconds;
+        _markerIsSpan      = marker.IsSpan;
+        _markerEndSeconds  = marker.EndSeconds ?? marker.TimeSeconds + DefaultSpanSeconds;
         _markerLabel       = marker.Label;
         _markerConfidence  = marker.ConfidenceLevel;
         _markerNote        = marker.Note ?? string.Empty;
         _showMarkerDialog  = true;
     }
+
+    /// <summary>How long a span starts out when the user asks for one without drawing a region.</summary>
+    private const double DefaultSpanSeconds = 1.0;
+
+    private void ToggleMarkerSpan(bool isSpan)
+    {
+        _markerIsSpan = isSpan;
+        // Re-seed rather than leaving a stale end behind the checkbox — an end at or before the
+        // start would be rejected by the API, and the user has no reason to expect that.
+        if (isSpan && _markerEndSeconds <= _markerTimeSeconds)
+            _markerEndSeconds = _markerTimeSeconds + DefaultSpanSeconds;
+    }
+
+    /// <summary>The end to persist: null unless the user asked for a span and it's actually one.</summary>
+    private double? MarkerEndToSave =>
+        _markerIsSpan && _markerEndSeconds > _markerTimeSeconds ? _markerEndSeconds : null;
 
     private async Task SaveMarkerAsync()
     {
@@ -832,7 +1264,8 @@ else
         {
             var created = await AdminClient.CreateAudioMarkerAsync(FileId, new CreateAudioMarkerRequest(
                 _markerTimeSeconds, _markerLabel.Trim(), _markerConfidence,
-                string.IsNullOrWhiteSpace(_markerNote) ? null : _markerNote.Trim()));
+                string.IsNullOrWhiteSpace(_markerNote) ? null : _markerNote.Trim(),
+                MarkerEndToSave));
             if (created is not null)
             {
                 _markers = [.. _markers, created];
@@ -843,7 +1276,8 @@ else
         {
             var updated = await AdminClient.UpdateAudioMarkerAsync(FileId, _editingMarker.Id, new UpdateAudioMarkerRequest(
                 _markerTimeSeconds, _markerLabel.Trim(), _markerConfidence,
-                string.IsNullOrWhiteSpace(_markerNote) ? null : _markerNote.Trim()));
+                string.IsNullOrWhiteSpace(_markerNote) ? null : _markerNote.Trim(),
+                MarkerEndToSave));
             if (updated is not null && _modalPlayer is not null)
             {
                 _markers = [.. _markers.Where(m => m.Id != updated.Id), updated];
@@ -888,9 +1322,36 @@ else
         _lastDrawnRegion = r;
     }
 
+    /// <summary>
+    /// Keeps the tracked bounds in step when the user drags or resizes the region they drew.
+    /// Without this, <see cref="_lastDrawnRegion"/> held the bounds from the moment the region
+    /// was first drawn, so a region-scoped Cut/Silence — and the region readout in the edit
+    /// panel — silently used the original bounds rather than what was on screen.
+    /// </summary>
+    private void OnModalRegionUpdated(WsRegionData r)
+    {
+        // Checked before the programmatic-region bail-out below: a candidate's region *is*
+        // programmatic, so without this the drags that adjust-bounds depends on are thrown away.
+        if (_adjustingCandidateId is { } adjustingId && r.Id == $"marker-{adjustingId}")
+        {
+            _adjustedStart = r.Start;
+            _adjustedEnd   = r.End;
+            StateHasChanged();
+            return;
+        }
+
+        if (_programmaticRegionIds.Contains(r.Id)) return;
+
+        if (_lastDrawnRegion?.Id == r.Id) _lastDrawnRegion = r;
+        if (_newUserRegion?.Id   == r.Id) _newUserRegion   = r;
+        StateHasChanged();
+    }
+
     private async Task SaveClipAsync()
     {
-        if (_newUserRegion is null || _saveClipTypeId == Guid.Empty) return;
+        // Either a drawn region or a marker can be the source; one of them must be.
+        if (_clipSourceMarker is null && _newUserRegion is null) return;
+        if (_saveClipTypeId == Guid.Empty) return;
 
         _isSavingClip = true;
         _saveClipError = null;
@@ -899,15 +1360,24 @@ else
         try
         {
             var result = await AdminClient.ClipAudioAsync(FileId, new ClipAudioRequest(
-                _newUserRegion.Start, _newUserRegion.End,
+                ClipStart, ClipEnd,
                 string.IsNullOrWhiteSpace(_saveClipLabel) ? null : _saveClipLabel.Trim(),
-                _saveClipIsPublic, _saveClipTypeId));
+                _saveClipIsPublic, _saveClipTypeId,
+                _clipNormalize, _clipSourceMarker?.Id));
 
             if (result is not null)
             {
                 _showSaveClipDialog  = false;
                 _saveClipLabel       = string.Empty;
                 _saveClipError       = null;
+
+                if (_clipSourceMarker is not null)
+                {
+                    // Reload so the marker row picks up its new LinkedClipUploadFileId — the server
+                    // set it, and nothing else would tell this list about it.
+                    _clipSourceMarker = null;
+                    _markers = await AdminClient.GetAudioMarkersAsync(FileId);
+                }
 
                 // Remove the user-drawn region — replaced by the persisted overlay
                 if (_newUserRegion is not null && _modalPlayer is not null)
@@ -1168,6 +1638,8 @@ else
     private bool                    _showMarkerDialog;
     private AudioMarkerRecord?      _editingMarker;
     private double                  _markerTimeSeconds;
+    private bool                    _markerIsSpan;
+    private double                  _markerEndSeconds;
     private string                  _markerLabel      = string.Empty;
     private EvpConfidenceLevel      _markerConfidence = EvpConfidenceLevel.Possible;
     private string                  _markerNote       = string.Empty;
@@ -1175,6 +1647,306 @@ else
     [
         EvpConfidenceLevel.Possible, EvpConfidenceLevel.Probable, EvpConfidenceLevel.Confirmed,
     ];
+
+    // ── EVP detection ─────────────────────────────────────────────────────────
+
+    private static readonly List<EvpSensitivity> _sensitivityOptions =
+    [
+        EvpSensitivity.Low, EvpSensitivity.Medium, EvpSensitivity.High,
+    ];
+
+    private EvpSensitivity      _scanSensitivity = EvpSensitivity.Medium;
+    private EvpDetectionOptions _scanOptions     = EvpDetectionOptions.FromSensitivity(EvpSensitivity.Medium);
+    private bool                _showScanTuning;
+    private bool                _scanning;
+    private string?             _scanMessage;
+
+    /// <summary>
+    /// Picking a preset reseeds every setting. That's the intent: the presets are starting points
+    /// you then adjust from, not a separate mode — so switching preset after fine-tuning gives you
+    /// a clean base again rather than a mix of the two.
+    /// </summary>
+    private void ApplySensitivityPreset(EvpSensitivity sensitivity)
+    {
+        _scanSensitivity = sensitivity;
+        _scanOptions     = EvpDetectionOptions.FromSensitivity(sensitivity);
+    }
+
+    private void SetThreshold(object? raw) =>
+        SetOption(raw, v => _scanOptions = _scanOptions with { ThresholdDb = v });
+
+    /// <summary>
+    /// Applies a numeric input, ignoring values mid-edit. A partially typed number ("0." or "")
+    /// parses to nothing useful, and writing it back would fight the user's cursor.
+    /// </summary>
+    private static void SetOption(object? raw, Action<double> apply)
+    {
+        if (double.TryParse(raw?.ToString(), out var value)) apply(value);
+    }
+
+    // ── Candidate review ──────────────────────────────────────────────────────
+
+    private bool                _candidatesByScore = true;
+    private Guid?               _reviewingCandidateId;
+    private bool                _showConfirmCandidateDialog;
+    private AudioMarkerRecord?  _confirmingCandidate;
+    private string              _confirmLabel      = string.Empty;
+    private EvpConfidenceLevel  _confirmConfidence = EvpConfidenceLevel.Possible;
+    private string              _confirmNote       = string.Empty;
+    private string?             _confirmError;
+
+    /// <summary>
+    /// Score order first by default — the strongest signals are the best use of the first few
+    /// minutes of review. Playback order is a click away for working straight through a recording.
+    /// </summary>
+    private IEnumerable<AudioMarkerRecord> SortedCandidates =>
+        _candidatesByScore
+            ? PendingCandidates.OrderByDescending(c => c.DetectionScore ?? 0).ThenBy(c => c.TimeSeconds)
+            : PendingCandidates;
+
+    /// <summary>
+    /// Plays just this candidate. The stored span already includes the detector's context padding,
+    /// so this plays the lead-in and tail too rather than starting mid-sound.
+    /// </summary>
+    private async Task PlayCandidateAsync(AudioMarkerRecord candidate)
+    {
+        if (_modalPlayer is null) return;
+        await _modalPlayer.PlayRegionAsync($"marker-{candidate.Id}");
+    }
+
+    private void OpenConfirmCandidateDialog(AudioMarkerRecord candidate)
+    {
+        _confirmingCandidate = candidate;
+        _confirmLabel        = string.Empty;   // never pre-fill "Detected signal" as a finding
+        _confirmConfidence   = EvpConfidenceLevel.Possible;
+        _confirmNote         = string.Empty;
+        _confirmError        = null;
+        _showConfirmCandidateDialog = true;
+    }
+
+    private async Task ConfirmCandidateAsync()
+    {
+        if (_confirmingCandidate is not { } candidate) return;
+        if (string.IsNullOrWhiteSpace(_confirmLabel))
+        {
+            _confirmError = "Say what you heard before keeping it — a marker with no description isn't a finding.";
+            return;
+        }
+
+        _confirmError = null;
+        _showConfirmCandidateDialog = false;
+        await ReviewCandidateAsync(candidate, new ReviewAudioMarkerRequest(
+            EvpReviewStatus.Confirmed,
+            _confirmLabel.Trim(),
+            _confirmConfidence,
+            string.IsNullOrWhiteSpace(_confirmNote) ? null : _confirmNote.Trim()));
+    }
+
+    private Task DismissCandidateAsync(AudioMarkerRecord candidate) =>
+        ReviewCandidateAsync(candidate, new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed));
+
+    // ── Adjusting a candidate's bounds ────────────────────────────────────────
+
+    private Guid?  _adjustingCandidateId;
+    private double _adjustedStart;
+    private double _adjustedEnd;
+
+    /// <summary>
+    /// Hands one candidate's region over to the mouse. The detector's edges are an estimate — it
+    /// finds where energy crossed a threshold, which is often a little inside or outside the sound
+    /// a person actually hears — so the bounds need to be correctable before the span is kept as a
+    /// finding and later cut into a clip.
+    /// </summary>
+    private async Task StartAdjustingAsync(AudioMarkerRecord candidate)
+    {
+        if (_modalPlayer is null) return;
+
+        // Region drag has to be on for the handles to respond; the capture-phase handler otherwise
+        // claims the gesture and draws a new region instead.
+        await _modalPlayer.SetDragModeAsync(regionMode: true);
+
+        var bounds = await _modalPlayer.SetRegionEditableAsync($"marker-{candidate.Id}");
+        if (bounds is null) return;
+
+        _adjustingCandidateId = candidate.Id;
+        _adjustedStart        = bounds.Start;
+        _adjustedEnd          = bounds.End;
+        StateHasChanged();
+    }
+
+    /// <summary>Locks every region again, optionally putting the one being edited back where it was.</summary>
+    private async Task StopAdjustingAsync(bool revert)
+    {
+        if (_modalPlayer is null) { _adjustingCandidateId = null; return; }
+
+        if (revert && _adjustingCandidateId is { } id
+                   && _markers.FirstOrDefault(m => m.Id == id) is { } original)
+        {
+            var regionId = $"marker-{original.Id}";
+            await _modalPlayer.RemoveRegionAsync(regionId);
+            _programmaticRegionIds.Remove(regionId);
+            await AddMarkerRegionAsync(original);
+        }
+
+        await _modalPlayer.SetRegionEditableAsync(null);
+        _adjustingCandidateId = null;
+        StateHasChanged();
+    }
+
+    private async Task SaveAdjustedBoundsAsync()
+    {
+        if (_adjustingCandidateId is not { } id) return;
+        if (_markers.FirstOrDefault(m => m.Id == id) is not { } candidate) return;
+
+        // Read the bounds off the waveform rather than trusting what the drag events told us.
+        // region-updated only arrives at the end of a pointer sequence, and anything that
+        // interrupts that sequence would otherwise save stale numbers — silently persisting
+        // something different from what the reviewer is looking at. Pulling at save time makes the
+        // region itself the single source of truth.
+        if (_modalPlayer is not null)
+        {
+            var live = (await _modalPlayer.GetRegionsAsync())
+                .FirstOrDefault(r => r.Id == $"marker-{id}");
+            if (live is not null)
+            {
+                _adjustedStart = live.Start;
+                _adjustedEnd   = live.End;
+            }
+        }
+
+        if (_adjustedEnd <= _adjustedStart)
+        {
+            // The API would reject this too; catching it here keeps the region editable so the
+            // reviewer can just drag it back rather than starting over.
+            _scanMessage = "That span ends before it starts — drag the edges apart.";
+            StateHasChanged();
+            return;
+        }
+
+        // Update, not review: moving the edges is not a decision about the candidate, and the
+        // review endpoint deliberately refuses anything that isn't confirm-or-dismiss. Update
+        // leaves ReviewStatus alone, so the candidate stays in the queue with better bounds.
+        _reviewingCandidateId = id;
+        try
+        {
+            var updated = await AdminClient.UpdateAudioMarkerAsync(FileId, id, new UpdateAudioMarkerRequest(
+                _adjustedStart,
+                candidate.Label,
+                candidate.ConfidenceLevel,
+                candidate.Note,
+                _adjustedEnd));
+
+            if (updated is not null)
+            {
+                _markers = [.. _markers.Where(m => m.Id != updated.Id), updated];
+                if (_modalPlayer is not null)
+                {
+                    var regionId = $"marker-{updated.Id}";
+                    await _modalPlayer.RemoveRegionAsync(regionId);
+                    _programmaticRegionIds.Remove(regionId);
+                    await AddMarkerRegionAsync(updated);
+                }
+                _scanMessage = "Bounds updated.";
+            }
+        }
+        catch { _scanMessage = "Couldn't save those bounds."; }
+        finally
+        {
+            _reviewingCandidateId = null;
+            _adjustingCandidateId = null;
+            if (_modalPlayer is not null) await _modalPlayer.SetRegionEditableAsync(null);
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Sends a decision and re-draws the affected marker. Only that one region is touched — a full
+    /// reload would restart the waveform's region layer mid-review for no reason.
+    /// </summary>
+    private async Task ReviewCandidateAsync(AudioMarkerRecord candidate, ReviewAudioMarkerRequest request)
+    {
+        _reviewingCandidateId = candidate.Id;
+        try
+        {
+            var updated = await AdminClient.ReviewAudioMarkerAsync(FileId, candidate.Id, request);
+            if (updated is null) return;
+
+            _markers = [.. _markers.Where(m => m.Id != updated.Id), updated];
+
+            if (_modalPlayer is not null)
+            {
+                var id = $"marker-{updated.Id}";
+                await _modalPlayer.RemoveRegionAsync(id);
+                _programmaticRegionIds.Remove(id);
+                // Re-adds in confirmed colours, or draws nothing at all when dismissed.
+                await AddMarkerRegionAsync(updated);
+            }
+        }
+        catch { /* leave the candidate in the queue rather than pretending it was decided */ }
+        finally
+        {
+            _reviewingCandidateId = null;
+            _confirmingCandidate  = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RunScanAsync()
+    {
+        if (_scanning) return;
+
+        if (_scanOptions.Validate() is { } problem)
+        {
+            _scanMessage = problem;
+            return;
+        }
+
+        _scanning    = true;
+        _scanMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var candidates = await AdminClient.ScanAudioForEvpAsync(FileId, _scanSensitivity, _scanOptions);
+
+            // Reload everything rather than merging the response in: the scan replaces the previous
+            // pending set server-side, so the local list is stale in ways the response alone
+            // doesn't describe.
+            await ClearMarkerRegionsAsync();
+            await OverlayMarkersAsync();
+
+            _scanMessage = candidates.Count switch
+            {
+                0 => "Nothing stood out from the background.",
+                1 => "1 candidate to review.",
+                _ => $"{candidates.Count} candidates to review.",
+            };
+        }
+        catch
+        {
+            _scanMessage = "The scan failed. The file may not be readable audio.";
+        }
+        finally
+        {
+            _scanning = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Removes the marker regions currently drawn, so a re-scan doesn't leave the previous scan's
+    /// candidates on the waveform as orphans with no row behind them.
+    /// </summary>
+    private async Task ClearMarkerRegionsAsync()
+    {
+        if (_modalPlayer is null) return;
+        foreach (var marker in _markers)
+        {
+            var id = $"marker-{marker.Id}";
+            await _modalPlayer.RemoveRegionAsync(id);
+            _programmaticRegionIds.Remove(id);
+        }
+    }
 
     // ── Phase D: destructive edit state ─────────────────────────────────────────
 

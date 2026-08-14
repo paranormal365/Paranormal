@@ -97,6 +97,7 @@
     {
         if (firstRender)
         {
+            if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
             _users    = await AdminClient.GetAllUsersAsync();
             _filtered = _users;
             StateHasChanged();

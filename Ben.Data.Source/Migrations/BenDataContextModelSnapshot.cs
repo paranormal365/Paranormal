@@ -115,12 +115,27 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime?>("DateUpdated")
                         .HasColumnType("datetime2");
 
+                    b.Property<float?>("DetectionScore")
+                        .HasColumnType("real");
+
+                    b.Property<double?>("EndSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<bool>("IsAutoDetected")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Label")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<Guid?>("LinkedClipUploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Note")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ReviewStatus")
+                        .HasColumnType("int");
 
                     b.Property<double>("TimeSeconds")
                         .HasColumnType("float");
@@ -135,9 +150,13 @@ namespace Ben.Data.Source.Migrations
 
                     b.HasIndex("CreatedByAppUserId");
 
+                    b.HasIndex("LinkedClipUploadFileId");
+
                     b.HasIndex("UpdatedByAppUserId");
 
                     b.HasIndex("UploadFileId");
+
+                    b.HasIndex("UploadFileId", "ReviewStatus");
 
                     b.ToTable("AudioMarkers");
                 });
@@ -4898,6 +4917,11 @@ namespace Ben.Data.Source.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "LinkedClipUploadFile")
+                        .WithMany()
+                        .HasForeignKey("LinkedClipUploadFileId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
                         .WithMany()
                         .HasForeignKey("UpdatedByAppUserId")
@@ -4910,6 +4934,8 @@ namespace Ben.Data.Source.Migrations
                         .IsRequired();
 
                     b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("LinkedClipUploadFile");
 
                     b.Navigation("UpdatedByAppUser");
 

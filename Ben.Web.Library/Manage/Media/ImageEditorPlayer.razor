@@ -14,8 +14,8 @@
 
 @if (_show)
 {
-    <TelerikWindow @bind-Visible="_show" Modal="true" Width="94vw" Height="94vh"
-                   Title="@($"Edit: {FileName}")">
+    <TelerikWindow @bind-Visible="_show" Modal="true" Width="94vw" Height="94vh">
+        <WindowTitle>@($"Edit: {FileName}")</WindowTitle>
         <WindowContent>
             <div class="d-flex h-100 gap-0" style="overflow:hidden;">
 
@@ -97,7 +97,7 @@
                                 </div>
                                 <div>
                                     <strong class="small">Timestamp Stamp</strong>
-                                    <TelerikTextBox @bind-Value="_stampText" PlaceholderText="Text (leave blank for now)" Class="mt-1" />
+                                    <TelerikTextBox @bind-Value="_stampText" Placeholder="Text (leave blank for now)" Class="mt-1" />
                                     <div class="d-flex gap-1 mt-1 flex-wrap">
                                         @foreach (var pos in new[] { ("tl","↖"), ("tr","↗"), ("bl","↙"), ("br","↘") })
                                         {
@@ -175,8 +175,8 @@
             <WindowAction Name="Minimize" />
             @if (_isDirty)
             {
-                <WindowAction Text="Save State"         OnClick="SaveEditStateAsync" />
-                <WindowAction Text="Save as New Version" OnClick="SaveAsNewVersionAsync" />
+                <WindowAction Title="Save State"         OnClick="SaveEditStateAsync" />
+                <WindowAction Title="Save as New Version" OnClick="SaveAsNewVersionAsync" />
             }
             <WindowAction Name="Close" />
         </WindowActions>
@@ -241,7 +241,17 @@
         _module    ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/image-editor.js");
         _dotNetRef ??= DotNetObjectReference.Create(this);
 
-        var imageUrl  = ImageUrl ?? AdminClient.GetFileDownloadUrl(UploadFileId);
+        // The UploadFile download endpoint is [Authorize]-protected, so Fabric.js's own
+        // fromURL() (a plain, unauthenticated browser image load) can never fetch it —
+        // fetch the bytes server-side over the authenticated HttpClient instead and hand
+        // the canvas a base64 data URL, matching UserMediaPreview/AudioFilePreview's pattern.
+        string? imageUrl = ImageUrl;
+        if (imageUrl is null)
+        {
+            var result = await AdminClient.GetFileDataAsync(UploadFileId);
+            if (result is not null)
+                imageUrl = $"data:{result.Value.ContentType};base64,{Convert.ToBase64String(result.Value.Data)}";
+        }
         var editState = (string?)null;
 
         await _module.InvokeVoidAsync("init", _containerId, imageUrl, editState, _dotNetRef);
@@ -352,7 +362,7 @@
 
     private async Task SaveEditStateAsync()
     {
-        if (_module is null) return;
+        if (_module is null || _saving) return;
         _saving = true; StateHasChanged();
         try
         {
@@ -370,7 +380,7 @@
 
     private async Task SaveAsNewVersionAsync()
     {
-        if (_module is null) return;
+        if (_module is null || _saving) return;
         _saving = true; StateHasChanged();
         try
         {

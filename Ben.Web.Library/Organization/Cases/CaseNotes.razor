@@ -155,6 +155,7 @@ else
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         try { _notes = (await AdminClient.GetCaseNotesAsync(OrgId, CaseId)).ToList(); }
         catch { _error = "Failed to load notes."; }
         finally { _loading = false; }

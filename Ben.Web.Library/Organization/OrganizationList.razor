@@ -166,6 +166,12 @@
     {
         if (firstRender)
         {
+            // OnInitializedAsync's AuthReady wait covers static SSR prerender, but this
+            // hook runs again once the interactive circuit takes over — the bearer token
+            // isn't guaranteed attached yet at that exact moment either, so a hard
+            // navigation could fire GetOrganizationsAsync unauthenticated and render an
+            // empty list. Wait here too, at the point the call actually happens.
+            if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
             await LoadOrgs();
             StateHasChanged();
         }

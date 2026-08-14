@@ -1,0 +1,302 @@
+@page "/notifications"
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@implements IDisposable
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NotificationState Notifications
+@inject NavigationManager NavManager
+
+<PageTitle>Notifications</PageTitle>
+
+<div class="container py-3" style="max-width:900px;">
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h3 class="mb-0">Notifications</h3>
+        <TelerikButton Icon="@SvgIcon.ArrowRotateCcw"
+                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="RefreshAllAsync">Refresh</TelerikButton>
+    </div>
+
+    @* ── Waiting on you ───────────────────────────────────────────────────── *@
+    <h6 class="text-secondary text-uppercase small mb-2">Waiting on you</h6>
+    @if (_summary.TotalCount == 0)
+    {
+        <div class="alert alert-light border">You're all caught up — nothing is waiting on you.</div>
+    }
+    else
+    {
+        <div class="list-group mb-4">
+            @foreach (var row in SummaryRows())
+            {
+                <button type="button"
+                        class="list-group-item list-group-item-action d-flex align-items-center gap-3"
+                        @onclick="@(() => NavManager.NavigateTo(row.Destination))">
+                    <TelerikSvgIcon Icon="@row.Icon" />
+                    <span class="flex-grow-1 text-start">
+                        <span class="d-block">@row.Title</span>
+                        <span class="d-block text-secondary small">@row.Detail</span>
+                    </span>
+                    <span class="@NotificationBadge.CssClass(row.Bucket)">
+                        @NotificationBadge.Text(row.Bucket.Count)
+                    </span>
+                </button>
+            }
+        </div>
+    }
+
+    @* ── Permission requests ──────────────────────────────────────────────── *@
+    @if (_pendingRequests.Count > 0)
+    {
+        <h6 class="text-secondary text-uppercase small mb-2">File permission requests</h6>
+        <div class="list-group mb-4">
+            @foreach (var req in _pendingRequests)
+            {
+                <div class="list-group-item">
+                    <div class="d-flex align-items-start gap-3">
+                        <div class="flex-grow-1">
+                            <div>
+                                <strong>@(req.RequestedByDisplayName ?? "Someone")</strong>
+                                requested <strong>@req.PermissionType</strong> access to
+                                <strong>@(req.FileName ?? "a file")</strong>
+                                @if (req.OrganizationName is not null)
+                                {
+                                    <text> on behalf of @req.OrganizationName</text>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(req.RequestNotes))
+                            {
+                                <div class="text-secondary small mt-1">“@req.RequestNotes”</div>
+                            }
+                            <div class="text-secondary small mt-1">
+                                @req.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                           Enabled="@(_reviewingId != req.Id)"
+                                           OnClick="@(() => ReviewAsync(req, FilePermissionRequestStatus.Approved))">Approve</TelerikButton>
+                            <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                           FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                           Enabled="@(_reviewingId != req.Id)"
+                                           OnClick="@(() => ReviewAsync(req, FilePermissionRequestStatus.Denied))">Deny</TelerikButton>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @* ── Platform messages ────────────────────────────────────────────────── *@
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <h6 class="text-secondary text-uppercase small mb-0">Messages</h6>
+        @if (_messages.Any(m => m.ReadUtc is null))
+        {
+            <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Enabled="@(!_markingAll)"
+                           OnClick="MarkAllReadAsync">Mark all read</TelerikButton>
+        }
+    </div>
+
+    @if (_loadingMessages)
+    {
+        <div class="text-secondary small">Loading…</div>
+    }
+    else if (_messages.Count == 0)
+    {
+        <div class="alert alert-light border">No messages.</div>
+    }
+    else
+    {
+        <div class="list-group">
+            @foreach (var msg in _messages)
+            {
+                <button type="button"
+                        class="list-group-item list-group-item-action d-flex align-items-center gap-3"
+                        @onclick="@(() => OpenMessageAsync(msg))">
+                    <span class="flex-grow-1 text-start">
+                        <span class="d-block @(msg.ReadUtc is null ? "fw-bold" : "")">
+                            @(string.IsNullOrWhiteSpace(msg.Subject) ? "(no subject)" : msg.Subject)
+                        </span>
+                        <span class="d-block text-secondary small">
+                            @msg.TypeName · @(msg.SentByDisplayName ?? "Unknown") ·
+                            @msg.SentUtc.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+                        </span>
+                    </span>
+                    @if (msg.ReadUtc is null)
+                    {
+                        <span class="badge rounded-pill bg-primary">New</span>
+                    }
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@* ── Message dialog ───────────────────────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showMessage"
+               Title="@(_openMessage?.Subject ?? "Message")"
+               Width="680px">
+    <DialogContent>
+        @if (_openMessage is not null)
+        {
+            <div class="mb-2 text-secondary small">
+                <strong>From:</strong> @(_openMessage.SentByDisplayName ?? "Unknown")
+                · @_openMessage.TypeName
+                · @_openMessage.SentUtc.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+            </div>
+            <div class="border-top pt-3">@((MarkupString)_openMessage.Body)</div>
+        }
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton OnClick="@(() => _showMessage = false)">Close</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@code {
+    private NotificationSummaryResponse _summary = NotificationSummaryResponse.Empty;
+    private List<MyMessageRecord> _messages = [];
+    private List<PendingPermissionRequestRecord> _pendingRequests = [];
+
+    private MyMessageRecord? _openMessage;
+    private bool  _showMessage;
+    private bool  _loadingMessages = true;
+    private bool  _markingAll;
+    private Guid? _reviewingId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
+        Notifications.Changed += OnNotificationsChanged;
+        await Notifications.EnsureStartedAsync(RendererInfo.IsInteractive);
+        _summary = Notifications.Current;
+
+        await LoadDetailAsync();
+    }
+
+    private void OnNotificationsChanged() => InvokeAsync(() =>
+    {
+        _summary = Notifications.Current;
+        StateHasChanged();
+    });
+
+    private async Task LoadDetailAsync()
+    {
+        _loadingMessages = true;
+        try
+        {
+            var messagesTask = AdminClient.GetMyMessagesAsync();
+            var requestsTask = AdminClient.GetPendingPermissionRequestsForMeAsync();
+            await Task.WhenAll(messagesTask, requestsTask);
+            _messages        = await messagesTask;
+            _pendingRequests = await requestsTask;
+        }
+        catch
+        {
+            _messages        = [];
+            _pendingRequests = [];
+        }
+        finally
+        {
+            _loadingMessages = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshAllAsync()
+    {
+        await Notifications.RefreshAsync(force: true);
+        await LoadDetailAsync();
+    }
+
+    private async Task OpenMessageAsync(MyMessageRecord msg)
+    {
+        _openMessage = msg;
+        _showMessage = true;
+
+        if (msg.ReadUtc is not null) return;
+
+        if (await AdminClient.MarkMyMessageReadAsync(msg.Id))
+        {
+            // Patch locally instead of refetching the list — the dialog is already showing this
+            // message, and a refetch would reorder nothing but cost a round trip.
+            var index = _messages.IndexOf(msg);
+            if (index >= 0) _messages[index] = msg with { ReadUtc = DateTime.UtcNow };
+            await Notifications.RefreshAsync(force: true);
+        }
+    }
+
+    private async Task MarkAllReadAsync()
+    {
+        _markingAll = true;
+        try
+        {
+            if (await AdminClient.MarkAllMyMessagesReadAsync() > 0)
+            {
+                var now = DateTime.UtcNow;
+                _messages = [.. _messages.Select(m => m.ReadUtc is null ? m with { ReadUtc = now } : m)];
+                await Notifications.RefreshAsync(force: true);
+            }
+        }
+        finally { _markingAll = false; }
+    }
+
+    private async Task ReviewAsync(PendingPermissionRequestRecord req, FilePermissionRequestStatus status)
+    {
+        _reviewingId = req.Id;
+        try
+        {
+            if (await AdminClient.ReviewPermissionRequestAsync(req.Id, status, reviewNotes: null))
+            {
+                _pendingRequests.Remove(req);
+                await Notifications.RefreshAsync(force: true);
+            }
+        }
+        finally { _reviewingId = null; }
+    }
+
+    /// <summary>
+    /// The non-empty buckets, each with somewhere to go. Buckets with nothing in them are dropped
+    /// rather than shown as zeroes — this page is a to-do list, not a dashboard.
+    /// </summary>
+    private IEnumerable<SummaryRow> SummaryRows()
+    {
+        var s = _summary;
+
+        if (s.CaseMessagesAsClient.Count > 0)
+            yield return new("Replies on your cases",
+                $"From the group handling your case · oldest {NotificationBadge.DescribeAge(s.CaseMessagesAsClient.OldestUnreadUtc)}",
+                SvgIcon.Folder, "/my-cases", s.CaseMessagesAsClient);
+
+        if (s.CaseMessagesAsOrgMember.Count > 0)
+            yield return new("Client messages awaiting a reply",
+                $"On cases at your groups · oldest {NotificationBadge.DescribeAge(s.CaseMessagesAsOrgMember.OldestUnreadUtc)}",
+                SvgIcon.Comment, "/organizations", s.CaseMessagesAsOrgMember);
+
+        if (s.OrgMessages.Count > 0)
+            yield return new("Unread group messages",
+                $"Internal messages addressed to you · oldest {NotificationBadge.DescribeAge(s.OrgMessages.OldestUnreadUtc)}",
+                SvgIcon.Envelope, "/organizations", s.OrgMessages);
+
+        if (s.PendingPermissionRequests.Count > 0)
+            yield return new("File permission requests",
+                $"Waiting on your decision · oldest {NotificationBadge.DescribeAge(s.PendingPermissionRequests.OldestUnreadUtc)}",
+                SvgIcon.Lock, "/notifications", s.PendingPermissionRequests);
+
+        if (s.SystemMessages.Count > 0)
+            yield return new("Unread messages",
+                $"Sent to you through the platform · oldest {NotificationBadge.DescribeAge(s.SystemMessages.OldestUnreadUtc)}",
+                SvgIcon.Bell, "/notifications", s.SystemMessages);
+    }
+
+    private sealed record SummaryRow(
+        string Title, string Detail, ISvgIcon Icon, string Destination, NotificationBucket Bucket);
+
+    public void Dispose() => Notifications.Changed -= OnNotificationsChanged;
+}

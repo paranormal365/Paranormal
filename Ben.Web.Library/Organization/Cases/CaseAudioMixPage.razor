@@ -3,6 +3,7 @@
 @using Ben.Web.Library.Services
 @implements IAsyncDisposable
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 @inject NavigationManager NavManager
 @inject IJSRuntime JS
 
@@ -181,6 +182,8 @@ else
             _module = await JS.InvokeAsync<IJSObjectReference>(
                 "import", "/_content/Ben.Web.Library/Organization/Cases/CaseAudioMixPage.razor.js");
             _dotNetRef = DotNetObjectReference.Create(this);
+
+            if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
 
             try { _case = await AdminClient.GetOrgCaseAsync(OrgId, CaseId); }
             catch { _case = null; }

@@ -272,7 +272,7 @@ public class EntraTests
     }
 
     [Fact]
-    public void StopImpersonating_WhenImpersonating_FiresStateChanged()
+    public async Task StopImpersonating_WhenImpersonating_FiresStateChanged()
     {
         var (svc, store, _, _) = Build();
         store.AccessToken = "original";
@@ -282,13 +282,13 @@ public class EntraTests
         int fireCount = 0;
         store.StateChanged += () => fireCount++;
 
-        svc.StopImpersonating();
+        await svc.StopImpersonatingAsync();
 
         Assert.Equal(1, fireCount);
     }
 
     [Fact]
-    public void StopImpersonating_WhenNotImpersonating_DoesNotFireStateChanged()
+    public async Task StopImpersonating_WhenNotImpersonating_DoesNotFireStateChanged()
     {
         var (svc, store, _, _) = Build();
         store.IsImpersonating = false;
@@ -296,7 +296,7 @@ public class EntraTests
         int fireCount = 0;
         store.StateChanged += () => fireCount++;
 
-        svc.StopImpersonating();
+        await svc.StopImpersonatingAsync();
 
         Assert.Equal(0, fireCount);
     }
