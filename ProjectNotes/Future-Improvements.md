@@ -994,7 +994,35 @@ sliders all show exactly 2 correct labels including non-aligned endpoints (`0.01
 
 ---
 
-## 31. Callout text-inside parity, or link a text overlay + callout as one unit (not started)
+## 31. Callout text-inside parity (✅ shipped 2026-08-13, phase 171) — linking half still open
+
+**Text-inside parity is done** (user chose it over the linking alternative). Scoping first inverted
+both of this item's assumptions:
+
+- `CalloutClip` **already had** `Text`, `FontFamily`, `FontSize`, `FontColor`, `FontBold`,
+  `FontUnderline`, rich-text `Runs`, `Opacity`, fade (`ComputeFadeAlpha`) and a full shadow group.
+  The genuine gaps were only **alignment, wrapping, and shadow-on-text**.
+- `TrackItem.LinkedClipId` **exists but propagates nothing** — set/cleared by an undoable
+  `LinkClipsCommand`, drives a CSS class and a J/L-cut offset readout, and has a video→audio
+  proximity finder, but no move/trim/delete follows a partner. Worth noting against item #52, which
+  reads as though grouped editing already works.
+
+Shipped: `TextAlign`, `TextVerticalAlign`, `TextWrap`, `TextShadow`, `TextPadding`, reusing
+TextOverlay's own alignment enums; all defaults reproduce the previous dead-centre render exactly.
+New `CalloutTextWrapper` uses an explicitly approximate width model (`chars × fontSize × 0.52`) —
+real glyph metrics aren't reachable from a pure C# renderer that must emit identical SVG for
+preview and export, and a slightly-wrong break beats those two disagreeing.
+
+**Bug caught by live verification, not tests:** the first cut wrapped only the plain-text path, but
+the rich-text editor *always* populates `Runs`, so `TextWrap` would have shipped as a checkbox that
+did nothing while the plain-text unit tests passed. Fixed via `RichTextTspanBuilder.WrapLines`.
+See `README-phase-171.md`.
+
+**Still open — the other design:** linking a text overlay + callout as one logical unit. Needs
+grouped move/trim/delete, grouped selection and drag on timeline *and* canvas, shared motion
+path/fade, pairing generalized past video→audio, and undo throughout. Original ask below.
+
+<details><summary>Original request (2026-08-08)</summary>
 
 Callouts gained basic centered text-inside support in phase 74 (item #16 slice A), but the fuller ask:
 either make text-inside a first-class equal of standalone text overlays (fonts, alignment within the
@@ -1005,6 +1033,8 @@ a link id between track items, grouped selection/drag on the timeline and canvas
 motion-path/fade application.
 
 > Requested by the user 2026-08-08. Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote).
+
+</details>
 
 ---
 
