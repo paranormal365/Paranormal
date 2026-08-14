@@ -85,34 +85,40 @@ public class AudioMarkerControllerTests
         return ctrl;
     }
 
-    private static async Task<Guid> SeedFileAsync(IDbContextFactory<BenDataContext> factory)
+    /// <summary>
+    /// Seeds a private UploadFile and returns it with its owner. Callers must act as the owner
+    /// (or an audience the file is shared with) — every action now requires
+    /// <c>FileAudienceAccess.CanViewFileAsync</c>.
+    /// </summary>
+    private static async Task<(Guid FileId, Guid OwnerId)> SeedFileAsync(IDbContextFactory<BenDataContext> factory)
     {
-        var fileId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
         await using var db = await factory.CreateDbContextAsync();
         db.UploadFiles.Add(new UploadFile
         {
-            Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = Guid.NewGuid(),
+            Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
             FileName = "audio.mp3", StoredFileName = "s.mp3", ContentType = "audio/mpeg",
             FileSize = 100, FileData = new byte[4],
-            DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
         });
         await db.SaveChangesAsync();
-        return fileId;
+        return (fileId, ownerId);
     }
 
     private static async Task<Guid> SeedMarkerAsync(
         IDbContextFactory<BenDataContext> factory,
         Guid fileId, double timeSeconds = 10,
-        string label = "Whisper?", EvpConfidenceLevel confidence = EvpConfidenceLevel.Possible)
+        string label = "Whisper?", EvpConfidenceLevel confidence = EvpConfidenceLevel.Possible,
+        Guid? createdBy = null)
     {
         var markerId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
         await using var db = await factory.CreateDbContextAsync();
         db.AudioMarkers.Add(new AudioMarker
         {
             Id = markerId, UploadFileId = fileId,
             TimeSeconds = timeSeconds, Label = label, ConfidenceLevel = confidence,
-            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = createdBy ?? Guid.NewGuid(),
         });
         await db.SaveChangesAsync();
         return markerId;
@@ -124,8 +130,8 @@ public class AudioMarkerControllerTests
     public async Task GetAll_ReturnsEmpty_WhenNoMarkers()
     {
         var factory = CreateFactory();
-        var fileId  = await SeedFileAsync(factory);
-        var ctrl    = Build(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.GetAll(fileId, default);
 
@@ -138,11 +144,11 @@ public class AudioMarkerControllerTests
     public async Task GetAll_ReturnsMarkers_OrderedByTimeSeconds()
     {
         var factory = CreateFactory();
-        var fileId  = await SeedFileAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory);
         await SeedMarkerAsync(factory, fileId, timeSeconds: 30.0);
         await SeedMarkerAsync(factory, fileId, timeSeconds: 5.0);
         await SeedMarkerAsync(factory, fileId, timeSeconds: 15.0);
-        var ctrl    = Build(factory, Guid.NewGuid());
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.GetAll(fileId, default);
 
@@ -160,8 +166,8 @@ public class AudioMarkerControllerTests
     public async Task GetById_ReturnsNotFound_WhenMarkerDoesNotExist()
     {
         var factory = CreateFactory();
-        var fileId  = await SeedFileAsync(factory);
-        var ctrl    = Build(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.GetById(fileId, Guid.NewGuid(), default);
 
@@ -172,9 +178,9 @@ public class AudioMarkerControllerTests
     public async Task GetById_ReturnsRecord_WhenMarkerExists()
     {
         var factory  = CreateFactory();
-        var fileId   = await SeedFileAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory);
         var markerId = await SeedMarkerAsync(factory, fileId, timeSeconds: 42.0, label: "Name?");
-        var ctrl     = Build(factory, Guid.NewGuid());
+        var ctrl     = Build(factory, ownerId);
 
         var result   = await ctrl.GetById(fileId, markerId, default);
 
@@ -190,10 +196,10 @@ public class AudioMarkerControllerTests
     public async Task GetById_ReturnsNotFound_WhenMarkerExistsOnDifferentFile()
     {
         var factory  = CreateFactory();
-        var fileId1  = await SeedFileAsync(factory);
-        var fileId2  = await SeedFileAsync(factory);
+        var (fileId1, _)       = await SeedFileAsync(factory);
+        var (fileId2, owner2Id) = await SeedFileAsync(factory);
         var markerId = await SeedMarkerAsync(factory, fileId1);
-        var ctrl     = Build(factory, Guid.NewGuid());
+        var ctrl     = Build(factory, owner2Id);
 
         var result   = await ctrl.GetById(fileId2, markerId, default);
 
@@ -219,7 +225,7 @@ public class AudioMarkerControllerTests
     public async Task Create_ReturnsUnauthorized_WhenNoUserClaim()
     {
         var factory = CreateFactory();
-        var fileId  = await SeedFileAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory);
         var ctrl    = Build(factory, userId: null); // no user
 
         var result  = await ctrl.Create(fileId,
@@ -232,9 +238,8 @@ public class AudioMarkerControllerTests
     public async Task Create_Returns201_WithCorrectFields()
     {
         var factory = CreateFactory();
-        var fileId  = await SeedFileAsync(factory);
-        var userId  = Guid.NewGuid();
-        var ctrl    = Build(factory, userId);
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Create(fileId,
             new CreateAudioMarkerRequest(12.5, "Footsteps", EvpConfidenceLevel.Confirmed, "Very clear"), default);
@@ -246,7 +251,7 @@ public class AudioMarkerControllerTests
         Assert.Equal("Footsteps", record.Label);
         Assert.Equal(EvpConfidenceLevel.Confirmed, record.ConfidenceLevel);
         Assert.Equal("Very clear", record.Note);
-        Assert.Equal(userId, record.CreatedByAppUserId);
+        Assert.Equal(ownerId, record.CreatedByAppUserId);
     }
 
     // ── Update ────────────────────────────────────────────────────────────────
@@ -255,8 +260,8 @@ public class AudioMarkerControllerTests
     public async Task Update_ReturnsNotFound_WhenMarkerDoesNotExist()
     {
         var factory = CreateFactory();
-        var fileId  = await SeedFileAsync(factory);
-        var ctrl    = Build(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Update(fileId, Guid.NewGuid(),
             new UpdateAudioMarkerRequest(5.0, "new", EvpConfidenceLevel.Probable, null), default);
@@ -268,9 +273,9 @@ public class AudioMarkerControllerTests
     public async Task Update_ChangesLabelConfidenceAndNote()
     {
         var factory  = CreateFactory();
-        var fileId   = await SeedFileAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory);
         var markerId = await SeedMarkerAsync(factory, fileId, label: "old", confidence: EvpConfidenceLevel.Possible);
-        var ctrl     = Build(factory, Guid.NewGuid());
+        var ctrl     = Build(factory, ownerId);
 
         var result   = await ctrl.Update(fileId, markerId,
             new UpdateAudioMarkerRequest(20.0, "new", EvpConfidenceLevel.Confirmed, "elaborated"), default);
@@ -289,9 +294,9 @@ public class AudioMarkerControllerTests
     public async Task Delete_ReturnsNoContent_WhenMarkerDeleted()
     {
         var factory  = CreateFactory();
-        var fileId   = await SeedFileAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory);
         var markerId = await SeedMarkerAsync(factory, fileId);
-        var ctrl     = Build(factory, Guid.NewGuid());
+        var ctrl     = Build(factory, ownerId);
 
         var result   = await ctrl.Delete(fileId, markerId, default);
 
@@ -305,11 +310,180 @@ public class AudioMarkerControllerTests
     public async Task Delete_ReturnsNotFound_WhenMarkerDoesNotExist()
     {
         var factory = CreateFactory();
-        var fileId  = await SeedFileAsync(factory);
-        var ctrl    = Build(factory, Guid.NewGuid());
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var ctrl    = Build(factory, ownerId);
 
         var result  = await ctrl.Delete(fileId, Guid.NewGuid(), default);
 
         Assert.IsType<NotFoundResult>(result);
+    }
+
+    // ── File-audience access ──────────────────────────────────────────────────
+    // These endpoints previously had no check on the parent file at all: any authenticated
+    // user could read, add, rewrite or delete EVP markers on anyone else's private recording
+    // just by knowing (or guessing) its id. Markers quote timestamps out of the audio, so
+    // reading them leaks the content of the file itself.
+
+    [Fact]
+    public async Task GetAll_UnrelatedCaller_ReturnsForbid()
+    {
+        var factory = CreateFactory();
+        var (fileId, _) = await SeedFileAsync(factory);
+        await SeedMarkerAsync(factory, fileId);
+        var ctrl = Build(factory, Guid.NewGuid());
+
+        var result = await ctrl.GetAll(fileId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetById_UnrelatedCaller_ReturnsForbid()
+    {
+        var factory = CreateFactory();
+        var (fileId, _) = await SeedFileAsync(factory);
+        var markerId    = await SeedMarkerAsync(factory, fileId);
+        var ctrl = Build(factory, Guid.NewGuid());
+
+        var result = await ctrl.GetById(fileId, markerId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Create_UnrelatedCaller_ReturnsForbid()
+    {
+        var factory = CreateFactory();
+        var (fileId, _) = await SeedFileAsync(factory);
+        var ctrl = Build(factory, Guid.NewGuid());
+
+        var result = await ctrl.Create(fileId,
+            new CreateAudioMarkerRequest(5.0, "Whisper?", EvpConfidenceLevel.Possible, null), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Update_UnrelatedCaller_ReturnsForbid()
+    {
+        var factory = CreateFactory();
+        var (fileId, _) = await SeedFileAsync(factory);
+        var markerId    = await SeedMarkerAsync(factory, fileId);
+        var ctrl = Build(factory, Guid.NewGuid());
+
+        var result = await ctrl.Update(fileId, markerId,
+            new UpdateAudioMarkerRequest(5.0, "hijacked", EvpConfidenceLevel.Confirmed, null), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Delete_UnrelatedCaller_ReturnsForbid()
+    {
+        var factory = CreateFactory();
+        var (fileId, _) = await SeedFileAsync(factory);
+        var markerId    = await SeedMarkerAsync(factory, fileId);
+        var ctrl = Build(factory, Guid.NewGuid());
+
+        var result = await ctrl.Delete(fileId, markerId, default);
+
+        Assert.IsType<ForbidResult>(result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.NotNull(await db.AudioMarkers.FindAsync(markerId));
+    }
+
+    [Fact]
+    public async Task GetAll_PublicFile_AllowsAnyAuthenticatedCaller()
+    {
+        // The guard must not over-reach: a public file stays readable by everyone.
+        var factory = CreateFactory();
+        var fileId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = Guid.NewGuid(),
+                FileName = "public.mp3", StoredFileName = "p.mp3", ContentType = "audio/mpeg",
+                FileSize = 100, FileData = new byte[4], IsPublic = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+            });
+            await db.SaveChangesAsync();
+        }
+        await SeedMarkerAsync(factory, fileId);
+        var ctrl = Build(factory, Guid.NewGuid());
+
+        var result = await ctrl.GetAll(fileId, default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Single(Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(ok.Value));
+    }
+
+    // ── Marker authorship (moderation) ────────────────────────────────────────
+
+    [Fact]
+    public async Task Update_ViewerWhoIsNotAuthorOrFileOwner_ReturnsForbid()
+    {
+        // Seeing a shared file is enough to add your own markers, but not to rewrite
+        // someone else's — mirrors UploadFileCommentController's author-or-owner rule.
+        var factory = CreateFactory();
+        var fileId  = Guid.NewGuid();
+        var viewerId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = Guid.NewGuid(),
+                FileName = "shared.mp3", StoredFileName = "s.mp3", ContentType = "audio/mpeg",
+                FileSize = 100, FileData = new byte[4], IsPublic = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+            });
+            await db.SaveChangesAsync();
+        }
+        var markerId = await SeedMarkerAsync(factory, fileId);   // authored by someone else
+        var ctrl = Build(factory, viewerId);
+
+        var result = await ctrl.Update(fileId, markerId,
+            new UpdateAudioMarkerRequest(5.0, "hijacked", EvpConfidenceLevel.Confirmed, null), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Delete_MarkerAuthor_Succeeds_EvenWhenNotFileOwner()
+    {
+        var factory  = CreateFactory();
+        var fileId   = Guid.NewGuid();
+        var authorId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = Guid.NewGuid(),
+                FileName = "shared.mp3", StoredFileName = "s.mp3", ContentType = "audio/mpeg",
+                FileSize = 100, FileData = new byte[4], IsPublic = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+            });
+            await db.SaveChangesAsync();
+        }
+        var markerId = await SeedMarkerAsync(factory, fileId, createdBy: authorId);
+        var ctrl = Build(factory, authorId);
+
+        var result = await ctrl.Delete(fileId, markerId, default);
+
+        Assert.IsType<NoContentResult>(result);
+    }
+
+    [Fact]
+    public async Task Delete_FileOwner_CanModerate_AnotherUsersMarker()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var markerId = await SeedMarkerAsync(factory, fileId);   // authored by someone else
+        var ctrl = Build(factory, ownerId);
+
+        var result = await ctrl.Delete(fileId, markerId, default);
+
+        Assert.IsType<NoContentResult>(result);
     }
 }

@@ -338,10 +338,31 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
     let wasPlayingBeforeScrub = false
     let scrubJustEnded        = false   // stays true until the trailing 'click' fires
 
+    // True when the gesture started on an existing region body or one of its resize handles.
+    // Regions live in the waveform's shadow DOM, so ev.target from the container's point of
+    // view is only the shadow host — composedPath() is what actually sees them.
+    //
+    // Without this, the capture-phase handler below claimed *every* pointerdown (and called
+    // setPointerCapture on the container), so the regions plugin's own move/resize handlers
+    // never received the drag: grabbing a region's edge silently drew a brand new region
+    // instead of resizing the existing one, i.e. move/resize were unreachable by mouse.
+    const startedOnRegion = (ev) =>
+      (ev.composedPath?.() ?? []).some((el) => {
+        const part = el?.getAttribute?.('part')
+        return !!part && /(^|\s)region(\s|$)|region-handle/.test(part)
+      })
+
     const onPointerDown = (ev) => {
       if (ev.button !== 0) return
       const duration = ws.getDuration()
       if (!duration) return
+
+      // Let the regions plugin own drags that begin on a region or its handles.
+      if (instance._dragMode === 'region' && startedOnRegion(ev)) {
+        dragStartX = null
+        isDragging = false
+        return
+      }
 
       if (instance._dragMode === 'scrub') {
         scrubbing = true

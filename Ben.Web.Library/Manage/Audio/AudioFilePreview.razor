@@ -388,6 +388,7 @@ else
                                       OnFinish="@(() => { _modalTime = 0; StateHasChanged(); })"
                                       OnRegionContextMenu="@OnRegionRightClick"
                                       OnRegionCreated="@OnModalRegionCreated"
+                                      OnRegionUpdated="@OnModalRegionUpdated"
                                       OnSpectrogramReady="@(() => StateHasChanged())"
                                       OnSpectrogramContextMenu="@OnSpectrogramContextMenuFired" />
                 </div>
@@ -886,6 +887,21 @@ else
                 _programmaticRegionIds.Append(r.Id));
 
         _lastDrawnRegion = r;
+    }
+
+    /// <summary>
+    /// Keeps the tracked bounds in step when the user drags or resizes the region they drew.
+    /// Without this, <see cref="_lastDrawnRegion"/> held the bounds from the moment the region
+    /// was first drawn, so a region-scoped Cut/Silence — and the region readout in the edit
+    /// panel — silently used the original bounds rather than what was on screen.
+    /// </summary>
+    private void OnModalRegionUpdated(WsRegionData r)
+    {
+        if (_programmaticRegionIds.Contains(r.Id)) return;
+
+        if (_lastDrawnRegion?.Id == r.Id) _lastDrawnRegion = r;
+        if (_newUserRegion?.Id   == r.Id) _newUserRegion   = r;
+        StateHasChanged();
     }
 
     private async Task SaveClipAsync()
