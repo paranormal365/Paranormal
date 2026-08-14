@@ -892,9 +892,15 @@ else
         _                            => "rgba(148,163,184,0.85)",
     };
 
+    /// <summary>
+    /// A candidate is labelled with its score alone. A scan can drop dozens of these onto one
+    /// waveform, and repeating "Detected signal" on every band produced overlapping text that hid
+    /// the waveform without telling the reader anything — they all say the same words. The number
+    /// is the only part that differs, and the panel below carries the full description.
+    /// </summary>
     private static string MarkerRegionLabel(AudioMarkerRecord marker) =>
         marker.ReviewStatus == EvpReviewStatus.Pending && marker.DetectionScore is { } score
-            ? $"{marker.Label} ({score:0})"
+            ? score.ToString("0")
             : marker.Label;
 
     /// <summary>"0:03" for a point, "0:03–0:04 (0.6s)" for a span.</summary>
