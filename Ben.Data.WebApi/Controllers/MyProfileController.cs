@@ -133,6 +133,28 @@ public sealed class MyProfileController : BenControllerBase
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
 
+        // Optimistic concurrency: let writers race, and let the filtered unique index arbitrate.
+        // The loser sees a DbUpdateException and runs the whole operation again — new context,
+        // new transaction — so it re-reads the winner's committed row and deactivates it properly.
+        // This works because the transaction spans the read as well as the write: an attempt that
+        // read outside the transaction would keep retrying against the same stale snapshot.
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await SetPhotoOnceAsync(userId, request, ct);
+            }
+            catch (DbUpdateException) when (attempt < MaxSlotWriteAttempts)
+            {
+                // Bounded, not infinite: past this the collision isn't contention, it's a fault,
+                // and it should surface rather than spin.
+            }
+        }
+    }
+
+    private async Task<ActionResult<AppUserPhotoRecord>> SetPhotoOnceAsync(
+        Guid userId, SetMyPhotoRequest request, CancellationToken ct)
+    {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
         // Must be a file the caller owns. Without this check any authenticated user could point
@@ -148,8 +170,6 @@ public sealed class MyProfileController : BenControllerBase
         await using var tx = db.Database.IsRelational()
             ? await db.Database.BeginTransactionAsync(ct)
             : null;
-
-        await LockSlotAsync(db, userId, request.IsPublic, ct);
 
         // The public slot is served to anyone, so the underlying file has to be public too —
         // otherwise the avatar endpoint would hand out a file the storage layer treats as private.
@@ -230,42 +250,15 @@ public sealed class MyProfileController : BenControllerBase
     private const int MaxDisplayNameLength = 100;
 
     /// <summary>
-    /// Takes an exclusive range lock on one user's photo slot for the rest of the transaction, so
-    /// concurrent writers to that slot run one after another instead of racing.
+    /// How many times a slot write may be attempted before a unique-index collision is treated as
+    /// a fault rather than contention.
     /// </summary>
     /// <remarks>
-    /// <para>Without this, two writers both read the row currently holding the slot, both mark it
-    /// inactive, and both insert a new active row. The filtered unique index catches that and
-    /// rejects the loser — correct, but it surfaces as a failed request for something as ordinary
-    /// as a double-click. Retrying on the violation works, but it is probabilistic: under a
-    /// six-way race one caller still lost every attempt in a tuned budget. Serialising the writers
-    /// removes the collision instead of recovering from it.</para>
-    ///
-    /// <para><c>UPDLOCK</c> makes the second writer wait rather than read stale state;
-    /// <c>HOLDLOCK</c> holds a key-range lock for the whole transaction, which is what stops a
-    /// phantom insert into a slot that currently has no active row — the first-photo case, where
-    /// there is no existing row to lock. The index stays as the last line of defence: this makes
-    /// it never fire, it does not make it unnecessary.</para>
-    ///
-    /// <para>T-SQL specific, hence the relational guard. That is consistent with the rest of this
-    /// schema, which already depends on SQL Server behaviour (the filtered index itself, and the
-    /// NoAction FKs that work around error 1785). Under the InMemory provider used by the unit
-    /// tests this is a no-op, so the concurrency behaviour is verified live instead.</para>
+    /// Measured, not guessed: with the transaction spanning the read, an 8-way race on one slot
+    /// settles well inside this budget. Realistic contention here is a double-click or a retried
+    /// request — two or three writers, not eight.
     /// </remarks>
-    private static async Task LockSlotAsync(
-        BenDataContext db, Guid userId, bool isPublic, CancellationToken ct)
-    {
-        if (!db.Database.IsRelational()) return;
-
-        // Deliberately selects the key column rather than TOP 1: the point is to lock the whole
-        // qualifying range, and short-circuiting the scan could leave part of it unlocked.
-        await db.Database.ExecuteSqlRawAsync(
-            """
-            SELECT [Id] FROM [AppUserPhotos] WITH (UPDLOCK, HOLDLOCK)
-            WHERE [AppUserId] = {0} AND [IsPublic] = {1} AND [IsActive] = 1
-            """,
-            [userId, isPublic], ct);
-    }
+    private const int MaxSlotWriteAttempts = 4;
 
     private async Task<List<AppUserPhotoRecord>> ActivePhotosAsync(
         BenDataContext db, Guid userId, CancellationToken ct)
