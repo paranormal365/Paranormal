@@ -114,9 +114,13 @@ public sealed class MyCaseController : BenControllerBase
         var c = await db.Cases.AsNoTracking()
             .Include(x => x.ClientRequest)
             .Include(x => x.CaseManagerAppUser)
+            // The client's own reports, plus anything the org deliberately shared with them.
+            // Previously this was "your own reports, plus public Evidence" — which meant an
+            // investigator had no way to tell a client anything without publishing it to the world,
+            // and notes written *for* the client were invisible to them.
             .Include(x => x.TimelineEntries.Where(e =>
                 e.EntryType == CaseTimelineEntryType.ClientReport ||
-                (e.EntryType == CaseTimelineEntryType.Evidence && e.IsPublic))
+                e.Visibility >= CaseTimelineVisibility.Client)
                 .OrderBy(e => e.EventDateTime ?? e.DateCreated))
                 .ThenInclude(e => e.Files)
                 .ThenInclude(f => f.UploadFile)
@@ -138,6 +142,9 @@ public sealed class MyCaseController : BenControllerBase
             EventDateTime: e.EventDateTime,
             Title:         e.Title,
             Body:          e.Body,
+            // Now that org-authored entries can reach this list, the client needs to know which
+            // ones are theirs. Without it an investigator's note reads as something they wrote.
+            FromInvestigators: e.AuthorAppUserId != userId,
             DateCreated:   e.DateCreated,
             Files:         e.Files.Select(f => new OccurrenceFileItem(
                 f.UploadFileId, f.UploadFile.FileName, f.UploadFile.ContentType, f.UploadFile.FileSize)).ToList())).ToList();
@@ -183,7 +190,7 @@ public sealed class MyCaseController : BenControllerBase
 
     /// <summary>
     /// Logs a new occurrence (ClientReport timeline entry) on the client's case.
-    /// The entry is created with IsPublic = false; the case manager can approve it.
+    /// Created OrgOnly; the case manager decides whether to share it further.
     /// </summary>
     [HttpPost("{caseId:guid}/occurrences")]
     public async Task<ActionResult<CaseTimelineEntryRecord>> LogOccurrence(
@@ -204,7 +211,9 @@ public sealed class MyCaseController : BenControllerBase
             EventDateTime      = request.EventDateTime,
             Title              = request.Title?.Trim(),
             Body               = request.Body?.Trim(),
-            IsPublic           = false,
+            // The client always sees their own reports via the EntryType clause, so OrgOnly here
+            // means "not shared onward", not "hidden from its author".
+            Visibility         = CaseTimelineVisibility.OrgOnly,
             IpAddress          = HttpContext.Connection.RemoteIpAddress?.ToString(),
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
@@ -1027,6 +1036,8 @@ public sealed record ClientCaseOccurrence(
     DateTime? EventDateTime,
     string?   Title,
     string?   Body,
+    /// <summary>True when the org wrote this, false when the client did.</summary>
+    bool      FromInvestigators,
     DateTime  DateCreated,
     IReadOnlyList<OccurrenceFileItem> Files);
 

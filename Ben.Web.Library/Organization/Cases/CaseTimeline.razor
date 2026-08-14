@@ -48,7 +48,7 @@
             @foreach (var entry in FilteredEntries)
             {
                 var e = entry;
-                <div class="card @(!e.IsPublic ? "border-0 bg-light" : "")">
+                <div class="card @(e.Visibility == CaseTimelineVisibility.OrgOnly ? "border-0 bg-light" : "")">
                     <div class="card-body">
                         <div class="d-flex align-items-start justify-content-between gap-2">
                             <div class="flex-grow-1">
@@ -56,10 +56,10 @@
                                     <span class="badge @EntryTypeBadgeClass(e.EntryType)">
                                         @EntryTypeLabel(e.EntryType)
                                     </span>
-                                    @if (!e.IsPublic)
-                                    {
-                                        <span class="badge bg-secondary">Private</span>
-                                    }
+                                    @* Says who can see it, not just "private" — with three tiers
+                                       an investigator needs to know which audience an entry reaches. *@
+                                    <span class="badge @VisibilityBadgeClass(e.Visibility)"
+                                          title="@VisibilityHint(e.Visibility)">@VisibilityLabel(e.Visibility)</span>
                                     @if (e.EventDateTime.HasValue)
                                     {
                                         <small class="text-secondary">
@@ -197,9 +197,13 @@
                     }
                 </div>
             </div>
-            <div class="col-12 d-flex align-items-center gap-2">
-                <TelerikCheckBox @bind-Value="@_form.IsPublic" Id="entry-public" />
-                <label for="entry-public" class="form-label mb-0">Visible on public case page</label>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Who can see this</label>
+                <TelerikDropDownList Data="@_visibilityOptions"
+                                     @bind-Value="_form.Visibility"
+                                     TextField="Label" ValueField="Value"
+                                     Width="100%" />
+                <div class="form-text">@VisibilityHint(_form.Visibility)</div>
             </div>
         </div>
         @if (_dialogError is not null)
@@ -322,7 +326,7 @@
             EventDateTime      = entry.EventDateTime,
             Title              = entry.Title ?? "",
             Body               = entry.Body ?? "",
-            IsPublic           = entry.IsPublic,
+            Visibility         = entry.Visibility,
             ExperienceTypeIds  = entry.ExperienceTypeIds.ToHashSet(),
         };
         _dialogError = null;
@@ -347,7 +351,7 @@
                 EventDateTime:     _form.EventDateTime,
                 Title:             string.IsNullOrWhiteSpace(_form.Title) ? null : _form.Title.Trim(),
                 Body:              string.IsNullOrWhiteSpace(_form.Body) ? null : _form.Body.Trim(),
-                IsPublic:          _form.IsPublic,
+                Visibility:        _form.Visibility,
                 ExperienceTypeIds: _form.ExperienceTypeIds.ToList());
 
             CaseTimelineEntryRecord? result;
@@ -392,6 +396,43 @@
         _                                      => t.ToString(),
     };
 
+    // ── Visibility (C2) ───────────────────────────────────────────────────────
+    // Three tiers replace a checkbox that could only mean "public or not", which forced a choice
+    // between telling the client nothing and telling the whole internet.
+
+    private sealed record VisibilityOption(string Label, CaseTimelineVisibility Value);
+
+    private static readonly List<VisibilityOption> _visibilityOptions =
+    [
+        new("Investigators only", CaseTimelineVisibility.OrgOnly),
+        new("Client can see",     CaseTimelineVisibility.Client),
+        new("Public",             CaseTimelineVisibility.Public),
+    ];
+
+    private static string VisibilityLabel(CaseTimelineVisibility v) => v switch
+    {
+        CaseTimelineVisibility.Public => "Public",
+        CaseTimelineVisibility.Client => "Client",
+        _                             => "Internal",
+    };
+
+    private static string VisibilityBadgeClass(CaseTimelineVisibility v) => v switch
+    {
+        CaseTimelineVisibility.Public => "bg-info text-dark",
+        CaseTimelineVisibility.Client => "bg-primary",
+        _                             => "bg-secondary",
+    };
+
+    private static string VisibilityHint(CaseTimelineVisibility v) => v switch
+    {
+        CaseTimelineVisibility.Public =>
+            "Anyone can read this, including on the public case page.",
+        CaseTimelineVisibility.Client =>
+            "Your team and the case's client. Not shown publicly.",
+        _ =>
+            "Only your team. The client won't see this.",
+    };
+
     private static string EntryTypeBadgeClass(CaseTimelineEntryType t) => t switch
     {
         CaseTimelineEntryType.ClientReport     => "bg-warning text-dark",
@@ -407,7 +448,7 @@
         public DateTime?             EventDateTime { get; set; }
         public string                Title         { get; set; } = "";
         public string                Body          { get; set; } = "";
-        public bool                  IsPublic      { get; set; }
+        public CaseTimelineVisibility Visibility   { get; set; } = CaseTimelineVisibility.OrgOnly;
         public HashSet<Guid>         ExperienceTypeIds { get; set; } = new();
     }
 

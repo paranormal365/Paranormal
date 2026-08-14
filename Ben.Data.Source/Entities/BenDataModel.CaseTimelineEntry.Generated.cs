@@ -20,8 +20,11 @@ namespace Ben.Data.Source.Entities
         /// <summary>HTML-formatted description of the event or evidence.</summary>
         public string? Body { get; set; }
 
-        /// <summary>When true, this entry is visible on the public case page.</summary>
-        public bool IsPublic { get; set; }
+        /// <summary>
+        /// Who can see this entry. Replaces the old binary <c>IsPublic</c>, which conflated
+        /// "the client may see it" with "the whole internet may see it".
+        /// </summary>
+        public CaseTimelineVisibility Visibility { get; set; }
 
         /// <summary>Client IP at submission time. SuperAdmin-only — never returned in public responses.</summary>
         public string? IpAddress { get; set; }

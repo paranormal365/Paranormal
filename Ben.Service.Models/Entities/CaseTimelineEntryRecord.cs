@@ -12,7 +12,8 @@ public record CaseTimelineEntryRecord
     public DateTime? EventDateTime { get; init; }
     public string? Title { get; init; }
     public string? Body { get; init; }
-    public bool IsPublic { get; init; }
+    /// <summary>Who can see this entry — org only, the client too, or public.</summary>
+    public CaseTimelineVisibility Visibility { get; init; }
     public IReadOnlyList<Guid> ExperienceTypeIds { get; init; } = [];
     public IReadOnlyList<CaseTimelineFileRecord> Files { get; init; } = [];
     public DateTime DateCreated { get; init; }

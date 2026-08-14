@@ -1392,7 +1392,7 @@ public sealed record UpsertTimelineEntryRequest(
     DateTime? EventDateTime,
     string? Title,
     string? Body,
-    bool IsPublic,
+    Ben.Data.Common.Enums.CaseTimelineVisibility Visibility,
     IList<Guid> ExperienceTypeIds);
 
 // ── Client Request request records ────────────────────────────────────────────
@@ -1442,6 +1442,8 @@ public sealed record ClientCaseOccurrence(
     DateTime? EventDateTime,
     string?   Title,
     string?   Body,
+    /// <summary>True when the org wrote this and shared it, false when the client did.</summary>
+    bool      FromInvestigators,
     DateTime  DateCreated,
     IReadOnlyList<OccurrenceFileItem> Files);
 

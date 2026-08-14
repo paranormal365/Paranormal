@@ -221,7 +221,7 @@ public class CaseAdapterTests
            });
 
         var req = new UpsertTimelineEntryRequest(CaseTimelineEntryType.ClientReport,
-            DateTime.UtcNow, "Knocking at night", "<p>Loud knocking.</p>", false, []);
+            DateTime.UtcNow, "Knocking at night", "<p>Loud knocking.</p>", CaseTimelineVisibility.OrgOnly, []);
         var result = await Build(api).AddCaseTimelineEntryAsync(orgId, caseId, req);
 
         Assert.NotNull(result);

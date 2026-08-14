@@ -50,7 +50,7 @@ public class CaseControllerTests
                 : []);
         m.Setup(x => x.Map<CaseTimelineEntryRecord>(It.IsAny<object>()))
             .Returns<object>(o => o is CaseTimelineEntry e
-                ? new CaseTimelineEntryRecord { Id = e.Id, CaseId = e.CaseId, AuthorAppUserId = e.AuthorAppUserId, EntryType = e.EntryType, Title = e.Title, Body = e.Body, IsPublic = e.IsPublic, DateCreated = e.DateCreated }
+                ? new CaseTimelineEntryRecord { Id = e.Id, CaseId = e.CaseId, AuthorAppUserId = e.AuthorAppUserId, EntryType = e.EntryType, Title = e.Title, Body = e.Body, Visibility = e.Visibility, DateCreated = e.DateCreated }
                 : new CaseTimelineEntryRecord { DateCreated = DateTime.UtcNow });
         m.Setup(x => x.Map<IEnumerable<CaseTimelineEntryRecord>>(It.IsAny<object>()))
             .Returns<object>(o => o is IEnumerable<CaseTimelineEntry> list
@@ -263,7 +263,7 @@ public class CaseControllerTests
         var ctrl   = Build(factory, userId);
         var caseId = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
 
-        var req    = new UpsertTimelineEntryRequest(CaseTimelineEntryType.Evidence, DateTime.UtcNow, "Strange noise", "Heard in basement", true, []);
+        var req    = new UpsertTimelineEntryRequest(CaseTimelineEntryType.Evidence, DateTime.UtcNow, "Strange noise", "Heard in basement", CaseTimelineVisibility.Public, []);
         var result = await ctrl.AddTimelineEntry(orgId, caseId, req, default);
 
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
@@ -279,7 +279,7 @@ public class CaseControllerTests
         var ctrl   = Build(factory, userId);
         var caseId = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
 
-        var req     = new UpsertTimelineEntryRequest(CaseTimelineEntryType.Evidence, null, "To delete", null, false, []);
+        var req     = new UpsertTimelineEntryRequest(CaseTimelineEntryType.Evidence, null, "To delete", null, CaseTimelineVisibility.OrgOnly, []);
         var entryId = ((CaseTimelineEntryRecord)((CreatedAtActionResult)(await ctrl.AddTimelineEntry(orgId, caseId, req, default)).Result!).Value!).Id;
 
         var result = await ctrl.DeleteTimelineEntry(orgId, caseId, entryId, default);
@@ -301,7 +301,7 @@ public class CaseControllerTests
 
         var admin  = Build(factory, adminId);
         var caseId = ((CaseRecord)((CreatedAtActionResult)(await admin.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
-        var entryId = ((CaseTimelineEntryRecord)((CreatedAtActionResult)(await admin.AddTimelineEntry(orgId, caseId, new UpsertTimelineEntryRequest(CaseTimelineEntryType.Evidence, null, "X", null, false, []), default)).Result!).Value!).Id;
+        var entryId = ((CaseTimelineEntryRecord)((CreatedAtActionResult)(await admin.AddTimelineEntry(orgId, caseId, new UpsertTimelineEntryRequest(CaseTimelineEntryType.Evidence, null, "X", null, CaseTimelineVisibility.OrgOnly, []), default)).Result!).Value!).Id;
 
         var member = Build(factory, memberId);
         Assert.IsType<ForbidResult>(await member.DeleteTimelineEntry(orgId, caseId, entryId, default));
@@ -317,7 +317,7 @@ public class CaseControllerTests
         var (factory, victimOrgId, victimAdminId) = await SeedAsync();
         var victim  = Build(factory, victimAdminId);
         var caseId  = ((CaseRecord)((CreatedAtActionResult)(await victim.Create(victimOrgId, MakeCreateRequest(), default)).Result!).Value!).Id;
-        var entryId = ((CaseTimelineEntryRecord)((CreatedAtActionResult)(await victim.AddTimelineEntry(victimOrgId, caseId, new UpsertTimelineEntryRequest(CaseTimelineEntryType.Evidence, null, "Private", null, false, []), default)).Result!).Value!).Id;
+        var entryId = ((CaseTimelineEntryRecord)((CreatedAtActionResult)(await victim.AddTimelineEntry(victimOrgId, caseId, new UpsertTimelineEntryRequest(CaseTimelineEntryType.Evidence, null, "Private", null, CaseTimelineVisibility.OrgOnly, []), default)).Result!).Value!).Id;
 
         var (attackerFactory, attackerOrgId, attackerId) = (factory, Guid.NewGuid(), Guid.NewGuid());
         await using (var db = await factory.CreateDbContextAsync())
@@ -330,7 +330,7 @@ public class CaseControllerTests
         var attacker = Build(attackerFactory, attackerId);
 
         var updateResult = await attacker.UpdateTimelineEntry(attackerOrgId, caseId, entryId,
-            new UpsertTimelineEntryRequest(CaseTimelineEntryType.Evidence, null, "Hijacked", null, false, []), default);
+            new UpsertTimelineEntryRequest(CaseTimelineEntryType.Evidence, null, "Hijacked", null, CaseTimelineVisibility.OrgOnly, []), default);
         Assert.IsType<NotFoundResult>(updateResult.Result);
 
         var deleteResult = await attacker.DeleteTimelineEntry(attackerOrgId, caseId, entryId, default);

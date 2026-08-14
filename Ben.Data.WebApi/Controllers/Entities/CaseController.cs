@@ -414,7 +414,7 @@ public sealed class CaseController : BenControllerBase
             EventDateTime      = request.EventDateTime,
             Title              = request.Title?.Trim(),
             Body               = request.Body?.Trim(),
-            IsPublic           = request.IsPublic,
+            Visibility         = request.Visibility,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
@@ -461,7 +461,7 @@ public sealed class CaseController : BenControllerBase
         entry.EventDateTime      = request.EventDateTime;
         entry.Title              = request.Title?.Trim();
         entry.Body               = request.Body?.Trim();
-        entry.IsPublic           = request.IsPublic;
+        entry.Visibility         = request.Visibility;
         entry.DateUpdated        = DateTime.UtcNow;
         entry.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
 
@@ -615,7 +615,7 @@ public sealed record UpsertTimelineEntryRequest(
     DateTime? EventDateTime,
     string? Title,
     string? Body,
-    bool IsPublic,
+    Ben.Data.Common.Enums.CaseTimelineVisibility Visibility,
     IList<Guid> ExperienceTypeIds);
 
 /// <summary>Updates a client-request org application to Viewed or UnderReview.</summary>
