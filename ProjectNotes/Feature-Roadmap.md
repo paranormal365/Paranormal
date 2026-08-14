@@ -95,7 +95,9 @@ Wire 4-layer client (`IBenAdminClient` → `BenAdminClientAdapter`). One round t
 **Clip with context padding — client-side over the existing clip endpoint.** Pre/post-seconds inputs (default 1.0 s) bidirectionally synced with a live draggable padded region, so submitted bounds are exactly what's on screen. Preview plays through the existing Web Audio enhancement chain (satisfies "toggle/adjust enhancements" at listening time). Baking into the file: only **Normalize** (add `bool Normalize` + `Guid? SourceMarkerId` to `ClipAudioRequest`; peak-normalize −1 dBFS in `AudioClipper`; controller links the clip to the marker atomically). Baking EQ/gate server-side is explicitly deferred — no server EQ exists, and `ParentFileId`/`RegionStart`/`RegionEnd` lineage means clips can always be re-cut losslessly.
 
 ### Phases (each: build + xunit tests + live browser verify)
-- **E0 — Security + correctness prerequisites**: `FileAudienceAccess.CanViewFileAsync` guard on every action of `UploadFileAudioEditController` and `AudioMarkerController` (mirroring the clip controller's fix + its 403 tests); subscribe `AudioFilePreview` to `OnRegionUpdated` (fixes stale bounds after resize — prerequisite for E3/E4).
+- **E0 — Security + correctness prerequisites ✅ SHIPPED 2026-08-14** (commit `0b3ff72`). `FileAudienceAccess.CanViewFileAsync` on every action of `UploadFileAudioEditController` and `AudioMarkerController`, plus author-or-file-owner moderation on marker update/delete; 11 new tests; verified live (owner 200 / unrelated 403 / public file still readable).
+  **Discovery while verifying:** `OnRegionUpdated` was not the whole story — the container's capture-phase `pointerdown` handler in `WaveSurferPlayer.razor.js` claimed *every* drag and called `setPointerCapture`, so the regions plugin never saw handle drags. **Region move/resize were unreachable by mouse entirely** (grabbing an edge silently drew a new region), which is why stale bounds had never been reported. Fixed by skipping drags that begin on a region body/handle (via `composedPath`, since regions live in the waveform's shadow DOM). **This was a hard prerequisite for E3's Adjust-bounds, which assumed edge-dragging worked.**
+  **Deferred, noted:** `UploadFileVoteController` (`api/upload-files/{fileId}/votes`) also has no `CanViewFileAsync` check, but it exposes only aggregate vote counts (no file content) and belongs to the orphaned `UploadFileVote` system — `UploadFileVoteBar.razor` is rendered by no live page; `EvidenceVote` is the live one. Worth a guard (or deletion) when that system is next touched.
 - **E1 — Schema + API**: entity fields + enum + migration; DTOs (`EndSeconds`, `BulkCreateAudioCandidatesRequest`, `ReviewAudioMarkerRequest`); endpoints `POST .../audio-markers/candidates` (transactional replace-Pending, cap, validation, audited) + `PUT .../audio-markers/{id}/review`; 4-layer wiring; span-aware marker regions.
 - **E2 — Detector + scan UI**: `detectEvpCandidates` JS + `zoomToRange`; Scan button + sensitivity dropdown + progress/cancel; bulk-save + overlay. **Accuracy gate**: seeded test fixture (room tone + 3 quiet speech snippets at known offsets + clap + hum) — snippets found within ±0.1 s at Medium, clap scores low, hum doesn't flood; 1 h file scans < ~10 s with responsive UI.
 - **E3 — Review workflow**: Candidates tab with Play/Go-to/Confirm/Dismiss/Adjust; reload persistence; re-scan doesn't resurrect dismissed.
@@ -230,7 +232,7 @@ No `OrganizationType` concept exists anywhere — orgs are differentiated only g
 
 | Order | Work | Size | Depends on |
 |---|---|---|---|
-| 1 | Audio security fixes (E0) | XS | — |
+| ~~1~~ | ~~Audio security fixes (E0)~~ ✅ **shipped 2026-08-14** | XS→S | — |
 | 2 | Audit log grid fix (Area 3) | XS | — |
 | 3 | Notifications N1–N3 (Area 1) | M | — |
 | 4 | EVP detection E1–E4 (Area 2) | L | E0 |
