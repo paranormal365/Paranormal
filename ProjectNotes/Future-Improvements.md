@@ -2824,26 +2824,34 @@ gets exactly the pre-arc behavior.
 > Noted by the user 2026-08-13, while discussing item #66's fix and whether the sidecar already
 > covered this (it didn't — sidecar was export-only before this arc).
 
-## 71. Make the ffmpeg status badge's "busy" state more visually distinct (not started)
+## 71. Make the ffmpeg status badge's "busy" state more visually distinct (✅ fixed 2026-08-13, phase 163)
 
 User observation while live-verifying phase 151 (item #67's fix): after clicking Initialize, the
-toolbar's ffmpeg status badge (`Toolbar.razor:186`, `bv-status--@Ffmpeg.State...`) already
-distinguishes `Ready` (green, `#4caf89`) from `Processing… N%` (blue, `#7c9ef8`) via
-`Toolbar.razor.css:97-105` — but the user's read of it in the moment was that it just "says ready"
-without a clear enough signal of busy-vs-available. Requested: strengthen the visual distinction
-(the user specifically suggested an "info" color for busy) so it's unambiguous at a glance whether
-ffmpeg is available for a new operation right now.
+toolbar's ffmpeg status badge already distinguished `Ready` from `Processing… N%` by color, but the
+user's read of it in the moment was that it just "says ready" without a clear enough signal of
+busy-vs-available. Requested an "info" color and stronger distinction.
 
-Worth checking as part of this: whether every operation that should count as "busy" actually flips
-`FfmpegState` to `Processing` — e.g. it's not yet confirmed whether lighter calls like
-`WriteFileAsync`/`GetMetadataAsync`/`Mounter.MountAsync` (used by phase 150/151's
-`AddCachedFileToTimelineAsync`) visibly reflect as busy in this badge the same way a full `exec`
-does.
+**Turned out to be more than cosmetic.** The item itself flagged the question — "does every
+operation that should count as busy actually flip `FfmpegState`?" — and the answer was no:
+`FfmpegService.IsWorkerBusy` (built phase 142, accurate for every worker call including lighter
+ones) was never read by the badge at all. `GetMetadataAsync`/`WriteFileAsync`/
+`ExtractThumbnailsAsync` — all heavily used during import — hold the worker lock the same as a full
+`exec` but never set `Processing`, so the badge showed "Ready" for the entire duration an import
+was genuinely blocking the worker. Not low-contrast — wrong.
 
-> Noted by the user 2026-08-13, while live-verifying phase 151. Explicitly framed as a future
-> enhancement, not for immediate implementation.
+Checked scope against item #70 first (a sidecar user hits this less often now that probe/
+thumbnails/preview/export can run off the main thread) — still worth doing, since it fires on any
+sidecar fallback and fully applies to non-sidecar installs. New `FfmpegStatusPresentation` (pure,
+unit-tested, `FfmpegBusyPolicy`'s pattern from item #67) computes the label/CSS-class/tooltip; both
+busy shapes (real Processing, and the newly-caught gap) collapse to one shared "busy" visual
+treatment — Telerik's own `--kendo-color-info` token, filled chip, the same pulse `LoadingCore`
+already used. Live-verified by polling the badge during a real import and catching `"Busy…"` /
+`bv-status--busy` during the exact window that used to read "Ready".
 
-## 73. Resize-handle and shape-control-point drag bypass the keyframe branch entirely (not started)
+> Noted by the user 2026-08-13, while live-verifying phase 151; fixed 2026-08-13 phase 163. See
+> `README-phase-163.md` in Github-BenVideo.
+
+## 73. Resize-handle and shape-control-point drag bypass the keyframe branch entirely (✅ fixed 2026-08-13, phase 164)
 
 While fixing item #63 (keyframe-branch canvas edits bypass undo/redo), traced every
 `Motion.EditLayer` call site to find which ones needed the new undo wiring. Found that
@@ -2872,6 +2880,68 @@ the clip's own base size, per `CanvasSelectionOverlay.SetSize`'s existing "edit 
 keyframe-aware value" pattern), then apply item #63's same `CommitKeyframeEditIfAnimated`-shaped
 undo wiring on top once that's in place.
 
-> Found 2026-08-13 during phase 154 (item #63's fix) — see `README-phase-154.md` in
+**Fix**: both overlays now route every drag through `Motion.EditLayer`, mirroring
+`CanvasSelectionOverlay`'s body-drag/`SetSize` exactly — resize converts effective Width/Height to
+ScaleX/ScaleY relative to the clip's static base size; control points write `ControlPointValues[key]`
+directly (confirmed via `ApplyMotionFrame`/`LerpControlPoints` that this needs no relative
+conversion, the same way X/Y doesn't). The subtler half: a live drag upserts one keyframe per
+frame, so a per-frame running state seeded from *effective* geometry is required — re-reading the
+clip's static fields each frame would never accumulate the delta while animated, since only the
+keyframe changes. The resize-handle/control-point positions and the shape outline were also
+switched to read from that same effective/live source, or they'd still be drawn at the stale
+static position on an animated shape even after the write-side fix.
+
+Live-verified thoroughly: Callout resize on an animated layer showed `Scale X 2.92x`/`Scale Y
+4.42x` in the keyframe editor (matching the drag ratio exactly) with undo cleanly reverting to
+`1.0x`/`1.0x`; a second, unanimated Callout's resize still wrote to the static fields unchanged
+(regression check); the Rectangle corner-radius control point on an animated layer went
+`rx: 4.0 → 40.0 → 4.0` through drag+undo; ClipArt resize on an animated Star clip moved the
+Properties panel's own "● Live" Width value and reverted correctly. No unit tests — matching item
+#63's own precedent, this logic has no clean pure-C# extraction point and this codebase tests
+Blazor-component drag logic live only.
+
+> Found 2026-08-13 during phase 154 (item #63's fix); fixed 2026-08-13 phase 164. See
+> `README-phase-164.md` in Github-BenVideo for full detail. Also see `README-phase-154.md` in
 > Github-BenVideo.
 
+
+---
+
+## 74. Post-#70 code audit — findings #1–#7 (✅ ALL FIXED 2026-08-13, phases 165–169)
+
+A read-only audit of Ben.Video.Editor requested after the item #70 arc closed, covering UI gaps and
+programming gaps. All seven findings are fixed and merged.
+
+| # | Finding | Phase |
+|---|---|---|
+| 2 | `DisposeAsync` revoked preview URLs through the ffmpeg-worker route even when sidecar-origin — a regression introduced by phase 161 itself | 165 |
+| 1 | Export **Cancel** couldn't interrupt a running encode | 166 |
+| 3 | The codebase's only `async void` (JS interop on a tear-down-able component ⇒ unobservable exceptions) | 167 |
+| 5 | Project delete was instant, permanent and unconfirmed | 167 |
+| 6 | `DeleteAsync`/`RenameAsync` swallowed failures while their `Save`/`Open` siblings rethrew | 167 |
+| 7 | **Toolbar "Open" crashed the entire app** when the Media panel was closed | 167 |
+| 4 | All 30 `eval` call sites replaced with typed interop modules | 169 |
+
+**#7 is the one that mattered most, and the audit didn't find it — live verification did.** The
+toolbar's Open button is the file picker; it ran `eval("getElementById('bv-file-input').click()")`,
+and that input unmounts with the Media panel, so with the panel closed it null-dereferenced and
+killed the circuit (yellow error bar, reload required). Phase 157's minimized default had made it
+reachable on a fresh load. Fixed twice over: `?.click()` so it cannot crash, *and* reopening the
+panel so the button actually works — a guard alone would only downgrade it to "does nothing".
+
+**#1's shaping constraint, verified before designing:** ffmpeg.wasm commands cannot be aborted
+mid-flight (no abort channel; only `terminate()`, which destroys the worker and every cached
+segment). Per phase 143's standing rule — *never kill an in-flight export without consent* — no
+force-stop was added. Cancel now stops at the next *command* boundary rather than the next *phase*,
+and the UI says so instead of appearing broken.
+
+**#4 was not a security hole** and shouldn't be remembered as one: every interpolated value was a
+constant, a typed `Guid`, or a loop index, and user text was correctly double-JSON-encoded. The
+real costs were the `unsafe-eval` CSP requirement and the #7 crash class. Fixing it also uncovered
+a latent bug hiding inside an eval string — `ClipBrowser` read `naturalWidth` synchronously right
+after setting `img.src`, so image dimensions were `[0,0]` essentially always.
+
+**Known gap:** the #5/#6 delete-confirm and error-banner UI is *not* live-verified — reaching the
+project dialog needs saved projects, and seeding them is what uncovered #7 instead.
+
+> See `README-phase-165.md` … `README-phase-169.md` in Github-BenVideo.
