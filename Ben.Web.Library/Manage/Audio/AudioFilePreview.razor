@@ -166,7 +166,9 @@ else
                                        Size="@ThemeConstants.Button.Size.Small"
                                        Enabled="@_modalReady"
                                        OnClick="@(() => _showMarkers = !_showMarkers)">
-                            🎯 @(_showMarkers ? "Hide Markers" : $"EVP Markers ({_markers.Count})")
+                            @* Counts confirmed findings only — dismissed candidates are kept solely
+                               for re-scan deduping, and counting them would inflate this. *@
+                            🎯 @(_showMarkers ? "Hide Markers" : $"EVP Markers ({ConfirmedMarkers.Count()})")
                         </TelerikButton>
                         @* Destructive edit toggle *@
                         <TelerikButton ThemeColor="@(_showEdit ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
@@ -286,19 +288,23 @@ else
                                 ➕ Add Marker at @FormatTime(_modalTime)
                             </TelerikButton>
                         </div>
-                        @if (!_markers.Any())
+                        @if (!ConfirmedMarkers.Any())
                         {
                             <div class="text-secondary small fst-italic">No markers yet — play the file and drop a marker where you hear something.</div>
                         }
                         else
                         {
-                            @foreach (var marker in _markers.OrderBy(m => m.TimeSeconds))
+                            @foreach (var marker in ConfirmedMarkers)
                             {
                                 var m = marker;
                                 <div class="d-flex align-items-center gap-2 mb-1 p-1 rounded" style="background:var(--kendo-color-surface,#f5f5f5);">
-                                    <span class="badge" style="background:@MarkerColor(m.ConfidenceLevel);">@FormatTime(m.TimeSeconds)</span>
+                                    <span class="badge" style="background:@MarkerColor(m);">@FormatMarkerRange(m)</span>
                                     <span class="fw-semibold">@m.Label</span>
                                     <span class="text-secondary small">@m.ConfidenceLevel</span>
+                                    @if (m.IsAutoDetected && m.DetectionScore is { } confirmedScore)
+                                    {
+                                        <span class="badge bg-secondary" title="Signal score from the detector that first proposed this">@confirmedScore.ToString("0")</span>
+                                    }
                                     @if (!string.IsNullOrWhiteSpace(m.Note))
                                     {
                                         <span class="text-secondary small text-truncate" style="max-width:200px;" title="@m.Note">@m.Note</span>
@@ -313,6 +319,18 @@ else
                                     </span>
                                 </div>
                             }
+                        }
+
+                        @if (PendingCandidates.Any())
+                        {
+                            @* Candidates exist in the database the moment a scan runs, so say so
+                               here rather than leaving amber regions on the waveform with nothing
+                               in the panel explaining them. Reviewing them lands in phase E3. *@
+                            <div class="mt-2 pt-2 border-top text-secondary small">
+                                <span class="badge" style="background:rgba(245,158,11,0.75);">@PendingCandidates.Count()</span>
+                                detected @(PendingCandidates.Count() == 1 ? "candidate" : "candidates")
+                                awaiting review (shown in amber on the waveform).
+                            </div>
                         }
                     </div>
                 }
@@ -474,7 +492,27 @@ else
     <DialogContent>
         <div class="mb-2">
             <label class="form-label fw-semibold">Time</label>
-            <div>@FormatTime(_markerTimeSeconds)</div>
+            <div>
+                @FormatTime(_markerTimeSeconds)
+                @if (_markerIsSpan)
+                {
+                    <text> – @FormatTime(_markerEndSeconds) <span class="text-secondary">(@((_markerEndSeconds - _markerTimeSeconds).ToString("0.0"))s)</span></text>
+                }
+            </div>
+            <label class="d-flex align-items-center gap-2 mt-1 small">
+                <input type="checkbox" checked="@_markerIsSpan"
+                       @onchange="@(e => ToggleMarkerSpan((bool?)e.Value ?? false))" />
+                Mark a stretch of audio rather than an instant
+            </label>
+            @if (_markerIsSpan)
+            {
+                <div class="d-flex align-items-center gap-2 mt-1">
+                    <span class="small text-secondary">Ends at</span>
+                    <TelerikNumericTextBox @bind-Value="@_markerEndSeconds"
+                                           Min="0" Step="0.1" Format="N1" Width="110px" />
+                    <span class="small text-secondary">s</span>
+                </div>
+            }
         </div>
         <div class="mb-2">
             <label class="form-label fw-semibold">Label</label>
@@ -767,6 +805,14 @@ else
 
     // ── EVP markers ──────────────────────────────────────────────────────────
 
+    /// <summary>Markers a person stands behind — what the marker list shows and edits.</summary>
+    private IEnumerable<AudioMarkerRecord> ConfirmedMarkers =>
+        _markers.Where(m => m.ReviewStatus == EvpReviewStatus.Confirmed).OrderBy(m => m.TimeSeconds);
+
+    /// <summary>Detector proposals nobody has ruled on yet. Reviewed on the Candidates tab (phase E3).</summary>
+    private IEnumerable<AudioMarkerRecord> PendingCandidates =>
+        _markers.Where(m => m.ReviewStatus == EvpReviewStatus.Pending).OrderBy(m => m.TimeSeconds);
+
     private async Task OverlayMarkersAsync()
     {
         if (_modalPlayer is null) return;
@@ -783,19 +829,36 @@ else
     private async Task AddMarkerRegionAsync(AudioMarkerRecord marker)
     {
         if (_modalPlayer is null) return;
+
+        // A dismissed candidate is kept in the database only so a re-scan can dedupe against it.
+        // Drawing it would put rejected noise back on the waveform.
+        if (marker.ReviewStatus == EvpReviewStatus.Dismissed) return;
+
         var id = $"marker-{marker.Id}";
         _programmaticRegionIds.Add(id);
         await _modalPlayer.AddRegionAsync(new WsRegionParams
         {
             Id      = id,
             Start   = marker.TimeSeconds,
-            End     = marker.TimeSeconds,
-            Color   = MarkerColor(marker.ConfidenceLevel),
+            // Equal start and end is how this plugin draws a point marker. A span passes its real
+            // end, so the region covers the audio the marker is actually a claim about.
+            End     = marker.IsSpan ? marker.EndSeconds : marker.TimeSeconds,
+            Color   = MarkerColor(marker),
             Drag    = false,
             Resize  = false,
-            Content = marker.Label,
+            Content = MarkerRegionLabel(marker),
         });
     }
+
+    /// <summary>
+    /// Candidates are amber regardless of confidence — they carry the detector's default
+    /// "Possible", which would otherwise render them identically to a human's least-certain
+    /// finding, and those are very different things to see on a waveform.
+    /// </summary>
+    private static string MarkerColor(AudioMarkerRecord marker) =>
+        marker.ReviewStatus == EvpReviewStatus.Pending
+            ? "rgba(245,158,11,0.75)"
+            : MarkerColor(marker.ConfidenceLevel);
 
     private static string MarkerColor(EvpConfidenceLevel level) => level switch
     {
@@ -804,10 +867,37 @@ else
         _                            => "rgba(148,163,184,0.85)",
     };
 
+    private static string MarkerRegionLabel(AudioMarkerRecord marker) =>
+        marker.ReviewStatus == EvpReviewStatus.Pending && marker.DetectionScore is { } score
+            ? $"{marker.Label} ({score:0})"
+            : marker.Label;
+
+    /// <summary>"0:03" for a point, "0:03–0:04 (0.6s)" for a span.</summary>
+    private static string FormatMarkerRange(AudioMarkerRecord marker) =>
+        marker.IsSpan
+            ? $"{FormatTime(marker.TimeSeconds)}–{FormatTime(marker.EndSeconds!.Value)} ({marker.EndSeconds!.Value - marker.TimeSeconds:0.0}s)"
+            : FormatTime(marker.TimeSeconds);
+
     private async Task AddMarkerAtCurrentTimeAsync()
     {
         _editingMarker      = null;
-        _markerTimeSeconds  = _modalTime;
+
+        // If the user has a region drawn, they've already shown us the stretch they mean — start
+        // from that rather than making them re-enter it as numbers.
+        var drawn = _newUserRegion ?? _lastDrawnRegion;
+        if (drawn is not null && drawn.End > drawn.Start)
+        {
+            _markerTimeSeconds = drawn.Start;
+            _markerEndSeconds  = drawn.End;
+            _markerIsSpan      = true;
+        }
+        else
+        {
+            _markerTimeSeconds = _modalTime;
+            _markerEndSeconds  = _modalTime + DefaultSpanSeconds;
+            _markerIsSpan      = false;
+        }
+
         _markerLabel        = string.Empty;
         _markerConfidence   = EvpConfidenceLevel.Possible;
         _markerNote         = string.Empty;
@@ -819,11 +909,29 @@ else
     {
         _editingMarker     = marker;
         _markerTimeSeconds = marker.TimeSeconds;
+        _markerIsSpan      = marker.IsSpan;
+        _markerEndSeconds  = marker.EndSeconds ?? marker.TimeSeconds + DefaultSpanSeconds;
         _markerLabel       = marker.Label;
         _markerConfidence  = marker.ConfidenceLevel;
         _markerNote        = marker.Note ?? string.Empty;
         _showMarkerDialog  = true;
     }
+
+    /// <summary>How long a span starts out when the user asks for one without drawing a region.</summary>
+    private const double DefaultSpanSeconds = 1.0;
+
+    private void ToggleMarkerSpan(bool isSpan)
+    {
+        _markerIsSpan = isSpan;
+        // Re-seed rather than leaving a stale end behind the checkbox — an end at or before the
+        // start would be rejected by the API, and the user has no reason to expect that.
+        if (isSpan && _markerEndSeconds <= _markerTimeSeconds)
+            _markerEndSeconds = _markerTimeSeconds + DefaultSpanSeconds;
+    }
+
+    /// <summary>The end to persist: null unless the user asked for a span and it's actually one.</summary>
+    private double? MarkerEndToSave =>
+        _markerIsSpan && _markerEndSeconds > _markerTimeSeconds ? _markerEndSeconds : null;
 
     private async Task SaveMarkerAsync()
     {
@@ -833,7 +941,8 @@ else
         {
             var created = await AdminClient.CreateAudioMarkerAsync(FileId, new CreateAudioMarkerRequest(
                 _markerTimeSeconds, _markerLabel.Trim(), _markerConfidence,
-                string.IsNullOrWhiteSpace(_markerNote) ? null : _markerNote.Trim()));
+                string.IsNullOrWhiteSpace(_markerNote) ? null : _markerNote.Trim(),
+                MarkerEndToSave));
             if (created is not null)
             {
                 _markers = [.. _markers, created];
@@ -844,7 +953,8 @@ else
         {
             var updated = await AdminClient.UpdateAudioMarkerAsync(FileId, _editingMarker.Id, new UpdateAudioMarkerRequest(
                 _markerTimeSeconds, _markerLabel.Trim(), _markerConfidence,
-                string.IsNullOrWhiteSpace(_markerNote) ? null : _markerNote.Trim()));
+                string.IsNullOrWhiteSpace(_markerNote) ? null : _markerNote.Trim(),
+                MarkerEndToSave));
             if (updated is not null && _modalPlayer is not null)
             {
                 _markers = [.. _markers.Where(m => m.Id != updated.Id), updated];
@@ -1184,6 +1294,8 @@ else
     private bool                    _showMarkerDialog;
     private AudioMarkerRecord?      _editingMarker;
     private double                  _markerTimeSeconds;
+    private bool                    _markerIsSpan;
+    private double                  _markerEndSeconds;
     private string                  _markerLabel      = string.Empty;
     private EvpConfidenceLevel      _markerConfidence = EvpConfidenceLevel.Possible;
     private string                  _markerNote       = string.Empty;
