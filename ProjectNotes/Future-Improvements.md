@@ -165,7 +165,32 @@ Need a dedicated pass to thoroughly test the Ben.Video.Editor component and veri
 > attempted but blocked by a slow/stuck audio import in the Playground this pass (recurring
 > environment flakiness, not a product bug) — still open for a future pass.
 >
-> Still to test: mixed video+image timeline preview/export, volume automation UI details, clip art, motion keyframes, export dialog/queue, project save/open (server variant — device variant now confirmed, see below), subtitle export, error log panel, asset browser, remaining keyboard shortcuts. Also noted but not yet investigated: `ImageClip.Width`/`Height` are never populated on import, so image clips always render at their native resolution in Preview/Export instead of being scaled/padded to match the project's output resolution — fine for a single image matching project aspect ratio, but will look wrong once a mismatched-aspect image is mixed into a real project.
+> **2026-08-13 pass (phase 172)** — opened with the one list entry that was a *known defect* rather
+> than an untested area, and the ticket named the wrong cause. Populating `ImageClip.Width`/`Height`
+> would NOT have fixed the "images render at native resolution" symptom. The real bug:
+> `ExportService.RenderImageSegmentsAsync` passed `clip.Width`/`clip.Height` as
+> `BuildImageSegmentArgs`' `outputWidth`/`outputHeight` — but those are the canvas to letterbox
+> *onto*, not a description of the input, so the filter became `scale={imgW}:{imgH},pad={imgW}:{imgH}`,
+> a **no-op**. With the fields at 0 the builder emitted no `-vf` at all: same outcome, different road.
+> Every other segment path already used `ParseResolution(s.Resolution)`; the image path was the only
+> one that didn't. Fixed in BOTH encoders (wasm + `NativeClipEncoder`, which must agree or a
+> sidecar-encoded and a wasm-encoded image segment land on different canvases in one export).
+> The dimensions gap was real too and is also fixed: the **media-library** import never set
+> Width/Height at all; the local-file path only started working in phase 167 (the eval removal
+> replaced a `naturalWidth` read taken before decode). 4 new `ImageSegmentCanvasTests` — a
+> source-level guard, since the builder was always correct and only the *caller* was wrong;
+> confirmed the guard genuinely fails when the fix is reverted. See `README-phase-172.md`.
+>
+> ⚠ **Still NOT verified end-to-end:** the mixed video+image Preview/Export *render*. Both files
+> import cleanly into one timeline, but the render wasn't completed that pass (a stale
+> media-missing clip in the restored project blocked it). Top item for the next pass.
+>
+> 🔍 **Unconfirmed lead:** with a clip selected on the timeline, the properties panel's "Remove clip"
+> deleted a *different* clip (redo label read `Redo: Remove mixed-video.mp4`). Suggests the panel can
+> act on a stale selection — but the session had a restored project and scripted clicks, so it needs
+> a clean repro with real clicks before it counts.
+>
+> Still to test: mixed video+image timeline preview/export (see ⚠ above), volume automation UI details, clip art, motion keyframes, export dialog/queue, project save/open (server variant — device variant now confirmed, see below), subtitle export, error log panel, asset browser, remaining keyboard shortcuts. Also noted but not yet investigated: `ImageClip.Width`/`Height` are never populated on import, so image clips always render at their native resolution in Preview/Export instead of being scaled/padded to match the project's output resolution — fine for a single image matching project aspect ratio, but will look wrong once a mismatched-aspect image is mixed into a real project.
 >
 > **2026-08-12 pass** (right after item #38 closed — deliberately re-verified core paths since
 > phases 121-124 touched `ExportService`/`FfmpegService`/the render backends significantly).
