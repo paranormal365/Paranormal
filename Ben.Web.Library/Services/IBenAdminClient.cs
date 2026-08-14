@@ -77,6 +77,14 @@ public interface IBenAdminClient
     /// </summary>
     Task<IReadOnlyList<UploadFileRecord>> GetMediaLibraryFilesAsync(string[]? contentTypePrefixes = null, CancellationToken token = default);
 
+    // ── Notifications ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Everything waiting on the current user, in one round trip: unread counts per bucket plus
+    /// the age of the oldest item in each. Backs the bell badge and the drawer counts.
+    /// </summary>
+    Task<NotificationSummaryResponse?> GetNotificationSummaryAsync(CancellationToken token = default);
+
     // ── Audit Log ─────────────────────────────────────────────────────────────
 
     Task<AuditLogPagedResponse?> GetAuditLogsAsync(int page = 1, int pageSize = 50, string? entityType = null, int? action = null, Guid? userId = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken token = default);

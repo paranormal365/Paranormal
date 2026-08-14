@@ -85,6 +85,11 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         return await _api.GetAsync<IReadOnlyList<UploadFileRecord>>(url, token) ?? [];
     }
 
+    // ── Notifications ─────────────────────────────────────────────────────────
+
+    public Task<NotificationSummaryResponse?> GetNotificationSummaryAsync(CancellationToken token = default)
+        => _api.GetAsync<NotificationSummaryResponse>("/api/me/notification-summary", token);
+
     // ── Audit Log ─────────────────────────────────────────────────────────────
 
     public async Task<AuditLogPagedResponse?> GetAuditLogsAsync(
