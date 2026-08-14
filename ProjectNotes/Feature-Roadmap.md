@@ -103,6 +103,51 @@ Wire 4-layer client (`IBenAdminClient` → `BenAdminClientAdapter`). One round t
 
 ## Area 2 — Audio EVP Detection & Clip Extraction (TOP PRIORITY)
 
+### ✅ SHIPPED 2026-08-14 — E0 through E4 (complete)
+
+Commits: `0b3ff72` (E0), `d1e7ea6` (E1a/b), `a3f21c8` (E1c), `f01578f` (detector + accuracy gate),
+`eb9f89b` (E2a scan + MP3 fix), `64e313d` (label fix), `207fecb` (tolerance + review list),
+`e029aca` (E3b adjust-bounds), `1f29480` (E4 clip). Suite 1408 passing.
+
+**Where the plan was wrong, and what replaced it:**
+
+- **The detector is C# server-side, not browser JS.** The plan chose JS because the AudioBuffer is
+  already decoded there. But accuracy was the stated priority, and a detector that can only be
+  eyeballed in a browser never gets tuned — one that runs against a fixture in milliseconds does.
+  Server-side also matches how every other audio operation here already works. A 3m06s MP3 scans in
+  **1.1s**, so an hour of tape is ~20s: comfortably synchronous, no background job needed.
+- **Sensitivity is presets *plus* full fine-tuning**, per the user during the build. The three
+  presets seed a complete `EvpDetectionOptions` (tolerance dB, shortest sound, merge gap, context
+  padding, longest candidate) which is then adjustable; picking a preset reseeds everything so it
+  stays a starting point rather than a separate mode. Ranges are enforced server-side too.
+  Measured on real audio: 4dB→60 candidates, 6dB→21, 9dB→6, 12dB→5, 16dB→3.
+- **Detection is manual and always was** — only the Scan button triggers it. Worth stating because
+  it was queried directly.
+
+**Two honest limits, both pinned by tests rather than left implicit:**
+
+- A quiet event *underneath* louder speech in the same band cannot be separated out by an energy
+  detector. The detector flags the stretch; a person listens. Isolating it needs spectral
+  subtraction or source separation — a different tool.
+- The accuracy fixture is synthetic (three-formant tones with a syllabic envelope). Passing proves
+  the detector responds to voice-band energy above the floor and rejects the two things that most
+  often flood this kind of detector — wideband transients and steady out-of-band tones. It is
+  **not** proof against real investigation tape.
+
+**The scoring genuinely discriminates**: a door slam at 10× the amplitude of a quiet utterance
+scores 80.3 against its 93.7. Loudness alone would rank it top.
+
+**⚠ Pre-existing bug found and fixed here, unrelated to EVP:** NAudio's `Mp3FileReader` defaults to
+the ACM codec (`Msacm32.dll`, Windows-only), so **every server-side MP3 operation — audio edit,
+clip, mix, and now scan — threw `DllNotFoundException` on macOS/Linux**. Confirmed pre-existing by
+hitting the untouched audio-edit endpoint and getting the identical stack. It hid because WAV works
+and WAV is what this app writes, so anything produced by an edit round-trips fine; only
+originally-uploaded MP3s hit it. All four call sites now go through one `AudioSourceReader` using
+NLayer's managed decoder.
+
+**Deferred:** E5 (keyboard review shortcuts, FFT spectral-flatness refinement, batch-dismiss below
+a score).
+
 ### What exists today (explored — unusually strong foundation)
 - Region drag-to-create/drag/resize on the waveform (hand-rolled pointer handlers), right-click menu with **save-as-clip already built** (`POST /api/upload-files/{fileId}/clip` persists a child `UploadFile` with `RegionStart`/`RegionEnd` lineage), non-persisted clip preview endpoint, Region Explorer modal with notes.
 - Client-side **silence detection** (RMS loop over the already-decoded AudioBuffer) — the exact inverse of a naive candidate detector; FFT frames already computed and cached client-side when the spectrogram is on; custom voice-band overlay exists.
@@ -272,7 +317,7 @@ No `OrganizationType` concept exists anywhere — orgs are differentiated only g
 | ~~1~~ | ~~Audio security fixes (E0)~~ ✅ **shipped 2026-08-14** | XS→S | — |
 | ~~2~~ | ~~Audit log grid fix (Area 3)~~ ✅ **shipped 2026-08-14** | XS→S | — |
 | ~~3~~ | ~~Notifications N1–N3 (Area 1)~~ ✅ **shipped 2026-08-14** (N4 push still deferred) | M | — |
-| 4 | EVP detection E1–E4 (Area 2) | L | E0 |
+| ~~4~~ | ~~EVP detection E1–E4 (Area 2)~~ ✅ **shipped 2026-08-14** (E5 deferred) | L | E0 |
 | 5 | Case page C1 (original request) | S | — |
 | 6 | Timeline visibility C2 | M | — |
 | 7 | Investigator binder C3 + C4 | M–L | C2 (visibility), Area 1 (badges) |
