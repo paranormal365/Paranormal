@@ -58,6 +58,33 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteRoleAsync(Guid roleId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/admin/roles/{roleId}", token);
 
+    // ── Cross-org visibility (SuperAdmin) ────────────────────────────────────
+
+    public async Task<IReadOnlyList<AdminCaseSummaryRecord>> GetAllCasesAsync(CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<AdminCaseSummaryRecord>>("/api/admin/cases", token) ?? [];
+
+    public async Task<IReadOnlyList<AdminInvestigationSummaryRecord>> GetAllInvestigationsAsync(CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<AdminInvestigationSummaryRecord>>("/api/admin/investigations", token) ?? [];
+
+    // ── Universal media library sharing ──────────────────────────────────────
+
+    public async Task<IReadOnlyList<UploadFileShareRecord>> GetSharesV2Async(Guid fileId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<UploadFileShareRecord>>($"/api/upload-files/{fileId}/shares-v2", token) ?? [];
+
+    public Task<UploadFileShareRecord?> CreateShareAsync(Guid fileId, CreateShareRequest request, CancellationToken token = default)
+        => _api.PostAsync<CreateShareRequest, UploadFileShareRecord>($"/api/upload-files/{fileId}/shares-v2", request, token);
+
+    public Task<bool> RemoveShareV2Async(Guid shareId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/upload-file-shares-v2/{shareId}", token);
+
+    public async Task<IReadOnlyList<UploadFileRecord>> GetMediaLibraryFilesAsync(string[]? contentTypePrefixes = null, CancellationToken token = default)
+    {
+        var url = "/api/media-library/files";
+        if (contentTypePrefixes is { Length: > 0 })
+            url += $"?contentTypePrefixes={Uri.EscapeDataString(string.Join(',', contentTypePrefixes))}";
+        return await _api.GetAsync<IReadOnlyList<UploadFileRecord>>(url, token) ?? [];
+    }
+
     // ── Audit Log ─────────────────────────────────────────────────────────────
 
     public async Task<AuditLogPagedResponse?> GetAuditLogsAsync(
@@ -87,6 +114,12 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public async Task<IReadOnlyList<AppUserRecord>> GetAllUsersAsync(CancellationToken token = default)
         => await _api.GetUsersAsync(token);
+
+    public async Task<IReadOnlyList<OrgUserDirectoryItem>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default)
+    {
+        var entries = await _api.GetOrgUserDirectoryAsync(organizationId, token);
+        return entries.Select(e => new OrgUserDirectoryItem(e.Id, e.DisplayName)).ToList();
+    }
 
     public Task<AppUserDetailAdminRecord?> GetUserDetailAsync(Guid userId, CancellationToken token = default)
         => _api.GetAsync<AppUserDetailAdminRecord>($"/api/admin/app-users/{userId}/detail", token);
@@ -257,7 +290,7 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     }
 
     public Task<GeocodingPreviewResponse?> SearchGeocodingAsync(string query, CancellationToken token = default)
-        => _api.GetAsync<GeocodingPreviewResponse>($"/api/geocode/search?q={Uri.EscapeDataString(query)}", token);
+        => _api.GetAnonymousAsync<GeocodingPreviewResponse>($"/api/geocode/search?q={Uri.EscapeDataString(query)}", token);
 
     public Task<ReverseGeocodingResponse?> ReverseGeocodeAsync(double latitude, double longitude, CancellationToken token = default)
     {
@@ -714,8 +747,7 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         => _api.DeleteAsync($"{InvBase(orgId, caseId)}/{id}", token);
 
     public Task<bool> CancelInvestigationByOrgAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
-        => _api.PostAsync<object, object>($"{InvBase(orgId, caseId)}/{id}/cancel", new { }, token)
-               .ContinueWith(t => t.Result is not null);
+        => _api.PostVoidAsync($"{InvBase(orgId, caseId)}/{id}/cancel", new { }, token);
 
     public async Task<IReadOnlyList<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
     {
@@ -852,18 +884,14 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         => _api.PostAsync<AcceptClientRequestAsCaseRequest, CaseRecord>(
                $"/api/organizations/{orgId}/cases/accept-client-request/{clientRequestId}", request, token);
 
-    public async Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default)
-    {
-        var result = await _api.PostAsync<object, object>(
-            $"/api/organizations/{orgId}/cases/decline-request/{clientRequestId}", new { }, token);
-        return result is not null;
-    }
+    public Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default)
+        => _api.PostVoidAsync(
+               $"/api/organizations/{orgId}/cases/decline-request/{clientRequestId}", new { }, token);
 
     public Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default)
-        => _api.PutAsync<object, object>(
+        => _api.PutVoidAsync(
                $"/api/organizations/{orgId}/cases/request-status/{clientRequestId}",
-               new { Status = (int)status }, token)
-           .ContinueWith(t => t.Result is not null);
+               new { Status = (int)status }, token);
 
     public Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default)
         => _api.PutAsync<UpdateCaseRequest, CaseRecord>($"/api/organizations/{orgId}/cases/{caseId}", request, token);
@@ -966,6 +994,31 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/research/{entryId}", token);
 
+    // ── Case Files (Files/Evidence tab) ──────────────────────────────────────
+
+    public async Task<IReadOnlyList<CaseFileRecord>> GetCaseFilesAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<CaseFileRecord>>($"/api/orgs/{orgId}/cases/{caseId}/files", token) ?? [];
+
+    public async Task<CaseFileRecord?> UploadCaseFileAsync(Guid orgId, Guid caseId, string? description, Stream content, string fileName, string contentType, CancellationToken token = default)
+    {
+        using var form = new MultipartFormDataContent();
+        if (description is not null) form.Add(new StringContent(description), "description");
+        using var sc = new StreamContent(content);
+        sc.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        form.Add(sc, "file", fileName);
+        return await _api.PostMultipartAsync<CaseFileRecord>($"/api/orgs/{orgId}/cases/{caseId}/files", form, token);
+    }
+
+    public Task<bool> DeleteCaseFileAsync(Guid orgId, Guid caseId, Guid caseFileId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/files/{caseFileId}", token);
+
+    public Task<CaseFileRecord?> LinkCaseFileAsync(Guid orgId, Guid caseId, Guid uploadFileId, string? description = null, CancellationToken token = default)
+        => _api.PostAsync<LinkCaseFileRequest, CaseFileRecord>(
+            $"/api/orgs/{orgId}/cases/{caseId}/files/link/{uploadFileId}", new LinkCaseFileRequest(description), token);
+
+    public Task<CaseFileRecord?> ExportAudioMixAsync(Guid orgId, Guid caseId, ExportAudioMixRequest request, CancellationToken token = default)
+        => _api.PostAsync<ExportAudioMixRequest, CaseFileRecord>($"/api/orgs/{orgId}/cases/{caseId}/audio-mix/export", request, token);
+
     // ── Case Notes ────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<CaseNoteDto>> GetCaseNotesAsync(Guid orgId, Guid caseId, CancellationToken token = default)
@@ -1040,6 +1093,10 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<ClientRequestRecord?> WithdrawClientRequestAsync(Guid id, CancellationToken token = default)
         => _api.PostAsync<object, ClientRequestRecord>($"/api/client-requests/{id}/withdraw", new { }, token);
 
+    public Task<ClientRequestRecord?> AddOrganizationToRequestAsync(Guid id, Guid organizationId, CancellationToken token = default)
+        => _api.PostAsync<object, ClientRequestRecord>($"/api/client-requests/{id}/add-organization",
+               new { OrganizationId = organizationId }, token);
+
     // ── My Cases ─────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<ClientCaseListItem>> GetMyCasesAsync(CancellationToken token = default)
@@ -1094,6 +1151,28 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> RemoveCoClientAsync(Guid caseId, Guid accessId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/my-cases/{caseId}/co-clients/{accessId}", token);
 
+    // ── Sub-client invites (item #4) ──────────────────────────────────────────
+
+    public async Task<IReadOnlyList<CaseClientInviteRecord>> GetCaseInvitesAsync(Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<CaseClientInviteRecord>>($"/api/my-cases/{caseId}/invites", token) ?? [];
+
+    public Task<InviteCoClientResult?> InviteCoClientAsync(Guid caseId, string email, CancellationToken token = default)
+        => _api.PostAsync<object, InviteCoClientResult>($"/api/my-cases/{caseId}/invites", new { Email = email }, token);
+
+    public Task<bool> RevokeCaseInviteAsync(Guid caseId, Guid inviteId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/my-cases/{caseId}/invites/{inviteId}", token);
+
+    // ── Related people (basic-info, no account) ─────────────────────────────────
+
+    public async Task<IReadOnlyList<CaseRelatedPersonRecord>> GetRelatedPeopleAsync(Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<CaseRelatedPersonRecord>>($"/api/my-cases/{caseId}/related-people", token) ?? [];
+
+    public Task<CaseRelatedPersonRecord?> AddRelatedPersonAsync(Guid caseId, AddRelatedPersonRequest request, CancellationToken token = default)
+        => _api.PostAsync<AddRelatedPersonRequest, CaseRelatedPersonRecord>($"/api/my-cases/{caseId}/related-people", request, token);
+
+    public Task<bool> RemoveRelatedPersonAsync(Guid caseId, Guid personId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/my-cases/{caseId}/related-people/{personId}", token);
+
     // ── My Investigations ───────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default)
@@ -1103,7 +1182,7 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     }
 
     public async Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default)
-        => await _api.PutAsync<object, object>($"/api/my-investigations/{attendeeId}/rsvp", new { Rsvp = rsvp }, token);
+        => await _api.PutVoidAsync($"/api/my-investigations/{attendeeId}/rsvp", new { Rsvp = rsvp }, token);
 
     // ── Case Messages (org side) ──────────────────────────────────────────────
 
@@ -1239,6 +1318,40 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteRegionNoteAsync(Guid fileId, Guid noteId, CancellationToken token = default)
         => _api.DeleteRegionNoteAsync(fileId, noteId, token);
 
+    // ── File Comments (item #6 phase 2) ───────────────────────────────────────
+
+    public Task<IReadOnlyList<UploadFileCommentRecord>> GetFileCommentsAsync(Guid fileId, CancellationToken token = default)
+        => _api.GetFileCommentsAsync(fileId, token);
+
+    public Task<UploadFileCommentRecord?> CreateFileCommentAsync(Guid fileId, CreateFileCommentRequest request, CancellationToken token = default)
+        => _api.CreateFileCommentAsync(fileId, request, token);
+
+    public Task<UploadFileCommentRecord?> UpdateFileCommentAsync(Guid fileId, Guid commentId, UpdateFileCommentRequest request, CancellationToken token = default)
+        => _api.UpdateFileCommentAsync(fileId, commentId, request, token);
+
+    public Task<bool> DeleteFileCommentAsync(Guid fileId, Guid commentId, CancellationToken token = default)
+        => _api.DeleteFileCommentAsync(fileId, commentId, token);
+
+    public Task<FileCommentSettingsRecord?> GetFileCommentSettingsAsync(Guid fileId, CancellationToken token = default)
+        => _api.GetFileCommentSettingsAsync(fileId, token);
+
+    public Task<FileCommentSettingsRecord?> UpdateFileCommentSettingsAsync(Guid fileId, FileCommentSettingsRecord request, CancellationToken token = default)
+        => _api.UpdateFileCommentSettingsAsync(fileId, request, token);
+
+    // ── Audio Markers (EVP) ──────────────────────────────────────────────────
+
+    public Task<IReadOnlyList<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default)
+        => _api.GetAudioMarkersAsync(fileId, token);
+
+    public Task<AudioMarkerRecord?> CreateAudioMarkerAsync(Guid fileId, CreateAudioMarkerRequest request, CancellationToken token = default)
+        => _api.CreateAudioMarkerAsync(fileId, request, token);
+
+    public Task<AudioMarkerRecord?> UpdateAudioMarkerAsync(Guid fileId, Guid markerId, UpdateAudioMarkerRequest request, CancellationToken token = default)
+        => _api.UpdateAudioMarkerAsync(fileId, markerId, request, token);
+
+    public Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default)
+        => _api.DeleteAudioMarkerAsync(fileId, markerId, token);
+
     // ── Audio Clip ────────────────────────────────────────────────────────────
 
     public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)
@@ -1246,6 +1359,9 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
         => _api.GetChildClipsAsync(fileId, token);
+
+    public Task<UploadFileRecord?> EditAudioAsync(Guid fileId, AudioEditRequest request, CancellationToken token = default)
+        => _api.EditAudioAsync(fileId, request, token);
 
     public Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default)
         => _api.GetClipPreviewAsync(fileId, start, end, token);

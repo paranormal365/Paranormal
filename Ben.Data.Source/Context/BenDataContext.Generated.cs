@@ -60,6 +60,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UploadFileTypeExtension> UploadFileTypeExtensions { get; set; }
         public virtual DbSet<UploadFile> UploadFiles { get; set; }
         public virtual DbSet<UploadFileOrganizationShare> UploadFileOrganizationShares { get; set; }
+        public virtual DbSet<UploadFileShare> UploadFileShares { get; set; }
+        public virtual DbSet<UploadFileComment> UploadFileComments { get; set; }
         public virtual DbSet<UploadFilePermissionRequest> UploadFilePermissionRequests { get; set; }
         public virtual DbSet<ClientRequest> ClientRequests { get; set; }
         public virtual DbSet<ClientRequestOrganization> ClientRequestOrganizations { get; set; }
@@ -81,17 +83,21 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<CaseTransferLog> CaseTransferLogs { get; set; }
         public virtual DbSet<CaseMessage> CaseMessages { get; set; }
         public virtual DbSet<CaseClientAccess> CaseClientAccesses { get; set; }
+        public virtual DbSet<CaseClientInvite> CaseClientInvites { get; set; }
         public virtual DbSet<UploadFileMetadata> UploadFileMetadata { get; set; }
         public virtual DbSet<CaseReport> CaseReports { get; set; }
         public virtual DbSet<CaseReportSection> CaseReportSections { get; set; }
         public virtual DbSet<CaseReportSectionFile> CaseReportSectionFiles { get; set; }
         public virtual DbSet<CaseResearchEntry> CaseResearchEntries { get; set; }
+        public virtual DbSet<CaseFile> CaseFiles { get; set; }
+        public virtual DbSet<CaseRelatedPerson> CaseRelatedPeople { get; set; }
         public virtual DbSet<CaseNote> CaseNotes { get; set; }
         public virtual DbSet<InvestigationScheduleProposal> InvestigationScheduleProposals { get; set; }
         public virtual DbSet<ScheduleProposalSlot> ScheduleProposalSlots { get; set; }
         public virtual DbSet<UploadFileAudioConfig> UploadFileAudioConfigs { get; set; }
         public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
         public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
+        public virtual DbSet<AudioMarker> AudioMarkers { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
         public virtual DbSet<VideoProject> VideoProjects { get; set; }
 
@@ -141,6 +147,8 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<UserMessageType>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UserMessageType>()
+                .HasIndex(e => e.Name).IsUnique();
 
             // ── UserNoteType ─────────────────────────────────────────────────
             modelBuilder.Entity<UserNoteType>()
@@ -607,6 +615,58 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
+            // ── UploadFileShare ────────────────────────────────────────────────
+            modelBuilder.Entity<UploadFileShare>()
+                .HasIndex(e => new { e.UploadFileId, e.TargetType, e.IsActive });
+            modelBuilder.Entity<UploadFileShare>()
+                .HasIndex(e => e.TargetAppUserId);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasIndex(e => e.TargetInvestigationId);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasIndex(e => e.TargetOrganizationId);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasOne(e => e.UploadFile).WithMany(e => e.Shares)
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasOne(e => e.TargetAppUser).WithMany()
+                .HasForeignKey(e => e.TargetAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasOne(e => e.TargetInvestigation).WithMany()
+                .HasForeignKey(e => e.TargetInvestigationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasOne(e => e.TargetOrganization).WithMany()
+                .HasForeignKey(e => e.TargetOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasOne(e => e.SharedByAppUser).WithMany()
+                .HasForeignKey(e => e.SharedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasOne(e => e.RemovedByAppUser).WithMany()
+                .HasForeignKey(e => e.RemovedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileShare>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── UploadFileComment ─────────────────────────────────────────────
+            modelBuilder.Entity<UploadFileComment>()
+                .HasIndex(e => new { e.UploadFileId, e.DateCreated });
+            modelBuilder.Entity<UploadFileComment>()
+                .Property(e => e.Text).HasColumnType("nvarchar(max)").IsRequired();
+            modelBuilder.Entity<UploadFileComment>()
+                .HasOne(e => e.UploadFile).WithMany(e => e.Comments)
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UploadFileComment>()
+                .HasOne(e => e.AuthorAppUser).WithMany()
+                .HasForeignKey(e => e.AuthorAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileComment>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFileComment>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
             // ── UploadFilePermissionRequest ───────────────────────────────────
             modelBuilder.Entity<UploadFilePermissionRequest>()
                 .HasOne(e => e.UploadFile).WithMany(e => e.PermissionRequests)
@@ -671,6 +731,28 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<UploadFile>()
                 .Property(e => e.EditStateJson).HasColumnType("nvarchar(max)");
 
+            // ── UploadFile self-reference (case-copy lineage, item #6 phase 2) ─
+            // Deliberately a separate FK from ParentFile above — see the field's doc comment.
+            modelBuilder.Entity<UploadFile>()
+                .HasOne(e => e.CaseCopySourceFile).WithMany(e => e.CaseCopies)
+                .HasForeignKey(e => e.CaseCopyOfUploadFileId)
+                .IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<UploadFile>()
+                .Property(e => e.AllowInvestigationTeamComments).HasDefaultValue(false);
+            modelBuilder.Entity<UploadFile>()
+                .Property(e => e.AllowClientComments).HasDefaultValue(false);
+            modelBuilder.Entity<UploadFile>()
+                .Property(e => e.AllowOrganizationComments).HasDefaultValue(false);
+            modelBuilder.Entity<UploadFile>()
+                .Property(e => e.AllowPublicComments).HasDefaultValue(false);
+
+            // ── UploadFile self-reference (archived prior version, item #6 phase 3) ─
+            // Deliberately a separate FK from ParentFile/CaseCopySourceFile above — see the field's doc comment.
+            modelBuilder.Entity<UploadFile>()
+                .HasOne(e => e.ArchivedFromUploadFile).WithMany(e => e.ArchivedVersions)
+                .HasForeignKey(e => e.ArchivedFromUploadFileId)
+                .IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
             // ── UploadFileAudioConfig ────────────────────────────────────────
             // One-to-one with UploadFile; cascade so config is deleted with the file.
             modelBuilder.Entity<UploadFileAudioConfig>()
@@ -716,6 +798,23 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<UploadFileRegionNote>()
                 .Property(e => e.NoteHtml).HasColumnType("nvarchar(max)");
 
+            // ── AudioMarker ────────────────────────────────────────────────
+            modelBuilder.Entity<AudioMarker>()
+                .HasOne(e => e.UploadFile).WithMany(e => e.AudioMarkers)
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<AudioMarker>()
+                .HasIndex(e => e.UploadFileId);
+            modelBuilder.Entity<AudioMarker>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<AudioMarker>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<AudioMarker>()
+                .Property(e => e.Label).HasMaxLength(200);
+            modelBuilder.Entity<AudioMarker>()
+                .Property(e => e.Note).HasColumnType("nvarchar(max)");
+
             // ── UploadFileVote ───────────────────────────────────────────────
             // One vote per (user, file): unique index enforces the business rule.
             modelBuilder.Entity<UploadFileVote>()
@@ -741,8 +840,12 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrganizationMembershipRequest>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // Only one Pending request per (org, user) at a time — filtered so a user can still
+            // re-apply after a prior request was Accepted/Denied/Withdrawn.
             modelBuilder.Entity<OrganizationMembershipRequest>()
-                .HasIndex(e => new { e.OrganizationId, e.AppUserId });
+                .HasIndex(e => new { e.OrganizationId, e.AppUserId })
+                .HasFilter("[Status] = 0")
+                .IsUnique();
             modelBuilder.Entity<OrganizationMembershipRequest>()
                 .Property(e => e.RequestMessage).HasMaxLength(2000).IsRequired(false);
             modelBuilder.Entity<OrganizationMembershipRequest>()
@@ -1291,6 +1394,28 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<CaseClientAccess>()
                 .HasIndex(e => new { e.CaseId, e.AppUserId }).IsUnique();
 
+            // ── CaseClientInvite (item #4 remaining piece) ───────────────────
+            modelBuilder.Entity<CaseClientInvite>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseClientInvite>()
+                .HasOne(e => e.AcceptedByAppUser).WithMany()
+                .HasForeignKey(e => e.AcceptedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseClientInvite>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseClientInvite>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseClientInvite>()
+                .Property(e => e.Email).HasMaxLength(320); // RFC 5321 max
+            modelBuilder.Entity<CaseClientInvite>()
+                .Property(e => e.Token).HasMaxLength(64);
+            modelBuilder.Entity<CaseClientInvite>()
+                .HasIndex(e => e.Token).IsUnique();
+            modelBuilder.Entity<CaseClientInvite>()
+                .HasIndex(e => new { e.CaseId, e.Email });
+
             // ── CaseTimelineEntry.IpAddress ─────────────────────────────────
             modelBuilder.Entity<CaseTimelineEntry>()
                 .Property(e => e.IpAddress).HasMaxLength(45); // supports IPv6
@@ -1384,6 +1509,45 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Url).HasMaxLength(2000);
             modelBuilder.Entity<CaseResearchEntry>()
                 .HasIndex(e => new { e.CaseId, e.SortOrder });
+
+            // ── CaseFile ──────────────────────────────────────────────────────
+            modelBuilder.Entity<CaseFile>()
+                .HasOne(e => e.Case).WithMany(e => e.CaseFiles)
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CaseFile>()
+                .HasOne(e => e.UploadFile).WithMany(e => e.CaseFiles)
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CaseFile>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseFile>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseFile>()
+                .Property(e => e.Description).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<CaseFile>()
+                .HasIndex(e => e.CaseId);
+            modelBuilder.Entity<CaseFile>()
+                .HasIndex(e => e.UploadFileId);
+
+            // ── CaseRelatedPerson ─────────────────────────────────────────────
+            modelBuilder.Entity<CaseRelatedPerson>()
+                .HasOne(e => e.Case).WithMany(e => e.RelatedPeople)
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CaseRelatedPerson>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseRelatedPerson>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseRelatedPerson>()
+                .Property(e => e.Name).HasMaxLength(200);
+            modelBuilder.Entity<CaseRelatedPerson>()
+                .Property(e => e.Relationship).HasMaxLength(100);
+            modelBuilder.Entity<CaseRelatedPerson>()
+                .Property(e => e.Notes).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<CaseRelatedPerson>()
+                .HasIndex(e => e.CaseId);
 
             // ── InvestigationScheduleProposal ──────────────────────────────
             modelBuilder.Entity<InvestigationScheduleProposal>()

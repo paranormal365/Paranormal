@@ -88,7 +88,28 @@ export function setMapCenter(lat, lon, zoom) {
     map.zoom(zoom)
 }
 
+// ── Resize ───────────────────────────────────────────────────────────────────
+
+/**
+ * Forces Kendo Map to re-measure its container and redraw tiles.
+ * Needed because the map is first mounted while its container is inside a
+ * conditionally-hidden loading state; Kendo caches the container's width at
+ * mount time and never re-measures on its own, so it can end up rendering
+ * tiles at whatever (narrower) width the container happened to have then.
+ */
+export function resizeMap() {
+    const mapEl = document.querySelector('[data-role="map"]')
+    if (!mapEl) return
+    const map = typeof kendo !== 'undefined' && kendo.widgetInstance
+        ? kendo.widgetInstance(mapEl)
+        : null
+    if (!map) return
+    map.resize(true)
+}
+
 // ── Init / dispose ────────────────────────────────────────────────────────────
+
+let _resizeHandler = null
 
 export function init(dotnetRef) {
     _dotnetRef = dotnetRef
@@ -96,6 +117,15 @@ export function init(dotnetRef) {
     window.caseMapTileTemplate    = caseMapTileTemplate
     window.caseMapMarkerTemplate  = caseMapMarkerTemplate
     window.caseMapMarkerClick     = caseMapMarkerClick
+
+    // Keep the map in sync with real browser window resizes too, not just
+    // the one-time post-load mount fix driven from Blazor.
+    let resizeTimeout
+    _resizeHandler = () => {
+        clearTimeout(resizeTimeout)
+        resizeTimeout = setTimeout(resizeMap, 150)
+    }
+    window.addEventListener('resize', _resizeHandler)
 }
 
 export function dispose() {
@@ -103,4 +133,8 @@ export function dispose() {
     delete window.caseMapTileTemplate
     delete window.caseMapMarkerTemplate
     delete window.caseMapMarkerClick
+    if (_resizeHandler) {
+        window.removeEventListener('resize', _resizeHandler)
+        _resizeHandler = null
+    }
 }

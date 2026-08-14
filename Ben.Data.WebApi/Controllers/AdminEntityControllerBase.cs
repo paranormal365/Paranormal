@@ -1,15 +1,18 @@
 using AutoMapper;
 using Ben.Data.Common.Constants;
 using Ben.Data.Source.Context;
+using Ben.Data.WebApi.Filters;
 using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace Ben.Data.WebApi.Controllers;
 
 [ApiController]
 [Authorize(Policy = RoleNames.SuperAdmin)]
+[TypeFilter(typeof(EnableRequestBufferingFilter))]
 public abstract class AdminEntityControllerBase<TEntity, TRecord> : BenControllerBase
     where TEntity : class
 {
@@ -65,7 +68,13 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : BenControlle
         var currentUserId = GetCurrentUserId();
         SetPropertyIfExists(entity, "CreatedByAppUserId", currentUserId);
         SetPropertyIfExists(entity, "DateCreated",        now);
-        SetPropertyIfExists(entity, "IsActive",           GetPropertyIfNotSet<bool>(entity, "IsActive", true));
+
+        // Default IsActive to true only when the caller didn't send it at all — a bound bool
+        // property can't distinguish "the caller sent false" from "the caller sent nothing", so
+        // this checks the raw JSON body (see EnableRequestBufferingFilter) rather than the
+        // deserialized value.
+        if (!await WasJsonPropertySetAsync("isActive", cancellationToken))
+            SetPropertyIfExists(entity, "IsActive", true);
 
         dbContext.Set<TEntity>().Add(entity);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -178,14 +187,34 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : BenControlle
     }
 
     /// <summary>
-    /// Returns the property's current value if it is the default for its type, otherwise returns the
-    /// provided fallback. Used so that caller-supplied IsActive=false is still respected.
+    /// Re-reads the raw request body (buffered by <see cref="EnableRequestBufferingFilter"/>) to check
+    /// whether the caller's JSON actually included the given property, case-insensitively — the bound
+    /// value alone can't tell "sent as false" apart from "omitted" for a non-nullable bool.
     /// </summary>
-    private static T GetPropertyIfNotSet<T>(TEntity entity, string propertyName, T fallback)
+    private async Task<bool> WasJsonPropertySetAsync(string propertyName, CancellationToken cancellationToken)
     {
-        var prop = typeof(TEntity).GetProperty(propertyName);
-        if (prop is null) return fallback;
-        var val = prop.GetValue(entity);
-        return (val is T t && !t.Equals(default(T))) ? t : fallback;
+        var body = HttpContext.Request.Body;
+        body.Position = 0;
+        try
+        {
+            using var document = await JsonDocument.ParseAsync(body, cancellationToken: cancellationToken);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+                return false;
+
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        finally
+        {
+            body.Position = 0;
+        }
     }
 }

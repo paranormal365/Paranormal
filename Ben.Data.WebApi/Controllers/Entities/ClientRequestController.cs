@@ -201,7 +201,7 @@ public sealed class ClientRequestController : BenControllerBase
         return Ok(_mapper.Map<ClientRequestRecord>(entity));
     }
 
-    /// <summary>Withdraws a submitted (or draft) request.</summary>
+    /// <summary>Withdraws a submitted (or draft) request, cancelling any still-open organization applications.</summary>
     [HttpPost("{id:guid}/withdraw")]
     public async Task<ActionResult<ClientRequestRecord>> Withdraw(Guid id, CancellationToken ct)
     {
@@ -213,8 +213,63 @@ public sealed class ClientRequestController : BenControllerBase
         if (entity.Status == ClientRequestStatus.Assigned)
             return BadRequest("An assigned case cannot be withdrawn without contacting the organization.");
 
+        var now = DateTime.UtcNow;
+
+        var openApps = await db.ClientRequestOrganizations
+            .Where(a => a.ClientRequestId == id &&
+                (a.Status == ClientOrgRequestStatus.Pending || a.Status == ClientOrgRequestStatus.Viewed ||
+                 a.Status == ClientOrgRequestStatus.UnderReview))
+            .ToListAsync(ct);
+        foreach (var a in openApps) { a.Status = ClientOrgRequestStatus.Cancelled; a.DateResponded = now; }
+
         entity.Status             = ClientRequestStatus.Withdrawn;
-        entity.DateUpdated        = DateTime.UtcNow;
+        entity.DateUpdated        = now;
+        entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
+        await db.SaveChangesAsync(ct);
+        return Ok(_mapper.Map<ClientRequestRecord>(entity));
+    }
+
+    /// <summary>
+    /// Adds one more organization to a Declined or Withdrawn request, re-opening it as Submitted.
+    /// Subject to the same 2-organization cap as the initial submission.
+    /// </summary>
+    [HttpPost("{id:guid}/add-organization")]
+    public async Task<ActionResult<ClientRequestRecord>> AddOrganization(
+        Guid id, [FromBody] AddOrganizationRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var entity = await db.ClientRequests
+            .Include(r => r.OrganizationApplications)
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (entity is null) return NotFound();
+        if (entity.AppUserId != userId) return Forbid();
+        if (entity.Status is not (ClientRequestStatus.Declined or ClientRequestStatus.Withdrawn))
+            return BadRequest("Only a declined or withdrawn request can be sent to another organization.");
+        if (entity.OrganizationApplications.Count >= 2)
+            return BadRequest("You may apply to a maximum of 2 organizations.");
+        if (entity.OrganizationApplications.Any(a => a.OrganizationId == request.OrganizationId))
+            return BadRequest("This organization has already been applied to.");
+
+        var org = await db.Organizations.AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == request.OrganizationId, ct);
+        if (org is null) return BadRequest("Organization not found.");
+        if (!org.IsAcceptingClients) return BadRequest("This organization is not accepting new requests.");
+
+        var now = DateTime.UtcNow;
+        db.ClientRequestOrganizations.Add(new ClientRequestOrganization
+        {
+            Id                 = Guid.NewGuid(),
+            ClientRequestId    = id,
+            OrganizationId     = request.OrganizationId,
+            Status             = ClientOrgRequestStatus.Pending,
+            DateApplied        = now,
+            DateCreated        = now,
+            CreatedByAppUserId = userId,
+        });
+
+        entity.Status             = ClientRequestStatus.Submitted;
+        entity.DateUpdated        = now;
         entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
         await db.SaveChangesAsync(ct);
         return Ok(_mapper.Map<ClientRequestRecord>(entity));
@@ -237,3 +292,5 @@ public sealed record UpsertClientRequestRequest(
     string? Description);
 
 public sealed record SubmitClientRequestRequest(IList<Guid> OrganizationIds);
+
+public sealed record AddOrganizationRequest(Guid OrganizationId);

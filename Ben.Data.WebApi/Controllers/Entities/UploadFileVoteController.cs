@@ -96,7 +96,23 @@ public sealed class UploadFileVoteController : BenControllerBase
             DateCreated  = DateTime.UtcNow,
         };
         db.UploadFileVotes.Add(vote);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Lost the race against a concurrent first vote from the same user — this is an
+            // upsert endpoint, so fall through to updating the row that won instead of erroring.
+            db.Entry(vote).State = EntityState.Detached;
+            var winner = await db.UploadFileVotes
+                .FirstAsync(v => v.UploadFileId == fileId && v.AppUserId == userId, ct);
+            winner.Score       = request.Score;
+            winner.DateUpdated = DateTime.UtcNow;
+            await db.SaveChangesAsync(ct);
+            _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileVote), winner.Id, winner, winner, userId, AppSources.WebApi, ct));
+            return Ok(_mapper.Map<UploadFileVoteRecord>(winner));
+        }
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileVote), vote.Id, vote, userId, AppSources.WebApi, ct));
 
         return CreatedAtAction(nameof(GetSummary), new { fileId },

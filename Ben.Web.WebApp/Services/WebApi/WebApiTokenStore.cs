@@ -21,10 +21,17 @@ public sealed class WebApiTokenStore : IWebApiTokenStore, IBenUserState
 
     public bool IsEntraSession { get; set; }
 
+    public TimeZoneInfo BrowserTimeZone { get; set; } = TimeZoneInfo.Utc;
+
     // IBenUserState (computed)
     bool IBenUserState.IsAuthenticated => !string.IsNullOrWhiteSpace(AccessToken);
 
     // State change notification
     public event Action? StateChanged;
     public void NotifyStateChanged() => StateChanged?.Invoke();
+
+    // Auth-ready gate — see IWebApiTokenStore.AuthReady / IBenUserState.AuthReady for why this exists.
+    private readonly TaskCompletionSource _authReadyTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public Task AuthReady => _authReadyTcs.Task;
+    public void SignalAuthReady() => _authReadyTcs.TrySetResult();
 }

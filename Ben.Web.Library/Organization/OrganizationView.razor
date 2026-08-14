@@ -80,13 +80,16 @@
                 <TelerikCheckBox @bind-Value="@_editIsAcceptingApplications" Id="edit-accepting-apps" />
                 <label for="edit-accepting-apps" class="form-label mb-0">Accepting Membership Applications</label>
             </div>
-            <div class="col-12">
-                <label class="form-label text-secondary small">ID</label>
-                <div class="text-secondary small font-monospace">@_org.Id</div>
-            </div>
+            @if (_isOwnerOrSuperAdmin)
+            {
+                <div class="col-12">
+                    <label class="form-label text-secondary small">ID</label>
+                    <div class="text-secondary small font-monospace">@_org.Id</div>
+                </div>
+            }
             <div class="col-12">
                 <label class="form-label text-secondary small">Created</label>
-                <div class="text-secondary small">@_org.DateCreated.ToString("yyyy-MM-dd HH:mm") UTC</div>
+                <div class="text-secondary small">@FormatServerTime(_org.DateCreated)</div>
             </div>
             <div class="col-12 d-flex gap-2 mt-1">
                 <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
@@ -146,16 +149,19 @@
                             }
                         }
 
-                        <dt class="col-sm-3 text-secondary small">ID</dt>
-                        <dd class="col-sm-9 mb-0 font-monospace small text-secondary">@_org.Id</dd>
+                        @if (_isOwnerOrSuperAdmin)
+                        {
+                            <dt class="col-sm-3 text-secondary small">ID</dt>
+                            <dd class="col-sm-9 mb-0 font-monospace small text-secondary">@_org.Id</dd>
+                        }
 
                         <dt class="col-sm-3 text-secondary small">Created</dt>
-                        <dd class="col-sm-9 mb-0 small">@_org.DateCreated.ToString("yyyy-MM-dd HH:mm") UTC</dd>
+                        <dd class="col-sm-9 mb-0 small">@FormatServerTime(_org.DateCreated)</dd>
 
                         @if (_org.DateUpdated.HasValue)
                         {
                             <dt class="col-sm-3 text-secondary small">Updated</dt>
-                            <dd class="col-sm-9 mb-0 small">@_org.DateUpdated.Value.ToString("yyyy-MM-dd HH:mm") UTC</dd>
+                            <dd class="col-sm-9 mb-0 small">@FormatServerTime(_org.DateUpdated.Value)</dd>
                         }
                     </dl>
                 </div>
@@ -247,6 +253,7 @@
     private bool   _canEdit;
     private bool   _canManageRoles;
     private bool   _isMember;
+    private bool   _isOwnerOrSuperAdmin;
     private bool   _loading   = true;
     private bool   _editMode;
     private bool   _isSaving;
@@ -261,8 +268,9 @@
     private string? _editPublicWebsite;
     private bool    _editIsAcceptingApplications;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated)
             NavManager.NavigateTo("/login");
     }
@@ -294,6 +302,19 @@
             _isMember       = UserState.IsSuperAdmin || listItem is not null;
             _canEdit        = UserState.IsSuperAdmin || (listItem?.CanEdit ?? false);
             _canManageRoles = _canEdit;
+
+            // The org's raw ID is only shown to the Owner and SuperAdmin — not every admin-tier
+            // member, so a real membership-role lookup is needed here rather than reusing _canEdit.
+            if (UserState.IsSuperAdmin)
+            {
+                _isOwnerOrSuperAdmin = true;
+            }
+            else if (UserState.UserId.HasValue)
+            {
+                var members = await AdminClient.GetOrganizationMembersAsync(OrgId);
+                _isOwnerOrSuperAdmin = members.Any(m =>
+                    m.AppUserId == UserState.UserId.Value && m.Role == OrganizationMemberRole.Owner);
+            }
         }
         catch
         {
@@ -309,6 +330,16 @@
         _editMode = false;
         _errorMessage = null;
         _successMessage = null;
+    }
+
+    private static readonly TimeZoneInfo _centralTimeZone = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
+
+    /// <summary>Formats a stored UTC timestamp as the server's own Central time, explicitly labeled
+    /// "(server)" so it's never confused with the viewer's own local time.</summary>
+    private static string FormatServerTime(DateTime utc)
+    {
+        var central = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), _centralTimeZone);
+        return $"{central:MM/dd/yyyy HH:mm:ss} (server)";
     }
 
     private void BeginEdit()

@@ -445,8 +445,9 @@
         {
             var all = await AdminClient.GetRegionNotesAsync(FileId);
             _notes = FilterNotesForRegion(all);
+            _noteError = null;
         }
-        catch { /* silently ignore */ }
+        catch { _noteError = "Failed to load notes."; }
         _loadingNotes = false;
     }
 
@@ -586,9 +587,18 @@
         {
             var result = await AdminClient.UpdateRegionNoteAsync(FileId, _editNoteId.Value,
                 new UpdateRegionNoteRequest(_editTimeOffset, _editNoteHtml, _editNotePublic));
-            if (result is not null) { _editNoteId = null; await ReloadNotesAsync(); }
+            if (result is not null)
+            {
+                _editNoteId = null;
+                _noteError = null;
+                await ReloadNotesAsync();
+            }
+            else
+            {
+                _noteError = "Failed to save changes to the note.";
+            }
         }
-        catch { /* silently ignore */ }
+        catch { _noteError = "Failed to save changes to the note."; }
     }
 
     private async Task DeleteNoteAsync(Guid noteId)
@@ -596,9 +606,16 @@
         try
         {
             if (await AdminClient.DeleteRegionNoteAsync(FileId, noteId))
+            {
+                _noteError = null;
                 await ReloadNotesAsync();
+            }
+            else
+            {
+                _noteError = "Failed to delete the note.";
+            }
         }
-        catch { /* silently ignore */ }
+        catch { _noteError = "Failed to delete the note."; }
     }
 
     // ── Sub-region context menu ───────────────────────────────────────────────

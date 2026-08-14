@@ -6,7 +6,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
-    <link id="theme-link" rel="stylesheet" href="./theme/ben-light/dist/css/ben-light.css" />
+    <!-- Every asset href/src below is explicitly root-relative (leading slash) rather than
+         relying on <base href> resolution — Safari has a known quirk where relative URLs in
+         elements parsed from a streamed SSR response (Blazor Web Apps stream by default) can
+         resolve against the current page path instead of <base> on a hard navigation to a
+         nested route, breaking asset loading (and any @import inside an affected stylesheet,
+         since a wrongly-fetched stylesheet's own relative @imports inherit its wrong base too). -->
+    <link id="theme-link" rel="stylesheet" href="/theme/ben-light/dist/css/ben-light.css" />
     <script>
         // Runs synchronously in <head> to avoid flash of wrong theme
         (function () {
@@ -15,7 +21,7 @@
                 ? saved
                 : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
             var link = document.getElementById('theme-link');
-            if (link) link.href = './theme/ben-' + theme + '/dist/css/ben-' + theme + '.css';
+            if (link) link.href = '/theme/ben-' + theme + '/dist/css/ben-' + theme + '.css';
             document.documentElement.setAttribute('data-bs-theme', theme);
         })();
     </script>
@@ -23,17 +29,19 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <script src="https://kit.fontawesome.com/19e4ba368d.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous" defer></script>
-    <script src="_content/Telerik.UI.for.Blazor/js/telerik-blazor.js" defer></script>
-    <script src="https://unpkg.com/@@ffmpeg/ffmpeg@@0.12.15/dist/umd/ffmpeg.js" defer></script>
+    <script src="/_content/Telerik.UI.for.Blazor/js/telerik-blazor.js" defer></script>
+    <!-- ffmpeg.wasm — served locally so the worker chunk (814.ffmpeg.js) is same-origin -->
+    <script src="/_content/Ben.Video.Editor/js/ffmpeg.umd.js" defer></script>
     <script src="https://unpkg.com/wavesurfer.js@@7/dist/wavesurfer.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/fabric@@6/dist/index.min.js" defer></script>
-    <link href="_content/Ben.Video.Editor/css/ben-video-variables.css" rel="stylesheet" />
-    <script src="./js/themeSwitcher.js"></script>
-    <script src="./js/geolocation.js"></script>
-    <link rel="stylesheet" href="@Assets["Ben.Web.WebApp.styles.css"]" />
-    <link rel="icon" type="image/png" href="favicon.png" />
+    <link href="/_content/Ben.Video.Editor/css/ben-video-variables.css" rel="stylesheet" />
+    <script src="/js/themeSwitcher.js"></script>
+    <script src="/js/geolocation.js"></script>
+    <script src="/js/timezone.js"></script>
+    <link rel="stylesheet" href="/@Assets["Ben.Web.WebApp.styles.css"]" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <HeadOutlet @rendermode="@InteractiveServer" />
-    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="/@Assets["app.css"]" />
 </head>
 
 <body class="k-body">
@@ -41,7 +49,7 @@
          the Interactive Server circuit can restore it via PersistentComponentState. -->
     <EntraTokenPersister />
     <Routes @rendermode="@InteractiveServer" />
-    <script src="_framework/blazor.web.js" autostart="false"></script>
+    <script src="/_framework/blazor.web.js" autostart="false"></script>
     <script>
         document.addEventListener("DOMContentLoaded", function() {
             Blazor.start();

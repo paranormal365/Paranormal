@@ -1,6 +1,7 @@
 @* Reusable chat-style message thread for case client↔org dialogue. *@
 @using Ben.Data.Common.Enums
 @using Ben.Web.Library.Services
+@inject IBenUserState UserState
 
 @* ── Thread display ──────────────────────────────────────────────────────────── *@
 @if (_messages is null)
@@ -36,7 +37,7 @@ else
                     }
                     <div>@msg.Body</div>
                     <div class="@(isOwn ? "text-white-50" : "text-muted") mt-1" style="font-size:.7rem;">
-                        @msg.DateCreated.ToLocalTime().ToString("MMM d h:mm tt")
+                        @msg.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d h:mm tt")
                         @if (isOwn && CurrentSide == CaseMessageSide.Client && !msg.IsReadByOrg)
                         {
                             <span class="ms-1">· Unread</span>

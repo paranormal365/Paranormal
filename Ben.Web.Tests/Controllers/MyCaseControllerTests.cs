@@ -1,4 +1,5 @@
 using AutoMapper;
+using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
@@ -9,6 +10,7 @@ using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Moq;
 using System.Security.Claims;
 using Xunit;
@@ -17,7 +19,7 @@ namespace Ben.Web.Tests.Controllers;
 
 /// <summary>
 /// Tests for MyCaseController — client-facing case dashboard, occurrences,
-/// schedule proposals, co-clients, and investigation cancellation.
+/// schedule proposals, co-clients, sub-client invites, and investigation cancellation.
 /// </summary>
 public class MyCaseControllerTests
 {
@@ -48,11 +50,15 @@ public class MyCaseControllerTests
         return m.Object;
     }
 
-    private static MyCaseController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
+    private static MyCaseController Build(IDbContextFactory<BenDataContext> factory, Guid userId,
+        IAuditLogService? auditLog = null, IEmailService? emailService = null)
     {
         var storage = new Mock<IFileStorageService>();
         storage.Setup(s => s.CaseFilePath(It.IsAny<Guid>(), It.IsAny<string>())).Returns("fake/path");
-        var ctrl = new MyCaseController(factory, CreateMapper(), storage.Object, new FileMetadataExtractorService());
+        var ctrl = new MyCaseController(factory, CreateMapper(), storage.Object, new FileMetadataExtractorService(),
+            auditLog ?? new Mock<IAuditLogService>().Object,
+            emailService ?? CreateUnconfiguredEmailService(), new ConfigurationBuilder().Build(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -67,12 +73,21 @@ public class MyCaseControllerTests
     private static MyCaseController BuildAnonymous(IDbContextFactory<BenDataContext> factory)
     {
         var ctrl = new MyCaseController(factory, CreateMapper(),
-            new Mock<IFileStorageService>().Object, new FileMetadataExtractorService());
+            new Mock<IFileStorageService>().Object, new FileMetadataExtractorService(), new Mock<IAuditLogService>().Object,
+            CreateUnconfiguredEmailService(), new ConfigurationBuilder().Build(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
         };
         return ctrl;
+    }
+
+    private static IEmailService CreateUnconfiguredEmailService()
+    {
+        var mock = new Mock<IEmailService>();
+        mock.Setup(e => e.IsConfigured).Returns(false);
+        return mock.Object;
     }
 
     /// <summary>Seeds org, client user, client request, and accepted case.</summary>
@@ -142,6 +157,32 @@ public class MyCaseControllerTests
         var ok   = Assert.IsType<OkObjectResult>((await ctrl.GetMyCase(caseId, default)).Result);
         var dto  = Assert.IsType<ClientCaseDetail>(ok.Value);
         Assert.Equal(caseId, dto.CaseId);
+        Assert.True(dto.IsPrimaryClient);
+    }
+
+    [Fact]
+    public async Task GetMyCase_CoClient_IsPrimaryClientFalse()
+    {
+        // Regression: MyCaseDetail.razor's Shared Access card previously inferred "am I primary"
+        // from whether GetCoClients happened not to throw — but the generic HTTP client returns an
+        // empty list on 403 instead of throwing, so co-clients incorrectly saw the primary-only
+        // admin controls. IsPrimaryClient is now a real, server-computed field instead.
+        var (factory, caseId, _, _) = await SeedClientCaseAsync();
+        var coClientId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser { Id = coClientId, UserName = "co@t.com", NormalizedUserName = "CO@T.COM", Email = "co@t.com", NormalizedEmail = "CO@T.COM", DateCreated = DateTime.UtcNow });
+            db.CaseClientAccesses.Add(new CaseClientAccess
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, AppUserId = coClientId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = coClientId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl = Build(factory, coClientId);
+        var ok   = Assert.IsType<OkObjectResult>((await ctrl.GetMyCase(caseId, default)).Result);
+        Assert.False(Assert.IsType<ClientCaseDetail>(ok.Value).IsPrimaryClient);
     }
 
     [Fact]
@@ -150,6 +191,56 @@ public class MyCaseControllerTests
         var (factory, caseId, _, _) = await SeedClientCaseAsync();
         var ctrl = Build(factory, Guid.NewGuid());
         Assert.IsType<NotFoundResult>((await ctrl.GetMyCase(caseId, default)).Result);
+    }
+
+    // ── Co-client access to case list/detail (regression — previously primary-client-only) ──────
+    // A secondary co-client (via CaseClientAccess, from either the old AddCoClient flow or a
+    // sub-client invite) must see the case in GetMyCases and be able to open GetMyCase — before
+    // this fix, both endpoints checked only ClientRequest.AppUserId, so a co-client's grant did
+    // nothing for browsing even though it worked for individual occurrence actions.
+
+    [Fact]
+    public async Task GetMyCases_IncludesCasesWhereUserIsCoClient()
+    {
+        var (factory, caseId, _, _) = await SeedClientCaseAsync();
+        var coClientId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser { Id = coClientId, UserName = "co@t.com", NormalizedUserName = "CO@T.COM", Email = "co@t.com", NormalizedEmail = "CO@T.COM", DateCreated = DateTime.UtcNow });
+            db.CaseClientAccesses.Add(new CaseClientAccess
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, AppUserId = coClientId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = coClientId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl = Build(factory, coClientId);
+        var ok   = Assert.IsType<OkObjectResult>((await ctrl.GetMyCases(default)).Result);
+        var list = Assert.IsAssignableFrom<IEnumerable<ClientCaseListItem>>(ok.Value).ToList();
+        Assert.Single(list);
+        Assert.Equal(caseId, list[0].CaseId);
+    }
+
+    [Fact]
+    public async Task GetMyCase_CoClient_ReturnsDetail()
+    {
+        var (factory, caseId, _, _) = await SeedClientCaseAsync();
+        var coClientId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser { Id = coClientId, UserName = "co@t.com", NormalizedUserName = "CO@T.COM", Email = "co@t.com", NormalizedEmail = "CO@T.COM", DateCreated = DateTime.UtcNow });
+            db.CaseClientAccesses.Add(new CaseClientAccess
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, AppUserId = coClientId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = coClientId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl = Build(factory, coClientId);
+        var ok   = Assert.IsType<OkObjectResult>((await ctrl.GetMyCase(caseId, default)).Result);
+        Assert.Equal(caseId, Assert.IsType<ClientCaseDetail>(ok.Value).CaseId);
     }
 
     // ── LogOccurrence ─────────────────────────────────────────────────────────
@@ -174,6 +265,32 @@ public class MyCaseControllerTests
         var (factory, caseId, _, _) = await SeedClientCaseAsync();
         var ctrl = Build(factory, Guid.NewGuid());
         Assert.IsType<NotFoundResult>((await ctrl.LogOccurrence(caseId, new LogOccurrenceRequest(null, "X", null), default)).Result);
+    }
+
+    [Fact]
+    public async Task LogOccurrence_CoClient_CreatesEntry()
+    {
+        // Regression: LogOccurrence previously checked only ClientRequest.AppUserId (primary
+        // client), while its own IsCaseClient helper (used elsewhere in this controller) already
+        // supported co-clients — a real co-client got NotFound trying to log an occurrence.
+        var (factory, caseId, _, _) = await SeedClientCaseAsync();
+        var coClientId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser { Id = coClientId, UserName = "co@t.com", NormalizedUserName = "CO@T.COM", Email = "co@t.com", NormalizedEmail = "CO@T.COM", DateCreated = DateTime.UtcNow });
+            db.CaseClientAccesses.Add(new CaseClientAccess
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, AppUserId = coClientId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = coClientId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl = Build(factory, coClientId);
+        var result = await ctrl.LogOccurrence(caseId, new LogOccurrenceRequest(null, "Co-client report", null), default);
+
+        var ok  = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal("Co-client report", Assert.IsType<CaseTimelineEntryRecord>(ok.Value).Title);
     }
 
     // ── UpdateOccurrence ──────────────────────────────────────────────────────
@@ -202,6 +319,34 @@ public class MyCaseControllerTests
         Assert.IsType<NotFoundResult>((await other.UpdateOccurrence(caseId, entry.Id, new LogOccurrenceRequest(null, "Hack", null), default)).Result);
     }
 
+    [Fact]
+    public async Task UpdateOccurrence_CoClient_UpdatesOwnEntry()
+    {
+        // Regression: entry.Case.ClientRequest?.AppUserId != userId rejected any caller who
+        // wasn't the primary client — even though the query filter already guaranteed the
+        // caller was the entry's own author (AuthorAppUserId == userId), so a co-client editing
+        // an occurrence they themselves logged was wrongly Forbidden.
+        var (factory, caseId, _, _) = await SeedClientCaseAsync();
+        var coClientId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser { Id = coClientId, UserName = "co@t.com", NormalizedUserName = "CO@T.COM", Email = "co@t.com", NormalizedEmail = "CO@T.COM", DateCreated = DateTime.UtcNow });
+            db.CaseClientAccesses.Add(new CaseClientAccess
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, AppUserId = coClientId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = coClientId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var ctrl  = Build(factory, coClientId);
+        var entry = (CaseTimelineEntryRecord)((OkObjectResult)(await ctrl.LogOccurrence(caseId, new LogOccurrenceRequest(null, "Original", "Body"), default)).Result!).Value!;
+
+        var result = await ctrl.UpdateOccurrence(caseId, entry.Id, new LogOccurrenceRequest(null, "Updated", "New body"), default);
+
+        var ok  = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal("Updated", Assert.IsType<CaseTimelineEntryRecord>(ok.Value).Title);
+    }
+
     // ── DeleteOccurrence ──────────────────────────────────────────────────────
 
     [Fact]
@@ -215,6 +360,30 @@ public class MyCaseControllerTests
 
         await using var db = await factory.CreateDbContextAsync();
         Assert.False(await db.CaseTimelineEntries.AnyAsync(e => e.Id == entry.Id));
+    }
+
+    [Fact]
+    public async Task DeleteOccurrence_CoClient_DeletesOwnEntry()
+    {
+        var (factory, caseId, _, _) = await SeedClientCaseAsync();
+        var coClientId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser { Id = coClientId, UserName = "co@t.com", NormalizedUserName = "CO@T.COM", Email = "co@t.com", NormalizedEmail = "CO@T.COM", DateCreated = DateTime.UtcNow });
+            db.CaseClientAccesses.Add(new CaseClientAccess
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, AppUserId = coClientId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = coClientId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var ctrl  = Build(factory, coClientId);
+        var entry = (CaseTimelineEntryRecord)((OkObjectResult)(await ctrl.LogOccurrence(caseId, new LogOccurrenceRequest(null, "X", null), default)).Result!).Value!;
+
+        Assert.IsType<NoContentResult>(await ctrl.DeleteOccurrence(caseId, entry.Id, default));
+
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        Assert.False(await verifyDb.CaseTimelineEntries.AnyAsync(e => e.Id == entry.Id));
     }
 
     // ── Schedule proposals ────────────────────────────────────────────────────
@@ -381,5 +550,300 @@ public class MyCaseControllerTests
         Assert.IsType<NoContentResult>(result);
         await using var db2 = await factory.CreateDbContextAsync();
         Assert.False(await db2.CaseClientAccesses.AnyAsync(a => a.Id == dto.AccessId));
+    }
+
+    // ── Sub-client invites (item #4) ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task InviteCoClient_ExistingAccount_LinksImmediatelyWithoutCreatingInvite()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var coClientId = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser { Id = coClientId, UserName = "co@t.com", NormalizedUserName = "CO@T.COM", Email = "co@t.com", NormalizedEmail = "CO@T.COM", DateCreated = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = Build(factory, clientId);
+        var result = await ctrl.InviteCoClient(caseId, new InviteCoClientRequest("co@t.com"), default);
+
+        var ok  = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<InviteCoClientResult>(ok.Value);
+        Assert.True(dto.LinkedExistingAccount);
+        Assert.Equal(coClientId, dto.CoClient?.AppUserId);
+        Assert.Null(dto.Invite);
+        Assert.False(dto.EmailSent);
+
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        Assert.True(await verifyDb.CaseClientAccesses.AnyAsync(a => a.CaseId == caseId && a.AppUserId == coClientId));
+        Assert.False(await verifyDb.CaseClientInvites.AnyAsync(i => i.CaseId == caseId));
+    }
+
+    [Fact]
+    public async Task InviteCoClient_NoAccount_CreatesFourteenDayInvite()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl   = Build(factory, clientId);
+        var before = DateTime.UtcNow;
+
+        var result = await ctrl.InviteCoClient(caseId, new InviteCoClientRequest("newperson@t.com"), default);
+
+        var ok  = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<InviteCoClientResult>(ok.Value);
+        Assert.False(dto.LinkedExistingAccount);
+        Assert.Null(dto.CoClient);
+        Assert.NotNull(dto.Invite);
+        Assert.Equal("newperson@t.com", dto.Invite!.Email);
+        Assert.False(string.IsNullOrWhiteSpace(dto.Invite.Token));
+        Assert.InRange(dto.Invite.DateExpires, before.AddDays(14).AddMinutes(-1), before.AddDays(14).AddMinutes(1));
+        Assert.False(dto.EmailSent); // unconfigured IEmailService in tests
+    }
+
+    [Fact]
+    public async Task InviteCoClient_EmailConfigured_SendsAndReportsSent()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var email = new Mock<IEmailService>();
+        email.Setup(e => e.IsConfigured).Returns(true);
+        email.Setup(e => e.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+             .Returns(Task.CompletedTask);
+        var ctrl = Build(factory, clientId, emailService: email.Object);
+
+        var result = await ctrl.InviteCoClient(caseId, new InviteCoClientRequest("newperson@t.com"), default);
+
+        var ok  = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<InviteCoClientResult>(ok.Value);
+        Assert.True(dto.EmailSent);
+        email.Verify(e => e.SendAsync("newperson@t.com", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task InviteCoClient_SendFailure_StillSucceedsButReportsNotSent()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var email = new Mock<IEmailService>();
+        email.Setup(e => e.IsConfigured).Returns(true);
+        email.Setup(e => e.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+             .ThrowsAsync(new InvalidOperationException("SMTP unreachable"));
+        var ctrl = Build(factory, clientId, emailService: email.Object);
+
+        var result = await ctrl.InviteCoClient(caseId, new InviteCoClientRequest("newperson@t.com"), default);
+
+        var ok  = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<InviteCoClientResult>(ok.Value);
+        Assert.NotNull(dto.Invite); // invite still created despite the send failure
+        Assert.False(dto.EmailSent);
+    }
+
+    [Fact]
+    public async Task InviteCoClient_ReInvitingSameEmail_RevokesThePriorPendingInvite()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl = Build(factory, clientId);
+
+        var first  = (InviteCoClientResult)((OkObjectResult)(await ctrl.InviteCoClient(caseId, new InviteCoClientRequest("newperson@t.com"), default)).Result!).Value!;
+        var second = (InviteCoClientResult)((OkObjectResult)(await ctrl.InviteCoClient(caseId, new InviteCoClientRequest("newperson@t.com"), default)).Result!).Value!;
+
+        Assert.NotEqual(first.Invite!.Token, second.Invite!.Token);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var firstRow = await db.CaseClientInvites.FirstAsync(i => i.Id == first.Invite.Id);
+        Assert.NotNull(firstRow.DateRevoked);
+        var secondRow = await db.CaseClientInvites.FirstAsync(i => i.Id == second.Invite.Id);
+        Assert.Null(secondRow.DateRevoked);
+    }
+
+    [Fact]
+    public async Task InviteCoClient_NonPrimaryClient_ReturnsForbid()
+    {
+        var (factory, caseId, _, _) = await SeedClientCaseAsync();
+        var ctrl   = Build(factory, Guid.NewGuid());
+        var result = await ctrl.InviteCoClient(caseId, new InviteCoClientRequest("newperson@t.com"), default);
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetInvites_ExcludesAcceptedRevokedAndExpired()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.CaseClientInvites.Add(new CaseClientInvite // pending
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, Email = "pending@t.com", Token = "tok-pending",
+                DateExpires = DateTime.UtcNow.AddDays(14), DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId,
+            });
+            db.CaseClientInvites.Add(new CaseClientInvite // accepted
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, Email = "used@t.com", Token = "tok-used",
+                DateExpires = DateTime.UtcNow.AddDays(14), DateAccepted = DateTime.UtcNow,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId,
+            });
+            db.CaseClientInvites.Add(new CaseClientInvite // revoked
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, Email = "revoked@t.com", Token = "tok-revoked",
+                DateExpires = DateTime.UtcNow.AddDays(14), DateRevoked = DateTime.UtcNow,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId,
+            });
+            db.CaseClientInvites.Add(new CaseClientInvite // expired
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, Email = "expired@t.com", Token = "tok-expired",
+                DateExpires = DateTime.UtcNow.AddDays(-1), DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl = Build(factory, clientId);
+        var ok   = Assert.IsType<OkObjectResult>((await ctrl.GetInvites(caseId, default)).Result);
+        var invites = Assert.IsAssignableFrom<IEnumerable<CaseClientInviteRecord>>(ok.Value).ToList();
+
+        Assert.Single(invites);
+        Assert.Equal("pending@t.com", invites[0].Email);
+    }
+
+    [Fact]
+    public async Task RevokeInvite_SetsDateRevoked()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl   = Build(factory, clientId);
+        var invite = (InviteCoClientResult)((OkObjectResult)(await ctrl.InviteCoClient(caseId, new InviteCoClientRequest("newperson@t.com"), default)).Result!).Value!;
+
+        var result = await ctrl.RevokeInvite(caseId, invite.Invite!.Id, default);
+        Assert.IsType<NoContentResult>(result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var row = await db.CaseClientInvites.FirstAsync(i => i.Id == invite.Invite.Id);
+        Assert.NotNull(row.DateRevoked);
+    }
+
+    [Fact]
+    public async Task RevokeInvite_NonPrimaryClient_ReturnsForbid()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl   = Build(factory, clientId);
+        var invite = (InviteCoClientResult)((OkObjectResult)(await ctrl.InviteCoClient(caseId, new InviteCoClientRequest("newperson@t.com"), default)).Result!).Value!;
+
+        var otherCtrl = Build(factory, Guid.NewGuid());
+        var result = await otherCtrl.RevokeInvite(caseId, invite.Invite!.Id, default);
+        Assert.IsType<ForbidResult>(result);
+    }
+
+    // ── Related people (basic-info, no account) ─────────────────────────────────
+
+    [Fact]
+    public async Task AddRelatedPerson_ReturnsRecord_AndPersists()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl = Build(factory, clientId);
+
+        var result = await ctrl.AddRelatedPerson(caseId,
+            new AddRelatedPersonRequest("Jane Doe", 34, "Spouse", true, "Sleeps poorly upstairs."), default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var record = Assert.IsType<CaseRelatedPersonRecord>(ok.Value);
+        Assert.Equal("Jane Doe", record.Name);
+        Assert.True(record.LivesAtProperty);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.True(await db.CaseRelatedPeople.AnyAsync(p => p.Id == record.Id && p.CaseId == caseId));
+    }
+
+    [Fact]
+    public async Task AddRelatedPerson_MissingName_ReturnsBadRequest()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl = Build(factory, clientId);
+
+        var result = await ctrl.AddRelatedPerson(caseId,
+            new AddRelatedPersonRequest("  ", null, null, false, null), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task AddRelatedPerson_NotPrimaryClient_ReturnsForbid()
+    {
+        var (factory, caseId, _, _) = await SeedClientCaseAsync();
+        var ctrl = Build(factory, Guid.NewGuid());
+
+        var result = await ctrl.AddRelatedPerson(caseId,
+            new AddRelatedPersonRequest("Jane Doe", null, null, false, null), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetRelatedPeople_ReturnsAddedPeople()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl = Build(factory, clientId);
+        await ctrl.AddRelatedPerson(caseId, new AddRelatedPersonRequest("Jane Doe", null, null, false, null), default);
+
+        var result = await ctrl.GetRelatedPeople(caseId, default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var list = Assert.IsAssignableFrom<IEnumerable<CaseRelatedPersonRecord>>(ok.Value);
+        Assert.Single(list);
+    }
+
+    [Fact]
+    public async Task RemoveRelatedPerson_DeletesRow()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl = Build(factory, clientId);
+        var added = (CaseRelatedPersonRecord)((OkObjectResult)(await ctrl.AddRelatedPerson(
+            caseId, new AddRelatedPersonRequest("Jane Doe", null, null, false, null), default)).Result!).Value!;
+
+        var result = await ctrl.RemoveRelatedPerson(caseId, added.Id, default);
+
+        Assert.IsType<NoContentResult>(result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.CaseRelatedPeople.AnyAsync(p => p.Id == added.Id));
+    }
+
+    [Fact]
+    public async Task RemoveRelatedPerson_NotPrimaryClient_ReturnsForbid()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var owner = Build(factory, clientId);
+        var added = (CaseRelatedPersonRecord)((OkObjectResult)(await owner.AddRelatedPerson(
+            caseId, new AddRelatedPersonRequest("Jane Doe", null, null, false, null), default)).Result!).Value!;
+
+        var other = Build(factory, Guid.NewGuid());
+        var result = await other.RemoveRelatedPerson(caseId, added.Id, default);
+
+        Assert.IsType<ForbidResult>(result);
+    }
+
+    // ── Audit logging on client case-log writes ──────────────────────────────────
+
+    [Fact]
+    public async Task LogOccurrence_WritesAuditCreateEntry()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var auditLog = new Mock<IAuditLogService>();
+        var ctrl = Build(factory, clientId, auditLog.Object);
+
+        await ctrl.LogOccurrence(caseId, new LogOccurrenceRequest(DateTime.UtcNow, "Title", "Body"), default);
+
+        auditLog.Verify(a => a.LogCreateAsync(
+            nameof(CaseTimelineEntry), It.IsAny<Guid>(), It.IsAny<object>(), clientId, AppSources.WebApi, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task AddRelatedPerson_WritesAuditCreateEntry()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var auditLog = new Mock<IAuditLogService>();
+        var ctrl = Build(factory, clientId, auditLog.Object);
+
+        await ctrl.AddRelatedPerson(caseId, new AddRelatedPersonRequest("Jane Doe", null, null, false, null), default);
+
+        auditLog.Verify(a => a.LogCreateAsync(
+            nameof(Ben.Data.Source.Entities.CaseRelatedPerson), It.IsAny<Guid>(), It.IsAny<object>(), clientId, AppSources.WebApi, It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 }

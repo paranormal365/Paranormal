@@ -1,6 +1,7 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Library.Services
+@using Ben.Web.Library.Shared
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 
@@ -62,7 +63,7 @@
                                     @if (e.EventDateTime.HasValue)
                                     {
                                         <small class="text-secondary">
-                                            @e.EventDateTime.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                                            @e.EventDateTime.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
                                         </small>
                                     }
                                     @if (!string.IsNullOrEmpty(e.AuthorDisplayName))
@@ -218,19 +219,10 @@
 </TelerikDialog>
 
 @* ── Delete confirm ───────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showDeleteConfirm" Title="Delete Entry" Width="380px">
-    <DialogContent>
-        <p>Delete this timeline entry? This cannot be undone.</p>
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="@(() => _showDeleteConfirm = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                       OnClick="ExecuteDelete"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Deleting…" : "Delete")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+<ConfirmDialog @bind-Visible="@_showDeleteConfirm" Title="Delete Entry" Width="380px"
+               Busy="@_isBusy" BusyText="Deleting…" OnConfirm="ExecuteDelete">
+    <p>Delete this timeline entry? This cannot be undone.</p>
+</ConfirmDialog>
 
 @* Image editor — opened when user clicks the pencil icon on an image file *@
 <ImageEditorPlayer @ref="_imageEditor"

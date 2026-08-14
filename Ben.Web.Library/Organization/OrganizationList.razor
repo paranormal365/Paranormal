@@ -1,4 +1,5 @@
 @page "/organizations"
+@using Ben.Web.Library.Shared
 
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -61,74 +62,70 @@
                         }
                     </Template>
                 </GridColumn>
-                <GridColumn Field="@nameof(OrganizationListItemResponse.DateCreated)" Title="Created"
-                            DisplayFormat="{0:yyyy-MM-dd}" Width="110px" />
-                <GridColumn Title="Actions" Width="340px">
+                <GridColumn Field="@nameof(OrganizationListItemResponse.DateCreated)" Title="Created" Width="110px">
+                    <Template>
+                        @{ var item = (OrganizationListItemResponse)context; }
+                        @item.DateCreated.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")
+                    </Template>
+                </GridColumn>
+                @if (UserState.IsSuperAdmin)
+                {
+                    <GridColumn Field="@nameof(OrganizationListItemResponse.MemberCount)" Title="Members" Width="90px" TextAlign="@ColumnTextAlign.Center" />
+                    <GridColumn Field="@nameof(OrganizationListItemResponse.CaseCount)" Title="Cases" Width="80px" TextAlign="@ColumnTextAlign.Center" />
+                    <GridColumn Field="@nameof(OrganizationListItemResponse.InvestigationCount)" Title="Investigations" Width="110px" TextAlign="@ColumnTextAlign.Center" />
+                }
+                <GridColumn Title="Actions" Width="110px">
                     <Template>
                         @{
                             var org = (OrganizationListItemResponse)context;
                         }
-                        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
-                                       Size="@ThemeConstants.Button.Size.Small"
-                                       Icon="@SvgIcon.Eye"
-                                       OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}"))">
-                            View
-                        </TelerikButton>
-                        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
-                                       Size="@ThemeConstants.Button.Size.Small"
-                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
-                                       OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/cms"))">
-                            CMS
-                        </TelerikButton>
-                        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
-                                       Size="@ThemeConstants.Button.Size.Small"
-                                       Icon="@SvgIcon.GridLayout"
-                                       OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/cases"))">
-                            Cases
-                        </TelerikButton>
-                        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
-                                       Size="@ThemeConstants.Button.Size.Small"
-                                       Icon="@SvgIcon.Calendar"
-                                       OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/calendar"))">
-                            Calendar
-                        </TelerikButton>
-                        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
-                                       Size="@ThemeConstants.Button.Size.Small"
-                                       Icon="@SvgIcon.Envelope"
-                                       OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/messages"))">
-                            Messages
-                        </TelerikButton>
-                        @if (org.CanEdit)
-                        {
-                            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
-                                           Size="@ThemeConstants.Button.Size.Small"
-                                           Icon="@SvgIcon.Gear"
-                                           OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/client-settings"))">
-                                Clients
-                            </TelerikButton>
-                            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
-                                           Size="@ThemeConstants.Button.Size.Small"
-                                           Icon="@SvgIcon.Comment"
-                                           OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/membership-questions"))">
-                                Q&amp;A
-                            </TelerikButton>
-                            <TelerikButton Icon="@SvgIcon.Pencil"
-                                           FillMode="@ThemeConstants.Button.FillMode.Flat"
-                                           Size="@ThemeConstants.Button.Size.Small"
-                                           OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/edit"))">
-                                Edit
-                            </TelerikButton>
-                        }
-                        @if (org.CanDelete)
-                        {
-                            <TelerikButton Icon="@SvgIcon.Trash"
-                                           FillMode="@ThemeConstants.Button.FillMode.Flat"
-                                           Size="@ThemeConstants.Button.Size.Small"
-                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                           OnClick="@(() => RequestDelete(org))">
-                                Delete
-                            </TelerikButton>
-                        }
+                        <TelerikDropDownButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                Size="@ThemeConstants.Button.Size.Small"
+                                                OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}"))">
+                            <DropDownButtonContent>
+                                <TelerikSvgIcon Icon="@SvgIcon.Eye" /> View
+                            </DropDownButtonContent>
+                            <DropDownButtonItems>
+                                <DropDownButtonItem Icon="@SvgIcon.GridLayout"
+                                                     OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/cms"))">
+                                    CMS
+                                </DropDownButtonItem>
+                                <DropDownButtonItem Icon="@SvgIcon.GridLayout"
+                                                     OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/cases"))">
+                                    Cases
+                                </DropDownButtonItem>
+                                <DropDownButtonItem Icon="@SvgIcon.Calendar"
+                                                     OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/calendar"))">
+                                    Calendar
+                                </DropDownButtonItem>
+                                <DropDownButtonItem Icon="@SvgIcon.Envelope"
+                                                     OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/messages"))">
+                                    Messages
+                                </DropDownButtonItem>
+                                @if (org.CanEdit)
+                                {
+                                    <DropDownButtonItem Icon="@SvgIcon.Gear"
+                                                         OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/client-settings"))">
+                                        Clients
+                                    </DropDownButtonItem>
+                                    <DropDownButtonItem Icon="@SvgIcon.Comment"
+                                                         OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/membership-questions"))">
+                                        Q&amp;A
+                                    </DropDownButtonItem>
+                                    <DropDownButtonItem Icon="@SvgIcon.Pencil"
+                                                         OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/edit"))">
+                                        Edit
+                                    </DropDownButtonItem>
+                                }
+                                @if (org.CanDelete)
+                                {
+                                    <DropDownButtonItem Icon="@SvgIcon.Trash"
+                                                         OnClick="@(() => RequestDelete(org))">
+                                        Delete
+                                    </DropDownButtonItem>
+                                }
+                            </DropDownButtonItems>
+                        </TelerikDropDownButton>
                     </Template>
                 </GridColumn>
             </GridColumns>
@@ -137,25 +134,18 @@
 </div>
 
 @* ── Delete Confirmation ── *@
-<TelerikDialog @bind-Visible="@_showDeleteDialog"
+<ConfirmDialog @bind-Visible="@_showDeleteDialog"
                Title="Delete Organization"
-               Width="400px">
-    <DialogContent>
-        @if (_pendingDelete is not null)
-        {
-            <p>Permanently delete <strong>@_pendingDelete.Name</strong>?</p>
-            <p class="text-secondary small mb-0">This cannot be undone. All associated data will be removed.</p>
-        }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="CancelDelete">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                       OnClick="ConfirmDelete"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Deleting…" : "Delete")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+               Busy="@_isBusy"
+               BusyText="Deleting…"
+               OnConfirm="ConfirmDelete"
+               OnCancel="@(() => _pendingDelete = null)">
+    @if (_pendingDelete is not null)
+    {
+        <p>Permanently delete <strong>@_pendingDelete.Name</strong>?</p>
+        <p class="text-secondary small mb-0">This cannot be undone. All associated data will be removed.</p>
+    }
+</ConfirmDialog>
 
 @code {
     private IReadOnlyList<OrganizationListItemResponse>? _orgs;
@@ -165,8 +155,9 @@
     private bool _showDeleteDialog;
     private OrganizationListItemResponse? _pendingDelete;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated)
             NavManager.NavigateTo("/login");
     }
@@ -189,12 +180,6 @@
         _successMessage   = null;
         _pendingDelete    = org;
         _showDeleteDialog = true;
-    }
-
-    private void CancelDelete()
-    {
-        _showDeleteDialog = false;
-        _pendingDelete    = null;
     }
 
     private async Task ConfirmDelete()

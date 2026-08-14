@@ -373,7 +373,12 @@ public class WsPluginConfig
     [JsonPropertyName("regions")]
     public bool Regions { get; set; }
 
-    /// <summary>When true, the user can draw new regions by clicking and dragging on the waveform.</summary>
+    /// <summary>
+    /// When true, the user can click-and-drag on the waveform. What the drag does is a
+    /// runtime toggle (see <see cref="WaveSurferPlayer.SetDragModeAsync"/>): draws a
+    /// selection region by default, or scrubs the playhead — playing audio audibly while
+    /// dragging — when switched to scrub mode.
+    /// </summary>
     [JsonPropertyName("regionsDragToCreate")]
     public bool RegionsDragToCreate { get; set; }
 

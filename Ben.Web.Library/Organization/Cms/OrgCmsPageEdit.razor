@@ -457,8 +457,9 @@
         .Select(t => new SectionTypeOption(t, t.ToString()))
         .ToList();
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated)
             NavManager.NavigateTo("/login");
     }
@@ -490,7 +491,7 @@
         var permsTask  = AdminClient.GetPagePermissionsAsync(OrgId, PageId);
         var groupsTask = AdminClient.GetGroupsAsync(OrgId);
         var membersTask= AdminClient.GetOrganizationMembersAsync(OrgId);
-        var usersTask  = AdminClient.GetAllUsersAsync();
+        var usersTask  = AdminClient.GetOrgUserDirectoryAsync(OrgId);
         await Task.WhenAll(permsTask, groupsTask, membersTask, usersTask);
 
         _permissionRecords = [..permsTask.Result];
@@ -504,7 +505,7 @@
             .Select(m =>
             {
                 var u = users.FirstOrDefault(x => x.Id == m.AppUserId);
-                return new OrgMemberPermOption(m.AppUserId, u?.DisplayName ?? u?.Email ?? m.AppUserId.ToString());
+                return new OrgMemberPermOption(m.AppUserId, u?.DisplayName ?? m.AppUserId.ToString());
             })
             .OrderBy(o => o.DisplayName)
             .ToList();
@@ -515,7 +516,7 @@
             {
                 var u = users.FirstOrDefault(x => x.Id == p.AppUserId.Value);
                 return new PermissionRow(p.Id, p.AppUserId.Value, null, "User",
-                    u?.DisplayName ?? u?.Email ?? p.AppUserId.Value.ToString(), p.Actions);
+                    u?.DisplayName ?? p.AppUserId.Value.ToString(), p.Actions);
             }
             else
             {

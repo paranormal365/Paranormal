@@ -26,4 +26,5 @@ public interface IAppUserRepositoryManager
     IUploadFilePermissionRequestRepository UploadFilePermissionRequestRepository { get; }
     IUploadFileRegionNoteRepository UploadFileRegionNoteRepository { get; }
     IUploadFileVoteRepository UploadFileVoteRepository { get; }
+    IAudioMarkerRepository AudioMarkerRepository { get; }
 }

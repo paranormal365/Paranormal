@@ -219,4 +219,28 @@ public class OrgCalendarControllerTests
         await using var db = await factory.CreateDbContextAsync();
         Assert.False(await db.OrgCalendarEventAttendees.AnyAsync(a => a.Id == attendeeId));
     }
+
+    [Fact]
+    public async Task GetAttendees_EventBelongsToDifferentOrg_ReturnsNotFound()
+    {
+        // The core of the fix: GetAttendees checked org membership but never that eventId
+        // actually belonged to the route orgId (unlike its own Delete/AddAttendee siblings).
+        var (factory, victimOrgId, victimUserId) = await SeedAsync();
+        var victim  = Build(factory, victimUserId);
+        var eventId = ((OrgCalendarEventRecord)((CreatedAtActionResult)(await victim.Create(victimOrgId, MakeEventRequest(), default)).Result!).Value!).Id;
+
+        var attackerOrgId = Guid.NewGuid();
+        var attackerId    = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization { Id = attackerOrgId, Name = "Attacker Org", UrlName = "attacker", DateCreated = DateTime.UtcNow, CreatedByAppUserId = attackerId });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = attackerOrgId, AppUserId = attackerId, Role = OrganizationMemberRole.Owner, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = attackerId });
+            await db.SaveChangesAsync();
+        }
+        var attacker = Build(factory, attackerId);
+
+        var result = await attacker.GetAttendees(attackerOrgId, eventId, default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
 }

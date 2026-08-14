@@ -45,6 +45,34 @@ namespace Ben.Data.Source.Entities
         /// <summary>True when this file is an edited copy produced by the image editor; ParentFileId points to the original.</summary>
         public bool IsEditedVersion { get; set; }
 
+        // ── Comment settings (item #6 phase 2) ──────────────────────────────
+        // Owner-controlled, independently toggleable per audience. Posting requires BOTH the
+        // corresponding toggle here AND an active Phase-1 share/link granting that audience
+        // visibility of the file at all — see FileAudienceAccess.
+        public bool AllowInvestigationTeamComments { get; set; }
+        public bool AllowClientComments { get; set; }
+        public bool AllowOrganizationComments { get; set; }
+        public bool AllowPublicComments { get; set; }
+
+        /// <summary>
+        /// When this file is an independent byte-copy made for a case's Files tab (copy-on-attach,
+        /// item #6 phase 2), the source file it was copied from. Deliberately separate from
+        /// <see cref="ParentFileId"/> (clip/edit-version lineage) — <c>UploadFileController.GetChildClips</c>
+        /// queries ParentFileId with no type filter, so conflating the two would surface case copies
+        /// as selectable "clips" of the source file in that endpoint.
+        /// </summary>
+        public Guid? CaseCopyOfUploadFileId { get; set; }
+
+        /// <summary>
+        /// When this row is an archived prior version kept by a replace (item #6 phase 3), the live
+        /// file it was replaced on. Non-null IS the archived flag — deliberately no companion bool
+        /// (an IsArchived that can disagree with the FK is a bug surface), and deliberately NOT
+        /// <see cref="ParentFileId"/>: <c>UploadFileController.GetChildClips</c> queries ParentFileId
+        /// with no type filter, so archives would surface as selectable "clips" of the file — the
+        /// same trap <see cref="CaseCopyOfUploadFileId"/> already documents.
+        /// </summary>
+        public Guid? ArchivedFromUploadFileId { get; set; }
+
         public virtual UploadFileType UploadFileType { get; set; } = null!;
         public virtual AppUser AppUser { get; set; } = null!;
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
@@ -56,5 +84,13 @@ namespace Ben.Data.Source.Entities
         public virtual UploadFileAudioConfig? AudioConfig { get; set; }
         public virtual ICollection<UploadFileRegionNote> RegionNotes { get; set; } = new List<UploadFileRegionNote>();
         public virtual ICollection<UploadFileVote> Votes { get; set; } = new List<UploadFileVote>();
+        public virtual ICollection<AudioMarker> AudioMarkers { get; set; } = new List<AudioMarker>();
+        public virtual ICollection<CaseFile> CaseFiles { get; set; } = new List<CaseFile>();
+        public virtual ICollection<UploadFileShare> Shares { get; set; } = new List<UploadFileShare>();
+        public virtual ICollection<UploadFileComment> Comments { get; set; } = new List<UploadFileComment>();
+        public virtual UploadFile? CaseCopySourceFile { get; set; }
+        public virtual ICollection<UploadFile> CaseCopies { get; set; } = new List<UploadFile>();
+        public virtual UploadFile? ArchivedFromUploadFile { get; set; }
+        public virtual ICollection<UploadFile> ArchivedVersions { get; set; } = new List<UploadFile>();
     }
 }

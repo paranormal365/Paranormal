@@ -308,26 +308,50 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
 
   instances.set(containerId, { ws, regionsPlugin, envelopePlugin, resizeObserver })
 
-  // ── Custom drag-to-create (only when requested) ────────────────────────
-  // We implement drag-to-create manually instead of relying on RegionsPlugin's
-  // built-in option so that:
+  // ── Custom drag-to-create / drag-to-scrub (only when requested) ─────────
+  // We implement both manually instead of relying on RegionsPlugin's/WaveSurfer's
+  // built-in options so that:
   //   1. A plain click still seeks (WaveSurfer handles it via 'click' event)
-  //   2. A click-and-drag creates a region with a live blue preview overlay
-  //   3. WaveSurfer's click-to-seek is blocked when the user actually dragged
+  //   2. In "region" mode, a click-and-drag creates a region with a live blue
+  //      preview overlay, and WaveSurfer's click-to-seek is blocked afterward
+  //   3. In "scrub" mode, a click-and-drag moves the playhead live and plays the
+  //      audio audibly while dragging (see onPointerDown below)
+  //
+  // Mode is a single runtime switch (instance._dragMode, toggled via the exported
+  // setDragMode()) — the two gestures share the same click-and-drag input, so only
+  // one can be active at a time; there is no separate playhead-only hit-test.
 
   if (plugins.regionsDragToCreate && regionsPlugin) {
-    const DRAG_THRESHOLD = 5   // px moved before we treat this as a drag
+    const DRAG_THRESHOLD = 5   // px moved before a region-drag counts as a drag
+    const instance = instances.get(containerId)
+    instance._dragMode = 'region'   // 'region' | 'scrub'
 
+    // Region-drag state
     let dragStartX    = null
     let dragStartTime = null
     let isDragging    = false
     let wasDragging   = false   // stays true until 'click' fires
     let previewDiv    = null
 
+    // Scrub state — see setDragMode()'s doc comment for the audible-while-paused rationale
+    let scrubbing             = false
+    let wasPlayingBeforeScrub = false
+    let scrubJustEnded        = false   // stays true until the trailing 'click' fires
+
     const onPointerDown = (ev) => {
       if (ev.button !== 0) return
       const duration = ws.getDuration()
       if (!duration) return
+
+      if (instance._dragMode === 'scrub') {
+        scrubbing = true
+        wasPlayingBeforeScrub = ws.isPlaying()
+        try { container.setPointerCapture(ev.pointerId) } catch {}
+        if (!wasPlayingBeforeScrub) ws.play().catch(() => {})
+        ws.setTime(_wsTimeAtClientX(ws, container, ev.clientX))
+        return
+      }
+
       try { container.setPointerCapture(ev.pointerId) } catch {}
       dragStartX    = ev.clientX
       dragStartTime = _wsTimeAtClientX(ws, container, ev.clientX)
@@ -336,6 +360,10 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
     }
 
     const onPointerMove = (ev) => {
+      if (scrubbing) {
+        ws.setTime(_wsTimeAtClientX(ws, container, ev.clientX))
+        return
+      }
       if (dragStartX === null) return
       if (Math.abs(ev.clientX - dragStartX) > DRAG_THRESHOLD) isDragging = true
       if (!isDragging) return
@@ -358,6 +386,14 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
     }
 
     const onPointerUp = (ev) => {
+      if (scrubbing) {
+        scrubbing = false
+        scrubJustEnded = true
+        try { container.releasePointerCapture(ev.pointerId) } catch {}
+        if (!wasPlayingBeforeScrub) ws.pause()
+        return
+      }
+
       if (previewDiv) { previewDiv.remove(); previewDiv = null }
       try { container.releasePointerCapture(ev.pointerId) } catch {}
 
@@ -382,16 +418,22 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
     }
 
     const onPointerCancel = () => {
+      if (scrubbing) {
+        scrubbing = false
+        if (!wasPlayingBeforeScrub) ws.pause()
+      }
       if (previewDiv) { previewDiv.remove(); previewDiv = null }
       dragStartX = null; dragStartTime = null
       isDragging = false; wasDragging = false
     }
 
-    // Stop WaveSurfer's seek when the user dragged instead of clicking
+    // Stop WaveSurfer's native click-to-seek after a real region-drag or a scrub —
+    // in both cases the position is already exactly where the user released.
     const onClickCapture = (ev) => {
-      if (wasDragging) {
+      if (wasDragging || scrubJustEnded) {
         ev.stopImmediatePropagation()
-        wasDragging = false
+        wasDragging    = false
+        scrubJustEnded = false
       }
     }
 
@@ -402,7 +444,7 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
     container.addEventListener('click',         onClickCapture,  { capture: true })
 
     // Store cleanup function so destroy() can remove the listeners
-    instances.get(containerId).dragCleanup = () => {
+    instance.dragCleanup = () => {
       container.removeEventListener('pointerdown',   onPointerDown,   { capture: true })
       container.removeEventListener('pointermove',   onPointerMove,   { capture: true })
       container.removeEventListener('pointerup',     onPointerUp,     { capture: true })
@@ -761,6 +803,22 @@ export async function setSpectrogramResolution(containerId, fftSamples, showLabe
 }
 
 /**
+ * Switches what click-and-drag does on the waveform: 'region' (default) draws a
+ * selection region for clipping/editing; 'scrub' moves the playhead live, playing
+ * audio audibly while dragging (temporarily starting playback if paused, restoring
+ * the prior paused/playing state on release). Only meaningful when the player was
+ * created with plugins.regionsDragToCreate — that flag registers the pointer
+ * handlers this mode switch controls.
+ */
+export function setDragMode(containerId, mode) {
+  const instance = instances.get(containerId)
+  if (!instance) return
+  instance._dragMode = mode === 'scrub' ? 'scrub' : 'region'
+  const container = document.getElementById(containerId)
+  if (container) container.style.cursor = instance._dragMode === 'scrub' ? 'ew-resize' : ''
+}
+
+/**
  * Shows or hides the WaveSurfer Timeline plugin bar.
  * When making it visible, fires zoom() so the Timeline plugin repaints its
  * notches at the current container width.
@@ -986,6 +1044,7 @@ function _redrawSpectrogramViewport(containerId) {
     ctx.imageSmoothingQuality = 'high'
     ctx.drawImage(instance._prerenderCanvas, srcX, 0, srcWidth, 128, 0, 0, canvasW, 128)
     if (showLabels) _drawSpectrogramLabels(canvas, sampleRate, nBins)
+    if (instance._showVoiceBand) _drawVoiceBandOverlay(canvas, sampleRate, melScale)
     _hideSpectrogramLoading(canvasId)
     return
   }
@@ -1001,13 +1060,14 @@ function _redrawSpectrogramViewport(containerId) {
 
   // Cache lookup
   if (!instance._spectrogramCache) instance._spectrogramCache = new Map()
-  const cacheKey = `${startFrame}:${endFrame}:${canvasW}:${showLabels ? 1 : 0}`
+  const cacheKey = `${startFrame}:${endFrame}:${canvasW}:${showLabels ? 1 : 0}:${instance._showVoiceBand ? 1 : 0}`
   const cached   = instance._spectrogramCache.get(cacheKey)
 
   if (cached) {
     canvas.width  = canvasW
     canvas.height = 128
     canvas.getContext('2d').putImageData(cached, 0, 0)
+    if (instance._showVoiceBand) _drawVoiceBandOverlay(canvas, sampleRate, melScale)
     _hideSpectrogramLoading(canvasId)
     return
   }
@@ -1032,9 +1092,12 @@ function _redrawSpectrogramViewport(containerId) {
       const ctx = c.getContext('2d')
       ctx.putImageData(new ImageData(pixels, width, height), 0, 0)
 
-      if (ck.endsWith(':1')) {
-        const { sampleRate: sr = 44100, fftSamples: fs = 512 } = inst.spectrogramMeta ?? {}
+      const { sampleRate: sr = 44100, fftSamples: fs = 512, melScale: ms = false } = inst.spectrogramMeta ?? {}
+      if (ck.split(':')[3] === '1') {
         _drawSpectrogramLabels(c, sr, Math.floor(fs / 2))
+      }
+      if (inst._showVoiceBand) {
+        _drawVoiceBandOverlay(c, sr, ms)
       }
 
       if (!inst._spectrogramCache) inst._spectrogramCache = new Map()
@@ -1184,6 +1247,113 @@ function _drawSpectrogramLabels(canvas, sampleRate, nBins) {
     ctx.fillStyle = 'rgba(255,255,255,0.85)'
     ctx.fillText(freq >= 1000 ? `${freq / 1000}kHz` : `${freq}Hz`, 4, y - 2)
   }
+}
+
+/**
+ * Shades the 300 Hz–3 kHz human-voice range on an already-drawn spectrogram canvas —
+ * anomalies that fall outside this band stand out visually against normal speech.
+ */
+function _drawVoiceBandOverlay(canvas, sampleRate, melScale) {
+  const W = canvas.width
+  const H = canvas.height
+  if (!W || !H) return
+  const nyquist = sampleRate / 2
+  const melMax  = 2595 * Math.log10(1 + nyquist / 700)
+
+  const freqToY = (freq) => {
+    if (melScale) {
+      const mel = 2595 * Math.log10(1 + freq / 700)
+      return H - Math.floor((mel / melMax) * H)
+    }
+    return H - Math.floor((freq / nyquist) * H)
+  }
+
+  const yTop    = Math.max(0, freqToY(3000))
+  const yBottom = Math.min(H, freqToY(300))
+  if (yBottom <= yTop) return
+
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = 'rgba(16,185,129,0.15)'
+  ctx.fillRect(0, yTop, W, yBottom - yTop)
+  ctx.strokeStyle = 'rgba(16,185,129,0.6)'
+  ctx.setLineDash([4, 3])
+  ctx.strokeRect(0, yTop, W, yBottom - yTop)
+  ctx.setLineDash([])
+}
+
+/** Toggles the voice-frequency-band overlay and forces a redraw so it appears/disappears immediately. */
+export function toggleVoiceBandOverlay(containerId, show) {
+  const instance = instances.get(containerId)
+  if (!instance) return
+  instance._showVoiceBand = show
+  _redrawSpectrogramViewport(containerId)
+}
+
+/**
+ * Detects low-amplitude (silent) stretches of the decoded audio and shades them as
+ * light, non-interactive regions on the waveform. Replaces any previously-detected
+ * silence regions. Requires the track to already be decoded (i.e. loaded into the player).
+ */
+export function detectSilence(containerId, thresholdDb, windowSeconds) {
+  const instance = instances.get(containerId)
+  if (!instance?.ws || !instance.regionsPlugin) return
+
+  clearSilenceDetection(containerId)
+
+  const audioBuffer = instance.ws.getDecodedData?.()
+  if (!audioBuffer) return
+
+  const sampleRate    = audioBuffer.sampleRate
+  const channels      = []
+  for (let c = 0; c < audioBuffer.numberOfChannels; c++) channels.push(audioBuffer.getChannelData(c))
+  const windowSize     = Math.max(1, Math.floor((windowSeconds ?? 0.15) * sampleRate))
+  const totalSamples   = audioBuffer.length
+  const thresholdLinear = Math.pow(10, thresholdDb / 20)
+
+  const ids = []
+  let runStart = null
+
+  const closeRun = (runEndSample) => {
+    const startTime = runStart / sampleRate
+    const endTime   = runEndSample / sampleRate
+    runStart = null
+    if (endTime - startTime < 0.1) return  // skip tiny blips
+    const id = `silence-${Math.round(startTime * 1000)}`
+    instance.regionsPlugin.addRegion({
+      id, start: startTime, end: endTime,
+      color: 'rgba(148,163,184,0.22)',
+      drag: false, resize: false,
+    })
+    ids.push(id)
+  }
+
+  for (let start = 0; start < totalSamples; start += windowSize) {
+    const end = Math.min(start + windowSize, totalSamples)
+    let sumSquares = 0
+    let count = 0
+    for (const data of channels) {
+      for (let i = start; i < end; i++) { sumSquares += data[i] * data[i]; count++ }
+    }
+    const rms = count > 0 ? Math.sqrt(sumSquares / count) : 0
+
+    if (rms < thresholdLinear) {
+      if (runStart === null) runStart = start
+    } else if (runStart !== null) {
+      closeRun(start)
+    }
+  }
+  if (runStart !== null) closeRun(totalSamples)
+
+  instance._silenceRegionIds = ids
+}
+
+/** Removes regions previously added by {@link detectSilence}. */
+export function clearSilenceDetection(containerId) {
+  const instance = instances.get(containerId)
+  if (!instance) return
+  for (const id of instance._silenceRegionIds ?? [])
+    instance.regionsPlugin?.getRegions().find((r) => r.id === id)?.remove()
+  instance._silenceRegionIds = []
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────

@@ -118,6 +118,8 @@ builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IOrga
 builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService, Ben.Service.RepositoryService.Services.AuditLogService>();
 builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IFileStorageService, Ben.Data.WebApi.Services.LocalFileStorageService>();
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.FileMetadataExtractorService>();
+builder.Services.Configure<Ben.Data.WebApi.Services.SmtpOptions>(builder.Configuration.GetSection("Smtp"));
+builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IEmailService, Ben.Data.WebApi.Services.SmtpEmailService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>();
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);
 builder.Services.AddTransient<Microsoft.AspNetCore.Authentication.IClaimsTransformation, Ben.Data.WebApi.Services.EntraClaimsTransformation>();
@@ -189,6 +191,22 @@ builder.Services.AddAuthorization(options =>
             .AddAuthenticationSchemes(schemes)
             .RequireAuthenticatedUser()
             .AddRequirements(new Ben.Data.WebApi.Authorization.SuperAdminRequirement()));
+
+    // "EntraOnly" policy used by [Authorize(Policy = AuthPolicyNames.EntraOnly)] on
+    // EntraAuthController's Register/Link actions — those need to read the caller's OID/email
+    // from a *validated Entra JWT's own claims* rather than trusting the request body, so they
+    // must pin the "Entra" scheme specifically rather than accepting the default multi-scheme
+    // policy. Referencing the scheme by name only when it's actually registered (entraEnabled)
+    // avoids the "no authentication handler registered for scheme 'Entra'" crash that pinning an
+    // unregistered scheme name would cause; when Entra isn't configured, deny outright instead —
+    // no Entra JWT could ever be presented in that environment anyway.
+    options.AddPolicy(AuthPolicyNames.EntraOnly, policy =>
+    {
+        if (entraEnabled)
+            policy.AddAuthenticationSchemes(EntraScheme).RequireAuthenticatedUser();
+        else
+            policy.RequireAssertion(_ => false);
+    });
 });
 
 var app = builder.Build();

@@ -233,6 +233,48 @@ public class AdminAuditLogControllerTests
         Assert.Equal(1, paged.TotalCount);
     }
 
+    [Fact]
+    public async Task GetAll_JoinsUserDisplayName_ForKnownUser()
+    {
+        var factory = CreateFactory();
+        var actorId = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.AppUsers.Add(new AppUser { Id = actorId, UserName = "jane", Email = "jane@test.com", DisplayName = "Jane Doe" });
+            var log = MakeLog("Organization", AuditAction.Create);
+            log.UserId = actorId;
+            db.AuditLogs.Add(log);
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = Build(factory);
+        var result = await ctrl.GetAll(ct: CancellationToken.None);
+        var ok     = Assert.IsType<OkObjectResult>(result.Result);
+        var paged  = Assert.IsType<AuditLogPagedResponse>(ok.Value);
+
+        Assert.Equal("Jane Doe", paged.Items[0].UserDisplayName);
+    }
+
+    [Fact]
+    public async Task GetAll_UnknownUser_UserDisplayNameIsNull()
+    {
+        var factory = CreateFactory();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.AuditLogs.Add(MakeLog("Organization", AuditAction.Create)); // UserId has no matching AppUser
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = Build(factory);
+        var result = await ctrl.GetAll(ct: CancellationToken.None);
+        var ok     = Assert.IsType<OkObjectResult>(result.Result);
+        var paged  = Assert.IsType<AuditLogPagedResponse>(ok.Value);
+
+        Assert.Null(paged.Items[0].UserDisplayName);
+    }
+
     // ── GetEntityTypes ────────────────────────────────────────────────────────
 
     [Fact]
@@ -437,5 +479,41 @@ public class AdminAuditLogControllerTests
         await using var verify = await factory.CreateDbContextAsync();
         var tos = await verify.UserMessageTos.ToListAsync();
         Assert.Single(tos); // deduplicated
+    }
+
+    [Fact]
+    public async Task SendMessage_ConcurrentCallsWithMissingType_BothSucceedWithExactlyOneType()
+    {
+        // Regression for the get-or-create race: two concurrent SendMessage calls that both find
+        // no existing "System Notification" type used to both try to insert one, so the loser hit
+        // an unhandled DbUpdateException (raw 500) from the new unique index on Name. The fix
+        // catches that and re-fetches the winner's row instead of erroring.
+        var factory      = CreateFactory();
+        var senderId     = Guid.NewGuid();
+        var recipientId  = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.AppUsers.Add(new AppUser { Id = senderId,    UserName = "s", Email = "s@test.com" });
+            db.AppUsers.Add(new AppUser { Id = recipientId, UserName = "r", Email = "r@test.com" });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl1 = Build(factory, senderId);
+        var ctrl2 = Build(factory, senderId);
+
+        var results = await Task.WhenAll(
+            ctrl1.SendMessage(new SendAuditLogMessageRequest(Guid.NewGuid(), [recipientId], "Subj 1", "Body 1"), CancellationToken.None),
+            ctrl2.SendMessage(new SendAuditLogMessageRequest(Guid.NewGuid(), [recipientId], "Subj 2", "Body 2"), CancellationToken.None));
+
+        Assert.All(results, r => Assert.IsType<OkResult>(r));
+
+        await using var verify = await factory.CreateDbContextAsync();
+        var types = await verify.UserMessageTypes.Where(t => t.Name == "System Notification").ToListAsync();
+        Assert.Single(types);
+
+        var messages = await verify.UserMessages.ToListAsync();
+        Assert.Equal(2, messages.Count);
+        Assert.All(messages, m => Assert.Equal(types[0].Id, m.UserMessageTypeId));
     }
 }

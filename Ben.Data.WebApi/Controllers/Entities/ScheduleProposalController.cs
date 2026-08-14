@@ -23,6 +23,7 @@ public sealed class ScheduleProposalController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var proposals = await db.InvestigationScheduleProposals.AsNoTracking()
             .Include(p => p.Slots)
@@ -40,7 +41,7 @@ public sealed class ScheduleProposalController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
-        if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct)) return NotFound();
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         if (request.Slots is null || request.Slots.Count == 0) return BadRequest("At least one proposed slot is required.");
 
         var proposal = new InvestigationScheduleProposal
@@ -76,6 +77,7 @@ public sealed class ScheduleProposalController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var proposal = await db.InvestigationScheduleProposals
             .FirstOrDefaultAsync(p => p.Id == proposalId && p.CaseId == caseId, ct);
@@ -96,6 +98,7 @@ public sealed class ScheduleProposalController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var proposal = await db.InvestigationScheduleProposals.Include(p => p.Slots)
             .FirstOrDefaultAsync(p => p.Id == proposalId && p.CaseId == caseId, ct);

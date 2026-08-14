@@ -116,8 +116,7 @@ public sealed class CaseNoteController : BenControllerBase
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return false;
         await using var db = await _db.CreateDbContextAsync(ct);
-        return await db.OrganizationUserMemberships.AnyAsync(
-            m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
+        return await FileAudienceAccess.IsOrgMemberAsync(db, orgId, userId, ct);
     }
 
     private async Task<bool> IsOrgAdminAsync(Guid orgId, CancellationToken ct)
@@ -126,9 +125,7 @@ public sealed class CaseNoteController : BenControllerBase
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return false;
         await using var db = await _db.CreateDbContextAsync(ct);
-        return await db.OrganizationUserMemberships.AnyAsync(
-            m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive
-              && (m.Role == OrganizationMemberRole.Owner || m.Role == OrganizationMemberRole.Administrator), ct);
+        return await FileAudienceAccess.IsOrgAdminAsync(db, orgId, userId, ct);
     }
 }
 

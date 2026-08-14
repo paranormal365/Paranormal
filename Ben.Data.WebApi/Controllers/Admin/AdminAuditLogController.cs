@@ -53,7 +53,12 @@ public sealed class AdminAuditLogController : BenControllerBase
             .Take(validPageSize)
             .ToListAsync(ct);
 
-        var records = items.Select(ToRecord).ToList();
+        var userIds = items.Select(i => i.UserId).Distinct().ToList();
+        var displayNames = await db.AppUsers.AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.DisplayName ?? u.Email, ct);
+
+        var records = items.Select(l => ToRecord(l, displayNames.GetValueOrDefault(l.UserId))).ToList();
         return Ok(new AuditLogPagedResponse(records, total));
     }
 
@@ -103,7 +108,17 @@ public sealed class AdminAuditLogController : BenControllerBase
                 CreatedByAppUserId = senderId
             };
             db.UserMessageTypes.Add(msgType);
-            await db.SaveChangesAsync(ct);
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                // Lost the race — another request just created the same type. Use theirs.
+                db.Entry(msgType).State = EntityState.Detached;
+                msgType = await db.UserMessageTypes
+                    .FirstAsync(t => t.Name == "System Notification" && t.IsActive, ct);
+            }
         }
 
         var message = new UserMessage
@@ -117,11 +132,14 @@ public sealed class AdminAuditLogController : BenControllerBase
         };
         db.UserMessages.Add(message);
 
-        foreach (var recipientId in request.RecipientUserIds.Distinct())
-        {
-            // Verify the recipient exists
-            if (!await db.AppUsers.AnyAsync(u => u.Id == recipientId, ct)) continue;
+        var requestedIds = request.RecipientUserIds.Distinct().ToList();
+        var validRecipientIds = await db.AppUsers.AsNoTracking()
+            .Where(u => requestedIds.Contains(u.Id))
+            .Select(u => u.Id)
+            .ToListAsync(ct);
 
+        foreach (var recipientId in validRecipientIds)
+        {
             db.UserMessageTos.Add(new UserMessageTo
             {
                 Id           = Guid.NewGuid(),
@@ -137,15 +155,16 @@ public sealed class AdminAuditLogController : BenControllerBase
 
     // ── Helper ────────────────────────────────────────────────────────────────
 
-    private static AuditLogRecord ToRecord(AuditLog l) => new()
+    private static AuditLogRecord ToRecord(AuditLog l, string? userDisplayName) => new()
     {
-        Id          = l.Id,
-        UserId      = l.UserId,
-        Action      = l.Action,
-        EntityType  = l.EntityType,
-        EntityId    = l.EntityId,
-        Source      = l.Source,
-        OccurredAt  = l.OccurredAt,
-        ChangesJson = l.ChangesJson
+        Id              = l.Id,
+        UserId          = l.UserId,
+        UserDisplayName = userDisplayName,
+        Action          = l.Action,
+        EntityType      = l.EntityType,
+        EntityId        = l.EntityId,
+        Source          = l.Source,
+        OccurredAt      = l.OccurredAt,
+        ChangesJson     = l.ChangesJson
     };
 }

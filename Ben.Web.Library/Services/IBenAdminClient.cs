@@ -51,6 +51,32 @@ public interface IBenAdminClient
     /// <summary>Deletes a role. Will fail if any users are still assigned to it.</summary>
     Task<bool> DeleteRoleAsync(Guid roleId, CancellationToken token = default);
 
+    // ── Cross-org visibility (SuperAdmin) ────────────────────────────────────
+
+    /// <summary>Returns every case across every organization (SuperAdmin only).</summary>
+    Task<IReadOnlyList<AdminCaseSummaryRecord>> GetAllCasesAsync(CancellationToken token = default);
+
+    /// <summary>Returns every investigation across every organization (SuperAdmin only).</summary>
+    Task<IReadOnlyList<AdminInvestigationSummaryRecord>> GetAllInvestigationsAsync(CancellationToken token = default);
+
+    // ── Universal media library sharing (person / investigation team / org / public) ────────────
+
+    /// <summary>Returns active shares for a file. Owner or SuperAdmin only.</summary>
+    Task<IReadOnlyList<UploadFileShareRecord>> GetSharesV2Async(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Grants one of the 4 share targets on a file the caller owns.</summary>
+    Task<UploadFileShareRecord?> CreateShareAsync(Guid fileId, CreateShareRequest request, CancellationToken token = default);
+
+    /// <summary>Revokes a share. Owner or SuperAdmin only.</summary>
+    Task<bool> RemoveShareV2Async(Guid shareId, CancellationToken token = default);
+
+    /// <summary>
+    /// Returns files across every scope the universal media library aggregates (owned, shared,
+    /// org, public, case-linked). Pass <paramref name="contentTypePrefixes"/> (e.g. "video/","image/")
+    /// to narrow the result; omit for everything.
+    /// </summary>
+    Task<IReadOnlyList<UploadFileRecord>> GetMediaLibraryFilesAsync(string[]? contentTypePrefixes = null, CancellationToken token = default);
+
     // ── Audit Log ─────────────────────────────────────────────────────────────
 
     Task<AuditLogPagedResponse?> GetAuditLogsAsync(int page = 1, int pageSize = 50, string? entityType = null, int? action = null, Guid? userId = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken token = default);
@@ -59,9 +85,19 @@ public interface IBenAdminClient
 
     // ── Users ─────────────────────────────────────────────────────────────────
 
-    /// <summary>Returns a lightweight list of all application users.</summary>
+    /// <summary>Returns a lightweight list of all application users. SuperAdmin only — see
+    /// EntityReadControllerBase's doc comment. Org-admin surfaces that only need to resolve
+    /// member display names should use <see cref="GetOrgUserDirectoryAsync"/> instead.</summary>
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
     Task<IReadOnlyList<AppUserRecord>> GetAllUsersAsync(CancellationToken token = default);
+
+    /// <summary>Returns a minimal Id+DisplayName directory of one organization's active
+    /// members — for org-admin surfaces (e.g. CMS permission/member pickers) that only need to
+    /// resolve names, not the full <see cref="AppUserRecord"/>. Caller must be an active member
+    /// of <paramref name="organizationId"/> themselves.</summary>
+    /// <param name="organizationId">The organization whose member directory to return.</param>
+    /// <param name="token">Propagates cancellation from the Blazor component.</param>
+    Task<IReadOnlyList<OrgUserDirectoryItem>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default);
 
     /// <summary>Returns the full detail aggregate for a single user, including addresses, emails, phones, links, notes, memberships, and files.</summary>
     /// <param name="userId">The <see cref="Guid"/> primary key of the user.</param>
@@ -487,6 +523,23 @@ public interface IBenAdminClient
     Task<CaseResearchEntryDto?> UpdateCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, UpsertResearchRequest request, CancellationToken token = default);
     Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
 
+    // ── Case Files (Files/Evidence tab) ──────────────────────────────────────
+
+    /// <summary>Returns all files linked to a case's Files/Evidence tab, newest first.</summary>
+    Task<IReadOnlyList<CaseFileRecord>> GetCaseFilesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+
+    /// <summary>Uploads a file of any content type and links it to the case's Files/Evidence tab.</summary>
+    Task<CaseFileRecord?> UploadCaseFileAsync(Guid orgId, Guid caseId, string? description, Stream content, string fileName, string contentType, CancellationToken token = default);
+
+    /// <summary>Un-links a file from the case. The underlying UploadFile is preserved.</summary>
+    Task<bool> DeleteCaseFileAsync(Guid orgId, Guid caseId, Guid caseFileId, CancellationToken token = default);
+
+    /// <summary>Links an existing UploadFile (e.g. picked from the media library) to the case's Files tab — no bytes are copied.</summary>
+    Task<CaseFileRecord?> LinkCaseFileAsync(Guid orgId, Guid caseId, Guid uploadFileId, string? description = null, CancellationToken token = default);
+
+    /// <summary>Renders the placed clips down to a single mixed audio file and saves it to the case's Files tab.</summary>
+    Task<CaseFileRecord?> ExportAudioMixAsync(Guid orgId, Guid caseId, ExportAudioMixRequest request, CancellationToken token = default);
+
     // ── Case Notes ────────────────────────────────────────────────────────────
 
     Task<IReadOnlyList<CaseNoteDto>> GetCaseNotesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
@@ -517,6 +570,7 @@ public interface IBenAdminClient
     Task<ClientRequestRecord?> UpdateClientRequestAsync(Guid id, UpsertClientRequestRequest request, CancellationToken token = default);
     Task<ClientRequestRecord?> SubmitClientRequestAsync(Guid id, IList<Guid> organizationIds, CancellationToken token = default);
     Task<ClientRequestRecord?> WithdrawClientRequestAsync(Guid id, CancellationToken token = default);
+    Task<ClientRequestRecord?> AddOrganizationToRequestAsync(Guid id, Guid organizationId, CancellationToken token = default);
 
     // ── My Cases (client dashboard) ───────────────────────────────────────────
 
@@ -540,6 +594,31 @@ public interface IBenAdminClient
     Task<IReadOnlyList<CoClientItem>> GetCoClientsAsync(Guid caseId, CancellationToken token = default);
     Task<CoClientItem?> AddCoClientAsync(Guid caseId, string email, CancellationToken token = default);
     Task<bool> RemoveCoClientAsync(Guid caseId, Guid accessId, CancellationToken token = default);
+
+    // ── Sub-client invites (item #4) — for people with no account yet ───────────
+
+    /// <summary>Returns this case's pending (not accepted/revoked/expired) invites.</summary>
+    Task<IReadOnlyList<CaseClientInviteRecord>> GetCaseInvitesAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>
+    /// Single entry point for adding a secondary user: an existing account is linked immediately
+    /// (see <see cref="InviteCoClientResult.LinkedExistingAccount"/>); no account yet mints an
+    /// invite instead.
+    /// </summary>
+    Task<InviteCoClientResult?> InviteCoClientAsync(Guid caseId, string email, CancellationToken token = default);
+
+    Task<bool> RevokeCaseInviteAsync(Guid caseId, Guid inviteId, CancellationToken token = default);
+
+    // ── Related people (basic-info, no account) ─────────────────────────────────
+
+    /// <summary>Returns people referenced on this case who are not platform users.</summary>
+    Task<IReadOnlyList<CaseRelatedPersonRecord>> GetRelatedPeopleAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Adds a basic-info reference to someone connected to the case (no account created).</summary>
+    Task<CaseRelatedPersonRecord?> AddRelatedPersonAsync(Guid caseId, AddRelatedPersonRequest request, CancellationToken token = default);
+
+    /// <summary>Removes a related-person reference.</summary>
+    Task<bool> RemoveRelatedPersonAsync(Guid caseId, Guid personId, CancellationToken token = default);
 
     /// <summary>Attaches a file to an occurrence entry using case-scoped storage.</summary>
     Task<OccurrenceFileItem?> AttachOccurrenceFileAsync(Guid caseId, Guid entryId, Stream content, string fileName, string contentType, CancellationToken token = default);
@@ -648,6 +727,40 @@ public interface IBenAdminClient
     /// <summary>Permanently deletes a region note.</summary>
     Task<bool> DeleteRegionNoteAsync(Guid fileId, Guid noteId, CancellationToken token = default);
 
+    // ── File Comments (item #6 phase 2) ────────────────────────────
+
+    /// <summary>Returns the full comment thread for a file — visible to anyone who can see the file.</summary>
+    Task<IReadOnlyList<UploadFileCommentRecord>> GetFileCommentsAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Posts a new comment. Fails (null) unless the caller is the file's owner or matches an enabled audience.</summary>
+    Task<UploadFileCommentRecord?> CreateFileCommentAsync(Guid fileId, CreateFileCommentRequest request, CancellationToken token = default);
+
+    /// <summary>Edits the text of the caller's own comment.</summary>
+    Task<UploadFileCommentRecord?> UpdateFileCommentAsync(Guid fileId, Guid commentId, UpdateFileCommentRequest request, CancellationToken token = default);
+
+    /// <summary>Deletes a comment — allowed for its author or the file's owner.</summary>
+    Task<bool> DeleteFileCommentAsync(Guid fileId, Guid commentId, CancellationToken token = default);
+
+    /// <summary>Returns the file's current per-audience commenting toggles.</summary>
+    Task<FileCommentSettingsRecord?> GetFileCommentSettingsAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Updates the file's per-audience commenting toggles. Owner-only.</summary>
+    Task<FileCommentSettingsRecord?> UpdateFileCommentSettingsAsync(Guid fileId, FileCommentSettingsRecord request, CancellationToken token = default);
+
+    // ── Audio Markers (EVP) ───────────────────────────────────────
+
+    /// <summary>Returns all EVP markers for the given file, ordered by time.</summary>
+    Task<IReadOnlyList<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Creates a new EVP marker and returns the persisted record.</summary>
+    Task<AudioMarkerRecord?> CreateAudioMarkerAsync(Guid fileId, CreateAudioMarkerRequest request, CancellationToken token = default);
+
+    /// <summary>Updates an existing EVP marker (time, label, confidence, note).</summary>
+    Task<AudioMarkerRecord?> UpdateAudioMarkerAsync(Guid fileId, Guid markerId, UpdateAudioMarkerRequest request, CancellationToken token = default);
+
+    /// <summary>Permanently deletes an EVP marker.</summary>
+    Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default);
+
     // ── Audio Clip ─────────────────────────────────────────────────
 
     /// <summary>
@@ -665,6 +778,14 @@ public interface IBenAdminClient
 
     /// <summary>Returns all child clip files that were derived from <paramref name="fileId"/> via the region-clip workflow.</summary>
     Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default);
+
+    // ── Audio Edit (destructive) ──────────────────────────────────
+
+    /// <summary>
+    /// Applies a destructive audio edit (cut, silence, normalize, gain, fade, reverse) to
+    /// <paramref name="fileId"/> and saves the result as a new UploadFile. The source is never modified.
+    /// </summary>
+    Task<UploadFileRecord?> EditAudioAsync(Guid fileId, AudioEditRequest request, CancellationToken token = default);
 
     // ── Votes ──────────────────────────────────────────────────────
 
@@ -753,7 +874,11 @@ public sealed record OrganizationListItemResponse(
     DateTime DateCreated,
     bool IsAcceptingApplications,
     bool CanEdit,
-    bool CanDelete);
+    bool CanDelete,
+    // 0 unless the caller is SuperAdmin — see OrganizationController.GetAllWithPermissions.
+    int MemberCount = 0,
+    int CaseCount = 0,
+    int InvestigationCount = 0);
 
 /// <summary>Request body for creating a new organization (SuperAdmin only).</summary>
 public sealed record AdminCreateOrganizationRequest(string Name, string UrlName,
@@ -958,6 +1083,9 @@ public sealed record PagePermissionCreateRequest(Guid? AppUserId, Guid? OrgMembe
 
 /// <summary>Org membership row from GET /api/organizations/{orgId}/security/users.</summary>
 public sealed record OrgMembershipItem(Guid MembershipId, Guid AppUserId, OrganizationMemberRole Role, bool IsActive, string? DisplayName = null);
+
+/// <summary>Minimal member-directory entry — see <c>IBenAdminClient.GetOrgUserDirectoryAsync</c>.</summary>
+public sealed record OrgUserDirectoryItem(Guid Id, string DisplayName);
 
 /// <summary>Computed display label: DisplayName → email → id.</summary>
 public static class OrgMembershipItemExtensions
@@ -1249,7 +1377,8 @@ public sealed record ClientCaseDetail(
     DateTime? DateCaseClosed,
     IReadOnlyList<ClientCaseOccurrence>    Occurrences,
     IReadOnlyList<ClientCaseInvestigation> Investigations,
-    int       UnreadMessageCount = 0);
+    int       UnreadMessageCount = 0,
+    bool      IsPrimaryClient = false);
 
 public sealed record ClientCaseOccurrence(
     Guid      Id,
@@ -1406,6 +1535,10 @@ public sealed record SlotDto(Guid Id, DateTime StartDateTime, DateTime? EndDateT
 
 // ── Co-client access records ──────────────────────────────────────────────────
 public sealed record CoClientItem(Guid AccessId, Guid AppUserId, string DisplayName);
+
+// ── Sub-client invite records (item #4) ─────────────────────────────────────────
+public sealed record CaseClientInviteRecord(Guid Id, Guid CaseId, string Email, string Token, DateTime DateExpires, DateTime DateCreated);
+public sealed record InviteCoClientResult(bool LinkedExistingAccount, CoClientItem? CoClient, CaseClientInviteRecord? Invite, bool EmailSent);
 
 // ── Case note records ─────────────────────────────────────────────────────────
 public sealed record CaseNoteDto(

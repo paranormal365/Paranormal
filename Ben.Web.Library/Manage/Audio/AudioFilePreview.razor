@@ -134,7 +134,24 @@ else
                                            OnClick="ToggleMelScaleAsync">
                                 🎵 Mel Scale
                             </TelerikButton>
+                            @* Voice frequency band overlay *@
+                            <TelerikButton ThemeColor="@(_showVoiceBand ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                                           FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                           Size="@ThemeConstants.Button.Size.Small"
+                                           Enabled="@_modalReady"
+                                           OnClick="ToggleVoiceBandAsync">
+                                🗣 Voice Band
+                            </TelerikButton>
                         }
+                        @* Drag mode toggle: create region (default) vs. scrub the playhead *@
+                        <TelerikButton Icon="@SvgIcon.Crop"
+                                       ThemeColor="@(_regionDrawMode ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Enabled="@_modalReady"
+                                       Title="@(_regionDrawMode ? "Create Region" : "Scrub Playhead")"
+                                       OnClick="ToggleDragModeAsync">
+                        </TelerikButton>
                         @* EQ toggle *@
                         <TelerikButton ThemeColor="@(_showEq ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
                                        FillMode="@ThemeConstants.Button.FillMode.Outline"
@@ -143,8 +160,40 @@ else
                                        OnClick="@(() => _showEq = !_showEq)">
                             🎚 @(_showEq ? "Hide EQ" : "EQ / Filters")
                         </TelerikButton>
+                        @* EVP Markers toggle *@
+                        <TelerikButton ThemeColor="@(_showMarkers ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Enabled="@_modalReady"
+                                       OnClick="@(() => _showMarkers = !_showMarkers)">
+                            🎯 @(_showMarkers ? "Hide Markers" : $"EVP Markers ({_markers.Count})")
+                        </TelerikButton>
+                        @* Destructive edit toggle *@
+                        <TelerikButton ThemeColor="@(_showEdit ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Enabled="@_modalReady"
+                                       OnClick="@(() => _showEdit = !_showEdit)">
+                            ✂ @(_showEdit ? "Hide Edit" : "Edit")
+                        </TelerikButton>
+                        @* Silence detection toggle *@
+                        <TelerikButton ThemeColor="@(_silenceDetectionEnabled ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Enabled="@_modalReady"
+                                       OnClick="ToggleSilenceDetectionAsync">
+                            🤫 Silence
+                        </TelerikButton>
+                        @if (_silenceDetectionEnabled)
+                        {
+                            <TelerikNumericTextBox @bind-Value="_silenceThresholdDb" Min="-80" Max="-10" Width="90px"
+                                                    OnChange="@(() => _ = ApplySilenceDetectionAsync())" />
+                            <span class="small text-secondary">dB</span>
+                        }
                         <span class="small text-secondary fst-italic">
-                            Click &amp; drag to mark a region &mdash; right-click to play, save, or edit
+                            @(_regionDrawMode
+                                ? "Click & drag to mark a region — right-click to play, save, or edit"
+                                : "Click & drag the waveform to scrub — audio plays while dragging")
                         </span>
                     </span>
                 </div>
@@ -226,6 +275,109 @@ else
                     </div>
                 }
 
+                @* EVP Markers panel *@
+                @if (_showMarkers && _modalReady)
+                {
+                    <div class="p-2 mb-2 rounded border bg-body-secondary" style="font-size:0.8rem;">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <strong class="small">EVP Markers</strong>
+                            <TelerikButton Size="sm" ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                           OnClick="AddMarkerAtCurrentTimeAsync">
+                                ➕ Add Marker at @FormatTime(_modalTime)
+                            </TelerikButton>
+                        </div>
+                        @if (!_markers.Any())
+                        {
+                            <div class="text-secondary small fst-italic">No markers yet — play the file and drop a marker where you hear something.</div>
+                        }
+                        else
+                        {
+                            @foreach (var marker in _markers.OrderBy(m => m.TimeSeconds))
+                            {
+                                var m = marker;
+                                <div class="d-flex align-items-center gap-2 mb-1 p-1 rounded" style="background:var(--kendo-color-surface,#f5f5f5);">
+                                    <span class="badge" style="background:@MarkerColor(m.ConfidenceLevel);">@FormatTime(m.TimeSeconds)</span>
+                                    <span class="fw-semibold">@m.Label</span>
+                                    <span class="text-secondary small">@m.ConfidenceLevel</span>
+                                    @if (!string.IsNullOrWhiteSpace(m.Note))
+                                    {
+                                        <span class="text-secondary small text-truncate" style="max-width:200px;" title="@m.Note">@m.Note</span>
+                                    }
+                                    <span class="ms-auto d-flex gap-1">
+                                        <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Play"
+                                                       OnClick="@(() => SeekToMarkerAsync(m))" />
+                                        <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Pencil"
+                                                       OnClick="@(() => OpenEditMarkerDialog(m))" />
+                                        <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Trash"
+                                                       OnClick="@(() => DeleteMarkerAsync(m))" />
+                                    </span>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+
+                @* Destructive edit panel *@
+                @if (_showEdit && _modalReady)
+                {
+                    <div class="p-2 mb-2 rounded border bg-body-secondary" style="font-size:0.8rem;">
+                        <div class="d-flex gap-3 flex-wrap">
+                            <div class="d-flex flex-column gap-1" style="min-width:180px;">
+                                <strong class="small">Region</strong>
+                                <span class="text-muted small">
+                                    @(_lastDrawnRegion is null ? "Draw a region on the waveform first" : $"{FormatTime(_lastDrawnRegion.Start)}–{FormatTime(_lastDrawnRegion.End)}")
+                                </span>
+                                <div class="d-flex gap-1">
+                                    <TelerikButton Size="sm" Enabled="@CanApplyEdit(requiresRegion: true)"
+                                                   OnClick="@(() => ApplyAudioEditAsync(AudioEditOperation.Cut))">✂ Cut</TelerikButton>
+                                    <TelerikButton Size="sm" Enabled="@CanApplyEdit(requiresRegion: true)"
+                                                   OnClick="@(() => ApplyAudioEditAsync(AudioEditOperation.Silence))">🔇 Silence</TelerikButton>
+                                </div>
+                            </div>
+                            <div class="d-flex flex-column gap-1" style="min-width:160px;">
+                                <strong class="small">Whole File</strong>
+                                <div class="d-flex gap-1">
+                                    <TelerikButton Size="sm" Enabled="@CanApplyEdit()"
+                                                   OnClick="@(() => ApplyAudioEditAsync(AudioEditOperation.Normalize))">📶 Normalize</TelerikButton>
+                                    <TelerikButton Size="sm" Enabled="@CanApplyEdit()"
+                                                   OnClick="@(() => ApplyAudioEditAsync(AudioEditOperation.Reverse))">⏪ Reverse</TelerikButton>
+                                </div>
+                            </div>
+                            <div class="d-flex flex-column gap-1" style="min-width:180px;">
+                                <strong class="small">Gain @(_editGainDb > 0 ? "+" : "")@_editGainDb dB</strong>
+                                <TelerikSlider @bind-Value="_editGainDb" Min="-24" Max="24" SmallStep="1" LargeStep="6" />
+                                <TelerikButton Size="sm" Enabled="@CanApplyEdit()"
+                                               OnClick="@(() => ApplyAudioEditAsync(AudioEditOperation.Gain))">Apply Gain</TelerikButton>
+                            </div>
+                            <div class="d-flex flex-column gap-1" style="min-width:200px;">
+                                <strong class="small">Fade In / Out (seconds)</strong>
+                                <div class="d-flex gap-1">
+                                    <TelerikNumericTextBox @bind-Value="_editFadeIn" Min="0" Width="80px" />
+                                    <TelerikNumericTextBox @bind-Value="_editFadeOut" Min="0" Width="80px" />
+                                </div>
+                                <TelerikButton Size="sm" Enabled="@CanApplyEdit()"
+                                               OnClick="@(() => ApplyAudioEditAsync(AudioEditOperation.Fade))">Apply Fade</TelerikButton>
+                            </div>
+                            <div class="d-flex flex-column gap-1" style="min-width:180px;">
+                                <strong class="small">Speed @_editSpeedRatio.ToString("0.0#")×</strong>
+                                <TelerikSlider @bind-Value="_editSpeedRatio" Min="0.25" Max="4" SmallStep="0.05" LargeStep="0.5" />
+                                <TelerikButton Size="sm" Enabled="@CanApplyEdit()"
+                                               OnClick="@(() => ApplyAudioEditAsync(AudioEditOperation.Speed))">Apply Speed</TelerikButton>
+                            </div>
+                            <div class="d-flex flex-column gap-1" style="min-width:180px;">
+                                <strong class="small">Pitch @(_editPitchSemitones > 0 ? "+" : "")@_editPitchSemitones st</strong>
+                                <TelerikSlider @bind-Value="_editPitchSemitones" Min="-12" Max="12" SmallStep="1" LargeStep="4" />
+                                <TelerikButton Size="sm" Enabled="@CanApplyEdit()"
+                                               OnClick="@(() => ApplyAudioEditAsync(AudioEditOperation.Pitch))">Apply Pitch</TelerikButton>
+                            </div>
+                        </div>
+                        @if (_editError is not null)
+                        {
+                            <div class="alert alert-danger mt-2 mb-0 py-1 small">@_editError</div>
+                        }
+                    </div>
+                }
+
                 @* Full WaveSurfer player *@
                 <div class="flex-shrink-0">
                     <WaveSurferPlayer @ref="_modalPlayer"
@@ -290,6 +442,18 @@ else
                     OnClick="@(async (RegionContextMenuItem item) => await OnRegionMenuClickAsync(item))">
 </TelerikContextMenu>
 
+@* ── Region Explorer — playback + save-as-clip + notes for a drawn region ── *@
+@if (_explorerRegion is not null)
+{
+    <WsRegionExplorer FileId="@FileId"
+                      FileName="@FileName"
+                      ContentType="@ContentType"
+                      FileSize="@FileSize"
+                      Region="@_explorerRegion"
+                      @bind-Visible="@_showRegionExplorer"
+                      OnClipSaved="@(async _ => await OverlayChildClipRegionsAsync())" />
+}
+
 @* ── Region label edit dialog ────────────────────────────────── *@
 <TelerikDialog @bind-Visible="@_showEditLabelDialog" Title="Edit Region Label" Width="360px">
     <DialogContent>
@@ -301,6 +465,37 @@ else
                        OnClick="@(() => _showEditLabelDialog = false)">Cancel</TelerikButton>
         <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                        OnClick="SaveRegionLabelAsync">Save</TelerikButton>
+    </DialogButtons>
+</TelerikDialog>
+
+@* ── EVP marker add/edit dialog ─────────────────────────────────────── *@
+<TelerikDialog @bind-Visible="@_showMarkerDialog" Title="@(_editingMarker is null ? "Add EVP Marker" : "Edit EVP Marker")" Width="400px">
+    <DialogContent>
+        <div class="mb-2">
+            <label class="form-label fw-semibold">Time</label>
+            <div>@FormatTime(_markerTimeSeconds)</div>
+        </div>
+        <div class="mb-2">
+            <label class="form-label fw-semibold">Label</label>
+            <TelerikTextBox @bind-Value="@_markerLabel" Width="100%" PlaceHolder="e.g. Whispered name?" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label fw-semibold">Confidence</label>
+            <TelerikDropDownList Data="@_confidenceOptions"
+                                 @bind-Value="_markerConfidence"
+                                 Width="100%" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label fw-semibold">Note</label>
+            <TelerikTextArea @bind-Value="@_markerNote" Rows="3" Width="100%" />
+        </div>
+    </DialogContent>
+    <DialogButtons>
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       OnClick="@(() => _showMarkerDialog = false)">Cancel</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Enabled="@(!string.IsNullOrWhiteSpace(_markerLabel))"
+                       OnClick="SaveMarkerAsync">Save</TelerikButton>
     </DialogButtons>
 </TelerikDialog>
 
@@ -382,6 +577,9 @@ else
     private bool   _modalReady;
     private IReadOnlyList<UploadFileRecord> _childClips = [];
 
+    /// <summary>true = drag creates a region (default); false = drag scrubs the playhead.</summary>
+    private bool   _regionDrawMode = true;
+
     // ── Timeline + Spectrogram state ───────────────────────────────────
 
     private bool   _timelineEnabled  = true;
@@ -437,10 +635,16 @@ else
     private static readonly List<RegionContextMenuItem> _regionMenuItems =
     [
         new("play",    "▶  Play Region"),
+        new("explore", "⤢  Explore Region (clip or add a note)"),
         new("save",    "🎵  Create Audio File from Region"),
         new("label",   "✏  Edit Label"),
         new("delete",  "🗑  Delete Region"),
     ];
+
+    // ── Region Explorer (clip + notes) ──────────────────────────────────────────
+
+    private bool         _showRegionExplorer;
+    private WsRegionData? _explorerRegion;
 
     private readonly string _wrapperId = $"afp-{Guid.NewGuid():N}";
 
@@ -512,6 +716,11 @@ else
         _modalReady    = true;
         StateHasChanged();
 
+        // Re-apply the chosen drag mode — each modal open creates a fresh JS/WaveSurfer
+        // instance that defaults back to region mode regardless of the prior selection.
+        if (_modalPlayer is not null)
+            await _modalPlayer.SetDragModeAsync(_regionDrawMode);
+
         try
         {
             _fileTypes = await AdminClient.GetPublicFileTypesAsync();
@@ -521,6 +730,7 @@ else
         catch { /* non-critical */ }
 
         await OverlayChildClipRegionsAsync();
+        await OverlayMarkersAsync();
 
         // Init Web Audio processing chain after player is ready
         if (_modalPlayer is not null)
@@ -554,6 +764,114 @@ else
         catch { /* silently ignore */ }
     }
 
+    // ── EVP markers ──────────────────────────────────────────────────────────
+
+    private async Task OverlayMarkersAsync()
+    {
+        if (_modalPlayer is null) return;
+        try
+        {
+            _markers = await AdminClient.GetAudioMarkersAsync(FileId);
+            foreach (var marker in _markers)
+                await AddMarkerRegionAsync(marker);
+            StateHasChanged();
+        }
+        catch { /* silently ignore */ }
+    }
+
+    private async Task AddMarkerRegionAsync(AudioMarkerRecord marker)
+    {
+        if (_modalPlayer is null) return;
+        var id = $"marker-{marker.Id}";
+        _programmaticRegionIds.Add(id);
+        await _modalPlayer.AddRegionAsync(new WsRegionParams
+        {
+            Id      = id,
+            Start   = marker.TimeSeconds,
+            End     = marker.TimeSeconds,
+            Color   = MarkerColor(marker.ConfidenceLevel),
+            Drag    = false,
+            Resize  = false,
+            Content = marker.Label,
+        });
+    }
+
+    private static string MarkerColor(EvpConfidenceLevel level) => level switch
+    {
+        EvpConfidenceLevel.Confirmed => "rgba(16,185,129,0.85)",
+        EvpConfidenceLevel.Probable  => "rgba(234,179,8,0.85)",
+        _                            => "rgba(148,163,184,0.85)",
+    };
+
+    private async Task AddMarkerAtCurrentTimeAsync()
+    {
+        _editingMarker      = null;
+        _markerTimeSeconds  = _modalTime;
+        _markerLabel        = string.Empty;
+        _markerConfidence   = EvpConfidenceLevel.Possible;
+        _markerNote         = string.Empty;
+        _showMarkerDialog   = true;
+        await Task.CompletedTask;
+    }
+
+    private void OpenEditMarkerDialog(AudioMarkerRecord marker)
+    {
+        _editingMarker     = marker;
+        _markerTimeSeconds = marker.TimeSeconds;
+        _markerLabel       = marker.Label;
+        _markerConfidence  = marker.ConfidenceLevel;
+        _markerNote        = marker.Note ?? string.Empty;
+        _showMarkerDialog  = true;
+    }
+
+    private async Task SaveMarkerAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_markerLabel)) return;
+
+        if (_editingMarker is null)
+        {
+            var created = await AdminClient.CreateAudioMarkerAsync(FileId, new CreateAudioMarkerRequest(
+                _markerTimeSeconds, _markerLabel.Trim(), _markerConfidence,
+                string.IsNullOrWhiteSpace(_markerNote) ? null : _markerNote.Trim()));
+            if (created is not null)
+            {
+                _markers = [.. _markers, created];
+                await AddMarkerRegionAsync(created);
+            }
+        }
+        else
+        {
+            var updated = await AdminClient.UpdateAudioMarkerAsync(FileId, _editingMarker.Id, new UpdateAudioMarkerRequest(
+                _markerTimeSeconds, _markerLabel.Trim(), _markerConfidence,
+                string.IsNullOrWhiteSpace(_markerNote) ? null : _markerNote.Trim()));
+            if (updated is not null && _modalPlayer is not null)
+            {
+                _markers = [.. _markers.Where(m => m.Id != updated.Id), updated];
+                await _modalPlayer.RemoveRegionAsync($"marker-{updated.Id}");
+                await AddMarkerRegionAsync(updated);
+            }
+        }
+
+        _showMarkerDialog = false;
+        StateHasChanged();
+    }
+
+    private async Task DeleteMarkerAsync(AudioMarkerRecord marker)
+    {
+        var ok = await AdminClient.DeleteAudioMarkerAsync(FileId, marker.Id);
+        if (!ok) return;
+        _markers = [.. _markers.Where(m => m.Id != marker.Id)];
+        if (_modalPlayer is not null)
+            await _modalPlayer.RemoveRegionAsync($"marker-{marker.Id}");
+        StateHasChanged();
+    }
+
+    private async Task SeekToMarkerAsync(AudioMarkerRecord marker)
+    {
+        if (_modalPlayer is null || _modalDuration <= 0) return;
+        await _modalPlayer.SeekToAsync(marker.TimeSeconds / _modalDuration);
+    }
+
     // ── New region drawn by user ──────────────────────────────────────────────
 
     private async Task OnModalRegionCreated(WsRegionData r)
@@ -566,6 +884,8 @@ else
         if (_modalPlayer is not null)
             await _modalPlayer.ClearUserRegionsAsync(
                 _programmaticRegionIds.Append(r.Id));
+
+        _lastDrawnRegion = r;
     }
 
     private async Task SaveClipAsync()
@@ -625,6 +945,10 @@ else
             _spectrogramEnabled = false;
             _spectrogramLabels  = false;
             _modalReady         = false;
+            _showMarkers        = false;
+            _showVoiceBand      = false;
+            _silenceDetectionEnabled = false;
+            _regionDrawMode     = true;
         }
     }
 
@@ -692,6 +1016,13 @@ else
         await _modalPlayer.ToggleTimelineAsync(_timelineEnabled);
     }
 
+    private async Task ToggleDragModeAsync()
+    {
+        _regionDrawMode = !_regionDrawMode;
+        if (_modalPlayer is null) return;
+        await _modalPlayer.SetDragModeAsync(_regionDrawMode);
+    }
+
     private async Task ToggleSpectrogramAsync()
     {
         _spectrogramEnabled = !_spectrogramEnabled;
@@ -739,6 +1070,17 @@ else
             case "play":
                 if (_modalPlayer is not null) await _modalPlayer.PlayRegionAsync(_pendingRegion.RegionId);
                 break;
+            case "explore":
+                _explorerRegion = new WsRegionData
+                {
+                    Id    = _pendingRegion.RegionId,
+                    Start = _pendingRegion.Start,
+                    End   = _pendingRegion.End,
+                    Label = _pendingRegion.Label,
+                };
+                _showRegionExplorer = true;
+                StateHasChanged();
+                break;
             case "label":
                 _editLabelText       = _pendingRegion.Label ?? string.Empty;
                 _showEditLabelDialog = true;
@@ -761,6 +1103,8 @@ else
                     await _modalPlayer.RemoveRegionAsync(_pendingRegion.RegionId);
                     if (_newUserRegion?.Id == _pendingRegion.RegionId)
                         _newUserRegion = null;
+                    if (_lastDrawnRegion?.Id == _pendingRegion.RegionId)
+                        _lastDrawnRegion = null;
                 }
                 break;
         }
@@ -808,11 +1152,90 @@ else
     private double                   _noiseGateRelease   = 0.15;
     private string                   _colormap      = "jet";
     private bool                     _melScale;
+    private bool                     _showVoiceBand;
+    private bool                     _silenceDetectionEnabled;
+    private double                   _silenceThresholdDb = -40;
 
     private static readonly List<(string Value, string Label)> _colormapOptions =
     [
         ("jet","Jet"), ("viridis","Viridis"), ("inferno","Inferno"), ("grayscale","Grayscale"),
     ];
+
+    // ── Phase D: EVP markers state ─────────────────────────────────────────────
+
+    private IReadOnlyList<AudioMarkerRecord> _markers = [];
+    private bool                    _showMarkers;
+    private bool                    _showMarkerDialog;
+    private AudioMarkerRecord?      _editingMarker;
+    private double                  _markerTimeSeconds;
+    private string                  _markerLabel      = string.Empty;
+    private EvpConfidenceLevel      _markerConfidence = EvpConfidenceLevel.Possible;
+    private string                  _markerNote       = string.Empty;
+    private static readonly List<EvpConfidenceLevel> _confidenceOptions =
+    [
+        EvpConfidenceLevel.Possible, EvpConfidenceLevel.Probable, EvpConfidenceLevel.Confirmed,
+    ];
+
+    // ── Phase D: destructive edit state ─────────────────────────────────────────
+
+    private bool          _showEdit;
+    private bool          _isApplyingEdit;
+    private string?       _editError;
+    private WsRegionData? _lastDrawnRegion;
+    private double        _editGainDb   = 0;
+    private double        _editFadeIn   = 1;
+    private double        _editFadeOut  = 1;
+    private double        _editSpeedRatio     = 1.0;
+    private double        _editPitchSemitones = 0;
+
+    private bool CanApplyEdit(bool requiresRegion = false)
+        => !_isApplyingEdit
+           && _saveClipTypeId != Guid.Empty
+           && (!requiresRegion || _lastDrawnRegion is not null);
+
+    private async Task ApplyAudioEditAsync(AudioEditOperation operation)
+    {
+        if (!CanApplyEdit(requiresRegion: operation is AudioEditOperation.Cut or AudioEditOperation.Silence)) return;
+
+        _isApplyingEdit = true;
+        _editError = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await AdminClient.EditAudioAsync(FileId, new AudioEditRequest(
+                operation,
+                _lastDrawnRegion?.Start,
+                _lastDrawnRegion?.End,
+                operation == AudioEditOperation.Gain ? _editGainDb : null,
+                operation == AudioEditOperation.Fade ? _editFadeIn : null,
+                operation == AudioEditOperation.Fade ? _editFadeOut : null,
+                null,
+                _saveClipIsPublic,
+                _saveClipTypeId,
+                operation == AudioEditOperation.Speed ? _editSpeedRatio : null,
+                operation == AudioEditOperation.Pitch ? _editPitchSemitones : null));
+
+            if (result is not null)
+            {
+                await OverlayChildClipRegionsAsync();
+                Notify($"Saved \"{result.FileName}\"", "success");
+            }
+            else
+            {
+                _editError = "Edit failed — only WAV and MP3 sources can be edited.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _editError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _isApplyingEdit = false;
+            StateHasChanged();
+        }
+    }
 
     private async Task OnEqGainChanged(int band, double db)
     {
@@ -853,6 +1276,29 @@ else
         _melScale = !_melScale;
         if (_modalPlayer is not null && _spectrogramEnabled)
             await _modalPlayer.SetSpectrogramMelScaleAsync(_melScale);
+    }
+
+    private async Task ToggleVoiceBandAsync()
+    {
+        _showVoiceBand = !_showVoiceBand;
+        if (_modalPlayer is not null && _spectrogramEnabled)
+            await _modalPlayer.ToggleVoiceBandOverlayAsync(_showVoiceBand);
+    }
+
+    private async Task ToggleSilenceDetectionAsync()
+    {
+        _silenceDetectionEnabled = !_silenceDetectionEnabled;
+        if (_modalPlayer is null) return;
+        if (_silenceDetectionEnabled)
+            await _modalPlayer.DetectSilenceAsync(_silenceThresholdDb);
+        else
+            await _modalPlayer.ClearSilenceDetectionAsync();
+    }
+
+    private async Task ApplySilenceDetectionAsync()
+    {
+        if (_modalPlayer is not null && _silenceDetectionEnabled)
+            await _modalPlayer.DetectSilenceAsync(_silenceThresholdDb);
     }
 
     private async Task ApplyNoiseGateAsync()

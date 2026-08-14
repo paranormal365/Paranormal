@@ -3,6 +3,7 @@
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.JSInterop
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 @inject IJSRuntime JS
 
 @if (_loading) { <TelerikLoaderContainer Visible="true" Text="Loading research…" /> }
@@ -59,7 +60,7 @@ else
                                 </div>
                             }
                             <div class="text-muted mt-1" style="font-size:.7rem;">
-                                Added @e.DateCreated.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                                Added @e.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
                             </div>
                         </div>
                         <div class="d-flex gap-1 flex-shrink-0">
@@ -186,7 +187,9 @@ else
         {
             foreach (var f in e.GetMultipleFiles(5))
             {
-                using var stream = f.OpenReadStream(maxAllowedSize: 100_000_000); // 100 MB
+                // No practical upload size limit for now — a future limit belongs at app-settings /
+                // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
+                using var stream = f.OpenReadStream(maxAllowedSize: long.MaxValue);
                 var result = await AdminClient.UploadCaseResearchFileAsync(
                     OrgId, CaseId, f.Name, null, stream, f.Name, f.ContentType);
                 if (result is not null) _entries.Add(result);

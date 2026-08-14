@@ -42,7 +42,8 @@ public sealed class OrganizationSettingsController : OrgCmsControllerBase
         var before = await db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.Id == orgId, ct);
         if (before is null) return NotFound();
         var org = await db.Organizations.FirstOrDefaultAsync(o => o.Id == orgId, ct);
-        org!.ShowAddressMap       = request.ShowAddressMap;
+        if (org is null) return NotFound();
+        org.ShowAddressMap        = request.ShowAddressMap;
         org.ShowAddressDirections = request.ShowAddressDirections;
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Organization), orgId, before, org, userId.Value, AppSources.WebApi, ct));

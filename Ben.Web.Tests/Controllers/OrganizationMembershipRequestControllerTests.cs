@@ -143,6 +143,32 @@ public class OrganizationMembershipRequestControllerTests
         Assert.IsType<ConflictObjectResult>((await ctrl.Apply(orgId, new ApplyForMembershipRequest(null), default)).Result);
     }
 
+    [Fact]
+    public async Task Apply_ConcurrentApplications_OnlyOneSucceeds()
+    {
+        // Regression for the check-then-insert race: two concurrent Apply calls for the same
+        // (org, user) used to both be able to pass the AnyAsync "no pending request" check before
+        // either inserted, so the loser hit an unhandled DbUpdateException (raw 500) once the
+        // filtered unique index was in place. The fix catches that and returns the same Conflict
+        // the pre-check already returns for the non-racing case.
+        var (factory, orgId, applicantId, _) = await SeedAsync();
+        var ctrl1 = Build(factory, applicantId);
+        var ctrl2 = Build(factory, applicantId);
+
+        var results = await Task.WhenAll(
+            ctrl1.Apply(orgId, new ApplyForMembershipRequest("First"), default),
+            ctrl2.Apply(orgId, new ApplyForMembershipRequest("Second"), default));
+
+        Assert.All(results, r => Assert.True(r.Result is CreatedAtActionResult or ConflictObjectResult));
+
+        await using var verify = await factory.CreateDbContextAsync();
+        var pending = await verify.OrganizationMembershipRequests
+            .Where(r => r.OrganizationId == orgId && r.AppUserId == applicantId
+                     && r.Status == OrganizationMembershipRequestStatus.Pending)
+            .ToListAsync();
+        Assert.Single(pending);
+    }
+
     // ── Respond (accept) ──────────────────────────────────────────────────────
 
     [Fact]
@@ -229,5 +255,26 @@ public class OrganizationMembershipRequestControllerTests
         await admin.Respond(orgId, reqId, new RespondToMembershipRequest(OrganizationMembershipRequestStatus.Accepted, null), default);
 
         Assert.IsType<ConflictObjectResult>(await applicant.Withdraw(orgId, reqId, default));
+    }
+
+    // ── GetVotes cross-org chain (Phase B) ───────────────────────────────────
+
+    [Fact]
+    public async Task GetVotes_RequestBelongsToDifferentOrg_ReturnsNotFound()
+    {
+        // The core of the fix: GetVotes checked the caller's HasAccessAsync permission for the
+        // route orgId, but never that the requestId (id) actually belonged to that org — an
+        // admin with real MembershipRequests-Update permission in THEIR OWN org could read the
+        // vote list for any other org's application just by knowing/guessing its id.
+        var (factory, orgId, applicantId, _) = await SeedAsync();
+        var applicant = Build(factory, applicantId);
+        var reqId = ((OrganizationMembershipRequestRecord)((CreatedAtActionResult)(await applicant.Apply(orgId, new ApplyForMembershipRequest(null), default)).Result!).Value!).Id;
+
+        var otherOrgId = Guid.NewGuid();
+        var attacker = Build(factory, Guid.NewGuid(), hasPermission: true); // has real permission in otherOrgId
+
+        var result = await attacker.GetVotes(otherOrgId, reqId, default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 }

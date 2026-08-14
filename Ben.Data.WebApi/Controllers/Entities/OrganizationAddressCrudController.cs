@@ -187,6 +187,8 @@ public sealed class OrganizationAddressCrudController : OrgCmsControllerBase
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await db.OrganizationAddresses.AnyAsync(a => a.Id == addressId && a.OrganizationId == orgId, ct))
+            return NotFound();
         var items = await db.OrganizationAddressMemberAccesses.AsNoTracking()
             .Where(x => x.OrganizationAddressId == addressId)
             .ToListAsync(ct);
@@ -231,6 +233,8 @@ public sealed class OrganizationAddressCrudController : OrgCmsControllerBase
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await db.OrganizationAddresses.AnyAsync(a => a.Id == addressId && a.OrganizationId == orgId, ct))
+            return NotFound();
         var entity = await db.OrganizationAddressMemberAccesses.FirstOrDefaultAsync(x => x.Id == accessId && x.OrganizationAddressId == addressId, ct);
         if (entity is null) return NotFound();
         db.OrganizationAddressMemberAccesses.Remove(entity);

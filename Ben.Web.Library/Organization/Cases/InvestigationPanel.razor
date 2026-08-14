@@ -1,6 +1,7 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Library.Services
+@using Ben.Web.Library.Shared
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 
@@ -51,9 +52,9 @@
                                 <strong>@i.Title</strong>
                             </div>
                             <div class="text-secondary small">
-                                @i.ScheduledDateTime.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                                @i.ScheduledDateTime.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
                                 @if (i.EndDateTime.HasValue)
-                                { <span> – @i.EndDateTime.Value.ToLocalTime().ToString("h:mm tt")</span> }
+                                { <span> – @i.EndDateTime.Value.ToViewerLocalTime(UserState).ToString("h:mm tt")</span> }
                                 @if (!string.IsNullOrEmpty(i.Location))
                                 { <span> · @i.Location</span> }
                             </div>
@@ -106,7 +107,7 @@
                                                     {
                                                         var a = att;
                                                         <tr>
-                                                            <td class="align-middle small">@(a.DisplayName ?? a.AppUserId.ToString()[..8])</td>
+                                                            <td class="align-middle small"><UserNameLink AppUserId="@a.AppUserId" DisplayName="@a.DisplayName" /></td>
                                                             <td class="align-middle small">
                                                                 @if (_editRoleAttendeeId == a.Id)
                                                                 {
@@ -401,7 +402,7 @@
     private void OpenAdd()
     {
         _editInv = null;
-        _form = new InvForm { ScheduledDateTime = DateTime.Now.AddDays(7) };
+        _form = new InvForm { ScheduledDateTime = UserState.NowInViewerTimeZone().AddDays(7) };
         _dialogError = null;
         _showDialog = true;
     }
@@ -414,11 +415,11 @@
             Title             = inv.Title,
             Description       = inv.Description ?? "",
             Location          = inv.Location ?? "",
-            ScheduledDateTime = inv.ScheduledDateTime,
-            EndDateTime       = inv.EndDateTime,
+            ScheduledDateTime = inv.ScheduledDateTime.ToViewerLocalTime(UserState),
+            EndDateTime       = inv.EndDateTime?.ToViewerLocalTime(UserState),
             Status            = inv.Status,
             Notes             = inv.Notes ?? "",
-            EvidenceDueDate   = inv.EvidenceDueDate,
+            EvidenceDueDate   = inv.EvidenceDueDate?.ToViewerLocalTime(UserState),
         };
         _dialogError = null;
         _showDialog = true;
@@ -434,12 +435,12 @@
                 Title:             _form.Title.Trim(),
                 Description:       string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim(),
                 Location:          string.IsNullOrWhiteSpace(_form.Location) ? null : _form.Location.Trim(),
-                ScheduledDateTime: _form.ScheduledDateTime,
-                EndDateTime:       _form.EndDateTime,
+                ScheduledDateTime: _form.ScheduledDateTime.ToUtcFromViewerLocal(UserState),
+                EndDateTime:       _form.EndDateTime?.ToUtcFromViewerLocal(UserState),
                 Status:            _form.Status,
                 Notes:             string.IsNullOrWhiteSpace(_form.Notes) ? null : _form.Notes.Trim(),
                 OrgCalendarEventId: null,
-                EvidenceDueDate:   _form.EvidenceDueDate);
+                EvidenceDueDate:   _form.EvidenceDueDate?.ToUtcFromViewerLocal(UserState));
 
             InvestigationRecord? result;
             if (_editInv is null)

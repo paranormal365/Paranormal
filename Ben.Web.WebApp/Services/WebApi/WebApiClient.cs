@@ -56,6 +56,14 @@ public sealed class WebApiClient : IWebApiClient
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
     }
 
+    public async Task<TResponse?> PostAnonymousAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = JsonContent.Create(payload) };
+        using var response = await _httpClient.SendAsync(req, token);
+        if (!response.IsSuccessStatusCode) return default;
+        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
+    }
+
     public async Task<TResponse?> PutAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Put, relativeUrl);
@@ -75,6 +83,14 @@ public sealed class WebApiClient : IWebApiClient
     public async Task<bool> PutVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Put, relativeUrl);
+        req.Content = JsonContent.Create(payload);
+        using var response = await _httpClient.SendAsync(req, token);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> PostVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Post, relativeUrl);
         req.Content = JsonContent.Create(payload);
         using var response = await _httpClient.SendAsync(req, token);
         return response.IsSuccessStatusCode;
@@ -136,6 +152,12 @@ public sealed class WebApiClient : IWebApiClient
         return PutAsync<SetOrganizationGrantRequest, OrganizationAccessGrantResponse>(relativeUrl, request, token);
     }
 
+    public async Task<IReadOnlyList<OrgUserDirectoryEntryResponse>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default)
+    {
+        var entries = await GetAsync<List<OrgUserDirectoryEntryResponse>>($"/api/organizations/{organizationId}/user-directory", token);
+        return entries ?? [];
+    }
+
     // ── Upload File Types ────────────────────────────────────────────────────
     public async Task<IReadOnlyList<UploadFileTypeRecord>> GetUploadFileTypesAsync(CancellationToken token = default)
     {
@@ -173,6 +195,13 @@ public sealed class WebApiClient : IWebApiClient
 
     public Task<bool> DeleteUploadFileAsync(Guid id, CancellationToken token = default)
         => DeleteAsync($"/api/upload-files/{id}", token);
+
+    // ── Upload File — Replace (item #6 phase 3) ─────────────────────────────────
+    public Task<UploadFileRecord?> ReplaceUploadFileAsync(Guid id, MultipartFormDataContent content, CancellationToken token = default)
+        => PostMultipartAsync<UploadFileRecord>($"/api/upload-files/{id}/replace", content, token);
+
+    public Task<ReplaceImpactRecord?> GetReplaceImpactAsync(Guid id, CancellationToken token = default)
+        => GetAsync<ReplaceImpactRecord>($"/api/upload-files/{id}/replace-impact", token);
 
     public async Task<(byte[] Data, string ContentType, string FileName)?> DownloadFileAsync(Guid id, CancellationToken token = default)
     {
@@ -222,9 +251,51 @@ public sealed class WebApiClient : IWebApiClient
     public Task<bool> DeleteRegionNoteAsync(Guid fileId, Guid noteId, CancellationToken token = default)
         => DeleteAsync($"/api/upload-files/{fileId}/region-notes/{noteId}", token);
 
+    // ── File Comments (item #6 phase 2) ───────────────────────────────────────
+    public async Task<IReadOnlyList<UploadFileCommentRecord>> GetFileCommentsAsync(Guid fileId, CancellationToken token = default)
+    {
+        var result = await GetAsync<List<UploadFileCommentRecord>>($"/api/upload-files/{fileId}/comments", token);
+        return result ?? [];
+    }
+
+    public Task<UploadFileCommentRecord?> CreateFileCommentAsync(Guid fileId, CreateFileCommentRequest request, CancellationToken token = default)
+        => PostAsync<CreateFileCommentRequest, UploadFileCommentRecord>($"/api/upload-files/{fileId}/comments", request, token);
+
+    public Task<UploadFileCommentRecord?> UpdateFileCommentAsync(Guid fileId, Guid commentId, UpdateFileCommentRequest request, CancellationToken token = default)
+        => PutAsync<UpdateFileCommentRequest, UploadFileCommentRecord>($"/api/upload-files/{fileId}/comments/{commentId}", request, token);
+
+    public Task<bool> DeleteFileCommentAsync(Guid fileId, Guid commentId, CancellationToken token = default)
+        => DeleteAsync($"/api/upload-files/{fileId}/comments/{commentId}", token);
+
+    public Task<FileCommentSettingsRecord?> GetFileCommentSettingsAsync(Guid fileId, CancellationToken token = default)
+        => GetAsync<FileCommentSettingsRecord>($"/api/upload-files/{fileId}/comments/settings", token);
+
+    public Task<FileCommentSettingsRecord?> UpdateFileCommentSettingsAsync(Guid fileId, FileCommentSettingsRecord request, CancellationToken token = default)
+        => PutAsync<FileCommentSettingsRecord, FileCommentSettingsRecord>($"/api/upload-files/{fileId}/comments/settings", request, token);
+
+    // ── Audio Markers (EVP) ──────────────────────────────────────────────────
+    public async Task<IReadOnlyList<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default)
+    {
+        var result = await GetAsync<List<AudioMarkerRecord>>($"/api/upload-files/{fileId}/audio-markers", token);
+        return result ?? [];
+    }
+
+    public Task<AudioMarkerRecord?> CreateAudioMarkerAsync(Guid fileId, CreateAudioMarkerRequest request, CancellationToken token = default)
+        => PostAsync<CreateAudioMarkerRequest, AudioMarkerRecord>($"/api/upload-files/{fileId}/audio-markers", request, token);
+
+    public Task<AudioMarkerRecord?> UpdateAudioMarkerAsync(Guid fileId, Guid markerId, UpdateAudioMarkerRequest request, CancellationToken token = default)
+        => PutAsync<UpdateAudioMarkerRequest, AudioMarkerRecord>($"/api/upload-files/{fileId}/audio-markers/{markerId}", request, token);
+
+    public Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default)
+        => DeleteAsync($"/api/upload-files/{fileId}/audio-markers/{markerId}", token);
+
     // ── Audio Clip ────────────────────────────────────────────────────────────
     public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)
         => PostAsync<ClipAudioRequest, UploadFileRecord>($"/api/upload-files/{fileId}/clip", request, token);
+
+    // ── Audio Edit (destructive) ─────────────────────────────────────────────
+    public Task<UploadFileRecord?> EditAudioAsync(Guid fileId, AudioEditRequest request, CancellationToken token = default)
+        => PostAsync<AudioEditRequest, UploadFileRecord>($"/api/upload-files/{fileId}/audio-edit", request, token);
 
     public async Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
     {
@@ -299,15 +370,45 @@ public sealed class WebApiClient : IWebApiClient
         => PostAsync<object, WebApiTokenResponse>($"/api/admin/impersonate/{targetUserId}", new { }, token);
 
     // ── Entra registration and account linking ───────────────────────────────
+    // Both send the caller-supplied Entra access token explicitly rather than via Auth()/
+    // TokenStore — see IWebApiClient's doc comment on these two methods.
 
-    public Task<EntraRegisterResponse?> EntraRegisterAsync(EntraRegisterPayload request, CancellationToken token = default)
-        => PostAsync<EntraRegisterPayload, EntraRegisterResponse>("/api/auth/entra/register", request, token);
-
-    public async Task<bool> EntraLinkAsync(EntraLinkPayload request, CancellationToken token = default)
+    public async Task<EntraRegisterResponse?> EntraRegisterAsync(string entraAccessToken, EntraRegisterPayload request, CancellationToken token = default)
     {
-        using var req = Auth(HttpMethod.Post, "/api/auth/entra/link");
+        using var req = EntraAuth(HttpMethod.Post, "/api/auth/entra/register", entraAccessToken);
+        req.Content = JsonContent.Create(request);
+        using var response = await _httpClient.SendAsync(req, token);
+        if (!response.IsSuccessStatusCode) return default;
+        return await response.Content.ReadFromJsonAsync<EntraRegisterResponse>(cancellationToken: token);
+    }
+
+    public async Task<bool> EntraLinkAsync(string entraAccessToken, EntraLinkPayload request, CancellationToken token = default)
+    {
+        using var req = EntraAuth(HttpMethod.Post, "/api/auth/entra/link", entraAccessToken);
         req.Content = JsonContent.Create(request);
         using var response = await _httpClient.SendAsync(req, token);
         return response.IsSuccessStatusCode;
     }
+
+    /// <summary>Like <see cref="Auth"/>, but attaches an explicitly-supplied bearer token instead
+    /// of reading <see cref="_tokenStore"/> — used only for the two Entra actions above, where the
+    /// caller must present the Entra access token specifically, which may not be what's currently
+    /// sitting in the token store (e.g. after a local sign-in has since overwritten it).</summary>
+    private static HttpRequestMessage EntraAuth(HttpMethod method, string url, string entraAccessToken)
+    {
+        var req = new HttpRequestMessage(method, url);
+        if (!string.IsNullOrWhiteSpace(entraAccessToken))
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", entraAccessToken);
+        return req;
+    }
+
+    // ── Sub-client invite accept flow (item #4) ───────────────────────────────
+    public Task<InviteInfoRecord?> GetInviteInfoAsync(string token, CancellationToken cancellationToken = default)
+        => GetAnonymousAsync<InviteInfoRecord>($"/api/case-invites/{Uri.EscapeDataString(token)}", cancellationToken);
+
+    public Task<AcceptInviteResult?> AcceptInviteAsync(string token, AcceptInviteRequest request, CancellationToken cancellationToken = default)
+        => PostAnonymousAsync<AcceptInviteRequest, AcceptInviteResult>($"/api/case-invites/{Uri.EscapeDataString(token)}/accept", request, cancellationToken);
+
+    public Task<AcceptInviteResult?> AcceptInviteExistingAsync(string token, CancellationToken cancellationToken = default)
+        => PostAsync<object, AcceptInviteResult>($"/api/case-invites/{Uri.EscapeDataString(token)}/accept-existing", new { }, cancellationToken);
 }

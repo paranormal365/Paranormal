@@ -125,4 +125,34 @@ public class ScheduleProposalControllerTests
         var items  = Assert.IsAssignableFrom<IEnumerable<ScheduleProposalDto>>(ok.Value);
         Assert.Single(items);
     }
+
+    // ── Cross-org chain (Phase B) ────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetAllWithdrawConvert_CaseBelongsToDifferentOrg_ReturnsNotFound()
+    {
+        var (factory, victimOrgId, victimCaseId, victimUserId) = await SeedBasicCase();
+        var victim = BuildController(factory, victimUserId);
+        var created = await victim.Create(victimOrgId, victimCaseId,
+            new CreateProposalRequest(null, [new SlotInput(DateTime.UtcNow.AddDays(7), null)]), CancellationToken.None);
+        var proposalId = ((ScheduleProposalDto)((OkObjectResult)created.Result!).Value!).Id;
+
+        var attackerOrgId = Guid.NewGuid();
+        var attackerId    = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization { Id = attackerOrgId, Name = "Attacker Org", UrlName = "attacker", DateCreated = DateTime.UtcNow, CreatedByAppUserId = attackerId });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = attackerOrgId, AppUserId = attackerId, Role = OrganizationMemberRole.Manager, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = attackerId });
+            await db.SaveChangesAsync();
+        }
+        var attacker = BuildController(factory, attackerId);
+
+        Assert.IsType<NotFoundResult>((await attacker.GetAll(attackerOrgId, victimCaseId, CancellationToken.None)).Result);
+        Assert.IsType<NotFoundResult>(await attacker.Withdraw(attackerOrgId, victimCaseId, proposalId, CancellationToken.None));
+        Assert.IsType<NotFoundResult>((await attacker.Convert(attackerOrgId, victimCaseId, proposalId, new ConvertProposalRequest(null, "Hijacked"), CancellationToken.None)).Result);
+
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        var proposal = await verifyDb.InvestigationScheduleProposals.FindAsync([proposalId]);
+        Assert.Equal(ScheduleProposalStatus.Pending, proposal!.Status);
+    }
 }

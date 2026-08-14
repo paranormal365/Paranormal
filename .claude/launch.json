@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ben-webapp",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["scripts/start-webapp-with-api.sh"],
+      "port": 5078
+    },
+    {
+      "name": "video-editor-playground",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "/Users/ben/Source/Github-BenVideo/Ben.Video.Playground", "--configuration", "Debug"],
+      "port": 64368
+    }
+  ]
+}

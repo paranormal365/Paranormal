@@ -11,14 +11,13 @@ public sealed record UpdateUploadFileRequest(
     Guid? UpdatedByAppUserId);
 
 // ── Org Sharing ──────────────────────────────────────────────────────────────
+// SharedByAppUserId/UpdatedByAppUserId dropped — the server now derives the acting user from the
+// bearer token (GetCurrentUserIdOrThrow), never from client input; see UploadFileShareController.
 public sealed record ShareFileWithOrgRequest(
     Guid OrganizationId,
-    Guid SharedByAppUserId,
     FileShareVisibility Visibility);
 
-public sealed record UpdateOrgShareVisibilityRequest(
-    FileShareVisibility Visibility,
-    Guid UpdatedByAppUserId);
+public sealed record UpdateOrgShareVisibilityRequest(FileShareVisibility Visibility);
 
 public sealed class UploadFileOrgShareResponse
 {
@@ -32,16 +31,16 @@ public sealed class UploadFileOrgShareResponse
 }
 
 // ── Permission Requests ──────────────────────────────────────────────────────
+// RequestedByAppUserId/ReviewedByAppUserId dropped — the server derives the acting user from the
+// bearer token, never from client input; see UploadFilePermissionRequestController.
 public sealed record SubmitPermissionRequestRequest(
     Guid? OrganizationId,
-    Guid RequestedByAppUserId,
     FilePermissionType PermissionType,
     string? RequestNotes);
 
 public sealed record ReviewPermissionRequestRequest(
     FilePermissionRequestStatus RequestStatus,
-    string? ReviewNotes,
-    Guid ReviewedByAppUserId);
+    string? ReviewNotes);
 
 public sealed class UploadFilePermissionRequestResponse
 {

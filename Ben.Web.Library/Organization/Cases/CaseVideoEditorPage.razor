@@ -5,6 +5,7 @@
 @inject ProjectStore ProjectStore
 @inject NavigationManager NavManager
 @inject IJSRuntime JSRuntime
+@inject VideoExportPublisher ExportPublisher
 
 <PageTitle>Case Video Editor</PageTitle>
 
@@ -20,7 +21,10 @@
     return;
 }
 
-<div class="d-flex flex-column" style="height:100vh; overflow:hidden;">
+@* 100vh alone ignores the site's TelerikAppBar (58px) sitting above <main>, which has no
+   explicit height of its own for a height:100% chain to resolve against — the 58px
+   overshoot pushed the video editor's transport controls below the visible viewport. *@
+<div class="d-flex flex-column" style="height:calc(100vh - 58px); overflow:hidden;">
 
     @* ── Header bar ──────────────────────────────────────────────────────── *@
     <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom bg-body" style="flex:0 0 auto;">
@@ -51,12 +55,13 @@
 
     @* ── Editor (full remaining height) ─────────────────────────────────── *@
     <div style="flex:1 1 auto; min-height:0; overflow:hidden;">
-        <VideoEditor />
+        <VideoEditor OnPublishExport="OnPublishExportAsync" />
     </div>
 </div>
 
 @* ── Case Projects dialog ────────────────────────────────────────────────── *@
-<TelerikWindow @bind-Visible="_showProjectList" Modal="true" Width="620px" Title="Case Projects">
+<TelerikWindow @bind-Visible="_showProjectList" Modal="true" Width="620px">
+    <WindowTitle>Case Projects</WindowTitle>
     <WindowContent>
         @if (_loadingList)
         {
@@ -73,12 +78,16 @@
                     <GridColumn Field="@nameof(VideoProjectRecord.Name)" Title="Name" />
                     <GridColumn Title="By" Width="130px">
                         <Template>
-                            @{ var row = (VideoProjectRecord)context; }
-                            <span class="text-muted small">@row.CreatedByAppUserId.ToString()[..8]…</span>
+                            @* GetMyVideoProjectsAsync only ever returns the viewer's own projects. *@
+                            <span class="text-muted small">You</span>
                         </Template>
                     </GridColumn>
-                    <GridColumn Field="@nameof(VideoProjectRecord.DateCreated)" Title="Saved"
-                                DisplayFormat="{0:MMM d, yyyy}" Width="110px" />
+                    <GridColumn Title="Saved" Width="110px">
+                        <Template>
+                            @{ var proj = (VideoProjectRecord)context; }
+                            @proj.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")
+                        </Template>
+                    </GridColumn>
                     <GridColumn Width="160px">
                         <Template>
                             @{ var row2 = (VideoProjectRecord)context; }
@@ -139,10 +148,14 @@
     private VideoProjectRecord? _deleteTarget;
     private VideoProjectRecord? _publishTarget;
     private Guid _myUserId;
+    /// <summary>Server project id established by an earlier publish this session, so a second
+    /// export updates the same project instead of creating a new row per render.</summary>
+    private Guid? _publishedProjectId;
     private TelerikNotification? _notifications;
 
     protected override async Task OnInitializedAsync()
     {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated) { _error = "You must be signed in."; _loaded = true; return; }
 
         try
@@ -229,7 +242,33 @@
             _caseProjects.Remove(_deleteTarget);
             _notifications?.Show("Project deleted.", ThemeConstants.Notification.ThemeColor.Success);
         }
+        else
+        {
+            _notifications?.Show("Failed to delete the project. Please try again.", ThemeConstants.Notification.ThemeColor.Error);
+        }
         _deleteTarget = null;
+    }
+
+    /// <summary>
+    /// The editor's own "Upload to server" destination — the render goes straight from the export
+    /// to the case, with no trip through the user's Downloads folder and no re-selecting the file.
+    /// The <see cref="TriggerPublish"/> flow below stays for publishing a file the user already
+    /// has on disk (an older export, or one made before this existed).
+    /// </summary>
+    private async Task OnPublishExportAsync(ExportedVideo exported)
+    {
+        // No try/catch on purpose: VideoEditor's destination prompt needs the exception to know
+        // the upload failed, so it can stay open and keep "Save to my machine" offered rather than
+        // discarding the user's only copy. Notifications here are for the SUCCESS path only.
+        var result = await ExportPublisher.PublishAsync(exported, CaseId, _publishedProjectId);
+        _publishedProjectId = result.ProjectId;
+
+        var idx = _caseProjects.FindIndex(p => p.Id == result.Record.Id);
+        if (idx >= 0) _caseProjects[idx] = result.Record;
+        else          _caseProjects.Add(result.Record);
+
+        _notifications?.Show("Video published to case.", ThemeConstants.Notification.ThemeColor.Success);
+        StateHasChanged();
     }
 
     private void TriggerPublish(VideoProjectRecord record)
@@ -245,7 +284,9 @@
         StateHasChanged();
         try
         {
-            const long maxBytes = 600_000_000;
+            // No practical upload size limit for now — a future limit belongs at app-settings /
+            // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
+            const long maxBytes = long.MaxValue;
             using var ms = new System.IO.MemoryStream();
             await e.File.OpenReadStream(maxBytes).CopyToAsync(ms);
             var bytes  = ms.ToArray();

@@ -5,8 +5,15 @@
 @inject ProjectStore ProjectStore
 @inject NavigationManager NavManager
 @inject IJSRuntime JSRuntime
+@inject VideoExportPublisher ExportPublisher
 
 <PageTitle>My Videos</PageTitle>
+
+@if (!_authReady)
+{
+    <TelerikLoaderContainer Visible="true" Text="Loading…" />
+    return;
+}
 
 @if (!UserState.IsAuthenticated)
 {
@@ -41,12 +48,13 @@
 
     @* ── Editor (full remaining height) ─────────────────────────────────── *@
     <div style="flex:1 1 auto; min-height:0; overflow:hidden;">
-        <VideoEditor />
+        <VideoEditor OnPublishExport="OnPublishExportAsync" />
     </div>
 </div>
 
 @* ── Saved Projects dialog ──────────────────────────────────────────────── *@
-<TelerikWindow @bind-Visible="_showProjectList" Modal="true" Width="600px" Title="Saved Projects">
+<TelerikWindow @bind-Visible="_showProjectList" Modal="true" Width="600px">
+    <WindowTitle>Saved Projects</WindowTitle>
     <WindowContent>
         @if (_loadingList)
         {
@@ -62,8 +70,12 @@
                          Height="360px">
                 <GridColumns>
                     <GridColumn Field="@nameof(VideoProjectRecord.Name)" Title="Name" />
-                    <GridColumn Field="@nameof(VideoProjectRecord.DateCreated)" Title="Saved"
-                                DisplayFormat="{0:MMM d, yyyy h:mm tt}" Width="170px" />
+                    <GridColumn Title="Saved" Width="170px">
+                        <Template>
+                            @{ var proj = (VideoProjectRecord)context; }
+                            @proj.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+                        </Template>
+                    </GridColumn>
                     <GridColumn Width="160px">
                         <Template>
                             @{ var row = (VideoProjectRecord)context; }
@@ -115,9 +127,15 @@
     private VideoProjectRecord? _deleteTarget;
     private VideoProjectRecord? _publishTarget;
     private TelerikNotification? _notifications;
+    private bool _authReady;
 
     protected override async Task OnInitializedAsync()
     {
+        // Gated so the prerender pass — where AuthReady can never resolve — just shows the
+        // loading state above instead of racing IsAuthenticated and flashing "not signed in"
+        // on a hard nav for a genuinely signed-in user.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        _authReady = true;
         if (!UserState.IsAuthenticated) return;
         await LoadProjectListAsync();
     }
@@ -186,6 +204,10 @@
             _projects.Remove(_deleteTarget);
             _notifications?.Show("Project deleted.", ThemeConstants.Notification.ThemeColor.Success);
         }
+        else
+        {
+            _notifications?.Show("Failed to delete the project. Please try again.", ThemeConstants.Notification.ThemeColor.Error);
+        }
         _deleteTarget = null;
     }
 
@@ -195,6 +217,28 @@
         _ = JSRuntime.InvokeVoidAsync("eval", "document.getElementById('publish-input-my').click()");
     }
 
+    /// <summary>Server project id from an earlier publish this session — see the case editor's
+    /// copy of this field for why it exists.</summary>
+    private Guid? _publishedProjectId;
+
+    /// <summary>
+    /// The editor's own "Upload to server" destination. Throws on failure by design so the
+    /// editor's prompt can stay open and keep "Save to my machine" available — see
+    /// VideoExportPublisher.
+    /// </summary>
+    private async Task OnPublishExportAsync(ExportedVideo exported)
+    {
+        var result = await ExportPublisher.PublishAsync(exported, caseId: null, _publishedProjectId);
+        _publishedProjectId = result.ProjectId;
+
+        var idx = _projects.FindIndex(p => p.Id == result.Record.Id);
+        if (idx >= 0) _projects[idx] = result.Record;
+        else          _projects.Add(result.Record);
+
+        _notifications?.Show("Video published.", ThemeConstants.Notification.ThemeColor.Success);
+        StateHasChanged();
+    }
+
     private async Task OnPublishFileSelectedAsync(InputFileChangeEventArgs e)
     {
         if (_publishTarget is null || e.FileCount == 0) return;
@@ -202,7 +246,9 @@
         StateHasChanged();
         try
         {
-            const long maxBytes = 600_000_000;
+            // No practical upload size limit for now — a future limit belongs at app-settings /
+            // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
+            const long maxBytes = long.MaxValue;
             using var ms = new System.IO.MemoryStream();
             await e.File.OpenReadStream(maxBytes).CopyToAsync(ms);
             var bytes  = ms.ToArray();

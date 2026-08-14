@@ -119,7 +119,7 @@ public sealed class OrganizationFileController : ControllerBase
     // POST /api/organizations/{orgId}/files  (direct upload)
     // The uploader may set IsPublic; publish audit is recorded if IsPublic=true.
     [HttpPost]
-    [RequestSizeLimit(200 * 1024 * 1024)]
+    [DisableRequestSizeLimit]
     public async Task<ActionResult<OrganizationFileRecord>> Upload(
         Guid orgId, [FromForm] OrgFileUploadRequest request, CancellationToken ct)
     {

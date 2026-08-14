@@ -359,4 +359,63 @@ public class InvestigationControllerTests
 
         Assert.IsType<NotFoundResult>(result);
     }
+
+    // ── Cross-org chain (Phase B) ────────────────────────────────────────────
+    // The core of the fix: a legitimate member of their OWN org could previously supply their
+    // own orgId (to pass IsOrgMemberAsync) alongside another org's real caseId and reach it —
+    // every action here checked org membership but never that caseId actually belonged to orgId.
+
+    private static async Task<Guid> SeedOtherOrgCaseAsync(IDbContextFactory<BenDataContext> factory)
+    {
+        var otherOrgId  = Guid.NewGuid();
+        var otherCaseId = Guid.NewGuid();
+        var otherUserId = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.Organizations.Add(new Organization { Id = otherOrgId, Name = "Other Org", UrlName = "other", DateCreated = DateTime.UtcNow, CreatedByAppUserId = otherUserId });
+        db.Cases.Add(new Case
+        {
+            Id = otherCaseId, OrganizationId = otherOrgId, Title = "Other Org's Case",
+            CaseYear = 2026, OrgCaseNumber = 1,
+            StreetAddress1 = "1 Other St", City = "Elsewhere", State = "TN", ZipCode = "37201", Country = "US",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = otherUserId,
+        });
+        await db.SaveChangesAsync();
+        return otherCaseId;
+    }
+
+    [Fact]
+    public async Task GetAll_CaseBelongsToDifferentOrg_ReturnsNotFound()
+    {
+        var (factory, myOrgId, _, userId, _) = await SeedAsync();
+        var otherOrgsCaseId = await SeedOtherOrgCaseAsync(factory);
+        var ctrl = BuildController(factory, userId);
+
+        var result = await ctrl.GetAll(myOrgId, otherOrgsCaseId, default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Create_CaseBelongsToDifferentOrg_ReturnsNotFound()
+    {
+        var (factory, myOrgId, _, userId, _) = await SeedAsync();
+        var otherOrgsCaseId = await SeedOtherOrgCaseAsync(factory);
+        var ctrl = BuildController(factory, userId);
+
+        var result = await ctrl.Create(myOrgId, otherOrgsCaseId, MakeRequest(), default);
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetAttendees_CaseBelongsToDifferentOrg_ReturnsNotFound()
+    {
+        var (factory, myOrgId, _, userId, _) = await SeedAsync();
+        var otherOrgsCaseId = await SeedOtherOrgCaseAsync(factory);
+        var ctrl = BuildController(factory, userId);
+
+        var result = await ctrl.GetAttendees(myOrgId, otherOrgsCaseId, Guid.NewGuid(), default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
 }

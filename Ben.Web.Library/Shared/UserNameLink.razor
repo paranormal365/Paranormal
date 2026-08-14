@@ -1,0 +1,23 @@
+@using Ben.Web.Library.Services
+@inject IBenUserState UserState
+
+@if (AppUserId is null || string.IsNullOrWhiteSpace(DisplayName))
+{
+    <span>@(DisplayName ?? "Unknown user")</span>
+}
+else if (UserState.IsSuperAdmin && !UserState.IsImpersonating)
+{
+    <a href="/admin/users/@AppUserId">@DisplayName</a>
+}
+else
+{
+    <span>@DisplayName</span>
+}
+
+@code {
+    /// <summary>The user to display. If null, "Unknown user" is shown.</summary>
+    [Parameter] public Guid? AppUserId { get; set; }
+
+    /// <summary>The user's display name. Required to render a link — without it, only a placeholder shows.</summary>
+    [Parameter] public string? DisplayName { get; set; }
+}

@@ -164,8 +164,8 @@
         Id                   = e.Id,
         Title                = e.Title,
         Description          = e.Description,
-        Start                = e.StartDateTime,
-        End                  = e.EndDateTime,
+        Start                = e.StartDateTime.ToViewerLocalTime(UserState),
+        End                  = e.EndDateTime.ToViewerLocalTime(UserState),
         IsAllDay             = e.IsAllDay,
         RecurrenceRule       = e.RecurrenceRule,
         RecurrenceExceptions = null,
@@ -202,8 +202,8 @@
                 Title          = _editingEvent.Title,
                 Description    = _editingEvent.Description ?? "",
                 Location       = _editingEvent.Location ?? "",
-                Start          = _editingEvent.StartDateTime,
-                End            = _editingEvent.EndDateTime,
+                Start          = _editingEvent.StartDateTime.ToViewerLocalTime(UserState),
+                End            = _editingEvent.EndDateTime.ToViewerLocalTime(UserState),
                 IsAllDay       = _editingEvent.IsAllDay,
                 IsPublic       = _editingEvent.IsPublic,
                 EventTypeId    = _editingEvent.EventTypeId,
@@ -212,7 +212,7 @@
         }
         else
         {
-            _form = new EventFormModel { Start = DateTime.Now, End = DateTime.Now.AddHours(1) };
+            _form = new EventFormModel { Start = UserState.NowInViewerTimeZone(), End = UserState.NowInViewerTimeZone().AddHours(1) };
         }
 
         _showEventDialog = true;
@@ -243,8 +243,8 @@
                 Title:          _form.Title.Trim(),
                 Description:    string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim(),
                 Location:       string.IsNullOrWhiteSpace(_form.Location) ? null : _form.Location.Trim(),
-                StartDateTime:  _form.Start,
-                EndDateTime:    _form.End,
+                StartDateTime:  _form.Start.ToUtcFromViewerLocal(UserState),
+                EndDateTime:    _form.End.ToUtcFromViewerLocal(UserState),
                 IsAllDay:       _form.IsAllDay,
                 IsPublic:       _form.IsPublic,
                 EventTypeId:    _form.EventTypeId,

@@ -6,6 +6,7 @@
 @inject IWebApiClient WebApiClient
 @inject IWebApiTokenStore TokenStore
 @inject IWebApiAuthService AuthService
+@inject IJSRuntime JS
 @inject ProtectedLocalStorage LocalStorage
 @inject EntraTokenHolder EntraTokenHolder
 @inject PersistentComponentState AppState
@@ -22,7 +23,7 @@
         
         <AppBarSection>
             <div id="app-title" class="is-haunted-text">
-                <img src="./static/images/is-haunted-logo.svg" height="32" alt="" />
+                <img src="/static/images/is-haunted-logo.svg" height="32" alt="" />
                 <NavLink href="/"><strong class="k-opacity-40">Is</strong><em>Haunted</em><span class="k-opacity-30">.com</span></NavLink>
             </div>
         </AppBarSection>
@@ -142,15 +143,32 @@
     {
         if (firstRender)
         {
-            await RestoreAuthStateAsync(); // restore from ProtectedLocalStorage
-
-            // If still not authenticated, check for an active Entra/OIDC session
-            if (!TokenStore.IsAuthenticated)
-                await TryBridgeEntraAuthAsync();
-
-            if (TokenStore.IsAuthenticated)
+            try
             {
-                await RefreshPendingRequestCountAsync();
+                await RestoreAuthStateAsync(); // restore from ProtectedLocalStorage
+
+                // If still not authenticated, check for an active Entra/OIDC session
+                if (!TokenStore.IsAuthenticated)
+                    await TryBridgeEntraAuthAsync();
+
+                if (TokenStore.IsAuthenticated)
+                {
+                    await RefreshPendingRequestCountAsync();
+                }
+
+                try
+                {
+                    var tzId = await JS.InvokeAsync<string?>("benGetBrowserTimeZone");
+                    if (!string.IsNullOrWhiteSpace(tzId) && TokenStore is WebApiTokenStore concreteStore)
+                        concreteStore.BrowserTimeZone = TimeZoneInfo.FindSystemTimeZoneById(tzId);
+                }
+                catch { /* JS interop unavailable, or an IANA id .NET's ICU doesn't recognize — fall back to UTC */ }
+            }
+            finally
+            {
+                // Unblock any page-load guard awaiting TokenStore.AuthReady, whether or not
+                // restore succeeded — a guard that never gets signalled would hang forever.
+                TokenStore.SignalAuthReady();
             }
 
             await InvokeAsync(StateHasChanged);

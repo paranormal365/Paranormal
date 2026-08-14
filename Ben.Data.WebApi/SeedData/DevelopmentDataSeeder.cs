@@ -142,7 +142,8 @@ internal static class DevelopmentDataSeeder
             opened: new DateTime(2026, 3, 10, 0, 0, 0, DateTimeKind.Utc),
             creator: owner,
             confirms: 5, disputes: 1, inconclusive: 2, voters: [sarah, james, emma, daniel, owner],
-            now: now);
+            now: now,
+            latitude: 36.5034m, longitude: -86.8791m);
 
         await SeedCaseAsync(db, tgh,
             year: 2026, number: 2,
@@ -153,7 +154,8 @@ internal static class DevelopmentDataSeeder
             opened: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc),
             creator: sarah,
             confirms: 8, disputes: 0, inconclusive: 3, voters: [owner, james, emma, daniel],
-            now: now);
+            now: now,
+            latitude: 36.5726m, longitude: -87.0562m);
 
         await SeedCaseAsync(db, nps,
             year: 2026, number: 1,
@@ -164,7 +166,8 @@ internal static class DevelopmentDataSeeder
             opened: new DateTime(2026, 4, 15, 0, 0, 0, DateTimeKind.Utc),
             creator: owner,
             confirms: 3, disputes: 2, inconclusive: 1, voters: [sarah, emma],
-            now: now);
+            now: now,
+            latitude: 36.1612m, longitude: -86.7775m);
 
         await SeedCaseAsync(db, nps,
             year: 2026, number: 2,
@@ -175,7 +178,8 @@ internal static class DevelopmentDataSeeder
             opened: new DateTime(2026, 2, 20, 0, 0, 0, DateTimeKind.Utc),
             creator: emma,
             confirms: 12, disputes: 0, inconclusive: 4, voters: [owner, sarah, james, daniel],
-            now: now);
+            now: now,
+            latitude: 36.1653m, longitude: -86.7823m);
 
         // BenCo org — use the existing BenCo org if present
         var benco = await db.Organizations.FirstOrDefaultAsync(o => o.UrlName == "benco");
@@ -190,7 +194,8 @@ internal static class DevelopmentDataSeeder
                 opened: new DateTime(2026, 6, 5, 0, 0, 0, DateTimeKind.Utc),
                 creator: owner,
                 confirms: 4, disputes: 3, inconclusive: 2, voters: [sarah, emma, daniel],
-                now: now);
+                now: now,
+                latitude: 36.1043m, longitude: -86.7699m);
         }
 
         // ── Investigation for case 1 ───────────────────────────────────────────
@@ -410,7 +415,8 @@ internal static class DevelopmentDataSeeder
         AppUser creator,
         int confirms, int disputes, int inconclusive,
         AppUser[] voters,
-        DateTime now)
+        DateTime now,
+        decimal? latitude = null, decimal? longitude = null)
     {
         if (await db.Cases.AnyAsync(c => c.OrganizationId == org.Id && c.CaseYear == year && c.OrgCaseNumber == number))
             return;
@@ -422,6 +428,7 @@ internal static class DevelopmentDataSeeder
             Title = title, Description = description,
             StreetAddress1 = street, City = city, State = state,
             ZipCode = zip, Country = country,
+            Latitude = latitude, Longitude = longitude,
             Status = status, IsPublic = isPublic,
             PublicPseudonym = pseudonym,
             DateCaseOpened = opened,

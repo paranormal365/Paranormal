@@ -15,9 +15,13 @@ internal static class UploadFileTypeSeeder
     internal const string AudioFileTypeName          = "Audio";
     internal const string EvidenceFileTypeName       = "Case Evidence";
     internal const string PublishedVideoFileTypeName = "Published Video";
+    internal const string AudioMixFileTypeName       = "Audio Mix";
 
     // Fixed GUID so VideoProjectController can reference it without a DB lookup.
     internal static readonly Guid PublishedVideoFileTypeId = new("30000000-0000-0000-0000-000000000001");
+
+    // Fixed GUID so CaseAudioMixController can reference it without a DB lookup.
+    internal static readonly Guid AudioMixFileTypeId = new("40000000-0000-0000-0000-000000000001");
 
     private static readonly string[] LogoExtensions =
         [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"];
@@ -59,6 +63,8 @@ internal static class UploadFileTypeSeeder
         await SeedEvidenceFileTypeAsync(db, owner.Id);
 
         await SeedPublishedVideoFileTypeAsync(db, owner.Id);
+
+        await SeedAudioMixFileTypeAsync(db, owner.Id);
     }
 
     // ── Private helper ────────────────────────────────────────────────────────
@@ -149,6 +155,26 @@ internal static class UploadFileTypeSeeder
             IsPublic           = false,
             SortOrder          = 5,
             AllowAllExtensions = true, // any video format the editor produces
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Ensures the Audio Mix file type exists (fixed GUID so the mixer export endpoint can use it directly).</summary>
+    private static async Task SeedAudioMixFileTypeAsync(BenDataContext db, Guid ownerId)
+    {
+        if (await db.UploadFileTypes.AnyAsync(t => t.Id == AudioMixFileTypeId)) return;
+
+        db.UploadFileTypes.Add(new UploadFileType
+        {
+            Id                 = AudioMixFileTypeId,
+            Name               = AudioMixFileTypeName,
+            Description        = "Multi-track mixdowns exported from the case audio mixer",
+            IsActive           = true,
+            IsPublic           = false,
+            SortOrder          = 6,
+            AllowAllExtensions = true, // always WAV today, but the mixer's own output format
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = ownerId,
         });

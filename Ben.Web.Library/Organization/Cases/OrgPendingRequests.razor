@@ -52,7 +52,7 @@
                                     <span class="fw-semibold">@r.City, @r.State @r.ZipCode</span>
                                 </div>
                                 <div class="text-secondary small">
-                                    Submitted @r.DateApplied.ToLocalTime().ToString("MMM d, yyyy")
+                                    Submitted @r.DateApplied.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")
                                 </div>
                             </div>
                             <div class="d-flex gap-2 flex-wrap justify-content-end">
@@ -163,7 +163,7 @@
         </WindowActions>
         <WindowContent>
             <div class="p-2">
-                <p>Are you sure you want to decline this request from <strong>@_declineTarget.City, @_declineTarget.State</strong>?</p>
+                <p>Are you sure you want to decline this request from <strong>@_declineTarget?.City, @_declineTarget?.State</strong>?</p>
                 @if (_actionError is not null)
                 {
                     <div class="alert alert-danger">@_actionError</div>

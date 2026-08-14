@@ -151,24 +151,129 @@ public class OrganizationControllerTests
     }
 
     [Fact]
-    public async Task GetAll_AsMember_WithBothGrantsTrue_ReturnsCorrectFlags()
+    public async Task GetAll_AsSuperAdmin_IncludesMemberCaseInvestigationCounts()
+    {
+        var factory  = CreateFactory();
+        var userId   = Guid.NewGuid();
+        var org      = await SeedOrgAsync(factory, "Acme", "acme");
+        var otherOrg = await SeedOrgAsync(factory, "Other", "other");
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            // 2 active + 1 inactive member for org — inactive shouldn't count
+            db.OrganizationUserMemberships.AddRange(
+                new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = Guid.NewGuid(), Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId },
+                new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = Guid.NewGuid(), Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId },
+                new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = Guid.NewGuid(), Role = OrganizationMemberRole.Member, IsActive = false, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId },
+                new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = otherOrg.Id, AppUserId = Guid.NewGuid(), Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId });
+
+            var case1 = new Case
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, Title = "Case 1", CaseYear = 2026, OrgCaseNumber = 1,
+                StreetAddress1 = "1 Main St", City = "Nashville", State = "TN", ZipCode = "37201", Country = "US",
+                DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            };
+            db.Cases.Add(case1);
+            db.Cases.Add(new Case
+            {
+                Id = Guid.NewGuid(), OrganizationId = otherOrg.Id, Title = "Other Case", CaseYear = 2026, OrgCaseNumber = 1,
+                StreetAddress1 = "2 Main St", City = "Nashville", State = "TN", ZipCode = "37201", Country = "US",
+                DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+
+            db.Investigations.AddRange(
+                new Investigation { Id = Guid.NewGuid(), CaseId = case1.Id, Title = "Investigation 1", ScheduledDateTime = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId },
+                new Investigation { Id = Guid.NewGuid(), CaseId = case1.Id, Title = "Investigation 2", ScheduledDateTime = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId });
+
+            await db.SaveChangesAsync();
+        }
+
+        var securityMock = new Mock<IOrganizationSecurityService>();
+        securityMock
+            .Setup(s => s.GetOrganizationsForUserAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([org]);
+
+        var controller = BuildController(factory, UserPrincipal(userId, isSuperAdmin: true), securityMock);
+
+        var result = await controller.GetAllWithPermissions(default);
+
+        var ok   = Assert.IsType<OkObjectResult>(result.Result);
+        var list = Assert.IsAssignableFrom<IEnumerable<OrganizationListItemResponse>>(ok.Value);
+        var item = Assert.Single(list);
+        Assert.Equal(2, item.MemberCount);
+        Assert.Equal(1, item.CaseCount);
+        Assert.Equal(2, item.InvestigationCount);
+    }
+
+    [Fact]
+    public async Task GetAll_AsNonSuperAdmin_CountsAreZero()
     {
         var factory = CreateFactory();
         var userId  = Guid.NewGuid();
         var org     = await SeedOrgAsync(factory);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = Guid.NewGuid(), Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId });
+            await db.SaveChangesAsync();
+        }
 
         var securityMock = new Mock<IOrganizationSecurityService>();
         securityMock
             .Setup(s => s.GetOrganizationsForUserAsync(userId, It.IsAny<CancellationToken>()))
             .ReturnsAsync([org]);
         securityMock
-            .Setup(s => s.HasAccessAsync(userId, org.Id, OrganizationSecurityTable.Organization,
-                OrganizationSecurityAction.Update, It.IsAny<CancellationToken>()))
+            .Setup(s => s.HasAccessAsync(It.IsAny<Guid>(), It.IsAny<Guid>(),
+                It.IsAny<OrganizationSecurityTable>(), It.IsAny<OrganizationSecurityAction>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
+
+        var controller = BuildController(factory, UserPrincipal(userId), securityMock);
+
+        var result = await controller.GetAllWithPermissions(default);
+
+        var ok   = Assert.IsType<OkObjectResult>(result.Result);
+        var list = Assert.IsAssignableFrom<IEnumerable<OrganizationListItemResponse>>(ok.Value);
+        var item = Assert.Single(list);
+        Assert.Equal(0, item.MemberCount);
+        Assert.Equal(0, item.CaseCount);
+        Assert.Equal(0, item.InvestigationCount);
+    }
+
+    [Fact]
+    public async Task GetAll_AsMember_WithBothGrantsTrue_ReturnsCorrectFlags()
+    {
+        var factory = CreateFactory();
+        var userId  = Guid.NewGuid();
+        var org     = await SeedOrgAsync(factory);
+
+        // GetAllWithPermissions resolves edit/delete flags via a batched query directly against
+        // OrganizationAccessGrants (not IOrganizationSecurityService.HasAccessAsync, which would
+        // reintroduce the N+1 this endpoint was fixed to avoid). A direct grant only counts for an
+        // active member (matching HasAccessAsync's own real behavior), so seed both a non-admin
+        // membership and a grant row.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = userId,
+                Role = OrganizationMemberRole.Member, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            db.OrganizationAccessGrants.Add(new OrganizationAccessGrant
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = userId,
+                TableName = OrganizationSecurityTable.Organization,
+                Actions = OrganizationSecurityAction.Update | OrganizationSecurityAction.Delete,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var securityMock = new Mock<IOrganizationSecurityService>();
         securityMock
-            .Setup(s => s.HasAccessAsync(userId, org.Id, OrganizationSecurityTable.Organization,
-                OrganizationSecurityAction.Delete, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .Setup(s => s.GetOrganizationsForUserAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([org]);
 
         var controller = BuildController(factory, UserPrincipal(userId), securityMock);
 
@@ -188,18 +293,28 @@ public class OrganizationControllerTests
         var userId  = Guid.NewGuid();
         var org     = await SeedOrgAsync(factory);
 
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = userId,
+                Role = OrganizationMemberRole.Member, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            db.OrganizationAccessGrants.Add(new OrganizationAccessGrant
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = userId,
+                TableName = OrganizationSecurityTable.Organization,
+                Actions = OrganizationSecurityAction.Update,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
         var securityMock = new Mock<IOrganizationSecurityService>();
         securityMock
             .Setup(s => s.GetOrganizationsForUserAsync(userId, It.IsAny<CancellationToken>()))
             .ReturnsAsync([org]);
-        securityMock
-            .Setup(s => s.HasAccessAsync(userId, org.Id, OrganizationSecurityTable.Organization,
-                OrganizationSecurityAction.Update, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        securityMock
-            .Setup(s => s.HasAccessAsync(userId, org.Id, OrganizationSecurityTable.Organization,
-                OrganizationSecurityAction.Delete, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
 
         var controller = BuildController(factory, UserPrincipal(userId), securityMock);
 
@@ -210,6 +325,42 @@ public class OrganizationControllerTests
         var item = Assert.Single(list);
         Assert.True(item.CanEdit);
         Assert.False(item.CanDelete);
+    }
+
+    [Fact]
+    public async Task GetAll_AsOwnerMembership_ReturnsBothFlagsTrue_WithNoExplicitGrant()
+    {
+        var factory = CreateFactory();
+        var userId  = Guid.NewGuid();
+        var org     = await SeedOrgAsync(factory);
+
+        // Owner/Administrator membership implies full access with no OrganizationAccessGrant row
+        // at all -- the most common real-world path, distinct from the direct-grant tests above.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = userId,
+                Role = OrganizationMemberRole.Owner, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var securityMock = new Mock<IOrganizationSecurityService>();
+        securityMock
+            .Setup(s => s.GetOrganizationsForUserAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([org]);
+
+        var controller = BuildController(factory, UserPrincipal(userId), securityMock);
+
+        var result = await controller.GetAllWithPermissions(default);
+
+        var ok   = Assert.IsType<OkObjectResult>(result.Result);
+        var list = Assert.IsAssignableFrom<IEnumerable<OrganizationListItemResponse>>(ok.Value);
+        var item = Assert.Single(list);
+        Assert.True(item.CanEdit);
+        Assert.True(item.CanDelete);
     }
 
     [Fact]
@@ -431,6 +582,27 @@ public class OrganizationControllerTests
         var result = await controller.Update(Guid.NewGuid(), new AdminUpdateOrganizationRequest("Name", "name"), default);
 
         Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Update_ConcurrentWithDelete_NeverThrows()
+    {
+        // Regression: Update fetches "before" (untracked), then re-fetches the tracked row and
+        // used to dereference it with `!` — if a concurrent Delete won that race, the second
+        // fetch returned null and the unchecked `!` threw an unhandled NullReferenceException
+        // (raw 500) instead of a clean NotFound.
+        var factory     = CreateFactory();
+        var userId      = Guid.NewGuid();
+        var org         = await SeedOrgAsync(factory);
+        var updateCtrl  = BuildController(factory, UserPrincipal(userId, isSuperAdmin: true));
+        var deleteCtrl  = BuildController(factory, UserPrincipal(userId, isSuperAdmin: true));
+
+        var updateTask = updateCtrl.Update(org.Id, new AdminUpdateOrganizationRequest("Renamed", "renamed"), default);
+        var deleteTask = deleteCtrl.Delete(org.Id, default);
+        var (updateResult, deleteResult) = (await updateTask, await deleteTask);
+
+        Assert.True(updateResult.Result is OkObjectResult or NotFoundResult);
+        Assert.True(deleteResult is NoContentResult or NotFoundResult);
     }
 
     // ── Delete ────────────────────────────────────────────────────────────────
@@ -665,5 +837,127 @@ public class OrganizationControllerTests
         Assert.Equal("(800) 555-0199",  created.PublicPhone);
         Assert.Equal("info@neworg.com", created.PublicEmail);
         Assert.Equal("https://neworg.com", created.PublicWebsite);
+    }
+
+    // ── GetUserDirectory (Phase A: replaces GetAllUsersAsync for org-admin CMS surfaces) ──────
+
+    [Fact]
+    public async Task GetUserDirectory_ActiveMember_ReturnsOtherActiveMembers()
+    {
+        var factory = CreateFactory();
+        var orgId   = Guid.NewGuid();
+        var callerId = Guid.NewGuid();
+        var otherId  = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.AppUsers.Add(new AppUser { Id = callerId, Email = "caller@test.com", UserName = "caller@test.com", DisplayName = "Caller" });
+            db.AppUsers.Add(new AppUser { Id = otherId, Email = "other@test.com", UserName = "other@test.com", DisplayName = "Other Member" });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = callerId,
+                Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = callerId
+            });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = otherId,
+                Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = callerId
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var controller = BuildController(factory, UserPrincipal(callerId));
+        var result = await controller.GetUserDirectory(orgId, default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var entries = Assert.IsAssignableFrom<IEnumerable<OrgUserDirectoryEntry>>(ok.Value).ToList();
+        Assert.Equal(2, entries.Count);
+        Assert.Contains(entries, e => e.Id == callerId && e.DisplayName == "Caller");
+        Assert.Contains(entries, e => e.Id == otherId && e.DisplayName == "Other Member");
+    }
+
+    [Fact]
+    public async Task GetUserDirectory_NotAMember_ReturnsForbid()
+    {
+        // The actual fix under test: a caller who isn't a member of this org — even if they're
+        // an active member of some *other* org — cannot pull this org's member directory.
+        var factory = CreateFactory();
+        var orgId       = Guid.NewGuid();
+        var otherOrgId  = Guid.NewGuid();
+        var callerId    = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.AppUsers.Add(new AppUser { Id = callerId, Email = "caller@test.com", UserName = "caller@test.com" });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = otherOrgId, AppUserId = callerId,
+                Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = callerId
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var controller = BuildController(factory, UserPrincipal(callerId));
+        var result = await controller.GetUserDirectory(orgId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetUserDirectory_InactiveMembership_ReturnsForbid()
+    {
+        var factory = CreateFactory();
+        var orgId    = Guid.NewGuid();
+        var callerId = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.AppUsers.Add(new AppUser { Id = callerId, Email = "caller@test.com", UserName = "caller@test.com" });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = callerId,
+                Role = OrganizationMemberRole.Member, IsActive = false, DateCreated = DateTime.UtcNow, CreatedByAppUserId = callerId
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var controller = BuildController(factory, UserPrincipal(callerId));
+        var result = await controller.GetUserDirectory(orgId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetUserDirectory_ExcludesInactiveMembers()
+    {
+        var factory  = CreateFactory();
+        var orgId    = Guid.NewGuid();
+        var callerId = Guid.NewGuid();
+        var formerMemberId = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.AppUsers.Add(new AppUser { Id = callerId, Email = "caller@test.com", UserName = "caller@test.com", DisplayName = "Caller" });
+            db.AppUsers.Add(new AppUser { Id = formerMemberId, Email = "former@test.com", UserName = "former@test.com", DisplayName = "Former Member" });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = callerId,
+                Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = callerId
+            });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = formerMemberId,
+                Role = OrganizationMemberRole.Member, IsActive = false, DateCreated = DateTime.UtcNow, CreatedByAppUserId = callerId
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var controller = BuildController(factory, UserPrincipal(callerId));
+        var result = await controller.GetUserDirectory(orgId, default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var entries = Assert.IsAssignableFrom<IEnumerable<OrgUserDirectoryEntry>>(ok.Value).ToList();
+        Assert.Single(entries);
+        Assert.DoesNotContain(entries, e => e.Id == formerMemberId);
     }
 }

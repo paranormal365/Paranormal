@@ -34,8 +34,8 @@
                 <h3 class="mb-0">@_case.DisplayLabel</h3>
                 <div class="text-secondary small mt-1">
                     @_case.City, @_case.State ·
-                    Opened @_case.DateCaseOpened.ToLocalTime().ToString("MMMM d, yyyy")
-                    @if (_case.IsPublic) { <span class="badge bg-info text-dark ms-2">Public</span> }
+                    Opened @_case.DateCaseOpened.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy")
+                    @if (_case.IsPublic && _case.Status != CaseStatus.Public) { <span class="badge bg-info text-dark ms-2">Public</span> }
                     @if (!string.IsNullOrEmpty(_case.PublicPseudonym))
                     {
                         <span class="ms-2 text-secondary">Public name: <em>@_case.PublicPseudonym</em></span>
@@ -54,19 +54,24 @@
                 </div>
             </div>
             <div class="d-flex gap-2">
-                <span class="badge fs-6 @CaseList.StatusBadgeClass(_case.Status)">
-                    @CaseList.StatusLabel(_case.Status)
+                <span class="badge fs-6 @_case.Status.BadgeClass()">
+                    @_case.Status.Label()
                 </span>
+                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                               FillMode="@ThemeConstants.Button.FillMode.Outline"
+                               OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/{CaseId}/audio-mix"))">
+                    🎚 Audio Mixer
+                </TelerikButton>
                 <TelerikButton Icon="@SvgIcon.Pencil" Size="@ThemeConstants.Button.Size.Small"
                                OnClick="OpenEditDialog">Edit Case</TelerikButton>
             </div>
         </div>
 
         @* ── Tab strip ─────────────────────────────────────────────────────── *@
-        <TelerikTabStrip>
+        <TelerikTabStrip @bind-ActiveTabId="_activeTabId">
 
             @* ── Overview ────────────────────────────────────────────────── *@
-            <TabStripTab Title="Overview">
+            <TabStripTab Id="overview" Title="Overview">
                 <div class="row g-4 mt-1">
                     <div class="col-md-8">
                         @if (!string.IsNullOrWhiteSpace(_case.Description))
@@ -102,7 +107,7 @@
                                     @if (_case.DateCaseClosed.HasValue)
                                     {
                                         <dt class="col-5">Closed</dt>
-                                        <dd class="col-7">@_case.DateCaseClosed.Value.ToLocalTime().ToString("MMM d, yyyy")</dd>
+                                        <dd class="col-7">@_case.DateCaseClosed.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")</dd>
                                     }
                                 </dl>
                             </div>
@@ -112,28 +117,35 @@
             </TabStripTab>
 
             @* ── Timeline ─────────────────────────────────────────────────── *@
-            <TabStripTab Title="Timeline">
+            <TabStripTab Id="timeline" Title="Timeline">
                 <div class="mt-2">
                     <CaseTimeline OrgId="@OrgId" CaseId="@CaseId" />
                 </div>
             </TabStripTab>
 
             @* ── Investigations ───────────────────────────────────────────── *@
-            <TabStripTab Title="Investigations">
+            <TabStripTab Id="investigations" Title="Investigations">
                 <div class="mt-2">
                     <InvestigationPanel OrgId="@OrgId" CaseId="@CaseId" />
                 </div>
             </TabStripTab>
 
+            @* ── Files ─────────────────────────────────────────────────────── *@
+            <TabStripTab Id="files" Title="Files">
+                <div class="mt-2">
+                    <CaseFiles OrgId="@OrgId" CaseId="@CaseId" />
+                </div>
+            </TabStripTab>
+
             @* ── Transfers ────────────────────────────────────────────────── *@
-            <TabStripTab Title="Transfers">
+            <TabStripTab Id="transfers" Title="Transfers">
                 <div class="mt-2">
                     <CaseTransferPanel OrgId="@OrgId" CaseId="@CaseId" />
                 </div>
             </TabStripTab>
 
             @* ── Client Messages ─────────────────────────────────────────────── *@
-            <TabStripTab Title="@(_unreadCount > 0 ? $"Messages ({_unreadCount})" : "Messages")">
+            <TabStripTab Id="messages" Title="@(_unreadCount > 0 ? $"Messages ({_unreadCount})" : "Messages")">
                 <div class="mt-2" style="max-width:680px;">
                     <CaseMessageThread CurrentSide="@Ben.Data.Common.Enums.CaseMessageSide.Organization"
                                        LoadMessages="@LoadOrgMessages"
@@ -142,27 +154,27 @@
             </TabStripTab>
 
             @* ── Report Builder ──────────────────────────────────────────────── *@
-            <TabStripTab Title="Reports">
+            <TabStripTab Id="reports" Title="Reports">
                 <div class="mt-2">
                     <ReportBuilder OrgId="@OrgId" CaseId="@CaseId" />
                 </div>
             </TabStripTab>
 
             @* ── Research ─────────────────────────────────────────────────────── *@
-            <TabStripTab Title="Research">
+            <TabStripTab Id="research" Title="Research">
                 <div class="mt-2">
                     <CaseResearch OrgId="@OrgId" CaseId="@CaseId" />
                 </div>
             </TabStripTab>
             @* ── Notes ───────────────────────────────────────────────────────────── *@
-            <TabStripTab Title="Notes">
+            <TabStripTab Id="notes" Title="Notes">
                 <div class="mt-2">
                     <CaseNotes OrgId="@OrgId" CaseId="@CaseId" />
                 </div>
             </TabStripTab>
 
             @* ── Video Editor ────────────────────────────────────────────────────── *@
-            <TabStripTab Title="Video">
+            <TabStripTab Id="video" Title="Video">
                 <div class="mt-3">
                     <p class="text-muted small mb-2">Create and manage video projects for this case. The video editor opens full-screen.</p>
                     <a href="/organizations/@OrgId/cases/@CaseId/video-editor"
@@ -235,11 +247,29 @@
     [Parameter] public Guid OrgId { get; set; }
     [Parameter] public Guid CaseId { get; set; }
 
+    /// <summary>Selects the initial tab, e.g. "?tab=investigations" — used by My Investigations' clickable cards.</summary>
+    [Parameter, SupplyParameterFromQuery(Name = "tab")] public string? InitialTab { get; set; }
+
     private CaseRecord? _case;
     private bool _loaded;
     private string? _error;
     private bool _isBusy;
     private int _unreadCount;
+    private string _activeTabId = "overview";
+
+    private static string TabIdFor(string? tab) => tab?.ToLowerInvariant() switch
+    {
+        "timeline"       => "timeline",
+        "investigations" => "investigations",
+        "files"          => "files",
+        "transfers"      => "transfers",
+        "messages"       => "messages",
+        "reports"        => "reports",
+        "research"       => "research",
+        "notes"          => "notes",
+        "video"          => "video",
+        _                => "overview",
+    };
 
     // Edit dialog
     private bool _showEdit;
@@ -254,12 +284,40 @@
 
     private static readonly List<StatusOption> _statusOptions = Enum
         .GetValues<CaseStatus>()
-        .Select(s => new StatusOption(s, CaseList.StatusLabel(s)))
+        .Select(s => new StatusOption(s, s.Label()))
         .ToList();
+
+    private Guid _loadedCaseId;
+
+    protected override void OnInitialized()
+    {
+        _activeTabId = TabIdFor(InitialTab);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Guards against a same-route navigation (e.g. a "next case" link) reusing this component
+        // instance for a different CaseId — OnInitialized/OnAfterRenderAsync(firstRender) only fire
+        // once per instance, so without this the page would silently keep showing the previous case.
+        if (!_loaded || CaseId == _loadedCaseId) return;
+        await LoadCaseAsync();
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        await LoadCaseAsync();
+    }
+
+    private async Task LoadCaseAsync()
+    {
+        _loadedCaseId = CaseId;
+        _loaded = false;
+        _case   = null;
+        _error  = null;
+        _activeTabId = TabIdFor(InitialTab);
+        StateHasChanged();
+
         try { _case = await AdminClient.GetOrgCaseAsync(OrgId, CaseId); }
         catch { _error = "Failed to load case."; }
         _loaded = true;

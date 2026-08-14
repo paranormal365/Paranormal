@@ -41,8 +41,8 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper, 
     {
         if (!await FileExistsAsync(fileId)) return NotFound();
 
-        var userId = GetCurrentUserId();
-        if (userId == Guid.Empty) return Unauthorized();
+        var userId = GetCurrentUserIdOrThrow();
+        if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, userId, CancellationToken.None)) return Forbid();
 
         var existingBefore = await db.UploadFileAudioConfigs.AsNoTracking()
             .FirstOrDefaultAsync(c => c.UploadFileId == fileId);
@@ -84,6 +84,10 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper, 
     [HttpDelete]
     public async Task<IActionResult> Delete(Guid fileId)
     {
+        var userId = GetCurrentUserIdOrThrow();
+        if (!await FileExistsAsync(fileId)) return NotFound();
+        if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, userId, CancellationToken.None)) return Forbid();
+
         var entity = await db.UploadFileAudioConfigs
             .FirstOrDefaultAsync(c => c.UploadFileId == fileId);
 
@@ -91,7 +95,7 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper, 
 
         db.UploadFileAudioConfigs.Remove(entity);
         await db.SaveChangesAsync();
-        _ = TryAuditAsync(auditLog.LogDeleteAsync(nameof(UploadFileAudioConfig), entity.Id, entity, GetCurrentUserId(), AppSources.WebApi, CancellationToken.None));
+        _ = TryAuditAsync(auditLog.LogDeleteAsync(nameof(UploadFileAudioConfig), entity.Id, entity, userId, AppSources.WebApi, CancellationToken.None));
 
         return NoContent();
     }

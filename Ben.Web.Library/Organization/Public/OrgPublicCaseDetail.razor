@@ -40,8 +40,8 @@ else
         <div class="mb-4">
             <div class="d-flex align-items-center gap-2 mb-1">
                 <span class="font-monospace text-muted">@_case.CaseReference</span>
-                <span class="badge @BadgeClass(_case.Status)">@StatusLabel(_case.Status)</span>
-                @if (_case.IsHaunted)
+                <span class="badge @_case.Status.BadgeClass()">@_case.Status.Label()</span>
+                @if (_case.IsHaunted && _case.Status != CaseStatus.Haunted)
                 {
                     <span class="badge bg-warning text-dark">👻 Haunted</span>
                 }
@@ -142,20 +142,6 @@ else
         _case    = await AdminClient.GetPublicCaseAsync(UrlName, CaseRef);
         _loading = false;
     }
-
-    private static string StatusLabel(CaseStatus s) => s switch
-    {
-        CaseStatus.Public   => "Public",
-        CaseStatus.Haunted  => "Haunted",
-        _                   => s.ToString(),
-    };
-
-    private static string BadgeClass(CaseStatus s) => s switch
-    {
-        CaseStatus.Haunted => "bg-warning text-dark",
-        CaseStatus.Public  => "bg-info text-dark",
-        _                  => "bg-secondary",
-    };
 
     private static string EntryTypeLabel(CaseTimelineEntryType t) => t switch
     {

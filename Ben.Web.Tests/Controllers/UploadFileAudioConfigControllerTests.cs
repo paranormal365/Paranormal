@@ -85,24 +85,25 @@ public class UploadFileAudioConfigControllerTests
             new Claim(ClaimTypes.NameIdentifier, userId.ToString())
         ], "Bearer"));
 
-    private static async Task<Guid> SeedFileAsync(BenDataContext db)
+    private static async Task<(Guid FileId, Guid OwnerId)> SeedFileAsync(BenDataContext db)
     {
-        var fileId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
         db.UploadFiles.Add(new UploadFile
         {
             Id              = fileId,
             UploadFileTypeId = Guid.NewGuid(),
-            AppUserId       = Guid.NewGuid(),
+            AppUserId       = ownerId,
             FileName        = "audio.mp3",
             StoredFileName  = "stored.mp3",
             ContentType     = "audio/mpeg",
             FileSize        = 1024,
             FileData        = new byte[4],
             DateCreated     = DateTime.UtcNow,
-            CreatedByAppUserId = Guid.NewGuid(),
+            CreatedByAppUserId = ownerId,
         });
         await db.SaveChangesAsync();
-        return fileId;
+        return (fileId, ownerId);
     }
 
     private static async Task<Guid> SeedConfigAsync(BenDataContext db, Guid fileId, Guid userId)
@@ -135,7 +136,7 @@ public class UploadFileAudioConfigControllerTests
     public async Task Get_ReturnsNull_WhenFileExistsButNoConfigSaved()
     {
         await using var db  = CreateDb();
-        var fileId          = await SeedFileAsync(db);
+        var (fileId, _)     = await SeedFileAsync(db);
         var ctrl            = Build(db, AuthUser(Guid.NewGuid()));
 
         var result          = await ctrl.Get(fileId);
@@ -148,10 +149,9 @@ public class UploadFileAudioConfigControllerTests
     public async Task Get_ReturnsRecord_WhenConfigExists()
     {
         await using var db  = CreateDb();
-        var userId          = Guid.NewGuid();
-        var fileId          = await SeedFileAsync(db);
-        await SeedConfigAsync(db, fileId, userId);
-        var ctrl            = Build(db, AuthUser(userId));
+        var (fileId, ownerId) = await SeedFileAsync(db);
+        await SeedConfigAsync(db, fileId, ownerId);
+        var ctrl            = Build(db, AuthUser(ownerId));
 
         var result          = await ctrl.Get(fileId);
 
@@ -180,9 +180,8 @@ public class UploadFileAudioConfigControllerTests
     public async Task Upsert_Creates_WhenNoConfigExists()
     {
         await using var db  = CreateDb();
-        var userId          = Guid.NewGuid();
-        var fileId          = await SeedFileAsync(db);
-        var ctrl            = Build(db, AuthUser(userId));
+        var (fileId, ownerId) = await SeedFileAsync(db);
+        var ctrl            = Build(db, AuthUser(ownerId));
         var req             = new UpsertAudioConfigRequest
         {
             WaveColor       = "#3B82F6",
@@ -212,10 +211,9 @@ public class UploadFileAudioConfigControllerTests
     public async Task Upsert_Updates_WhenConfigAlreadyExists()
     {
         await using var db  = CreateDb();
-        var userId          = Guid.NewGuid();
-        var fileId          = await SeedFileAsync(db);
-        await SeedConfigAsync(db, fileId, userId);
-        var ctrl            = Build(db, AuthUser(userId));
+        var (fileId, ownerId) = await SeedFileAsync(db);
+        await SeedConfigAsync(db, fileId, ownerId);
+        var ctrl            = Build(db, AuthUser(ownerId));
         var req             = new UpsertAudioConfigRequest
         {
             WaveColor       = "#00FF00",
@@ -255,16 +253,31 @@ public class UploadFileAudioConfigControllerTests
     }
 
     [Fact]
-    public async Task Upsert_ReturnsUnauthorized_WhenNoUserIdentityClaim()
+    public async Task Upsert_ThrowsUnauthorized_WhenNoUserIdentityClaim()
     {
         await using var db  = CreateDb();
-        var fileId          = await SeedFileAsync(db);
+        var (fileId, _)     = await SeedFileAsync(db);
         var ctrl            = Build(db, Anonymous());  // no NameIdentifier claim
+        var req             = new UpsertAudioConfigRequest { InitialHeight = "200px", MinHeight = "80px", MaxHeight = "800px" };
+
+        var act = async () => await ctrl.Upsert(fileId, req);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(act);
+    }
+
+    [Fact]
+    public async Task Upsert_UnrelatedCaller_ReturnsForbid()
+    {
+        // The core of the fix: this used to let any authenticated user overwrite the player
+        // config for any file, regardless of ownership/visibility.
+        await using var db  = CreateDb();
+        var (fileId, _)     = await SeedFileAsync(db);
+        var ctrl            = Build(db, AuthUser(Guid.NewGuid()));
         var req             = new UpsertAudioConfigRequest { InitialHeight = "200px", MinHeight = "80px", MaxHeight = "800px" };
 
         var result          = await ctrl.Upsert(fileId, req);
 
-        Assert.IsType<UnauthorizedResult>(result.Result);
+        Assert.IsType<ForbidResult>(result.Result);
     }
 
     // ── DELETE ────────────────────────────────────────────────────────────────
@@ -273,10 +286,9 @@ public class UploadFileAudioConfigControllerTests
     public async Task Delete_RemovesConfig_AndReturnsNoContent()
     {
         await using var db  = CreateDb();
-        var userId          = Guid.NewGuid();
-        var fileId          = await SeedFileAsync(db);
-        await SeedConfigAsync(db, fileId, userId);
-        var ctrl            = Build(db, AuthUser(userId));
+        var (fileId, ownerId) = await SeedFileAsync(db);
+        await SeedConfigAsync(db, fileId, ownerId);
+        var ctrl            = Build(db, AuthUser(ownerId));
 
         var result          = await ctrl.Delete(fileId);
 
@@ -285,14 +297,42 @@ public class UploadFileAudioConfigControllerTests
     }
 
     [Fact]
-    public async Task Delete_ReturnsNoContent_WhenNoConfigExists()
+    public async Task Delete_ReturnsNoContent_WhenFileExistsButNoConfigSaved()
+    {
+        // Idempotent delete: the file exists (so the caller's ownership can be checked) but has
+        // no config row yet.
+        await using var db  = CreateDb();
+        var (fileId, ownerId) = await SeedFileAsync(db);
+        var ctrl            = Build(db, AuthUser(ownerId));
+
+        var result          = await ctrl.Delete(fileId);
+
+        Assert.IsType<NoContentResult>(result);
+    }
+
+    [Fact]
+    public async Task Delete_ReturnsNotFound_WhenFileDoesNotExist()
     {
         await using var db  = CreateDb();
         var ctrl            = Build(db, AuthUser(Guid.NewGuid()));
 
-        // No file seeded either — still NoContent (idempotent delete)
         var result          = await ctrl.Delete(Guid.NewGuid());
 
-        Assert.IsType<NoContentResult>(result);
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task Delete_UnrelatedCaller_ReturnsForbid()
+    {
+        // The core of the fix: this used to let any authenticated user reset/delete another
+        // user's saved audio-player config.
+        await using var db  = CreateDb();
+        var (fileId, ownerId) = await SeedFileAsync(db);
+        await SeedConfigAsync(db, fileId, ownerId);
+        var ctrl            = Build(db, AuthUser(Guid.NewGuid()));
+
+        var result          = await ctrl.Delete(fileId);
+
+        Assert.IsType<ForbidResult>(result);
     }
 }

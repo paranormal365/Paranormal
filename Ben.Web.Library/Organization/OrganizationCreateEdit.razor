@@ -86,8 +86,9 @@
     private bool      _isSaving;
     private string?   _errorMessage;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated)
         {
             NavManager.NavigateTo("/login");

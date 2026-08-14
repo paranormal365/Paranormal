@@ -11,15 +11,22 @@ namespace Ben.Web.Tests.Controllers;
 
 /// <summary>
 /// Unit tests for EntraAuthController:
-///   - POST /api/auth/entra/register — creates local AppUser and links Entra OID
-///   - POST /api/auth/entra/link    — links Entra OID to existing authenticated user
+///   - POST /api/auth/entra/register — creates a local AppUser from the caller's validated
+///     Entra identity (OID/email read from claims, never the request body) and links it
+///   - POST /api/auth/entra/link    — links the caller's validated Entra identity to an
+///     existing local account, identified + proven by email/password in the body
+///
+/// Both actions require [Authorize(Policy = AuthPolicyNames.EntraOnly)] in production — that
+/// attribute isn't exercised by these controller-level unit tests (no auth pipeline runs), so
+/// the tests instead assert the action body's own claim-reading and validation guards, which is
+/// where the actual security fix lives: neither action ever trusts a client-supplied OID/email.
 /// </summary>
 public class EntraAuthControllerTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static readonly string ValidOid   = Guid.NewGuid().ToString();
-    private static readonly Guid   UserId     = Guid.NewGuid();
+    private static readonly string ValidOid = Guid.NewGuid().ToString();
+    private static readonly Guid   UserId   = Guid.NewGuid();
 
     private static Mock<UserManager<AppUser>> CreateUserManagerMock()
     {
@@ -43,11 +50,19 @@ public class EntraAuthControllerTests
         return controller;
     }
 
-    private static ClaimsPrincipal AuthenticatedPrincipal(Guid userId) =>
+    /// <summary>Simulates the principal the "Entra" JWT bearer scheme would produce — carries the
+    /// validated "oid" and "preferred_username" claims that <c>GetValidatedEntraIdentity</c> reads.</summary>
+    private static ClaimsPrincipal EntraPrincipal(string oid, string email) =>
         new(new ClaimsIdentity(
         [
-            new Claim(ClaimTypes.NameIdentifier, userId.ToString())
-        ], authenticationType: "Bearer"));
+            new Claim("oid", oid),
+            new Claim("preferred_username", email)
+        ], authenticationType: "Entra"));
+
+    /// <summary>A principal with no "oid" claim at all — e.g. what a local Identity bearer token
+    /// (never carrying Entra claims) would produce if it somehow reached these actions.</summary>
+    private static readonly ClaimsPrincipal NoOidPrincipal =
+        new(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, UserId.ToString())], authenticationType: "Bearer"));
 
     // ── Register — happy path ─────────────────────────────────────────────────
 
@@ -64,8 +79,8 @@ public class EntraAuthControllerTests
         umMock.Setup(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()))
               .ReturnsAsync(IdentityResult.Success);
 
-        var controller = BuildController(umMock);
-        var request = new EntraRegisterRequest(ValidOid, "new@test.com", "New User");
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "new@test.com"));
+        var request = new EntraRegisterRequest("New User");
 
         var result = await controller.Register(request, default);
 
@@ -89,52 +104,58 @@ public class EntraAuthControllerTests
         umMock.Setup(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()))
               .ReturnsAsync(IdentityResult.Success);
 
-        var controller = BuildController(umMock);
-        await controller.Register(new EntraRegisterRequest(ValidOid, "e@t.com", "Name"), default);
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "e@t.com"));
+        await controller.Register(new EntraRegisterRequest("Name"), default);
 
         Assert.NotNull(capturedUser);
         Assert.True(capturedUser!.EmailConfirmed);
     }
 
     [Fact]
-    public async Task Register_LinksCorrectOidAndProvider()
+    public async Task Register_UsesOidAndEmailFromValidatedClaims_NotFromBody()
     {
+        // The core of the fix: even though the request body carries no identity fields at all,
+        // the created login is tied to whatever OID/email the (simulated) validated token carried.
         var umMock = CreateUserManagerMock();
         UserLoginInfo? capturedLogin = null;
+        AppUser? capturedUser = null;
         umMock.Setup(m => m.FindByEmailAsync(It.IsAny<string>())).ReturnsAsync((AppUser?)null);
         umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync((AppUser?)null);
-        umMock.Setup(m => m.CreateAsync(It.IsAny<AppUser>())).ReturnsAsync(IdentityResult.Success);
+        umMock.Setup(m => m.CreateAsync(It.IsAny<AppUser>()))
+              .Callback<AppUser>(u => capturedUser = u)
+              .ReturnsAsync(IdentityResult.Success);
         umMock.Setup(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()))
               .Callback<AppUser, UserLoginInfo>((_, l) => capturedLogin = l)
               .ReturnsAsync(IdentityResult.Success);
 
-        var controller = BuildController(umMock);
-        await controller.Register(new EntraRegisterRequest(ValidOid, "e@t.com", "Name", "e@t.com"), default);
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "claims-email@test.com"));
+        await controller.Register(new EntraRegisterRequest("Name"), default);
 
         Assert.NotNull(capturedLogin);
-        Assert.Equal("Microsoft",  capturedLogin!.LoginProvider);
-        Assert.Equal(ValidOid,     capturedLogin.ProviderKey);
-        Assert.Equal("e@t.com",    capturedLogin.ProviderDisplayName);
+        Assert.Equal("Microsoft", capturedLogin!.LoginProvider);
+        Assert.Equal(ValidOid, capturedLogin.ProviderKey);
+        Assert.Equal("claims-email@test.com", capturedUser!.Email);
     }
 
     // ── Register — validation guards ─────────────────────────────────────────
 
     [Fact]
-    public async Task Register_EmptyEmail_ReturnsBadRequest()
+    public async Task Register_NoOidClaim_ReturnsBadRequest()
     {
-        var controller = BuildController(CreateUserManagerMock());
-        var result = await controller.Register(
-            new EntraRegisterRequest(ValidOid, "", "Name"), default);
+        // Simulates a caller whose token isn't actually a validated Entra JWT (no "oid" claim) —
+        // in production the EntraOnly policy would already have rejected this, but the action
+        // itself must not proceed as if it had a valid identity either.
+        var controller = BuildController(CreateUserManagerMock(), NoOidPrincipal);
+        var result = await controller.Register(new EntraRegisterRequest("Name"), default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
     [Fact]
-    public async Task Register_InvalidOid_ReturnsBadRequest()
+    public async Task Register_EmptyDisplayName_ReturnsBadRequest()
     {
-        var controller = BuildController(CreateUserManagerMock());
-        var result = await controller.Register(
-            new EntraRegisterRequest("not-a-guid", "e@t.com", "Name"), default);
+        var controller = BuildController(CreateUserManagerMock(), EntraPrincipal(ValidOid, "e@t.com"));
+        var result = await controller.Register(new EntraRegisterRequest(""), default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
@@ -146,9 +167,8 @@ public class EntraAuthControllerTests
         umMock.Setup(m => m.FindByEmailAsync("existing@test.com"))
               .ReturnsAsync(new AppUser { Id = UserId, Email = "existing@test.com" });
 
-        var controller = BuildController(umMock);
-        var result = await controller.Register(
-            new EntraRegisterRequest(ValidOid, "existing@test.com", "Name"), default);
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "existing@test.com"));
+        var result = await controller.Register(new EntraRegisterRequest("Name"), default);
 
         Assert.IsType<ConflictObjectResult>(result.Result);
     }
@@ -162,9 +182,8 @@ public class EntraAuthControllerTests
         umMock.Setup(m => m.FindByEmailAsync(It.IsAny<string>())).ReturnsAsync((AppUser?)null);
         umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync(existingUser);
 
-        var controller = BuildController(umMock);
-        var result = await controller.Register(
-            new EntraRegisterRequest(ValidOid, "e@t.com", "Name"), default);
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "e@t.com"));
+        var result = await controller.Register(new EntraRegisterRequest("Name"), default);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var reg = Assert.IsType<EntraRegisterResult>(ok.Value);
@@ -182,9 +201,8 @@ public class EntraAuthControllerTests
         umMock.Setup(m => m.CreateAsync(It.IsAny<AppUser>()))
               .ReturnsAsync(IdentityResult.Failed(new IdentityError { Description = "DB error" }));
 
-        var controller = BuildController(umMock);
-        var result = await controller.Register(
-            new EntraRegisterRequest(ValidOid, "e@t.com", "Name"), default);
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "e@t.com"));
+        var result = await controller.Register(new EntraRegisterRequest("Name"), default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
@@ -201,9 +219,8 @@ public class EntraAuthControllerTests
               .ReturnsAsync(IdentityResult.Failed(new IdentityError { Description = "Link error" }));
         umMock.Setup(m => m.DeleteAsync(It.IsAny<AppUser>())).ReturnsAsync(IdentityResult.Success);
 
-        var controller = BuildController(umMock);
-        var result = await controller.Register(
-            new EntraRegisterRequest(ValidOid, "e@t.com", "Name"), default);
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "e@t.com"));
+        var result = await controller.Register(new EntraRegisterRequest("Name"), default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
         umMock.Verify(m => m.DeleteAsync(It.IsAny<AppUser>()), Times.Once);
@@ -212,66 +229,98 @@ public class EntraAuthControllerTests
     // ── Link — happy path ─────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Link_NewOid_LinksSuccessfully_ReturnsOk()
+    public async Task Link_ValidCredentials_LinksSuccessfully_ReturnsOk()
     {
         var localUser = new AppUser { Id = UserId, Email = "local@test.com" };
         var umMock    = CreateUserManagerMock();
-        umMock.Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync(localUser);
+        umMock.Setup(m => m.FindByEmailAsync("local@test.com")).ReturnsAsync(localUser);
+        umMock.Setup(m => m.CheckPasswordAsync(localUser, "correct-password")).ReturnsAsync(true);
         umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync((AppUser?)null);
         umMock.Setup(m => m.AddLoginAsync(localUser, It.IsAny<UserLoginInfo>()))
               .ReturnsAsync(IdentityResult.Success);
 
-        var controller = BuildController(umMock, AuthenticatedPrincipal(UserId));
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "entra@test.com"));
         var result = await controller.Link(
-            new EntraLinkRequest(ValidOid, "entra@test.com"), default);
+            new EntraLinkRequest("local@test.com", "correct-password"), default);
 
         Assert.IsType<OkObjectResult>(result);
     }
 
     [Fact]
-    public async Task Link_NewOid_LinksWithCorrectProvider()
+    public async Task Link_UsesOidFromValidatedClaims_NotFromBody()
     {
+        // The body carries only email/password now — the OID being linked comes entirely from
+        // the (simulated) validated Entra token, which is the actual fix under test.
         var localUser = new AppUser { Id = UserId, Email = "local@test.com" };
         UserLoginInfo? captured = null;
         var umMock = CreateUserManagerMock();
-        umMock.Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync(localUser);
+        umMock.Setup(m => m.FindByEmailAsync("local@test.com")).ReturnsAsync(localUser);
+        umMock.Setup(m => m.CheckPasswordAsync(localUser, "correct-password")).ReturnsAsync(true);
         umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync((AppUser?)null);
         umMock.Setup(m => m.AddLoginAsync(localUser, It.IsAny<UserLoginInfo>()))
               .Callback<AppUser, UserLoginInfo>((_, l) => captured = l)
               .ReturnsAsync(IdentityResult.Success);
 
-        var controller = BuildController(umMock, AuthenticatedPrincipal(UserId));
-        await controller.Link(new EntraLinkRequest(ValidOid, "entra@test.com", "entra@test.com"), default);
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "entra@test.com"));
+        await controller.Link(new EntraLinkRequest("local@test.com", "correct-password"), default);
 
         Assert.NotNull(captured);
-        Assert.Equal("Microsoft",       captured!.LoginProvider);
-        Assert.Equal(ValidOid,          captured.ProviderKey);
-        Assert.Equal("entra@test.com",  captured.ProviderDisplayName);
+        Assert.Equal("Microsoft", captured!.LoginProvider);
+        Assert.Equal(ValidOid, captured.ProviderKey);
     }
 
     // ── Link — guard cases ────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Link_InvalidOid_ReturnsBadRequest()
+    public async Task Link_NoOidClaim_ReturnsBadRequest()
     {
-        var controller = BuildController(CreateUserManagerMock());
+        var controller = BuildController(CreateUserManagerMock(), NoOidPrincipal);
         var result = await controller.Link(
-            new EntraLinkRequest("not-a-guid", "e@t.com"), default);
+            new EntraLinkRequest("e@t.com", "password"), default);
 
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
     [Fact]
-    public async Task Link_NoLocalUser_ReturnsUnauthorized()
+    public async Task Link_EmptyPassword_ReturnsBadRequest()
+    {
+        var controller = BuildController(CreateUserManagerMock(), EntraPrincipal(ValidOid, "entra@test.com"));
+        var result = await controller.Link(
+            new EntraLinkRequest("e@t.com", ""), default);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Link_NoAccountForEmail_ReturnsUnauthorized()
     {
         var umMock = CreateUserManagerMock();
-        umMock.Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync((AppUser?)null);
+        umMock.Setup(m => m.FindByEmailAsync("nobody@test.com")).ReturnsAsync((AppUser?)null);
 
-        var controller = BuildController(umMock, AuthenticatedPrincipal(UserId));
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "entra@test.com"));
         var result = await controller.Link(
-            new EntraLinkRequest(ValidOid, "e@t.com"), default);
+            new EntraLinkRequest("nobody@test.com", "password"), default);
 
-        Assert.IsType<UnauthorizedResult>(result);
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Link_WrongPassword_ReturnsUnauthorized()
+    {
+        // This is the actual attack this endpoint used to be vulnerable to: without a password
+        // check, presenting any target email would be enough to hijack that account's future
+        // Entra sign-ins. Confirms the fix rejects it.
+        var localUser = new AppUser { Id = UserId, Email = "victim@test.com" };
+        var umMock = CreateUserManagerMock();
+        umMock.Setup(m => m.FindByEmailAsync("victim@test.com")).ReturnsAsync(localUser);
+        umMock.Setup(m => m.CheckPasswordAsync(localUser, "wrong-password")).ReturnsAsync(false);
+
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "attacker@test.com"));
+        var result = await controller.Link(
+            new EntraLinkRequest("victim@test.com", "wrong-password"), default);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        umMock.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
     }
 
     [Fact]
@@ -280,12 +329,13 @@ public class EntraAuthControllerTests
         // Idempotent: linking the same OID twice to the same account is harmless.
         var localUser = new AppUser { Id = UserId, Email = "local@test.com" };
         var umMock    = CreateUserManagerMock();
-        umMock.Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync(localUser);
+        umMock.Setup(m => m.FindByEmailAsync("local@test.com")).ReturnsAsync(localUser);
+        umMock.Setup(m => m.CheckPasswordAsync(localUser, "correct-password")).ReturnsAsync(true);
         umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync(localUser);
 
-        var controller = BuildController(umMock, AuthenticatedPrincipal(UserId));
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "entra@test.com"));
         var result = await controller.Link(
-            new EntraLinkRequest(ValidOid, "e@t.com"), default);
+            new EntraLinkRequest("local@test.com", "correct-password"), default);
 
         Assert.IsType<OkObjectResult>(result);
         umMock.Verify(m => m.AddLoginAsync(It.IsAny<AppUser>(), It.IsAny<UserLoginInfo>()), Times.Never);
@@ -299,12 +349,13 @@ public class EntraAuthControllerTests
         var otherUser   = new AppUser { Id = differentId, Email = "other@test.com" };
 
         var umMock = CreateUserManagerMock();
-        umMock.Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync(localUser);
+        umMock.Setup(m => m.FindByEmailAsync("local@test.com")).ReturnsAsync(localUser);
+        umMock.Setup(m => m.CheckPasswordAsync(localUser, "correct-password")).ReturnsAsync(true);
         umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync(otherUser);
 
-        var controller = BuildController(umMock, AuthenticatedPrincipal(UserId));
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "entra@test.com"));
         var result = await controller.Link(
-            new EntraLinkRequest(ValidOid, "e@t.com"), default);
+            new EntraLinkRequest("local@test.com", "correct-password"), default);
 
         Assert.IsType<ConflictObjectResult>(result);
     }
@@ -314,14 +365,15 @@ public class EntraAuthControllerTests
     {
         var localUser = new AppUser { Id = UserId, Email = "local@test.com" };
         var umMock    = CreateUserManagerMock();
-        umMock.Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync(localUser);
+        umMock.Setup(m => m.FindByEmailAsync("local@test.com")).ReturnsAsync(localUser);
+        umMock.Setup(m => m.CheckPasswordAsync(localUser, "correct-password")).ReturnsAsync(true);
         umMock.Setup(m => m.FindByLoginAsync("Microsoft", ValidOid)).ReturnsAsync((AppUser?)null);
         umMock.Setup(m => m.AddLoginAsync(localUser, It.IsAny<UserLoginInfo>()))
               .ReturnsAsync(IdentityResult.Failed(new IdentityError { Description = "Store error" }));
 
-        var controller = BuildController(umMock, AuthenticatedPrincipal(UserId));
+        var controller = BuildController(umMock, EntraPrincipal(ValidOid, "entra@test.com"));
         var result = await controller.Link(
-            new EntraLinkRequest(ValidOid, "e@t.com"), default);
+            new EntraLinkRequest("local@test.com", "correct-password"), default);
 
         Assert.IsType<BadRequestObjectResult>(result);
     }

@@ -34,10 +34,10 @@
             <a href="/my-cases" class="text-secondary small">← My Cases</a>
             <div class="d-flex align-items-center gap-2 mt-1">
                 <span class="font-monospace text-muted">@_case.CaseReference</span>
-                <span class="badge @StatusBadge(_case.Status)">@StatusLabel(_case.Status)</span>
+                <span class="badge @_case.Status.BadgeClass()">@_case.Status.Label()</span>
             </div>
             <h3 class="mb-0 mt-1">@_case.Title</h3>
-            <div class="text-secondary small">@_case.City, @_case.State · Opened @_case.DateCaseOpened.ToLocalTime().ToString("MMMM d, yyyy")</div>
+            <div class="text-secondary small">@_case.City, @_case.State · Opened @_case.DateCaseOpened.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy")</div>
             @if (!string.IsNullOrWhiteSpace(_case.CaseManagerDisplayName))
             {
                 <div class="text-secondary small mt-1">Case Manager: <strong>@_case.CaseManagerDisplayName</strong></div>
@@ -63,8 +63,8 @@
                 <div class="card-body">
                     <TelerikCalendar Value="@_selectedDate"
                                      ValueChanged="@((DateTime d) => _selectedDate = d)"
-                                     Min="@_case.DateCaseOpened.ToLocalTime().Date"
-                                     Max="@(_case.DateCaseClosed?.ToLocalTime().Date ?? DateTime.Today)"
+                                     Min="@_case.DateCaseOpened.ToViewerLocalTime(UserState).Date"
+                                     Max="@(_case.DateCaseClosed?.ToViewerLocalTime(UserState).Date ?? UserState.NowInViewerTimeZone().Date)"
                                      ShowOtherMonthDays="false">
                     </TelerikCalendar>
                 </div>
@@ -95,7 +95,7 @@
                                             <div class="text-secondary small mt-1">@((MarkupString)o.Body)</div>
                                         }
                                         <div class="text-muted" style="font-size:.72rem;">
-                                            @((o.EventDateTime ?? o.DateCreated).ToLocalTime().ToString("h:mm tt"))
+                                            @((o.EventDateTime ?? o.DateCreated).ToViewerLocalTime(UserState).ToString("h:mm tt"))
                                         </div>
                                         @* Attached files *@
                                         @if (o.Files.Count > 0)
@@ -181,9 +181,9 @@
                                     <div>
                                         <div class="fw-semibold small">@inv.Title</div>
                                         <div class="text-secondary small">
-                                            @inv.ScheduledDateTime.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                                            @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
                                             @if (inv.EndDateTime.HasValue)
-                                            { <span> – @inv.EndDateTime.Value.ToLocalTime().ToString("h:mm tt")</span> }
+                                            { <span> – @inv.EndDateTime.Value.ToViewerLocalTime(UserState).ToString("h:mm tt")</span> }
                                         </div>
                                         @if (!string.IsNullOrEmpty(inv.Location))
                                         {
@@ -191,18 +191,18 @@
                                         }
                                         @if (inv.EvidenceDueDate.HasValue)
                                         {
-                                            var isPastDue = inv.EvidenceDueDate.Value.ToLocalTime() < DateTime.Now;
-                                            var isSoon    = !isPastDue && inv.EvidenceDueDate.Value.ToLocalTime() < DateTime.Now.AddDays(7);
+                                            var isPastDue = inv.EvidenceDueDate.Value < DateTime.UtcNow;
+                                            var isSoon    = !isPastDue && inv.EvidenceDueDate.Value < DateTime.UtcNow.AddDays(7);
                                             <div class="small mt-1 @(isPastDue ? "text-danger" : isSoon ? "text-warning" : "text-secondary")">
                                                 Evidence @(isPastDue ? "was due" : "due"):
-                                                @inv.EvidenceDueDate.Value.ToLocalTime().ToString("MMM d, yyyy")
+                                                @inv.EvidenceDueDate.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")
                                                 @if (isPastDue) { <strong> (closed)</strong> }
                                             </div>
                                         }
                                         @if (canCancel)
                                         {
                                             <div class="text-secondary small mt-1">
-                                                Cancel by: @inv.CancellationDeadlineUtc!.Value.ToLocalTime().ToString("MMM d h:mm tt")
+                                                Cancel by: @inv.CancellationDeadlineUtc!.Value.ToViewerLocalTime(UserState).ToString("MMM d h:mm tt")
                                             </div>
                                         }
                                         @if (deadlinePassed && inv.Status == Ben.Data.Common.Enums.InvestigationStatus.Scheduled)
@@ -253,8 +253,8 @@
                                 var s = slot;
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="small">
-                                        @s.StartDateTime.ToLocalTime().ToString("ddd MMM d, yyyy h:mm tt")
-                                        @if (s.EndDateTime.HasValue) { <span> – @s.EndDateTime.Value.ToLocalTime().ToString("h:mm tt")</span> }
+                                        @s.StartDateTime.ToViewerLocalTime(UserState).ToString("ddd MMM d, yyyy h:mm tt")
+                                        @if (s.EndDateTime.HasValue) { <span> – @s.EndDateTime.Value.ToViewerLocalTime(UserState).ToString("h:mm tt")</span> }
                                     </span>
                                     <TelerikButton Size="sm" ThemeColor="success"
                                                    OnClick="@(async () => await AcceptProposal(p.Id, s.Id))"
@@ -285,7 +285,7 @@
                 <TelerikButton Size="sm" Icon="@SvgIcon.Plus" OnClick="@(() => _showAddCoClient = true)">Add Person</TelerikButton>
             </div>
             <div class="card-body">
-                @if (_coClients.Count == 0)
+                @if (_coClients.Count == 0 && _pendingInvites.Count == 0)
                 {
                     <div class="text-secondary small">Only you have access. Use 'Add Person' to share this case with another account.</div>
                 }
@@ -299,9 +299,73 @@
                         </div>
                     }
                 </div>
+
+                @if (_pendingInvites.Count > 0)
+                {
+                    <div class="text-secondary small fw-semibold mt-3 mb-1">Pending Invites</div>
+                    <div class="d-flex flex-column gap-1">
+                        @foreach (var inv in _pendingInvites)
+                        {
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span class="small">
+                                    @inv.Email
+                                    <span class="text-secondary"> · expires @inv.DateExpires.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")</span>
+                                </span>
+                                <div class="d-flex gap-1">
+                                    <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Copy"
+                                                   OnClick="@(() => CopyInviteLink(inv))">Copy Link</TelerikButton>
+                                    <TelerikButton Size="sm" FillMode="flat" ThemeColor="error" Icon="@SvgIcon.X"
+                                                   OnClick="@(async () => await RevokeInvite(inv.Id))" />
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
             </div>
         </div>
     }
+
+    @* ── People at the property (basic info, no account) ─────────────────────── *@
+    <div class="card mt-4">
+        <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+            <span><TelerikSvgIcon Icon="@SvgIcon.Group" /> People at the Property</span>
+            @if (_isPrimaryClient)
+            {
+                <TelerikButton Size="sm" Icon="@SvgIcon.Plus" OnClick="@(() => _showAddRelatedPerson = true)">Add Person</TelerikButton>
+            }
+        </div>
+        <div class="card-body">
+            <div class="text-secondary small mb-2">
+                People you mention who don't have accounts on this site — for reference in your notes and timeline. This information is never made public.
+            </div>
+            @if (_relatedPeople.Count == 0)
+            {
+                <div class="text-secondary small">No one added yet.</div>
+            }
+            <div class="d-flex flex-column gap-2">
+                @foreach (var p in _relatedPeople)
+                {
+                    <div class="d-flex align-items-start justify-content-between">
+                        <div>
+                            <span class="small fw-semibold">@p.Name</span>
+                            @if (p.Age.HasValue) { <span class="small text-secondary"> · Age @p.Age</span> }
+                            @if (!string.IsNullOrWhiteSpace(p.Relationship)) { <span class="small text-secondary"> · @p.Relationship</span> }
+                            @if (p.LivesAtProperty) { <span class="badge bg-info text-dark ms-1" style="font-size:.65rem;">Lives here</span> }
+                            @if (!string.IsNullOrWhiteSpace(p.Notes))
+                            {
+                                <div class="text-secondary small">@p.Notes</div>
+                            }
+                        </div>
+                        @if (_isPrimaryClient)
+                        {
+                            <TelerikButton Size="sm" FillMode="flat" ThemeColor="error" Icon="@SvgIcon.X"
+                                           OnClick="@(async () => await RemoveRelatedPerson(p.Id))" />
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
 
     @* ── Message thread ──────────────────────────────────────────────────────── *@
     <div class="card mt-4">
@@ -337,7 +401,7 @@
                             <div class="fw-semibold small">@r.Title</div>
                             @if (r.PublishedAt.HasValue)
                             {
-                                <div class="text-secondary small">Published @r.PublishedAt.Value.ToLocalTime().ToString("MMM d, yyyy")</div>
+                                <div class="text-secondary small">Published @r.PublishedAt.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")</div>
                             }
                         </div>
                         <TelerikButton Size="sm" FillMode="outline" Icon="@SvgIcon.FilePdf"
@@ -417,25 +481,110 @@
     </TelerikWindow>
 }
 
-@* ── Add co-client dialog ─────────────────────────────────────────────────────── *@
-<TelerikWindow @bind-Visible="@_showAddCoClient" Width="400px" Modal="true">
+@* ── Add co-client / invite dialog ────────────────────────────────────────────── *@
+<TelerikWindow @bind-Visible="@_showAddCoClient" Width="440px" Modal="true">
     <WindowTitle>Share Case Access</WindowTitle>
+    <WindowContent>
+        @if (_inviteResult is null)
+        {
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Email address of person to add</label>
+                    <TelerikTextBox @bind-Value="@_addCoClientEmail" Width="100%"
+                                    Placeholder="person@example.com" />
+                    <div class="form-text">If they don't have an account yet, we'll send them an invite to create one.</div>
+                    @if (!string.IsNullOrWhiteSpace(_addCoClientEmail) && !IsValidEmailFormat(_addCoClientEmail))
+                    {
+                        <div class="text-danger small mt-1">Enter a valid email address.</div>
+                    }
+                </div>
+                @if (_inviteError is not null)
+                {
+                    <div class="col-12"><div class="alert alert-danger py-2 mb-0">@_inviteError</div></div>
+                }
+            </div>
+        }
+        else if (_inviteResult.LinkedExistingAccount)
+        {
+            <div class="alert alert-success mb-0">
+                <strong>@_inviteResult.CoClient?.DisplayName</strong> already has an account and now has access to this case.
+            </div>
+        }
+        else
+        {
+            <p class="mb-2">
+                @if (_inviteResult.EmailSent)
+                {
+                    <text>An invite email is on its way to <strong>@_inviteResult.Invite?.Email</strong>. You can also share this link directly:</text>
+                }
+                else
+                {
+                    <text>Email isn't set up on this server yet — share this link with <strong>@_inviteResult.Invite?.Email</strong> yourself:</text>
+                }
+            </p>
+            <div class="d-flex gap-2">
+                <TelerikTextBox Value="@InviteLink(_inviteResult.Invite)" ReadOnly="true" Width="100%" />
+                <TelerikButton Icon="@SvgIcon.Copy" OnClick="@(() => CopyToClipboard(InviteLink(_inviteResult.Invite)))" />
+            </div>
+            <div class="text-secondary small mt-2">This link expires @_inviteResult.Invite?.DateExpires.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy").</div>
+        }
+    </WindowContent>
+    <WindowActions><WindowAction Name="Close" OnClick="CloseAddCoClientDialog" /></WindowActions>
+    <WindowFooter>
+        <div class="d-flex gap-2 justify-content-end w-100">
+            @if (_inviteResult is null)
+            {
+                <TelerikButton OnClick="CloseAddCoClientDialog">Cancel</TelerikButton>
+                <TelerikButton ThemeColor="primary" OnClick="AddCoClient" Enabled="@(IsValidEmailFormat(_addCoClientEmail) && !_isInviting)">
+                    @(_isInviting ? "Sending..." : "Add")
+                </TelerikButton>
+            }
+            else
+            {
+                <TelerikButton ThemeColor="primary" OnClick="CloseAddCoClientDialog">Done</TelerikButton>
+            }
+        </div>
+    </WindowFooter>
+</TelerikWindow>
+
+@* ── Add related person dialog ────────────────────────────────────────────────── *@
+<TelerikWindow @bind-Visible="@_showAddRelatedPerson" Width="420px" Modal="true">
+    <WindowTitle>Add a Person</WindowTitle>
     <WindowContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Email address of person to add</label>
-                <TelerikTextBox @bind-Value="@_addCoClientEmail" Width="100%"
-                                Placeholder="person@example.com" />
-                <div class="form-text">They must already have an account on this platform.</div>
+                <label class="form-label fw-semibold">Name</label>
+                <TelerikTextBox @bind-Value="@_newPersonName" Width="100%" Placeholder="Full name" />
+            </div>
+            <div class="col-6">
+                <label class="form-label fw-semibold">Age (optional)</label>
+                <TelerikNumericTextBox @bind-Value="@_newPersonAge" Width="100%" Min="0" Max="120" />
+            </div>
+            <div class="col-6 d-flex align-items-end">
+                <div class="form-check">
+                    <TelerikCheckBox @bind-Value="@_newPersonLivesAtProperty" Id="livesHere" />
+                    <label class="form-check-label ms-1" for="livesHere">Lives at the property</label>
+                </div>
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Relationship (optional)</label>
+                <TelerikTextBox @bind-Value="@_newPersonRelationship" Width="100%" Placeholder="e.g. spouse, neighbor, tenant" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Notes (optional)</label>
+                <TelerikTextArea @bind-Value="@_newPersonNotes" Rows="2" Width="100%" />
+            </div>
+            <div class="col-12">
+                <div class="text-secondary small">This information is never made public, even if the case is.</div>
             </div>
         </div>
     </WindowContent>
-    <WindowActions><WindowAction Name="Close" OnClick="@(() => _showAddCoClient = false)" /></WindowActions>
+    <WindowActions><WindowAction Name="Close" OnClick="@(() => _showAddRelatedPerson = false)" /></WindowActions>
     <WindowFooter>
         <div class="d-flex gap-2 justify-content-end w-100">
-            <TelerikButton OnClick="@(() => _showAddCoClient = false)">Cancel</TelerikButton>
-            <TelerikButton ThemeColor="primary" OnClick="AddCoClient"
-                           Enabled="@(!string.IsNullOrWhiteSpace(_addCoClientEmail))">Add</TelerikButton>
+            <TelerikButton OnClick="@(() => _showAddRelatedPerson = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="primary" OnClick="AddRelatedPerson"
+                           Enabled="@(!string.IsNullOrWhiteSpace(_newPersonName))">Add</TelerikButton>
         </div>
     </WindowFooter>
 </TelerikWindow>
@@ -490,6 +639,17 @@
     private bool _cancelling;
     private bool _showAddCoClient;
     private string _addCoClientEmail = "";
+    private List<CaseClientInviteRecord> _pendingInvites = [];
+    private InviteCoClientResult? _inviteResult;
+    private string? _inviteError;
+    private bool _isInviting;
+    private List<CaseRelatedPersonRecord> _relatedPeople = [];
+    private bool _showAddRelatedPerson;
+    private string _newPersonName = "";
+    private int? _newPersonAge;
+    private string _newPersonRelationship = "";
+    private bool _newPersonLivesAtProperty;
+    private string _newPersonNotes = "";
     private bool _showCounterDialog;
     private Guid _counterProposalId;
     private DateTime? _counterDateTime;
@@ -498,6 +658,7 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
         await LoadAsync();
     }
@@ -519,27 +680,36 @@
         try { _pendingProposals = (await AdminClient.GetMyScheduleProposalsAsync(CaseId)).ToList(); StateHasChanged(); }
         catch { /* silent */ }
 
-        // Co-clients — only load for primary client
-        _isPrimaryClient = _case?.CaseManagerDisplayName is not null || true; // will check via API result
-        try
+        // Co-clients — only load (and only shown) for the primary client. IsPrimaryClient comes
+        // from the case detail response itself, not from whether GetCoClients happens not to
+        // throw: the generic HTTP client returns an empty list on a 403 rather than throwing, so
+        // that inference silently showed every co-client the primary-only admin controls too.
+        _isPrimaryClient = _case?.IsPrimaryClient ?? false;
+        if (_isPrimaryClient)
         {
-            _coClients = (await AdminClient.GetCoClientsAsync(CaseId)).ToList();
-            _isPrimaryClient = true; // if this call succeeds, user is primary client
-            StateHasChanged();
+            try
+            {
+                _coClients = (await AdminClient.GetCoClientsAsync(CaseId)).ToList();
+                _pendingInvites = (await AdminClient.GetCaseInvitesAsync(CaseId)).ToList();
+                StateHasChanged();
+            }
+            catch { /* silent — Shared Access card just shows its empty state */ }
         }
-        catch { _isPrimaryClient = false; }
+
+        try { _relatedPeople = (await AdminClient.GetRelatedPeopleAsync(CaseId)).ToList(); StateHasChanged(); }
+        catch { /* silent */ }
     }
 
     private List<ClientCaseOccurrence> OccurrencesForDate(DateTime date) =>
         _case?.Occurrences
-            .Where(o => (o.EventDateTime ?? o.DateCreated).ToLocalTime().Date == date.Date)
+            .Where(o => (o.EventDateTime ?? o.DateCreated).ToViewerLocalTime(UserState).Date == date.Date)
             .OrderBy(o => o.EventDateTime ?? o.DateCreated)
             .ToList() ?? [];
 
     private void OpenLogDialog()
     {
         _editOcc = null;
-        _form = new OccForm { EventDateTime = _selectedDate.Date.AddHours(DateTime.Now.Hour) };
+        _form = new OccForm { EventDateTime = _selectedDate.Date.AddHours(UserState.NowInViewerTimeZone().Hour) };
         _dialogError = null;
         _showDialog = true;
     }
@@ -549,7 +719,7 @@
         _editOcc = occ;
         _form = new OccForm
         {
-            EventDateTime = occ.EventDateTime ?? occ.DateCreated,
+            EventDateTime = (occ.EventDateTime ?? occ.DateCreated).ToViewerLocalTime(UserState),
             Title         = occ.Title ?? "",
             Body          = occ.Body ?? "",
         };
@@ -565,7 +735,7 @@
         _isBusy = true; _dialogError = null;
         try
         {
-            var req = new LogOccurrenceRequest(_form.EventDateTime, _form.Title?.Trim(), _form.Body.Trim());
+            var req = new LogOccurrenceRequest(_form.EventDateTime!.Value.ToUtcFromViewerLocal(UserState), _form.Title?.Trim(), _form.Body.Trim());
             if (_editOcc is null)
                 await AdminClient.LogOccurrenceAsync(CaseId, req);
             else
@@ -590,27 +760,6 @@
         catch { _error = "Delete failed."; }
         finally { _isBusy = false; }
     }
-
-    private static string StatusBadge(CaseStatus s) => s switch
-    {
-        CaseStatus.Accepted  => "bg-primary",
-        CaseStatus.Active    => "bg-success",
-        CaseStatus.Public    => "bg-info text-dark",
-        CaseStatus.Haunted   => "bg-warning text-dark",
-        CaseStatus.Closed    => "bg-dark",
-        _                    => "bg-secondary",
-    };
-
-    private static string StatusLabel(CaseStatus s) => s switch
-    {
-        CaseStatus.Accepted    => "Accepted",
-        CaseStatus.Active      => "Active",
-        CaseStatus.Public      => "Public",
-        CaseStatus.Haunted     => "Haunted",
-        CaseStatus.Closed      => "Closed",
-        CaseStatus.Transferred => "Transferred",
-        _                      => s.ToString(),
-    };
 
     private static string InvStatusBadge(InvestigationStatus s) => s switch
     {
@@ -643,11 +792,96 @@
         StateHasChanged();
     }
 
+    /// <summary>Server-side validation is already correct; this is UX polish only — catches an
+    /// obviously malformed address before round-tripping to the API.</summary>
+    private static bool IsValidEmailFormat(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return false;
+        try { return new System.Net.Mail.MailAddress(email.Trim()).Address == email.Trim(); }
+        catch { return false; }
+    }
+
     private async Task AddCoClient()
     {
-        if (string.IsNullOrWhiteSpace(_addCoClientEmail)) return;
-        var result = await AdminClient.AddCoClientAsync(CaseId, _addCoClientEmail.Trim());
-        if (result is not null) { _coClients.Add(result); _showAddCoClient = false; _addCoClientEmail = ""; }
+        if (!IsValidEmailFormat(_addCoClientEmail) || _isInviting) return;
+        _isInviting = true;
+        _inviteError = null;
+        try
+        {
+            var result = await AdminClient.InviteCoClientAsync(CaseId, _addCoClientEmail.Trim());
+            if (result is null)
+            {
+                _inviteError = "Something went wrong. Please try again.";
+                return;
+            }
+
+            if (result.LinkedExistingAccount && result.CoClient is not null)
+                _coClients.Add(result.CoClient);
+            else if (result.Invite is not null)
+                _pendingInvites.Insert(0, result.Invite);
+
+            _inviteResult = result;
+        }
+        catch
+        {
+            _inviteError = "Something went wrong. Please try again.";
+        }
+        finally
+        {
+            _isInviting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CloseAddCoClientDialog()
+    {
+        _showAddCoClient = false;
+        _addCoClientEmail = "";
+        _inviteResult = null;
+        _inviteError = null;
+    }
+
+    private string InviteLink(CaseClientInviteRecord? invite) =>
+        invite is null ? "" : $"{NavManager.BaseUri.TrimEnd('/')}/invite/{invite.Token}";
+
+    private async Task CopyToClipboard(string text)
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", text); }
+        catch { /* clipboard access can be denied by the browser — link is still visible/selectable */ }
+    }
+
+    private Task CopyInviteLink(CaseClientInviteRecord invite) => CopyToClipboard(InviteLink(invite));
+
+    private async Task RevokeInvite(Guid inviteId)
+    {
+        await AdminClient.RevokeCaseInviteAsync(CaseId, inviteId);
+        _pendingInvites.RemoveAll(i => i.Id == inviteId);
+        StateHasChanged();
+    }
+
+    private async Task RemoveRelatedPerson(Guid personId)
+    {
+        await AdminClient.RemoveRelatedPersonAsync(CaseId, personId);
+        _relatedPeople.RemoveAll(p => p.Id == personId);
+        StateHasChanged();
+    }
+
+    private async Task AddRelatedPerson()
+    {
+        if (string.IsNullOrWhiteSpace(_newPersonName)) return;
+        var request = new AddRelatedPersonRequest(
+            _newPersonName.Trim(), _newPersonAge,
+            string.IsNullOrWhiteSpace(_newPersonRelationship) ? null : _newPersonRelationship.Trim(),
+            _newPersonLivesAtProperty,
+            string.IsNullOrWhiteSpace(_newPersonNotes) ? null : _newPersonNotes.Trim());
+        var result = await AdminClient.AddRelatedPersonAsync(CaseId, request);
+        if (result is not null)
+        {
+            _relatedPeople.Add(result);
+            _showAddRelatedPerson = false;
+            _newPersonName = ""; _newPersonAge = null; _newPersonRelationship = "";
+            _newPersonLivesAtProperty = false; _newPersonNotes = "";
+        }
         StateHasChanged();
     }
 
@@ -729,7 +963,9 @@
         {
             foreach (var f in e.GetMultipleFiles(10))
             {
-                using var stream = f.OpenReadStream(maxAllowedSize: 50_000_000); // 50 MB max
+                // No practical upload size limit for now — a future limit belongs at app-settings /
+                // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
+                using var stream = f.OpenReadStream(maxAllowedSize: long.MaxValue);
                 var item = await AdminClient.AttachOccurrenceFileAsync(CaseId, entryId, stream, f.Name, f.ContentType);
                 if (item is not null)
                 {

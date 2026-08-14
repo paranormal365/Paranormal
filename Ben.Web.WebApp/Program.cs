@@ -43,11 +43,22 @@ builder.Services.AddBenVideoEditor(options =>
     options.ProjectPersistence = true;
     options.ErrorLog        = true;
     options.RippleEdit      = true;
+    // Item #36 phase E rollout: background render worker + rough/fine two-pass preview.
+    options.BackgroundRendering = true;
+    // Item #70 phase 173: show the "Native acceleration" panel so a user who has installed the
+    // sidecar can pair with it. Opt-in twice over — this only makes the editor probe the user's
+    // own loopback ports and render the pairing panel; nothing is routed anywhere until they
+    // paste that sidecar's one-time code. With no sidecar installed the probe finds nothing and
+    // every path stays on ffmpeg.wasm exactly as before.
+    options.NativeSidecar   = true;
     options.MediaLibraryBaseUrl = builder.Configuration["WebApi:BaseUrl"];
     options.DocumentPostUrl = $"{builder.Configuration["WebApi:BaseUrl"]}/api/video-projects";
 });
 // Override the default HttpMediaLibraryProvider with one that injects the bearer token.
 builder.Services.AddScoped<Ben.Video.Editor.Services.IMediaLibraryProvider, BenMediaLibraryProvider>();
+// Handles VideoEditor.OnPublishExport — sends a finished render to the server, saving the project
+// first when it has never been saved (the publish endpoint attaches to an existing project row).
+builder.Services.AddScoped<VideoExportPublisher>();
 builder.Services.Configure<WebApiOptions>(builder.Configuration.GetSection("WebApi"));
 builder.Services.AddScoped<IWebApiTokenStore, WebApiTokenStore>();
 builder.Services.AddHttpClient<IWebApiIdentityClient, WebApiIdentityClient>((sp, client) =>
@@ -189,6 +200,7 @@ app.UseAntiforgery();
 
 
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+    .AddInteractiveServerRenderMode()
+    .AddAdditionalAssemblies(typeof(Ben.Web.Library.SuperAdmin.LibraryAssemblyMarker).Assembly);
 
 app.Run();

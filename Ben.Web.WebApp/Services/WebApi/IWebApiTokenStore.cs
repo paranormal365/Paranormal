@@ -30,4 +30,15 @@ public interface IWebApiTokenStore
 
     /// <summary>Invoke after all state fields have been set to notify subscribers.</summary>
     void NotifyStateChanged();
+
+    /// <summary>
+    /// Completes once this circuit has finished resolving auth state for the current page
+    /// load (see <see cref="Ben.Web.Library.Services.IBenUserState.AuthReady"/> for why this
+    /// matters). Signalled once by <c>MainLayout</c> via <see cref="SignalAuthReady"/> after
+    /// its first-render restore attempt.
+    /// </summary>
+    Task AuthReady { get; }
+
+    /// <summary>Marks <see cref="AuthReady"/> complete. Call once, after the first-render auth restore attempt finishes (success or failure).</summary>
+    void SignalAuthReady();
 }

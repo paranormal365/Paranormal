@@ -1,11 +1,9 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Service.Models.Entities;
-using Ben.Service.RepositoryService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 
 namespace Ben.Data.WebApi.Controllers.Public;
 
@@ -19,15 +17,16 @@ namespace Ben.Data.WebApi.Controllers.Public;
 public sealed class PublicCaseDiscoveryController : ControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
-    private readonly IMemoryCache _cache;
 
-    public PublicCaseDiscoveryController(IDbContextFactory<BenDataContext> db, IMemoryCache cache)
-    { _db = db; _cache = cache; }
+    public PublicCaseDiscoveryController(IDbContextFactory<BenDataContext> db)
+    { _db = db; }
 
     /// <summary>
     /// Returns paginated public cases across all organizations.
     /// sort: "votes" (default) | "date"
-    /// City-level coordinates are geocoded once and cached for 24 h.
+    /// Coordinates are whatever was already resolved onto the Case (e.g. at intake) —
+    /// this endpoint is unauthenticated and public, so it must never geocode on the
+    /// request path; a case with no resolved coordinates just omits them.
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<PublicCaseDiscoveryPagedResponse>> GetAll(
@@ -74,29 +73,10 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
             })
             .ToDictionaryAsync(x => x.CaseId, ct);
 
-        // Geocode each unique city/state combination (cached 24 h per city)
-        var geoCache = new Dictionary<(string City, string State, string Country), (decimal? Lat, decimal? Lon)>();
-        foreach (var loc in cases.Select(c => (c.City, c.State, c.Country)).Distinct())
-        {
-            var cacheKey = $"geo:{loc.City}|{loc.State}|{loc.Country}";
-            if (!_cache.TryGetValue(cacheKey, out (decimal? Lat, decimal? Lon) cached))
-            {
-                var q   = string.IsNullOrWhiteSpace(loc.City)
-                    ? $"{loc.State}, {loc.Country}"
-                    : $"{loc.City}, {loc.State}, {loc.Country}";
-                var geo = await AddressGeocodingService.TryResolveFromQueryAsync(q, ct);
-                cached  = (geo.Latitude.HasValue  ? (decimal)geo.Latitude.Value  : null,
-                           geo.Longitude.HasValue ? (decimal)geo.Longitude.Value : null);
-                _cache.Set(cacheKey, cached, TimeSpan.FromHours(24));
-            }
-            geoCache[(loc.City, loc.State, loc.Country)] = cached;
-        }
-
         // Build response items
         var items = cases.Select(c =>
         {
             voteCounts.TryGetValue(c.Id, out var vc);
-            geoCache.TryGetValue((c.City, c.State, c.Country), out var geo);
             return new PublicCaseDiscoveryItem(
                 CaseId:            c.Id,
                 CaseReference:     $"#{c.CaseYear}-{c.OrgCaseNumber:D3}",
@@ -114,8 +94,8 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
                 DisputesCount:     vc?.Disputes     ?? 0,
                 InconclusiveCount: vc?.Inconclusive ?? 0,
                 TotalVotes:        vc?.Total        ?? 0,
-                ApproxLatitude:    geo.Lat,
-                ApproxLongitude:   geo.Lon,
+                ApproxLatitude:    c.Latitude,
+                ApproxLongitude:   c.Longitude,
                 ClientName:        string.IsNullOrWhiteSpace(c.PublicPseudonym) ? null : c.PublicPseudonym);
         }).ToList();
 

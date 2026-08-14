@@ -2,6 +2,7 @@
 @namespace Ben.Web.Library.SuperAdmin
 @using Ben.Service.Models.Admin
 @using Ben.Data.Common.Enums
+@using Ben.Web.Library.Shared
 
 @inject IBenAdminClient AdminClient
 @inject IBenUserState   UserState
@@ -104,8 +105,8 @@
                 <div class="row g-2 mb-2">
                     <div class="col-sm-3 text-secondary small">Entity ID</div>
                     <div class="col-sm-9 font-monospace small">@log.EntityId</div>
-                    <div class="col-sm-3 text-secondary small">User ID</div>
-                    <div class="col-sm-9 font-monospace small">@log.UserId</div>
+                    <div class="col-sm-3 text-secondary small">User</div>
+                    <div class="col-sm-9 small"><UserNameLink AppUserId="@log.UserId" DisplayName="@log.UserDisplayName" /></div>
                     <div class="col-sm-3 text-secondary small">Source</div>
                     <div class="col-sm-9 small">@log.Source</div>
                     <div class="col-sm-3 text-secondary small">Occurred</div>
@@ -139,10 +140,10 @@
                     <span class="font-monospace small text-secondary">@r3.EntityId.ToString()[..8]…</span>
                 </Template>
             </GridColumn>
-            <GridColumn Field="@nameof(AuditLogRecord.UserId)" Title="User ID" Width="110px">
+            <GridColumn Field="@nameof(AuditLogRecord.UserId)" Title="User" Width="150px">
                 <Template>
                     @{ var r4 = (AuditLogRecord)context; }
-                    <span class="font-monospace small text-secondary">@r4.UserId.ToString()[..8]…</span>
+                    <span class="small"><UserNameLink AppUserId="@r4.UserId" DisplayName="@r4.UserDisplayName" /></span>
                 </Template>
             </GridColumn>
             <GridColumn Field="@nameof(AuditLogRecord.Source)" Title="Source" Width="100px" />
@@ -298,6 +299,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
         await Task.WhenAll(LoadEntityTypesAsync(), LoadDataAsync());
     }

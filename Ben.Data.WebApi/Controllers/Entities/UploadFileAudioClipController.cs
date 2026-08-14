@@ -16,6 +16,12 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 /// Use <c>GET preview</c> for an in-browser preview without saving;
 /// <c>POST</c> persists the clip as a new UploadFile record on disk.
 /// </summary>
+/// <remarks>
+/// Both actions previously had no check on the source file at all — any authenticated user could
+/// clip audio out of someone else's private file, and <c>POST</c> persists that clip as a brand
+/// new file the caller owns (permanent content exfiltration bypassing the source's visibility
+/// entirely). Both now require <see cref="FileAudienceAccess.CanViewFileAsync"/> on the source.
+/// </remarks>
 [ApiController]
 [Route("api/upload-files/{fileId:guid}/clip")]
 [Authorize]
@@ -51,10 +57,12 @@ public sealed class UploadFileAudioClipController : BenControllerBase
     {
         if (end <= start) return BadRequest("end must be greater than start.");
 
+        var userId = GetCurrentUserIdOrThrow();
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         var source = await db.UploadFiles.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == fileId, ct);
         if (source is null) return NotFound();
+        if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, userId, ct)) return Forbid();
 
         try
         {
@@ -80,14 +88,14 @@ public sealed class UploadFileAudioClipController : BenControllerBase
         if (request.End <= request.Start)
             return BadRequest("End must be greater than Start.");
 
-        var userId = GetCurrentUserId();
-        if (userId == Guid.Empty) return Unauthorized();
+        var userId = GetCurrentUserIdOrThrow();
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
         var source = await db.UploadFiles.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == fileId, ct);
         if (source is null) return NotFound("Source file not found.");
+        if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, userId, ct)) return Forbid();
 
         if (!await db.UploadFileTypes.AnyAsync(t => t.Id == request.UploadFileTypeId, ct))
             return BadRequest("Upload file type not found.");

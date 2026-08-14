@@ -11,7 +11,9 @@
 
 @page "/organizations/{OrgId:guid}/files"
 @namespace Ben.Web.Library.Organization
+@using Ben.Web.Library.Shared
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 
 <div class="container-fluid py-3">
     @if (_loading)
@@ -73,9 +75,9 @@
                         @{ var fa = (OrganizationFileRecord)context; }
                         @if (fa.DatePublished.HasValue)
                         {
-                            <span class="small text-success" title="@fa.DatePublished.Value.ToString("g")">
+                            <span class="small text-success" title="@fa.DatePublished.Value.ToViewerLocalTime(UserState).ToString("g")">
                                 @fa.PublishedByDisplayName<br/>
-                                <em class="text-secondary">@fa.DatePublished.Value.ToString("d")</em>
+                                <em class="text-secondary">@fa.DatePublished.Value.ToViewerLocalTime(UserState).ToString("d")</em>
                             </span>
                         }
                         else { <span class="text-secondary small">—</span> }
@@ -143,7 +145,12 @@
                                     </Template>
                                 </GridColumn>
                                 <GridColumn Field="@nameof(OrganizationFileDeleteLogRecord.DeletedByDisplayName)" Title="Deleted By" Width="130px" />
-                                <GridColumn Field="@nameof(OrganizationFileDeleteLogRecord.DateDeleted)" Title="Deleted" DisplayFormat="{0:g}" Width="130px" />
+                                <GridColumn Title="Deleted" Width="130px">
+                                    <Template>
+                                        @{ var log = (OrganizationFileDeleteLogRecord)context; }
+                                        @log.DateDeleted.ToViewerLocalTime(UserState).ToString("g")
+                                    </Template>
+                                </GridColumn>
                             </GridColumns>
                         </TelerikGrid>
                     }
@@ -247,10 +254,12 @@
     </DialogContent>
     <DialogButtons>
         <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       Enabled="@(!_publishing)"
                        OnClick="@(() => _showPublishDialog = false)">Cancel</TelerikButton>
         <TelerikButton ThemeColor="@(_publishTarget?.IsPublic == true ? ThemeConstants.Button.ThemeColor.Warning : ThemeConstants.Button.ThemeColor.Success)"
+                       Enabled="@(!_publishing)"
                        OnClick="ConfirmPublishAsync">
-            @(_publishTarget?.IsPublic == true ? "Unpublish" : "Approve & Publish")
+            @(_publishing ? "Working…" : (_publishTarget?.IsPublic == true ? "Unpublish" : "Approve & Publish"))
         </TelerikButton>
     </DialogButtons>
 </TelerikDialog>
@@ -271,23 +280,18 @@
     </DialogContent>
     <DialogButtons>
         <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       Enabled="@(!_savingEdit)"
                        OnClick="@(() => _showEditDialog = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" OnClick="SaveEditAsync">Save</TelerikButton>
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" Enabled="@(!_savingEdit)" OnClick="SaveEditAsync">@(_savingEdit ? "Saving…" : "Save")</TelerikButton>
     </DialogButtons>
 </TelerikDialog>
 
 @* ── Delete confirm ──────────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showDeleteDialog" Title="Delete File" Width="400px">
-    <DialogContent>
-        <p>Delete <strong>@_pendingDelete?.FileName</strong>? (@FormatSize(_pendingDelete?.FileSize ?? 0))</p>
-        <p class="small text-secondary mb-0">This action is permanent. An audit record will be saved before deletion.</p>
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="@(() => _showDeleteDialog = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error" OnClick="DeleteAsync">Delete</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+<ConfirmDialog @bind-Visible="@_showDeleteDialog" Title="Delete File" Width="400px"
+               Busy="@_deleting" BusyText="Deleting…" OnConfirm="DeleteAsync">
+    <p>Delete <strong>@_pendingDelete?.FileName</strong>? (@FormatSize(_pendingDelete?.FileSize ?? 0))</p>
+    <p class="small text-secondary mb-0">This action is permanent. An audit record will be saved before deletion.</p>
+</ConfirmDialog>
 
 <TelerikNotification @ref="_toast" HorizontalPosition="@NotificationHorizontalPosition.Right"
                      VerticalPosition="@NotificationVerticalPosition.Top" />
@@ -345,16 +349,19 @@
     // Publish
     private bool _showPublishDialog;
     private OrganizationFileRecord? _publishTarget;
+    private bool _publishing;
 
     // Edit
     private bool   _showEditDialog;
     private OrganizationFileRecord? _editingFile;
     private string _editDescription = string.Empty;
     private int    _editSortOrder;
+    private bool   _savingEdit;
 
     // Delete
     private bool _showDeleteDialog;
     private OrganizationFileRecord? _pendingDelete;
+    private bool _deleting;
 
     private TelerikNotification? _toast;
 
@@ -384,7 +391,9 @@
         try
         {
             using var content = new MultipartFormDataContent();
-            content.Add(new StreamContent(_selectedFile.OpenReadStream(200 * 1024 * 1024)), "File", _selectedFile.Name);
+            // No practical upload size limit for now — a future limit belongs at app-settings /
+            // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
+            content.Add(new StreamContent(_selectedFile.OpenReadStream(long.MaxValue)), "File", _selectedFile.Name);
             content.Add(new StringContent(_uploadTypeId.ToString()), "UploadFileTypeId");
             content.Add(new StringContent(_uploadDescription), "Description");
             content.Add(new StringContent(_uploadIsPublic.ToString()), "IsPublic");
@@ -433,15 +442,24 @@
     private async Task ConfirmPublishAsync()
     {
         if (_publishTarget is null) return;
-        var newState = !_publishTarget.IsPublic;
-        var result   = await AdminClient.PublishOrgFileAsync(OrgId, _publishTarget.Id, newState);
-        _showPublishDialog = false;
-        if (result is not null)
+        _publishing = true;
+        try
         {
-            await ReloadAsync();
-            var msg = newState ? $"✓ {result.FileName} is now public." : $"{result.FileName} set to private.";
-            _toast?.Show(new NotificationModel { Text = msg, ThemeColor = ThemeConstants.Notification.ThemeColor.Success, CloseAfter = 3000 });
+            var newState = !_publishTarget.IsPublic;
+            var result   = await AdminClient.PublishOrgFileAsync(OrgId, _publishTarget.Id, newState);
+            _showPublishDialog = false;
+            if (result is not null)
+            {
+                await ReloadAsync();
+                var msg = newState ? $"✓ {result.FileName} is now public." : $"{result.FileName} set to private.";
+                _toast?.Show(new NotificationModel { Text = msg, ThemeColor = ThemeConstants.Notification.ThemeColor.Success, CloseAfter = 3000 });
+            }
+            else
+            {
+                _toast?.Show(new NotificationModel { Text = "Failed to update visibility. Please try again.", ThemeColor = ThemeConstants.Notification.ThemeColor.Error, CloseAfter = 4000 });
+            }
         }
+        finally { _publishing = false; }
     }
 
     private void OpenEdit(OrganizationFileRecord f)
@@ -455,13 +473,22 @@
     private async Task SaveEditAsync()
     {
         if (_editingFile is null) return;
-        var result = await AdminClient.UpdateOrgFileAsync(OrgId, _editingFile.Id, _editDescription, _editSortOrder);
-        _showEditDialog = false;
-        if (result is not null)
+        _savingEdit = true;
+        try
         {
-            await ReloadAsync();
-            _toast?.Show(new NotificationModel { Text = "Saved.", ThemeColor = ThemeConstants.Notification.ThemeColor.Success, CloseAfter = 3000 });
+            var result = await AdminClient.UpdateOrgFileAsync(OrgId, _editingFile.Id, _editDescription, _editSortOrder);
+            _showEditDialog = false;
+            if (result is not null)
+            {
+                await ReloadAsync();
+                _toast?.Show(new NotificationModel { Text = "Saved.", ThemeColor = ThemeConstants.Notification.ThemeColor.Success, CloseAfter = 3000 });
+            }
+            else
+            {
+                _toast?.Show(new NotificationModel { Text = "Failed to save changes. Please try again.", ThemeColor = ThemeConstants.Notification.ThemeColor.Error, CloseAfter = 4000 });
+            }
         }
+        finally { _savingEdit = false; }
     }
 
     private void ConfirmDelete(OrganizationFileRecord f) { _pendingDelete = f; _showDeleteDialog = true; }
@@ -469,13 +496,22 @@
     private async Task DeleteAsync()
     {
         if (_pendingDelete is null) return;
-        var ok = await AdminClient.DeleteOrgFileAsync(OrgId, _pendingDelete.Id);
-        _showDeleteDialog = false;
-        if (ok)
+        _deleting = true;
+        try
         {
-            await ReloadAsync();
-            _toast?.Show(new NotificationModel { Text = "Deleted. Audit record saved.", ThemeColor = ThemeConstants.Notification.ThemeColor.Error, CloseAfter = 4000 });
+            var ok = await AdminClient.DeleteOrgFileAsync(OrgId, _pendingDelete.Id);
+            _showDeleteDialog = false;
+            if (ok)
+            {
+                await ReloadAsync();
+                _toast?.Show(new NotificationModel { Text = "Deleted. Audit record saved.", ThemeColor = ThemeConstants.Notification.ThemeColor.Error, CloseAfter = 4000 });
+            }
+            else
+            {
+                _toast?.Show(new NotificationModel { Text = "Failed to delete the file. Please try again.", ThemeColor = ThemeConstants.Notification.ThemeColor.Error, CloseAfter = 4000 });
+            }
         }
+        finally { _deleting = false; }
     }
 
     private static string FormatSize(long bytes)

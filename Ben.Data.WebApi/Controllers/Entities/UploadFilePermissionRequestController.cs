@@ -9,6 +9,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
+/// <summary>
+/// Previously had no authorization beyond <c>[Authorize]</c> on any action: <c>Review</c> let any
+/// authenticated user approve their own (or anyone's) access to any file, since
+/// <c>ReviewedByAppUserId</c> was read from the request body rather than the caller's identity,
+/// and neither it nor <c>GetForFile</c> checked that the caller actually owned the file or
+/// administered the relevant org. <c>Submit</c> similarly let the caller spoof
+/// <c>RequestedByAppUserId</c>. Only <c>Cancel</c> checked correctly — every other action below
+/// now follows its pattern.
+/// </summary>
 [ApiController]
 [Route("api/upload-file-permission-requests")]
 [Authorize]
@@ -25,16 +34,35 @@ public sealed class UploadFilePermissionRequestController : BenControllerBase
         _auditLog = auditLog;
     }
 
-    /// <summary>Get all permission requests for a file (visible to file owner and org admins).</summary>
+    /// <summary>Get all permission requests for a file. Visible to the file owner (sees every
+    /// request) and SuperAdmin; an org admin sees only the requests scoped to an org they
+    /// administer (a request's <c>OrganizationId</c> is nullable — person-to-person requests with
+    /// no org are owner/SuperAdmin-only).</summary>
     [HttpGet("/api/upload-files/{fileId:guid}/permission-requests")]
     public async Task<ActionResult<IEnumerable<UploadFilePermissionRequestRecord>>> GetForFile(
         Guid fileId, CancellationToken cancellationToken)
     {
+        var userId = GetCurrentUserIdOrThrow();
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        var file = await db.UploadFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken);
+        if (file is null) return NotFound();
+
         var requests = await db.UploadFilePermissionRequests.AsNoTracking()
             .Where(r => r.UploadFileId == fileId)
             .OrderByDescending(r => r.DateCreated)
             .ToListAsync(cancellationToken);
+
+        var isFileOwnerOrSuperAdmin = file.AppUserId == userId || User.IsInRole(RoleNames.SuperAdmin);
+        if (!isFileOwnerOrSuperAdmin)
+        {
+            var adminOrgIds = await db.OrganizationUserMemberships.AsNoTracking()
+                .Where(m => m.AppUserId == userId && m.IsActive && m.Role <= OrganizationMemberRole.Administrator)
+                .Select(m => m.OrganizationId)
+                .ToListAsync(cancellationToken);
+            requests = requests.Where(r => r.OrganizationId.HasValue && adminOrgIds.Contains(r.OrganizationId.Value)).ToList();
+        }
+
         return Ok(_mapper.Map<IEnumerable<UploadFilePermissionRequestRecord>>(requests));
     }
 
@@ -43,6 +71,9 @@ public sealed class UploadFilePermissionRequestController : BenControllerBase
     public async Task<ActionResult<IEnumerable<UploadFilePermissionRequestRecord>>> GetPendingForReviewer(
         Guid reviewerAppUserId, CancellationToken cancellationToken)
     {
+        var userId = GetCurrentUserIdOrThrow();
+        if (reviewerAppUserId != userId && !User.IsInRole(RoleNames.SuperAdmin)) return Forbid();
+
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
         // Requests on files owned by this user
@@ -67,6 +98,7 @@ public sealed class UploadFilePermissionRequestController : BenControllerBase
         [FromBody] SubmitRequestBody body,
         CancellationToken cancellationToken)
     {
+        var userId = GetCurrentUserIdOrThrow();
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
         var request = new UploadFilePermissionRequest
@@ -74,40 +106,51 @@ public sealed class UploadFilePermissionRequestController : BenControllerBase
             Id = Guid.NewGuid(),
             UploadFileId = fileId,
             OrganizationId = body.OrganizationId,
-            RequestedByAppUserId = body.RequestedByAppUserId,
+            RequestedByAppUserId = userId,
             PermissionType = body.PermissionType,
             RequestStatus = FilePermissionRequestStatus.Pending,
             RequestNotes = body.RequestNotes,
             DateCreated = DateTime.UtcNow,
-            CreatedByAppUserId = body.RequestedByAppUserId
+            CreatedByAppUserId = userId
         };
 
         db.UploadFilePermissionRequests.Add(request);
         await db.SaveChangesAsync(cancellationToken);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFilePermissionRequest), request.Id, request, request.RequestedByAppUserId, AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFilePermissionRequest), request.Id, request, userId, AppSources.WebApi, cancellationToken));
         return CreatedAtAction(nameof(GetForFile), new { fileId }, _mapper.Map<UploadFilePermissionRequestRecord>(request));
     }
 
-    /// <summary>Approve or deny a permission request (file owner or org admin).</summary>
+    /// <summary>Approve or deny a permission request. File owner, SuperAdmin, or (when the request
+    /// targets an org) an admin-tier member of that org.</summary>
     [HttpPut("{requestId:guid}/review")]
     public async Task<ActionResult<UploadFilePermissionRequestRecord>> Review(
         Guid requestId,
         [FromBody] ReviewRequestBody body,
         CancellationToken cancellationToken)
     {
+        var userId = GetCurrentUserIdOrThrow();
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var before = await db.UploadFilePermissionRequests.AsNoTracking().FirstOrDefaultAsync(r => r.Id == requestId, cancellationToken);
-        var request = await db.UploadFilePermissionRequests.FirstOrDefaultAsync(r => r.Id == requestId, cancellationToken);
+        var request = await db.UploadFilePermissionRequests.Include(r => r.UploadFile)
+            .FirstOrDefaultAsync(r => r.Id == requestId, cancellationToken);
         if (request is null) return NotFound();
+
+        var isFileOwnerOrSuperAdmin = request.UploadFile.AppUserId == userId || User.IsInRole(RoleNames.SuperAdmin);
+        if (!isFileOwnerOrSuperAdmin)
+        {
+            var isOrgAdmin = request.OrganizationId.HasValue
+                && await FileAudienceAccess.IsOrgAdminAsync(db, request.OrganizationId.Value, userId, cancellationToken);
+            if (!isOrgAdmin) return Forbid();
+        }
 
         request.RequestStatus = body.RequestStatus;
         request.ReviewNotes = body.ReviewNotes;
-        request.ReviewedByAppUserId = body.ReviewedByAppUserId;
+        request.ReviewedByAppUserId = userId;
         request.DateReviewed = DateTime.UtcNow;
         request.DateUpdated = DateTime.UtcNow;
-        request.UpdatedByAppUserId = body.ReviewedByAppUserId;
+        request.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(cancellationToken);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFilePermissionRequest), requestId, before!, request, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFilePermissionRequest), requestId, before!, request, userId, AppSources.WebApi, cancellationToken));
         return Ok(_mapper.Map<UploadFilePermissionRequestRecord>(request));
     }
 
@@ -134,11 +177,9 @@ public sealed class UploadFilePermissionRequestController : BenControllerBase
 
 public sealed record SubmitRequestBody(
     Guid? OrganizationId,
-    Guid RequestedByAppUserId,
     FilePermissionType PermissionType,
     string? RequestNotes);
 
 public sealed record ReviewRequestBody(
     FilePermissionRequestStatus RequestStatus,
-    string? ReviewNotes,
-    Guid ReviewedByAppUserId);
+    string? ReviewNotes);

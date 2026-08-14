@@ -8,6 +8,7 @@ using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Ben.Data.WebApi.Controllers;
 
@@ -25,15 +26,30 @@ public sealed class MyCaseController : BenControllerBase
     private readonly IMapper _mapper;
     private readonly IFileStorageService _fileStorage;
     private readonly FileMetadataExtractorService _metadataExtractor;
+    private readonly IAuditLogService _auditLog;
+    private readonly IEmailService _emailService;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<MyCaseController> _logger;
 
     // Fixed Guid for the 'Case Evidence' upload file type seeded by UploadFileTypeSeeder
     private static readonly Guid EvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
 
     public MyCaseController(IDbContextFactory<BenDataContext> db, IMapper mapper,
-        IFileStorageService fileStorage, FileMetadataExtractorService metadataExtractor)
-    { _db = db; _mapper = mapper; _fileStorage = fileStorage; _metadataExtractor = metadataExtractor; }
+        IFileStorageService fileStorage, FileMetadataExtractorService metadataExtractor, IAuditLogService auditLog,
+        IEmailService emailService, IConfiguration configuration, ILogger<MyCaseController> logger)
+    {
+        _db = db; _mapper = mapper; _fileStorage = fileStorage; _metadataExtractor = metadataExtractor; _auditLog = auditLog;
+        _emailService = emailService; _configuration = configuration; _logger = logger;
+    }
 
-    /// <summary>Returns all active cases where the current user is the originating client.</summary>
+    /// <summary>
+    /// Returns all active cases the current user can access as a client — either as the
+    /// originating (primary) client, or as a secondary co-client via <see cref="CaseClientAccess"/>
+    /// (including one accepted through a sub-client invite, item #4). Previously only checked
+    /// primary-client ownership, so a co-client's grant was inert for browsing — they could act on
+    /// individual occurrences (which already checked <see cref="IsCaseClient"/>) but never actually
+    /// see the case here or on its detail page; fixed as a follow-up surfaced while adding invites.
+    /// </summary>
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ClientCaseListItem>>> GetMyCases(CancellationToken ct)
     {
@@ -41,11 +57,18 @@ public sealed class MyCaseController : BenControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
+
+        var accessibleCaseIds = new HashSet<Guid>();
+        accessibleCaseIds.UnionWith(await db.Cases.AsNoTracking()
+            .Where(c => c.ClientRequest != null && c.ClientRequest.AppUserId == userId)
+            .Select(c => c.Id).ToListAsync(ct));
+        accessibleCaseIds.UnionWith(await db.CaseClientAccesses.AsNoTracking()
+            .Where(a => a.AppUserId == userId).Select(a => a.CaseId).ToListAsync(ct));
+
         var cases = await db.Cases.AsNoTracking()
             .Include(c => c.ClientRequest)
             .Include(c => c.CaseManagerAppUser)
-            .Where(c => c.ClientRequest != null && c.ClientRequest.AppUserId == userId
-                     && c.Status != CaseStatus.Proposed)
+            .Where(c => accessibleCaseIds.Contains(c.Id) && c.Status != CaseStatus.Proposed)
             .OrderByDescending(c => c.DateCaseOpened)
             .ToListAsync(ct);
 
@@ -83,6 +106,11 @@ public sealed class MyCaseController : BenControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
+
+        // Same access rule as GetMyCases — primary client OR a secondary co-client grant. See that
+        // method's doc comment for why this changed.
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
         var c = await db.Cases.AsNoTracking()
             .Include(x => x.ClientRequest)
             .Include(x => x.CaseManagerAppUser)
@@ -92,8 +120,7 @@ public sealed class MyCaseController : BenControllerBase
                 .OrderBy(e => e.EventDateTime ?? e.DateCreated))
                 .ThenInclude(e => e.Files)
                 .ThenInclude(f => f.UploadFile)
-            .FirstOrDefaultAsync(x => x.Id == caseId
-                && x.ClientRequest != null && x.ClientRequest.AppUserId == userId, ct);
+            .FirstOrDefaultAsync(x => x.Id == caseId, ct);
 
         if (c is null) return NotFound();
 
@@ -150,7 +177,8 @@ public sealed class MyCaseController : BenControllerBase
             DateCaseClosed:          c.DateCaseClosed,
             Occurrences:             occurrences,
             Investigations:          invItems,
-            UnreadMessageCount:      unreadCount));
+            UnreadMessageCount:      unreadCount,
+            IsPrimaryClient:         c.ClientRequest?.AppUserId == userId));
     }
 
     /// <summary>
@@ -165,11 +193,7 @@ public sealed class MyCaseController : BenControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
-        var c = await db.Cases.AsNoTracking()
-            .Include(x => x.ClientRequest)
-            .FirstOrDefaultAsync(x => x.Id == caseId
-                && x.ClientRequest != null && x.ClientRequest.AppUserId == userId, ct);
-        if (c is null) return NotFound();
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
 
         var entry = new CaseTimelineEntry
         {
@@ -187,6 +211,7 @@ public sealed class MyCaseController : BenControllerBase
         };
         db.CaseTimelineEntries.Add(entry);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CaseTimelineEntry), entry.Id, entry, userId, AppSources.WebApi, ct));
 
         var loaded = await db.CaseTimelineEntries.AsNoTracking()
             .Include(e => e.AuthorAppUser)
@@ -204,13 +229,17 @@ public sealed class MyCaseController : BenControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
+        var before = await db.CaseTimelineEntries.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == entryId && e.CaseId == caseId
+                && e.AuthorAppUserId == userId
+                && e.EntryType == CaseTimelineEntryType.ClientReport, ct);
         var entry = await db.CaseTimelineEntries
             .Include(e => e.Case).ThenInclude(c => c.ClientRequest)
             .FirstOrDefaultAsync(e => e.Id == entryId && e.CaseId == caseId
                 && e.AuthorAppUserId == userId
                 && e.EntryType == CaseTimelineEntryType.ClientReport, ct);
-        if (entry is null) return NotFound();
-        if (entry.Case.ClientRequest?.AppUserId != userId) return Forbid();
+        if (entry is null || before is null) return NotFound();
+        if (!await IsCaseClient(db, caseId, userId, ct)) return Forbid();
 
         entry.EventDateTime      = request.EventDateTime;
         entry.Title              = request.Title?.Trim();
@@ -218,6 +247,7 @@ public sealed class MyCaseController : BenControllerBase
         entry.DateUpdated        = DateTime.UtcNow;
         entry.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(CaseTimelineEntry), entry.Id, before, entry, userId, AppSources.WebApi, ct));
 
         var loaded = await db.CaseTimelineEntries.AsNoTracking()
             .Include(e => e.AuthorAppUser)
@@ -240,10 +270,11 @@ public sealed class MyCaseController : BenControllerBase
                 && e.AuthorAppUserId == userId
                 && e.EntryType == CaseTimelineEntryType.ClientReport, ct);
         if (entry is null) return NotFound();
-        if (entry.Case.ClientRequest?.AppUserId != userId) return Forbid();
+        if (!await IsCaseClient(db, caseId, userId, ct)) return Forbid();
 
         db.CaseTimelineEntries.Remove(entry);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(CaseTimelineEntry), entry.Id, entry, userId, AppSources.WebApi, ct));
         return NoContent();
     }
 
@@ -406,6 +437,7 @@ public sealed class MyCaseController : BenControllerBase
     /// <summary>Attaches a file to an occurrence. Saved to cases/{caseId}/... path.</summary>
     [HttpPost("{caseId:guid}/occurrences/{entryId:guid}/files")]
     [Consumes("multipart/form-data")]
+    [DisableRequestSizeLimit]
     public async Task<ActionResult<OccurrenceFileItem>> AttachFile(
         Guid caseId, Guid entryId, IFormFile file, CancellationToken ct)
     {
@@ -446,15 +478,17 @@ public sealed class MyCaseController : BenControllerBase
         };
         db.UploadFiles.Add(uploadFile);
 
-        db.CaseTimelineEntryFiles.Add(new CaseTimelineEntryFile
+        var entryFile = new CaseTimelineEntryFile
         {
             Id                   = Guid.NewGuid(),
             CaseTimelineEntryId  = entryId,
             UploadFileId         = uploadFile.Id,
             DateCreated          = DateTime.UtcNow,
             CreatedByAppUserId   = userId,
-        });
+        };
+        db.CaseTimelineEntryFiles.Add(entryFile);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CaseTimelineEntryFile), entryFile.Id, entryFile, userId, AppSources.WebApi, ct));
 
         // Metadata extraction fire-and-forget
         var capturedBytes = fileBytes;
@@ -469,7 +503,13 @@ public sealed class MyCaseController : BenControllerBase
                 dbMeta.UploadFileMetadata.Add(meta);
                 await dbMeta.SaveChangesAsync(CancellationToken.None);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Extraction is best-effort — never surface this to the caller — but a silent
+                // failure here previously meant a systemic breakage was invisible until someone
+                // noticed missing metadata.
+                _logger.LogWarning(ex, "Metadata extraction failed for upload file {UploadFileId}", capturedId);
+            }
         });
 
         return Ok(new OccurrenceFileItem(uploadFile.Id, uploadFile.FileName, uploadFile.ContentType, uploadFile.FileSize));
@@ -497,6 +537,7 @@ public sealed class MyCaseController : BenControllerBase
         db.CaseTimelineEntryFiles.Remove(link);
         db.UploadFiles.Remove(link.UploadFile);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(CaseTimelineEntryFile), link.Id, link, userId, AppSources.WebApi, ct));
 
         if (storagePath is not null)
             await _fileStorage.DeleteAsync(storagePath, ct);
@@ -624,6 +665,7 @@ public sealed class MyCaseController : BenControllerBase
         };
         db.CaseClientAccesses.Add(access);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseClientAccess), access.Id, access, userId, AppSources.WebApi, ct));
         return Ok(new CoClientItem(access.Id, target.Id, target.DisplayName ?? target.Email!));
     }
 
@@ -643,8 +685,232 @@ public sealed class MyCaseController : BenControllerBase
         if (access is null) return NotFound();
         db.CaseClientAccesses.Remove(access);
         await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(Ben.Data.Source.Entities.CaseClientAccess), access.Id, access, userId, AppSources.WebApi, ct));
         return NoContent();
     }
+
+    // ── Sub-client invites (item #4's remaining piece — email invite for people with no account yet) ─
+
+    /// <summary>Returns this case's pending (not accepted/revoked/expired) invites.</summary>
+    [HttpGet("{caseId:guid}/invites")]
+    public async Task<ActionResult<IEnumerable<CaseClientInviteRecord>>> GetInvites(Guid caseId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var primaryClient = await db.Cases.AsNoTracking().Include(c => c.ClientRequest)
+            .FirstOrDefaultAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+        if (primaryClient is null) return Forbid();
+
+        var now = DateTime.UtcNow;
+        var invites = await db.CaseClientInvites.AsNoTracking()
+            .Where(i => i.CaseId == caseId && i.DateAccepted == null && i.DateRevoked == null && i.DateExpires > now)
+            .OrderByDescending(i => i.DateCreated)
+            .ToListAsync(ct);
+        return Ok(invites.Select(ToInviteRecord));
+    }
+
+    /// <summary>
+    /// The single entry point for adding a secondary user to a case: primary client supplies just
+    /// an email. An existing account is linked immediately (identical to the old <see cref="AddCoClient"/>
+    /// path — kept alongside, untouched, for any other caller); no account yet mints a 14-day,
+    /// revocable invite and — if <see cref="IEmailService.IsConfigured"/> — emails it. Either way
+    /// the primary client always gets the invite link back, since email delivery is never
+    /// guaranteed (unconfigured in every environment today, and a live send can still fail).
+    /// </summary>
+    [HttpPost("{caseId:guid}/invites")]
+    public async Task<ActionResult<InviteCoClientResult>> InviteCoClient(
+        Guid caseId, [FromBody] InviteCoClientRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        if (string.IsNullOrWhiteSpace(request.Email)) return BadRequest("Email is required.");
+        var email = request.Email.Trim();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var primaryClient = await db.Cases.AsNoTracking().Include(c => c.ClientRequest)
+            .FirstOrDefaultAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+        if (primaryClient is null) return Forbid();
+
+        var target = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email, ct);
+        if (target is not null)
+        {
+            if (target.Id == userId) return BadRequest("You are already the primary client.");
+            if (await db.CaseClientAccesses.AnyAsync(a => a.CaseId == caseId && a.AppUserId == target.Id, ct))
+                return Conflict("This user already has access.");
+
+            var access = new Ben.Data.Source.Entities.CaseClientAccess
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, AppUserId = target.Id,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            };
+            db.CaseClientAccesses.Add(access);
+            await db.SaveChangesAsync(ct);
+            _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseClientAccess), access.Id, access, userId, AppSources.WebApi, ct));
+            return Ok(new InviteCoClientResult(
+                LinkedExistingAccount: true,
+                CoClient: new CoClientItem(access.Id, target.Id, target.DisplayName ?? target.Email!),
+                Invite: null, EmailSent: false));
+        }
+
+        // No account yet — revoke any still-pending invite for this exact (case, email) so there's
+        // only ever one live token per invitee, then mint a fresh one.
+        var priorPending = await db.CaseClientInvites
+            .Where(i => i.CaseId == caseId && i.Email == email && i.DateAccepted == null && i.DateRevoked == null)
+            .ToListAsync(ct);
+        foreach (var prior in priorPending)
+        {
+            prior.DateRevoked = DateTime.UtcNow;
+            prior.UpdatedByAppUserId = userId;
+            prior.DateUpdated = DateTime.UtcNow;
+        }
+
+        var invite = new Ben.Data.Source.Entities.CaseClientInvite
+        {
+            Id = Guid.NewGuid(), CaseId = caseId, Email = email,
+            Token = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)),
+            DateExpires = DateTime.UtcNow.AddDays(14),
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        };
+        db.CaseClientInvites.Add(invite);
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseClientInvite), invite.Id, invite, userId, AppSources.WebApi, ct));
+
+        var emailSent = false;
+        if (_emailService.IsConfigured)
+        {
+            try
+            {
+                var inviter = await db.AppUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);
+                var appBaseUrl = _configuration["AppBaseUrl"]?.TrimEnd('/') ?? string.Empty;
+                var inviteLink = $"{appBaseUrl}/invite/{invite.Token}";
+                var inviterName = System.Net.WebUtility.HtmlEncode(inviter?.DisplayName ?? "Someone");
+                var caseTitle = System.Net.WebUtility.HtmlEncode(primaryClient.Title);
+                var subject = $"{inviter?.DisplayName ?? "Someone"} invited you to a case on IsHaunted.com";
+                var body = $"<p>{inviterName} has invited you to collaborate on the case " +
+                           $"\"<strong>{caseTitle}</strong>\" on IsHaunted.com.</p>" +
+                           $"<p><a href=\"{inviteLink}\">Accept invitation</a></p>" +
+                           $"<p>This link expires {invite.DateExpires:MMMM d, yyyy}.</p>";
+                await _emailService.SendAsync(email, subject, body, ct);
+                emailSent = true;
+            }
+            catch { /* best-effort — the invite still succeeds; the UI falls back to copy-link */ }
+        }
+
+        return Ok(new InviteCoClientResult(
+            LinkedExistingAccount: false, CoClient: null, Invite: ToInviteRecord(invite), EmailSent: emailSent));
+    }
+
+    /// <summary>Primary client revokes a pending invite. Idempotent — revoking twice is a no-op.</summary>
+    [HttpDelete("{caseId:guid}/invites/{inviteId:guid}")]
+    public async Task<IActionResult> RevokeInvite(Guid caseId, Guid inviteId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var primaryClient = await db.Cases.AsNoTracking().Include(c => c.ClientRequest)
+            .FirstOrDefaultAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+        if (primaryClient is null) return Forbid();
+
+        var before = await db.CaseClientInvites.AsNoTracking().FirstOrDefaultAsync(i => i.Id == inviteId && i.CaseId == caseId, ct);
+        if (before is null) return NotFound();
+        if (before.DateRevoked is not null) return NoContent();
+
+        var invite = await db.CaseClientInvites.FirstAsync(i => i.Id == inviteId, ct);
+        invite.DateRevoked = DateTime.UtcNow;
+        invite.UpdatedByAppUserId = userId;
+        invite.DateUpdated = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Ben.Data.Source.Entities.CaseClientInvite), invite.Id, before, invite, userId, AppSources.WebApi, ct));
+        return NoContent();
+    }
+
+    private static CaseClientInviteRecord ToInviteRecord(Ben.Data.Source.Entities.CaseClientInvite i) =>
+        new(i.Id, i.CaseId, i.Email, i.Token, i.DateExpires, i.DateCreated);
+
+    // ── Related people (basic-info, no account) ─────────────────────────────────
+
+    /// <summary>Returns people referenced on this case who are not platform users.</summary>
+    [HttpGet("{caseId:guid}/related-people")]
+    public async Task<ActionResult<IEnumerable<CaseRelatedPersonRecord>>> GetRelatedPeople(Guid caseId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var people = await db.CaseRelatedPeople.AsNoTracking()
+            .Where(p => p.CaseId == caseId)
+            .OrderBy(p => p.Name)
+            .ToListAsync(ct);
+        return Ok(people.Select(ToRecord));
+    }
+
+    /// <summary>Primary client adds a basic-info reference to someone connected to the case (no account created).</summary>
+    [HttpPost("{caseId:guid}/related-people")]
+    public async Task<ActionResult<CaseRelatedPersonRecord>> AddRelatedPerson(
+        Guid caseId, [FromBody] AddRelatedPersonRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name)) return BadRequest("Name is required.");
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var primaryClient = await db.Cases.AsNoTracking().Include(c => c.ClientRequest)
+            .FirstOrDefaultAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+        if (primaryClient is null) return Forbid();
+
+        var person = new Ben.Data.Source.Entities.CaseRelatedPerson
+        {
+            Id                 = Guid.NewGuid(),
+            CaseId             = caseId,
+            Name               = request.Name.Trim(),
+            Age                = request.Age,
+            Relationship       = request.Relationship?.Trim(),
+            LivesAtProperty    = request.LivesAtProperty,
+            Notes              = request.Notes?.Trim(),
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        };
+        db.CaseRelatedPeople.Add(person);
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseRelatedPerson), person.Id, person, userId, AppSources.WebApi, ct));
+        return Ok(ToRecord(person));
+    }
+
+    /// <summary>Primary client removes a related-person reference.</summary>
+    [HttpDelete("{caseId:guid}/related-people/{personId:guid}")]
+    public async Task<IActionResult> RemoveRelatedPerson(Guid caseId, Guid personId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var primaryClient = await db.Cases.AsNoTracking().Include(c => c.ClientRequest)
+            .FirstOrDefaultAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+        if (primaryClient is null) return Forbid();
+
+        var person = await db.CaseRelatedPeople.FirstOrDefaultAsync(p => p.Id == personId && p.CaseId == caseId, ct);
+        if (person is null) return NotFound();
+        db.CaseRelatedPeople.Remove(person);
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(Ben.Data.Source.Entities.CaseRelatedPerson), person.Id, person, userId, AppSources.WebApi, ct));
+        return NoContent();
+    }
+
+    private static CaseRelatedPersonRecord ToRecord(Ben.Data.Source.Entities.CaseRelatedPerson p) => new()
+    {
+        Id              = p.Id,
+        CaseId          = p.CaseId,
+        Name            = p.Name,
+        Age             = p.Age,
+        Relationship    = p.Relationship,
+        LivesAtProperty = p.LivesAtProperty,
+        Notes           = p.Notes,
+        DateCreated     = p.DateCreated,
+    };
 
     // ── Investigation cancellation (client-initiated, time-gated) ─────────────
 
@@ -746,7 +1012,14 @@ public sealed record ClientCaseDetail(
     DateTime? DateCaseClosed,
     IReadOnlyList<ClientCaseOccurrence>    Occurrences,
     IReadOnlyList<ClientCaseInvestigation> Investigations,
-    int       UnreadMessageCount = 0);
+    int       UnreadMessageCount = 0,
+    // Item #4 follow-up: the client's own reliable signal for showing primary-only management UI
+    // (Shared Access, invites) — MyCaseDetail.razor previously *inferred* this from whether
+    // GetCoClients happened not to throw, but the generic HTTP client swallows a 403 as an empty
+    // list rather than throwing, so every co-client (old AddCoClient flow or a new invite) saw the
+    // primary-only admin controls too. Surfaced only once co-clients could reach this page at all
+    // (see the GetMyCase/GetMyCases fix above) — previously unreachable, now a real bug.
+    bool      IsPrimaryClient = false);
 
 public sealed record ClientCaseOccurrence(
     Guid      Id,
@@ -823,3 +1096,15 @@ public sealed record CancellationResult(Guid InvestigationId, DateTime DeadlineU
 
 public sealed record CoClientItem(Guid AccessId, Guid AppUserId, string DisplayName);
 public sealed record AddCoClientRequest(string Email);
+
+public sealed record InviteCoClientRequest(string Email);
+
+/// <summary>
+/// Result of <see cref="MyCaseController.InviteCoClient"/> — exactly one of <see cref="CoClient"/>
+/// (existing account, linked immediately) or <see cref="Invite"/> (no account yet) is set.
+/// </summary>
+public sealed record InviteCoClientResult(bool LinkedExistingAccount, CoClientItem? CoClient, CaseClientInviteRecord? Invite, bool EmailSent);
+
+/// <summary>A pending sub-client invite, as returned to the inviting primary client — includes the
+/// raw <see cref="Token"/> so the UI can render a "Copy Link" action.</summary>
+public sealed record CaseClientInviteRecord(Guid Id, Guid CaseId, string Email, string Token, DateTime DateExpires, DateTime DateCreated);

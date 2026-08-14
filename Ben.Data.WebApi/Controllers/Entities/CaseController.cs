@@ -166,6 +166,24 @@ public sealed class CaseController : BenControllerBase
         application.DateResponded        = DateTime.UtcNow;
         application.RespondedByAppUserId = userId == Guid.Empty ? null : userId;
         await db.SaveChangesAsync(ct);
+
+        // If every organization this request was sent to has now declined it,
+        // flip the parent request to Declined so the client can pick another org.
+        var stillActive = await db.ClientRequestOrganizations
+            .AnyAsync(a => a.ClientRequestId == clientRequestId &&
+                (a.Status == ClientOrgRequestStatus.Pending || a.Status == ClientOrgRequestStatus.Viewed ||
+                 a.Status == ClientOrgRequestStatus.UnderReview || a.Status == ClientOrgRequestStatus.Accepted), ct);
+        if (!stillActive)
+        {
+            var clientRequest = await db.ClientRequests.FirstOrDefaultAsync(r => r.Id == clientRequestId, ct);
+            if (clientRequest is not null && clientRequest.Status == ClientRequestStatus.Submitted)
+            {
+                clientRequest.Status      = ClientRequestStatus.Declined;
+                clientRequest.DateUpdated = DateTime.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
+        }
+
         return NoContent();
     }
 
@@ -244,11 +262,22 @@ public sealed class CaseController : BenControllerBase
         newCase.CaseYear      = yr;
         newCase.OrgCaseNumber = num;
         db.Cases.Add(newCase);
+
+        // Both saves must land together — otherwise a failure between them leaves an
+        // Accepted Case with no CMS pages, and the guard above rejects retrying an
+        // already-Accepted application. The in-memory provider used by tests doesn't
+        // support transactions, so skip it there rather than fail every test.
+        var transaction = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(ct)
+            : null;
+        await using var _ = transaction;
         await db.SaveChangesAsync(ct);
 
         // Auto-generate standard CMS pages
         await AutoGenerateCmsPagesAsync(db, orgId, newCase.Id, caseTitle, newCase.CaseYear, newCase.OrgCaseNumber, userId, ct);
         await db.SaveChangesAsync(ct);
+        if (transaction is not null)
+            await transaction.CommitAsync(ct);
 
         return CreatedAtAction(nameof(GetById), new { orgId, caseId = newCase.Id },
             _mapper.Map<CaseRecord>(newCase));
@@ -358,6 +387,7 @@ public sealed class CaseController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var entry = await db.CaseTimelineEntries
             .Include(e => e.ExperienceTypes)
             .FirstOrDefaultAsync(e => e.Id == entryId && e.CaseId == caseId, ct);
@@ -401,6 +431,7 @@ public sealed class CaseController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var entry = await db.CaseTimelineEntries
             .FirstOrDefaultAsync(e => e.Id == entryId && e.CaseId == caseId, ct);
         if (entry is null) return NotFound();
