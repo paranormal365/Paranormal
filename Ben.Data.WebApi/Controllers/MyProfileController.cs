@@ -133,28 +133,6 @@ public sealed class MyProfileController : BenControllerBase
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
 
-        // Two writes racing for the same slot both try to insert an active row, and the filtered
-        // unique index rejects the loser. The index is doing its job — the data stays correct —
-        // but a double-click is a normal thing for a user to do, and it surfaced as a bare 500.
-        // Each retry re-reads the now-committed winner and deactivates it properly. Measured: a
-        // 6-way race needed more than one retry, so the budget is small but not one.
-        for (var attempt = 1; ; attempt++)
-        {
-            try
-            {
-                return await SetPhotoOnceAsync(userId, request, ct);
-            }
-            catch (DbUpdateException) when (attempt < MaxSlotWriteAttempts)
-            {
-                // Fall through and try again with a fresh context. Bounded rather than infinite:
-                // past this point a failure is a real fault and should surface, not spin.
-            }
-        }
-    }
-
-    private async Task<ActionResult<AppUserPhotoRecord>> SetPhotoOnceAsync(
-        Guid userId, SetMyPhotoRequest request, CancellationToken ct)
-    {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
         // Must be a file the caller owns. Without this check any authenticated user could point
@@ -163,6 +141,15 @@ public sealed class MyProfileController : BenControllerBase
             .FirstOrDefaultAsync(f => f.Id == request.UploadFileId, ct);
         if (file is null) return NotFound("Upload file not found.");
         if (file.AppUserId != userId) return Forbid();
+
+        // One transaction, opened before the first read rather than just around the save: the
+        // read of "what currently holds this slot" is itself part of the operation, and a writer
+        // that reads outside the transaction is reading state another writer is about to change.
+        await using var tx = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(ct)
+            : null;
+
+        await LockSlotAsync(db, userId, request.IsPublic, ct);
 
         // The public slot is served to anyone, so the underlying file has to be public too —
         // otherwise the avatar endpoint would hand out a file the storage layer treats as private.
@@ -197,18 +184,8 @@ public sealed class MyProfileController : BenControllerBase
         };
         db.AppUserPhotos.Add(photo);
 
-        // One transaction: deactivating the old slot and activating the new one must not be
-        // separable, or a failure between them leaves the user with no photo at all.
-        if (db.Database.IsRelational())
-        {
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
-            await db.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
-        }
-        else
-        {
-            await db.SaveChangesAsync(ct);
-        }
+        await db.SaveChangesAsync(ct);
+        if (tx is not null) await tx.CommitAsync(ct);
 
         _ = TryAuditAsync(_auditLog.LogCreateAsync(
             nameof(AppUserPhoto), photo.Id, photo, userId, AppSources.WebApi, ct));
@@ -253,11 +230,42 @@ public sealed class MyProfileController : BenControllerBase
     private const int MaxDisplayNameLength = 100;
 
     /// <summary>
-    /// How many times a slot write may be attempted before a unique-index collision is treated as
-    /// a real fault. Covers realistic contention (a double-click, a retried request) without
-    /// turning a genuine constraint problem into an endless loop.
+    /// Takes an exclusive range lock on one user's photo slot for the rest of the transaction, so
+    /// concurrent writers to that slot run one after another instead of racing.
     /// </summary>
-    private const int MaxSlotWriteAttempts = 4;
+    /// <remarks>
+    /// <para>Without this, two writers both read the row currently holding the slot, both mark it
+    /// inactive, and both insert a new active row. The filtered unique index catches that and
+    /// rejects the loser — correct, but it surfaces as a failed request for something as ordinary
+    /// as a double-click. Retrying on the violation works, but it is probabilistic: under a
+    /// six-way race one caller still lost every attempt in a tuned budget. Serialising the writers
+    /// removes the collision instead of recovering from it.</para>
+    ///
+    /// <para><c>UPDLOCK</c> makes the second writer wait rather than read stale state;
+    /// <c>HOLDLOCK</c> holds a key-range lock for the whole transaction, which is what stops a
+    /// phantom insert into a slot that currently has no active row — the first-photo case, where
+    /// there is no existing row to lock. The index stays as the last line of defence: this makes
+    /// it never fire, it does not make it unnecessary.</para>
+    ///
+    /// <para>T-SQL specific, hence the relational guard. That is consistent with the rest of this
+    /// schema, which already depends on SQL Server behaviour (the filtered index itself, and the
+    /// NoAction FKs that work around error 1785). Under the InMemory provider used by the unit
+    /// tests this is a no-op, so the concurrency behaviour is verified live instead.</para>
+    /// </remarks>
+    private static async Task LockSlotAsync(
+        BenDataContext db, Guid userId, bool isPublic, CancellationToken ct)
+    {
+        if (!db.Database.IsRelational()) return;
+
+        // Deliberately selects the key column rather than TOP 1: the point is to lock the whole
+        // qualifying range, and short-circuiting the scan could leave part of it unlocked.
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            SELECT [Id] FROM [AppUserPhotos] WITH (UPDLOCK, HOLDLOCK)
+            WHERE [AppUserId] = {0} AND [IsPublic] = {1} AND [IsActive] = 1
+            """,
+            [userId, isPublic], ct);
+    }
 
     private async Task<List<AppUserPhotoRecord>> ActivePhotosAsync(
         BenDataContext db, Guid userId, CancellationToken ct)
