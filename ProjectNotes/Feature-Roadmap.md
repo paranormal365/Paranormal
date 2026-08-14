@@ -244,6 +244,33 @@ Files: `AdminAuditLog.razor` (main), possibly `AdminAuditLogController.cs` (only
 
 ## Area 5 — Case Page & Investigations Overhaul
 
+### ✅ SHIPPED 2026-08-14 — C1 through C4 (complete)
+
+Built as planned. What the plan didn't anticipate:
+
+- **The timeline assumed one entry per moment, and that assumption was wrong.** Raised by the
+  user: several people can report the same event, and unrelated events can share a minute. All
+  six sort sites keyed on `EventDateTime ?? DateCreated` alone, leaving ties in unspecified
+  provider order — a timeline that reshuffles between page loads can't be cited. Every site now
+  breaks ties on `DateCreated` then `Id`, and the org timeline labels tied entries "N of M at
+  this time", deliberately neutral about whether they are one event or a coincidence.
+- **Telerik dropdowns silently discarded their selection**, under both `@bind-Value` and explicit
+  `Value`/`ValueChanged`. The C3 binder type picker saved "Note" whatever you chose, and the C2
+  visibility picker had the same defect. Both are plain `<select>` now. Only caught by inspecting
+  what persisted — the control looked correct on screen.
+- **Deleting an investigation would have taken its binder entries with it.** SQL Server rejects
+  `SetNull` on that FK (error 1785, multiple cascade paths), so the FK is `NoAction` and
+  `InvestigationController.Delete` detaches entries explicitly. Observations must outlive the
+  calendar event that produced them.
+- **C4's bucket can't be coloured by urgency.** `NotificationBadge` classifies on
+  `now - timestamp`, so a scheduled date would read as negative age and stay Fresh forever. The
+  bucket uses the invite's own date like every other bucket, and the invite row leads the popover
+  instead of relying on colour to convey imminence.
+- **A badge that doesn't clear when you act on it reads as a failed save.** `NotificationState`
+  only refreshed on navigation or the 60s poll, so answering an RSVP left the count stale while
+  the user watched. `MyInvestigations` now forces a refresh after saving. The server count was
+  right the whole time — this was only visible live.
+
 ### What exists today (explored)
 - **Original request**: `Case.ClientRequestId` FK exists, and `AcceptClientRequest` snapshots the request's Description/address onto the case — but the case Description is then freely editable, so it diverges. The Overview tab renders only the literal words "Client Request" as the Source — no link, no content. **No endpoint lets an org member read the originating `ClientRequest`** (`GET api/client-requests/{id}` is owner-or-SuperAdmin only), and `ClientRequestFile` attachments are never carried to the case.
 - **Timeline**: `CaseTimelineEntry` has exactly one visibility flag — binary `IsPublic` (public case page or not). No org-vs-client tiering; any active org member sees every entry. Entry types: ClientReport / InvestigatorNote / Evidence / ResearchNote. Public read path already filters `IsPublic` at the query level.
