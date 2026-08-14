@@ -2448,7 +2448,35 @@ the confirmed scope) — logged as a possible future enhancement if still wanted
 > Noted by the user 2026-08-12, mid-session while item #57 (Camtasia GUI arc) was in progress;
 > fixed 2026-08-13 phase 156. See `README-phase-156.md` in Github-BenVideo for full detail.
 
-## 62. blob: URL "failed to load resource" — same untracked-down issue seen again, inspector-only this time
+## 62. blob: URL "failed to load resource" (✅ root-caused + fixed 2026-08-13, phase 170)
+
+**It was never a lifetime bug.** The import row picks its thumbnail element by *file* type
+(`@if (item.IsVideo) → <video>`), but `PreviewUrl` changes *kind* mid-import: it starts as an object
+URL over the picked file (a real video), then is overwritten with `thumbs[0]` — an extracted
+`image/webp` still frame. The markup still renders `<video>`, which can never decode a WebP, so the
+browser logs exactly one failed `blob:` load per video import: no exception, no C#-side signal, no
+visible symptom beyond an empty thumb box in a row that clears itself. That matches this item's
+reported signature exactly — solo, inspector-only, "intermittent" (needs a video import *and* an
+open inspector). The clincher: the failing URL was still `fetch`-able at the moment it 404'd, which
+rules out every revoke/lifetime theory the previous four phases had assumed.
+
+Fix: track what the URL *is*, not what the file is — `FileImportStatus.PreviewIsVideo`, with all
+assignments routed through one `SetThumbnailPreviewAsync`. Measured 1 → 0 failed blob loads on the
+same import.
+
+Chasing the (wrong) lifetime hypothesis first still paid: it surfaced **three genuine latent
+defects** in the thumbnail path, all fixed in the same phase — revoke-before-swap in
+`LazyFillThumbnailsAsync`; shared URL *strings* across duplicated clips and the import row (both
+duplication paths copy the list, not the strings) now guarded by a pure `ThumbnailRevokePlan`; and
+a missing `@key` on `VideoTimeline`'s thumbstrip. Plus a per-video-import leak of the superseded
+`fileObjectUrl` blob.
+
+**Why it stayed unfound for four phases:** phase 144 built `BlobUrlLifecycle` precisely to catch
+this class of bug, then only pointed it at preview URLs; phase 159 added sidecar thumbnails. wasm
+thumbnails — the largest blob population in the app — were never registered, so the detector was
+structurally blind. Now registered under `ClipBrowser.wasmThumbnail`. See `README-phase-170.md`.
+
+<details><summary>Original report (2026-08-12)</summary>
 
 Ben spotted another `Failed to load resource` error for a `blob:http://localhost:PORT/<guid>` URL
 during item #57 P5 live testing — no visible on-screen symptom this time, only caught in the
@@ -2467,6 +2495,8 @@ inspector — narrows out "always causes a visible hang" as a necessary conditio
 > Noted by the user 2026-08-12 during item #57 P5 live verification. User has already asked
 > (recorded in the memory above) to properly root-cause this later rather than keep routing around
 > it — not blocking P5.
+
+</details>
 
 ## 63. Keyframe-branch canvas edits bypass undo/redo entirely (✅ fixed 2026-08-13, phase 154)
 
