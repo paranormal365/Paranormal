@@ -84,7 +84,7 @@
                             <TelerikButton Icon="@SvgIcon.Upload" Size="@ThemeConstants.Button.Size.Small"
                                            ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
                                            Title="Publish rendered video"
-                                           OnClick="@(() => TriggerPublish(row))" />
+                                           OnClick="@(() => TriggerPublishAsync(row))" />
                             <TelerikButton Icon="@SvgIcon.Trash" Size="@ThemeConstants.Button.Size.Small"
                                            ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                            OnClick="@(() => ConfirmDeleteAsync(row))" />
@@ -114,7 +114,7 @@
 <TelerikNotification @ref="_notifications" VerticalPosition="NotificationVerticalPosition.Bottom"
                      HorizontalPosition="NotificationHorizontalPosition.Right" />
 
-@* Hidden file input triggered by TriggerPublish — accepts the rendered export from the user's Downloads *@
+@* Hidden file input triggered by TriggerPublishAsync — accepts the rendered export from the user's Downloads *@
 <InputFile id="publish-input-my" OnChange="OnPublishFileSelectedAsync" accept="video/*" style="display:none" />
 
 @code {
@@ -211,10 +211,14 @@
         _deleteTarget = null;
     }
 
-    private void TriggerPublish(VideoProjectRecord record)
+    /// <summary>Opens the hidden file input's native picker — see the case editor's copy for why
+    /// this goes through a typed interop module rather than <c>eval</c>.</summary>
+    private async Task TriggerPublishAsync(VideoProjectRecord record)
     {
         _publishTarget = record;
-        _ = JSRuntime.InvokeVoidAsync("eval", "document.getElementById('publish-input-my').click()");
+        await using var dom = await JSRuntime.InvokeAsync<IJSObjectReference>(
+            "import", "/_content/Ben.Web.Library/js/domInterop.js");
+        await dom.InvokeVoidAsync("clickElementById", "publish-input-my");
     }
 
     /// <summary>Server project id from an earlier publish this session — see the case editor's
