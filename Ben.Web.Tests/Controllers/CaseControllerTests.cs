@@ -460,4 +460,185 @@ public class CaseControllerTests
         var app = await db2.ClientRequestOrganizations.FirstAsync(a => a.ClientRequestId == req.Id);
         Assert.Equal(ClientOrgRequestStatus.Accepted, app.Status);
     }
+
+    // ── GetClientRequest (C1) ─────────────────────────────────────────────────
+
+    /// <summary>Seeds a client request with optional attachments and a case pointing at it.</summary>
+    private static async Task<(Guid CaseId, Guid RequestId)> SeedCaseFromRequestAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid userId,
+        int attachmentCount = 0, bool linkRequest = true)
+    {
+        var caseId    = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+
+        db.ClientRequests.Add(new ClientRequest
+        {
+            Id = requestId, AppUserId = userId,
+            Status = ClientRequestStatus.Assigned,
+            StreetAddress1 = "12 Ghost Lane", StreetAddress2 = "Apt 3",
+            City = "Nashville", State = "TN", ZipCode = "37201", Country = "US",
+            Gender = ClientGender.Female, BirthYear = 1984,
+            Description = "<p>Footsteps upstairs every night around 2am.</p>",
+            Latitude = 36.16m, Longitude = -86.78m,
+            DateCreated = new DateTime(2026, 3, 4, 9, 30, 0, DateTimeKind.Utc),
+            CreatedByAppUserId = userId,
+        });
+
+        for (var i = 0; i < attachmentCount; i++)
+        {
+            var fileId = Guid.NewGuid();
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = userId,
+                FileName = $"evidence{i}.jpg", StoredFileName = $"s{i}.jpg", ContentType = "image/jpeg",
+                FileSize = 100 + i, FileData = new byte[4],
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            db.ClientRequestFiles.Add(new ClientRequestFile
+            {
+                Id = Guid.NewGuid(), ClientRequestId = requestId, UploadFileId = fileId,
+                DateCreated = DateTime.UtcNow.AddMinutes(i), CreatedByAppUserId = userId,
+            });
+        }
+
+        db.Cases.Add(new Case
+        {
+            Id = caseId, OrganizationId = orgId, Title = "The Nashville case",
+            Description = "Edited by the org, diverged from the request",
+            ClientRequestId = linkRequest ? requestId : null,
+            StreetAddress1 = "12 Ghost Lane", City = "Nashville", State = "TN",
+            ZipCode = "37201", Country = "US",
+            DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        });
+        await db.SaveChangesAsync();
+        return (caseId, requestId);
+    }
+
+    private static async Task<CaseClientRequestRecord> GetRequestAsync(
+        IDbContextFactory<BenDataContext> factory, Guid userId, Guid orgId, Guid caseId)
+    {
+        var result = await Build(factory, userId).GetClientRequest(orgId, caseId, default);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        return Assert.IsType<CaseClientRequestRecord>(ok.Value);
+    }
+
+    [Fact]
+    public async Task GetClientRequest_ReturnsTheClientsOwnWords_NotTheEditedCase()
+    {
+        // The whole point: the case description is a snapshot the org then edits, so it stops being
+        // what the client said. This endpoint has to return the request's text, not the case's.
+        var (factory, orgId, userId) = await SeedAsync();
+        var (caseId, requestId) = await SeedCaseFromRequestAsync(factory, orgId, userId);
+
+        var record = await GetRequestAsync(factory, userId, orgId, caseId);
+
+        Assert.Equal(requestId, record.ClientRequestId);
+        Assert.Equal("<p>Footsteps upstairs every night around 2am.</p>", record.Description);
+        Assert.Equal(new DateTime(2026, 3, 4, 9, 30, 0, DateTimeKind.Utc), record.SubmittedUtc);
+        Assert.Equal("12 Ghost Lane", record.StreetAddress1);
+        Assert.Equal("Apt 3", record.StreetAddress2);
+        Assert.Equal("Nashville", record.City);
+        Assert.Equal(ClientGender.Female, record.Gender);
+        Assert.Equal(1984, record.BirthYear);
+    }
+
+    [Fact]
+    public async Task GetClientRequest_ReturnsTheRequestsAttachments_InSubmissionOrder()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var (caseId, _) = await SeedCaseFromRequestAsync(factory, orgId, userId, attachmentCount: 3);
+
+        var record = await GetRequestAsync(factory, userId, orgId, caseId);
+
+        Assert.Equal(3, record.Files.Count);
+        Assert.Equal(["evidence0.jpg", "evidence1.jpg", "evidence2.jpg"],
+                     record.Files.Select(f => f.FileName));
+        Assert.All(record.Files, f => Assert.Equal("image/jpeg", f.ContentType));
+    }
+
+    [Fact]
+    public async Task GetClientRequest_NonMember_ReturnsForbid()
+    {
+        // The request carries a client's home address and demographics.
+        var (factory, orgId, userId) = await SeedAsync();
+        var (caseId, _) = await SeedCaseFromRequestAsync(factory, orgId, userId);
+
+        var result = await Build(factory, Guid.NewGuid()).GetClientRequest(orgId, caseId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetClientRequest_PlainMember_CanRead()
+    {
+        // Reading the originating request is ordinary case work, not an admin action.
+        var (factory, orgId, userId) = await SeedAsync(makeAdmin: false);
+        var (caseId, _) = await SeedCaseFromRequestAsync(factory, orgId, userId);
+
+        var record = await GetRequestAsync(factory, userId, orgId, caseId);
+
+        Assert.Equal("Nashville", record.City);
+    }
+
+    [Fact]
+    public async Task GetClientRequest_ForACaseWithNoRequest_ReturnsNotFound()
+    {
+        // Normal, not an error: cases can be raised internally rather than from a submission.
+        var (factory, orgId, userId) = await SeedAsync();
+        var (caseId, _) = await SeedCaseFromRequestAsync(factory, orgId, userId, linkRequest: false);
+
+        var result = await Build(factory, userId).GetClientRequest(orgId, caseId, default);
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetClientRequest_ForACaseInAnotherOrg_ReturnsNotFound()
+    {
+        // Being a member of the org named in the route must not resolve another org's case.
+        var (factory, orgId, userId) = await SeedAsync();
+        var otherOrgId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization
+            {
+                Id = otherOrgId, Name = "Other", UrlName = "other",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var (foreignCaseId, _) = await SeedCaseFromRequestAsync(factory, otherOrgId, userId);
+
+        var result = await Build(factory, userId).GetClientRequest(orgId, foreignCaseId, default);
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetClientRequest_ForAnUnknownCase_ReturnsNotFound()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+
+        var result = await Build(factory, userId).GetClientRequest(orgId, Guid.NewGuid(), default);
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetClientRequest_WhenTheRequestRowIsGone_ReturnsNotFoundNotAnError()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var (caseId, requestId) = await SeedCaseFromRequestAsync(factory, orgId, userId);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.ClientRequests.Remove(await db.ClientRequests.SingleAsync(r => r.Id == requestId));
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, userId).GetClientRequest(orgId, caseId, default);
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
 }

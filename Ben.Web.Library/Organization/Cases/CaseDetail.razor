@@ -81,6 +81,80 @@
                                 <div class="card-body">@((MarkupString)_case.Description)</div>
                             </div>
                         }
+
+                        @* ── What the client actually submitted ───────────────
+                           Kept visually distinct from the Case Summary above: that one starts as a
+                           copy of this and is then edited freely, so the two disagree within days.
+                           This is the client's own words, read-only. *@
+                        @if (_clientRequest is { } req)
+                        {
+                            <div class="card mb-3 border-info">
+                                <div class="card-header fw-semibold d-flex align-items-center gap-2">
+                                    <TelerikSvgIcon Icon="@SvgIcon.User" />
+                                    Original Request
+                                    <span class="ms-auto text-secondary small fw-normal">
+                                        as submitted by the client on
+                                        @req.SubmittedUtc.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")
+                                    </span>
+                                </div>
+                                <div class="card-body">
+                                    @if (!string.IsNullOrWhiteSpace(req.Description))
+                                    {
+                                        <div class="mb-3">@((MarkupString)req.Description)</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="text-secondary fst-italic mb-3">
+                                            The client didn't write a description.
+                                        </div>
+                                    }
+
+                                    <dl class="row mb-0 small">
+                                        <dt class="col-sm-3">Address given</dt>
+                                        <dd class="col-sm-9">
+                                            @req.StreetAddress1@(string.IsNullOrWhiteSpace(req.StreetAddress2) ? "" : $", {req.StreetAddress2}")<br />
+                                            @req.City, @req.State @req.ZipCode @req.Country
+                                        </dd>
+                                        @if (req.Gender != ClientGender.NotProvided || req.BirthYear.HasValue)
+                                        {
+                                            <dt class="col-sm-3">Client</dt>
+                                            <dd class="col-sm-9">
+                                                @if (req.Gender != ClientGender.NotProvided) { <text>@req.Gender</text> }
+                                                @if (req.BirthYear is { } year)
+                                                {
+                                                    <text>@(req.Gender != ClientGender.NotProvided ? ", " : "")born @year</text>
+                                                }
+                                            </dd>
+                                        }
+                                    </dl>
+
+                                    @if (req.Files.Count > 0)
+                                    {
+                                        <div class="mt-3 pt-3 border-top">
+                                            <div class="fw-semibold small mb-2">
+                                                Attached by the client (@req.Files.Count)
+                                            </div>
+                                            <div class="d-flex flex-column gap-1">
+                                                @foreach (var f in req.Files)
+                                                {
+                                                    @* A plain link, matching how every other file in
+                                                       the library is offered — the download endpoint
+                                                       applies its own access checks. *@
+                                                    <div class="d-flex align-items-center gap-2 small">
+                                                        <TelerikSvgIcon Icon="@SvgIcon.Paperclip" />
+                                                        <a href="@AdminClient.GetFileDownloadUrl(f.UploadFileId)"
+                                                           target="_blank" rel="noopener"
+                                                           class="text-truncate" style="max-width:280px;"
+                                                           title="@f.FileName">@f.FileName</a>
+                                                        <span class="text-secondary">@FormatBytes(f.FileSize)</span>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
                     </div>
                     <div class="col-md-4">
                         <div class="card">
@@ -97,7 +171,15 @@
                                     @if (_case.ClientRequestId.HasValue)
                                     {
                                         <dt class="col-5">Source</dt>
-                                        <dd class="col-7">Client Request</dd>
+                                        <dd class="col-7">
+                                            Client Request
+                                            @* Used to be these two words and nothing else. Points at
+                                               the card that now renders the request itself. *@
+                                            @if (_clientRequest is not null)
+                                            {
+                                                <div class="text-secondary small">see Original Request</div>
+                                            }
+                                        </dd>
                                     }
                                     else
                                     {
@@ -251,6 +333,12 @@
     [Parameter, SupplyParameterFromQuery(Name = "tab")] public string? InitialTab { get; set; }
 
     private CaseRecord? _case;
+
+    /// <summary>
+    /// The client request this case came from, when there is one and the caller may read it.
+    /// Null is the normal state for an internally-raised case, so it is not treated as an error.
+    /// </summary>
+    private CaseClientRequestRecord? _clientRequest;
     private bool _loaded;
     private string? _error;
     private bool _isBusy;
@@ -319,16 +407,36 @@
         _activeTabId = TabIdFor(InitialTab);
         StateHasChanged();
 
+        _clientRequest = null;
+
         try { _case = await AdminClient.GetOrgCaseAsync(OrgId, CaseId); }
         catch { _error = "Failed to load case."; }
         _loaded = true;
         StateHasChanged();
+
+        // Fetched separately and allowed to fail quietly: most cases have one, some don't, and a
+        // missing original request should never stop the case page rendering.
+        if (_case?.ClientRequestId is not null)
+        {
+            try { _clientRequest = await AdminClient.GetOrgCaseClientRequestAsync(OrgId, CaseId); }
+            catch { /* the card just doesn't appear */ }
+            StateHasChanged();
+        }
 
         // Load unread count separately so it doesn't block the page render
         try { _unreadCount = await AdminClient.GetCaseMessageUnreadCountAsync(OrgId, CaseId); }
         catch { /* non-critical; badge stays at 0 */ }
         StateHasChanged();
     }
+
+    /// <summary>Human-readable file size for the attachment list.</summary>
+    private static string FormatBytes(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
+        < 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024):0.#} MB",
+        _ => $"{bytes / (1024.0 * 1024 * 1024):0.#} GB",
+    };
 
     private void OpenEditDialog()
     {
