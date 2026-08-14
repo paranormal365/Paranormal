@@ -90,6 +90,25 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<NotificationSummaryResponse?> GetNotificationSummaryAsync(CancellationToken token = default)
         => _api.GetAsync<NotificationSummaryResponse>("/api/me/notification-summary", token);
 
+    public async Task<List<MyMessageRecord>> GetMyMessagesAsync(bool unreadOnly = false, CancellationToken token = default)
+        => await _api.GetAsync<List<MyMessageRecord>>(
+               $"/api/me/messages?unreadOnly={(unreadOnly ? "true" : "false")}", token) ?? [];
+
+    public Task<bool> MarkMyMessageReadAsync(Guid id, CancellationToken token = default)
+        => _api.PutVoidAsync<object?>($"/api/me/messages/{id}/read", null, token);
+
+    public async Task<int> MarkAllMyMessagesReadAsync(CancellationToken token = default)
+        => await _api.PutAsync<object?, int>("/api/me/messages/read-all", null, token);
+
+    public async Task<List<PendingPermissionRequestRecord>> GetPendingPermissionRequestsForMeAsync(CancellationToken token = default)
+        => await _api.GetAsync<List<PendingPermissionRequestRecord>>("/api/me/permission-requests/pending", token) ?? [];
+
+    public async Task<bool> ReviewPermissionRequestAsync(
+        Guid requestId, FilePermissionRequestStatus status, string? reviewNotes, CancellationToken token = default)
+        => await _api.PutAsync<ReviewPermissionRequestRequest, UploadFilePermissionRequestResponse>(
+               $"/api/upload-file-permission-requests/{requestId}/review",
+               new ReviewPermissionRequestRequest(status, reviewNotes), token) is not null;
+
     // ── Audit Log ─────────────────────────────────────────────────────────────
 
     public async Task<AuditLogPagedResponse?> GetAuditLogsAsync(

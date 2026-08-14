@@ -91,6 +91,46 @@ public sealed class UploadFilePermissionRequestController : BenControllerBase
         return Ok(_mapper.Map<IEnumerable<UploadFilePermissionRequestRecord>>(requests));
     }
 
+    /// <summary>
+    /// Pending requests on the caller's own files, with the file, requester and org names joined in.
+    /// </summary>
+    /// <remarks>
+    /// The reviewer-id-in-the-route form above predates this and is still used by the raw
+    /// per-file view. This one is always "me" — a reviewer list has no business accepting someone
+    /// else's id — and returns names, because a list of ids is not something a person can act on.
+    /// </remarks>
+    [HttpGet("/api/me/permission-requests/pending")]
+    public async Task<ActionResult<IEnumerable<PendingPermissionRequestRecord>>> GetPendingForMe(
+        CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        var items = await db.UploadFilePermissionRequests.AsNoTracking()
+            .Where(r => r.RequestStatus == FilePermissionRequestStatus.Pending
+                     && db.UploadFiles.Any(f => f.Id == r.UploadFileId && f.AppUserId == userId))
+            .OrderByDescending(r => r.DateCreated)
+            .Select(r => new PendingPermissionRequestRecord(
+                r.Id,
+                r.UploadFileId,
+                db.UploadFiles.Where(f => f.Id == r.UploadFileId).Select(f => f.FileName).FirstOrDefault(),
+                r.OrganizationId,
+                r.OrganizationId == null
+                    ? null
+                    : db.Organizations.Where(o => o.Id == r.OrganizationId).Select(o => o.Name).FirstOrDefault(),
+                r.RequestedByAppUserId,
+                db.AppUsers.Where(u => u.Id == r.RequestedByAppUserId)
+                           .Select(u => u.DisplayName ?? u.Email).FirstOrDefault(),
+                r.PermissionType,
+                r.RequestNotes,
+                r.DateCreated))
+            .ToListAsync(cancellationToken);
+
+        return Ok(items);
+    }
+
     /// <summary>Submit a permission request for a file.</summary>
     [HttpPost("/api/upload-files/{fileId:guid}/permission-requests")]
     public async Task<ActionResult<UploadFilePermissionRequestRecord>> Submit(

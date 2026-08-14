@@ -85,6 +85,23 @@ public interface IBenAdminClient
     /// </summary>
     Task<NotificationSummaryResponse?> GetNotificationSummaryAsync(CancellationToken token = default);
 
+    /// <summary>Platform messages addressed to the current user, newest first.</summary>
+    /// <param name="unreadOnly">Restrict to messages never opened.</param>
+    Task<List<MyMessageRecord>> GetMyMessagesAsync(bool unreadOnly = false, CancellationToken token = default);
+
+    /// <summary>Marks one of the current user's messages read. <paramref name="id"/> is the record's Id.</summary>
+    Task<bool> MarkMyMessageReadAsync(Guid id, CancellationToken token = default);
+
+    /// <summary>Marks every unread message of the current user's read. Returns how many changed.</summary>
+    Task<int> MarkAllMyMessagesReadAsync(CancellationToken token = default);
+
+    /// <summary>Pending file-permission requests awaiting the current user, with names resolved.</summary>
+    Task<List<PendingPermissionRequestRecord>> GetPendingPermissionRequestsForMeAsync(CancellationToken token = default);
+
+    /// <summary>Approves or denies a file-permission request. Returns false when the API rejects it.</summary>
+    Task<bool> ReviewPermissionRequestAsync(
+        Guid requestId, FilePermissionRequestStatus status, string? reviewNotes, CancellationToken token = default);
+
     // ── Audit Log ─────────────────────────────────────────────────────────────
 
     Task<AuditLogPagedResponse?> GetAuditLogsAsync(int page = 1, int pageSize = 50, string? entityType = null, int? action = null, Guid? userId = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken token = default);

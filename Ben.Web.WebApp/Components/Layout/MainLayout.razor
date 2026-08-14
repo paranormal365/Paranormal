@@ -31,6 +31,7 @@
         <AppBarSection>
             @if (TokenStore.IsAuthenticated)
             {
+                <NotificationBell />
                 <span class="me-2 text-secondary small">@TokenStore.UserEmail</span>
                 <TelerikButton Icon="@SvgIcon.Logout"
                                FillMode="@ThemeConstants.Button.FillMode.Clear"
@@ -86,10 +87,8 @@
 </div>
 
 @code {
-    private CancellationTokenSource _cancellationTokenSource = new();
     private bool _adminPanelOpen = false;
     private MainNavigationDrawer? _drawer;
-    private int _pendingRequestCount;
 
     private const string AuthStateKey = "ben-auth-state";
 
@@ -116,21 +115,8 @@
         InvokeAsync(async () =>
         {
             await PersistAuthStateAsync();
-            if (TokenStore.IsAuthenticated && TokenStore.UserId.HasValue)
-                await RefreshPendingRequestCountAsync();
             StateHasChanged();
         });
-    }
-
-    private async Task RefreshPendingRequestCountAsync()
-    {
-        if (!TokenStore.IsAuthenticated || !TokenStore.UserId.HasValue) return;
-        try
-        {
-            var pending = await WebApiClient.GetPendingPermissionRequestsForReviewerAsync(TokenStore.UserId.Value, _cancellationTokenSource.Token);
-            _pendingRequestCount = pending.Count;
-        }
-        catch { _pendingRequestCount = 0; }
     }
 
     private void HandleLogout()
@@ -150,11 +136,6 @@
                 // If still not authenticated, check for an active Entra/OIDC session
                 if (!TokenStore.IsAuthenticated)
                     await TryBridgeEntraAuthAsync();
-
-                if (TokenStore.IsAuthenticated)
-                {
-                    await RefreshPendingRequestCountAsync();
-                }
 
                 try
                 {
@@ -293,12 +274,6 @@
     public void Dispose()
     {
         TokenStore.StateChanged -= HandleTokenStateChanged;
-
-        if (_cancellationTokenSource != null)
-        {
-            _cancellationTokenSource.Cancel();
-            _cancellationTokenSource.Dispose();
-        }
     }
 
     // ── Persisted auth state ──────────────────────────────────────────────────
