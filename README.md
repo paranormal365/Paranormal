@@ -17,26 +17,49 @@ Full-stack .NET solution — ASP.NET Core Web API + Blazor Server + EF Core + SQ
 | `Ben.Service.Security` | Org-level tenant security service |
 | `Ben.Web.Library` | Razor Class Library — Blazor + Telerik components: `WaveSurferPlayer`, `AudioFilePreview`, `AddressMapPlayer`, `IconClassPicker`, `IconPickerDialog`, org/CMS/user management pages |
 | `Ben.Web.WebApp` | Blazor Server app — Telerik UI for Blazor (`:5078`) |
-| `Ben.Service.RepositoryService.Tests` | xUnit — 279 tests |
-| `Ben.Web.Tests` | xUnit — 497 tests |
+| `Ben.Service.RepositoryService.Tests` | xUnit — 374 tests |
+| `Ben.Web.Tests` | xUnit — 1,278 tests |
 
-**776 tests — 0 failures, 0 warnings**
+**1,652 tests — 0 failures**
+
+### Media projects (separate repository)
+
+The video editor and its companion processes live in their own git repository at
+`../Github-BenVideo` and are referenced by path, not by package. They appear in `Ben.slnx` under
+**Media Projects** so they build and run from this solution — but **commits for them belong in that
+repository**, not this one.
+
+| Project | Role |
+|---|---|
+| `Ben.Video.Editor` | Razor Class Library — the editor itself (`<VideoEditor />`), referenced by `Ben.Web.Library` |
+| `Ben.Video.Core` | Wire contracts shared by the editor and the sidecar |
+| `Ben.Video.RenderService` | Background render worker abstraction (`IRenderBackend`) |
+| `Ben.Video.Sidecar` | Optional native-ffmpeg companion the **user** installs on their own machine; loopback-only, pairing-token authenticated |
+| `Ben.Video.Sidecar.FakeFfmpeg` | Dev stand-in that records ffmpeg argv, for exercising the sidecar without real binaries |
+
+The sidecar is opt-in and unpaired by default (`options.NativeSidecar`). With none installed every
+path stays on ffmpeg.wasm in the browser. Note that it serves only origins listed in its own
+`SidecarOptions.AllowedOrigins` — **a production deployment must add its origin there**, or every
+request past `/v1/health` is rejected with a 403.
 
 ---
 
 ## 🚀 Getting Started
 
-**Prerequisites:** .NET 10 SDK, Docker Desktop, Telerik license
+**Prerequisites:** .NET 10 SDK, Telerik license, and network access to the development SQL Server.
 
 ```bash
-# Start Docker DB + WebApi + WebApp in one step
-# Via VS Code: Cmd+Shift+P → Run Task → start-full-stack
+# Both servers in one step:
+./scripts/start-webapp-with-api.sh
 
 # Or manually:
-docker start bendb-sql
 dotnet run --project Ben.Data.WebApi/Ben.Data.WebApi.csproj --urls http://localhost:5252
 dotnet run --project Ben.Web.WebApp/Ben.Web.WebApp.csproj --urls http://localhost:5078
 ```
+
+> **No Docker.** Development runs against a dedicated SQL Server (see *Database Setup* below), and
+> the start scripts do not touch Docker. `scripts/ensure-docker-running.sh` is left over from the
+> container setup and is not part of the current path — `docker start bendb-sql` will not help.
 
 Add your secrets to `appsettings.Development.json` (see [WebApp-WebApi Integration Guide](./ProjectNotes/WebApp-WebApi-Integration-Guide.md) for configuration details).
 
@@ -44,7 +67,17 @@ Add your secrets to `appsettings.Development.json` (see [WebApp-WebApi Integrati
 
 ## �️ Database Setup
 
-### Development (Docker — default)
+### Development (dedicated SQL Server — current)
+
+Development points at a standalone SQL Server on the local network; there is nothing to start.
+The connection string lives in `Ben.Data.WebApi/appsettings.Development.json`:
+
+```jsonc
+"BenDbConnectionString": "Server=192.168.1.71,1433;Database=IsHauntedDb;User Id=…;…"
+```
+
+<details>
+<summary>Previous Docker-based setup (superseded — the connection string above is what runs)</summary>
 
 ```bash
 docker start bendb-sql   # start existing container
@@ -53,6 +86,10 @@ docker run -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD=YourStrong@Password1 \
            -p 1433:1433 --name bendb-sql \
            -d mcr.microsoft.com/mssql/server:2022-latest
 ```
+
+The matching localhost connection string is still present, commented out, in
+`appsettings.Development.json`.
+</details>
 
 Then apply migrations:
 

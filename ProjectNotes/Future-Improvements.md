@@ -3047,3 +3047,77 @@ after setting `img.src`, so image dimensions were `[0,0]` essentially always.
 project dialog needs saved projects, and seeding them is what uncovered #7 instead.
 
 > See `README-phase-165.md` … `README-phase-169.md` in Github-BenVideo.
+
+---
+
+## 75. Native sidecar wired into the Ben solution (✅ COMPLETE 2026-08-14, Ben.Video phase 173)
+
+Item #70 finished the sidecar's *capability*; this covers making it usable from the Ben app rather
+than only from the WASM Playground.
+
+**The blocker, which was not obvious.** Everything sidecar-related had been built and verified
+under Blazor **WebAssembly**. `Ben.Web.WebApp` is Blazor **Server**, and the sidecar binds
+`127.0.0.1` on the *user's* machine. The JSON half of the protocol went out over a C# `HttpClient`,
+which resolves that address wherever the Blazor code executes — the browser under WASM (correct by
+accident), the **server** under Blazor Server. A server-side request also carries no `Origin`
+header, and `SecurityMiddleware` 403s every endpoint except bare `/v1/health`.
+
+The resulting symptom was worse than an outright failure: **health succeeded, so the toolbar chip
+reported a sidecar had been found, and only pairing failed** — reading as a mistyped pairing code
+rather than a request that never reached the user's machine. Measured against a real sidecar:
+`/v1/status` + valid token with no Origin → 403; the same request with an allowlisted Origin → 200.
+
+**Fixed** by routing every sidecar request through the browser (`SidecarTransport` →
+`sidecarInterop.js`); 7 call sites converted and the named `HttpClient` removed. A guard test greps
+the sidecar services for `IHttpClientFactory`/`CreateClient(` — nothing else catches a regression,
+because a new C# call site still works fine in the WASM Playground.
+
+**Also in this item:** `Ben.slnx` gained `Ben.Video.Sidecar` (+ `Core`, `RenderService`,
+`Sidecar.FakeFfmpeg`) under *Media Projects*; `options.NativeSidecar = true` in
+`Ben.Web.WebApp/Program.cs`; the Ben dev origins added to `SidecarOptions.AllowedOrigins`; and a
+build break fixed where `BenMediaLibraryProvider` had never implemented the `IProgress<double>`
+parameter `IMediaLibraryProvider.DownloadFileAsync` gained in Ben.Video phase 150.
+
+**⚠ Before this works off localhost:** the production origin must be added to
+`SidecarOptions.AllowedOrigins` (via appsettings). Nothing else is needed; without it every request
+past `/v1/health` is rejected.
+
+> See `README-phase-173.md` in Github-BenVideo.
+
+---
+
+## 76. A finished render can go to the server or the user's machine (✅ COMPLETE 2026-08-14, Ben.Video phase 176)
+
+**The user's model, stated explicitly:** the *rendered video* goes either to the server as a final
+video or to the user's machine. The *project* is a separate concern — JSON export to save, JSON
+open to resume. Two different questions; they now have two different prompts.
+
+**What existed before:** export → blob download to Downloads → the retained copy deleted.
+Publishing meant going to the project list, clicking Publish, and **re-selecting the exported file
+out of Downloads** through a hidden `<InputFile>`. Nothing connected the file the editor had just
+produced to the file the user picked back up.
+
+**Now:** `<VideoEditor OnPublishExport="…" />`. Supply a handler and "Export Now" ends with a
+destination prompt — *Upload to server* / *Save to my machine* / *Discard*. Leave it unset and
+export behaves exactly as before; the gate is `HasDelegate`, not a new options flag, because a host
+with no handler has no second destination to offer. Queued exports still download directly — nobody
+is present to answer a prompt for a job the user queued and walked away from.
+
+Host side: `VideoExportPublisher` (`Ben.Web.Library/Services/`) holds the two-step all three editor
+pages need. `POST /api/video-projects/{id}/publish` attaches to an *existing* project row and 404s
+without one, so a render made without ever saving to the server would have nowhere to go — it saves
+the project first in that case, then publishes to what it just created, and remembers the id so a
+second export updates that project rather than adding a row per render.
+
+**Two decisions that look like bugs and aren't:**
+- The retained-export discard is deliberately **not** in a `finally`. A host that throws keeps its
+  output, so the prompt can stay open and still offer "Save to my machine" instead of deleting the
+  only copy of a render the user just waited through. Handlers must therefore **throw** to report
+  failure — returning normally means "safely stored".
+- The bytes are read from the **blob URL, not OPFS**. A retained export always has a blob URL,
+  including on the OPFS-unavailable branch (Safari private browsing) where it is minted from MEMFS.
+  Reading OPFS would have uploaded an empty body in exactly the browser nobody tests.
+
+The old publish-from-Downloads flow stays, for files the user already has on disk.
+
+> See `README-phase-176.md` in Github-BenVideo.
