@@ -5,6 +5,7 @@
 @inject ProjectStore ProjectStore
 @inject NavigationManager NavManager
 @inject IJSRuntime JSRuntime
+@inject VideoExportPublisher ExportPublisher
 
 <PageTitle>My Videos</PageTitle>
 
@@ -47,7 +48,7 @@
 
     @* ── Editor (full remaining height) ─────────────────────────────────── *@
     <div style="flex:1 1 auto; min-height:0; overflow:hidden;">
-        <VideoEditor />
+        <VideoEditor OnPublishExport="OnPublishExportAsync" />
     </div>
 </div>
 
@@ -214,6 +215,28 @@
     {
         _publishTarget = record;
         _ = JSRuntime.InvokeVoidAsync("eval", "document.getElementById('publish-input-my').click()");
+    }
+
+    /// <summary>Server project id from an earlier publish this session — see the case editor's
+    /// copy of this field for why it exists.</summary>
+    private Guid? _publishedProjectId;
+
+    /// <summary>
+    /// The editor's own "Upload to server" destination. Throws on failure by design so the
+    /// editor's prompt can stay open and keep "Save to my machine" available — see
+    /// VideoExportPublisher.
+    /// </summary>
+    private async Task OnPublishExportAsync(ExportedVideo exported)
+    {
+        var result = await ExportPublisher.PublishAsync(exported, caseId: null, _publishedProjectId);
+        _publishedProjectId = result.ProjectId;
+
+        var idx = _projects.FindIndex(p => p.Id == result.Record.Id);
+        if (idx >= 0) _projects[idx] = result.Record;
+        else          _projects.Add(result.Record);
+
+        _notifications?.Show("Video published.", ThemeConstants.Notification.ThemeColor.Success);
+        StateHasChanged();
     }
 
     private async Task OnPublishFileSelectedAsync(InputFileChangeEventArgs e)

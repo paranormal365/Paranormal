@@ -3,6 +3,7 @@
 
 @inject IOptions<VideoEditorOptions> EditorOptions
 @inject IBenUserState UserState
+@inject VideoExportPublisher ExportPublisher
 
 <PageTitle>Video Editor</PageTitle>
 
@@ -12,4 +13,26 @@
     return;
 }
 
-<VideoEditor />
+<VideoEditor OnPublishExport="OnPublishExportAsync" />
+
+@code {
+    /// <summary>Server project id from an earlier publish this session, so a second export in the
+    /// same session updates that project rather than creating another row.</summary>
+    private Guid? _publishedProjectId;
+
+    /// <summary>
+    /// Sends a finished render to the server as a personal (non-case) video project. This page has
+    /// no project list of its own, so there is nothing to refresh afterwards — MyVideosPage is
+    /// where the result shows up.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately no try/catch: the editor's destination prompt uses the exception to keep itself
+    /// open and leave "Save to my machine" available. Catching here would report success and let
+    /// the editor discard the render.
+    /// </remarks>
+    private async Task OnPublishExportAsync(ExportedVideo exported)
+    {
+        var result = await ExportPublisher.PublishAsync(exported, caseId: null, _publishedProjectId);
+        _publishedProjectId = result.ProjectId;
+    }
+}

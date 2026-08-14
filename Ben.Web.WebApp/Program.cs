@@ -56,6 +56,9 @@ builder.Services.AddBenVideoEditor(options =>
 });
 // Override the default HttpMediaLibraryProvider with one that injects the bearer token.
 builder.Services.AddScoped<Ben.Video.Editor.Services.IMediaLibraryProvider, BenMediaLibraryProvider>();
+// Handles VideoEditor.OnPublishExport — sends a finished render to the server, saving the project
+// first when it has never been saved (the publish endpoint attaches to an existing project row).
+builder.Services.AddScoped<VideoExportPublisher>();
 builder.Services.Configure<WebApiOptions>(builder.Configuration.GetSection("WebApi"));
 builder.Services.AddScoped<IWebApiTokenStore, WebApiTokenStore>();
 builder.Services.AddHttpClient<IWebApiIdentityClient, WebApiIdentityClient>((sp, client) =>

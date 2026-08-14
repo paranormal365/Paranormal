@@ -5,6 +5,7 @@
 @inject ProjectStore ProjectStore
 @inject NavigationManager NavManager
 @inject IJSRuntime JSRuntime
+@inject VideoExportPublisher ExportPublisher
 
 <PageTitle>Case Video Editor</PageTitle>
 
@@ -54,7 +55,7 @@
 
     @* ── Editor (full remaining height) ─────────────────────────────────── *@
     <div style="flex:1 1 auto; min-height:0; overflow:hidden;">
-        <VideoEditor />
+        <VideoEditor OnPublishExport="OnPublishExportAsync" />
     </div>
 </div>
 
@@ -147,6 +148,9 @@
     private VideoProjectRecord? _deleteTarget;
     private VideoProjectRecord? _publishTarget;
     private Guid _myUserId;
+    /// <summary>Server project id established by an earlier publish this session, so a second
+    /// export updates the same project instead of creating a new row per render.</summary>
+    private Guid? _publishedProjectId;
     private TelerikNotification? _notifications;
 
     protected override async Task OnInitializedAsync()
@@ -243,6 +247,28 @@
             _notifications?.Show("Failed to delete the project. Please try again.", ThemeConstants.Notification.ThemeColor.Error);
         }
         _deleteTarget = null;
+    }
+
+    /// <summary>
+    /// The editor's own "Upload to server" destination — the render goes straight from the export
+    /// to the case, with no trip through the user's Downloads folder and no re-selecting the file.
+    /// The <see cref="TriggerPublish"/> flow below stays for publishing a file the user already
+    /// has on disk (an older export, or one made before this existed).
+    /// </summary>
+    private async Task OnPublishExportAsync(ExportedVideo exported)
+    {
+        // No try/catch on purpose: VideoEditor's destination prompt needs the exception to know
+        // the upload failed, so it can stay open and keep "Save to my machine" offered rather than
+        // discarding the user's only copy. Notifications here are for the SUCCESS path only.
+        var result = await ExportPublisher.PublishAsync(exported, CaseId, _publishedProjectId);
+        _publishedProjectId = result.ProjectId;
+
+        var idx = _caseProjects.FindIndex(p => p.Id == result.Record.Id);
+        if (idx >= 0) _caseProjects[idx] = result.Record;
+        else          _caseProjects.Add(result.Record);
+
+        _notifications?.Show("Video published to case.", ThemeConstants.Notification.ThemeColor.Success);
+        StateHasChanged();
     }
 
     private void TriggerPublish(VideoProjectRecord record)
