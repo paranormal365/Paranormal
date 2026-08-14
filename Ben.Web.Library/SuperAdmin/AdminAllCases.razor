@@ -65,6 +65,7 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         _cases = await AdminClient.GetAllCasesAsync();
         StateHasChanged();
     }

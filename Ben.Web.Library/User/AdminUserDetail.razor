@@ -629,6 +629,7 @@ else
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         _detail = await AdminClient.GetUserDetailAsync(UserId);
         if (_detail is null) { NavManager.NavigateTo("/admin/users"); return; }
         RefreshLists();
