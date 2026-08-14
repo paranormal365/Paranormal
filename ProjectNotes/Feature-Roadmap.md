@@ -120,7 +120,16 @@ The **UI is what's broken** (`Ben.Web.Library/SuperAdmin/AdminAuditLog.razor`):
 - Date filters are sent without UTC normalization (`TelerikDatePicker` gives Unspecified-kind local dates; `OccurredAt` is UTC) — off by the viewer's UTC offset.
 - The `userId` server filter has no UI.
 
-### Plan (1 phase)
+### ✅ SHIPPED 2026-08-14 (commit `1c20c4a`)
+Live-verified: pager reads "1 - 25 of 37", page 2 returns "26 - 37 of 37" with different rows and a matching server query per page turn; User filter narrows to 2 records; date boundary measured against the API — a "To = Aug 11" filter returned **10** records before the fix and **31** after (21 silently dropped).
+
+Two extra traps found while wiring it, both fixed:
+- **The grid never issues its first `OnRead` during static SSR prerender, and does not re-issue on hydration** — it sat permanently empty ("0 - 0 of 0") despite rows existing. Needs an explicit `Rebind()` once interactive. Worth remembering for any future `OnRead` grid in this codebase.
+- Applying a filter via `Rebind()` re-reads *the current page*, so narrowing a filter from page 2 could land past the end of the new result set. Must reset page via the grid's own state (`GetState`/`SetStateAsync`).
+
+Also: `TelerikComboBox` silently dropped its selection and snapped back to placeholder with a `Guid?` value + `Guid` ValueField; `TelerikDropDownList` with the identical shape (as used by the two filters beside it) binds correctly. And `ClearButton` is not a ComboBox parameter — the real name is `ShowClearButton` (found by reflecting over `Telerik.Blazor.dll`, same technique as the Image Editor fix).
+
+### Original plan (1 phase)
 - Switch the grid to Telerik's `OnRead` pattern: map `GridReadEventArgs.Request.Page/PageSize` to the existing endpoint, set `args.Data` + `args.Total`. Remove the in-memory FilterRow (keep the purpose-built server filter bar) or translate `Request.Filters` — recommend **remove FilterRow, keep the filter bar** (simpler, no ambiguity).
 - Add a sort parameter to the controller only if sorting matters; otherwise drop `Sortable` (ordering is already newest-first, which is what an audit log wants). Recommend drop.
 - Normalize `dateFrom`/`dateTo` to UTC day boundaries before sending (`dateTo` → end-of-day).
@@ -233,7 +242,7 @@ No `OrganizationType` concept exists anywhere — orgs are differentiated only g
 | Order | Work | Size | Depends on |
 |---|---|---|---|
 | ~~1~~ | ~~Audio security fixes (E0)~~ ✅ **shipped 2026-08-14** | XS→S | — |
-| 2 | Audit log grid fix (Area 3) | XS | — |
+| ~~2~~ | ~~Audit log grid fix (Area 3)~~ ✅ **shipped 2026-08-14** | XS→S | — |
 | 3 | Notifications N1–N3 (Area 1) | M | — |
 | 4 | EVP detection E1–E4 (Area 2) | L | E0 |
 | 5 | Case page C1 (original request) | S | — |
