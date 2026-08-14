@@ -246,6 +246,7 @@ public sealed class CaseController : BenControllerBase
             CaseManagerAppUserId  = request.CaseManagerAppUserId,
             Status                = CaseStatus.Accepted,
             Title                 = caseTitle,
+            Description           = clientReq.Description,
             StreetAddress1        = clientReq.StreetAddress1,
             StreetAddress2        = clientReq.StreetAddress2,
             City                  = clientReq.City,

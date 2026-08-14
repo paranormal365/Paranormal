@@ -42,7 +42,7 @@ public class CaseControllerTests
         var m = new Mock<IMapper>();
         m.Setup(x => x.Map<CaseRecord>(It.IsAny<object>()))
             .Returns<object>(o => o is Case c
-                ? new CaseRecord { Id = c.Id, OrganizationId = c.OrganizationId, Title = c.Title, Status = c.Status, CaseYear = c.CaseYear, OrgCaseNumber = c.OrgCaseNumber, StreetAddress1 = c.StreetAddress1, City = c.City, State = c.State, ZipCode = c.ZipCode, Country = c.Country, DateCaseOpened = c.DateCaseOpened, DateCreated = c.DateCreated, CaseManagerAppUserId = c.CaseManagerAppUserId, DateCaseClosed = c.DateCaseClosed }
+                ? new CaseRecord { Id = c.Id, OrganizationId = c.OrganizationId, Title = c.Title, Description = c.Description, Status = c.Status, CaseYear = c.CaseYear, OrgCaseNumber = c.OrgCaseNumber, StreetAddress1 = c.StreetAddress1, City = c.City, State = c.State, ZipCode = c.ZipCode, Country = c.Country, DateCaseOpened = c.DateCaseOpened, DateCreated = c.DateCreated, CaseManagerAppUserId = c.CaseManagerAppUserId, DateCaseClosed = c.DateCaseClosed }
                 : new CaseRecord { Title = "", StreetAddress1 = "", City = "", State = "", ZipCode = "", Country = "", DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow });
         m.Setup(x => x.Map<IEnumerable<CaseRecord>>(It.IsAny<object>()))
             .Returns<object>(o => o is IEnumerable<Case> list
@@ -451,6 +451,7 @@ public class CaseControllerTests
         var dto = Assert.IsType<CaseRecord>(created.Value);
         Assert.Equal(CaseStatus.Accepted, dto.Status);
         Assert.Equal(1, dto.OrgCaseNumber);
+        Assert.Equal("Haunting", dto.Description);
 
         await using var db2 = await factory.CreateDbContextAsync();
         var cmsPages = await db2.OrganizationPages.CountAsync(p => p.CaseId == dto.Id);
