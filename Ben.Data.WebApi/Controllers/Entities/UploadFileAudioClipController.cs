@@ -100,6 +100,17 @@ public sealed class UploadFileAudioClipController : BenControllerBase
         if (!await db.UploadFileTypes.AnyAsync(t => t.Id == request.UploadFileTypeId, ct))
             return BadRequest("Upload file type not found.");
 
+        // Resolved before any work: cutting a clip "from" a marker that isn't on this file would
+        // produce a link that misrepresents where the evidence came from.
+        AudioMarker? sourceMarker = null;
+        if (request.SourceMarkerId is { } markerId)
+        {
+            sourceMarker = await db.AudioMarkers
+                .FirstOrDefaultAsync(m => m.Id == markerId && m.UploadFileId == fileId, ct);
+            if (sourceMarker is null)
+                return BadRequest("That marker isn't on this file.");
+        }
+
         byte[] clippedBytes;
         string outContentType;
         string outExtension;
@@ -109,7 +120,8 @@ public sealed class UploadFileAudioClipController : BenControllerBase
             await using (sourceStream)
             {
                 (clippedBytes, outContentType, outExtension) =
-                    AudioClipper.Clip(sourceStream, source.ContentType, request.Start, request.End);
+                    AudioClipper.Clip(sourceStream, source.ContentType, request.Start, request.End,
+                                      request.Normalize);
             }
         }
         catch (NotSupportedException ex)
@@ -153,6 +165,16 @@ public sealed class UploadFileAudioClipController : BenControllerBase
         entity.StoragePath = relativePath;
 
         db.UploadFiles.Add(entity);
+
+        // Saved together with the file: a marker pointing at a clip row that failed to insert would
+        // be a dangling reference the UI renders as a broken link.
+        if (sourceMarker is not null)
+        {
+            sourceMarker.LinkedClipUploadFileId = entity.Id;
+            sourceMarker.DateUpdated            = DateTime.UtcNow;
+            sourceMarker.UpdatedByAppUserId     = userId;
+        }
+
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), entity.Id, entity, userId, AppSources.WebApi, ct));
 
@@ -183,8 +205,18 @@ internal static class AudioClipper
     /// Returns the clipped PCM bytes as WAV together with its content-type and file extension.
     /// </summary>
     /// <exception cref="NotSupportedException">Thrown when the source format cannot be decoded by NAudio.</exception>
+    /// <param name="sourceStream">The audio to clip from.</param>
+    /// <param name="sourceContentType">Content type of the source, used to pick a decoder.</param>
+    /// <param name="startSeconds">Clip start.</param>
+    /// <param name="endSeconds">Clip end.</param>
+    /// <param name="normalize">
+    /// Scale the clip so its loudest peak sits just below full scale. Applied after the cut, so the
+    /// gain is chosen from the clip's own peak rather than the whole recording's — which is the
+    /// point, since the recording's peak is usually something far louder than the EVP.
+    /// </param>
     public static (byte[] Bytes, string ContentType, string Extension) Clip(
-        Stream sourceStream, string sourceContentType, double startSeconds, double endSeconds)
+        Stream sourceStream, string sourceContentType, double startSeconds, double endSeconds,
+        bool normalize = false)
     {
         // See AudioSourceReader: the default NAudio MP3 reader is Windows-only.
         var waveStream = AudioSourceReader.Open(sourceStream, sourceContentType);
@@ -216,7 +248,45 @@ internal static class AudioClipper
                 writer.Write(buffer, 0, bytesRead);
             }
             writer.Flush();
-            return (outputStream.ToArray(), "audio/wav", ".wav");
+            var clipped = outputStream.ToArray();
+            return (normalize ? NormalizePeak(clipped) : clipped, "audio/wav", ".wav");
         }
+    }
+
+    /// <summary>Peak level to normalize to: −1 dBFS, leaving headroom so playback can't clip.</summary>
+    private const float NormalizeTargetPeak = 0.891f;
+
+    /// <summary>
+    /// Scales a WAV so its loudest sample sits at <see cref="NormalizeTargetPeak"/>. Silence is
+    /// returned untouched — there is no peak to scale, and dividing by one would amplify nothing
+    /// into noise.
+    /// </summary>
+    private static byte[] NormalizePeak(byte[] wavBytes)
+    {
+        using var input  = new MemoryStream(wavBytes);
+        using var reader = new WaveFileReader(input);
+        var provider = reader.ToSampleProvider();
+
+        var samples = new List<float>();
+        var buffer  = new float[reader.WaveFormat.SampleRate * reader.WaveFormat.Channels];
+        int read;
+        while ((read = provider.Read(buffer, 0, buffer.Length)) > 0)
+            samples.AddRange(buffer.AsSpan(0, read).ToArray());
+
+        var peak = 0f;
+        foreach (var s in samples) peak = Math.Max(peak, Math.Abs(s));
+        if (peak <= 0.0001f) return wavBytes;
+
+        var scale = NormalizeTargetPeak / peak;
+
+        using var output = new MemoryStream();
+        using (var writer = new WaveFileWriter(
+            output, new WaveFormat(reader.WaveFormat.SampleRate, 16, reader.WaveFormat.Channels)))
+        {
+            foreach (var s in samples)
+                writer.WriteSample(Math.Clamp(s * scale, -1f, 1f));
+            writer.Flush();
+        }
+        return output.ToArray();
     }
 }

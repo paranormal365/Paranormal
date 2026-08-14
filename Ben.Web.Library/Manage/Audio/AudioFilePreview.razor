@@ -305,6 +305,10 @@ else
                                     {
                                         <span class="badge bg-secondary" title="Signal score from the detector that first proposed this">@confirmedScore.ToString("0")</span>
                                     }
+                                    @if (m.LinkedClipUploadFileId is not null)
+                                    {
+                                        <span class="badge bg-success" title="A clip has been cut from this marker">🎧 clip</span>
+                                    }
                                     @if (!string.IsNullOrWhiteSpace(m.Note))
                                     {
                                         <span class="text-secondary small text-truncate" style="max-width:200px;" title="@m.Note">@m.Note</span>
@@ -312,6 +316,11 @@ else
                                     <span class="ms-auto d-flex gap-1">
                                         <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Play"
                                                        OnClick="@(() => SeekToMarkerAsync(m))" />
+                                        <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Crop"
+                                                       Title="@(m.LinkedClipUploadFileId is null
+                                                                 ? "Save this as its own audio file"
+                                                                 : "Save another clip from this marker")"
+                                                       OnClick="@(() => OpenClipFromMarkerDialog(m))" />
                                         <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Pencil"
                                                        OnClick="@(() => OpenEditMarkerDialog(m))" />
                                         <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Trash"
@@ -770,15 +779,52 @@ else
                Title="Create Audio File from Region"
                Width="460px">
     <DialogContent>
-        @if (_newUserRegion is not null)
+        @if (_clipSourceMarker is { } clipMarker)
         {
             <p class="text-secondary small mb-3">
-                Clipping <strong>@FormatTime(_newUserRegion.Start)</strong>
-                &ndash; <strong>@FormatTime(_newUserRegion.End)</strong>
+                Clipping <strong>@clipMarker.Label</strong>
+                (@FormatMarkerRange(clipMarker)) from <em>@FileName</em>.
+                With padding: <strong>@FormatTime(ClipStart) &ndash; @FormatTime(ClipEnd)</strong>.
+                Output will be saved as WAV.
+            </p>
+        }
+        else if (_newUserRegion is not null)
+        {
+            <p class="text-secondary small mb-3">
+                Clipping <strong>@FormatTime(ClipStart)</strong>
+                &ndash; <strong>@FormatTime(ClipEnd)</strong>
                 from <em>@FileName</em>. Output will be saved as WAV.
             </p>
         }
         <div class="row g-3">
+            <div class="col-12 d-flex gap-3 flex-wrap align-items-end">
+                <label class="small mb-0">
+                    Lead-in (s)
+                    @* Extra room either side of the marked sound. A clip trimmed exactly to the
+                       words is hard to judge — you want a moment of the room before and after. *@
+                    <input type="number" class="form-control form-control-sm" style="width:90px;"
+                           min="0" max="10" step="0.1" value="@_clipPrePad"
+                           @oninput="@(e => SetOption(e.Value, v => _clipPrePad = Math.Clamp(v, 0, 10)))" />
+                </label>
+                <label class="small mb-0">
+                    Tail (s)
+                    <input type="number" class="form-control form-control-sm" style="width:90px;"
+                           min="0" max="10" step="0.1" value="@_clipPostPad"
+                           @oninput="@(e => SetOption(e.Value, v => _clipPostPad = Math.Clamp(v, 0, 10)))" />
+                </label>
+                <label class="small mb-0 d-flex align-items-center gap-2">
+                    <input type="checkbox" checked="@_clipNormalize"
+                           @onchange="@(e => _clipNormalize = (bool?)e.Value ?? false)" />
+                    Boost volume (normalize)
+                </label>
+            </div>
+            <div class="col-12">
+                <div class="small text-secondary">
+                    Normalizing raises the clip's loudest point to just under maximum. An EVP is
+                    usually far quieter than the rest of the recording, so without it the clip can be
+                    almost inaudible. The original is never modified — a clip can always be re-cut.
+                </div>
+            </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Label / Description</label>
                 <TelerikTextBox @bind-Value="@_saveClipLabel"
@@ -815,6 +861,12 @@ else
                        OnClick="SaveClipAsync">
             @(_isSavingClip ? "Saving…" : "Save as WAV")
         </TelerikButton>
+        @* Nothing else in this dialog is gated on the file type, so a missing type reads as a dead
+           button. Say why. *@
+        @if (_saveClipTypeId == Guid.Empty)
+        {
+            <span class="small text-secondary ms-2">Pick a file type first.</span>
+        }
     </DialogButtons>
 </TelerikDialog>
 @* ── Toast notifications ────────────────────────────────────────────── *@
@@ -879,6 +931,44 @@ else
     private WsRegionData? _newUserRegion;
 
     private bool   _showSaveClipDialog;      // save-as-clip form
+
+    // ── Clipping an EVP marker (phase E4) ─────────────────────────────────────
+
+    /// <summary>Set when the clip dialog was opened from a marker rather than a drawn region.</summary>
+    private AudioMarkerRecord? _clipSourceMarker;
+    private double _clipPrePad  = 1.0;
+    private double _clipPostPad = 1.0;
+    /// <summary>On by default — the usual reason to clip an EVP is to be able to hear it.</summary>
+    private bool   _clipNormalize = true;
+
+    /// <summary>Where the clip actually starts once padding is applied, never before the file does.</summary>
+    private double ClipStart => Math.Max(0, ClipSourceStart - _clipPrePad);
+
+    /// <summary>Where it ends, clamped to the recording so the request can't run past the audio.</summary>
+    private double ClipEnd =>
+        _modalDuration > 0
+            ? Math.Min(_modalDuration, ClipSourceEnd + _clipPostPad)
+            : ClipSourceEnd + _clipPostPad;
+
+    private double ClipSourceStart =>
+        _clipSourceMarker?.TimeSeconds ?? _newUserRegion?.Start ?? 0;
+
+    private double ClipSourceEnd =>
+        _clipSourceMarker is { } m
+            ? (m.EndSeconds ?? m.TimeSeconds)
+            : _newUserRegion?.End ?? 0;
+
+    /// <summary>Opens the clip dialog for a confirmed EVP marker, seeded with listening padding.</summary>
+    private void OpenClipFromMarkerDialog(AudioMarkerRecord marker)
+    {
+        _clipSourceMarker   = marker;
+        _saveClipLabel      = marker.Label;
+        _clipPrePad         = 1.0;
+        _clipPostPad        = 1.0;
+        _clipNormalize      = true;
+        _saveClipError      = null;
+        _showSaveClipDialog = true;
+    }
     private bool   _isSavingClip;
     private string? _saveClipError;
     private string  _saveClipLabel    = string.Empty;
@@ -1259,7 +1349,9 @@ else
 
     private async Task SaveClipAsync()
     {
-        if (_newUserRegion is null || _saveClipTypeId == Guid.Empty) return;
+        // Either a drawn region or a marker can be the source; one of them must be.
+        if (_clipSourceMarker is null && _newUserRegion is null) return;
+        if (_saveClipTypeId == Guid.Empty) return;
 
         _isSavingClip = true;
         _saveClipError = null;
@@ -1268,15 +1360,24 @@ else
         try
         {
             var result = await AdminClient.ClipAudioAsync(FileId, new ClipAudioRequest(
-                _newUserRegion.Start, _newUserRegion.End,
+                ClipStart, ClipEnd,
                 string.IsNullOrWhiteSpace(_saveClipLabel) ? null : _saveClipLabel.Trim(),
-                _saveClipIsPublic, _saveClipTypeId));
+                _saveClipIsPublic, _saveClipTypeId,
+                _clipNormalize, _clipSourceMarker?.Id));
 
             if (result is not null)
             {
                 _showSaveClipDialog  = false;
                 _saveClipLabel       = string.Empty;
                 _saveClipError       = null;
+
+                if (_clipSourceMarker is not null)
+                {
+                    // Reload so the marker row picks up its new LinkedClipUploadFileId — the server
+                    // set it, and nothing else would tell this list about it.
+                    _clipSourceMarker = null;
+                    _markers = await AdminClient.GetAudioMarkersAsync(FileId);
+                }
 
                 // Remove the user-drawn region — replaced by the persisted overlay
                 if (_newUserRegion is not null && _modalPlayer is not null)

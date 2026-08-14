@@ -1,9 +1,11 @@
 using AutoMapper;
+using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Entities;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Http;
+using NAudio.Wave;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -421,5 +423,198 @@ public class UploadFileAudioClipControllerTests
         await using var db    = await factory.CreateDbContextAsync();
         var count             = await db.UploadFiles.CountAsync();
         Assert.Equal(1, count); // only the seeded source file
+    }
+
+    // ── Clipping from an EVP marker (phase E4) ────────────────────────────────
+
+    /// <summary>A quiet tone, so normalization has something real to scale.</summary>
+    private static byte[] CreateQuietToneWav(
+        double amplitude = 0.05, int seconds = 2, int sampleRate = 8000)
+    {
+        var numSamples = sampleRate * seconds;
+        using var ms = new System.IO.MemoryStream();
+        using (var w = new System.IO.BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true))
+        {
+            var dataSize = numSamples * 2;
+            w.Write("RIFF"u8); w.Write(36 + dataSize); w.Write("WAVE"u8);
+            w.Write("fmt "u8); w.Write(16); w.Write((short)1); w.Write((short)1);
+            w.Write(sampleRate); w.Write(sampleRate * 2); w.Write((short)2); w.Write((short)16);
+            w.Write("data"u8); w.Write(dataSize);
+            for (var i = 0; i < numSamples; i++)
+            {
+                var v = Math.Sin(2 * Math.PI * 440 * i / sampleRate) * amplitude;
+                w.Write((short)Math.Clamp(v * 32767, short.MinValue, short.MaxValue));
+            }
+        }
+        return ms.ToArray();
+    }
+
+    private static double PeakOf(byte[] wav)
+    {
+        using var reader = new WaveFileReader(new System.IO.MemoryStream(wav));
+        var provider = reader.ToSampleProvider();
+        var buffer = new float[4096];
+        var peak = 0f;
+        int read;
+        while ((read = provider.Read(buffer, 0, buffer.Length)) > 0)
+            for (var i = 0; i < read; i++) peak = Math.Max(peak, Math.Abs(buffer[i]));
+        return peak;
+    }
+
+    private static async Task<Guid> SeedMarkerAsync(
+        IDbContextFactory<BenDataContext> factory, Guid fileId, Guid createdBy,
+        double start = 0.5, double end = 1.5)
+    {
+        var markerId = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.AudioMarkers.Add(new AudioMarker
+        {
+            Id = markerId, UploadFileId = fileId,
+            TimeSeconds = start, EndSeconds = end,
+            Label = "Says my name", ConfidenceLevel = EvpConfidenceLevel.Probable,
+            ReviewStatus = EvpReviewStatus.Confirmed, IsAutoDetected = true, DetectionScore = 84f,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = createdBy,
+        });
+        await db.SaveChangesAsync();
+        return markerId;
+    }
+
+    [Fact]
+    public async Task Clip_WithSourceMarker_LinksTheClipBackToTheMarker()
+    {
+        // Without this the marker and its clip are unrelated rows, and there's no way to get from a
+        // finding to the audio that evidences it.
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav());
+        var markerId = await SeedMarkerAsync(factory, fileId, ownerId);
+
+        var result = await Build(factory, ownerId).Clip(fileId,
+            new ClipAudioRequest(0.5, 1.5, "EVP clip", false, typeId, Normalize: false, SourceMarkerId: markerId),
+            default);
+
+        var created = Assert.IsType<UploadFileRecord>(Assert.IsType<CreatedAtActionResult>(result.Result).Value);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var marker = await db.AudioMarkers.SingleAsync(m => m.Id == markerId);
+        Assert.Equal(created.Id, marker.LinkedClipUploadFileId);
+        Assert.Equal(EvpReviewStatus.Confirmed, marker.ReviewStatus);   // clipping isn't a review
+    }
+
+    [Fact]
+    public async Task Clip_WithAMarkerFromAnotherFile_IsRejected()
+    {
+        // A link claiming the clip came from a marker on a different recording would misrepresent
+        // where the evidence originated.
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId)  = await SeedFileAsync(factory, CreateSilentWav());
+        var (otherId, otherOwner) = await SeedFileAsync(factory, CreateSilentWav());
+        var foreignMarker = await SeedMarkerAsync(factory, otherId, otherOwner);
+
+        var result = await Build(factory, ownerId).Clip(fileId,
+            new ClipAudioRequest(0.5, 1.5, "EVP clip", false, typeId, SourceMarkerId: foreignMarker),
+            default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Null((await db.AudioMarkers.SingleAsync(m => m.Id == foreignMarker)).LinkedClipUploadFileId);
+    }
+
+    [Fact]
+    public async Task Clip_WithoutASourceMarker_StillWorks()
+    {
+        // The plain region-to-clip path predates EVP markers and must keep working untouched.
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav());
+
+        var result = await Build(factory, ownerId).Clip(fileId,
+            new ClipAudioRequest(0.2, 1.0, null, false, typeId), default);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Clip_WithNormalize_RaisesAQuietClipTowardFullScale()
+    {
+        // The reason normalize exists: an EVP is typically far quieter than the recording around
+        // it, so an un-normalized clip is close to inaudible without headphones.
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var quiet   = CreateQuietToneWav(amplitude: 0.05);
+        Assert.InRange(PeakOf(quiet), 0.04, 0.06);
+
+        var (fileId, ownerId) = await SeedFileAsync(factory, quiet);
+
+        byte[]? written = null;
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        storage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+               .Returns<string, Stream, CancellationToken>((_, stream, _) =>
+               {
+                   using var ms = new MemoryStream();
+                   stream.CopyTo(ms);
+                   written = ms.ToArray();
+                   return Task.CompletedTask;
+               });
+
+        var ctrl = new UploadFileAudioClipController(factory, CreateMapper(), storage.Object,
+            new Mock<IAuditLogService>().Object);
+        ctrl.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity([
+                    new Claim(ClaimTypes.NameIdentifier, ownerId.ToString())
+                ], "Bearer"))
+            }
+        };
+
+        var result = await ctrl.Clip(fileId,
+            new ClipAudioRequest(0.2, 1.5, "loud", false, typeId, Normalize: true), default);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+        Assert.NotNull(written);
+        Assert.InRange(PeakOf(written!), 0.85, 0.9);   // −1 dBFS target
+    }
+
+    [Fact]
+    public async Task Clip_WithNormalize_LeavesSilenceAlone()
+    {
+        // Silence has no peak to scale against; scaling it would just amplify nothing into noise.
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav());
+
+        byte[]? written = null;
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        storage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+               .Returns<string, Stream, CancellationToken>((_, stream, _) =>
+               {
+                   using var ms = new MemoryStream();
+                   stream.CopyTo(ms);
+                   written = ms.ToArray();
+                   return Task.CompletedTask;
+               });
+
+        var ctrl = new UploadFileAudioClipController(factory, CreateMapper(), storage.Object,
+            new Mock<IAuditLogService>().Object);
+        ctrl.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity([
+                    new Claim(ClaimTypes.NameIdentifier, ownerId.ToString())
+                ], "Bearer"))
+            }
+        };
+
+        var result = await ctrl.Clip(fileId,
+            new ClipAudioRequest(0.2, 1.0, "silent", false, typeId, Normalize: true), default);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+        Assert.NotNull(written);
+        Assert.Equal(0.0, PeakOf(written!), precision: 3);
     }
 }

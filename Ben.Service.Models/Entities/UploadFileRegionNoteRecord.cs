@@ -36,9 +36,27 @@ public record UpdateRegionNoteRequest(
 // ── Audio clip ────────────────────────────────────────────────────────────────
 
 /// <summary>Clips an existing upload-file's audio to the specified time bounds and saves as a new UploadFile.</summary>
+/// <param name="Start">Clip start in seconds, including whatever lead-in the caller wants.</param>
+/// <param name="End">Clip end in seconds.</param>
+/// <param name="Label">Optional name for the clip; a descriptive one is generated when omitted.</param>
+/// <param name="IsPublic">Whether the resulting file is publicly visible.</param>
+/// <param name="UploadFileTypeId">File type to file the clip under.</param>
+/// <param name="Normalize">
+/// Raise the clip's peak to just under full scale. An EVP is usually far quieter than the
+/// recording around it, so an un-normalized clip is often near-inaudible on anything but
+/// headphones. Deliberately the only processing baked in: everything else stays reversible,
+/// because <c>ParentFileId</c>/<c>RegionStart</c>/<c>RegionEnd</c> mean a clip can always be re-cut
+/// from the original.
+/// </param>
+/// <param name="SourceMarkerId">
+/// The EVP marker this clip was cut from, when there is one. Links the two so the marker can show
+/// its clip and the clip can be traced back to the finding that justified it.
+/// </param>
 public record ClipAudioRequest(
     double  Start,
     double  End,
     string? Label,
     bool    IsPublic,
-    Guid    UploadFileTypeId);
+    Guid    UploadFileTypeId,
+    bool    Normalize      = false,
+    Guid?   SourceMarkerId = null);
