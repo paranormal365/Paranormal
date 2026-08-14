@@ -453,27 +453,58 @@ else
                                     @foreach (var candidate in SortedCandidates)
                                     {
                                         var c = candidate;
+                                        var isAdjusting = _adjustingCandidateId == c.Id;
                                         <div class="d-flex align-items-center gap-2 mb-1 p-1 rounded"
-                                             style="background:var(--kendo-color-surface,#f5f5f5);">
+                                             style="background:@(isAdjusting ? "rgba(245,158,11,0.18)" : "var(--kendo-color-surface,#f5f5f5)");">
                                             <span class="badge" style="background:rgba(245,158,11,0.75);"
                                                   title="How much this stood out from the background — not a likelihood of speech">
                                                 @c.DetectionScore?.ToString("0")
                                             </span>
-                                            <span class="small">@FormatMarkerRange(c)</span>
+                                            @if (isAdjusting)
+                                            {
+                                                @* Live values, not the stored ones — the point is to see
+                                                   what you're about to save while dragging. *@
+                                                <span class="small fw-semibold">
+                                                    @FormatTime(_adjustedStart)–@FormatTime(_adjustedEnd)
+                                                    (@((_adjustedEnd - _adjustedStart).ToString("0.0"))s)
+                                                </span>
+                                                <span class="small text-secondary">
+                                                    drag the edges on the waveform, then save
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="small">@FormatMarkerRange(c)</span>
+                                            }
                                             <span class="ms-auto d-flex gap-1">
                                                 <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Play"
                                                                Title="Play this stretch with its surrounding context"
                                                                OnClick="@(() => PlayCandidateAsync(c))" />
-                                                <TelerikButton Size="sm" FillMode="flat"
-                                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                                                               Icon="@SvgIcon.Check"
-                                                               Title="Keep as an EVP marker"
-                                                               Enabled="@(_reviewingCandidateId != c.Id)"
-                                                               OnClick="@(() => OpenConfirmCandidateDialog(c))" />
-                                                <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.X"
-                                                               Title="Not an EVP — won't be proposed again"
-                                                               Enabled="@(_reviewingCandidateId != c.Id)"
-                                                               OnClick="@(() => DismissCandidateAsync(c))" />
+                                                @if (isAdjusting)
+                                                {
+                                                    <TelerikButton Size="sm"
+                                                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                                                   OnClick="SaveAdjustedBoundsAsync">Save bounds</TelerikButton>
+                                                    <TelerikButton Size="sm" FillMode="flat"
+                                                                   OnClick="@(() => StopAdjustingAsync(revert: true))">Cancel</TelerikButton>
+                                                }
+                                                else
+                                                {
+                                                    <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Pencil"
+                                                                   Title="Adjust where this starts and ends"
+                                                                   Enabled="@(_reviewingCandidateId != c.Id)"
+                                                                   OnClick="@(() => StartAdjustingAsync(c))" />
+                                                    <TelerikButton Size="sm" FillMode="flat"
+                                                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                                                   Icon="@SvgIcon.Check"
+                                                                   Title="Keep as an EVP marker"
+                                                                   Enabled="@(_reviewingCandidateId != c.Id)"
+                                                                   OnClick="@(() => OpenConfirmCandidateDialog(c))" />
+                                                    <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.X"
+                                                                   Title="Not an EVP — won't be proposed again"
+                                                                   Enabled="@(_reviewingCandidateId != c.Id)"
+                                                                   OnClick="@(() => DismissCandidateAsync(c))" />
+                                                }
                                             </span>
                                         </div>
                                     }
@@ -1209,6 +1240,16 @@ else
     /// </summary>
     private void OnModalRegionUpdated(WsRegionData r)
     {
+        // Checked before the programmatic-region bail-out below: a candidate's region *is*
+        // programmatic, so without this the drags that adjust-bounds depends on are thrown away.
+        if (_adjustingCandidateId is { } adjustingId && r.Id == $"marker-{adjustingId}")
+        {
+            _adjustedStart = r.Start;
+            _adjustedEnd   = r.End;
+            StateHasChanged();
+            return;
+        }
+
         if (_programmaticRegionIds.Contains(r.Id)) return;
 
         if (_lastDrawnRegion?.Id == r.Id) _lastDrawnRegion = r;
@@ -1602,6 +1643,120 @@ else
 
     private Task DismissCandidateAsync(AudioMarkerRecord candidate) =>
         ReviewCandidateAsync(candidate, new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed));
+
+    // ── Adjusting a candidate's bounds ────────────────────────────────────────
+
+    private Guid?  _adjustingCandidateId;
+    private double _adjustedStart;
+    private double _adjustedEnd;
+
+    /// <summary>
+    /// Hands one candidate's region over to the mouse. The detector's edges are an estimate — it
+    /// finds where energy crossed a threshold, which is often a little inside or outside the sound
+    /// a person actually hears — so the bounds need to be correctable before the span is kept as a
+    /// finding and later cut into a clip.
+    /// </summary>
+    private async Task StartAdjustingAsync(AudioMarkerRecord candidate)
+    {
+        if (_modalPlayer is null) return;
+
+        // Region drag has to be on for the handles to respond; the capture-phase handler otherwise
+        // claims the gesture and draws a new region instead.
+        await _modalPlayer.SetDragModeAsync(regionMode: true);
+
+        var bounds = await _modalPlayer.SetRegionEditableAsync($"marker-{candidate.Id}");
+        if (bounds is null) return;
+
+        _adjustingCandidateId = candidate.Id;
+        _adjustedStart        = bounds.Start;
+        _adjustedEnd          = bounds.End;
+        StateHasChanged();
+    }
+
+    /// <summary>Locks every region again, optionally putting the one being edited back where it was.</summary>
+    private async Task StopAdjustingAsync(bool revert)
+    {
+        if (_modalPlayer is null) { _adjustingCandidateId = null; return; }
+
+        if (revert && _adjustingCandidateId is { } id
+                   && _markers.FirstOrDefault(m => m.Id == id) is { } original)
+        {
+            var regionId = $"marker-{original.Id}";
+            await _modalPlayer.RemoveRegionAsync(regionId);
+            _programmaticRegionIds.Remove(regionId);
+            await AddMarkerRegionAsync(original);
+        }
+
+        await _modalPlayer.SetRegionEditableAsync(null);
+        _adjustingCandidateId = null;
+        StateHasChanged();
+    }
+
+    private async Task SaveAdjustedBoundsAsync()
+    {
+        if (_adjustingCandidateId is not { } id) return;
+        if (_markers.FirstOrDefault(m => m.Id == id) is not { } candidate) return;
+
+        // Read the bounds off the waveform rather than trusting what the drag events told us.
+        // region-updated only arrives at the end of a pointer sequence, and anything that
+        // interrupts that sequence would otherwise save stale numbers — silently persisting
+        // something different from what the reviewer is looking at. Pulling at save time makes the
+        // region itself the single source of truth.
+        if (_modalPlayer is not null)
+        {
+            var live = (await _modalPlayer.GetRegionsAsync())
+                .FirstOrDefault(r => r.Id == $"marker-{id}");
+            if (live is not null)
+            {
+                _adjustedStart = live.Start;
+                _adjustedEnd   = live.End;
+            }
+        }
+
+        if (_adjustedEnd <= _adjustedStart)
+        {
+            // The API would reject this too; catching it here keeps the region editable so the
+            // reviewer can just drag it back rather than starting over.
+            _scanMessage = "That span ends before it starts — drag the edges apart.";
+            StateHasChanged();
+            return;
+        }
+
+        // Update, not review: moving the edges is not a decision about the candidate, and the
+        // review endpoint deliberately refuses anything that isn't confirm-or-dismiss. Update
+        // leaves ReviewStatus alone, so the candidate stays in the queue with better bounds.
+        _reviewingCandidateId = id;
+        try
+        {
+            var updated = await AdminClient.UpdateAudioMarkerAsync(FileId, id, new UpdateAudioMarkerRequest(
+                _adjustedStart,
+                candidate.Label,
+                candidate.ConfidenceLevel,
+                candidate.Note,
+                _adjustedEnd));
+
+            if (updated is not null)
+            {
+                _markers = [.. _markers.Where(m => m.Id != updated.Id), updated];
+                if (_modalPlayer is not null)
+                {
+                    var regionId = $"marker-{updated.Id}";
+                    await _modalPlayer.RemoveRegionAsync(regionId);
+                    _programmaticRegionIds.Remove(regionId);
+                    await AddMarkerRegionAsync(updated);
+                }
+                _scanMessage = "Bounds updated.";
+            }
+        }
+        catch { _scanMessage = "Couldn't save those bounds."; }
+        finally
+        {
+            _reviewingCandidateId = null;
+            _adjustingCandidateId = null;
+            if (_modalPlayer is not null) await _modalPlayer.SetRegionEditableAsync(null);
+            StateHasChanged();
+        }
+    }
 
     /// <summary>
     /// Sends a decision and re-draws the affected marker. Only that one region is touched — a full

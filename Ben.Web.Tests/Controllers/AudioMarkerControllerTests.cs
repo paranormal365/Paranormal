@@ -1003,4 +1003,51 @@ public class AudioMarkerControllerTests
 
         Assert.IsType<UnauthorizedResult>(result.Result);
     }
+
+    // ── Adjusting bounds without deciding ─────────────────────────────────────
+
+    [Fact]
+    public async Task Update_OnAPendingCandidate_MovesTheBoundsAndLeavesItPending()
+    {
+        // Adjust-bounds routes through Update rather than Review on purpose: moving the edges is
+        // not a verdict, and Review refuses anything that isn't confirm-or-dismiss. If Update ever
+        // started touching ReviewStatus, adjusting a candidate would silently decide it.
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var markerId = await SeedMarkerAsync(factory, fileId, 12.0, "Detected signal", createdBy: ownerId,
+                                             reviewStatus: EvpReviewStatus.Pending,
+                                             endSeconds: 12.9, isAutoDetected: true, detectionScore: 77f);
+
+        var result = await Build(factory, ownerId).Update(fileId, markerId,
+            new UpdateAudioMarkerRequest(11.6, "Detected signal", EvpConfidenceLevel.Possible, null, 13.4), default);
+
+        var record = Assert.IsType<AudioMarkerRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(11.6, record.TimeSeconds);
+        Assert.Equal(13.4, record.EndSeconds);
+        Assert.Equal(EvpReviewStatus.Pending, record.ReviewStatus);
+        Assert.True(record.IsAutoDetected);
+        Assert.Equal(77f, record.DetectionScore);
+    }
+
+    [Fact]
+    public async Task Scan_AfterAdjustingACandidatesBounds_StillReplacesIt()
+    {
+        // An adjusted-but-undecided candidate is still Pending, so a re-scan is entitled to
+        // replace it. Pinned so the adjust flow doesn't accidentally make candidates sticky.
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+
+        var first = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default);
+        var firstList = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(
+            Assert.IsType<OkObjectResult>(first.Result).Value).ToList();
+
+        await Build(factory, ownerId).Update(fileId, firstList[0].Id,
+            new UpdateAudioMarkerRequest(1.0, firstList[0].Label, firstList[0].ConfidenceLevel, null, 2.0), default);
+
+        await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default);
+
+        var all = await MarkersAsync(factory, fileId);
+        Assert.Equal(2, all.Count);
+        Assert.DoesNotContain(all, m => m.TimeSeconds == 1.0);   // the adjusted one was replaced
+    }
 }

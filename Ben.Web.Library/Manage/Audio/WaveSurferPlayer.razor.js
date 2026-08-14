@@ -550,6 +550,29 @@ export function clearUserRegions(containerId, keepIds) {
     .forEach(r => r.remove())
 }
 
+/**
+ * Makes exactly one region draggable/resizable and locks every other one.
+ *
+ * Editing bounds is deliberately one-at-a-time: the waveform can carry dozens of detector
+ * candidates at once, and if they were all draggable a reviewer would nudge the wrong one
+ * constantly while trying to scrub. Passing a null regionId locks them all again.
+ *
+ * Returns the editable region's current bounds so the caller can seed its inputs without
+ * a second round trip.
+ */
+export function setRegionEditable(containerId, regionId) {
+  const { regionsPlugin } = instances.get(containerId) ?? {}
+  if (!regionsPlugin) return null
+
+  let bounds = null
+  for (const r of regionsPlugin.getRegions()) {
+    const editable = r.id === regionId
+    r.setOptions({ drag: editable, resize: editable })
+    if (editable) bounds = { id: r.id, start: r.start, end: r.end, color: r.color }
+  }
+  return bounds
+}
+
 export function getRegions(containerId) {
   const { regionsPlugin } = instances.get(containerId) ?? {}
   return regionsPlugin?.getRegions().map((r) => ({ id: r.id, start: r.start, end: r.end, color: r.color })) ?? []
