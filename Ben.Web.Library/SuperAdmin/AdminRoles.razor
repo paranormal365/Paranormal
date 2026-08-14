@@ -106,6 +106,7 @@
     {
         if (firstRender)
         {
+            if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
             await LoadRoles();
             StateHasChanged();
         }

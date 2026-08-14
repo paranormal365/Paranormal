@@ -142,6 +142,7 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         try
         {
             _eventTypes = (await AdminClient.GetCalendarEventTypesAsync(OrgId)).ToList();
