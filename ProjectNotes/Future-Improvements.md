@@ -181,16 +181,33 @@ Need a dedicated pass to thoroughly test the Ben.Video.Editor component and veri
 > source-level guard, since the builder was always correct and only the *caller* was wrong;
 > confirmed the guard genuinely fails when the fix is reverted. See `README-phase-172.md`.
 >
-> ⚠ **Still NOT verified end-to-end:** the mixed video+image Preview/Export *render*. Both files
-> import cleanly into one timeline, but the render wasn't completed that pass (a stale
-> media-missing clip in the restored project blocked it). Top item for the next pass.
+> ✅ **Mixed video+image export VERIFIED end-to-end (2026-08-14, clean-slate pass).** Cleared
+> localStorage + OPFS first, then imported a 640×360 16:9 video and a **600×600 square** image (a
+> genuinely mismatched aspect) onto one 1280×720 timeline and ran a real Export.
+> - The live ffmpeg argv confirms the phase-172 fix in the real pipeline: the image segment ran
+>   `-vf scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2` —
+>   the PROJECT canvas, not `600:600`. The video segment used the identical scale/pad, which is what
+>   makes the concat valid.
+> - Export completed in 77.5s (2.8 MB). Output measured **1280×720, 18.917s** (13.867 video + 5.0
+>   image ✓).
+> - Pixel-sampled the output mid-image (t=16s): x=40/150/279 → **rgb(0,0,0)**; x=300/640/980 →
+>   image content; x=1001/1130/1240 → **rgb(0,0,0)**. Predicted pillars for a square on 16:9 were at
+>   280 and 1000 — measured black ≤279, content ≥300, content ≤980, black ≥1001, bracketing both
+>   edges exactly. Mid-video (t=5s) showed no pillars, i.e. the 16:9 source fills the frame.
 >
-> 🔍 **Unconfirmed lead:** with a clip selected on the timeline, the properties panel's "Remove clip"
-> deleted a *different* clip (redo label read `Redo: Remove mixed-video.mp4`). Suggests the panel can
-> act on a stale selection — but the session had a restored project and scripted clicks, so it needs
-> a clean repro with real clicks before it counts.
+> ⚠ **Preview not pixel-verified.** The preview proxy loaded with correct dimensions (960×540) and
+> the correct concatenated duration (18.9167s), so the mixed timeline does assemble into one
+> coherent stream — but the preview blob would not seek in a detached `<video>` (seek timeout), so
+> the image's pillarboxing was NOT confirmed by pixels on that path. Export is the authoritative
+> path and is proven; treat preview as structurally-but-not-visually verified.
 >
-> Still to test: mixed video+image timeline preview/export (see ⚠ above), volume automation UI details, clip art, motion keyframes, export dialog/queue, project save/open (server variant — device variant now confirmed, see below), subtitle export, error log panel, asset browser, remaining keyboard shortcuts. Also noted but not yet investigated: `ImageClip.Width`/`Height` are never populated on import, so image clips always render at their native resolution in Preview/Export instead of being scaled/padded to match the project's output resolution — fine for a single image matching project aspect ratio, but will look wrong once a mismatched-aspect image is mixed into a real project.
+> ✅ **Prior "Remove clip deleted the wrong clip" lead — NOT a bug, closed.** That button lives in
+> `.bv-clip-card__actions` inside `.bv-browser__grid`: it is the **media-library card's** remove,
+> paired with "Add to timeline", not the properties panel's remove for the timeline selection. The
+> earlier scripted `.click()` matched by button text and hit the library card's. No selection
+> desync exists.
+>
+> Still to test: mixed video+image timeline **preview** pixel-check (export ✅ done, see above), volume automation UI details, clip art, motion keyframes, export dialog/queue, project save/open (server variant — device variant now confirmed, see below), subtitle export, error log panel, asset browser, remaining keyboard shortcuts. Also noted but not yet investigated: `ImageClip.Width`/`Height` are never populated on import, so image clips always render at their native resolution in Preview/Export instead of being scaled/padded to match the project's output resolution — fine for a single image matching project aspect ratio, but will look wrong once a mismatched-aspect image is mixed into a real project.
 >
 > **2026-08-12 pass** (right after item #38 closed — deliberately re-verified core paths since
 > phases 121-124 touched `ExportService`/`FfmpegService`/the render backends significantly).
