@@ -362,7 +362,7 @@
 
     private async Task SaveEditStateAsync()
     {
-        if (_module is null) return;
+        if (_module is null || _saving) return;
         _saving = true; StateHasChanged();
         try
         {
@@ -380,7 +380,7 @@
 
     private async Task SaveAsNewVersionAsync()
     {
-        if (_module is null) return;
+        if (_module is null || _saving) return;
         _saving = true; StateHasChanged();
         try
         {

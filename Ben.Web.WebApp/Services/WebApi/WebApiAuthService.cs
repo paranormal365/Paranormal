@@ -147,7 +147,6 @@ public sealed class WebApiAuthService : IWebApiAuthService
         _tokenStore.UserId = userId;
         _tokenStore.IsSuperAdmin = isSuperAdmin;
     }
-
 }
 
 /// <summary>Matches the JSON shape of MeResponse in Ben.Data.WebApi.</summary>

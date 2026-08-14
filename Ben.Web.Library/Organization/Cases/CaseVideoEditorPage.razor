@@ -93,16 +93,14 @@
                             @{ var row2 = (VideoProjectRecord)context; }
                             <TelerikButton Size="@ThemeConstants.Button.Size.Small"
                                            OnClick="@(() => OpenProjectAsync(row2))">Open</TelerikButton>
-                            @if (row2.CreatedByAppUserId == _myUserId)
-                            {
-                                <TelerikButton Icon="@SvgIcon.Upload" Size="@ThemeConstants.Button.Size.Small"
-                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
-                                               Title="Publish rendered video to case"
-                                               OnClick="@(() => TriggerPublishAsync(row2))" />
-                                <TelerikButton Icon="@SvgIcon.Trash" Size="@ThemeConstants.Button.Size.Small"
-                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                               OnClick="@(() => ConfirmDelete(row2))" />
-                            }
+                            <TelerikButton Icon="@SvgIcon.Upload" Size="@ThemeConstants.Button.Size.Small"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
+                                           Title="Publish rendered video to case"
+                                           Enabled="@(!_publishing)"
+                                           OnClick="@(() => TriggerPublishAsync(row2))" />
+                            <TelerikButton Icon="@SvgIcon.Trash" Size="@ThemeConstants.Button.Size.Small"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                           OnClick="@(() => ConfirmDelete(row2))" />
                         </Template>
                     </GridColumn>
                 </GridColumns>
@@ -147,7 +145,6 @@
     private bool _showDeleteConfirm;
     private VideoProjectRecord? _deleteTarget;
     private VideoProjectRecord? _publishTarget;
-    private Guid _myUserId;
     /// <summary>Server project id established by an earlier publish this session, so a second
     /// export updates the same project instead of creating a new row per render.</summary>
     private Guid? _publishedProjectId;

@@ -84,6 +84,7 @@
                             <TelerikButton Icon="@SvgIcon.Upload" Size="@ThemeConstants.Button.Size.Small"
                                            ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
                                            Title="Publish rendered video"
+                                           Enabled="@(!_publishing)"
                                            OnClick="@(() => TriggerPublishAsync(row))" />
                             <TelerikButton Icon="@SvgIcon.Trash" Size="@ThemeConstants.Button.Size.Small"
                                            ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
