@@ -30,41 +30,37 @@ public class AudioMarkerControllerTests
         return new PooledDbContextFactory<BenDataContext>(opts);
     }
 
+    /// <summary>
+    /// Projects every field, in one place used by both mapper overloads. A stand-in mapper that
+    /// silently drops a field turns an assertion about that field into a test of the stand-in, so
+    /// this has to stay in step with <see cref="AudioMarkerRecord"/>.
+    /// </summary>
+    private static AudioMarkerRecord ToRecord(AudioMarker e) => new()
+    {
+        Id                     = e.Id,
+        UploadFileId           = e.UploadFileId,
+        TimeSeconds            = e.TimeSeconds,
+        EndSeconds             = e.EndSeconds,
+        Label                  = e.Label,
+        ConfidenceLevel        = e.ConfidenceLevel,
+        Note                   = e.Note,
+        IsAutoDetected         = e.IsAutoDetected,
+        DetectionScore         = e.DetectionScore,
+        ReviewStatus           = e.ReviewStatus,
+        LinkedClipUploadFileId = e.LinkedClipUploadFileId,
+        DateCreated            = e.DateCreated,
+        DateUpdated            = e.DateUpdated,
+        CreatedByAppUserId     = e.CreatedByAppUserId,
+        UpdatedByAppUserId     = e.UpdatedByAppUserId,
+    };
+
     private static IMapper CreateMapper()
     {
         var m = new Mock<IMapper>();
         m.Setup(x => x.Map<AudioMarkerRecord>(It.IsAny<object>()))
-         .Returns<object>(o =>
-         {
-             if (o is not AudioMarker e) return new AudioMarkerRecord { Label = "" };
-             return new AudioMarkerRecord
-             {
-                 Id                 = e.Id,
-                 UploadFileId       = e.UploadFileId,
-                 TimeSeconds        = e.TimeSeconds,
-                 Label              = e.Label,
-                 ConfidenceLevel    = e.ConfidenceLevel,
-                 Note               = e.Note,
-                 DateCreated        = e.DateCreated,
-                 CreatedByAppUserId = e.CreatedByAppUserId,
-             };
-         });
+         .Returns<object>(o => o is AudioMarker e ? ToRecord(e) : new AudioMarkerRecord { Label = "" });
         m.Setup(x => x.Map<IEnumerable<AudioMarkerRecord>>(It.IsAny<object>()))
-         .Returns<object>(o =>
-         {
-             if (o is not IEnumerable<AudioMarker> list) return [];
-             return list.Select(e => new AudioMarkerRecord
-             {
-                 Id                 = e.Id,
-                 UploadFileId       = e.UploadFileId,
-                 TimeSeconds        = e.TimeSeconds,
-                 Label              = e.Label,
-                 ConfidenceLevel    = e.ConfidenceLevel,
-                 Note               = e.Note,
-                 DateCreated        = e.DateCreated,
-                 CreatedByAppUserId = e.CreatedByAppUserId,
-             });
-         });
+         .Returns<object>(o => o is IEnumerable<AudioMarker> list ? list.Select(ToRecord) : []);
         return m.Object;
     }
 
@@ -110,14 +106,21 @@ public class AudioMarkerControllerTests
         IDbContextFactory<BenDataContext> factory,
         Guid fileId, double timeSeconds = 10,
         string label = "Whisper?", EvpConfidenceLevel confidence = EvpConfidenceLevel.Possible,
-        Guid? createdBy = null)
+        Guid? createdBy = null,
+        EvpReviewStatus reviewStatus = EvpReviewStatus.Confirmed,
+        double? endSeconds = null,
+        bool isAutoDetected = false,
+        float? detectionScore = null)
     {
         var markerId = Guid.NewGuid();
         await using var db = await factory.CreateDbContextAsync();
         db.AudioMarkers.Add(new AudioMarker
         {
             Id = markerId, UploadFileId = fileId,
-            TimeSeconds = timeSeconds, Label = label, ConfidenceLevel = confidence,
+            TimeSeconds = timeSeconds, EndSeconds = endSeconds,
+            Label = label, ConfidenceLevel = confidence,
+            IsAutoDetected = isAutoDetected, DetectionScore = detectionScore,
+            ReviewStatus = reviewStatus,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = createdBy ?? Guid.NewGuid(),
         });
         await db.SaveChangesAsync();
@@ -485,5 +488,276 @@ public class AudioMarkerControllerTests
         var result = await ctrl.Delete(fileId, markerId, default);
 
         Assert.IsType<NoContentResult>(result);
+    }
+
+    // ── ReplaceCandidates ─────────────────────────────────────────────────────
+
+    private static BulkCreateAudioCandidatesRequest Scan(params (double Start, double End, float Score)[] c)
+        => new([.. c.Select(x => new AudioCandidateRequest(x.Start, x.End, x.Score))]);
+
+    private static async Task<List<AudioMarker>> MarkersAsync(
+        IDbContextFactory<BenDataContext> factory, Guid fileId)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        return await db.AudioMarkers.AsNoTracking()
+            .Where(m => m.UploadFileId == fileId).OrderBy(m => m.TimeSeconds).ToListAsync();
+    }
+
+    [Fact]
+    public async Task ReplaceCandidates_CreatesPendingAutoDetectedSpans()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+
+        var result = await Build(factory, ownerId)
+            .ReplaceCandidates(fileId, Scan((3.0, 3.6, 72f), (10.0, 10.4, 51f)), default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var created = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(ok.Value).ToList();
+        Assert.Equal(2, created.Count);
+        Assert.All(created, c =>
+        {
+            Assert.True(c.IsAutoDetected);
+            Assert.Equal(EvpReviewStatus.Pending, c.ReviewStatus);
+            Assert.True(c.IsSpan);
+        });
+        Assert.Equal([3.0, 10.0], created.Select(c => c.TimeSeconds));
+        Assert.Equal([72f, 51f], created.Select(c => c.DetectionScore));
+    }
+
+    [Fact]
+    public async Task ReplaceCandidates_ReplacesOnlyThePriorPendingOnes()
+    {
+        // The point of the whole review workflow: a re-scan must not wipe what a person decided.
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var confirmed = await SeedMarkerAsync(factory, fileId, 1.0, "Real EVP", createdBy: ownerId);
+        var dismissed = await SeedMarkerAsync(factory, fileId, 2.0, "Nope", createdBy: ownerId,
+                                              reviewStatus: EvpReviewStatus.Dismissed);
+        await SeedMarkerAsync(factory, fileId, 5.0, "Detected signal", createdBy: ownerId,
+                              reviewStatus: EvpReviewStatus.Pending, isAutoDetected: true);
+
+        await Build(factory, ownerId).ReplaceCandidates(fileId, Scan((9.0, 9.5, 60f)), default);
+
+        var markers = await MarkersAsync(factory, fileId);
+        Assert.Equal(3, markers.Count);
+        Assert.Contains(markers, m => m.Id == confirmed);
+        Assert.Contains(markers, m => m.Id == dismissed);
+        Assert.DoesNotContain(markers, m => m.TimeSeconds == 5.0);   // the stale candidate is gone
+        Assert.Contains(markers, m => m.TimeSeconds == 9.0);
+    }
+
+    [Fact]
+    public async Task ReplaceCandidates_WithNoCandidates_ClearsThePendingQueue()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        await SeedMarkerAsync(factory, fileId, 5.0, createdBy: ownerId,
+                              reviewStatus: EvpReviewStatus.Pending, isAutoDetected: true);
+
+        await Build(factory, ownerId).ReplaceCandidates(fileId, Scan(), default);
+
+        Assert.Empty(await MarkersAsync(factory, fileId));
+    }
+
+    [Theory]
+    [InlineData(5.0, 5.0, 50f)]     // zero-length
+    [InlineData(5.0, 4.0, 50f)]     // inverted
+    [InlineData(-1.0, 2.0, 50f)]    // before the recording starts
+    [InlineData(1.0, 2.0, 101f)]    // score out of range
+    [InlineData(1.0, 2.0, -1f)]
+    public async Task ReplaceCandidates_RejectsMalformedCandidates(double start, double end, float score)
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+
+        var result = await Build(factory, ownerId)
+            .ReplaceCandidates(fileId, Scan((start, end, score)), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Empty(await MarkersAsync(factory, fileId));
+    }
+
+    [Fact]
+    public async Task ReplaceCandidates_RejectsAScanOverTheCap()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var tooMany = Enumerable.Range(0, AudioMarkerController.MaxCandidatesPerScan + 1)
+            .Select(i => ((double)i, i + 0.5, 50f)).ToArray();
+
+        var result = await Build(factory, ownerId).ReplaceCandidates(fileId, Scan(tooMany), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Empty(await MarkersAsync(factory, fileId));
+    }
+
+    [Fact]
+    public async Task ReplaceCandidates_ReturnsForbid_ForSomeoneWhoCannotSeeTheFile()
+    {
+        var factory = CreateFactory();
+        var (fileId, _) = await SeedFileAsync(factory);
+
+        var result = await Build(factory, Guid.NewGuid())
+            .ReplaceCandidates(fileId, Scan((1.0, 2.0, 50f)), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+        Assert.Empty(await MarkersAsync(factory, fileId));
+    }
+
+    [Fact]
+    public async Task ReplaceCandidates_ReturnsNotFound_ForAnUnknownFile()
+    {
+        var factory = CreateFactory();
+        var result = await Build(factory, Guid.NewGuid())
+            .ReplaceCandidates(Guid.NewGuid(), Scan((1.0, 2.0, 50f)), default);
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    // ── Review ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Review_Confirm_KeepsTheDetectorsScoreAlongsideTheReviewersLabel()
+    {
+        // Confirming edits the candidate in place rather than copying it, so you can still see what
+        // the machine thought of something a person signed off on.
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var markerId = await SeedMarkerAsync(factory, fileId, 3.0, "Detected signal", createdBy: ownerId,
+                                             reviewStatus: EvpReviewStatus.Pending,
+                                             endSeconds: 3.6, isAutoDetected: true, detectionScore: 81f);
+
+        var result = await Build(factory, ownerId).Review(fileId, markerId,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Confirmed, "Says my name",
+                EvpConfidenceLevel.Probable, "Clear on headphones"), default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var record = Assert.IsType<AudioMarkerRecord>(ok.Value);
+        Assert.Equal(EvpReviewStatus.Confirmed, record.ReviewStatus);
+        Assert.Equal("Says my name", record.Label);
+        Assert.Equal(EvpConfidenceLevel.Probable, record.ConfidenceLevel);
+        Assert.Equal("Clear on headphones", record.Note);
+        Assert.True(record.IsAutoDetected);
+        Assert.Equal(81f, record.DetectionScore);
+    }
+
+    [Fact]
+    public async Task Review_Confirm_CanNudgeTheBounds()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var markerId = await SeedMarkerAsync(factory, fileId, 3.0, createdBy: ownerId,
+                                             reviewStatus: EvpReviewStatus.Pending, endSeconds: 3.6);
+
+        var result = await Build(factory, ownerId).Review(fileId, markerId,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Confirmed, "Adjusted",
+                StartSeconds: 2.8, EndSeconds: 3.9), default);
+
+        var record = Assert.IsType<AudioMarkerRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(2.8, record.TimeSeconds);
+        Assert.Equal(3.9, record.EndSeconds);
+    }
+
+    [Fact]
+    public async Task Review_Dismiss_KeepsTheRowSoARescanCanDedupeAgainstIt()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var markerId = await SeedMarkerAsync(factory, fileId, 3.0, createdBy: ownerId,
+                                             reviewStatus: EvpReviewStatus.Pending, endSeconds: 3.6);
+
+        await Build(factory, ownerId).Review(fileId, markerId,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed), default);
+
+        var marker = Assert.Single(await MarkersAsync(factory, fileId));
+        Assert.Equal(EvpReviewStatus.Dismissed, marker.ReviewStatus);
+    }
+
+    [Fact]
+    public async Task Review_Dismiss_IgnoresLabelAndConfidence()
+    {
+        // A rejected candidate shouldn't quietly acquire a reviewer's label.
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var markerId = await SeedMarkerAsync(factory, fileId, 3.0, "Detected signal", createdBy: ownerId,
+                                             reviewStatus: EvpReviewStatus.Pending, endSeconds: 3.6);
+
+        await Build(factory, ownerId).Review(fileId, markerId,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed, "Should not stick",
+                EvpConfidenceLevel.Confirmed), default);
+
+        var marker = Assert.Single(await MarkersAsync(factory, fileId));
+        Assert.Equal("Detected signal", marker.Label);
+        Assert.Equal(EvpConfidenceLevel.Possible, marker.ConfidenceLevel);
+    }
+
+    [Fact]
+    public async Task Review_RejectsPendingAsADecision()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var markerId = await SeedMarkerAsync(factory, fileId, createdBy: ownerId,
+                                             reviewStatus: EvpReviewStatus.Pending);
+
+        var result = await Build(factory, ownerId).Review(fileId, markerId,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Pending), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Review_RejectsAnInvertedSpan()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var markerId = await SeedMarkerAsync(factory, fileId, createdBy: ownerId,
+                                             reviewStatus: EvpReviewStatus.Pending);
+
+        var result = await Build(factory, ownerId).Review(fileId, markerId,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Confirmed,
+                StartSeconds: 5.0, EndSeconds: 4.0), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Review_ReturnsForbid_ForAMarkerTheCallerCanSeeButDoesNotOwn()
+    {
+        // Both gates return Forbid, so this first proves the caller passes the *visibility* gate —
+        // otherwise the assertion below would hold for the wrong reason and the author-or-owner
+        // rule would be untested.
+        var factory = CreateFactory();
+        var (fileId, _) = await SeedFileAsync(factory);
+        var markerId = await SeedMarkerAsync(factory, fileId, reviewStatus: EvpReviewStatus.Pending);
+        var otherViewer = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var file = await db.UploadFiles.FirstAsync(f => f.Id == fileId);
+            file.IsPublic = true;
+            await db.SaveChangesAsync();
+        }
+
+        var canRead = await Build(factory, otherViewer).GetAll(fileId, default);
+        Assert.IsType<OkObjectResult>(canRead.Result);
+
+        var result = await Build(factory, otherViewer).Review(fileId, markerId,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+        var marker = Assert.Single(await MarkersAsync(factory, fileId));
+        Assert.Equal(EvpReviewStatus.Pending, marker.ReviewStatus);   // and nothing changed
+    }
+
+    [Fact]
+    public async Task Review_ReturnsNotFound_ForAnUnknownMarker()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+
+        var result = await Build(factory, ownerId).Review(fileId, Guid.NewGuid(),
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed), default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 }

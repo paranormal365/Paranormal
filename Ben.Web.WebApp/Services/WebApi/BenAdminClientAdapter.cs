@@ -1376,6 +1376,12 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default)
         => _api.DeleteAudioMarkerAsync(fileId, markerId, token);
 
+    public Task<IReadOnlyList<AudioMarkerRecord>> ReplaceAudioCandidatesAsync(Guid fileId, BulkCreateAudioCandidatesRequest request, CancellationToken token = default)
+        => _api.ReplaceAudioCandidatesAsync(fileId, request, token);
+
+    public Task<AudioMarkerRecord?> ReviewAudioMarkerAsync(Guid fileId, Guid markerId, ReviewAudioMarkerRequest request, CancellationToken token = default)
+        => _api.ReviewAudioMarkerAsync(fileId, markerId, request, token);
+
     // ── Audio Clip ────────────────────────────────────────────────────────────
 
     public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)

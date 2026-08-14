@@ -289,6 +289,17 @@ public sealed class WebApiClient : IWebApiClient
     public Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default)
         => DeleteAsync($"/api/upload-files/{fileId}/audio-markers/{markerId}", token);
 
+    public async Task<IReadOnlyList<AudioMarkerRecord>> ReplaceAudioCandidatesAsync(Guid fileId, BulkCreateAudioCandidatesRequest request, CancellationToken token = default)
+    {
+        var result = await PostAsync<BulkCreateAudioCandidatesRequest, List<AudioMarkerRecord>>(
+            $"/api/upload-files/{fileId}/audio-markers/candidates", request, token);
+        return result ?? [];
+    }
+
+    public Task<AudioMarkerRecord?> ReviewAudioMarkerAsync(Guid fileId, Guid markerId, ReviewAudioMarkerRequest request, CancellationToken token = default)
+        => PutAsync<ReviewAudioMarkerRequest, AudioMarkerRecord>(
+            $"/api/upload-files/{fileId}/audio-markers/{markerId}/review", request, token);
+
     // ── Audio Clip ────────────────────────────────────────────────────────────
     public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)
         => PostAsync<ClipAudioRequest, UploadFileRecord>($"/api/upload-files/{fileId}/clip", request, token);

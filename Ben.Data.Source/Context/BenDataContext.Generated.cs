@@ -814,6 +814,16 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Label).HasMaxLength(200);
             modelBuilder.Entity<AudioMarker>()
                 .Property(e => e.Note).HasColumnType("nvarchar(max)");
+            // NoAction, not Cascade: deleting a clip must not take the marker it was cut from with
+            // it — the marker is the finding, the clip is one artefact of it.
+            modelBuilder.Entity<AudioMarker>()
+                .HasOne(e => e.LinkedClipUploadFile).WithMany()
+                .HasForeignKey(e => e.LinkedClipUploadFileId).IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+            // The review workflow always reads "this file's markers at this status" — render the
+            // pending candidates, dedupe a re-scan against the dismissed ones.
+            modelBuilder.Entity<AudioMarker>()
+                .HasIndex(e => new { e.UploadFileId, e.ReviewStatus });
 
             // ── UploadFileVote ───────────────────────────────────────────────
             // One vote per (user, file): unique index enforces the business rule.

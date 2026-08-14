@@ -789,6 +789,17 @@ public interface IBenAdminClient
     /// <summary>Permanently deletes an EVP marker.</summary>
     Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default);
 
+    /// <summary>
+    /// Replaces this file's pending detector candidates with a fresh scan's results, leaving
+    /// confirmed and dismissed markers alone. Returns the newly-created candidates.
+    /// </summary>
+    Task<IReadOnlyList<AudioMarkerRecord>> ReplaceAudioCandidatesAsync(
+        Guid fileId, BulkCreateAudioCandidatesRequest request, CancellationToken token = default);
+
+    /// <summary>Records a reviewer's decision on a candidate — confirm (optionally relabelled and re-bounded) or dismiss.</summary>
+    Task<AudioMarkerRecord?> ReviewAudioMarkerAsync(
+        Guid fileId, Guid markerId, ReviewAudioMarkerRequest request, CancellationToken token = default);
+
     // ── Audio Clip ─────────────────────────────────────────────────
 
     /// <summary>
