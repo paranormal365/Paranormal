@@ -14,6 +14,7 @@ public class DateTimeViewerExtensionsTests
         public Guid? UserId => null;
         public Task AuthReady => Task.CompletedTask;
         public TimeZoneInfo BrowserTimeZone { get; } = timeZone;
+        public event Action? StateChanged { add { } remove { } }
     }
 
     private static IBenUserState UserStateFor(string ianaId) =>

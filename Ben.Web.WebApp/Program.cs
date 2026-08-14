@@ -74,6 +74,9 @@ builder.Services.AddHttpClient<IWebApiClient, WebApiClient>((sp, client) =>
 builder.Services.AddScoped<IWebApiAuthService, WebApiAuthService>();
 builder.Services.AddScoped<IBenAdminClient, BenAdminClientAdapter>();
 builder.Services.AddScoped<IBenUserState>(sp => (IBenUserState)sp.GetRequiredService<IWebApiTokenStore>());
+// One set of unread counts per circuit, shared by every badge on the page. Scoped, so it is torn
+// down with the circuit — the poll it owns must not outlive the session it polls for.
+builder.Services.AddScoped<NotificationState>();
 
 // ── Microsoft Entra OIDC ─────────────────────────────────────────────────────
 // EntraTokenHolder is populated by middleware before the Blazor circuit starts
