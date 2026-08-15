@@ -52,6 +52,11 @@ builder.Services.AddBenVideoEditor(options =>
     // every path stays on ffmpeg.wasm exactly as before.
     options.NativeSidecar   = true;
     options.MediaLibraryBaseUrl = builder.Configuration["WebApi:BaseUrl"];
+    // Turns on SharedCatalogAssetProvider, which has existed in the editor since phase 49 but
+    // stayed dark because nothing served GET /api/video-assets. That endpoint is now real, so
+    // the shared clipart library shows up in the editor's asset browser. The catalog's read
+    // endpoints are anonymous by design — this named HttpClient carries no auth handler.
+    options.AssetCatalogUrl = builder.Configuration["WebApi:BaseUrl"];
     options.DocumentPostUrl = $"{builder.Configuration["WebApi:BaseUrl"]}/api/video-projects";
 });
 // Override the default HttpMediaLibraryProvider with one that injects the bearer token.
