@@ -182,8 +182,8 @@ public class OrganizationControllerTests
             });
 
             db.Investigations.AddRange(
-                new Investigation { Id = Guid.NewGuid(), CaseId = case1.Id, Title = "Investigation 1", ScheduledDateTime = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId },
-                new Investigation { Id = Guid.NewGuid(), CaseId = case1.Id, Title = "Investigation 2", ScheduledDateTime = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId });
+                new Investigation { Id = Guid.NewGuid(), OrganizationId = org.Id, CaseId = case1.Id, Title = "Investigation 1", ScheduledDateTime = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId },
+                new Investigation { Id = Guid.NewGuid(), OrganizationId = org.Id, CaseId = case1.Id, Title = "Investigation 2", ScheduledDateTime = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId });
 
             await db.SaveChangesAsync();
         }

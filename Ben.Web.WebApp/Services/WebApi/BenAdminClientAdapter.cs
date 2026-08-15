@@ -958,6 +958,40 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<OrgMessageRecord?> SendOrgMessageAsync(Guid orgId, SendOrgMessageRequest request, CancellationToken token = default)
         => _api.PostAsync<SendOrgMessageRequest, OrgMessageRecord>($"/api/organizations/{orgId}/messages", request, token);
 
+    // ── Org-wide investigations (Area 9) ──────────────────────────────────────
+
+    public async Task<IReadOnlyList<OrgInvestigationRow>> GetOrgInvestigationsAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrgInvestigationRow>>($"/api/organizations/{orgId}/investigations", token);
+        return result ?? [];
+    }
+
+    public Task<InvestigationRecord?> CreateOrgInvestigationAsync(
+        Guid orgId, CreateOrgInvestigationRequest request, CancellationToken token = default)
+        => _api.PostAsync<CreateOrgInvestigationRequest, InvestigationRecord>(
+            $"/api/organizations/{orgId}/investigations", request, token);
+
+    public async Task<IReadOnlyList<InvestigationRosterEntry>> GetInvestigationRosterAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<InvestigationRosterEntry>>(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/roster", token);
+        return result ?? [];
+    }
+
+    public Task<InvestigationRosterEntry?> CheckInToInvestigationAsync(
+        Guid orgId, Guid investigationId, DateTime? statedArrivalTime = null, CancellationToken token = default)
+        => _api.PostAsync<object, InvestigationRosterEntry>(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/check-in",
+            new { StatedArrivalTime = statedArrivalTime }, token);
+
+    public Task<InvestigationRosterEntry?> OverrideInvestigationAttendanceAsync(
+        Guid orgId, Guid investigationId, Guid attendeeId, bool? didAttend,
+        DateTime? statedArrivalTime = null, CancellationToken token = default)
+        => _api.PutAsync<object, InvestigationRosterEntry>(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/attendees/{attendeeId}/attendance",
+            new { DidAttend = didAttend, StatedArrivalTime = statedArrivalTime }, token);
+
     // ── Calendar ──────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default)
@@ -1381,6 +1415,12 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public async Task<IReadOnlyList<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default)
     {
         var result = await _api.GetAsync<IReadOnlyList<MyInvestigationItem>>("/api/my-investigations", token);
+        return result ?? [];
+    }
+
+    public async Task<IReadOnlyList<AttendedInvestigationItem>> GetAttendedInvestigationsAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<AttendedInvestigationItem>>("/api/my-investigations/attended", token);
         return result ?? [];
     }
 

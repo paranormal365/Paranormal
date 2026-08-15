@@ -1,0 +1,260 @@
+@namespace Ben.Web.Library.Shared
+@implements IAsyncDisposable
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@*
+   Who is on tonight's team and who has turned up.
+
+   Polls rather than pushes: no real-time infrastructure exists in this app, and adding SignalR for
+   a handful of chips that change a few times an evening would be a large piece of machinery to
+   maintain for a small effect. A timer every few seconds is ample and can be deleted in a line.
+*@
+
+<div class="card">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h6 class="card-title mb-1">Team<HelpLink Slug="working-a-case" Anchor="arriving-on-site" /></h6>
+                <p class="text-secondary small mb-0">
+                    @_arrivedCount of @_roster.Count arrived
+                </p>
+            </div>
+
+            @if (_myEntry is not null && _myEntry.DidAttend != true)
+            {
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                               Icon="@SvgIcon.MapMarker"
+                               Enabled="@(!_checkingIn)"
+                               OnClick="@(() => _showCheckIn = true)">
+                    @(_checkingIn ? "Saving…" : "I've arrived")
+                </TelerikButton>
+            }
+        </div>
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger py-2 small mt-3 mb-0">@_error</div>
+        }
+
+        @* ── Check-in ─────────────────────────────────────────────────────── *@
+        @if (_showCheckIn)
+        {
+            <div class="border rounded p-3 mt-3">
+                <label class="form-label small mb-1">When did you get there?</label>
+                @* Editable rather than assumed-now. Most sites have no signal, so checking in the
+                   next morning and correcting the time is the ordinary path, not an edge case. *@
+                <input type="datetime-local" class="form-control" style="max-width:260px;"
+                       value="@_statedArrival"
+                       @oninput="@(e => _statedArrival = e.Value?.ToString() ?? string.Empty)" />
+                <div class="form-text">Leave as-is if you are checking in now.</div>
+
+                <div class="d-flex gap-2 mt-2">
+                    <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                   Enabled="@(!_checkingIn)" OnClick="CheckInAsync">Check in</TelerikButton>
+                    <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                   OnClick="@(() => _showCheckIn = false)">Cancel</TelerikButton>
+                </div>
+            </div>
+        }
+
+        @* ── Roster ───────────────────────────────────────────────────────── *@
+        @if (_roster.Count == 0)
+        {
+            <p class="text-secondary small fst-italic mt-3 mb-0">Nobody has been added to this investigation yet.</p>
+        }
+        else
+        {
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                @foreach (var entry in _roster)
+                {
+                    <span class="badge rounded-pill @ChipClass(entry) d-inline-flex align-items-center gap-1"
+                          style="font-size:.8rem;padding:.45rem .7rem;"
+                          title="@ChipTitle(entry)">
+                        @entry.DisplayName
+                        @if (entry.IsLead)
+                        {
+                            <span class="badge bg-light text-dark">Lead</span>
+                        }
+                        @if (entry.DateArrived is { } arrived)
+                        {
+                            <span class="opacity-75">@arrived.ToLocalTime().ToString("HH:mm")</span>
+                        }
+                    </span>
+                }
+            </div>
+
+            @* Manage-gated: correcting somebody else's attendance is not a participant's job. *@
+            @if (CanManage)
+            {
+                <div class="table-responsive mt-3">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr><th>Who</th><th>Arrived</th><th class="text-center">Attended</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var entry in _roster)
+                            {
+                                <tr>
+                                    <td>@entry.DisplayName</td>
+                                    <td class="text-nowrap">
+                                        @(entry.DateArrived?.ToLocalTime().ToString("d MMM, HH:mm") ?? "—")
+                                        @if (entry.DidAttend == true && !entry.SelfReported)
+                                        {
+                                            <span class="badge bg-secondary ms-1" title="Recorded by someone else, not by them">Recorded</span>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <input type="checkbox" class="form-check-input"
+                                               checked="@(entry.DidAttend == true)"
+                                               @onchange="@(e => OverrideAsync(entry, (bool)(e.Value ?? false)))" />
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter, EditorRequired] public Guid InvestigationId { get; set; }
+
+    /// <summary>The server's verdict, passed down. Not worked out here.</summary>
+    [Parameter] public bool CanManage { get; set; }
+
+    /// <summary>How often to re-read the roster. A few seconds is ample for a handful of chips.</summary>
+    [Parameter] public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(12);
+
+    private List<InvestigationRosterEntry> _roster = [];
+    private InvestigationRosterEntry? _myEntry;
+    private int _arrivedCount;
+
+    private bool _showCheckIn;
+    private bool _checkingIn;
+    private string _statedArrival = string.Empty;
+    private string? _error;
+
+    private PeriodicTimer? _timer;
+    private CancellationTokenSource? _cts;
+    private Guid _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (InvestigationId == Guid.Empty || InvestigationId == _loadedFor) return;
+        _loadedFor = InvestigationId;
+        _statedArrival = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
+        await LoadAsync();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender || _timer is not null) return;
+        _cts = new CancellationTokenSource();
+        _timer = new PeriodicTimer(PollInterval);
+        _ = PollAsync(_cts.Token);
+    }
+
+    /// <summary>Re-reads the roster until the component goes away.</summary>
+    private async Task PollAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (await _timer!.WaitForNextTickAsync(ct))
+            {
+                await LoadAsync();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Ordinary teardown — the page was left. Nothing to report.
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _roster = (await AdminClient.GetInvestigationRosterAsync(OrgId, InvestigationId)).ToList();
+            _arrivedCount = _roster.Count(r => r.DidAttend == true);
+            _myEntry = _roster.FirstOrDefault(r => r.AppUserId == UserState.UserId);
+        }
+        catch
+        {
+            // A failed poll is not worth an error banner that appears and vanishes on its own —
+            // the previous roster stays on screen and the next tick tries again.
+        }
+    }
+
+    private async Task CheckInAsync()
+    {
+        _checkingIn = true;
+        _error = null;
+
+        // Parsed as local time and sent as UTC, because the field is what the person is reading
+        // off their own watch.
+        DateTime? stated = DateTime.TryParse(_statedArrival, out var parsed)
+            ? parsed.ToUniversalTime()
+            : null;
+
+        var result = await AdminClient.CheckInToInvestigationAsync(OrgId, InvestigationId, stated);
+
+        _checkingIn = false;
+
+        if (result is null)
+        {
+            _error = "That could not be saved. Check the arrival time is not in the future.";
+            return;
+        }
+
+        _showCheckIn = false;
+        await LoadAsync();
+    }
+
+    private async Task OverrideAsync(InvestigationRosterEntry entry, bool didAttend)
+    {
+        _error = null;
+
+        var result = await AdminClient.OverrideInvestigationAttendanceAsync(
+            OrgId, InvestigationId, entry.AttendeeId, didAttend,
+            didAttend ? entry.DateArrived ?? DateTime.UtcNow : null);
+
+        if (result is null)
+        {
+            _error = "That could not be saved.";
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private static string ChipClass(InvestigationRosterEntry entry) => entry.DidAttend switch
+    {
+        true => "bg-success",
+        false => "bg-secondary",
+        // Not yet known reads as waiting, not as a problem — most of the evening is spent here.
+        _ => "bg-light text-dark border",
+    };
+
+    private static string ChipTitle(InvestigationRosterEntry entry)
+    {
+        if (entry.DidAttend == false) return "Marked as not attending";
+        if (entry.DidAttend != true) return $"Not arrived yet · {entry.Rsvp}";
+        return entry.SelfReported
+            ? "Checked in themselves"
+            : "Attendance recorded by someone else";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // Without this the timer keeps ticking against a dead circuit after navigation.
+        if (_cts is not null) await _cts.CancelAsync();
+        _timer?.Dispose();
+        _cts?.Dispose();
+    }
+}

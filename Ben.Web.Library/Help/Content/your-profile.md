@@ -72,3 +72,15 @@ button, so a mail scanner that follows links cannot confirm it for you.
 Links last seven days, and you can only ask for a new one once a minute. Asking for a new link
 retires the old one. If you later change the address text, the confirmation is cleared and the
 entry goes back to private — the new address has not been proven, only the old one had.
+
+## Your investigation map
+
+**My Investigations** keeps a map of where you have actually been, under *Where I've been*.
+
+It shows visits you **attended** — not ones you were invited to, and not ones you said yes to. A
+map of places you might have gone is not a record of where you have been, and only the second is
+worth keeping.
+
+That means it fills up slowly, and starts empty. Attendance is recorded after the visit, so a
+scheduled investigation appears in your list straight away but on the map only once someone has
+confirmed you were there.

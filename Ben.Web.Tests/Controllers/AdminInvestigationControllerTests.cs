@@ -43,8 +43,17 @@ public class AdminInvestigationControllerTests
             });
             db.Investigations.Add(new Investigation
             {
-                Id = Guid.NewGuid(), CaseId = caseA, Title = "Night Survey",
+                // Organization is held directly now rather than reached through the case.
+                Id = Guid.NewGuid(), OrganizationId = orgA, CaseId = caseA, Title = "Night Survey",
                 ScheduledDateTime = new DateTime(2026, 9, 1, 20, 0, 0, DateTimeKind.Utc),
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            // A visit with no case at all — the admin screen exists to see everything, so it has
+            // to show this one too rather than quietly dropping it on the case join.
+            db.Investigations.Add(new Investigation
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgA, CaseId = null, Title = "Landmark visit",
+                ScheduledDateTime = new DateTime(2026, 9, 2, 20, 0, 0, DateTimeKind.Utc),
                 DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
             });
             await db.SaveChangesAsync();
@@ -56,10 +65,18 @@ public class AdminInvestigationControllerTests
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var list = Assert.IsAssignableFrom<IEnumerable<AdminInvestigationSummaryRecord>>(ok.Value).ToList();
 
-        var item = Assert.Single(list);
-        Assert.Equal("Org A", item.OrganizationName);
-        Assert.Equal("#2026-007", item.CaseReference);
-        Assert.Equal("Night Survey", item.Title);
+        Assert.Equal(2, list.Count);
+
+        var withCase = Assert.Single(list, i => i.Title == "Night Survey");
+        Assert.Equal("Org A", withCase.OrganizationName);
+        Assert.Equal("#2026-007", withCase.CaseReference);
+
+        var caseLess = Assert.Single(list, i => i.Title == "Landmark visit");
+        // The organization still resolves without a case, and the case fields are honestly null
+        // rather than a placeholder string the UI would have to recognise.
+        Assert.Equal("Org A", caseLess.OrganizationName);
+        Assert.Null(caseLess.CaseReference);
+        Assert.Null(caseLess.CaseId);
     }
 
     [Fact]

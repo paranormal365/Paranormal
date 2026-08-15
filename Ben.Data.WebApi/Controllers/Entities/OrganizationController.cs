@@ -90,8 +90,8 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
                     .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
 
                 investigationCounts = await db.Investigations.AsNoTracking()
-                    .Where(i => orgIds.Contains(i.Case.OrganizationId))
-                    .GroupBy(i => i.Case.OrganizationId)
+                    .Where(i => orgIds.Contains(i.OrganizationId))
+                    .GroupBy(i => i.OrganizationId)
                     .Select(g => new { g.Key, Count = g.Count() })
                     .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
             }

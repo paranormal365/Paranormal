@@ -315,6 +315,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("PlaceId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("PublicPseudonym")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
@@ -351,6 +354,8 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("ClientRequestId");
 
                     b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("PlaceId");
 
                     b.HasIndex("UpdatedByAppUserId");
 
@@ -1467,7 +1472,7 @@ namespace Ben.Data.Source.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("CaseId")
+                    b.Property<Guid?>("CaseId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("CreatedByAppUserId")
@@ -1495,19 +1500,27 @@ namespace Ben.Data.Source.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal?>("Latitude")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 10)
+                        .HasColumnType("decimal(18,10)");
 
                     b.Property<string>("Location")
                         .HasMaxLength(512)
                         .HasColumnType("nvarchar(512)");
 
                     b.Property<decimal?>("Longitude")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 10)
+                        .HasColumnType("decimal(18,10)");
 
                     b.Property<string>("Notes")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<Guid?>("OrgCalendarEventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("PlaceId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("ScheduledDateTime")
@@ -1524,6 +1537,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid?>("UpdatedByAppUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int>("Visibility")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CaseId");
@@ -1531,6 +1547,10 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("CreatedByAppUserId");
 
                     b.HasIndex("OrgCalendarEventId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("PlaceId");
 
                     b.HasIndex("UpdatedByAppUserId");
 
@@ -1550,8 +1570,14 @@ namespace Ben.Data.Source.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
+                    b.Property<Guid?>("AttendanceRecordedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("CreatedByAppUserId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DateArrived")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime>("DateCreated")
                         .HasColumnType("datetime2");
@@ -1562,12 +1588,17 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid>("InvestigationId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("IsLead")
+                        .HasColumnType("bit");
+
                     b.Property<int>("Rsvp")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
                     b.HasIndex("AppUserId");
+
+                    b.HasIndex("AttendanceRecordedByAppUserId");
 
                     b.HasIndex("CreatedByAppUserId");
 
@@ -3398,6 +3429,84 @@ namespace Ben.Data.Source.Migrations
                         .IsUnique();
 
                     b.ToTable("OrganizationUserMemberships", (string)null);
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.Place", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("Country")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateGeocoded")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("GeocodeNote")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<bool>("IsApproved")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("Latitude")
+                        .HasPrecision(18, 10)
+                        .HasColumnType("decimal(18,10)");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasPrecision(18, 10)
+                        .HasColumnType("decimal(18,10)");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("State")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("StreetAddress1")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("StreetAddress2")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ZipCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("Latitude", "Longitude");
+
+                    b.ToTable("Places");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.ScheduleProposalSlot", b =>
@@ -5355,6 +5464,11 @@ namespace Ben.Data.Source.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
+                    b.HasOne("Ben.Data.Source.Entities.Place", "Place")
+                        .WithMany("Cases")
+                        .HasForeignKey("PlaceId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
                         .WithMany()
                         .HasForeignKey("UpdatedByAppUserId")
@@ -5367,6 +5481,8 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("CreatedByAppUser");
 
                     b.Navigation("Organization");
+
+                    b.Navigation("Place");
 
                     b.Navigation("UpdatedByAppUser");
                 });
@@ -6102,8 +6218,7 @@ namespace Ben.Data.Source.Migrations
                     b.HasOne("Ben.Data.Source.Entities.Case", "Case")
                         .WithMany()
                         .HasForeignKey("CaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
                         .WithMany()
@@ -6116,6 +6231,17 @@ namespace Ben.Data.Source.Migrations
                         .HasForeignKey("OrgCalendarEventId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Place", "Place")
+                        .WithMany("Investigations")
+                        .HasForeignKey("PlaceId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
                         .WithMany()
                         .HasForeignKey("UpdatedByAppUserId")
@@ -6127,6 +6253,10 @@ namespace Ben.Data.Source.Migrations
 
                     b.Navigation("OrgCalendarEvent");
 
+                    b.Navigation("Organization");
+
+                    b.Navigation("Place");
+
                     b.Navigation("UpdatedByAppUser");
                 });
 
@@ -6137,6 +6267,11 @@ namespace Ben.Data.Source.Migrations
                         .HasForeignKey("AppUserId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AttendanceRecordedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("AttendanceRecordedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
                         .WithMany()
@@ -6151,6 +6286,8 @@ namespace Ben.Data.Source.Migrations
                         .IsRequired();
 
                     b.Navigation("AppUser");
+
+                    b.Navigation("AttendanceRecordedByAppUser");
 
                     b.Navigation("CreatedByAppUser");
 
@@ -7154,6 +7291,24 @@ namespace Ben.Data.Source.Migrations
                         .WithMany()
                         .HasForeignKey("UpdatedByAppUserId")
                         .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.Place", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("UpdatedByAppUser");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.ScheduleProposalSlot", b =>
@@ -8200,6 +8355,13 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("Members");
 
                     b.Navigation("Permissions");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.Place", b =>
+                {
+                    b.Navigation("Cases");
+
+                    b.Navigation("Investigations");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.SupportTicket", b =>

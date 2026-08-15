@@ -180,6 +180,13 @@
                             }
                             @if (attendeesOpen)
                             {
+                                @* Arrival lives in its own component because it polls, and because
+                                   the same panel is wanted on the org-wide investigations view
+                                   where there is no case in the route at all. *@
+                                <div class="mt-3">
+                                    <InvestigationRoster OrgId="@OrgId" InvestigationId="@i.Id" CanManage="true" />
+                                </div>
+
                                 <div class="mt-3 border rounded p-3 bg-body-secondary">
                                     @if (_attendeeBusy && !_attendeeCache.ContainsKey(i.Id))
                                     {
@@ -333,6 +340,46 @@
                     <div class="form-text">After this date, no new evidence may be submitted for this investigation.</div>
                 </div>
             }
+
+            <div class="col-12">
+                <label class="form-label fw-semibold">Who can see the findings</label>
+                @* Plain select: a Telerik dropdown that drops its selection would silently leave
+                   the previous sharing scope in place, and this is the one field where quietly
+                   keeping the old value could publish something. *@
+                <select class="form-select" style="max-width:420px;" value="@_form.Visibility"
+                        @onchange="@(e => _form.Visibility = Enum.TryParse<InvestigationVisibility>(e.Value?.ToString(), out var v) ? v : _form.Visibility)">
+                    <option value="@InvestigationVisibility.GroupOnly"
+                            selected="@(_form.Visibility == InvestigationVisibility.GroupOnly)">
+                        Just this group
+                    </option>
+                    <option value="@InvestigationVisibility.PlaceInvestigators"
+                            selected="@(_form.Visibility == InvestigationVisibility.PlaceInvestigators)">
+                        Groups who have also investigated this place
+                    </option>
+                    <option value="@InvestigationVisibility.Public"
+                            selected="@(_form.Visibility == InvestigationVisibility.Public)">
+                        Anyone
+                    </option>
+                </select>
+
+                @* The membership is dynamic, and that is not obvious from the wording alone. A
+                   group that investigates this place next year gains access to what was shared
+                   this year — choosing this is a decision about the future, not just the present. *@
+                @if (_form.Visibility == InvestigationVisibility.PlaceInvestigators)
+                {
+                    <div class="alert alert-warning py-2 small mt-2 mb-0">
+                        This includes groups who investigate this place <strong>in future</strong>,
+                        not only the ones who already have.
+                    </div>
+                }
+                @if (_form.Visibility == InvestigationVisibility.Public)
+                {
+                    <div class="alert alert-warning py-2 small mt-2 mb-0">
+                        Anyone can read this, including visitors who are not signed in.
+                        Investigations at a private home cannot be made public.
+                    </div>
+                }
+            </div>
         </div>
         @if (_dialogError is not null)
         {
@@ -626,6 +673,7 @@
             Status            = inv.Status,
             Notes             = inv.Notes ?? "",
             EvidenceDueDate   = inv.EvidenceDueDate?.ToViewerLocalTime(UserState),
+            Visibility        = inv.Visibility,
         };
         _dialogError = null;
         _showDialog = true;
@@ -646,7 +694,8 @@
                 Status:            _form.Status,
                 Notes:             string.IsNullOrWhiteSpace(_form.Notes) ? null : _form.Notes.Trim(),
                 OrgCalendarEventId: null,
-                EvidenceDueDate:   _form.EvidenceDueDate?.ToUtcFromViewerLocal(UserState));
+                EvidenceDueDate:   _form.EvidenceDueDate?.ToUtcFromViewerLocal(UserState),
+                Visibility:        _form.Visibility);
 
             InvestigationRecord? result;
             if (_editInv is null)
@@ -717,6 +766,7 @@
         public InvestigationStatus Status           { get; set; } = InvestigationStatus.Scheduled;
         public string             Notes             { get; set; } = "";
         public DateTime?          EvidenceDueDate   { get; set; }
+        public InvestigationVisibility Visibility     { get; set; } = InvestigationVisibility.GroupOnly;
     }
 
     private record StatusOption(InvestigationStatus Value, string Label);
