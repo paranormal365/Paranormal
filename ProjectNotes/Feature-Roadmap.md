@@ -230,6 +230,24 @@ Files: `AdminAuditLog.razor` (main), possibly `AdminAuditLogController.cs` (only
 
 **U2 — Self-service profile page (`/profile`).** The first user-facing profile editor: DisplayName edit, public photo, private photo, and a personal opt-in toggle "show my private photo to clients I work with". **DECIDED: client-sharing requires BOTH the org policy and the individual opt-in** — so org Settings also gains "allow members' private photos to be shown to clients" (org-level policy). Add a user menu to `MainLayout`'s top bar (avatar thumbnail + dropdown: Profile, Sign Out) — replacing the bare email text. This page is also where future self-service settings accumulate.
 
+**U2-cam — Take a photo with the device camera (requested 2026-08-14, deferred).** The user wants
+the private profile picture settable by taking a photo then and there, not only by uploading a file
+someone already has. Applies to the private slot in particular — a candid taken on the spot is
+exactly the kind of image you'd share with colleagues and not the public page. Notes for whoever
+builds it:
+
+- Two implementations, and the cheap one covers most of the value: `<input type="file"
+  accept="image/*" capture="user">` hands off to the native camera app on phones and needs no new
+  permissions plumbing. A live in-page preview (`getUserMedia` → `<video>` → `<canvas>` →
+  `toBlob`) is the nicer desktop experience but is a real chunk of JS interop.
+- `getUserMedia` is **secure-context only** — it works on `localhost` but silently fails over plain
+  HTTP to a LAN address, so testing from a phone against the dev server needs HTTPS or a tunnel.
+- Output is a `Blob`/`byte[]`, so it can go through the existing upload endpoint unchanged; the
+  Profile Photo `UploadFileType` already allows `.jpg`/`.png`/`.webp`. No schema work.
+- Verification will be awkward: the browser tooling used here cannot drive OS file pickers or
+  synthesise a camera stream, so this needs either a fake-device browser flag or manual testing on
+  a real phone. Budget for that rather than discovering it late.
+
 **U3 — Avatar resolution + rendering.** New endpoint `GET /api/users/{id}/avatar` that picks which photo the *viewer* may see: private photo if (viewer shares an active org membership with the subject) OR (viewer is a client with a case at an org where the subject is a member AND that org's policy allows it AND the subject opted in) — else public photo — else null (render initials fallback). New `UserAvatar.razor` component (initials fallback, size parameter) + integrate into `UserNameLink`. Because `UserNameLink` does no lookup, add a small circuit-scoped avatar-URL cache service rather than threading file ids through every DTO. Adopt in the 4 existing `UserNameLink` sites + message threads + member lists.
 
 **U4 — Client private-photo sharing to case orgs.** Per the doc: clients share their private image with a group while they have a case with it; co-clients likewise. This is just an extra clause in U3's resolution logic (subject has `Case→ClientRequest.AppUserId` or `CaseClientAccess` row at viewer's org) — no new tables.
