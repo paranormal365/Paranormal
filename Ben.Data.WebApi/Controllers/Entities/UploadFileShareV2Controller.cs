@@ -124,9 +124,12 @@ public sealed class UploadFileShareV2Controller : BenControllerBase
 
     private static async Task<bool> IsOrgMemberOfInvestigationAsync(BenDataContext db, Guid investigationId, Guid userId, CancellationToken ct)
     {
+        // Read straight off the investigation. Going through the case returned Guid.Empty for a
+        // case-less visit, which this method reads as "deny everybody" — a permission check that
+        // fails closed is still a permission check that is wrong, and nobody would see why.
         var orgId = await db.Investigations.AsNoTracking()
             .Where(i => i.Id == investigationId)
-            .Select(i => i.Case.OrganizationId)
+            .Select(i => i.OrganizationId)
             .FirstOrDefaultAsync(ct);
         if (orgId == Guid.Empty) return false;
         return await db.OrganizationUserMemberships.AsNoTracking()

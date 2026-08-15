@@ -93,6 +93,24 @@
                 }
             </div>
         </div>
+
+        @* Contact details. Each card loads and saves on its own — one slow lookup or one failed
+           save has no business blocking the rest of the page. *@
+        <MyEmailsCard />
+        <MyPhonesCard />
+        <MyAddressesCard />
+        <MyLinksCard />
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="card-title">Where you've been<HelpLink Slug="your-profile" Anchor="your-investigation-map" /></h6>
+                <p class="text-secondary small">
+                    A map of the investigations you have actually attended, kept on your
+                    investigations page.
+                </p>
+                <a class="btn btn-outline-primary btn-sm" href="/my-investigations">My investigations</a>
+            </div>
+        </div>
     }
 </div>
 

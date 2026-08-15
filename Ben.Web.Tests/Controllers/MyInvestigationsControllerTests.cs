@@ -70,7 +70,9 @@ public class MyInvestigationsControllerTests
         db.Users.Add(new AppUser { Id = adminId, UserName = "adm@t.com", NormalizedUserName = "ADM@T.COM", Email = "adm@t.com", NormalizedEmail = "ADM@T.COM", DateCreated = DateTime.UtcNow });
         db.Organizations.Add(new Organization { Id = orgId, Name = "Test Org", UrlName = "test", DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId });
         db.Cases.Add(new Case { Id = caseId, OrganizationId = orgId, Title = "Test Case", CaseYear = 2026, OrgCaseNumber = 1, StreetAddress1 = "1 Main", City = "Nashville", State = "TN", ZipCode = "37201", Country = "US", DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId });
-        db.Investigations.Add(new Investigation { Id = invId, CaseId = caseId, Title = "Night Visit", ScheduledDateTime = scheduledAt ?? DateTime.UtcNow.AddDays(7), Status = InvestigationStatus.Scheduled, DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId });
+        // OrganizationId is required and set directly now — the endpoint no longer reaches the org
+        // through the case, so a seed that omits it produces an investigation belonging to nobody.
+        db.Investigations.Add(new Investigation { Id = invId, OrganizationId = orgId, CaseId = caseId, Title = "Night Visit", ScheduledDateTime = scheduledAt ?? DateTime.UtcNow.AddDays(7), Status = InvestigationStatus.Scheduled, DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId });
         db.InvestigationAttendees.Add(new InvestigationAttendee { Id = attId, InvestigationId = invId, AppUserId = userId, Rsvp = RsvpStatus.Invited, DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId });
         await db.SaveChangesAsync();
         return (factory, userId, attId, invId);

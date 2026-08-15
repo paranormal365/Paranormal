@@ -129,6 +129,44 @@ public interface IBenAdminClient
     /// </summary>
     Task<(byte[] Data, string ContentType)?> GetUserAvatarAsync(Guid userId, CancellationToken token = default);
 
+    // ── My contact info (self-service emails/phones/addresses/links) ─────────
+    // Same scoping rule as My profile above: every call is implicitly the signed-in user, so none
+    // of these take a user id — there is no "edit someone else" shape to get wrong.
+
+    Task<List<MyEmailRecord>> GetMyEmailsAsync(CancellationToken token = default);
+    Task<MyEmailRecord?> CreateMyEmailAsync(UpsertMyEmailRequest request, CancellationToken token = default);
+    Task<MyEmailRecord?> UpdateMyEmailAsync(Guid id, UpsertMyEmailRequest request, CancellationToken token = default);
+    Task<bool> DeleteMyEmailAsync(Guid id, CancellationToken token = default);
+
+    /// <summary>
+    /// Issues (or reissues) a validation link for one of the caller's emails. The link is always
+    /// returned, whether or not it could also be emailed — see <see cref="SendValidationResponse"/>.
+    /// </summary>
+    Task<SendValidationResponse?> SendMyEmailValidationAsync(Guid id, CancellationToken token = default);
+
+    Task<List<MyPhoneRecord>> GetMyPhonesAsync(CancellationToken token = default);
+    Task<MyPhoneRecord?> CreateMyPhoneAsync(UpsertMyPhoneRequest request, CancellationToken token = default);
+    Task<MyPhoneRecord?> UpdateMyPhoneAsync(Guid id, UpsertMyPhoneRequest request, CancellationToken token = default);
+    Task<bool> DeleteMyPhoneAsync(Guid id, CancellationToken token = default);
+
+    Task<List<MyAddressRecord>> GetMyAddressesAsync(CancellationToken token = default);
+    Task<MyAddressRecord?> CreateMyAddressAsync(UpsertMyAddressRequest request, CancellationToken token = default);
+    Task<MyAddressRecord?> UpdateMyAddressAsync(Guid id, UpsertMyAddressRequest request, CancellationToken token = default);
+    Task<bool> DeleteMyAddressAsync(Guid id, CancellationToken token = default);
+
+    Task<List<MyLinkRecord>> GetMyLinksAsync(CancellationToken token = default);
+    Task<MyLinkRecord?> CreateMyLinkAsync(UpsertMyLinkRequest request, CancellationToken token = default);
+    Task<MyLinkRecord?> UpdateMyLinkAsync(Guid id, UpsertMyLinkRequest request, CancellationToken token = default);
+    Task<bool> DeleteMyLinkAsync(Guid id, CancellationToken token = default);
+
+    // ── Email validation redemption (anonymous — the confirming visitor may have no session) ──
+
+    /// <summary>Info for the validation landing page: masked address + whether the link is still good.</summary>
+    Task<EmailValidationInfoRecord?> GetEmailValidationInfoAsync(string token, CancellationToken cancellationToken = default);
+
+    /// <summary>Confirms the address the token was issued for. True on success.</summary>
+    Task<bool> ConfirmEmailValidationAsync(string token, CancellationToken cancellationToken = default);
+
     /// <summary>Approves or denies a file-permission request. Returns false when the API rejects it.</summary>
     Task<bool> ReviewPermissionRequestAsync(
         Guid requestId, FilePermissionRequestStatus status, string? reviewNotes, CancellationToken token = default);
@@ -550,6 +588,87 @@ public interface IBenAdminClient
     // ── Calendar ──────────────────────────────────────────────────────────────
 
     Task<IReadOnlyList<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default);
+
+    // ── Org-wide investigations (Area 9) ──────────────────────────────────────
+
+    /// <summary>
+    /// Every investigation the organization ran — including ones with no client case — each
+    /// carrying the server's verdict on what this viewer may do with it.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="GetInvestigationsAsync"/>, which is nested under one case and
+    /// therefore cannot see a case-less visit at all. Render <c>CanEditRecord</c> as given; a UI
+    /// that works out edit rights for itself will eventually disagree with the endpoint.
+    /// </remarks>
+    Task<IReadOnlyList<OrgInvestigationRow>> GetOrgInvestigationsAsync(Guid orgId, CancellationToken token = default);
+
+    // ── Places (Area 9) ───────────────────────────────────────────────────────
+
+    /// <summary>One place, for the place page header and map.</summary>
+    Task<PlaceRecord?> GetPlaceAsync(Guid placeId, CancellationToken token = default);
+
+    /// <summary>
+    /// Investigations at a place that the signed-in caller may see — their own group's, anything
+    /// public, and anything shared with groups who have also investigated there.
+    /// </summary>
+    Task<IReadOnlyList<PlaceInvestigationRow>> GetPlaceInvestigationsAsync(
+        Guid placeId, CancellationToken token = default);
+
+    /// <summary>"N investigations by M groups since Y", counted over what this caller may see.</summary>
+    Task<PlaceSummary?> GetPlaceSummaryAsync(Guid placeId, CancellationToken token = default);
+
+    /// <summary>
+    /// Places that are probably the one being typed in — "did you mean this?" before a duplicate
+    /// exists.
+    /// </summary>
+    /// <remarks>
+    /// Read-only. The server decides what counts as a probable match (same address, within a tenth
+    /// of a mile); the caller shows the answer and the person picks. Returns nothing when there is
+    /// neither an address nor a name to go on.
+    /// </remarks>
+    Task<IReadOnlyList<PlaceCandidate>> FindPlaceCandidatesAsync(
+        string? street, string? city, string? state, string? zip, string? name,
+        decimal? latitude, decimal? longitude, CancellationToken token = default);
+
+    /// <summary>
+    /// The visitor's view: the place plus only what has been published about it.
+    /// </summary>
+    /// <remarks>
+    /// Anonymous, so the place page works signed-out. Never returns anything a signed-in call
+    /// would have hidden — both go through the same server-side predicate.
+    /// </remarks>
+    Task<PublicPlaceResponse?> GetPublicPlaceAsync(Guid placeId, CancellationToken token = default);
+
+    /// <summary>Who is on an investigation's team and who has turned up. Any member may read it.</summary>
+    Task<IReadOnlyList<InvestigationRosterEntry>> GetInvestigationRosterAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default);
+
+    /// <summary>
+    /// Records the signed-in person's own arrival. <paramref name="statedArrivalTime"/> null means now.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="OverrideInvestigationAttendanceAsync"/> on purpose: this leaves the
+    /// record self-reported, which is the provenance the roster shows.
+    /// </remarks>
+    Task<InvestigationRosterEntry?> CheckInToInvestigationAsync(
+        Guid orgId, Guid investigationId, DateTime? statedArrivalTime = null, CancellationToken token = default);
+
+    /// <summary>Records or corrects somebody else's attendance. Needs the right to manage the visit.</summary>
+    Task<InvestigationRosterEntry?> OverrideInvestigationAttendanceAsync(
+        Guid orgId, Guid investigationId, Guid attendeeId, bool? didAttend,
+        DateTime? statedArrivalTime = null, CancellationToken token = default);
+
+    /// <summary>
+    /// Schedules an investigation, with a case or without one. Needs a place when there is no case.
+    /// </summary>
+    /// <remarks>
+    /// Returns the plain record the endpoint creates, not an <see cref="OrgInvestigationRow"/>:
+    /// the row's denormalised place/case names and permission verdicts are list-view concerns, so
+    /// callers that need them refetch the list rather than have the create path assemble a second,
+    /// subtly different shape.
+    /// </remarks>
+    Task<InvestigationRecord?> CreateOrgInvestigationAsync(
+        Guid orgId, CreateOrgInvestigationRequest request, CancellationToken token = default);
     Task<OrgCalendarEventTypeRecord?> CreateCalendarEventTypeAsync(Guid orgId, UpsertCalendarEventTypeRequest request, CancellationToken token = default);
     Task<OrgCalendarEventTypeRecord?> UpdateCalendarEventTypeAsync(Guid orgId, Guid id, UpsertCalendarEventTypeRequest request, CancellationToken token = default);
     Task<bool> DeleteCalendarEventTypeAsync(Guid orgId, Guid id, CancellationToken token = default);
@@ -792,6 +911,15 @@ public interface IBenAdminClient
 
     /// <summary>Returns all investigations the current user is assigned to attend.</summary>
     Task<IReadOnlyList<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// Where the signed-in person has actually been: past investigations they attended.
+    /// </summary>
+    /// <remarks>
+    /// Only rows marked attended, so it is expected to be sparse — and honestly so — until arrival
+    /// check-in exists. A map of places you were invited to is not a map of where you have been.
+    /// </remarks>
+    Task<IReadOnlyList<AttendedInvestigationItem>> GetAttendedInvestigationsAsync(CancellationToken token = default);
 
     /// <summary>Sets the current user's RSVP on their attendee record.</summary>
     Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default);
@@ -1244,6 +1372,204 @@ public sealed record UserNoteUpsertRequest(
     bool IsPublic);
 
 /// <summary>
+/// One investigation the signed-in person attended. Mirror of the WebApi record in
+/// MyInvestigationsController.cs.
+/// </summary>
+public sealed record AttendedInvestigationItem(
+    Guid InvestigationId,
+    string Title,
+    DateTime ScheduledDateTime,
+    Guid OrganizationId,
+    string OrganizationName,
+    Guid? CaseId,
+    string? CaseReference,
+    Guid? PlaceId,
+    string? PlaceName,
+    string? PlaceCity,
+    string? PlaceState,
+    decimal? Latitude,
+    decimal? Longitude,
+    string? GeocodeNote,
+    bool WasLead);
+
+// ── Place records (Area 9) ────────────────────────────────────────────────────
+// Mirrors of the WebApi records in PlaceController.cs / Public/PublicPlaceController.cs.
+
+public sealed record PlaceRecord(
+    Guid Id,
+    string? Name,
+    string? StreetAddress1,
+    string? City,
+    string? State,
+    string? ZipCode,
+    string? Country,
+    decimal? Latitude,
+    decimal? Longitude,
+    string? GeocodeNote,
+    Ben.Data.Common.Enums.PlaceKind Kind);
+
+/// <summary><c>IsMine</c> lets the page separate our own visits from what others have shared.</summary>
+public sealed record PlaceInvestigationRow(
+    Guid Id,
+    string Title,
+    DateTime ScheduledDateTime,
+    Ben.Data.Common.Enums.InvestigationStatus Status,
+    Ben.Data.Common.Enums.InvestigationVisibility Visibility,
+    Guid OrganizationId,
+    string OrganizationName,
+    bool IsMine);
+
+/// <summary><c>Since</c> is null when nothing is visible, so the phrase can be omitted entirely.</summary>
+public sealed record PlaceSummary(int InvestigationCount, int OrganizationCount, int? Since);
+
+/// <summary>
+/// A place that might be the one somebody is about to create.
+/// </summary>
+/// <remarks>
+/// <c>DistanceMiles</c> is null when either side has no coordinates — unknown, not zero, so a page
+/// must not print it as "0 miles away". <c>InvestigationCount</c> is what tells an established
+/// place from a stray row.
+/// </remarks>
+public sealed record PlaceCandidate(
+    Guid Id,
+    string? Name,
+    string? StreetAddress1,
+    string? City,
+    string? State,
+    Ben.Data.Common.Enums.PlaceKind Kind,
+    double? DistanceMiles,
+    int InvestigationCount);
+
+public sealed record PublicPlaceInvestigationRow(
+    Guid Id,
+    string Title,
+    DateTime ScheduledDateTime,
+    Ben.Data.Common.Enums.InvestigationStatus Status,
+    string OrganizationName,
+    string OrganizationUrlName);
+
+public sealed record PublicPlaceResponse(
+    PlaceRecord Place,
+    IReadOnlyList<PublicPlaceInvestigationRow> Investigations,
+    PlaceSummary Summary);
+
+// ── Org-wide investigation records (Area 9) ───────────────────────────────────
+// Mirrors of the WebApi records in OrgInvestigationsController.cs — this library cannot reference
+// the WebApi project, so the shapes are restated here.
+
+/// <summary>
+/// One investigation for the organization's map-and-grid view. <c>CanEditRecord</c> and
+/// <c>CanCompleteMyFindings</c> are the server's verdicts: render them, never re-derive them.
+/// </summary>
+public sealed record OrgInvestigationRow(
+    Guid Id,
+    string Title,
+    DateTime ScheduledDateTime,
+    DateTime? EndDateTime,
+    Ben.Data.Common.Enums.InvestigationStatus Status,
+    Ben.Data.Common.Enums.InvestigationVisibility Visibility,
+    string? Location,
+    Guid? CaseId,
+    string? CaseReference,
+    string? CaseTitle,
+    Guid? PlaceId,
+    string? PlaceName,
+    string? PlaceCity,
+    string? PlaceState,
+    decimal? Latitude,
+    decimal? Longitude,
+    string? GeocodeNote,
+    int AttendeeCount,
+    bool CanEditRecord,
+    bool CanCompleteMyFindings);
+
+/// <summary>
+/// A place being created inline with the investigation held there, so scheduling a visit to
+/// somewhere new is one step rather than two.
+/// </summary>
+public sealed record NewPlaceRequest(
+    string? Name,
+    string? StreetAddress1,
+    string? StreetAddress2,
+    string? City,
+    string? State,
+    string? ZipCode,
+    string? Country,
+    decimal? Latitude = null,
+    decimal? Longitude = null,
+    Ben.Data.Common.Enums.PlaceKind? Kind = null);
+
+/// <summary>
+/// One person on an investigation's team, and whether they turned up. Mirror of the WebApi record.
+/// </summary>
+/// <remarks>
+/// <c>SelfReported</c> distinguishes "checked in on site" from "somebody recorded it for them".
+/// Who did the recording is deliberately not carried — the roster is read by the whole team.
+/// </remarks>
+public sealed record InvestigationRosterEntry(
+    Guid AttendeeId,
+    Guid AppUserId,
+    string? DisplayName,
+    string? AssignedRole,
+    bool IsLead,
+    Ben.Data.Common.Enums.RsvpStatus Rsvp,
+    bool? DidAttend,
+    DateTime? DateArrived,
+    bool SelfReported);
+
+/// <summary>Schedules an investigation. With no <c>CaseId</c>, a place is required.</summary>
+public sealed record CreateOrgInvestigationRequest(
+    string Title,
+    DateTime ScheduledDateTime,
+    string? Description = null,
+    string? Location = null,
+    DateTime? EndDateTime = null,
+    DateTime? EvidenceDueDate = null,
+    Guid? CaseId = null,
+    Guid? PlaceId = null,
+    NewPlaceRequest? NewPlace = null,
+    Ben.Data.Common.Enums.InvestigationVisibility? Visibility = null);
+
+// ── My contact info request/response records ──────────────────────────────────
+// Mirrors of the WebApi records in MyContactInfoController.cs / PublicEmailValidationController.cs
+// — this library cannot reference the WebApi project, so the shapes are restated here.
+
+public sealed record MyEmailRecord(
+    Guid Id, Guid UserEmailTypeId, string EmailAddress, bool IsPrimary, bool IsPublic,
+    bool IsValidated, DateTime? DateValidated, DateTime? DateValidationSent, int SortOrder);
+
+public sealed record UpsertMyEmailRequest(
+    Guid UserEmailTypeId, string? EmailAddress, bool IsPrimary, bool IsPublic, int SortOrder = 0);
+
+public sealed record SendValidationResponse(string ValidationLink, bool EmailSent);
+
+public sealed record MyPhoneRecord(
+    Guid Id, Guid UserPhoneTypeId, string PhoneNumber, string? PhoneCountry,
+    bool IsPrimary, bool IsCellular, bool IsPublic);
+
+public sealed record UpsertMyPhoneRequest(
+    Guid UserPhoneTypeId, string? PhoneNumber, string? PhoneCountry,
+    bool IsPrimary, bool IsCellular, bool IsPublic);
+
+public sealed record MyAddressRecord(
+    Guid Id, Guid UserAddressTypeId, string StreetAddress1, string? StreetAddress2,
+    string City, string State, string ZipCode, string Country, bool IsPublic, int SortOrder,
+    decimal? Latitude, decimal? Longitude);
+
+public sealed record UpsertMyAddressRequest(
+    Guid UserAddressTypeId, string? StreetAddress1, string? StreetAddress2,
+    string? City, string? State, string? ZipCode, string? Country, bool IsPublic, int SortOrder = 0,
+    decimal? Latitude = null, decimal? Longitude = null);
+
+public sealed record MyLinkRecord(
+    Guid Id, Guid UserLinkTypeId, string LinkUrl, string? DisplayText, bool IsPublic, bool IsVerifiedApproved);
+
+public sealed record UpsertMyLinkRequest(
+    Guid UserLinkTypeId, string? LinkUrl, string? DisplayText, bool IsPublic);
+
+public sealed record EmailValidationInfoRecord(string MaskedEmail, bool IsExpired);
+
+/// <summary>
 /// Request body for creating or fully replacing a lookup-type row
 /// (UserAddressType, OrganizationEmailType, etc.).
 /// The Id field must be set to the existing Id on update, or <see cref="Guid.Empty"/> on create.
@@ -1482,7 +1808,12 @@ public sealed record UpsertInvestigationRequest(
     Ben.Data.Common.Enums.InvestigationStatus Status,
     string? Notes,
     Guid? OrgCalendarEventId,
-    DateTime? EvidenceDueDate = null);
+    DateTime? EvidenceDueDate = null,
+    Guid? PlaceId = null,
+    NewPlaceRequest? NewPlace = null,
+    // Null means "leave the sharing scope alone" — defaulted from the place on create, untouched
+    // on an edit that says nothing about it.
+    Ben.Data.Common.Enums.InvestigationVisibility? Visibility = null);
 
 public sealed record AddInvestigationAttendeeRequest(Guid AppUserId, string? AssignedRole);
 
@@ -1710,9 +2041,11 @@ public sealed record CaseMessageRecord(
 public sealed record MyInvestigationItem(
     Guid                               AttendeeId,
     Guid                               InvestigationId,
-    Guid                               CaseId,
-    string                             CaseReference,
-    string                             CaseTitle,
+    // Null together for a visit with no client case. OrgId is never null — it comes off the
+    // investigation itself, not through the case.
+    Guid?                              CaseId,
+    string?                            CaseReference,
+    string?                            CaseTitle,
     Guid                               OrgId,
     string                             OrgName,
     string                             OrgUrlName,

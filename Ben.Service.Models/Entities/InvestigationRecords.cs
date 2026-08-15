@@ -5,7 +5,25 @@ namespace Ben.Service.Models.Entities;
 public record InvestigationRecord
 {
     public Guid Id { get; init; }
-    public Guid CaseId { get; init; }
+
+    /// <summary>Null for a visit with no client case.</summary>
+    public Guid? CaseId { get; init; }
+
+    /// <summary>The group that ran it. Always set, including when there is no case.</summary>
+    public Guid OrganizationId { get; init; }
+
+    /// <summary>The shared location this visit happened at, once one is known.</summary>
+    public Guid? PlaceId { get; init; }
+
+    public decimal? Latitude { get; init; }
+    public decimal? Longitude { get; init; }
+
+    /// <summary>Why there are no coordinates, or null when there are. See <c>PlaceGeocoder</c>.</summary>
+    public string? GeocodeNote { get; init; }
+
+    /// <summary>How widely the findings may be shared. See <c>InvestigationVisibility</c>.</summary>
+    public InvestigationVisibility Visibility { get; init; } = InvestigationVisibility.GroupOnly;
+
     public Guid? OrgCalendarEventId { get; init; }
     public required string Title { get; init; }
     public string? Description { get; init; }
@@ -28,7 +46,16 @@ public record InvestigationAttendeeRecord
     public Guid InvestigationId { get; init; }
     public Guid AppUserId { get; init; }
     public string? DisplayName { get; init; }
+
+    /// <summary>Free text describing the job on the night. Grants nothing.</summary>
     public string? AssignedRole { get; init; }
+
+    /// <summary>
+    /// Running this particular visit — delegated authority that expires with it, and distinct from
+    /// both <see cref="AssignedRole"/> and standing rank in the group.
+    /// </summary>
+    public bool IsLead { get; init; }
+
     public RsvpStatus Rsvp { get; init; } = RsvpStatus.Invited;
     public bool? DidAttend { get; init; }
     public DateTime DateCreated { get; init; }

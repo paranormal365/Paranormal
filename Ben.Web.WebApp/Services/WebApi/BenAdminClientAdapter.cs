@@ -134,6 +134,65 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public async Task<List<PendingPermissionRequestRecord>> GetPendingPermissionRequestsForMeAsync(CancellationToken token = default)
         => await _api.GetAsync<List<PendingPermissionRequestRecord>>("/api/me/permission-requests/pending", token) ?? [];
 
+    // ── My contact info ────────────────────────────────────────────────────────
+
+    public async Task<List<MyEmailRecord>> GetMyEmailsAsync(CancellationToken token = default)
+        => await _api.GetAsync<List<MyEmailRecord>>("/api/me/emails", token) ?? [];
+
+    public Task<MyEmailRecord?> CreateMyEmailAsync(UpsertMyEmailRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertMyEmailRequest, MyEmailRecord>("/api/me/emails", request, token);
+
+    public Task<MyEmailRecord?> UpdateMyEmailAsync(Guid id, UpsertMyEmailRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertMyEmailRequest, MyEmailRecord>($"/api/me/emails/{id}", request, token);
+
+    public Task<bool> DeleteMyEmailAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/me/emails/{id}", token);
+
+    public Task<SendValidationResponse?> SendMyEmailValidationAsync(Guid id, CancellationToken token = default)
+        => _api.PostAsync<object?, SendValidationResponse>($"/api/me/emails/{id}/send-validation", null, token);
+
+    public async Task<List<MyPhoneRecord>> GetMyPhonesAsync(CancellationToken token = default)
+        => await _api.GetAsync<List<MyPhoneRecord>>("/api/me/phones", token) ?? [];
+
+    public Task<MyPhoneRecord?> CreateMyPhoneAsync(UpsertMyPhoneRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertMyPhoneRequest, MyPhoneRecord>("/api/me/phones", request, token);
+
+    public Task<MyPhoneRecord?> UpdateMyPhoneAsync(Guid id, UpsertMyPhoneRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertMyPhoneRequest, MyPhoneRecord>($"/api/me/phones/{id}", request, token);
+
+    public Task<bool> DeleteMyPhoneAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/me/phones/{id}", token);
+
+    public async Task<List<MyAddressRecord>> GetMyAddressesAsync(CancellationToken token = default)
+        => await _api.GetAsync<List<MyAddressRecord>>("/api/me/addresses", token) ?? [];
+
+    public Task<MyAddressRecord?> CreateMyAddressAsync(UpsertMyAddressRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertMyAddressRequest, MyAddressRecord>("/api/me/addresses", request, token);
+
+    public Task<MyAddressRecord?> UpdateMyAddressAsync(Guid id, UpsertMyAddressRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertMyAddressRequest, MyAddressRecord>($"/api/me/addresses/{id}", request, token);
+
+    public Task<bool> DeleteMyAddressAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/me/addresses/{id}", token);
+
+    public async Task<List<MyLinkRecord>> GetMyLinksAsync(CancellationToken token = default)
+        => await _api.GetAsync<List<MyLinkRecord>>("/api/me/links", token) ?? [];
+
+    public Task<MyLinkRecord?> CreateMyLinkAsync(UpsertMyLinkRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertMyLinkRequest, MyLinkRecord>("/api/me/links", request, token);
+
+    public Task<MyLinkRecord?> UpdateMyLinkAsync(Guid id, UpsertMyLinkRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertMyLinkRequest, MyLinkRecord>($"/api/me/links/{id}", request, token);
+
+    public Task<bool> DeleteMyLinkAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/me/links/{id}", token);
+
+    public Task<EmailValidationInfoRecord?> GetEmailValidationInfoAsync(string token, CancellationToken cancellationToken = default)
+        => _api.GetAnonymousAsync<EmailValidationInfoRecord>($"/api/public/email-validation/{Uri.EscapeDataString(token)}", cancellationToken);
+
+    public Task<bool> ConfirmEmailValidationAsync(string token, CancellationToken cancellationToken = default)
+        => _api.PostAnonymousVoidAsync<object?>($"/api/public/email-validation/{Uri.EscapeDataString(token)}", null, cancellationToken);
+
     public async Task<bool> ReviewPermissionRequestAsync(
         Guid requestId, FilePermissionRequestStatus status, string? reviewNotes, CancellationToken token = default)
         => await _api.PutAsync<ReviewPermissionRequestRequest, UploadFilePermissionRequestResponse>(
@@ -899,6 +958,85 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<OrgMessageRecord?> SendOrgMessageAsync(Guid orgId, SendOrgMessageRequest request, CancellationToken token = default)
         => _api.PostAsync<SendOrgMessageRequest, OrgMessageRecord>($"/api/organizations/{orgId}/messages", request, token);
 
+    // ── Org-wide investigations (Area 9) ──────────────────────────────────────
+
+    public async Task<IReadOnlyList<OrgInvestigationRow>> GetOrgInvestigationsAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrgInvestigationRow>>($"/api/organizations/{orgId}/investigations", token);
+        return result ?? [];
+    }
+
+    public Task<InvestigationRecord?> CreateOrgInvestigationAsync(
+        Guid orgId, CreateOrgInvestigationRequest request, CancellationToken token = default)
+        => _api.PostAsync<CreateOrgInvestigationRequest, InvestigationRecord>(
+            $"/api/organizations/{orgId}/investigations", request, token);
+
+    // ── Places (Area 9) ───────────────────────────────────────────────────────
+
+    public Task<PlaceRecord?> GetPlaceAsync(Guid placeId, CancellationToken token = default)
+        => _api.GetAsync<PlaceRecord>($"/api/places/{placeId}", token);
+
+    public async Task<IReadOnlyList<PlaceInvestigationRow>> GetPlaceInvestigationsAsync(
+        Guid placeId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<PlaceInvestigationRow>>(
+            $"/api/places/{placeId}/investigations", token);
+        return result ?? [];
+    }
+
+    public Task<PlaceSummary?> GetPlaceSummaryAsync(Guid placeId, CancellationToken token = default)
+        => _api.GetAsync<PlaceSummary>($"/api/places/{placeId}/summary", token);
+
+    public async Task<IReadOnlyList<PlaceCandidate>> FindPlaceCandidatesAsync(
+        string? street, string? city, string? state, string? zip, string? name,
+        decimal? latitude, decimal? longitude, CancellationToken token = default)
+    {
+        var query = new List<string>();
+        void Add(string key, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                query.Add($"{key}={Uri.EscapeDataString(value)}");
+        }
+
+        Add("street", street);
+        Add("city", city);
+        Add("state", state);
+        Add("zip", zip);
+        Add("name", name);
+        // Invariant culture on purpose: a decimal formatted under a comma-decimal locale would
+        // arrive as a different number, and this one is compared against a tenth of a mile.
+        Add("latitude", latitude?.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Add("longitude", longitude?.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        var result = await _api.GetAsync<IReadOnlyList<PlaceCandidate>>(
+            $"/api/places/candidates?{string.Join("&", query)}", token);
+        return result ?? [];
+    }
+
+    public Task<PublicPlaceResponse?> GetPublicPlaceAsync(Guid placeId, CancellationToken token = default)
+        => _api.GetAnonymousAsync<PublicPlaceResponse>($"/api/public/places/{placeId}", token);
+
+    public async Task<IReadOnlyList<InvestigationRosterEntry>> GetInvestigationRosterAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<InvestigationRosterEntry>>(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/roster", token);
+        return result ?? [];
+    }
+
+    public Task<InvestigationRosterEntry?> CheckInToInvestigationAsync(
+        Guid orgId, Guid investigationId, DateTime? statedArrivalTime = null, CancellationToken token = default)
+        => _api.PostAsync<object, InvestigationRosterEntry>(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/check-in",
+            new { StatedArrivalTime = statedArrivalTime }, token);
+
+    public Task<InvestigationRosterEntry?> OverrideInvestigationAttendanceAsync(
+        Guid orgId, Guid investigationId, Guid attendeeId, bool? didAttend,
+        DateTime? statedArrivalTime = null, CancellationToken token = default)
+        => _api.PutAsync<object, InvestigationRosterEntry>(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/attendees/{attendeeId}/attendance",
+            new { DidAttend = didAttend, StatedArrivalTime = statedArrivalTime }, token);
+
     // ── Calendar ──────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default)
@@ -1322,6 +1460,12 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public async Task<IReadOnlyList<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default)
     {
         var result = await _api.GetAsync<IReadOnlyList<MyInvestigationItem>>("/api/my-investigations", token);
+        return result ?? [];
+    }
+
+    public async Task<IReadOnlyList<AttendedInvestigationItem>> GetAttendedInvestigationsAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<AttendedInvestigationItem>>("/api/my-investigations/attended", token);
         return result ?? [];
     }
 

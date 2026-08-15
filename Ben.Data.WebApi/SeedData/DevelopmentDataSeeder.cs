@@ -395,7 +395,104 @@ internal static class DevelopmentDataSeeder
             }
         }
 
+        // Both organizations are created above if missing, so this is defensive rather than
+        // expected — but the compiler is right that FirstOrDefaultAsync can return null, and a seed
+        // that throws takes the whole API startup down with it.
+        if (tgh is not null && nps is not null)
+            await SeedSharedPlaceAsync(db, tgh, nps, owner, emma, sarah, now);
+
         Console.WriteLine("[DevDataSeeder] Development seed data applied successfully.");
+    }
+
+    /// <summary>
+    /// One landmark investigated by two different organizations, with each sharing scope in use.
+    /// </summary>
+    /// <remarks>
+    /// <para>Area 9's central claim is that several groups accumulate visits at the same place over
+    /// years and comparing notes is useful. Nothing in the case-derived seed data exercises that —
+    /// every backfilled place belongs to exactly one case of one organization — so the sharing
+    /// rules could only be seen working by hand-building rows.</para>
+    ///
+    /// <para>Deliberately mixed: a group-only visit that must stay hidden from the other group, a
+    /// shared one that must be visible to them, and a public one visible to anybody. If the
+    /// visibility filter regresses, this is the data that shows it on screen rather than only in a
+    /// test.</para>
+    /// </remarks>
+    private static async Task SeedSharedPlaceAsync(
+        BenDataContext db, Organization tgh, Organization nps,
+        AppUser owner, AppUser emma, AppUser sarah, DateTime now)
+    {
+        var placeId = new Guid("40000001-0000-0000-0000-000000000001");
+        if (await db.Places.AnyAsync(p => p.Id == placeId)) return;
+
+        db.Places.Add(new Place
+        {
+            Id = placeId,
+            Name = "Bell Witch Cave",
+            City = "Adams",
+            State = "TN",
+            ZipCode = "37010",
+            Country = "US",
+            Latitude = 36.5893000000m,
+            Longitude = -87.0625000000m,
+            DateGeocoded = now,
+            // A landmark, so investigations here default to sharing with fellow investigators.
+            Kind = PlaceKind.PublicLocation,
+            DateCreated = now, CreatedByAppUserId = owner.Id,
+        });
+
+        // Tennessee Ghost Hunters: one shared, one kept back. The pair is the point — a group can
+        // share some of its work at a place without sharing all of it.
+        var tghShared = NewVisit(placeId, tgh.Id, owner.Id, now.AddDays(-120),
+            "Bell Witch Cave — winter survey", InvestigationVisibility.PlaceInvestigators);
+        var tghPrivate = NewVisit(placeId, tgh.Id, owner.Id, now.AddDays(-60),
+            "Bell Witch Cave — follow-up (internal)", InvestigationVisibility.GroupOnly);
+
+        // Nashville Paranormal Society: public, so even a signed-in stranger sees it.
+        var npsPublic = NewVisit(placeId, nps.Id, emma.Id, now.AddDays(-30),
+            "Bell Witch Cave — published walkthrough", InvestigationVisibility.Public);
+
+        db.Investigations.AddRange(tghShared, tghPrivate, npsPublic);
+
+        // Attendance, so the personal map has something on it. Self-reported: RecordedBy stays null.
+        db.InvestigationAttendees.AddRange(
+            Attended(tghShared.Id, owner.Id, isLead: true, now.AddDays(-120)),
+            Attended(tghShared.Id, sarah.Id, isLead: false, now.AddDays(-120)),
+            Attended(tghPrivate.Id, owner.Id, isLead: true, now.AddDays(-60)),
+            Attended(npsPublic.Id, emma.Id, isLead: true, now.AddDays(-30)));
+
+        await db.SaveChangesAsync();
+        Console.WriteLine("[DevDataSeeder] Created Bell Witch Cave with visits from two organizations.");
+
+        static Investigation NewVisit(
+            Guid placeId, Guid orgId, Guid createdBy, DateTime when,
+            string title, InvestigationVisibility visibility) => new()
+            {
+                Id = Guid.NewGuid(),
+                OrganizationId = orgId,
+                CaseId = null,
+                PlaceId = placeId,
+                Title = title,
+                Visibility = visibility,
+                ScheduledDateTime = when,
+                EndDateTime = when.AddHours(5),
+                Status = InvestigationStatus.Completed,
+                Latitude = 36.5893000000m,
+                Longitude = -87.0625000000m,
+                DateGeocoded = when,
+                DateCreated = when, CreatedByAppUserId = createdBy,
+            };
+
+        static InvestigationAttendee Attended(Guid invId, Guid userId, bool isLead, DateTime when) => new()
+        {
+            Id = Guid.NewGuid(), InvestigationId = invId, AppUserId = userId,
+            Rsvp = RsvpStatus.Accepted, DidAttend = true, DateArrived = when,
+            IsLead = isLead,
+            // Null: they checked themselves in. Keeps the seed consistent with what the check-in
+            // endpoint would have written.
+            AttendanceRecordedByAppUserId = null,
+            DateCreated = when, CreatedByAppUserId = userId,
+        };
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

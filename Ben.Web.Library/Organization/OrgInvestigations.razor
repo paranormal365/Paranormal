@@ -1,0 +1,253 @@
+@namespace Ben.Web.Library.Organization
+@using Ben.Web.Library.Shared
+
+@inject IBenAdminClient AdminClient
+@inject NavigationManager NavManager
+
+@*
+   Every investigation the group has run, mapped and listed. The point of the screen is the two
+   things a case-by-case view cannot show: where the work has actually happened, and the visits
+   that belong to no client case at all.
+*@
+
+<div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+        <h6 class="mb-1 fw-semibold">Investigations<HelpLink Slug="working-a-case" Anchor="the-investigations-map" /></h6>
+        <p class="text-secondary small mb-0">
+            Everywhere this group has worked, including visits with no client case.
+        </p>
+    </div>
+    <div class="d-flex align-items-center gap-1">
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Icon="@SvgIcon.Plus"
+                       OnClick="@(() => _creating = true)">Schedule an investigation</TelerikButton>
+        <HelpLink Slug="working-a-case" Anchor="scheduling-a-visit-with-no-case" />
+    </div>
+</div>
+
+@if (_creating)
+{
+    <NewInvestigationWindow OrgId="@OrgId"
+                            OnCreated="@LoadAsync"
+                            OnClosed="@(() => _creating = false)" />
+}
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger py-2 small">@_error</div>
+}
+
+@if (_loading)
+{
+    <TelerikLoaderContainer Visible="true" Text="Loading investigations…" />
+}
+else if (_rows.Count == 0)
+{
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <p class="text-secondary mb-0">
+                No investigations yet. Schedule one above, or start it from a case.
+            </p>
+        </div>
+    </div>
+}
+else
+{
+    @* ── Map ──────────────────────────────────────────────────────────────── *@
+    @if (_pins.Any(p => p.Latitude.HasValue))
+    {
+        <InvestigationsMap Pins="@_pins" Height="380px" OnPinClicked="@GoToInvestigation" />
+    }
+
+    @* An investigation the map could not place is easy to lose: the pin simply is not drawn, and
+       nothing about the picture says one is missing. Listing them under the map is the whole
+       reason GeocodeNote travels on the row. *@
+    @if (_unplaceable.Count > 0)
+    {
+        <div class="alert alert-warning py-2 small mt-3 mb-0">
+            <strong>@_unplaceable.Count not shown on the map.</strong>
+            <ul class="mb-0 mt-1">
+                @foreach (var row in _unplaceable)
+                {
+                    <li>
+                        <a href="#" @onclick:preventDefault @onclick="@(() => GoToInvestigation(row.Id))">@row.Title</a>
+                        — @(row.GeocodeNote ?? "No location recorded.")
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+
+    @* ── Grids ────────────────────────────────────────────────────────────── *@
+    <div class="mt-4">
+        <h6 class="fw-semibold">Upcoming</h6>
+        @if (_upcoming.Count == 0)
+        {
+            <p class="text-secondary small fst-italic">Nothing scheduled.</p>
+        }
+        else
+        {
+            @Grid(_upcoming)
+        }
+    </div>
+
+    <div class="mt-4">
+        <h6 class="fw-semibold">Past</h6>
+        @if (_past.Count == 0)
+        {
+            <p class="text-secondary small fst-italic">Nothing yet.</p>
+        }
+        else
+        {
+            @Grid(_past)
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private List<OrgInvestigationRow> _rows = [];
+    private List<InvestigationMapPin> _pins = [];
+    private List<OrgInvestigationRow> _upcoming = [];
+    private List<OrgInvestigationRow> _past = [];
+    private List<OrgInvestigationRow> _unplaceable = [];
+
+    private bool _loading = true;
+    private bool _creating;
+    private string? _error;
+    private Guid _loadedForOrg;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (OrgId == Guid.Empty || OrgId == _loadedForOrg) return;
+        _loadedForOrg = OrgId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _rows = (await AdminClient.GetOrgInvestigationsAsync(OrgId)).ToList();
+        }
+        catch
+        {
+            _error = "Those could not be loaded just now.";
+            _rows = [];
+        }
+
+        var now = DateTime.UtcNow;
+        _upcoming = _rows.Where(r => r.ScheduledDateTime >= now)
+                         .OrderBy(r => r.ScheduledDateTime).ToList();
+        _past = _rows.Where(r => r.ScheduledDateTime < now)
+                     .OrderByDescending(r => r.ScheduledDateTime).ToList();
+
+        _unplaceable = _rows.Where(r => r.Latitude is null || r.Longitude is null).ToList();
+
+        _pins = _rows.Select(r => new InvestigationMapPin(
+            r.Id, r.Title, r.Latitude, r.Longitude, IsPast: r.ScheduledDateTime < now)).ToList();
+
+        _loading = false;
+    }
+
+    private void GoToInvestigation(Guid id)
+    {
+        var row = _rows.FirstOrDefault(r => r.Id == id);
+        if (row is null) return;
+
+        // A case-bound visit belongs on its case's Investigations tab, which is where the binder,
+        // attendees and findings already live. A case-less one has nowhere else to go yet — P7's
+        // place pages are its eventual home — so it stays here rather than linking into a page
+        // that would 404.
+        if (row.CaseId is { } caseId)
+            NavManager.NavigateTo($"/organizations/{OrgId}/cases/{caseId}?tab=investigations");
+    }
+
+    private static string WhereText(OrgInvestigationRow row)
+    {
+        if (!string.IsNullOrWhiteSpace(row.PlaceName)) return row.PlaceName!;
+
+        var cityState = string.Join(", ",
+            new[] { row.PlaceCity, row.PlaceState }.Where(v => !string.IsNullOrWhiteSpace(v)));
+        if (!string.IsNullOrWhiteSpace(cityState)) return cityState;
+
+        return string.IsNullOrWhiteSpace(row.Location) ? "—" : row.Location!;
+    }
+
+    private static string StatusBadge(Ben.Data.Common.Enums.InvestigationStatus status) => status switch
+    {
+        Ben.Data.Common.Enums.InvestigationStatus.Completed => "bg-success",
+        Ben.Data.Common.Enums.InvestigationStatus.Cancelled => "bg-secondary",
+        Ben.Data.Common.Enums.InvestigationStatus.InProgress => "bg-primary",
+        _ => "bg-info text-dark",
+    };
+
+    private RenderFragment Grid(List<OrgInvestigationRow> rows) =>@<div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Investigation</th>
+                    <th>Where</th>
+                    <th>Case</th>
+                    <th class="text-center">Team</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in rows)
+                {
+                    <tr>
+                        <td class="text-nowrap">
+                            @row.ScheduledDateTime.ToLocalTime().ToString("d MMM yyyy, HH:mm")
+                        </td>
+                        <td>
+                            @row.Title
+                            <span class="badge @StatusBadge(row.Status) ms-1">@row.Status</span>
+                        </td>
+                        <td>
+                            @if (row.PlaceId is { } placeId)
+                            {
+                                @* The place page is where this visit sits alongside everyone
+                                   else's at the same location — the whole point of Place. *@
+                                <a href="/places/@placeId">@WhereText(row)</a>
+                            }
+                            else
+                            {
+                                @WhereText(row)
+                            }
+                        </td>
+                        <td>
+                            @if (row.CaseReference is not null)
+                            {
+                                <a href="/organizations/@OrgId/cases/@row.CaseId">@row.CaseReference</a>
+                            }
+                            else
+                            {
+                                @* No case is a fact about the visit, not a gap in the data. *@
+                                <span class="text-secondary small fst-italic">No case</span>
+                            }
+                        </td>
+                        <td class="text-center">@row.AttendeeCount</td>
+                        <td class="text-end">
+                            @* Shown on the server's verdict alone. Working it out here would mean
+                               two answers to one question, and the button would eventually offer
+                               something the endpoint then refuses. *@
+                            @if (row.CanEditRecord && row.CaseId is not null)
+                            {
+                                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                               FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                               Icon="@SvgIcon.Pencil"
+                                               OnClick="@(() => GoToInvestigation(row.Id))">Edit</TelerikButton>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>;
+}

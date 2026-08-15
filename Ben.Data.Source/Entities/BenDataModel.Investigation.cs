@@ -10,7 +10,31 @@ namespace Ben.Data.Source.Entities
     public partial class Investigation : IAuditableEntity
     {
         public Guid Id { get; set; }
-        public Guid CaseId { get; set; }
+
+        /// <summary>
+        /// The organization that ran this investigation.
+        /// </summary>
+        /// <remarks>
+        /// Required, and held directly rather than reached through the case. Once
+        /// <see cref="CaseId"/> became optional there was nothing else tying a visit to an
+        /// organization at all, and every org-scoped query that joined through the case would
+        /// quietly stop returning case-less ones — a filter that silently drops rows is worse than
+        /// one that fails.
+        /// </remarks>
+        public Guid OrganizationId { get; set; }
+
+        /// <summary>
+        /// The case this investigation belongs to, or null for a visit that has no client case —
+        /// a group going to a landmark on its own account.
+        /// </summary>
+        /// <remarks>
+        /// A case-less investigation must still say where it happened, so the invariant is
+        /// <c>CaseId is not null || PlaceId is not null</c>. It is enforced in the controller
+        /// rather than as a check constraint, because the InMemory provider used by the tests
+        /// ignores check constraints entirely and a rule only the database knows is a rule the
+        /// tests cannot see.
+        /// </remarks>
+        public Guid? CaseId { get; set; }
 
         /// <summary>Optional link to the org calendar event for this investigation.</summary>
         public Guid? OrgCalendarEventId { get; set; }
@@ -59,7 +83,28 @@ namespace Ben.Data.Source.Entities
         public Guid CreatedByAppUserId { get; set; }
         public Guid? UpdatedByAppUserId { get; set; }
 
-        public virtual Case Case { get; set; } = null!;
+        /// <summary>
+        /// Where this investigation happened, as a shared location rather than free text.
+        /// </summary>
+        /// <remarks>
+        /// Nullable for now: today every investigation reaches a location through its case, and
+        /// P2 is what makes a case-less investigation possible. Until then this is the map's
+        /// identity for the visit, and it does not replace <see cref="Location"/> — a team often
+        /// works somewhere other than the address on file, and that free text is still how they
+        /// say so.
+        /// </remarks>
+        public Guid? PlaceId { get; set; }
+
+        /// <summary>
+        /// How widely this investigation's findings may be shared. See
+        /// <see cref="InvestigationVisibility"/>; the default follows the place's kind.
+        /// </summary>
+        public InvestigationVisibility Visibility { get; set; } = InvestigationVisibility.GroupOnly;
+
+        public virtual Place? Place { get; set; }
+
+        public virtual Case? Case { get; set; }
+        public virtual Organization Organization { get; set; } = null!;
         public virtual OrgCalendarEvent? OrgCalendarEvent { get; set; }
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
