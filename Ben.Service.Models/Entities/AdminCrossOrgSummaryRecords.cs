@@ -25,8 +25,14 @@ public record AdminCaseSummaryRecord
 public record AdminInvestigationSummaryRecord
 {
     public Guid Id { get; init; }
-    public Guid CaseId { get; init; }
-    public required string CaseReference { get; init; }
+
+    /// <summary>Null for a visit with no client case, along with <see cref="CaseReference"/>.</summary>
+    public Guid? CaseId { get; init; }
+
+    /// <summary>Null when there is no case. Not "—" or "(none)": rendering is the UI's business.</summary>
+    public string? CaseReference { get; init; }
+
+    /// <summary>Always set — read from the investigation, not through the case.</summary>
     public Guid OrganizationId { get; init; }
     public required string OrganizationName { get; init; }
     public required string Title { get; init; }

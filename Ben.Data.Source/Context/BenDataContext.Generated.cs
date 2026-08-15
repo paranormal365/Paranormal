@@ -1444,7 +1444,14 @@ namespace Ben.Data.Source.Context
             // ── Investigation ─────────────────────────────────────────────────
             modelBuilder.Entity<Investigation>()
                 .HasOne(e => e.Case).WithMany()
-                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.Cascade);
+                .HasForeignKey(e => e.CaseId).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<Investigation>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            // Every org-scoped list of investigations filters on this now, so it is worth an index
+            // of its own rather than relying on the case's.
+            modelBuilder.Entity<Investigation>()
+                .HasIndex(e => e.OrganizationId);
             modelBuilder.Entity<Investigation>()
                 .HasOne(e => e.OrgCalendarEvent).WithMany()
                 .HasForeignKey(e => e.OrgCalendarEventId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);

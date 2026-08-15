@@ -27,7 +27,9 @@ public sealed class AdminInvestigationController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         var investigations = await db.Investigations.AsNoTracking()
             .Include(i => i.Case)
-            .ThenInclude(c => c.Organization)
+            // The organization is on the investigation now. Reaching it through the case would
+            // hide every case-less visit from the one screen whose whole job is seeing everything.
+            .Include(i => i.Organization)
             .OrderByDescending(i => i.ScheduledDateTime)
             .ToListAsync(ct);
 
@@ -35,9 +37,9 @@ public sealed class AdminInvestigationController : BenControllerBase
         {
             Id                = i.Id,
             CaseId            = i.CaseId,
-            CaseReference     = $"#{i.Case.CaseYear}-{i.Case.OrgCaseNumber:D3}",
-            OrganizationId    = i.Case.OrganizationId,
-            OrganizationName  = i.Case.Organization.Name,
+            CaseReference     = i.Case is null ? null : $"#{i.Case.CaseYear}-{i.Case.OrgCaseNumber:D3}",
+            OrganizationId    = i.OrganizationId,
+            OrganizationName  = i.Organization.Name,
             Title             = i.Title,
             ScheduledDateTime = i.ScheduledDateTime,
             EndDateTime       = i.EndDateTime,

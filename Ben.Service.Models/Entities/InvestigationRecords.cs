@@ -5,7 +5,22 @@ namespace Ben.Service.Models.Entities;
 public record InvestigationRecord
 {
     public Guid Id { get; init; }
-    public Guid CaseId { get; init; }
+
+    /// <summary>Null for a visit with no client case.</summary>
+    public Guid? CaseId { get; init; }
+
+    /// <summary>The group that ran it. Always set, including when there is no case.</summary>
+    public Guid OrganizationId { get; init; }
+
+    /// <summary>The shared location this visit happened at, once one is known.</summary>
+    public Guid? PlaceId { get; init; }
+
+    public decimal? Latitude { get; init; }
+    public decimal? Longitude { get; init; }
+
+    /// <summary>Why there are no coordinates, or null when there are. See <c>PlaceGeocoder</c>.</summary>
+    public string? GeocodeNote { get; init; }
+
     public Guid? OrgCalendarEventId { get; init; }
     public required string Title { get; init; }
     public string? Description { get; init; }

@@ -75,11 +75,14 @@ public sealed class MyCaseController : BenControllerBase
         // Fetch next upcoming investigation per case in a single query
         var caseIds    = cases.Select(c => c.Id).ToList();
         var now        = DateTime.UtcNow;
+        // This is a client's list of their own cases, so a case-less investigation has no place in
+        // it by definition — the null check narrows the type and states that intent at once.
         var nextInvMap = await db.Investigations.AsNoTracking()
-            .Where(i => caseIds.Contains(i.CaseId)
+            .Where(i => i.CaseId != null
+                     && caseIds.Contains(i.CaseId.Value)
                      && i.ScheduledDateTime >= now
                      && i.Status == InvestigationStatus.Scheduled)
-            .GroupBy(i => i.CaseId)
+            .GroupBy(i => i.CaseId!.Value)
             .Select(g => new { CaseId = g.Key, Next = g.Min(i => i.ScheduledDateTime) })
             .ToDictionaryAsync(x => x.CaseId, x => (DateTime?)x.Next, ct);
 

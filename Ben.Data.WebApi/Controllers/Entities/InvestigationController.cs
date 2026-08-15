@@ -63,6 +63,9 @@ public sealed class InvestigationController : BenControllerBase
         var entity = new Investigation
         {
             Id = Guid.NewGuid(), CaseId = caseId,
+            // Required now that an investigation can outlive its case link. The case has already
+            // been proved to belong to this org by the check above, so the route id is safe here.
+            OrganizationId      = orgId,
             OrgCalendarEventId  = request.OrgCalendarEventId,
             Title               = request.Title.Trim(),
             Description         = request.Description?.Trim(),
@@ -75,6 +78,12 @@ public sealed class InvestigationController : BenControllerBase
             CreatedByAppUserId  = userId,
         };
         db.Investigations.Add(entity);
+
+        // Inherits the case's place unless the caller named another. This is what finally writes
+        // the coordinate columns added by AddInvestigationCoordinates, which nothing had ever set.
+        var placementError = await InvestigationPlacement.ApplyAsync(
+            db, entity, request.PlaceId, request.NewPlace, userId, ct);
+        if (placementError is not null) return BadRequest(placementError);
 
         // Auto-create an org calendar event if none was supplied
         if (entity.OrgCalendarEventId is null)
@@ -123,6 +132,13 @@ public sealed class InvestigationController : BenControllerBase
         entity.EvidenceDueDate     = request.EvidenceDueDate;
         entity.DateUpdated         = DateTime.UtcNow;
         entity.UpdatedByAppUserId  = userId == Guid.Empty ? null : userId;
+
+        // Re-placed on update too — editing the location and watching the map not move is exactly
+        // the sort of silent staleness the GeocodeNote convention exists to prevent.
+        var placementError = await InvestigationPlacement.ApplyAsync(
+            db, entity, request.PlaceId, request.NewPlace, userId, ct);
+        if (placementError is not null) return BadRequest(placementError);
+
         await db.SaveChangesAsync(ct);
         var loaded = await db.Investigations.AsNoTracking()
             .Include(i => i.Attendees)
@@ -446,7 +462,11 @@ public sealed record UpsertInvestigationRequest(
     Ben.Data.Common.Enums.InvestigationStatus Status,
     string? Notes,
     Guid? OrgCalendarEventId,
-    DateTime? EvidenceDueDate = null);
+    DateTime? EvidenceDueDate = null,
+    // Both optional and mutually exclusive in practice: name an existing place, or describe a new
+    // one. Neither given, a case-bound visit falls back to the case's own place.
+    Guid? PlaceId = null,
+    NewPlaceRequest? NewPlace = null);
 
 public sealed record AddInvestigationAttendeeRequest(Guid AppUserId, string? AssignedRole);
 public sealed record UpdateAttendanceRequest(bool? DidAttend, string? AssignedRole, Ben.Data.Common.Enums.RsvpStatus? Rsvp = null);

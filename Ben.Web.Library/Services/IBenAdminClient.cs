@@ -1787,9 +1787,11 @@ public sealed record CaseMessageRecord(
 public sealed record MyInvestigationItem(
     Guid                               AttendeeId,
     Guid                               InvestigationId,
-    Guid                               CaseId,
-    string                             CaseReference,
-    string                             CaseTitle,
+    // Null together for a visit with no client case. OrgId is never null — it comes off the
+    // investigation itself, not through the case.
+    Guid?                              CaseId,
+    string?                            CaseReference,
+    string?                            CaseTitle,
     Guid                               OrgId,
     string                             OrgName,
     string                             OrgUrlName,

@@ -26,7 +26,10 @@ public sealed class MyInvestigationsController : BenControllerBase
             .Where(a => a.AppUserId == userId)
             .Include(a => a.Investigation)
                 .ThenInclude(i => i.Case)
-                    .ThenInclude(c => c.Organization)
+            // The organization comes off the investigation directly now. Reaching it through the
+            // case would drop every case-less visit from this list without saying so.
+            .Include(a => a.Investigation)
+                .ThenInclude(i => i.Organization)
             .OrderByDescending(a => a.Investigation.ScheduledDateTime)
             .ToListAsync(ct);
 
@@ -34,11 +37,13 @@ public sealed class MyInvestigationsController : BenControllerBase
             AttendeeId:        a.Id,
             InvestigationId:   a.InvestigationId,
             CaseId:            a.Investigation.CaseId,
-            CaseReference:     $"#{a.Investigation.Case.CaseYear}-{a.Investigation.Case.OrgCaseNumber:D3}",
-            CaseTitle:         a.Investigation.Case.Title,
-            OrgId:             a.Investigation.Case.OrganizationId,
-            OrgName:           a.Investigation.Case.Organization.Name,
-            OrgUrlName:        a.Investigation.Case.Organization.UrlName,
+            CaseReference:     a.Investigation.Case is null
+                                   ? null
+                                   : $"#{a.Investigation.Case.CaseYear}-{a.Investigation.Case.OrgCaseNumber:D3}",
+            CaseTitle:         a.Investigation.Case?.Title,
+            OrgId:             a.Investigation.OrganizationId,
+            OrgName:           a.Investigation.Organization.Name,
+            OrgUrlName:        a.Investigation.Organization.UrlName,
             Title:             a.Investigation.Title,
             ScheduledDateTime: a.Investigation.ScheduledDateTime,
             EndDateTime:       a.Investigation.EndDateTime,
@@ -76,9 +81,13 @@ public sealed class MyInvestigationsController : BenControllerBase
 public sealed record MyInvestigationItem(
     Guid                AttendeeId,
     Guid                InvestigationId,
-    Guid                CaseId,
-    string              CaseReference,
-    string              CaseTitle,
+    // Null for a visit with no client case — a group going to a landmark on its own account. The
+    // three case fields travel together: all three are set, or all three are null.
+    Guid?               CaseId,
+    string?             CaseReference,
+    string?             CaseTitle,
+    // Read from the investigation itself rather than through the case, so a case-less visit still
+    // says which group ran it.
     Guid                OrgId,
     string              OrgName,
     string              OrgUrlName,
