@@ -114,19 +114,22 @@
                        OnSaved="@OnAreaSaved" />
 
 @* ── Delete confirm ───────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showDeleteConfirm" Title="Remove Operating Area" Width="400px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showDeleteConfirm" Width="400px" Modal="true">
+    <WindowTitle>Remove Operating Area</WindowTitle>
+    <WindowContent>
         <p>Remove the operating area configuration? Your organization will no longer appear in client proximity searches.</p>
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="@(() => _showDeleteConfirm = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                       OnClick="DeleteArea"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Removing…" : "Remove")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="@(() => _showDeleteConfirm = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           OnClick="DeleteArea"
+                           Enabled="@(!_isBusy)">
+                @(_isBusy ? "Removing…" : "Remove")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @code {
     [Parameter] public Guid OrgId { get; set; }

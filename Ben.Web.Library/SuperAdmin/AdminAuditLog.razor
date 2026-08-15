@@ -191,11 +191,10 @@
 </div>
 
 @* ── Mail Dialog ─────────────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_mailDialogVisible"
-               Title="Send Audit Log Record"
-               Width="640px"
-               CloseOnOverlayClick="false">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_mailDialogVisible" Width="640px"
+               CloseOnOverlayClick="false" Modal="true">
+    <WindowTitle>Send Audit Log Record</WindowTitle>
+    <WindowContent>
         @if (_mailTarget is not null)
         {
             <div class="mb-3 p-2 bg-light rounded small">
@@ -260,20 +259,22 @@
                 <div class="alert alert-success py-2 small">Message sent successfully.</div>
             }
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Icon="@SvgIcon.Envelope"
-                       OnClick="SendMessageAsync"
-                       Enabled="@(!_mailSending && _selectedRecipients.Any())">
-            @(_mailSending ? "Sending…" : "Send")
-        </TelerikButton>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="CloseMailDialog">
-            Close
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Icon="@SvgIcon.Envelope"
+                           OnClick="SendMessageAsync"
+                           Enabled="@(!_mailSending && _selectedRecipients.Any())">
+                @(_mailSending ? "Sending…" : "Send")
+            </TelerikButton>
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           OnClick="CloseMailDialog">
+                Close
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @code {
     // ── Grid state ─────────────────────────────────────────────────────────────

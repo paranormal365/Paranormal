@@ -138,10 +138,9 @@
 </div>
 
 @* ── Message dialog ───────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showMessage"
-               Title="@(_openMessage?.Subject ?? "Message")"
-               Width="680px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showMessage" Width="680px" Modal="true">
+    <WindowTitle>@(_openMessage?.Subject ?? "Message")</WindowTitle>
+    <WindowContent>
         @if (_openMessage is not null)
         {
             <div class="mb-2 text-secondary small">
@@ -151,11 +150,13 @@
             </div>
             <div class="border-top pt-3">@((MarkupString)_openMessage.Body)</div>
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="@(() => _showMessage = false)">Close</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="@(() => _showMessage = false)">Close</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @code {
     private NotificationSummaryResponse _summary = NotificationSummaryResponse.Empty;

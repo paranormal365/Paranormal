@@ -270,8 +270,9 @@
 }
 
 @* ── Edit dialog ──────────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showEdit" Title="Edit Case" Width="560px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showEdit" Width="560px" Modal="true">
+    <WindowTitle>Edit Case</WindowTitle>
+    <WindowContent>
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Case Label <span class="text-secondary fw-normal small">(surname, city state)</span></label>
@@ -313,17 +314,19 @@
         {
             <div class="alert alert-danger mt-3 mb-0">@_editError</div>
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="@(() => _showEdit = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Icon="@SvgIcon.Save"
-                       OnClick="SaveEdit"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Saving…" : "Save")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="@(() => _showEdit = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Icon="@SvgIcon.Save"
+                           OnClick="SaveEdit"
+                           Enabled="@(!_isBusy)">
+                @(_isBusy ? "Saving…" : "Save")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @code {
     [Parameter] public Guid OrgId { get; set; }

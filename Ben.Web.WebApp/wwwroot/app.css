@@ -363,3 +363,16 @@ body[data-bs-theme="dark"] .k-drawer {
     height: 1px;
     overflow: hidden;
 }
+
+/* Action row for modals whose buttons live in the content rather than in Telerik's own actions
+   slot — see the comment at each call site for why. */
+.dialog-footer-actions {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-top: 1.25rem;
+    padding-top: .75rem;
+    border-top: 1px solid var(--kendo-color-border, #e0e0e0);
+}
+
+.dialog-footer-spacer { flex: 1 1 auto; }

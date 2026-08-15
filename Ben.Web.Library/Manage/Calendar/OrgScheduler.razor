@@ -44,10 +44,9 @@
 </div>
 
 @* ── Custom event edit dialog (intercepts OnEdit) ─────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showEventDialog"
-               Title="@(_isNewEvent ? "New Event" : "Edit Event")"
-               Width="580px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showEventDialog" Width="580px" Modal="true">
+    <WindowTitle>@(_isNewEvent ? "New Event" : "Edit Event")</WindowTitle>
+    <WindowContent>
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
@@ -78,10 +77,27 @@
                 <TelerikTextArea @bind-Value="@_form.Description" Rows="3" Width="100%" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Recurrence Rule (RRULE, optional)</label>
-                <TelerikTextBox @bind-Value="@_form.RecurrenceRule" Width="100%"
-                                Placeholder="e.g. FREQ=WEEKLY;BYDAY=TU" />
-                <div class="form-text">Leave blank for a one-time event. Uses iCal RFC5545 format.</div>
+                <label class="form-label fw-semibold">Repeats</label>
+                @* Plain select: the Telerik dropdown has repeatedly failed to push its selection
+                   in this codebase, and a repeat rule that silently keeps its default would
+                   create the wrong series without telling anybody. *@
+                <select class="form-select" @onchange="OnRecurrenceChoiceChanged">
+                    @foreach (var option in RecurrenceOptions())
+                    {
+                        <option value="@option.Key" selected="@(option.Key == _recurrenceChoice)">@option.Label</option>
+                    }
+                </select>
+
+                @if (_recurrenceChoice == RecurrenceCustom)
+                {
+                    <TelerikTextBox @bind-Value="@_form.RecurrenceRule" Width="100%"
+                                    Placeholder="e.g. FREQ=WEEKLY;BYDAY=TU" Class="mt-2" />
+                    <div class="form-text">iCal RFC5545 format, for a pattern the list doesn't cover.</div>
+                }
+                else if (!string.IsNullOrWhiteSpace(_form.RecurrenceRule))
+                {
+                    <div class="form-text font-monospace">@_form.RecurrenceRule</div>
+                }
             </div>
             <div class="col-12 d-flex gap-4">
                 <div class="d-flex align-items-center gap-2">
@@ -98,24 +114,26 @@
         {
             <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
         }
-    </DialogContent>
-    <DialogButtons>
-        @if (!_isNewEvent)
-        {
-            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                           Icon="@SvgIcon.Trash"
-                           OnClick="DeleteFromDialog"
-                           Enabled="@(!_isBusy)">Delete</TelerikButton>
-        }
-        <TelerikButton OnClick="@(() => _showEventDialog = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Icon="@SvgIcon.Save"
-                       OnClick="SaveEvent"
-                       Enabled="@(!_isBusy && !string.IsNullOrWhiteSpace(_form.Title))">
-            @(_isBusy ? "Saving…" : "Save")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            @if (!_isNewEvent)
+            {
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                               Icon="@SvgIcon.Trash"
+                               OnClick="DeleteFromDialog"
+                               Enabled="@(!_isBusy)">Delete</TelerikButton>
+            }
+            <TelerikButton OnClick="@(() => _showEventDialog = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Icon="@SvgIcon.Save"
+                           OnClick="SaveEvent"
+                           Enabled="@(!_isBusy && !string.IsNullOrWhiteSpace(_form.Title))">
+                @(_isBusy ? "Saving…" : "Save")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @code {
     [Parameter] public Guid OrgId        { get; set; }
@@ -137,6 +155,89 @@
     private OrgCalendarEventRecord? _editingEvent;
     private string? _dialogError;
     private EventFormModel _form = new();
+
+    // ── Recurrence presets ────────────────────────────────────────────────────
+    // Nobody knows RFC5545 by heart, so the field offers the handful of patterns people actually
+    // want and keeps the raw box for anything else. The rules are built from the event's own start
+    // date, so "every week" means the day the event actually starts.
+
+    private const string RecurrenceNone   = "none";
+    private const string RecurrenceCustom = "custom";
+
+    private string _recurrenceChoice = RecurrenceNone;
+
+    private record RecurrenceOption(string Key, string Label);
+
+    private IReadOnlyList<RecurrenceOption> RecurrenceOptions()
+    {
+        var start = _form.Start;
+        var dayName = start.DayOfWeek.ToString();
+
+        return
+        [
+            new(RecurrenceNone,  "Does not repeat"),
+            new("daily",         "Every day"),
+            new("weekdays",      "Every weekday (Mon\u2013Fri)"),
+            new("weekly",        $"Every week on {dayName}"),
+            new("biweekly",      $"Every 2 weeks on {dayName}"),
+            new("monthly",       $"Every month on day {start.Day}"),
+            new("yearly",        $"Every year on {start:d MMMM}"),
+            new(RecurrenceCustom, "Custom\u2026"),
+        ];
+    }
+
+    /// <summary>The RRULE a preset means for a given start date, or null for "does not repeat".</summary>
+    private static string? RecurrenceRuleFor(string choice, DateTime start) => choice switch
+    {
+        "daily"     => "FREQ=DAILY",
+        "weekdays"  => "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+        "weekly"    => $"FREQ=WEEKLY;BYDAY={IcalDay(start.DayOfWeek)}",
+        "biweekly"  => $"FREQ=WEEKLY;INTERVAL=2;BYDAY={IcalDay(start.DayOfWeek)}",
+        "monthly"   => $"FREQ=MONTHLY;BYMONTHDAY={start.Day}",
+        "yearly"    => $"FREQ=YEARLY;BYMONTH={start.Month};BYMONTHDAY={start.Day}",
+        _           => null,
+    };
+
+    private static string IcalDay(DayOfWeek day) => day switch
+    {
+        DayOfWeek.Monday    => "MO",
+        DayOfWeek.Tuesday   => "TU",
+        DayOfWeek.Wednesday => "WE",
+        DayOfWeek.Thursday  => "TH",
+        DayOfWeek.Friday    => "FR",
+        DayOfWeek.Saturday  => "SA",
+        _                   => "SU",
+    };
+
+    /// <summary>
+    /// Works out which preset an existing rule corresponds to, so reopening an event shows what it
+    /// actually does rather than dropping back to "Does not repeat".
+    /// </summary>
+    /// <remarks>
+    /// A rule that matches no preset resolves to Custom, which keeps the raw text visible and
+    /// editable — never silently rewritten to something simpler.
+    /// </remarks>
+    private static string RecurrenceChoiceFor(string? rule, DateTime start)
+    {
+        if (string.IsNullOrWhiteSpace(rule)) return RecurrenceNone;
+
+        foreach (var key in new[] { "daily", "weekdays", "weekly", "biweekly", "monthly", "yearly" })
+        {
+            if (string.Equals(RecurrenceRuleFor(key, start), rule.Trim(), StringComparison.OrdinalIgnoreCase))
+                return key;
+        }
+
+        return RecurrenceCustom;
+    }
+
+    private void OnRecurrenceChoiceChanged(ChangeEventArgs e)
+    {
+        _recurrenceChoice = e.Value?.ToString() ?? RecurrenceNone;
+
+        // Custom keeps whatever is already typed; every other choice owns the rule outright.
+        if (_recurrenceChoice != RecurrenceCustom)
+            _form.RecurrenceRule = RecurrenceRuleFor(_recurrenceChoice, _form.Start);
+    }
     private List<EventTypeOption> _eventTypeOptions = [new(null, "(No type)")];
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -215,6 +316,10 @@
         {
             _form = new EventFormModel { Start = UserState.NowInViewerTimeZone(), End = UserState.NowInViewerTimeZone().AddHours(1) };
         }
+
+        // Derived after _form is built, so an existing event reopens showing the pattern it
+        // actually has rather than "Does not repeat".
+        _recurrenceChoice = RecurrenceChoiceFor(_form.RecurrenceRule, _form.Start);
 
         _showEventDialog = true;
     }

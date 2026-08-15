@@ -179,10 +179,9 @@
 </div>
 
 @* ── Add / Edit entry dialog ──────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showDialog"
-               Title="@(_editEntry is null ? "Add Timeline Entry" : "Edit Timeline Entry")"
-               Width="620px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showDialog" Width="620px" Modal="true">
+    <WindowTitle>@(_editEntry is null ? "Add Timeline Entry" : "Edit Timeline Entry")</WindowTitle>
+    <WindowContent>
         <div class="row g-3">
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Type</label>
@@ -285,17 +284,19 @@
         {
             <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="CloseDialog">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Icon="@SvgIcon.Save"
-                       OnClick="SaveEntry"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Saving…" : "Save")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="CloseDialog">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Icon="@SvgIcon.Save"
+                           OnClick="SaveEntry"
+                           Enabled="@(!_isBusy)">
+                @(_isBusy ? "Saving…" : "Save")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Delete confirm ───────────────────────────────────────────────────────── *@
 <ConfirmDialog @bind-Visible="@_showDeleteConfirm" Title="Delete Entry" Width="380px"

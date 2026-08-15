@@ -66,10 +66,9 @@
 </div>
 
 @* ── Add / Edit dialog ────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showDialog"
-               Title="@(_editQ is null ? "Add Question" : "Edit Question")"
-               Width="520px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showDialog" Width="520px" Modal="true">
+    <WindowTitle>@(_editQ is null ? "Add Question" : "Edit Question")</WindowTitle>
+    <WindowContent>
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Question Text <span class="text-danger">*</span></label>
@@ -95,30 +94,35 @@
         {
             <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="@(() => _showDialog = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Icon="@SvgIcon.Save"
-                       OnClick="Save"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Saving…" : "Save")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="@(() => _showDialog = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Icon="@SvgIcon.Save"
+                           OnClick="Save"
+                           Enabled="@(!_isBusy)">
+                @(_isBusy ? "Saving…" : "Save")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Delete confirm ───────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showDelete" Title="Delete Question" Width="380px">
-    <DialogContent><p>Delete this question? Existing answers will also be removed.</p></DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="@(() => _showDelete = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                       OnClick="ExecuteDelete"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Deleting…" : "Delete")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+<TelerikWindow @bind-Visible="@_showDelete" Width="380px" Modal="true">
+    <WindowTitle>Delete Question</WindowTitle>
+    <WindowContent><p>Delete this question? Existing answers will also be removed.</p>        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="@(() => _showDelete = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           OnClick="ExecuteDelete"
+                           Enabled="@(!_isBusy)">
+                @(_isBusy ? "Deleting…" : "Delete")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @code {
     [Parameter] public Guid OrgId { get; set; }

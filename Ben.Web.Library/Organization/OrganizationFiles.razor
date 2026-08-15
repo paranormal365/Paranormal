@@ -161,8 +161,9 @@
 </div>
 
 @* ── Upload dialog ──────────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showUploadDialog" Title="Upload Organization File" Width="520px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showUploadDialog" Width="520px" Modal="true">
+    <WindowTitle>Upload Organization File</WindowTitle>
+    <WindowContent>
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">File <span class="text-danger">*</span></label>
@@ -185,19 +186,22 @@
             </div>
         </div>
         @if (_uploadError is not null) { <div class="alert alert-danger mt-3 mb-0 py-2 small">@_uploadError</div> }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="@(() => { _showUploadDialog = false; _uploadError = null; })">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Enabled="@(!_uploading && _selectedFile is not null && _uploadTypeId != Guid.Empty)"
-                       OnClick="UploadAsync">@(_uploading ? "Uploading…" : "Upload")</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           OnClick="@(() => { _showUploadDialog = false; _uploadError = null; })">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Enabled="@(!_uploading && _selectedFile is not null && _uploadTypeId != Guid.Empty)"
+                           OnClick="UploadAsync">@(_uploading ? "Uploading…" : "Upload")</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Share from user file dialog ────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showCopyDialog" Title="Share User File to Organization" Width="500px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showCopyDialog" Width="500px" Modal="true">
+    <WindowTitle>Share User File to Organization</WindowTitle>
+    <WindowContent>
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">User File ID (Guid)</label>
@@ -226,19 +230,22 @@
             </div>
         </div>
         @if (_copyError is not null) { <div class="alert alert-danger mt-3 mb-0 py-2 small">@_copyError</div> }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="@(() => { _showCopyDialog = false; _copyError = null; })">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Enabled="@(!_copying)"
-                       OnClick="CopyAsync">@(_copying ? "Sharing…" : "Share to Org")</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           OnClick="@(() => { _showCopyDialog = false; _copyError = null; })">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Enabled="@(!_copying)"
+                           OnClick="CopyAsync">@(_copying ? "Sharing…" : "Share to Org")</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Publish / unpublish dialog ─────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showPublishDialog" Title="@(_publishTarget?.IsPublic == true ? "Unpublish File" : "Publish File")" Width="400px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showPublishDialog" Width="400px" Modal="true">
+    <WindowTitle>@(_publishTarget?.IsPublic == true ? "Unpublish File" : "Publish File")</WindowTitle>
+    <WindowContent>
         <p>
             @if (_publishTarget?.IsPublic == true)
             {
@@ -251,22 +258,25 @@
                 This will be logged with your name and the current date/time.</text>
             }
         </p>
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       Enabled="@(!_publishing)"
-                       OnClick="@(() => _showPublishDialog = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@(_publishTarget?.IsPublic == true ? ThemeConstants.Button.ThemeColor.Warning : ThemeConstants.Button.ThemeColor.Success)"
-                       Enabled="@(!_publishing)"
-                       OnClick="ConfirmPublishAsync">
-            @(_publishing ? "Working…" : (_publishTarget?.IsPublic == true ? "Unpublish" : "Approve & Publish"))
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           Enabled="@(!_publishing)"
+                           OnClick="@(() => _showPublishDialog = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@(_publishTarget?.IsPublic == true ? ThemeConstants.Button.ThemeColor.Warning : ThemeConstants.Button.ThemeColor.Success)"
+                           Enabled="@(!_publishing)"
+                           OnClick="ConfirmPublishAsync">
+                @(_publishing ? "Working…" : (_publishTarget?.IsPublic == true ? "Unpublish" : "Approve & Publish"))
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Edit metadata dialog ────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showEditDialog" Title="Edit File Metadata" Width="420px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showEditDialog" Width="420px" Modal="true">
+    <WindowTitle>Edit File Metadata</WindowTitle>
+    <WindowContent>
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Description</label>
@@ -277,14 +287,16 @@
                 <TelerikNumericTextBox @bind-Value="@_editSortOrder" Min="0" Width="100%" />
             </div>
         </div>
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       Enabled="@(!_savingEdit)"
-                       OnClick="@(() => _showEditDialog = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" Enabled="@(!_savingEdit)" OnClick="SaveEditAsync">@(_savingEdit ? "Saving…" : "Save")</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           Enabled="@(!_savingEdit)"
+                           OnClick="@(() => _showEditDialog = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" Enabled="@(!_savingEdit)" OnClick="SaveEditAsync">@(_savingEdit ? "Saving…" : "Save")</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Delete confirm ──────────────────────────────────────────────────────────── *@
 <ConfirmDialog @bind-Visible="@_showDeleteDialog" Title="Delete File" Width="400px"

@@ -4,19 +4,22 @@
    etc.) is entirely up to the caller's own OnConfirm handler, matching each page's existing
    behavior exactly. *@
 
-<TelerikDialog @bind-Visible="@Visible" Title="@Title" Width="@Width">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@Visible" Width="@Width" Modal="true">
+    <WindowTitle>@Title</WindowTitle>
+    <WindowContent>
         @ChildContent
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="Cancel" Enabled="@(!Busy)">@CancelText</TelerikButton>
-        <TelerikButton ThemeColor="@ConfirmThemeColor"
-                       OnClick="@(() => OnConfirm.InvokeAsync())"
-                       Enabled="@(!Busy && ConfirmEnabled)">
-            @(Busy ? BusyText : ConfirmText)
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="Cancel" Enabled="@(!Busy)">@CancelText</TelerikButton>
+            <TelerikButton ThemeColor="@ConfirmThemeColor"
+                           OnClick="@(() => OnConfirm.InvokeAsync())"
+                           Enabled="@(!Busy && ConfirmEnabled)">
+                @(Busy ? BusyText : ConfirmText)
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @code {
     [Parameter] public bool Visible { get; set; }
