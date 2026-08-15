@@ -119,8 +119,9 @@
 </div>
 
 @* Same-filename-on-upload prompt (item #6 phase 3) *@
-<TelerikDialog @bind-Visible="@_showSameNameDialog" Title="File Already Exists" Width="440px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showSameNameDialog" Width="440px" Modal="true">
+    <WindowTitle>File Already Exists</WindowTitle>
+    <WindowContent>
         @if (_sameNameMatch is not null)
         {
             <p>You already have a file named <strong>@_sameNameMatch.FileName</strong>.</p>
@@ -129,17 +130,20 @@
                 case that holds a copy), or keep both as separate files?
             </p>
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" OnClick="ConfirmReplaceFromSameName">Replace It</TelerikButton>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline" OnClick="ConfirmKeepBoth">Keep Both</TelerikButton>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat" OnClick="@(() => _showSameNameDialog = false)">Cancel</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" OnClick="ConfirmReplaceFromSameName">Replace It</TelerikButton>
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline" OnClick="ConfirmKeepBoth">Keep Both</TelerikButton>
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat" OnClick="@(() => _showSameNameDialog = false)">Cancel</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* Replace File Dialog (item #6 phase 3) *@
-<TelerikDialog @bind-Visible="@_showReplaceDialog" Title="Replace File" Width="520px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showReplaceDialog" Width="520px" Modal="true">
+    <WindowTitle>Replace File</WindowTitle>
+    <WindowContent>
         @if (_replaceTarget is not null)
         {
             <p class="text-secondary mb-3">Replacing: <strong>@_replaceTarget.FileName</strong></p>
@@ -191,20 +195,23 @@
                 <div class="alert alert-danger py-2 mt-3 mb-0">@_replaceError</div>
             }
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Enabled="@(_replaceSelectedFile is not null && !_loadingImpact && !_isReplacing)"
-                       OnClick="ConfirmReplace">
-            @(_isReplacing ? "Replacing..." : "Replace")
-        </TelerikButton>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline" OnClick="@(() => _showReplaceDialog = false)">Cancel</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Enabled="@(_replaceSelectedFile is not null && !_loadingImpact && !_isReplacing)"
+                           OnClick="ConfirmReplace">
+                @(_isReplacing ? "Replacing..." : "Replace")
+            </TelerikButton>
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline" OnClick="@(() => _showReplaceDialog = false)">Cancel</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* Share with Org Dialog *@
-<TelerikDialog @bind-Visible="@_showShareDialog" Title="Share with Organization" Width="440px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showShareDialog" Width="440px" Modal="true">
+    <WindowTitle>Share with Organization</WindowTitle>
+    <WindowContent>
         @if (_sharingFile is not null)
         {
             <p class="text-secondary mb-3">Sharing: <strong>@_sharingFile.FileName</strong></p>
@@ -225,13 +232,15 @@
                                      Width="100%" />
             </div>
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" OnClick="ConfirmShare">Share</TelerikButton>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="@(() => _showShareDialog = false)">Cancel</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" OnClick="ConfirmShare">Share</TelerikButton>
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           OnClick="@(() => _showShareDialog = false)">Cancel</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @code {
     // ── State ────────────────────────────────────────────────────────────────
