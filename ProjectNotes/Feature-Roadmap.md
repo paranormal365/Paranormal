@@ -414,6 +414,27 @@ No `OrganizationType` concept exists anywhere — orgs are differentiated only g
 
 ---
 
+## Area 9 — Places, Investigation Maps, and Location-Based Sharing
+
+### 📋 SPEC WRITTEN 2026-08-15 — the next roadmap piece
+
+Three requests that turn out to be one feature: a map of an organization's investigations, the same
+map scoped to a single user's own participation, and investigations without a client case at famous
+locations whose findings can be shared with whoever else has investigated there.
+
+Core decision: introduce a **Place** that both cases and investigations point at, rather than
+modelling case-less investigations as cases with the client fields left empty. Sharing defaults
+follow the place — private residences stay group-only, public locations default to sharing with
+other investigators of that place. A global public default was considered and rejected.
+
+Full model, three scopes, permission rules and an eight-phase build order in
+`ProjectNotes/specs/Places-and-Investigation-Sharing.md`.
+
+Migration `AddInvestigationCoordinates` has already been applied to the dev database and belongs to
+this work; nothing reads those columns yet.
+
+---
+
 ## Sequencing & Dependencies
 
 | Order | Work | Size | Depends on |

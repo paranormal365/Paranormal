@@ -270,18 +270,21 @@
 </TelerikContextMenu>
 
 @* ── Edit label dialog ──────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showEditLabelDialog" Title="Edit Region Label" Width="360px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showEditLabelDialog" Width="360px" Modal="true">
+    <WindowTitle>Edit Region Label</WindowTitle>
+    <WindowContent>
         <label class="form-label fw-semibold">Label</label>
         <TelerikTextBox @bind-Value="@_editLabelText" Width="100%" />
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="@(() => _showEditLabelDialog = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       OnClick="SaveRegionLabelAsync">Save</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           OnClick="@(() => _showEditLabelDialog = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           OnClick="SaveRegionLabelAsync">Save</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Nested region explorer ─────────────────────────────────────────────── *@
 @if (_subRegion is not null)

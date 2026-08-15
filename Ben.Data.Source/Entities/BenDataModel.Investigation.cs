@@ -18,6 +18,32 @@ namespace Ben.Data.Source.Entities
         public string Title { get; set; } = null!;
         public string? Description { get; set; }
         public string? Location { get; set; }
+
+        /// <summary>
+        /// Where the investigation actually happened, resolved from <see cref="Location"/> when
+        /// one is given and from the case's own address otherwise.
+        /// </summary>
+        /// <remarks>
+        /// Carried on the investigation rather than read from the case, because a team often works
+        /// somewhere other than the address on file — a cemetery, a second building, the woods
+        /// behind the property — and the map should show where they were, not where the paperwork
+        /// says the case is.
+        /// </remarks>
+        public decimal? Latitude { get; set; }
+        public decimal? Longitude { get; set; }
+
+        /// <summary>
+        /// Why this investigation has no coordinates, or null when it has them.
+        /// </summary>
+        /// <remarks>
+        /// Recorded rather than left as a silent pair of nulls. A missing dot on the map is
+        /// otherwise indistinguishable from an investigation nobody has looked at, and somebody
+        /// needs to be able to see that the address simply could not be found and fix it.
+        /// </remarks>
+        public string? GeocodeNote { get; set; }
+
+        /// <summary>When the coordinates were last resolved.</summary>
+        public DateTime? DateGeocoded { get; set; }
         public DateTime ScheduledDateTime { get; set; }
         public DateTime? EndDateTime { get; set; }
         public InvestigationStatus Status { get; set; } = InvestigationStatus.Scheduled;

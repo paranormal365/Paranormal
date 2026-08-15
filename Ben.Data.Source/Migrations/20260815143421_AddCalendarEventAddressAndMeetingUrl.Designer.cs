@@ -4,6 +4,7 @@ using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Ben.Data.Source.Migrations
 {
     [DbContext(typeof(BenDataContext))]
-    partial class BenDataContextModelSnapshot : ModelSnapshot
+    [Migration("20260815143421_AddCalendarEventAddressAndMeetingUrl")]
+    partial class AddCalendarEventAddressAndMeetingUrl
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1476,9 +1479,6 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime>("DateCreated")
                         .HasColumnType("datetime2");
 
-                    b.Property<DateTime?>("DateGeocoded")
-                        .HasColumnType("datetime2");
-
                     b.Property<DateTime?>("DateUpdated")
                         .HasColumnType("datetime2");
 
@@ -1491,18 +1491,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime?>("EvidenceDueDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("GeocodeNote")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal?>("Latitude")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<string>("Location")
                         .HasMaxLength(512)
                         .HasColumnType("nvarchar(512)");
-
-                    b.Property<decimal?>("Longitude")
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Notes")
                         .HasColumnType("nvarchar(max)");

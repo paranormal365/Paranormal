@@ -29,6 +29,16 @@ public record OrgCalendarEventRecord
     public required string Title { get; init; }
     public string? Description { get; init; }
     public string? Location { get; init; }
+
+    /// <summary>One of the org's saved addresses, when the event is held at one.</summary>
+    public Guid? OrganizationAddressId { get; init; }
+
+    /// <summary>The saved address rendered for display, so callers need no second lookup.</summary>
+    public string? OrganizationAddressLabel { get; init; }
+
+    /// <summary>Video call link — Zoom, Teams, or similar.</summary>
+    public string? MeetingUrl { get; init; }
+
     public DateTime StartDateTime { get; init; }
     public DateTime EndDateTime { get; init; }
     public bool IsAllDay { get; init; }

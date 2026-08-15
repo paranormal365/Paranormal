@@ -129,10 +129,9 @@
 </div>
 
 @* ── Category dialog ──────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showCatDialog"
-               Title="@(_editCat is null ? "New Category" : "Edit Category")"
-               Width="520px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showCatDialog" Width="520px" Modal="true">
+    <WindowTitle>@(_editCat is null ? "New Category" : "Edit Category")</WindowTitle>
+    <WindowContent>
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
@@ -163,23 +162,24 @@
         {
             <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="CloseCatDialog">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Icon="@SvgIcon.Save"
-                       OnClick="SaveCategory"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Saving…" : "Save")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="CloseCatDialog">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Icon="@SvgIcon.Save"
+                           OnClick="SaveCategory"
+                           Enabled="@(!_isBusy)">
+                @(_isBusy ? "Saving…" : "Save")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Type dialog ──────────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showTypeDialog"
-               Title="@(_editType is null ? $"New Type — {_typeParentCat?.Name}" : $"Edit Type — {_typeParentCat?.Name}")"
-               Width="480px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showTypeDialog" Width="480px" Modal="true">
+    <WindowTitle>@(_editType is null ? $"New Type — {_typeParentCat?.Name}" : $"Edit Type — {_typeParentCat?.Name}")</WindowTitle>
+    <WindowContent>
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
@@ -206,32 +206,37 @@
         {
             <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="CloseTypeDialog">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Icon="@SvgIcon.Save"
-                       OnClick="SaveType"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Saving…" : "Save")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="CloseTypeDialog">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Icon="@SvgIcon.Save"
+                           OnClick="SaveType"
+                           Enabled="@(!_isBusy)">
+                @(_isBusy ? "Saving…" : "Save")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Confirm delete ───────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showDeleteConfirm" Title="Confirm Delete" Width="400px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showDeleteConfirm" Width="400px" Modal="true">
+    <WindowTitle>Confirm Delete</WindowTitle>
+    <WindowContent>
         <p>Delete <strong>@_deleteLabel</strong>? This cannot be undone.</p>
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="@(() => _showDeleteConfirm = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                       OnClick="ExecuteDelete"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Deleting…" : "Delete")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="@(() => _showDeleteConfirm = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           OnClick="ExecuteDelete"
+                           Enabled="@(!_isBusy)">
+                @(_isBusy ? "Deleting…" : "Delete")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @code {
     // ── State ─────────────────────────────────────────────────────────────────

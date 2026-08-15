@@ -116,21 +116,24 @@ else
 @* ── Delete confirmation ──────────────────────────────────────────────────── *@
 @if (_deleteNote is not null)
 {
-    <TelerikDialog @bind-Visible="@_showDeleteConfirm" Title="Delete Note" Width="380px">
-        <DialogContent>
+    <TelerikWindow @bind-Visible="@_showDeleteConfirm" Width="380px" Modal="true">
+    <WindowTitle>Delete Note</WindowTitle>
+        <WindowContent>
             <p>Delete this note permanently?</p>
             @if (!string.IsNullOrWhiteSpace(_deleteNote.Title))
             {
                 <p class="fw-semibold mb-0">@_deleteNote.Title</p>
             }
-        </DialogContent>
-        <DialogButtons>
-            <TelerikButton OnClick="@(() => { _showDeleteConfirm = false; _deleteNote = null; })">Cancel</TelerikButton>
-            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                           OnClick="DeleteNote"
-                           Enabled="@(!_isBusy)">Delete</TelerikButton>
-        </DialogButtons>
-    </TelerikDialog>
+                <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+                <TelerikButton OnClick="@(() => { _showDeleteConfirm = false; _deleteNote = null; })">Cancel</TelerikButton>
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                               OnClick="DeleteNote"
+                               Enabled="@(!_isBusy)">Delete</TelerikButton>
+        </div>
+    </WindowContent>
+    </TelerikWindow>
 }
 
 @code {
