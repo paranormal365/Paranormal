@@ -393,6 +393,14 @@ DECIDED: **spec document only**; import features come later.
 
 ## Area 8 — Group Type Expansion (UFO / Bigfoot / other paranormal)
 
+### ⏸ LONG-TERM 2026-08-15 — the site stays ghost-hunting-only for now
+
+Scoped, not built. Full scoping, phase breakdown and open questions moved to
+`ProjectNotes/Future-Improvements.md` item #78. Two findings from that pass are recorded there and
+are also long-term: `/find` cannot browse without a location (a discovery gap that does not depend
+on group types), and the ExperienceCategory approval workflow is write-only and must not be copied
+if types ever become org-proposable.
+
 ### What exists today (explored)
 No `OrganizationType` concept exists anywhere — orgs are differentiated only geographically (`OrganizationAreaOfOperation`) and by accepting-flags. Two ready-made patterns to ride on:
 - The **Lookup Types system**: 11 identical-schema lookup tables driven by one generic admin page; a new family costs a new entity + two one-liner controllers + mapper + **one line** in the `_families` array in `AdminLookupTypes.razor`.

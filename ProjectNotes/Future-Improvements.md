@@ -3150,3 +3150,64 @@ Comprehensive validation of the whole Ben solution (not Ben.Video, which had its
 > **Phase 6 — code-streamlining pass.** Reviewed the full session diff (36 files) for cruft; almost all of it was already-minimal one-line `AuthReady` guards with nothing to trim. The one genuine finding: the build carried 4 pre-existing "unused field" (`CS0414`/`CS0649`) warnings, and every one of them turned out to be a real bug rather than dead code — `CaseVideoEditorPage._myUserId` was read in an ownership check but never assigned, so `row.CreatedByAppUserId == _myUserId` was always false and the Publish/Delete buttons never rendered for any video project, for any user (removed the check entirely — the list is already server-filtered to the caller's own projects, so it was redundant on top of broken); `CaseVideoEditorPage._publishing`/`MyVideosPage._publishing` were set during an in-flight publish but never read, leaving the Publish button clickable mid-upload with no double-submit guard (wired `Enabled="@(!_publishing)"`); `ImageEditorPlayer._saving` had the same shape around the two Save actions, fixed with a re-entrancy guard since `WindowAction` has no `Enabled` parameter to bind to. Build is now 0 warnings, 0 errors.
 >
 > Still to test: a code-streamlining pass over anything touched this session.
+
+---
+
+## 78. Group type expansion — UFO / cryptid / other paranormal (long-term, deferred 2026-08-15)
+
+**Decision: the site stays ghost-hunting-only for now.** Scoped, not built — long-term scope.
+Revisit when the paranormal feature set has settled and there is a real second kind of group asking
+to join.
+
+Groups today are differentiated only by geography (`OrganizationAreaOfOperation`) and the
+accepting-clients flags. `OrganizationType` exists nowhere in the codebase.
+
+**Decided with the user, and still standing:** many-to-many — a group can claim several types and
+appears under each. Seed set would be Paranormal/Ghost, UFO/UAP, USO, Cryptid/Bigfoot, Other.
+
+### What it would cost
+
+*The lookup machinery is genuinely cheap.* A new family (`OrganizationLinkType` is the template)
+costs 2 entity files, a `DbContext.Generated` registration + migration, an admin record, a one-line
+AutoMapper profile, a 12-line controller inheriting `AdminEntityControllerBase`, a public read
+controller, and **one line** in `_families` at `AdminLookupTypes.razor:179`. The catalog admin UI
+comes free, and `Name/Description/IconClass/ColorClass/IsActive/IsPublic/SortOrder` is already the
+right shape for a type badge.
+
+Phases, roughly:
+
+| | Work | Size |
+|---|---|---|
+| G1 | `OrganizationType` lookup family + seed | S |
+| G2 | `OrganizationOrganizationType` join + multi-select in org settings + audit | S–M |
+| G3 | Badges on the public org home, `/find` results, org list | S |
+| G4 | Public browse-by-type endpoint + a `/find` mode that works without a location | **M — the real work** |
+| G5 | Type matching in the client request wizard (optional) | S–M |
+
+### Two findings worth keeping regardless of whether this is ever built
+
+**`/find` cannot browse.** `OrgDiscovery.razor` gates its search button on a non-empty location
+query, and the only public list endpoint is `GET /api/public/organizations/search?lat=&lon=` —
+there is no "all organizations" endpoint. So the "Browse All Groups" button on the home hero lands
+on a page that demands a location before it will show anything. That is a discovery gap in its own
+right, independent of types, and it is most of G4's cost. **Long-term scope as well** — recorded
+here so that whoever picks up discovery work later knows the gap exists and that it does not
+actually depend on group types.
+
+**Do not copy the ExperienceCategory approval workflow.** Its schema has `IsApproved`,
+`ProposedByOrganizationId`, `ApprovedByAppUserId`, `DateApproved` — but every write path in
+`ExperienceCategoryController` hardcodes `IsApproved = true`. No org can propose anything; there is
+no propose UI and no approval queue. It is the write-only-feature pattern this codebase has
+produced before. If group types ever become org-proposable, that flow has to be built for real, not
+inherited. SuperAdmin-curated is the recommendation.
+
+### Questions to settle before starting
+
+1. Do types **restrict** who a client can send a request to, or only label and sort? Restricting
+   puts logic in the search endpoint and the wizard; labelling drops G5 and shrinks G4.
+2. Is browse-without-location in scope? If not, types are visible but not filterable.
+3. Curated or org-proposable? (Recommend curated — see above.)
+4. Could the **Experience taxonomy** do the matching job instead? Clients already tag what happened
+   at wizard step 3. Group type answers a different question — what a group *does* — so keep them
+   separate, but G5's matching could plausibly be built on experience tags already collected, with
+   no new taxonomy at all.
