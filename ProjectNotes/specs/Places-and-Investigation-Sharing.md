@@ -1,0 +1,220 @@
+# Places, Investigation Maps, and Location-Based Sharing
+
+**Status:** spec, not built. Next roadmap piece.
+**Date:** 2026-08-15
+
+---
+
+## What this is for
+
+Three requests that turn out to be one feature:
+
+1. An organization's page should show a **map of where its investigations happened**, plus grids of
+   past and future ones. Members can view the past ones; editing needs permission, except that
+   someone who was actually there may finish their own findings.
+2. A user's own page should show **the same map and grids, for investigations they took part in**.
+   They edit what they own; for everything else they follow the owning group's rules.
+3. Investigations should be possible **without a client case** — a group visiting a famous location.
+   Over time many groups accumulate visits to the same address, and their findings could be shared
+   publicly, or only with others who have investigated that address.
+
+They share one shape: *a map and a list of investigations, filtered by scope, with per-row
+permissions*. Build that once.
+
+---
+
+## The central decision: Place, not pseudo-case
+
+**Introduce a `Place`** — a named, geocoded address that both cases and investigations point at.
+Do **not** model case-less investigations as cases with the client fields left empty.
+
+A `Case` carries a client, an originating request, a case number, organization ownership, and a
+privacy model built entirely around protecting somebody's home. A visit to a public landmark has
+none of that. Folding them together means every existing case query grows an implicit "…and not one
+of those other ones", and the queries that miss it become bugs — some of them privacy bugs, in the
+part of the system least able to afford them.
+
+With a Place the model reads plainly:
+
+- **Case** = a client's problem *at a place*
+- **Public investigation** = a visit *to a place*
+
+The aggregation the user wants then falls out for free: *14 investigations here, by 6 groups, since
+2024*. And an investigation always has coordinates, because a Place always does.
+
+```
+Place  ──<  Case          ──<  Investigation
+   └────────────────────────<  Investigation   (no case)
+```
+
+### Place
+
+| Field | Notes |
+|---|---|
+| `Id` | |
+| `Name` | "Waverly Hills Sanatorium", or null for a private residence |
+| `StreetAddress1/2`, `City`, `State`, `ZipCode`, `Country` | |
+| `Latitude`, `Longitude` | resolved on save |
+| `GeocodeNote` | why it has no coordinates, or null — see below |
+| `Kind` | `PrivateResidence` \| `PublicLocation` — drives the sharing default |
+| `IsApproved` | for user-created public places, if curation proves necessary |
+
+**Deduplication is the hard part.** Two groups typing the same landmark must land on the same Place
+or the aggregation is worthless. Suggested rule: match on rounded coordinates (≈4 decimal places,
+about 11 m) plus a normalised name, and offer "did you mean this place?" rather than silently
+merging. Deliberately not solved in this spec — it needs its own pass.
+
+---
+
+## Geocoding, and saying so when it fails
+
+Every investigation resolves to coordinates: from its Place, or from an address the investigator
+enters directly, which is then geocoded like a case is.
+
+`AddressGeocodingService` already exists, is configured in `Ben.Data.WebApi/Program.cs`, and offers
+both `TryResolveCoordinatesAsync` (structured) and `TryResolveFromQueryAsync` (free text).
+
+**When lookup fails, record why.** A missing dot is otherwise indistinguishable from an
+investigation nobody has written up, and somebody needs to be able to see that an address simply
+could not be found, and fix it. That is what `GeocodeNote` is for — it is never silently null-null.
+
+> **Already applied:** migration `AddInvestigationCoordinates` added `Latitude`, `Longitude`,
+> `GeocodeNote` and `DateGeocoded` to `Investigation` on the dev database. It belongs to this work;
+> nothing populates or reads those columns yet.
+
+---
+
+## One view, three scopes
+
+The map-and-grid component is written once and fed a scope:
+
+| Scope | Shows | Lives on |
+|---|---|---|
+| **Organization** | investigations belonging to this group | a new Investigations tab on `OrganizationView` |
+| **Personal** | investigations this user *attended* | the user management page, beside the profile |
+| **Place** | every investigation at this address, across groups | a place page |
+
+There is no org-wide investigations endpoint today — the existing controller is case-scoped
+(`api/organizations/{orgId}/cases/{caseId}/investigations`) and `MyInvestigations` is user-scoped.
+All three scopes need new read endpoints.
+
+### Attended, not invited
+
+`InvestigationAttendee` carries both `Rsvp` and `DidAttend`. The personal map must filter on
+**`DidAttend == true`**. Somebody invited to a site they never visited must not get a dot asserting
+they were there — this is a record people may eventually cite, and quiet inaccuracy is the kind that
+survives.
+
+It also gives the "finish your findings" rule its footing: you may complete your write-up because
+you were actually present, which is the same fact that put the dot on your map.
+
+---
+
+## Permissions: decided on the server, carried on the row
+
+The same investigation now appears in three lists. If each view works out "can I edit this?" for
+itself, they will drift, and the failure mode is someone editing another group's record.
+
+**Each row arrives carrying its own verdict**, computed once where memberships and org rules live:
+
+```
+CanEditRecord         — title, schedule, attendees
+CanCompleteMyFindings — my own binder entries on this investigation
+```
+
+The UI decides whether to render a button. It never decides who you are.
+
+### The rules those flags encode
+
+| Situation | Record | Own findings |
+|---|---|---|
+| I own it / created it | ✅ | ✅ |
+| I attended, no edit permission | ❌ | ✅ — including after it is past |
+| Org member, granted permission | ✅ | ✅ |
+| Org member, no permission | ❌ | ❌ |
+| Another group's, visible to me | ❌ | ❌ |
+
+"My own findings" means the `CaseTimelineEntry` rows I authored against that investigation — the
+binder from Area 5 C3 — not the investigation record. Attendees finish their own contributions;
+they do not edit the visit.
+
+**This is a tightening.** Today `InvestigationController` checks only `IsOrgMemberAsync`, so any
+member can edit any investigation. Expect existing behaviour to change, and say so in the release
+note.
+
+---
+
+## Sharing
+
+### Scopes
+
+| Scope | Who sees it |
+|---|---|
+| `GroupOnly` | the owning organization |
+| `PlaceInvestigators` | the group, plus anyone else who has investigated this place |
+| `Public` | everyone, including signed-out visitors |
+
+`PlaceInvestigators` has **dynamic membership**: someone who investigates the place next year gains
+access to this year's findings retroactively. That is the point — it is what makes a shared record
+of a location worth having — but it must be said in the UI at the moment of choosing, not in a help
+page. "I shared this with three people" can quietly become three hundred.
+
+**Open question worth deciding:** is it reciprocal — must you publish your own findings for a place
+to see everyone else's? A contribute-to-see rule would feel fairer and discourage lurking, at the
+cost of real complexity. Not assumed either way here.
+
+### The default follows the place
+
+Rejected: a global default of public.
+
+The risk is not symmetric. A wrong "private" costs a click. A wrong "public" puts a family's home
+address on the internet and cannot be recalled. This application is otherwise built around exactly
+that protection — the pseudonym on public case pages, the two-key rule before a member's photo
+reaches a client — and a blanket public default would quietly undercut all of it, because most
+investigations happen at private residences.
+
+| Investigation at | Default |
+|---|---|
+| `PrivateResidence` (a case) | `GroupOnly`, and publishable only with client consent |
+| `PublicLocation` | `PlaceInvestigators`, with `Public` one click away |
+
+That gives the sociable outcome where it is safe and the careful one where it matters, without
+anyone having to remember to change a setting on the one that counts.
+
+---
+
+## Build order
+
+| Phase | Work | Size |
+|---|---|---|
+| **P1** | `Place` entity + geocoding + backfill from existing case addresses | M |
+| **P2** | `Investigation.CaseId` becomes nullable; `PlaceId` added; case-less investigations can be created | M |
+| **P3** | Org-scoped investigations endpoint with the server-computed permission flags; tighten `InvestigationController` | M |
+| **P4** | The map-and-grid component; Investigations tab on the org page | M |
+| **P5** | Personal scope on the user management page (`DidAttend`) | S |
+| **P6** | Visibility scopes + defaults + the sharing control | M |
+| **P7** | Place pages and cross-group aggregation | M |
+| **P8** | Place deduplication / "did you mean" | M — needs its own design pass |
+
+P1–P3 are the foundation and are worth doing as one branch. P4–P5 are where it starts to look like
+the thing the user described.
+
+### Notable existing pieces to reuse
+
+- `AddressGeocodingService` — configured, static, both lookup shapes
+- `PublicCaseDiscovery.razor.js` — a working multi-marker map with `init` / `setMapCenter` /
+  `resizeMap` / `dispose`; the closest thing to the component P4 needs
+- `Case.Latitude` / `Longitude` — proven source for P1's backfill
+- `CaseTimelineEntry.InvestigationId` + `CaseTimelineVisibility` — the binder, already the home of
+  "my findings"
+
+---
+
+## Open questions
+
+1. **Reciprocity** on `PlaceInvestigators` — contribute-to-see, or not?
+2. **Curation** of user-created public places — open, or SuperAdmin-approved? (`IsApproved` is
+   scaffolded for the latter; leave it unused if the answer is open.)
+3. **Client consent** to publish an investigation at their property — reuse the two-key pattern from
+   Area 4, or a per-case switch?
+4. **Deduplication** (P8) — needs its own pass before P7 is worth much.
