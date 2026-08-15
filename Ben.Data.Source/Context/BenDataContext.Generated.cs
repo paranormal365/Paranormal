@@ -1464,6 +1464,14 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<Investigation>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // Without these the columns default to decimal(18,2) — about 1.1km of precision, which
+            // is a pin in the wrong street. Every other coordinate column in the schema is (18,10);
+            // these were missed when AddInvestigationCoordinates created them, and it went unnoticed
+            // because nothing wrote them until Area 9's P2.
+            modelBuilder.Entity<Investigation>()
+                .Property(e => e.Latitude).HasPrecision(18, 10);
+            modelBuilder.Entity<Investigation>()
+                .Property(e => e.Longitude).HasPrecision(18, 10);
             modelBuilder.Entity<Investigation>()
                 .Property(e => e.Title).HasMaxLength(256);
             modelBuilder.Entity<Investigation>()

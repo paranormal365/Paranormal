@@ -198,6 +198,16 @@
 
             @if (_isMember)
             {
+                @* Member-visible, not admin-only: seeing where the group has worked is ordinary
+                   membership. Who may *edit* a given investigation is decided per row by the
+                   server and rendered from its verdict. *@
+                <TabStripTab Title="Investigations">
+                    <OrgInvestigations OrgId="@OrgId" />
+                </TabStripTab>
+            }
+
+            @if (_isMember)
+            {
                 <TabStripTab Title="Calendar">
                     <OrgScheduler OrgId="@OrgId" EmbeddedMode="true" />
                 </TabStripTab>
