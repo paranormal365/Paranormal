@@ -116,6 +116,72 @@ eventually cite — quiet inaccuracy is the kind that survives.
 bell (Area 5 C4), and `InvestigationController` already creates an `OrgCalendarEvent` and stores its
 id on `Investigation.OrgCalendarEventId`. This spec adds only the third stage.
 
+#### Arrival check-in — how `DidAttend` actually gets set
+
+People check themselves in when they arrive. Their chip on the investigation's roster changes
+colour as each person turns up, so anyone looking at the page can see who is on site. Checking in
+sets `DidAttend`.
+
+This is worth having for its own sake, not only for the map: on a night visit to an unfamiliar
+building, *who has arrived* is operational information, and at times a safety one.
+
+**A manual override stays.** The case manager, the investigation's lead, or organization management
+can set `DidAttend` afterwards — for the location with no signal, or the person who simply forgot.
+
+##### Record which way it was set
+
+Two paths to the same flag means the flag alone no longer says much. Store the provenance:
+
+| Field | Meaning |
+|---|---|
+| `DateArrived` | when they say they arrived — not necessarily when the row was written |
+| `AttendanceRecordedByAppUserId` | null when self-checked-in; the organizer when overridden |
+
+"I checked in from the site at 21:04" and "the manager ticked a box the following Tuesday" are
+different grades of evidence for the same claim, and this is a record people may eventually cite.
+
+##### No signal is the normal case, not the edge case
+
+Rural properties, basements, steel-framed buildings — the moment check-in matters most is exactly
+when it is least likely to work. Two consequences:
+
+- **Let check-in be late.** Capture `DateArrived` as a *stated* time rather than implicitly "now",
+  so someone can record a 21:00 arrival at 01:00 when signal returns.
+- **The roster stays first-class.** The live board is a convenience layered on it, never the only
+  route to a correct record.
+
+##### Deliberate non-goal: verifying arrival by location
+
+The temptation, now that investigations have coordinates, is to check the device is actually there.
+This spec says no. It is surveillance of volunteers, indoor GPS is unreliable in precisely these
+buildings, and the failure mode — an honest investigator unable to check in from a basement — is
+worse than the dishonesty it would prevent.
+
+##### Live updates: poll, do not reach for SignalR
+
+There is **no real-time infrastructure in this application at all**. Area 1 looked at it and
+deliberately deferred SignalR to a phase that was never built, because the WebApi is a separate
+process from the Blazor app and a hub would need `HubConnection` plus bearer plumbing.
+
+A roster refreshing every 10–15 seconds while the page is open is entirely adequate for watching a
+handful of people arrive, and costs nothing new. Revisit only if this page proves it needs better.
+
+##### This settles open question 2
+
+Attendance is self-reported by the person who was there, with an organizer override for reality.
+The earlier "presume present when unrecorded" fudge is no longer needed: the common path is now
+self-service, and the fallback is explicit rather than a guess. **The map filter becomes *past* and
+`DidAttend == true`**, which is the honest rule.
+
+##### One gap: "lead investigator" does not exist
+
+`Case.CaseManagerAppUserId` is real and checkable. Organization Owner/Administrator is real and
+checkable. **There is no lead-investigator concept** — `InvestigationAttendee.AssignedRole` is free
+text, so "Lead" is a string somebody typed and nothing can be authorised against it.
+
+Smallest honest fix: add `IsLead` to `InvestigationAttendee`. It earns its place beyond attendance —
+it is also the answer to "who is running this visit?", which the roster cannot currently express.
+
 #### Attended, not merely invited — and the trap in it
 
 `InvestigationAttendee` carries both `Rsvp` and `DidAttend`. The map filter needs *past* **and**
@@ -125,14 +191,9 @@ The trap: `DidAttend` is set by the organizer afterwards, and if nobody does tha
 a strict `DidAttend == true` leaves every personal map permanently empty — a feature silently
 dependent on admin hygiene that may never happen.
 
-**Recommendation:** show it when the investigation is past and `DidAttend != false` — i.e. treat
-"not recorded" as presumed present, since they were on the roster, while an explicit "did not
-attend" excludes it. That fails toward a useful map that its owner can correct, rather than an
-empty one nobody can fix.
-
-Worth considering alongside it: let the attendee confirm their own attendance. For a personal
-record, the person who was there is the better authority than the organizer's paperwork, and the
-organization's `DidAttend` can stay the organization's own answer.
+**Superseded by arrival check-in, above.** With people checking themselves in, the flag is set on
+the common path by the person best placed to know, and the organizer override covers the rest. The
+filter is *past* and `DidAttend == true`, with no presumption needed.
 
 Either way this also grounds the "finish your findings" rule: you may complete your write-up
 because you were present, which is the same fact that put the dot on your map.
@@ -224,6 +285,7 @@ anyone having to remember to change a setting on the one that counts.
 | **P6** | Visibility scopes + defaults + the sharing control | M |
 | **P7** | Place pages and cross-group aggregation | M |
 | **P8** | Place deduplication / "did you mean" | M — needs its own design pass |
+| **P5b** | Arrival check-in: `DateArrived`, `AttendanceRecordedByAppUserId`, `IsLead`, the live roster | M |
 | **P9** | **End-user documentation** — required before this is called done | S |
 
 ### P9 is not optional
@@ -265,8 +327,9 @@ the thing the user described.
 ## Open questions
 
 1. **Reciprocity** on `PlaceInvestigators` — contribute-to-see, or not?
-2. **Who confirms attendance** for the personal map — the organizer's `DidAttend`, treated as
-   presumed-present when unrecorded, or a self-confirmation by the attendee?
+2. ~~Who confirms attendance~~ — **settled**: self check-in on arrival, with a case-manager /
+   lead / org-management override. See "Arrival check-in" above. Leaves a smaller question: should
+   `IsLead` be added to `InvestigationAttendee` now, or deferred?
 3. **Curation** of user-created public places — open, or SuperAdmin-approved? (`IsApproved` is
    scaffolded for the latter; leave it unused if the answer is open.)
 4. **Client consent** to publish an investigation at their property — reuse the two-key pattern from
