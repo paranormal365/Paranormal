@@ -395,7 +395,11 @@ internal static class DevelopmentDataSeeder
             }
         }
 
-        await SeedSharedPlaceAsync(db, tgh, nps, owner, emma, sarah, now);
+        // Both organizations are created above if missing, so this is defensive rather than
+        // expected — but the compiler is right that FirstOrDefaultAsync can return null, and a seed
+        // that throws takes the whole API startup down with it.
+        if (tgh is not null && nps is not null)
+            await SeedSharedPlaceAsync(db, tgh, nps, owner, emma, sarah, now);
 
         Console.WriteLine("[DevDataSeeder] Development seed data applied successfully.");
     }

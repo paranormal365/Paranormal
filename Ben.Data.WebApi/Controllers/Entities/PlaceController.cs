@@ -102,10 +102,10 @@ public sealed record PlaceRecord(
 /// <summary>
 /// One investigation at a place, as seen by somebody who may or may not be in the group that ran it.
 /// </summary>
-/// <param name="IsMine">
-/// Whether the viewer's own organization ran it. Lets the page separate "our visits" from "what
-/// others have shared" without the client guessing from ids.
-/// </param>
+/// <remarks>
+/// <c>IsMine</c> says whether the viewer's own organization ran it, so the page can separate "our
+/// visits" from "what others have shared" without the client guessing from ids.
+/// </remarks>
 public sealed record PlaceInvestigationRow(
     Guid Id,
     string Title,
