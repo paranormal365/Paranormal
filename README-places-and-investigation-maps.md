@@ -43,11 +43,22 @@ P1–P3 are the foundation and are worth doing together.
 `AddInvestigationCoordinates` — `Latitude`, `Longitude`, `GeocodeNote`, `DateGeocoded` on
 `Investigation` — is **already applied to the dev database**. Nothing reads those columns yet.
 
+## Settled since this was written
+
+- **Reciprocity: no.** `PlaceInvestigators` is open to anyone who investigated the place — there is
+  no contribute-to-see requirement. Revisit only if lurking turns out to be a real problem. Even so,
+  the read filter goes in **one predicate function**, so a future change is one place.
+- **`IsLead` lands in P3**, with the permission work, rather than waiting for P5b.
+
 ## Still open
 
-1. **Reciprocity** on `PlaceInvestigators` — must you publish your own findings for a place to see
-   everyone else's?
-2. **`IsLead`** — add it in P3 with the permission work, or defer to P5b?
-3. **Curation** of user-created public places — open, or approved?
-4. **Client consent** to publish an investigation at a client's property.
-5. **Deduplication** — needs its own design pass before P7 is worth much.
+1. **Curation** of user-created public places — open, or approved?
+2. **Client consent** to publish an investigation at a client's property.
+3. **Deduplication** — needs its own design pass before P7 is worth much.
+
+## Branch state
+
+Rebased onto `develop` after `feature/self-service-contact-info` landed (self-service contact info,
+email validation, calendar event types). That ordering was deliberate: both branches append to
+`IBenAdminClient.cs` and `BenAdminClientAdapter.cs`, so landing one first avoids a conflict in two
+long files.
