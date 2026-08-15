@@ -55,6 +55,55 @@ public sealed class MyInvestigationsController : BenControllerBase
             EvidenceDueDate:   a.Investigation.EvidenceDueDate)));
     }
 
+    /// <summary>
+    /// The investigations this person actually attended, for their own map.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Past and <c>DidAttend == true</c>, and nothing else.</b> Not "invited to", not
+    /// "accepted the invitation" — a map of places you said you might go to is not a map of where
+    /// you have been, and the second is the only one worth having.</para>
+    ///
+    /// <para>That makes this deliberately sparse today: nothing marks attendance except a manager
+    /// ticking the box, so most people will see an empty map until arrival check-in lands. An
+    /// honestly empty map is better than a full one that overstates where somebody has been.</para>
+    /// </remarks>
+    [HttpGet("attended")]
+    public async Task<ActionResult<IEnumerable<AttendedInvestigationItem>>> GetAttended(CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var now = DateTime.UtcNow;
+        var rows = await db.InvestigationAttendees.AsNoTracking()
+            .Where(a => a.AppUserId == userId
+                     && a.DidAttend == true
+                     && a.Investigation.ScheduledDateTime < now)
+            .Select(a => new AttendedInvestigationItem(
+                a.InvestigationId,
+                a.Investigation.Title,
+                a.Investigation.ScheduledDateTime,
+                a.Investigation.OrganizationId,
+                a.Investigation.Organization.Name,
+                a.Investigation.CaseId,
+                a.Investigation.Case == null
+                    ? null
+                    : "#" + a.Investigation.Case.CaseYear + "-" + a.Investigation.Case.OrgCaseNumber,
+                a.Investigation.PlaceId,
+                a.Investigation.Place == null ? null : a.Investigation.Place.Name,
+                a.Investigation.Place == null ? null : a.Investigation.Place.City,
+                a.Investigation.Place == null ? null : a.Investigation.Place.State,
+                a.Investigation.Latitude,
+                a.Investigation.Longitude,
+                a.Investigation.GeocodeNote,
+                a.IsLead))
+            .OrderByDescending(i => i.ScheduledDateTime)
+            .ToListAsync(ct);
+
+        return Ok(rows);
+    }
+
     [HttpPut("{attendeeId:guid}/rsvp")]
     public async Task<ActionResult> UpdateRsvp(Guid attendeeId, [FromBody] UpdateMyRsvpRequest request, CancellationToken ct)
     {
@@ -102,3 +151,28 @@ public sealed record MyInvestigationItem(
     DateTime?           EvidenceDueDate);
 
 public sealed record UpdateMyRsvpRequest(RsvpStatus Rsvp);
+
+/// <summary>
+/// One investigation a person actually attended, for their own map and list.
+/// </summary>
+/// <remarks>
+/// Carries no permission flags, unlike the organization's row: this list is one person's own
+/// history, and there is nothing here to edit from it. What they may change about an investigation
+/// is decided where investigations are managed, not here.
+/// </remarks>
+public sealed record AttendedInvestigationItem(
+    Guid InvestigationId,
+    string Title,
+    DateTime ScheduledDateTime,
+    Guid OrganizationId,
+    string OrganizationName,
+    Guid? CaseId,
+    string? CaseReference,
+    Guid? PlaceId,
+    string? PlaceName,
+    string? PlaceCity,
+    string? PlaceState,
+    decimal? Latitude,
+    decimal? Longitude,
+    string? GeocodeNote,
+    bool WasLead);

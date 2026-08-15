@@ -76,11 +76,54 @@
                 }
             </div>
         }
+
+        @* ── Where I have been ────────────────────────────────────────────── *@
+        @if (_attended.Count > 0)
+        {
+            <h5 class="text-secondary mt-5 mb-1">
+                Where I've been<HelpLink Slug="your-profile" Anchor="your-investigation-map" />
+            </h5>
+            <p class="text-secondary small">
+                Investigations you actually attended — @_attended.Count so far.
+            </p>
+
+            @if (_attendedPins.Any(p => p.Latitude.HasValue))
+            {
+                <InvestigationsMap Pins="@_attendedPins" Height="320px" OnPinClicked="@OpenById" />
+            }
+
+            <div class="table-responsive mt-3">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr><th>When</th><th>Investigation</th><th>Where</th><th>Group</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _attended)
+                        {
+                            <tr style="cursor:pointer;" @onclick="@(() => OpenById(row.InvestigationId))">
+                                <td class="text-nowrap">@row.ScheduledDateTime.ToLocalTime().ToString("d MMM yyyy")</td>
+                                <td>
+                                    @row.Title
+                                    @if (row.WasLead)
+                                    {
+                                        <span class="badge bg-primary ms-1">Led</span>
+                                    }
+                                </td>
+                                <td>@AttendedWhere(row)</td>
+                                <td>@row.OrganizationName</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
     }
 </div>
 
 @code {
     private List<MyInvestigationItem>? _items;
+    private List<AttendedInvestigationItem> _attended = [];
+    private List<InvestigationMapPin> _attendedPins = [];
     private string? _error;
     private HashSet<Guid> _saving = [];
 
@@ -91,11 +134,48 @@
         if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
         try { _items = (await AdminClient.GetMyInvestigationsAsync()).ToList(); }
         catch { _error = "Failed to load investigations."; _items = []; }
+
+        try
+        {
+            _attended = (await AdminClient.GetAttendedInvestigationsAsync()).ToList();
+            _attendedPins = _attended
+                .Select(a => new InvestigationMapPin(
+                    a.InvestigationId, a.Title, a.Latitude, a.Longitude, IsPast: true))
+                .ToList();
+        }
+        catch
+        {
+            // The assignments list above is the point of this page; failing to draw the history
+            // map should not take the whole screen down with it.
+            _attended = [];
+            _attendedPins = [];
+        }
+
         StateHasChanged();
     }
 
     private void OpenInvestigation(MyInvestigationItem inv)
-        => NavManager.NavigateTo($"/organizations/{inv.OrgId}/cases/{inv.CaseId}?tab=investigations");
+    {
+        // CaseId is nullable now. A case-less visit has no case page to open, and building the URL
+        // anyway would navigate to /cases/ with nothing after it.
+        if (inv.CaseId is not { } caseId) return;
+        NavManager.NavigateTo($"/organizations/{inv.OrgId}/cases/{caseId}?tab=investigations");
+    }
+
+    private void OpenById(Guid investigationId)
+    {
+        var row = _attended.FirstOrDefault(a => a.InvestigationId == investigationId);
+        if (row?.CaseId is not { } caseId) return;
+        NavManager.NavigateTo($"/organizations/{row.OrganizationId}/cases/{caseId}?tab=investigations");
+    }
+
+    private static string AttendedWhere(AttendedInvestigationItem row)
+    {
+        if (!string.IsNullOrWhiteSpace(row.PlaceName)) return row.PlaceName!;
+        var cityState = string.Join(", ",
+            new[] { row.PlaceCity, row.PlaceState }.Where(v => !string.IsNullOrWhiteSpace(v)));
+        return string.IsNullOrWhiteSpace(cityState) ? "—" : cityState;
+    }
 
     private async Task SetRsvp(MyInvestigationItem inv, RsvpStatus rsvp)
     {

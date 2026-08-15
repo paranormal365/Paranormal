@@ -856,6 +856,15 @@ public interface IBenAdminClient
     /// <summary>Returns all investigations the current user is assigned to attend.</summary>
     Task<IReadOnlyList<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default);
 
+    /// <summary>
+    /// Where the signed-in person has actually been: past investigations they attended.
+    /// </summary>
+    /// <remarks>
+    /// Only rows marked attended, so it is expected to be sparse — and honestly so — until arrival
+    /// check-in exists. A map of places you were invited to is not a map of where you have been.
+    /// </remarks>
+    Task<IReadOnlyList<AttendedInvestigationItem>> GetAttendedInvestigationsAsync(CancellationToken token = default);
+
     /// <summary>Sets the current user's RSVP on their attendee record.</summary>
     Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default);
 
@@ -1305,6 +1314,27 @@ public sealed record UserNoteUpsertRequest(
     string NoteSubject,
     string NoteBody,
     bool IsPublic);
+
+/// <summary>
+/// One investigation the signed-in person attended. Mirror of the WebApi record in
+/// MyInvestigationsController.cs.
+/// </summary>
+public sealed record AttendedInvestigationItem(
+    Guid InvestigationId,
+    string Title,
+    DateTime ScheduledDateTime,
+    Guid OrganizationId,
+    string OrganizationName,
+    Guid? CaseId,
+    string? CaseReference,
+    Guid? PlaceId,
+    string? PlaceName,
+    string? PlaceCity,
+    string? PlaceState,
+    decimal? Latitude,
+    decimal? Longitude,
+    string? GeocodeNote,
+    bool WasLead);
 
 // ── Org-wide investigation records (Area 9) ───────────────────────────────────
 // Mirrors of the WebApi records in OrgInvestigationsController.cs — this library cannot reference

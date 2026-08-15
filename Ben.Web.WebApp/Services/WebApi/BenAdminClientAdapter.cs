@@ -1397,6 +1397,12 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         return result ?? [];
     }
 
+    public async Task<IReadOnlyList<AttendedInvestigationItem>> GetAttendedInvestigationsAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<AttendedInvestigationItem>>("/api/my-investigations/attended", token);
+        return result ?? [];
+    }
+
     public async Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default)
         => await _api.PutVoidAsync($"/api/my-investigations/{attendeeId}/rsvp", new { Rsvp = rsvp }, token);
 
