@@ -159,6 +159,12 @@
 
     private void BeginCreate()
     {
+        if (_types.Count == 0)
+        {
+            _error = "No link types have been set up yet. Ask an administrator to add some before adding a link.";
+            return;
+        }
+
         _editId = null;
         _formUrl = string.Empty;
         _formText = string.Empty;

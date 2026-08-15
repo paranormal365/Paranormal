@@ -179,6 +179,12 @@
 
     private void BeginCreate()
     {
+        if (_types.Count == 0)
+        {
+            _error = "No phone types have been set up yet. Ask an administrator to add some before adding a number.";
+            return;
+        }
+
         _editId = null;
         _formNumber = string.Empty;
         _formCountry = "US";

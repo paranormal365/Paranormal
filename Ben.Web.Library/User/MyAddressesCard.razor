@@ -167,6 +167,12 @@
 
     private void BeginCreate()
     {
+        if (_types.Count == 0)
+        {
+            _error = "No address types have been set up yet. Ask an administrator to add some before adding an address.";
+            return;
+        }
+
         _editId = null;
         _addrState = new AddressFieldsState();
         _formTypeId = _types.FirstOrDefault()?.Id ?? Guid.Empty;

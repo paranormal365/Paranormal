@@ -230,6 +230,14 @@
 
     private void BeginCreate()
     {
+        // Every row needs a type, so with none configured the form could only ever fail on save.
+        // Saying why beats a dropdown with nothing in it and a rejection the user can't explain.
+        if (_types.Count == 0)
+        {
+            _error = "No email types have been set up yet. Ask an administrator to add some before adding an address.";
+            return;
+        }
+
         _editId = null;
         _formAddress = string.Empty;
         _formTypeId = _types.FirstOrDefault()?.Id ?? Guid.Empty;

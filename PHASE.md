@@ -81,6 +81,20 @@ Every load-bearing assertion was **checked against deliberately broken code** in
 validation reset, the token clear, the owner filter on the primary slot, both publish guards, and
 the expiry check. Each round failed exactly the four tests it should have, and no others.
 
+## Found while live-verifying: the lookup tables were empty
+
+Every contact row requires a type (`UserEmailType`, `UserPhoneType`, and so on), and **nothing had
+ever populated those four tables**. It went unnoticed for as long as the only way to reach them was
+the SuperAdmin screens, where an empty list reads as "nobody has made one yet". On the profile page
+it is fatal: the Type dropdown renders empty and every save is rejected.
+
+New `ContactTypeSeeder` seeds Home/Work/Mobile-style defaults, idempotently, matched by name so a
+deployment that already made its own keeps it. The four cards also refuse to open a form when the
+list really is empty, and say why, rather than offering a form that can only fail.
+
+This is the same class of bug as the two features this branch exists to fix, found the same way —
+by actually using the screen.
+
 ## Known gap, not fixed here
 
 `OrgCalendarEventTypeController` writes no audit rows for create/update/delete. That is pre-existing
