@@ -17,6 +17,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UserMessageType> UserMessageTypes { get; set; }
         public virtual DbSet<UserNoteType> UserNoteTypes { get; set; }
         public virtual DbSet<AppUserPhoto> AppUserPhotos { get; set; }
+        public virtual DbSet<SiteSetting> SiteSettings { get; set; }
         public virtual DbSet<UserAddress> UserAddresses { get; set; }
         public virtual DbSet<UserEmail> UserEmails { get; set; }
         public virtual DbSet<UserPhone> UserPhones { get; set; }
@@ -397,6 +398,21 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrganizationPage>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── SiteSetting ──────────────────────────────────────────────────
+            modelBuilder.Entity<SiteSetting>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SiteSetting>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SiteSetting>()
+                .Property(e => e.Key).HasMaxLength(128).IsRequired();
+            // Unique so a setting can't end up with two rows disagreeing about its value.
+            modelBuilder.Entity<SiteSetting>()
+                .HasIndex(e => e.Key).IsUnique();
+            modelBuilder.Entity<SiteSetting>()
+                .Property(e => e.Description).HasMaxLength(512);
 
             // ── AppUserPhoto ─────────────────────────────────────────────────
             // The subject FK cascades: deleting a user takes their photo rows. The

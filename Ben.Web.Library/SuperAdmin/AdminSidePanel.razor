@@ -58,6 +58,10 @@
         </a>
 
         <div class="admin-panel-section-label">System</div>
+        <a class="admin-panel-link" href="/admin/site-settings" @onclick="Close" @onclick:preventDefault="false">
+            <TelerikSvgIcon Icon="@SvgIcon.Gear" />
+            <span>Site Settings</span>
+        </a>
         <a class="admin-panel-link" href="/admin/audit-log" @onclick="Close" @onclick:preventDefault="false">
             <TelerikSvgIcon Icon="@SvgIcon.LayoutStacked" />
             <span>Audit Log</span>

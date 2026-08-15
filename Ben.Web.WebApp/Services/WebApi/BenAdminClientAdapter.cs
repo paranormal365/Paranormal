@@ -1229,6 +1229,14 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<CaseRelatedPersonRecord?> AddRelatedPersonAsync(Guid caseId, AddRelatedPersonRequest request, CancellationToken token = default)
         => _api.PostAsync<AddRelatedPersonRequest, CaseRelatedPersonRecord>($"/api/my-cases/{caseId}/related-people", request, token);
 
+    public async Task<List<SiteSettingRecord>> GetSiteSettingsAsync(CancellationToken token = default)
+        => await _api.GetAsync<List<SiteSettingRecord>>("/api/admin/site-settings", token) ?? [];
+
+    public Task<SiteSettingRecord?> SetSiteSettingAsync(
+        string key, SetSiteSettingRequest request, CancellationToken token = default)
+        => _api.PutAsync<SetSiteSettingRequest, SiteSettingRecord>(
+               $"/api/admin/site-settings/{Uri.EscapeDataString(key)}", request, token);
+
     public Task<CaseDisplayAliasRecord?> GetCaseDisplayAliasAsync(Guid caseId, CancellationToken token = default)
         => _api.GetAsync<CaseDisplayAliasRecord>($"/api/my-cases/{caseId}/display-alias", token);
 

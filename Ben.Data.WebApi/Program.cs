@@ -118,6 +118,8 @@ builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IOrga
 builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService, Ben.Service.RepositoryService.Services.AuditLogService>();
 builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IFileStorageService, Ben.Data.WebApi.Services.LocalFileStorageService>();
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.FileMetadataExtractorService>();
+// Scoped: it opens its own DbContext per call and holds no state between them.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.SiteSettingsService>();
 builder.Services.Configure<Ben.Data.WebApi.Services.SmtpOptions>(builder.Configuration.GetSection("Smtp"));
 builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IEmailService, Ben.Data.WebApi.Services.SmtpEmailService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>();

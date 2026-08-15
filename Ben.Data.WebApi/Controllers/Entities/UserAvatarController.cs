@@ -1,4 +1,5 @@
 using Ben.Data.Common.Enums;
+using Ben.Data.WebApi.Services;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
@@ -24,6 +25,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 ///         <see cref="ClientIsEngagedWithViewersOrgAsync"/> for why this side needs no flags and
 ///         why it ends when the case does.</item>
 ///   <item>Otherwise their public photo, if they have set one.</item>
+///   <item>Otherwise the sitewide default avatar, when a SuperAdmin has configured one.</item>
 ///   <item>Otherwise nothing (204), and the caller renders initials.</item>
 /// </list>
 ///
@@ -67,10 +69,19 @@ public sealed class UserAvatarController : BenControllerBase
 
         var chosen = (maySeePrivate ? photos.FirstOrDefault(p => !p.IsPublic) : null)
                   ?? photos.FirstOrDefault(p => p.IsPublic);
-        if (chosen is null) return NoContent();
+
+        // Falls back to the sitewide default before giving up. Placed last on purpose: a generic
+        // house image must never take precedence over a photo the person actually chose. It
+        // carries no personal information, so it is served to any viewer — the audience rules
+        // above decide which of *their* photos you get, not whether you may see a stock image.
+        var fileId = chosen?.UploadFileId
+                  ?? await SiteSettingsService.GetGuidAsync(db, SiteSettingKeys.DefaultAvatarUploadFileId, ct);
+        if (fileId is null) return NoContent();
 
         var file = await db.UploadFiles.AsNoTracking()
-            .FirstOrDefaultAsync(f => f.Id == chosen.UploadFileId, ct);
+            .FirstOrDefaultAsync(f => f.Id == fileId, ct);
+        // A default pointing at a deleted or mistyped file id degrades to initials rather than
+        // erroring — a bad setting shouldn't break every avatar on the site.
         if (file is null) return NoContent();
 
         if (!string.IsNullOrEmpty(file.StoragePath))

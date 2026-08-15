@@ -689,6 +689,15 @@ public interface IBenAdminClient
     /// <summary>Removes a related-person reference.</summary>
     Task<bool> RemoveRelatedPersonAsync(Guid caseId, Guid personId, CancellationToken token = default);
 
+    // ── Sitewide settings (SuperAdmin) ───────────────────────────────────────
+
+    /// <summary>Every sitewide setting, including ones never yet given a value.</summary>
+    Task<List<SiteSettingRecord>> GetSiteSettingsAsync(CancellationToken token = default);
+
+    /// <summary>Sets one sitewide setting. An empty value clears it.</summary>
+    Task<SiteSettingRecord?> SetSiteSettingAsync(
+        string key, SetSiteSettingRequest request, CancellationToken token = default);
+
     /// <summary>The caller's public-facing alias for a case, plus what the public sees today.</summary>
     Task<CaseDisplayAliasRecord?> GetCaseDisplayAliasAsync(Guid caseId, CancellationToken token = default);
 
