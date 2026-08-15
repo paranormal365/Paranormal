@@ -291,6 +291,12 @@ public interface IBenAdminClient
     /// </summary>
     Task<IReadOnlyList<OrgSearchResult>> SearchOrganizationsAsync(double lat, double lon, int maxResults = 20, CancellationToken token = default);
 
+    /// <summary>
+    /// Every organization, paged, with no location required — what the "Browse All Groups"
+    /// entry point needs. Anonymous, like the proximity search beside it.
+    /// </summary>
+    Task<OrgBrowsePage?> BrowseOrganizationsAsync(int page = 1, int pageSize = 24, CancellationToken token = default);
+
     // ── Organization Addresses ────────────────────────────────────────────────
 
     Task<IReadOnlyList<OrganizationAddressRecord>> GetOrgAddressesAsync(Guid orgId, CancellationToken token = default);
@@ -786,6 +792,18 @@ public interface IBenAdminClient
     Task<bool> DeleteExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default);
     Task<ExperienceTypeRecord?> ApproveExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default);
 
+    /// <summary>
+    /// Rejects a group-added type: deletes it and strips it from every entry tagged with it.
+    /// The entries themselves are untouched — only the tagging goes.
+    /// </summary>
+    Task<RejectExperienceTypeResponse?> RejectExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default);
+
+    /// <summary>
+    /// Adds a type a group needs to an existing category. Live immediately and flagged for app
+    /// administrators to review. Returns the existing type when the name is already taken.
+    /// </summary>
+    Task<ExperienceTypeRecord?> AddOrgExperienceTypeAsync(Guid orgId, AddOrgExperienceTypeRequest request, CancellationToken token = default);
+
     // ── CMS File Library ──────────────────────────────────────────────────────
 
     /// <summary>Returns upload files shared with the given organization (for logo/gallery selection).</summary>
@@ -1262,6 +1280,15 @@ public sealed record UpsertExperienceTypeRequest(
     int SortOrder,
     bool IsActive);
 
+/// <summary>A group adding a missing type to an existing category.</summary>
+public sealed record AddOrgExperienceTypeRequest(
+    Guid ExperienceCategoryId,
+    string? Name,
+    string? Description);
+
+/// <summary>What a rejection removed — the type, and how many taggings went with it.</summary>
+public sealed record RejectExperienceTypeResponse(Guid ExperienceTypeId, int UsagesRemoved);
+
 public sealed record ExperienceCategoryWithTypesResponse(
     ExperienceCategoryRecord Category,
     IReadOnlyList<ExperienceTypeRecord> Types);
@@ -1288,6 +1315,26 @@ public sealed record OrgSearchResult(
     bool IsWithinRange,
     bool AcceptsClientsOutsideRange,
     Guid? ActiveLogoFileId);
+
+/// <summary>
+/// One organization in the location-free browse listing. Mirrors the WebApi record of the same
+/// name — the library cannot reference the WebApi project, so the shape is restated here.
+/// </summary>
+public sealed record OrgBrowseResult(
+    Guid OrganizationId,
+    string Name,
+    string UrlName,
+    string? AreaLabel,
+    double? RadiusMiles,
+    bool IsAcceptingClients,
+    Guid? ActiveLogoFileId);
+
+/// <summary>One page of the browse listing.</summary>
+public sealed record OrgBrowsePage(
+    IReadOnlyList<OrgBrowseResult> Items,
+    int TotalCount,
+    int Page,
+    int PageSize);
 
 // ── Phase 6: Case Transfer + Public Discovery records ─────────────────────────
 public sealed record PublicCaseListItem(

@@ -103,6 +103,56 @@ public sealed class PublicOrganizationSearchController : ControllerBase
         return Ok(ordered);
     }
 
+    /// <summary>
+    /// Every organization, newest-relevant first, with no location required.
+    /// </summary>
+    /// <remarks>
+    /// <para>The search above needs coordinates and skips any org without an area of operation
+    /// configured, which left the site with no way to see the full list at all — the "Browse All
+    /// Groups" button had nowhere to go. This is that list.</para>
+    ///
+    /// <para>Every organization already has a public page at <c>/o/{urlName}</c> served to anyone
+    /// who knows the name, so listing them exposes nothing new; it only makes them findable.
+    /// Coordinates are still never returned — only the area's display label, same as search.</para>
+    /// </remarks>
+    [HttpGet("browse")]
+    public async Task<ActionResult<OrgBrowsePage>> Browse(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24,
+        CancellationToken ct = default)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var query = db.Organizations.AsNoTracking();
+        var total = await query.CountAsync(ct);
+
+        var items = await query
+            // Groups taking new clients come first — that is what someone browsing is looking for.
+            // Name breaks the tie so paging is stable rather than at the database's discretion.
+            .OrderByDescending(o => o.IsAcceptingClients)
+            .ThenBy(o => o.Name)
+            .ThenBy(o => o.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(o => new OrgBrowseResult(
+                o.Id,
+                o.Name,
+                o.UrlName,
+                o.AreaOfOperation != null ? o.AreaOfOperation.DisplayLabel : null,
+                o.AreaOfOperation != null ? (double?)o.AreaOfOperation.RadiusMiles : null,
+                o.IsAcceptingClients,
+                o.OrganizationLogos
+                    .Where(l => l.IsActive)
+                    .Select(l => (Guid?)l.UploadFileId)
+                    .FirstOrDefault()))
+            .ToListAsync(ct);
+
+        return Ok(new OrgBrowsePage(items, total, page, pageSize));
+    }
+
     // Haversine formula — duplicated here since WebApi cannot reference Ben.Web.Library
     private static double HaversineDistanceMiles(
         double lat1, double lon1, double lat2, double lon2)
@@ -132,3 +182,29 @@ public sealed record OrgSearchResult(
     bool AcceptsClientsOutsideRange,
     Guid? ActiveLogoFileId,
     [property: System.Text.Json.Serialization.JsonIgnore] double SortKey);
+
+/// <summary>
+/// One organization in the location-free browse listing.
+/// </summary>
+/// <remarks>
+/// Deliberately not <see cref="OrgSearchResult"/>: that record carries a distance and a
+/// within-range flag, and there is no search point here to measure either against. Reusing it
+/// would mean filling two fields with zeroes and hoping nobody reads them.
+/// </remarks>
+/// AreaLabel is the human-readable area, e.g. "Nashville, TN", and is null when none is set;
+/// RadiusMiles is the declared operating radius, null when no area is configured.
+public sealed record OrgBrowseResult(
+    Guid OrganizationId,
+    string Name,
+    string UrlName,
+    string? AreaLabel,
+    double? RadiusMiles,
+    bool IsAcceptingClients,
+    Guid? ActiveLogoFileId);
+
+/// <summary>One page of the browse listing, with the total so the caller can page properly.</summary>
+public sealed record OrgBrowsePage(
+    IReadOnlyList<OrgBrowseResult> Items,
+    int TotalCount,
+    int Page,
+    int PageSize);

@@ -9,7 +9,9 @@
 <div class="container-fluid px-3 py-4" style="max-width:860px; margin:auto;">
 
     <h1 class="mb-1">Find a Paranormal Investigation Group</h1>
-    <p class="text-secondary mb-4">Enter your location to find organizations accepting cases near you.</p>
+    <p class="text-secondary mb-4">
+        Enter your location to find groups accepting cases near you, or browse every group below.
+    </p>
 
     @* ── Search form ──────────────────────────────────────────────────────── *@
     <div class="row g-2 mb-4 align-items-end">
@@ -26,6 +28,14 @@
                 @(_searching ? "Searching…" : "Search")
             </TelerikButton>
         </div>
+        @if (_searched)
+        {
+            <div class="col-auto">
+                <TelerikButton OnClick="ClearSearchAsync"
+                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               Enabled="@(!_searching)">Show all groups</TelerikButton>
+            </div>
+        }
     </div>
 
     @if (_geocodeError is not null)
@@ -33,12 +43,12 @@
         <div class="alert alert-warning mb-3">@_geocodeError</div>
     }
 
-    @* ── Results ──────────────────────────────────────────────────────────── *@
+    @* ── Proximity results ────────────────────────────────────────────────── *@
     @if (_searched && _results.Count == 0)
     {
         <div class="alert alert-light text-muted text-center py-4">
             No organizations accepting cases were found near <strong>@_searchedQuery</strong>.
-            <br /><span class="small">Try a nearby city or a broader location.</span>
+            <br /><span class="small">Try a nearby city, or browse the full list below.</span>
         </div>
     }
 
@@ -53,30 +63,13 @@
             @foreach (var org in _withinRange)
             {
                 <div class="col-12 col-md-6">
-                    <div class="card h-100">
-                        <div class="card-body">
-                            @if (org.ActiveLogoFileId.HasValue)
-                            {
-                                <div class="mb-2">
-                                    <img src="@AdminClient.GetFileDownloadUrl(org.ActiveLogoFileId.Value)"
-                                         alt="@org.Name logo"
-                                         style="max-height:40px; max-width:80px; object-fit:contain;" />
-                                </div>
-                            }
-                            <h5 class="mb-1">@org.Name</h5>
-                            @if (!string.IsNullOrWhiteSpace(org.DisplayLabel))
-                            {
-                                <p class="text-secondary small mb-1">@org.DisplayLabel</p>
-                            }
-                            <p class="text-muted mb-0" style="font-size:.85rem;">
-                                <span class="text-success">✓ Within range</span>
-                                <span> · @(org.DistanceFromSearchMiles.ToString("F1")) mi away</span>
-                            </p>
-                        </div>
-                        <div class="card-footer bg-transparent border-0 pt-0">
-                            <a href="/o/@org.UrlName" class="btn btn-sm btn-outline-primary">View Group</a>
-                        </div>
-                    </div>
+                    <OrgCard Name="@org.Name" UrlName="@org.UrlName"
+                             AreaLabel="@org.DisplayLabel" LogoFileId="@org.ActiveLogoFileId">
+                        <MetaLine>
+                            <span class="text-success">✓ Within range</span>
+                            <span> · @(org.DistanceFromSearchMiles.ToString("F1")) mi away</span>
+                        </MetaLine>
+                    </OrgCard>
                 </div>
             }
         </div>
@@ -92,49 +85,119 @@
             </div>
         }
         <h5 class="text-secondary mb-2">Outside Normal Range (still accepting)</h5>
-        <div class="row g-3">
+        <div class="row g-3 mb-4">
             @foreach (var org in _outsideRange)
             {
                 <div class="col-12 col-md-6">
-                    <div class="card h-100">
-                        <div class="card-body">
-                            @if (org.ActiveLogoFileId.HasValue)
-                            {
-                                <div class="mb-2">
-                                    <img src="@AdminClient.GetFileDownloadUrl(org.ActiveLogoFileId.Value)"
-                                         alt="@org.Name logo"
-                                         style="max-height:40px; max-width:80px; object-fit:contain;" />
-                                </div>
-                            }
-                            <h5 class="mb-1">@org.Name</h5>
-                            @if (!string.IsNullOrWhiteSpace(org.DisplayLabel))
-                            {
-                                <p class="text-secondary small mb-1">@org.DisplayLabel</p>
-                            }
-                            <p class="text-muted mb-0" style="font-size:.85rem;">
-                                <span>@(org.DistanceFromSearchMiles.ToString("F1")) mi away</span>
-                                <span class="text-secondary"> (range: @(org.RadiusMiles.ToString("F0")) mi)</span>
-                            </p>
-                        </div>
-                        <div class="card-footer bg-transparent border-0 pt-0">
-                            <a href="/o/@org.UrlName" class="btn btn-sm btn-outline-primary">View Group</a>
-                        </div>
-                    </div>
+                    <OrgCard Name="@org.Name" UrlName="@org.UrlName"
+                             AreaLabel="@org.DisplayLabel" LogoFileId="@org.ActiveLogoFileId">
+                        <MetaLine>
+                            <span>@(org.DistanceFromSearchMiles.ToString("F1")) mi away</span>
+                            <span class="text-secondary"> (range: @(org.RadiusMiles.ToString("F0")) mi)</span>
+                        </MetaLine>
+                    </OrgCard>
                 </div>
             }
         </div>
     }
+
+    @*
+        ── Browse ────────────────────────────────────────────────────────────
+        Shown until a location search replaces it. This page used to render nothing at all until
+        you typed a location, which made the site's own "Browse All Groups" button a dead end.
+    *@
+    @if (!_searched)
+    {
+        <hr class="my-4" />
+
+        @if (_browsing && _browse is null)
+        {
+            <TelerikLoaderContainer Visible="true" Text="Loading groups…" />
+        }
+        else if (_browse is null)
+        {
+            <div class="alert alert-warning">Could not load the list of groups. Please try again.</div>
+        }
+        else if (_browse.TotalCount == 0)
+        {
+            <div class="alert alert-light text-muted text-center py-4">
+                No groups have registered yet.
+            </div>
+        }
+        else
+        {
+            <div class="d-flex align-items-baseline gap-2 mb-3">
+                <h5 class="mb-0">All Groups</h5>
+                <span class="badge bg-secondary">@_browse.TotalCount total</span>
+            </div>
+
+            <div class="row g-3">
+                @foreach (var org in _browse.Items)
+                {
+                    <div class="col-12 col-md-6">
+                        <OrgCard Name="@org.Name" UrlName="@org.UrlName"
+                                 AreaLabel="@org.AreaLabel" LogoFileId="@org.ActiveLogoFileId">
+                            <MetaLine>
+                                @* Child content has to open with markup — a RenderFragment that
+                                   starts with @if confuses the Razor parser into losing the tag. *@
+                                <span class="@(org.IsAcceptingClients ? "text-success" : "text-secondary")">
+                                    @(org.IsAcceptingClients ? "✓ Accepting new cases" : "Not currently accepting new cases")
+                                </span>
+                                @if (org.RadiusMiles.HasValue)
+                                {
+                                    <span class="text-secondary"> · @(org.RadiusMiles.Value.ToString("F0")) mi range</span>
+                                }
+                            </MetaLine>
+                        </OrgCard>
+                    </div>
+                }
+            </div>
+
+            @if (TotalPages > 1)
+            {
+                <div class="d-flex justify-content-center align-items-center gap-3 mt-4">
+                    <TelerikButton OnClick="@(() => LoadBrowseAsync(_browse.Page - 1))"
+                                   Enabled="@(!_browsing && _browse.Page > 1)"
+                                   FillMode="@ThemeConstants.Button.FillMode.Outline">← Previous</TelerikButton>
+                    <span class="text-secondary small">Page @_browse.Page of @TotalPages</span>
+                    <TelerikButton OnClick="@(() => LoadBrowseAsync(_browse.Page + 1))"
+                                   Enabled="@(!_browsing && _browse.Page < TotalPages)"
+                                   FillMode="@ThemeConstants.Button.FillMode.Outline">Next →</TelerikButton>
+                </div>
+            }
+        }
+    }
 </div>
 
 @code {
-    private string _query        = "";
+    private const int BrowsePageSize = 24;
+
+    private string _query         = "";
     private string _searchedQuery = "";
-    private bool   _searching    = false;
-    private bool   _searched     = false;
+    private bool   _searching     = false;
+    private bool   _searched      = false;
     private string? _geocodeError;
     private IReadOnlyList<OrgSearchResult> _results      = [];
     private List<OrgSearchResult>          _withinRange  = [];
     private List<OrgSearchResult>          _outsideRange = [];
+
+    private OrgBrowsePage? _browse;
+    private bool _browsing;
+
+    private int TotalPages => _browse is null || _browse.PageSize == 0
+        ? 1
+        : (int)Math.Ceiling(_browse.TotalCount / (double)_browse.PageSize);
+
+    protected override async Task OnInitializedAsync() => await LoadBrowseAsync(1);
+
+    private async Task LoadBrowseAsync(int page)
+    {
+        _browsing = true;
+        StateHasChanged();
+        // Anonymous endpoint — no AuthReady wait needed, and this page is reachable signed out.
+        _browse = await AdminClient.BrowseOrganizationsAsync(page, BrowsePageSize);
+        _browsing = false;
+    }
 
     private async Task SearchAsync()
     {
@@ -159,5 +222,20 @@
         _searchedQuery = _query.Trim();
         _searched      = true;
         _searching     = false;
+    }
+
+    private async Task ClearSearchAsync()
+    {
+        _query         = "";
+        _searchedQuery = "";
+        _searched      = false;
+        _results       = [];
+        _withinRange   = [];
+        _outsideRange  = [];
+        _geocodeError  = null;
+
+        // The list may have changed while the visitor was searching, and reloading costs one
+        // anonymous call — cheaper than reasoning about how stale the cached page might be.
+        await LoadBrowseAsync(1);
     }
 }

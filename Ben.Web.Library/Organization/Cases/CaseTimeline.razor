@@ -225,7 +225,44 @@
                                 @t.Name
                             </div>
                         }
+
+                        @* Nothing in the list fits? Add it. The new type is usable straight away —
+                           an investigator recording tonight's occurrence cannot wait on approval. *@
+                        var catId = cat.Category.Id;
+                        @if (_addingTypeForCategoryId == catId)
+                        {
+                            <div class="d-flex align-items-center gap-1">
+                                @* Plain input, deliberately: Telerik text boxes push their value on
+                                   blur, and this one is submitted by a button click. *@
+                                <input class="form-control form-control-sm" style="width:180px;"
+                                       placeholder="New type name"
+                                       maxlength="100"
+                                       value="@_newTypeName"
+                                       @oninput="@(e => _newTypeName = e.Value?.ToString() ?? "")" />
+                                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                               Enabled="@(!_addingType && !string.IsNullOrWhiteSpace(_newTypeName))"
+                                               OnClick="@(() => AddTypeAsync(catId))">Add</TelerikButton>
+                                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                               OnClick="CancelAddType">Cancel</TelerikButton>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="d-flex align-items-center gap-1 border border-dashed rounded px-2 py-1 text-secondary"
+                                 style="cursor:pointer;font-size:0.82rem;"
+                                 @onclick="@(() => StartAddType(catId))">+ Add type</div>
+                        }
                     }
+                </div>
+                @if (_addTypeError is not null)
+                {
+                    <div class="text-danger small mt-1">@_addTypeError</div>
+                }
+                <div class="form-text">
+                    A type you add is available immediately and is flagged for site administrators
+                    to review.
                 </div>
             </div>
             <div class="col-12">
@@ -283,6 +320,12 @@
     // Taxonomy for experience type picker
     private List<ExperienceCategoryWithTypesResponse> _taxonomy = [];
     private Dictionary<Guid, string> _expTypeNames = new();
+
+    // Inline "add a missing type" state
+    private Guid? _addingTypeForCategoryId;
+    private string _newTypeName = "";
+    private bool _addingType;
+    private string? _addTypeError;
 
     // Dialog state
     private bool _showDialog;
@@ -431,6 +474,65 @@
     }
 
     private void CloseDialog() => _showDialog = false;
+
+    private void StartAddType(Guid categoryId)
+    {
+        _addingTypeForCategoryId = categoryId;
+        _newTypeName = "";
+        _addTypeError = null;
+    }
+
+    private void CancelAddType()
+    {
+        _addingTypeForCategoryId = null;
+        _newTypeName = "";
+        _addTypeError = null;
+    }
+
+    /// <summary>
+    /// Adds a type the taxonomy is missing, then selects it on the entry being written.
+    /// </summary>
+    /// <remarks>
+    /// Selecting it is the point — someone typed the name because they wanted to tag this entry
+    /// with it, so making them find and click it afterwards would be a pointless second step. The
+    /// server returns the existing type when the name is already taken, so a near-duplicate
+    /// selects what is already there instead of creating a twin.
+    /// </remarks>
+    private async Task AddTypeAsync(Guid categoryId)
+    {
+        var name = _newTypeName.Trim();
+        if (string.IsNullOrWhiteSpace(name)) return;
+
+        _addingType = true;
+        _addTypeError = null;
+        try
+        {
+            var created = await AdminClient.AddOrgExperienceTypeAsync(
+                OrgId, new AddOrgExperienceTypeRequest(categoryId, name, null));
+
+            if (created is null)
+            {
+                _addTypeError = "Could not add that type. Only group owners and administrators can.";
+                return;
+            }
+
+            _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).ToList();
+            _expTypeNames = _taxonomy
+                .SelectMany(c => c.Types)
+                .ToDictionary(t => t.Id, t => t.Name);
+
+            _form.ExperienceTypeIds.Add(created.Id);
+            CancelAddType();
+        }
+        catch
+        {
+            _addTypeError = "Could not add that type.";
+        }
+        finally
+        {
+            _addingType = false;
+        }
+    }
 
     private void ToggleType(Guid typeId)
     {
