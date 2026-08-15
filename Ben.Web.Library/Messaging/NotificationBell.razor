@@ -111,6 +111,10 @@
     private IEnumerable<Row> Rows()
     {
         var s = _summary;
+        // First: an unanswered RSVP has a deadline the message rows don't — the visit happens
+        // whether or not you replied, and the badge colour can't convey that (see the DTO).
+        if (s.InvestigationInvites.Count > 0)
+            yield return new("Investigation invitations", "/my-investigations", s.InvestigationInvites);
         if (s.CaseMessagesAsClient.Count > 0)
             yield return new("Replies on your cases", "/my-cases", s.CaseMessagesAsClient);
         if (s.CaseMessagesAsOrgMember.Count > 0)

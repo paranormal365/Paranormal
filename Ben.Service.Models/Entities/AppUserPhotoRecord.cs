@@ -1,0 +1,50 @@
+namespace Ben.Service.Models.Entities;
+
+/// <summary>
+/// One of a user's profile photos. <see cref="IsPublic"/> names the slot (public or private),
+/// <see cref="IsActive"/> says whether it is the one currently in use for that slot.
+/// </summary>
+public record AppUserPhotoRecord
+{
+    public Guid Id { get; init; }
+    public Guid AppUserId { get; init; }
+    public Guid UploadFileId { get; init; }
+    public string? AltText { get; init; }
+    public bool IsPublic { get; init; }
+    public bool IsActive { get; init; }
+    public DateTime DateCreated { get; init; }
+    public DateTime? DateUpdated { get; init; }
+    public Guid CreatedByAppUserId { get; init; }
+    public Guid? UpdatedByAppUserId { get; init; }
+
+    /// <summary>Original file name, for listing prior photos the user might re-activate.</summary>
+    public string? FileName { get; init; }
+}
+
+/// <summary>
+/// The caller's own profile — the first self-service view of an account in the product. Only
+/// the fields a user may change about themselves; role and membership stay admin-owned.
+/// </summary>
+public record MyProfileRecord
+{
+    public Guid AppUserId { get; init; }
+    public string? DisplayName { get; init; }
+    public string? Email { get; init; }
+
+    /// <summary>The active public photo, or null when none is set.</summary>
+    public AppUserPhotoRecord? PublicPhoto { get; init; }
+
+    /// <summary>The active private photo, or null when none is set.</summary>
+    public AppUserPhotoRecord? PrivatePhoto { get; init; }
+}
+
+/// <param name="DisplayName">
+/// Null leaves the current value alone; an empty or whitespace string clears it. The two are
+/// distinguished deliberately so a partial update can't blank a name it never meant to touch.
+/// </param>
+public sealed record UpdateMyProfileRequest(string? DisplayName);
+
+/// <param name="UploadFileId">An already-uploaded file to attach as a photo.</param>
+/// <param name="IsPublic">Which slot to fill: true = public photo, false = private.</param>
+/// <param name="AltText">Optional alt text for screen readers.</param>
+public sealed record SetMyPhotoRequest(Guid UploadFileId, bool IsPublic, string? AltText);

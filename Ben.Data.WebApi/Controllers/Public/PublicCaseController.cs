@@ -70,7 +70,7 @@ public sealed class PublicCaseController : ControllerBase
         if (org is null) return NotFound();
 
         var c = await db.Cases.AsNoTracking()
-            .Include(x => x.TimelineEntries.Where(e => e.IsPublic).OrderBy(e => e.EventDateTime ?? e.DateCreated))
+            .Include(x => x.TimelineEntries.Where(e => e.Visibility == CaseTimelineVisibility.Public).OrderBy(e => e.EventDateTime ?? e.DateCreated).ThenBy(e => e.DateCreated).ThenBy(e => e.Id))
                 .ThenInclude(e => e.Files)
             .FirstOrDefaultAsync(x => x.OrganizationId == org.Id
                                    && x.CaseYear == year && x.OrgCaseNumber == number

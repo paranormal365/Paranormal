@@ -373,4 +373,99 @@ public class NotificationSummaryControllerTests
             PermissionType = FilePermissionType.Use, RequestStatus = status,
             DateCreated = at, CreatedByAppUserId = Guid.NewGuid(),
         };
+
+    // ── Investigation invites ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Seeds an investigation plus one attendee row. The controller compares
+    /// <c>ScheduledDateTime</c> against the real <c>DateTime.UtcNow</c>, so schedules are
+    /// expressed as offsets from now rather than the fixed Older/Newer constants.
+    /// </summary>
+    private static void AddInvite(
+        BenDataContext db, Guid userId, TimeSpan scheduledIn, DateTime invitedAt,
+        RsvpStatus rsvp = RsvpStatus.Invited,
+        InvestigationStatus status = InvestigationStatus.Scheduled)
+    {
+        var invId = Guid.NewGuid();
+        db.Investigations.Add(new Investigation
+        {
+            Id = invId, CaseId = Guid.NewGuid(), Title = "Night visit",
+            ScheduledDateTime = DateTime.UtcNow.Add(scheduledIn), Status = status,
+            DateCreated = invitedAt, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        db.InvestigationAttendees.Add(new InvestigationAttendee
+        {
+            Id = Guid.NewGuid(), InvestigationId = invId, AppUserId = userId,
+            Rsvp = rsvp, DateCreated = invitedAt, CreatedByAppUserId = Guid.NewGuid(),
+        });
+    }
+
+    [Fact]
+    public async Task GetSummary_CountsUnansweredInvitesToUpcomingInvestigations()
+    {
+        var factory = CreateFactory();
+        var userId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            AddInvite(db, userId, TimeSpan.FromDays(3), invitedAt: Newer);
+            AddInvite(db, userId, TimeSpan.FromDays(9), invitedAt: Older);
+            await db.SaveChangesAsync();
+        }
+
+        var summary = await GetSummaryAsync(factory, userId);
+
+        Assert.Equal(2, summary.InvestigationInvites.Count);
+        // The invite's own age, not the visit date — the shared badge classifier reads this
+        // as "waiting since", and a future date would come out as negative age.
+        Assert.Equal(Older, summary.InvestigationInvites.OldestUnreadUtc);
+    }
+
+    [Theory]
+    [InlineData(RsvpStatus.Accepted)]
+    [InlineData(RsvpStatus.Declined)]
+    [InlineData(RsvpStatus.Tentative)]
+    public async Task GetSummary_IgnoresInvitesTheUserAlreadyAnswered(RsvpStatus answered)
+    {
+        var factory = CreateFactory();
+        var userId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            AddInvite(db, userId, TimeSpan.FromDays(3), Newer, rsvp: answered);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, (await GetSummaryAsync(factory, userId)).InvestigationInvites.Count);
+    }
+
+    [Fact]
+    public async Task GetSummary_IgnoresInvitesThatAreNoLongerActionable()
+    {
+        var factory = CreateFactory();
+        var userId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            // Already happened — an unanswered RSVP for last week is history, not a task.
+            AddInvite(db, userId, TimeSpan.FromDays(-2), Newer);
+            // Called off, so there is nothing left to answer.
+            AddInvite(db, userId, TimeSpan.FromDays(3), Newer,
+                status: InvestigationStatus.Cancelled);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, (await GetSummaryAsync(factory, userId)).InvestigationInvites.Count);
+    }
+
+    [Fact]
+    public async Task GetSummary_IgnoresInvitesAddressedToSomeoneElse()
+    {
+        var factory = CreateFactory();
+        var userId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            AddInvite(db, Guid.NewGuid(), TimeSpan.FromDays(3), Newer);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, (await GetSummaryAsync(factory, userId)).InvestigationInvites.Count);
+    }
 }

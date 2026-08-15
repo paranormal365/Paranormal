@@ -468,7 +468,7 @@ public class MediaLibraryControllerTests
             var entry = new CaseTimelineEntry
             {
                 Id = Guid.NewGuid(), CaseId = caseId, AuthorAppUserId = ownerId,
-                EntryType = CaseTimelineEntryType.Evidence, IsPublic = false,
+                EntryType = CaseTimelineEntryType.Evidence, Visibility = CaseTimelineVisibility.OrgOnly,
                 DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
             };
             db.CaseTimelineEntries.Add(entry);

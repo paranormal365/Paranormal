@@ -45,7 +45,7 @@ public class MyCaseControllerTests
         var m = new Mock<IMapper>();
         m.Setup(x => x.Map<CaseTimelineEntryRecord>(It.IsAny<object>()))
             .Returns<object>(o => o is CaseTimelineEntry e
-                ? new CaseTimelineEntryRecord { Id = e.Id, CaseId = e.CaseId, EntryType = e.EntryType, Title = e.Title, Body = e.Body, IsPublic = e.IsPublic, AuthorAppUserId = e.AuthorAppUserId, DateCreated = e.DateCreated }
+                ? new CaseTimelineEntryRecord { Id = e.Id, CaseId = e.CaseId, EntryType = e.EntryType, Title = e.Title, Body = e.Body, Visibility = e.Visibility, AuthorAppUserId = e.AuthorAppUserId, DateCreated = e.DateCreated }
                 : new CaseTimelineEntryRecord { DateCreated = DateTime.UtcNow });
         return m.Object;
     }
@@ -256,7 +256,8 @@ public class MyCaseControllerTests
         var dto = Assert.IsType<CaseTimelineEntryRecord>(ok.Value);
         Assert.Equal(CaseTimelineEntryType.ClientReport, dto.EntryType);
         Assert.Equal("Weird noise", dto.Title);
-        Assert.False(dto.IsPublic);
+        // A client's own report starts internal — visible to them as its author, not shared on.
+        Assert.Equal(CaseTimelineVisibility.OrgOnly, dto.Visibility);
     }
 
     [Fact]
@@ -845,5 +846,101 @@ public class MyCaseControllerTests
         auditLog.Verify(a => a.LogCreateAsync(
             nameof(Ben.Data.Source.Entities.CaseRelatedPerson), It.IsAny<Guid>(), It.IsAny<object>(), clientId, AppSources.WebApi, It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    // ── Timeline visibility tiers (C2) ────────────────────────────────────────
+
+    /// <summary>Adds an org-authored timeline entry at the given visibility.</summary>
+    private static async Task<Guid> SeedOrgEntryAsync(
+        IDbContextFactory<BenDataContext> factory, Guid caseId, CaseTimelineVisibility visibility,
+        string title, CaseTimelineEntryType type = CaseTimelineEntryType.InvestigatorNote)
+    {
+        var entryId = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.CaseTimelineEntries.Add(new CaseTimelineEntry
+        {
+            Id = entryId, CaseId = caseId,
+            AuthorAppUserId = Guid.NewGuid(),          // an investigator, not the client
+            EntryType = type, Title = title, Body = "<p>body</p>",
+            Visibility = visibility,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        await db.SaveChangesAsync();
+        return entryId;
+    }
+
+    private static async Task<IReadOnlyList<ClientCaseOccurrence>> ClientTimelineAsync(
+        IDbContextFactory<BenDataContext> factory, Guid clientId, Guid caseId)
+    {
+        var result = await Build(factory, clientId).GetMyCase(caseId, default);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        return Assert.IsType<ClientCaseDetail>(ok.Value).Occurrences;
+    }
+
+    [Fact]
+    public async Task ClientTimeline_HidesOrgOnlyEntries()
+    {
+        // The default for working notes. A client must never see these.
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        await SeedOrgEntryAsync(factory, caseId, CaseTimelineVisibility.OrgOnly, "Internal theory");
+
+        var timeline = await ClientTimelineAsync(factory, clientId, caseId);
+
+        Assert.DoesNotContain(timeline, o => o.Title == "Internal theory");
+    }
+
+    [Fact]
+    public async Task ClientTimeline_ShowsEntriesSharedWithTheClient()
+    {
+        // The new capability. Before this tier existed, telling a client anything meant publishing
+        // it to the whole internet.
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        await SeedOrgEntryAsync(factory, caseId, CaseTimelineVisibility.Client, "For your eyes");
+
+        var timeline = await ClientTimelineAsync(factory, clientId, caseId);
+
+        var entry = Assert.Single(timeline, o => o.Title == "For your eyes");
+        Assert.True(entry.FromInvestigators);
+    }
+
+    [Fact]
+    public async Task ClientTimeline_ShowsPublicEntriesToo()
+    {
+        // Cumulative: anything the public can see, the client can see.
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        await SeedOrgEntryAsync(factory, caseId, CaseTimelineVisibility.Public, "Published finding");
+
+        var timeline = await ClientTimelineAsync(factory, clientId, caseId);
+
+        Assert.Contains(timeline, o => o.Title == "Published finding");
+    }
+
+    [Fact]
+    public async Task ClientTimeline_StillShowsTheClientsOwnReports_EvenThoughTheyAreOrgOnly()
+    {
+        // A client's own report is created OrgOnly — "not shared onward", not "hidden from its
+        // author". If this ever regressed, clients would lose sight of their own submissions.
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        await Build(factory, clientId).LogOccurrence(caseId,
+            new LogOccurrenceRequest(DateTime.UtcNow, "My own report", "<p>I heard it.</p>"), default);
+
+        var timeline = await ClientTimelineAsync(factory, clientId, caseId);
+
+        var mine = Assert.Single(timeline, o => o.Title == "My own report");
+        Assert.False(mine.FromInvestigators);
+    }
+
+    [Fact]
+    public async Task ClientTimeline_SeparatesTheirOwnEntriesFromTheOrgs()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        await Build(factory, clientId).LogOccurrence(caseId,
+            new LogOccurrenceRequest(DateTime.UtcNow, "Mine", "<p>x</p>"), default);
+        await SeedOrgEntryAsync(factory, caseId, CaseTimelineVisibility.Client, "Theirs");
+
+        var timeline = await ClientTimelineAsync(factory, clientId, caseId);
+
+        Assert.False(Assert.Single(timeline, o => o.Title == "Mine").FromInvestigators);
+        Assert.True(Assert.Single(timeline, o => o.Title == "Theirs").FromInvestigators);
     }
 }

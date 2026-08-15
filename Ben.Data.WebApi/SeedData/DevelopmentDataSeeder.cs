@@ -308,7 +308,7 @@ internal static class DevelopmentDataSeeder
                 EventDateTime = now.AddDays(-28),
                 Title = "Initial Occurrence — Footsteps",
                 Body = "<p>Heard distinct footsteps on the second floor at approximately 2:15 AM. No one was upstairs. Lasted about 90 seconds then stopped. Second occurrence this week.</p>",
-                IsPublic = false,
+                Visibility = CaseTimelineVisibility.OrgOnly,
                 DateCreated = now.AddDays(-28), CreatedByAppUserId = daniel.Id,
             });
             db.CaseTimelineEntries.Add(new CaseTimelineEntry
@@ -318,7 +318,7 @@ internal static class DevelopmentDataSeeder
                 EventDateTime = now.AddDays(-25),
                 Title = "Case Accepted — Initial Review",
                 Body = "<p>Case accepted following review of client submission. Will schedule initial contact and site assessment.</p>",
-                IsPublic = false,
+                Visibility = CaseTimelineVisibility.OrgOnly,
                 DateCreated = now.AddDays(-25), CreatedByAppUserId = sarah.Id,
             });
 
@@ -445,7 +445,7 @@ internal static class DevelopmentDataSeeder
             EventDateTime = opened.AddDays(-7),
             Title = "Initial Client Report",
             Body = $"<p>Client contacted us regarding unusual activity at their property in {city}, {state}.</p>",
-            IsPublic = true,
+            Visibility = CaseTimelineVisibility.Public,
             DateCreated = now, CreatedByAppUserId = creator.Id,
         });
         db.CaseTimelineEntries.Add(new CaseTimelineEntry
@@ -455,7 +455,7 @@ internal static class DevelopmentDataSeeder
             EventDateTime = opened,
             Title = "Case Opened",
             Body = "<p>Case accepted for investigation. Preliminary review of client statement complete. Site visit scheduled.</p>",
-            IsPublic = true,
+            Visibility = CaseTimelineVisibility.Public,
             DateCreated = now, CreatedByAppUserId = creator.Id,
         });
         if (status == CaseStatus.Haunted)
@@ -467,7 +467,7 @@ internal static class DevelopmentDataSeeder
                 EventDateTime = opened.AddDays(14),
                 Title = "Historical Research — Property Records",
                 Body = "<p>Property records reveal multiple previous owners who each reported similar activity. Oldest documented account dates to 1947.</p>",
-                IsPublic = true,
+                Visibility = CaseTimelineVisibility.Public,
                 DateCreated = now, CreatedByAppUserId = creator.Id,
             });
         }

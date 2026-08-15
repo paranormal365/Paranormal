@@ -86,6 +86,12 @@
                             <div class="list-group-item">
                                 <div class="d-flex align-items-start justify-content-between">
                                     <div class="flex-grow-1">
+                                        @* Org-authored entries can now reach this list, so say so —
+                                           otherwise an investigator's note reads as the client's own. *@
+                                        @if (o.FromInvestigators)
+                                        {
+                                            <span class="badge bg-primary mb-1">From the investigators</span>
+                                        }
                                         @if (!string.IsNullOrWhiteSpace(o.Title))
                                         {
                                             <div class="fw-semibold small">@o.Title</div>
@@ -704,6 +710,7 @@
         _case?.Occurrences
             .Where(o => (o.EventDateTime ?? o.DateCreated).ToViewerLocalTime(UserState).Date == date.Date)
             .OrderBy(o => o.EventDateTime ?? o.DateCreated)
+            .ThenBy(o => o.DateCreated).ThenBy(o => o.Id)
             .ToList() ?? [];
 
     private void OpenLogDialog()

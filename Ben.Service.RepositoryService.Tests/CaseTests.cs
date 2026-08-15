@@ -205,7 +205,7 @@ public class CaseTests
             EventDateTime = DateTime.UtcNow.AddDays(-3),
             Title = "Strange knocking",
             Body = "<p>Heard at 2am.</p>",
-            IsPublic = false,
+            Visibility = CaseTimelineVisibility.OrgOnly,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = user.Id,
         });
         await db.SaveChangesAsync();

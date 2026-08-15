@@ -16,6 +16,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UserLinkType> UserLinkTypes { get; set; }
         public virtual DbSet<UserMessageType> UserMessageTypes { get; set; }
         public virtual DbSet<UserNoteType> UserNoteTypes { get; set; }
+        public virtual DbSet<AppUserPhoto> AppUserPhotos { get; set; }
         public virtual DbSet<UserAddress> UserAddresses { get; set; }
         public virtual DbSet<UserEmail> UserEmails { get; set; }
         public virtual DbSet<UserPhone> UserPhones { get; set; }
@@ -396,6 +397,29 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrganizationPage>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── AppUserPhoto ─────────────────────────────────────────────────
+            // The subject FK cascades: deleting a user takes their photo rows. The
+            // CreatedBy/UpdatedBy FKs to the same table must be NoAction or SQL Server sees
+            // multiple cascade paths into AppUserPhotos and refuses the migration (error 1785).
+            modelBuilder.Entity<AppUserPhoto>()
+                .HasOne(e => e.AppUser).WithMany(e => e.Photos)
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<AppUserPhoto>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<AppUserPhoto>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<AppUserPhoto>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // One active photo per slot is the invariant the whole feature rests on — enforced
+            // here rather than only in the controller, so a concurrent activate can't produce two.
+            modelBuilder.Entity<AppUserPhoto>()
+                .HasIndex(e => new { e.AppUserId, e.IsPublic })
+                .HasFilter("[IsActive] = 1")
+                .IsUnique();
 
             // ── OrganizationLogo ─────────────────────────────────────────────
             modelBuilder.Entity<OrganizationLogo>()
@@ -1159,6 +1183,20 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Body).HasColumnType("nvarchar(max)");
             modelBuilder.Entity<CaseTimelineEntry>()
                 .Property(e => e.Title).HasMaxLength(256);
+            // NoAction rather than SetNull or Cascade. Cascade is wrong outright — deleting an
+            // investigation must not delete the notes and readings taken during it, since the
+            // findings outlive the visit. SetNull would express that, but SQL Server rejects it
+            // here: Case already cascades to both Investigations and CaseTimelineEntries, so a
+            // SetNull on this FK is a second path to the same rows ("may cause cycles or multiple
+            // cascade paths", error 1785). InvestigationController.Delete therefore detaches the
+            // entries explicitly before removing the investigation.
+            modelBuilder.Entity<CaseTimelineEntry>()
+                .HasOne(e => e.Investigation).WithMany()
+                .HasForeignKey(e => e.InvestigationId).IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+            // The binder query is always "this investigation's entries".
+            modelBuilder.Entity<CaseTimelineEntry>()
+                .HasIndex(e => e.InvestigationId);
 
             // ── CaseTimelineEntryExperienceType ───────────────────────────────
             modelBuilder.Entity<CaseTimelineEntryExperienceType>()

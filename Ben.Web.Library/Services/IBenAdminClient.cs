@@ -98,6 +98,30 @@ public interface IBenAdminClient
     /// <summary>Pending file-permission requests awaiting the current user, with names resolved.</summary>
     Task<List<PendingPermissionRequestRecord>> GetPendingPermissionRequestsForMeAsync(CancellationToken token = default);
 
+    // ── My profile (Area 4 / U1) ─────────────────────────────────────────────
+    // Everything here is implicitly scoped to the signed-in user; none of these take a user id.
+
+    /// <summary>The current user's own profile, including their active public/private photos.</summary>
+    Task<MyProfileRecord?> GetMyProfileAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// Updates the current user's profile. A null <c>DisplayName</c> leaves the existing name
+    /// untouched; an empty or whitespace one clears it.
+    /// </summary>
+    Task<MyProfileRecord?> UpdateMyProfileAsync(UpdateMyProfileRequest request, CancellationToken token = default);
+
+    /// <summary>Every photo the current user has set, newest first — including inactive ones.</summary>
+    Task<List<AppUserPhotoRecord>> GetMyPhotosAsync(CancellationToken token = default);
+
+    /// <summary>Makes an already-uploaded file the current user's photo for one slot.</summary>
+    Task<AppUserPhotoRecord?> SetMyPhotoAsync(SetMyPhotoRequest request, CancellationToken token = default);
+
+    /// <summary>Removes one of the current user's photos. The underlying file is kept.</summary>
+    Task<bool> DeleteMyPhotoAsync(Guid photoId, CancellationToken token = default);
+
+    /// <summary>The UploadFileType new profile-photo uploads belong to.</summary>
+    Task<Guid?> GetProfilePhotoFileTypeIdAsync(CancellationToken token = default);
+
     /// <summary>Approves or denies a file-permission request. Returns false when the API rejects it.</summary>
     Task<bool> ReviewPermissionRequestAsync(
         Guid requestId, FilePermissionRequestStatus status, string? reviewNotes, CancellationToken token = default);
@@ -503,6 +527,13 @@ public interface IBenAdminClient
 
     Task<IReadOnlyList<CaseRecord>> GetOrgCasesAsync(Guid orgId, CancellationToken token = default);
     Task<CaseRecord?> GetOrgCaseAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+
+    /// <summary>
+    /// The client request this case was created from, or null when it was raised internally (or the
+    /// caller can't read it). Read-only — the case's own description is an editable snapshot that
+    /// diverges from what the client actually wrote.
+    /// </summary>
+    Task<CaseClientRequestRecord?> GetOrgCaseClientRequestAsync(Guid orgId, Guid caseId, CancellationToken token = default);
     Task<CaseRecord?> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default);
     Task<IReadOnlyList<OrgPendingRequestRecord>> GetOrgPendingRequestsAsync(Guid orgId, CancellationToken token = default);
     Task<CaseRecord?> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default);
@@ -510,7 +541,11 @@ public interface IBenAdminClient
     /// <summary>Marks a pending request as Viewed or UnderReview without accepting or declining.</summary>
     Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default);
     Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default);
-    Task<IReadOnlyList<CaseTimelineEntryRecord>> GetCaseTimelineAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    /// <summary>
+    /// The case timeline. Pass <paramref name="investigationId"/> for the binder view — only the
+    /// entries recorded during that investigation.
+    /// </summary>
+    Task<IReadOnlyList<CaseTimelineEntryRecord>> GetCaseTimelineAsync(Guid orgId, Guid caseId, Guid? investigationId = null, CancellationToken token = default);
     Task<CaseTimelineEntryRecord?> AddCaseTimelineEntryAsync(Guid orgId, Guid caseId, UpsertTimelineEntryRequest request, CancellationToken token = default);
     Task<CaseTimelineEntryRecord?> UpdateCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, UpsertTimelineEntryRequest request, CancellationToken token = default);
     Task<bool> DeleteCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
@@ -1385,8 +1420,9 @@ public sealed record UpsertTimelineEntryRequest(
     DateTime? EventDateTime,
     string? Title,
     string? Body,
-    bool IsPublic,
-    IList<Guid> ExperienceTypeIds);
+    Ben.Data.Common.Enums.CaseTimelineVisibility Visibility,
+    IList<Guid> ExperienceTypeIds,
+    Guid? InvestigationId = null);
 
 // ── Client Request request records ────────────────────────────────────────────
 public sealed record UpsertClientRequestRequest(
@@ -1435,6 +1471,7 @@ public sealed record ClientCaseOccurrence(
     DateTime? EventDateTime,
     string?   Title,
     string?   Body,
+    bool      FromInvestigators,   // true when the org wrote this and shared it
     DateTime  DateCreated,
     IReadOnlyList<OccurrenceFileItem> Files);
 

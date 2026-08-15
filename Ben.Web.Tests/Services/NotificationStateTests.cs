@@ -45,7 +45,8 @@ public class NotificationStateTests
     private static NotificationSummaryResponse SummaryWith(int orgMessages) =>
         new(new NotificationBucket(orgMessages, DateTime.UtcNow),
             NotificationBucket.Empty, NotificationBucket.Empty,
-            NotificationBucket.Empty, NotificationBucket.Empty);
+            NotificationBucket.Empty, NotificationBucket.Empty,
+            NotificationBucket.Empty);
 
     private static (NotificationState State, Mock<IBenAdminClient> Client, FakeUserState User, TestNavigationManager Nav)
         Build(NotificationSummaryResponse? returns = null)

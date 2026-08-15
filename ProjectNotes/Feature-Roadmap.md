@@ -230,6 +230,26 @@ Files: `AdminAuditLog.razor` (main), possibly `AdminAuditLogController.cs` (only
 
 **U2 — Self-service profile page (`/profile`).** The first user-facing profile editor: DisplayName edit, public photo, private photo, and a personal opt-in toggle "show my private photo to clients I work with". **DECIDED: client-sharing requires BOTH the org policy and the individual opt-in** — so org Settings also gains "allow members' private photos to be shown to clients" (org-level policy). Add a user menu to `MainLayout`'s top bar (avatar thumbnail + dropdown: Profile, Sign Out) — replacing the bare email text. This page is also where future self-service settings accumulate.
 
+**U2-cam — Take a photo with the device camera (requested 2026-08-14, deferred).** The user wants
+the private profile picture settable by taking a photo then and there, not only by uploading a file
+someone already has. Applies to the private slot in particular — a candid taken on the spot is
+exactly the kind of image you'd share with colleagues and not the public page. Notes for whoever
+builds it:
+
+- **DECIDED: use the native camera where the device offers it.** `<input type="file"
+  accept="image/*" capture="user">` hands off to the phone's own camera app — no permissions
+  plumbing, no JS interop, and the user gets the camera UI they already know. The in-page
+  `getUserMedia` → `<video>` → `<canvas>` → `toBlob` route is only worth building if desktop
+  capture turns out to matter, since on desktop the `capture` attribute is ignored and the control
+  falls back to a plain file picker. Start native; treat getUserMedia as a later add, not phase one.
+- `getUserMedia` is **secure-context only** — it works on `localhost` but silently fails over plain
+  HTTP to a LAN address, so testing from a phone against the dev server needs HTTPS or a tunnel.
+- Output is a `Blob`/`byte[]`, so it can go through the existing upload endpoint unchanged; the
+  Profile Photo `UploadFileType` already allows `.jpg`/`.png`/`.webp`. No schema work.
+- Verification will be awkward: the browser tooling used here cannot drive OS file pickers or
+  synthesise a camera stream, so this needs either a fake-device browser flag or manual testing on
+  a real phone. Budget for that rather than discovering it late.
+
 **U3 — Avatar resolution + rendering.** New endpoint `GET /api/users/{id}/avatar` that picks which photo the *viewer* may see: private photo if (viewer shares an active org membership with the subject) OR (viewer is a client with a case at an org where the subject is a member AND that org's policy allows it AND the subject opted in) — else public photo — else null (render initials fallback). New `UserAvatar.razor` component (initials fallback, size parameter) + integrate into `UserNameLink`. Because `UserNameLink` does no lookup, add a small circuit-scoped avatar-URL cache service rather than threading file ids through every DTO. Adopt in the 4 existing `UserNameLink` sites + message threads + member lists.
 
 **U4 — Client private-photo sharing to case orgs.** Per the doc: clients share their private image with a group while they have a case with it; co-clients likewise. This is just an extra clause in U3's resolution logic (subject has `Case→ClientRequest.AppUserId` or `CaseClientAccess` row at viewer's org) — no new tables.
@@ -243,6 +263,33 @@ Files: `AdminAuditLog.razor` (main), possibly `AdminAuditLogController.cs` (only
 ---
 
 ## Area 5 — Case Page & Investigations Overhaul
+
+### ✅ SHIPPED 2026-08-14 — C1 through C4 (complete)
+
+Built as planned. What the plan didn't anticipate:
+
+- **The timeline assumed one entry per moment, and that assumption was wrong.** Raised by the
+  user: several people can report the same event, and unrelated events can share a minute. All
+  six sort sites keyed on `EventDateTime ?? DateCreated` alone, leaving ties in unspecified
+  provider order — a timeline that reshuffles between page loads can't be cited. Every site now
+  breaks ties on `DateCreated` then `Id`, and the org timeline labels tied entries "N of M at
+  this time", deliberately neutral about whether they are one event or a coincidence.
+- **Telerik dropdowns silently discarded their selection**, under both `@bind-Value` and explicit
+  `Value`/`ValueChanged`. The C3 binder type picker saved "Note" whatever you chose, and the C2
+  visibility picker had the same defect. Both are plain `<select>` now. Only caught by inspecting
+  what persisted — the control looked correct on screen.
+- **Deleting an investigation would have taken its binder entries with it.** SQL Server rejects
+  `SetNull` on that FK (error 1785, multiple cascade paths), so the FK is `NoAction` and
+  `InvestigationController.Delete` detaches entries explicitly. Observations must outlive the
+  calendar event that produced them.
+- **C4's bucket can't be coloured by urgency.** `NotificationBadge` classifies on
+  `now - timestamp`, so a scheduled date would read as negative age and stay Fresh forever. The
+  bucket uses the invite's own date like every other bucket, and the invite row leads the popover
+  instead of relying on colour to convey imminence.
+- **A badge that doesn't clear when you act on it reads as a failed save.** `NotificationState`
+  only refreshed on navigation or the 60s poll, so answering an RSVP left the count stale while
+  the user watched. `MyInvestigations` now forces a refresh after saving. The server count was
+  right the whole time — this was only visible live.
 
 ### What exists today (explored)
 - **Original request**: `Case.ClientRequestId` FK exists, and `AcceptClientRequest` snapshots the request's Description/address onto the case — but the case Description is then freely editable, so it diverges. The Overview tab renders only the literal words "Client Request" as the Source — no link, no content. **No endpoint lets an org member read the originating `ClientRequest`** (`GET api/client-requests/{id}` is owner-or-SuperAdmin only), and `ClientRequestFile` attachments are never carried to the case.

@@ -97,6 +97,28 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<bool> MarkMyMessageReadAsync(Guid id, CancellationToken token = default)
         => _api.PutVoidAsync<object?>($"/api/me/messages/{id}/read", null, token);
 
+    // ── My profile (Area 4 / U1) ─────────────────────────────────────────────
+
+    public Task<MyProfileRecord?> GetMyProfileAsync(CancellationToken token = default)
+        => _api.GetAsync<MyProfileRecord>("/api/me/profile", token);
+
+    public Task<MyProfileRecord?> UpdateMyProfileAsync(
+        UpdateMyProfileRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpdateMyProfileRequest, MyProfileRecord>("/api/me/profile", request, token);
+
+    public async Task<List<AppUserPhotoRecord>> GetMyPhotosAsync(CancellationToken token = default)
+        => await _api.GetAsync<List<AppUserPhotoRecord>>("/api/me/photos", token) ?? [];
+
+    public Task<AppUserPhotoRecord?> SetMyPhotoAsync(
+        SetMyPhotoRequest request, CancellationToken token = default)
+        => _api.PostAsync<SetMyPhotoRequest, AppUserPhotoRecord>("/api/me/photos", request, token);
+
+    public Task<bool> DeleteMyPhotoAsync(Guid photoId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/me/photos/{photoId}", token);
+
+    public Task<Guid?> GetProfilePhotoFileTypeIdAsync(CancellationToken token = default)
+        => _api.GetAsync<Guid?>("/api/me/photos/file-type", token);
+
     public async Task<int> MarkAllMyMessagesReadAsync(CancellationToken token = default)
         => await _api.PutAsync<object?, int>("/api/me/messages/read-all", null, token);
 
@@ -895,6 +917,9 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<CaseRecord?> GetOrgCaseAsync(Guid orgId, Guid caseId, CancellationToken token = default)
         => _api.GetAsync<CaseRecord>($"/api/organizations/{orgId}/cases/{caseId}", token);
 
+    public Task<CaseClientRequestRecord?> GetOrgCaseClientRequestAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+        => _api.GetAsync<CaseClientRequestRecord>($"/api/organizations/{orgId}/cases/{caseId}/client-request", token);
+
     public Task<CaseRecord?> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default)
         => _api.PostAsync<CreateCaseRequest, CaseRecord>($"/api/organizations/{orgId}/cases", request, token);
 
@@ -920,9 +945,11 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default)
         => _api.PutAsync<UpdateCaseRequest, CaseRecord>($"/api/organizations/{orgId}/cases/{caseId}", request, token);
 
-    public async Task<IReadOnlyList<CaseTimelineEntryRecord>> GetCaseTimelineAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+    public async Task<IReadOnlyList<CaseTimelineEntryRecord>> GetCaseTimelineAsync(Guid orgId, Guid caseId, Guid? investigationId = null, CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<CaseTimelineEntryRecord>>($"/api/organizations/{orgId}/cases/{caseId}/timeline", token);
+        var url = $"/api/organizations/{orgId}/cases/{caseId}/timeline";
+        if (investigationId is { } id) url += $"?investigationId={id}";
+        var result = await _api.GetAsync<IReadOnlyList<CaseTimelineEntryRecord>>(url, token);
         return result ?? [];
     }
 

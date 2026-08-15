@@ -138,6 +138,16 @@ public sealed class InvestigationController : BenControllerBase
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var entity = await db.Investigations.FirstOrDefaultAsync(i => i.Id == id && i.CaseId == caseId, ct);
         if (entity is null) return NotFound();
+
+        // Detach the binder entries first. The FK is NoAction (SQL Server won't allow SetNull —
+        // see BenDataContext), so without this the delete fails on a referential constraint. The
+        // notes and readings survive on the case timeline; the visit they were taken during is what
+        // is being removed, not the findings.
+        var binderEntries = await db.CaseTimelineEntries
+            .Where(e => e.InvestigationId == id)
+            .ToListAsync(ct);
+        foreach (var e in binderEntries) e.InvestigationId = null;
+
         db.Investigations.Remove(entity);
         await db.SaveChangesAsync(ct);
         return NoContent();

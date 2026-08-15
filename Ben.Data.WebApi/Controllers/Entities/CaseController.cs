@@ -53,6 +53,66 @@ public sealed class CaseController : BenControllerBase
         return c is null ? NotFound() : Ok(_mapper.Map<CaseRecord>(c));
     }
 
+    /// <summary>
+    /// The client request this case was created from, read-only.
+    /// </summary>
+    /// <remarks>
+    /// <para>Exists because there was no way for an investigating org to read the request their own
+    /// case came from: <c>GET api/client-requests/{id}</c> is owner-or-SuperAdmin only, and the
+    /// case's own description is a snapshot that diverges the moment anyone edits it. Scoped to the
+    /// org route so the same active-membership check as every other case action applies — the
+    /// request contains a client's home address and demographics, and only the org handling the
+    /// case has any business reading it.</para>
+    /// <para>404 when the case has no originating request, which is normal: cases can be raised
+    /// internally rather than from a client submission.</para>
+    /// </remarks>
+    [HttpGet("{caseId:guid}/client-request")]
+    public async Task<ActionResult<CaseClientRequestRecord>> GetClientRequest(
+        Guid orgId, Guid caseId, CancellationToken ct)
+    {
+        if (!await CanReadAsync(orgId, ct)) return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // Matched on both ids: a caseId from another org must not resolve just because the caller
+        // belongs to the org they named in the route.
+        var caseRow = await db.Cases.AsNoTracking()
+            .Where(x => x.Id == caseId && x.OrganizationId == orgId)
+            .Select(x => new { x.ClientRequestId })
+            .FirstOrDefaultAsync(ct);
+        if (caseRow is null) return NotFound("Case not found.");
+        if (caseRow.ClientRequestId is not { } requestId)
+            return NotFound("This case wasn't created from a client request.");
+
+        var request = await db.ClientRequests.AsNoTracking()
+            .Where(r => r.Id == requestId)
+            .Select(r => new CaseClientRequestRecord(
+                r.Id,
+                r.DateCreated,
+                r.Description,
+                r.StreetAddress1,
+                r.StreetAddress2,
+                r.City,
+                r.State,
+                r.ZipCode,
+                r.Country,
+                r.Gender,
+                r.BirthYear,
+                db.ClientRequestFiles
+                  .Where(f => f.ClientRequestId == r.Id)
+                  .OrderBy(f => f.DateCreated)
+                  .Select(f => new CaseClientRequestFileRecord(
+                      f.UploadFileId,
+                      f.UploadFile.FileName,
+                      f.UploadFile.ContentType,
+                      f.UploadFile.FileSize))
+                  .ToList()))
+            .FirstOrDefaultAsync(ct);
+
+        // The FK pointed at a row that no longer exists — report it as missing rather than 500.
+        return request is null ? NotFound("The originating request no longer exists.") : Ok(request);
+    }
+
     // ── Create (internally proposed) ──────────────────────────────────────────
 
     [HttpPost]
@@ -315,22 +375,45 @@ public sealed class CaseController : BenControllerBase
 
     // ── Timeline entries ──────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The case timeline, optionally narrowed to one investigation.
+    /// </summary>
+    /// <param name="orgId">Owning org.</param>
+    /// <param name="caseId">The case.</param>
+    /// <param name="investigationId">
+    /// When supplied, returns only entries recorded during that investigation — the "binder" view.
+    /// A binder is a filtered timeline rather than a separate store, so entries written in one show
+    /// up on the case timeline automatically and carry the same visibility rules and attachments.
+    /// </param>
+    /// <param name="ct">Cancellation token.</param>
     [HttpGet("{caseId:guid}/timeline")]
     public async Task<ActionResult<IEnumerable<CaseTimelineEntryRecord>>> GetTimeline(
-        Guid orgId, Guid caseId, CancellationToken ct)
+        Guid orgId, Guid caseId, [FromQuery] Guid? investigationId, CancellationToken ct)
     {
         if (!await CanReadAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
         var exists = await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct);
         if (!exists) return NotFound();
 
-        var entries = await db.CaseTimelineEntries
+        var query = db.CaseTimelineEntries
             .AsNoTracking()
             .Include(e => e.AuthorAppUser)
             .Include(e => e.ExperienceTypes)
             .Include(e => e.Files).ThenInclude(f => f.UploadFile)
-            .Where(e => e.CaseId == caseId)
+            .Where(e => e.CaseId == caseId);
+
+        if (investigationId is { } invId)
+            query = query.Where(e => e.InvestigationId == invId);
+
+        // Two people can report the same moment — or two unrelated things can happen at
+        // the same moment — so ties on event time are expected, not an edge case. Sorting
+        // on event time alone leaves tied entries in whatever order the provider returns,
+        // which can differ between requests; a timeline that reshuffles isn't citable.
+        // DateCreated breaks the tie by who logged it first, Id guarantees a total order.
+        var entries = await query
             .OrderBy(e => e.EventDateTime ?? e.DateCreated)
+            .ThenBy(e => e.DateCreated)
+            .ThenBy(e => e.Id)
             .ToListAsync(ct);
         return Ok(_mapper.Map<IEnumerable<CaseTimelineEntryRecord>>(entries));
     }
@@ -354,7 +437,8 @@ public sealed class CaseController : BenControllerBase
             EventDateTime      = request.EventDateTime,
             Title              = request.Title?.Trim(),
             Body               = request.Body?.Trim(),
-            IsPublic           = request.IsPublic,
+            Visibility         = request.Visibility,
+            InvestigationId    = request.InvestigationId,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
@@ -401,7 +485,8 @@ public sealed class CaseController : BenControllerBase
         entry.EventDateTime      = request.EventDateTime;
         entry.Title              = request.Title?.Trim();
         entry.Body               = request.Body?.Trim();
-        entry.IsPublic           = request.IsPublic;
+        entry.Visibility         = request.Visibility;
+        entry.InvestigationId    = request.InvestigationId;
         entry.DateUpdated        = DateTime.UtcNow;
         entry.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
 
@@ -555,8 +640,9 @@ public sealed record UpsertTimelineEntryRequest(
     DateTime? EventDateTime,
     string? Title,
     string? Body,
-    bool IsPublic,
-    IList<Guid> ExperienceTypeIds);
+    Ben.Data.Common.Enums.CaseTimelineVisibility Visibility,
+    IList<Guid> ExperienceTypeIds,
+    Guid? InvestigationId = null);
 
 /// <summary>Updates a client-request org application to Viewed or UnderReview.</summary>
 public sealed record UpdateRequestStatusRequest(

@@ -4,6 +4,7 @@ using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Ben.Data.Source.Migrations
 {
     [DbContext(typeof(BenDataContext))]
-    partial class BenDataContextModelSnapshot : ModelSnapshot
+    [Migration("20260814192750_AddTimelineInvestigationLink")]
+    partial class AddTimelineInvestigationLink
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -95,54 +98,6 @@ namespace Ben.Data.Source.Migrations
                         .HasFilter("[NormalizedUserName] IS NOT NULL");
 
                     b.ToTable("AppUsers", (string)null);
-                });
-
-            modelBuilder.Entity("Ben.Data.Source.Entities.AppUserPhoto", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("AltText")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid>("AppUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("CreatedByAppUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("DateCreated")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("DateUpdated")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsPublic")
-                        .HasColumnType("bit");
-
-                    b.Property<Guid?>("UpdatedByAppUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("UploadFileId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedByAppUserId");
-
-                    b.HasIndex("UpdatedByAppUserId");
-
-                    b.HasIndex("UploadFileId");
-
-                    b.HasIndex("AppUserId", "IsPublic")
-                        .IsUnique()
-                        .HasFilter("[IsActive] = 1");
-
-                    b.ToTable("AppUserPhotos");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.AudioMarker", b =>
@@ -4962,40 +4917,6 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("Ben.Data.Source.Entities.AppUserPhoto", b =>
-                {
-                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
-                        .WithMany("Photos")
-                        .HasForeignKey("AppUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByAppUserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
-                        .WithMany()
-                        .HasForeignKey("UpdatedByAppUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "UploadFile")
-                        .WithMany()
-                        .HasForeignKey("UploadFileId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.Navigation("AppUser");
-
-                    b.Navigation("CreatedByAppUser");
-
-                    b.Navigation("UpdatedByAppUser");
-
-                    b.Navigation("UploadFile");
-                });
-
             modelBuilder.Entity("Ben.Data.Source.Entities.AudioMarker", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
@@ -7636,8 +7557,6 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("CreatedMessages");
 
                     b.Navigation("CreatedUserNotes");
-
-                    b.Navigation("Photos");
 
                     b.Navigation("ReceivedUserMessageTos");
 
