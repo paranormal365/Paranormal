@@ -7,6 +7,14 @@ namespace Ben.Data.Source.Entities
     {
         // UserName, Email, PasswordHash, etc. are provided by IdentityUser<Guid>.
         public string? DisplayName { get; set; }
+
+        /// <summary>
+        /// This user's half of the two-key rule for showing their private photo to clients of the
+        /// orgs they work for. Meaningless on its own — the org must also allow it
+        /// (<see cref="Organization.AllowMemberPrivatePhotosToClients"/>). Defaults to false:
+        /// consent is something you give, not something you forget to withdraw.
+        /// </summary>
+        public bool SharePrivatePhotoWithClients { get; set; }
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
 

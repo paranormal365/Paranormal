@@ -971,7 +971,10 @@ public sealed record AdminCreateOrganizationRequest(string Name, string UrlName,
 /// <summary>Request body for updating an organization's Name and UrlName.</summary>
 public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName,
     bool IsAcceptingApplications = false,
-    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null);
+    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null,
+    // Optional so an existing caller that omits it can't silently switch the policy off.
+    // Null means "leave as-is"; see OrganizationController.Update.
+    bool? AllowMemberPrivatePhotosToClients = null);
 
 /// <summary>Role record paired with its current user count.</summary>
 public sealed record AdminRoleWithCountResponse(AppRoleAdminRecord Role, int UserCount);

@@ -36,13 +36,31 @@ public record MyProfileRecord
 
     /// <summary>The active private photo, or null when none is set.</summary>
     public AppUserPhotoRecord? PrivatePhoto { get; init; }
+
+    /// <summary>
+    /// This user's opt-in to showing their private photo to clients of the orgs they work for.
+    /// One half of a two-key rule — see <see cref="AnyOrgAllowsPrivatePhotoSharing"/>.
+    /// </summary>
+    public bool SharePrivatePhotoWithClients { get; init; }
+
+    /// <summary>
+    /// Whether at least one org the user actively belongs to permits member private photos to be
+    /// shown to clients. Read-only context for the profile page, so the opt-in toggle can say
+    /// whether turning it on will actually do anything — an opt-in that silently does nothing
+    /// because no org allows it is worse than no toggle at all.
+    /// </summary>
+    public bool AnyOrgAllowsPrivatePhotoSharing { get; init; }
 }
 
 /// <param name="DisplayName">
 /// Null leaves the current value alone; an empty or whitespace string clears it. The two are
 /// distinguished deliberately so a partial update can't blank a name it never meant to touch.
 /// </param>
-public sealed record UpdateMyProfileRequest(string? DisplayName);
+/// <param name="SharePrivatePhotoWithClients">
+/// Null leaves the current setting alone, so a caller updating only the display name can't
+/// accidentally revoke or grant consent it never mentioned.
+/// </param>
+public sealed record UpdateMyProfileRequest(string? DisplayName, bool? SharePrivatePhotoWithClients = null);
 
 /// <param name="UploadFileId">An already-uploaded file to attach as a photo.</param>
 /// <param name="IsPublic">Which slot to fill: true = public photo, false = private.</param>

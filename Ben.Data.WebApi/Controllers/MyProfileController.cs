@@ -59,6 +59,15 @@ public sealed class MyProfileController : BenControllerBase
 
         var photos = await ActivePhotosAsync(db, userId, ct);
 
+        // Whether the opt-in can actually take effect anywhere. Computed rather than stored so it
+        // stays honest as org policy changes underneath the user.
+        // Joined explicitly — OrganizationUserMembership carries no Organization navigation.
+        var anyOrgAllows = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.AppUserId == userId && m.IsActive)
+            .Join(db.Organizations.AsNoTracking(),
+                  m => m.OrganizationId, o => o.Id, (_, o) => o.AllowMemberPrivatePhotosToClients)
+            .AnyAsync(allows => allows, ct);
+
         return Ok(new MyProfileRecord
         {
             AppUserId    = user.Id,
@@ -66,6 +75,8 @@ public sealed class MyProfileController : BenControllerBase
             Email        = user.Email,
             PublicPhoto  = photos.FirstOrDefault(p => p.IsPublic),
             PrivatePhoto = photos.FirstOrDefault(p => !p.IsPublic),
+            SharePrivatePhotoWithClients    = user.SharePrivatePhotoWithClients,
+            AnyOrgAllowsPrivatePhotoSharing = anyOrgAllows,
         });
     }
 
@@ -82,7 +93,12 @@ public sealed class MyProfileController : BenControllerBase
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
         if (user is null) return NotFound();
 
-        var before = new AppUser { Id = user.Id, DisplayName = user.DisplayName };
+        var before = new AppUser
+        {
+            Id = user.Id,
+            DisplayName = user.DisplayName,
+            SharePrivatePhotoWithClients = user.SharePrivatePhotoWithClients,
+        };
 
         // Null means "not supplied" and leaves the name alone; whitespace means "clear it".
         // Collapsing those two would let a partial update blank a name it never mentioned.
@@ -93,6 +109,11 @@ public sealed class MyProfileController : BenControllerBase
                 return BadRequest($"Display name cannot exceed {MaxDisplayNameLength} characters.");
             user.DisplayName = trimmed.Length == 0 ? null : trimmed;
         }
+
+        // Same null-means-untouched rule as DisplayName: consent is only changed when the caller
+        // actually says so, never as a side effect of editing something else on the page.
+        if (request.SharePrivatePhotoWithClients is { } share)
+            user.SharePrivatePhotoWithClients = share;
 
         user.DateUpdated = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
