@@ -105,6 +105,7 @@ internal static class OrganizationSeeder
 
         // ── Seed UserMessageType for membership responses ────────────────────
         await EnsureMembershipResponseMessageType(db, owner.Id);
+        await EnsureTaxonomyReviewMessageType(db, owner.Id);
     }
 
     /// <summary>
@@ -113,6 +114,35 @@ internal static class OrganizationSeeder
     /// </summary>
     internal static readonly Guid MembershipResponseMessageTypeId =
         new("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+
+    /// <summary>
+    /// Fixed ID for the "Experience Taxonomy Review" UserMessageType — the notice app
+    /// administrators get when a group adds a new experience type.
+    /// </summary>
+    internal static readonly Guid TaxonomyReviewMessageTypeId =
+        new("b2c3d4e5-f607-8901-bcde-f23456789012");
+
+    private static async Task EnsureTaxonomyReviewMessageType(BenDataContext db, Guid createdByUserId)
+    {
+        if (await db.UserMessageTypes.AnyAsync(t => t.Id == TaxonomyReviewMessageTypeId))
+            return;
+
+        db.UserMessageTypes.Add(new UserMessageType
+        {
+            Id                 = TaxonomyReviewMessageTypeId,
+            Name               = "Experience Taxonomy Review",
+            Description        = "System-generated notice to app administrators that a group added a new experience type, which is live and awaiting review.",
+            IconClass          = "fa-tags",
+            ColorClass         = "text-warning",
+            IsActive           = true,
+            IsPublic           = false,
+            SortOrder          = 110,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = createdByUserId,
+        });
+        await db.SaveChangesAsync();
+        Console.WriteLine("[OrganizationSeeder] Seeded 'Experience Taxonomy Review' UserMessageType.");
+    }
 
     private static async Task EnsureMembershipResponseMessageType(BenDataContext db, Guid createdByUserId)
     {

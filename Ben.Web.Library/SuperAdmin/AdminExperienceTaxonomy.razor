@@ -79,13 +79,15 @@
                         <div class="d-flex flex-wrap gap-2">
                             @foreach (var t in types.OrderBy(x => x.SortOrder))
                             {
-                                <div class="badge-pill d-flex align-items-center gap-1 border rounded px-2 py-1 @(t.IsApproved ? "" : "border-warning")">
+                                <div class="badge-pill d-flex align-items-center gap-1 border rounded px-2 py-1 @(!t.IsApproved || NeedsReview(t) ? "border-warning" : "")">
                                     @if (!string.IsNullOrEmpty(t.IconClass))
                                     {
                                         <i class="@t.IconClass" style="font-size:0.75rem;"></i>
                                     }
                                     <span style="font-size:0.85rem;">@t.Name</span>
                                     @if (!t.IsApproved) { <span class="text-warning" title="Pending approval">⚠</span> }
+                                    @* Added by a group: already live, but nobody here has looked at it yet. *@
+                                    @if (NeedsReview(t)) { <span class="text-warning" title="Added by a group — live, awaiting your review">★</span> }
                                     @if (!t.IsActive) { <span class="text-secondary" title="Inactive">●</span> }
                                     <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
                                                    Size="@ThemeConstants.Button.Size.Small"
@@ -97,12 +99,20 @@
                                                    Icon="@SvgIcon.Trash"
                                                    Title="Delete"
                                                    OnClick="@(() => ConfirmDeleteType(cat, t))" />
-                                    @if (!t.IsApproved)
+                                    @if (!t.IsApproved || NeedsReview(t))
                                     {
                                         <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
                                                        Size="@ThemeConstants.Button.Size.Small"
-                                                       Title="Approve"
+                                                       Title="@(NeedsReview(t) ? "Confirm — keep this type" : "Approve")"
                                                        OnClick="@(() => ApproveType(cat, t))">✓</TelerikButton>
+                                    }
+                                    @if (NeedsReview(t))
+                                    {
+                                        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                       Size="@ThemeConstants.Button.Size.Small"
+                                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
+                                                       Title="Reject — remove this type and untag anything using it"
+                                                       OnClick="@(() => ConfirmRejectType(cat, t))">✕</TelerikButton>
                                     }
                                 </div>
                             }
@@ -401,6 +411,31 @@
         await AdminClient.ApproveExperienceTypeAsync(cat.Id, t.Id);
         _isBusy = false;
         await LoadAsync();
+    }
+
+    /// <summary>
+    /// True for a type a group added that no app administrator has looked at yet.
+    /// </summary>
+    /// <remarks>
+    /// Needs no dedicated column: group-added types go live approved but with
+    /// <c>ApprovedByAppUserId</c> left null, and every SuperAdmin-created or confirmed type has
+    /// that field stamped. Null approver plus a proposing organization is exactly "unreviewed".
+    /// </remarks>
+    private static bool NeedsReview(ExperienceTypeRecord t)
+        => t.IsApproved && t.ProposedByOrganizationId is not null && t.ApprovedByAppUserId is null;
+
+    private void ConfirmRejectType(ExperienceCategoryRecord cat, ExperienceTypeRecord t)
+    {
+        // Reuses the delete-confirmation dialog, with wording that says what actually happens —
+        // the entries keep their content and lose only this tag.
+        _deleteLabel = $"type '{t.Name}'. Entries tagged with it will keep everything else and " +
+                       "simply lose this tag";
+        _deleteAction = async () =>
+        {
+            await AdminClient.RejectExperienceTypeAsync(cat.Id, t.Id);
+            await LoadAsync();
+        };
+        _showDeleteConfirm = true;
     }
 
     private void ConfirmDeleteType(ExperienceCategoryRecord cat, ExperienceTypeRecord t)

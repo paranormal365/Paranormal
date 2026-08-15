@@ -283,6 +283,46 @@ public sealed class AdminExperienceTypeController : BenControllerBase
         await db.SaveChangesAsync(ct);
         return Ok(_mapper.Map<ExperienceTypeRecord>(entity));
     }
+
+    /// <summary>
+    /// Rejects a group-added type: removes it, and strips it from anything tagged with it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Deletes the <i>usages</i>, never the records. A timeline entry tagged with a rejected
+    /// type loses the tag and keeps everything else — its text, its author, its files, its place
+    /// on the timeline. Someone's account of what happened is not deleted because an
+    /// administrator disliked the label put on it.</para>
+    ///
+    /// <para>Transactional: dropping the tags and dropping the type have to happen together, or a
+    /// half-applied rejection leaves join rows pointing at a type that no longer exists.</para>
+    /// </remarks>
+    [HttpPut("{id:guid}/reject")]
+    public async Task<ActionResult<RejectExperienceTypeResponse>> Reject(
+        Guid categoryId, Guid id, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var entity = await db.ExperienceTypes
+            .FirstOrDefaultAsync(t => t.Id == id && t.ExperienceCategoryId == categoryId, ct);
+        if (entity is null) return NotFound();
+
+        var usages = await db.CaseTimelineEntryExperienceTypes
+            .Where(x => x.ExperienceTypeId == id)
+            .ToListAsync(ct);
+
+        // EF InMemory has no transactions, so the guard keeps the unit tests runnable.
+        await using var tx = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(ct)
+            : null;
+
+        db.CaseTimelineEntryExperienceTypes.RemoveRange(usages);
+        db.ExperienceTypes.Remove(entity);
+        await db.SaveChangesAsync(ct);
+
+        if (tx is not null) await tx.CommitAsync(ct);
+
+        return Ok(new RejectExperienceTypeResponse(id, usages.Count));
+    }
 }
 
 // ── Request / response records ────────────────────────────────────────────────
@@ -303,6 +343,9 @@ public sealed record UpsertExperienceTypeRequest(
     string? IconClass,
     int SortOrder,
     bool IsActive);
+
+/// <summary>What a rejection removed — the type, and how many taggings went with it.</summary>
+public sealed record RejectExperienceTypeResponse(Guid ExperienceTypeId, int UsagesRemoved);
 
 public sealed record ExperienceCategoryWithTypesResponse(
     ExperienceCategoryRecord Category,

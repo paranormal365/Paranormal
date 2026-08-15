@@ -309,6 +309,10 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         return result ?? [];
     }
 
+    public Task<OrgBrowsePage?> BrowseOrganizationsAsync(int page = 1, int pageSize = 24, CancellationToken token = default)
+        => _api.GetAnonymousAsync<OrgBrowsePage>(
+               $"/api/public/organizations/browse?page={page}&pageSize={pageSize}", token);
+
     // ── Organization Addresses ────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<OrganizationAddressRecord>> GetOrgAddressesAsync(Guid orgId, CancellationToken token = default)
@@ -1343,6 +1347,12 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
 
     public Task<ExperienceTypeRecord?> ApproveExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default)
         => _api.PutAsync<object, ExperienceTypeRecord>($"/api/admin/experience-categories/{categoryId}/types/{id}/approve", new { }, token);
+
+    public Task<RejectExperienceTypeResponse?> RejectExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default)
+        => _api.PutAsync<object, RejectExperienceTypeResponse>($"/api/admin/experience-categories/{categoryId}/types/{id}/reject", new { }, token);
+
+    public Task<ExperienceTypeRecord?> AddOrgExperienceTypeAsync(Guid orgId, AddOrgExperienceTypeRequest request, CancellationToken token = default)
+        => _api.PostAsync<AddOrgExperienceTypeRequest, ExperienceTypeRecord>($"/api/organizations/{orgId}/experience-types", request, token);
 
     // ── CMS File Library ──────────────────────────────────────────────────────
 
