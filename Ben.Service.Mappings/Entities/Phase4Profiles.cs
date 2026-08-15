@@ -30,7 +30,14 @@ public class OrgCalendarEventProfile : Profile
             .ForMember(d => d.EventTypeName,  o => o.MapFrom(s => s.EventType != null ? s.EventType.Name : null))
             .ForMember(d => d.EventTypeColor, o => o.MapFrom(s => s.EventType != null ? s.EventType.ColorClass : null))
             .ForMember(d => d.CaseReference,  o => o.MapFrom(s => s.Case != null ? $"#{s.Case.CaseYear}-{s.Case.OrgCaseNumber:D3}" : null))
-            .ForMember(d => d.AttendeeCount,  o => o.MapFrom(s => s.Attendees.Count));
+            .ForMember(d => d.AttendeeCount,  o => o.MapFrom(s => s.Attendees.Count))
+            // Flattened here so a caller rendering an event needs no second lookup just to show
+            // where it is. Street and city only — the full postal form is more than a calendar row
+            // can use, and the address itself is one click away.
+            .ForMember(d => d.OrganizationAddressLabel, o => o.MapFrom(s =>
+                s.OrganizationAddress != null
+                    ? s.OrganizationAddress.StreetAddress1 + ", " + s.OrganizationAddress.City + " " + s.OrganizationAddress.State
+                    : null));
     }
 }
 

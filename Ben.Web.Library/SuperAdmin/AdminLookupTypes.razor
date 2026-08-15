@@ -113,10 +113,9 @@
 </div>
 
 @* ── Add / Edit dialog ── *@
-<TelerikDialog @bind-Visible="@_showDialog"
-               Title="@(_editingItem is null ? $"New {_familyLabel}" : $"Edit {_familyLabel}")"
-               Width="520px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showDialog" Width="520px" Modal="true">
+    <WindowTitle>@(_editingItem is null ? $"New {_familyLabel}" : $"Edit {_familyLabel}")</WindowTitle>
+    <WindowContent>
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
@@ -153,17 +152,19 @@
                 </div>
             }
         </div>
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       OnClick="SaveAsync"
-                       Enabled="@(!string.IsNullOrWhiteSpace(_form.Name))">
-            Save
-        </TelerikButton>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="@(() => _showDialog = false)">Cancel</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           OnClick="SaveAsync"
+                           Enabled="@(!string.IsNullOrWhiteSpace(_form.Name))">
+                Save
+            </TelerikButton>
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           OnClick="@(() => _showDialog = false)">Cancel</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Delete confirm dialog ────────────────────────────────── *@
 <ConfirmDialog @bind-Visible="@_showDeleteDialog" Title="Confirm Delete" Width="400px"

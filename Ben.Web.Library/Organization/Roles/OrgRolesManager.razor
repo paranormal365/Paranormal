@@ -118,24 +118,25 @@ else
     }
 }
 
-<TelerikDialog @bind-Visible="_showDeleteConfirm"
-               Title="Delete Role"
-               Width="400px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="_showDeleteConfirm" Width="400px" Modal="true">
+    <WindowTitle>Delete Role</WindowTitle>
+    <WindowContent>
         <p>Delete role <strong>@(_roleToDelete?.Name)</strong>? This will remove all permissions and member assignments for this role.</p>
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                       OnClick="DeleteRoleAsync"
-                       Enabled="@(!_isSaving)">
-            @(_isSaving ? "Deleting…" : "Delete")
-        </TelerikButton>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="@(() => _showDeleteConfirm = false)">
-            Cancel
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           OnClick="DeleteRoleAsync"
+                           Enabled="@(!_isSaving)">
+                @(_isSaving ? "Deleting…" : "Delete")
+            </TelerikButton>
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           OnClick="@(() => _showDeleteConfirm = false)">
+                Cancel
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @code {
     [Parameter] public Guid OrgId { get; set; }

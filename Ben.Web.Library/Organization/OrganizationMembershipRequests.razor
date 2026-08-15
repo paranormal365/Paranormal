@@ -85,8 +85,9 @@
 </div>
 
 @* ── Deny dialog — Phase 3: CanReapply + DenialReason ────────────────────── *@
-<TelerikDialog @bind-Visible="@_showDenyDialog" Title="Deny Membership Application" Width="480px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showDenyDialog" Width="480px" Modal="true">
+    <WindowTitle>Deny Membership Application</WindowTitle>
+    <WindowContent>
         <p class="small text-secondary mb-3">
             Applicant: <strong>@_pendingDeny?.ApplicantDisplayName</strong>
         </p>
@@ -103,22 +104,25 @@
                 </label>
             </div>
         </div>
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="@(() => { _showDenyDialog = false; _pendingDeny = null; _denyNote = string.Empty; _canReapply = false; })">
-            Cancel
-        </TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                       OnClick="ConfirmDenyAsync">
-            Deny Application
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           OnClick="@(() => { _showDenyDialog = false; _pendingDeny = null; _denyNote = string.Empty; _canReapply = false; })">
+                Cancel
+            </TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           OnClick="ConfirmDenyAsync">
+                Deny Application
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Open vote dialog ─────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showVoteDialog" Title="Open Committee Vote" Width="420px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showVoteDialog" Width="420px" Modal="true">
+    <WindowTitle>Open Committee Vote</WindowTitle>
+    <WindowContent>
         <p class="small text-secondary mb-3">
             Set a deadline for committee members to vote on <strong>@_pendingVote?.ApplicantDisplayName</strong>'s application.
             When the deadline passes, votes are tallied: majority Approve → Accepted, otherwise → Denied.
@@ -129,16 +133,18 @@
         {
             <div class="text-danger small mt-2">@_voteDialogError</div>
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="@(() => _showVoteDialog = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       OnClick="ConfirmOpenVoteAsync"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Opening…" : "Open Vote")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="@(() => _showVoteDialog = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           OnClick="ConfirmOpenVoteAsync"
+                           Enabled="@(!_isBusy)">
+                @(_isBusy ? "Opening…" : "Open Vote")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 <TelerikNotification @ref="_toast" HorizontalPosition="@NotificationHorizontalPosition.Right"
                      VerticalPosition="@NotificationVerticalPosition.Top" />

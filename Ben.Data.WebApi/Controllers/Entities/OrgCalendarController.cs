@@ -123,7 +123,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         var query = db.OrgCalendarEvents.AsNoTracking()
             .Include(e => e.EventType)
             .Include(e => e.Case)
-            .Include(e => e.Attendees)
+            .Include(e => e.Attendees).Include(e => e.OrganizationAddress)
             .Where(e => e.OrganizationId == orgId);
 
         if (from.HasValue) query = query.Where(e => e.EndDateTime >= from.Value);
@@ -140,7 +140,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
         var ev = await db.OrgCalendarEvents.AsNoTracking()
-            .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees)
+            .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees).Include(e => e.OrganizationAddress)
             .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         return ev is null ? NotFound() : Ok(_mapper.Map<OrgCalendarEventRecord>(ev));
     }
@@ -158,6 +158,8 @@ public sealed class OrgCalendarEventController : BenControllerBase
             EventTypeId = request.EventTypeId, CaseId = request.CaseId,
             Title = request.Title.Trim(), Description = request.Description?.Trim(),
             Location = request.Location?.Trim(),
+            OrganizationAddressId = request.OrganizationAddressId,
+            MeetingUrl = NormaliseUrl(request.MeetingUrl),
             StartDateTime = request.StartDateTime, EndDateTime = request.EndDateTime,
             IsAllDay = request.IsAllDay, IsPublic = request.IsPublic,
             RecurrenceRule = request.RecurrenceRule?.Trim(),
@@ -167,7 +169,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         await db.SaveChangesAsync(ct);
 
         var loaded = await db.OrgCalendarEvents.AsNoTracking()
-            .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees)
+            .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees).Include(e => e.OrganizationAddress)
             .FirstAsync(e => e.Id == entity.Id, ct);
         return CreatedAtAction(nameof(GetById), new { orgId, eventId = entity.Id },
             _mapper.Map<OrgCalendarEventRecord>(loaded));
@@ -186,6 +188,8 @@ public sealed class OrgCalendarEventController : BenControllerBase
         entity.EventTypeId = request.EventTypeId; entity.CaseId = request.CaseId;
         entity.Title = request.Title.Trim(); entity.Description = request.Description?.Trim();
         entity.Location = request.Location?.Trim();
+        entity.OrganizationAddressId = request.OrganizationAddressId;
+        entity.MeetingUrl = NormaliseUrl(request.MeetingUrl);
         entity.StartDateTime = request.StartDateTime; entity.EndDateTime = request.EndDateTime;
         entity.IsAllDay = request.IsAllDay; entity.IsPublic = request.IsPublic;
         entity.RecurrenceRule = request.RecurrenceRule?.Trim();
@@ -193,7 +197,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
         await db.SaveChangesAsync(ct);
         var loaded = await db.OrgCalendarEvents.AsNoTracking()
-            .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees)
+            .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees).Include(e => e.OrganizationAddress)
             .FirstAsync(e => e.Id == entity.Id, ct);
         return Ok(_mapper.Map<OrgCalendarEventRecord>(loaded));
     }
@@ -211,6 +215,29 @@ public sealed class OrgCalendarEventController : BenControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Tidies a pasted meeting link, or drops it if it isn't a usable web address.
+    /// </summary>
+    /// <remarks>
+    /// People paste "zoom.us/j/123" as often as the full URL, so a bare host gets https://
+    /// rather than being rejected. Anything that still will not parse as http(s) is stored as null
+    /// instead of as text that would render a dead link — a link that goes nowhere is worse than
+    /// no link, because someone will click it while a meeting is starting.
+    /// </remarks>
+    internal static string? NormaliseUrl(string? raw)
+    {
+        var value = raw?.Trim();
+        if (string.IsNullOrWhiteSpace(value)) return null;
+
+        if (!value.Contains("://", StringComparison.Ordinal))
+            value = "https://" + value;
+
+        return Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+                ? uri.ToString()
+                : null;
+    }
+
     // ── Attendees ─────────────────────────────────────────────────────────────
 
     [HttpGet("{eventId:guid}/attendees")]
@@ -226,6 +253,64 @@ public sealed class OrgCalendarEventController : BenControllerBase
             .Where(a => a.OrgCalendarEventId == eventId)
             .ToListAsync(ct);
         return Ok(_mapper.Map<IEnumerable<OrgCalendarEventAttendeeRecord>>(attendees));
+    }
+
+    /// <summary>Invites someone by email address, for people outside the organization.</summary>
+    /// <remarks>
+    /// <para>By address rather than by search on purpose. The existing user search only returns
+    /// people who already share an organization with the caller, so it cannot serve this case at
+    /// all — and widening it would hand every group administrator a searchable directory of the
+    /// whole site. Requiring the address means you can only invite someone you already know how
+    /// to contact, which is how you knew to invite them.</para>
+    ///
+    /// <para>It reveals only whether a *published* address belongs to an account, to someone who
+    /// already knows that address — which is what publishing an address means. Private sign-in
+    /// addresses are not searchable here at all.</para>
+    /// </remarks>
+    [HttpPost("{eventId:guid}/attendees/by-email")]
+    public async Task<ActionResult<OrgCalendarEventAttendeeRecord>> AddAttendeeByEmail(
+        Guid orgId, Guid eventId, [FromBody] AddAttendeeByEmailRequest request, CancellationToken ct)
+    {
+        if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        var userId = GetCurrentUserId();
+
+        var email = request.Email?.Trim();
+        if (string.IsNullOrWhiteSpace(email)) return BadRequest("An email address is required.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await db.OrgCalendarEvents.AnyAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct))
+            return NotFound();
+
+        // Matched against the user's *published* addresses, never AppUser.Email. The sign-in
+        // address is private by design — the profile page says so in as many words — so resolving
+        // an invite against it would turn this endpoint into a way of confirming somebody's
+        // private login from the outside. Only an address its owner marked public, did not hide,
+        // and has validated will match.
+        var target = await db.UserEmails.AsNoTracking()
+            .Where(e => e.IsPublic && !e.IsHidden && e.IsValidated
+                     && e.EmailAddress.ToLower() == email.ToLower())
+            .Select(e => new { AppUserId = e.AppUserId })
+            .FirstOrDefaultAsync(ct);
+
+        if (target is null)
+            return NotFound("No account here publishes that email address.");
+
+        if (await db.OrgCalendarEventAttendees
+                .AnyAsync(a => a.OrgCalendarEventId == eventId && a.AppUserId == target.AppUserId, ct))
+            return BadRequest("They are already invited.");
+
+        var invited = new OrgCalendarEventAttendee
+        {
+            Id = Guid.NewGuid(), OrgCalendarEventId = eventId,
+            AppUserId = target.AppUserId,
+            RsvpStatus = RsvpStatus.Invited, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        };
+        db.OrgCalendarEventAttendees.Add(invited);
+        await db.SaveChangesAsync(ct);
+
+        var loadedInvite = await db.OrgCalendarEventAttendees.AsNoTracking()
+            .Include(a => a.AppUser).FirstAsync(a => a.Id == invited.Id, ct);
+        return Ok(_mapper.Map<OrgCalendarEventAttendeeRecord>(loadedInvite));
     }
 
     [HttpPost("{eventId:guid}/attendees")]
@@ -310,7 +395,11 @@ public sealed record UpsertCalendarEventTypeRequest(
 public sealed record UpsertCalendarEventRequest(
     string Title, string? Description, string? Location,
     DateTime StartDateTime, DateTime EndDateTime, bool IsAllDay, bool IsPublic,
-    Guid? EventTypeId, Guid? CaseId, string? RecurrenceRule);
+    Guid? EventTypeId, Guid? CaseId, string? RecurrenceRule,
+    Guid? OrganizationAddressId = null,
+    string? MeetingUrl = null);
+
+public sealed record AddAttendeeByEmailRequest(string? Email);
 
 public sealed record AddAttendeeRequest(Guid AppUserId, string? AssignedTask);
 public sealed record RsvpRequest(Ben.Data.Common.Enums.RsvpStatus RsvpStatus);

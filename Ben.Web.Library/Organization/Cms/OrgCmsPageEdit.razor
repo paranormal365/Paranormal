@@ -266,10 +266,9 @@
 </div>
 
 @* ── Add/Edit Section dialog ──────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showSectionDialog"
-               Title="@(_editingSection is null ? "New Section" : "Edit Section")"
-               Width="720px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showSectionDialog" Width="720px" Modal="true">
+    <WindowTitle>@(_editingSection is null ? "New Section" : "Edit Section")</WindowTitle>
+    <WindowContent>
         <div class="row g-3">
             @if (_editingSection is null)
             {
@@ -306,44 +305,46 @@
         {
             <div class="alert alert-danger mt-3 mb-0">@_sectionError</div>
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="CloseSectionDialog">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Icon="@SvgIcon.Save"
-                       OnClick="SaveSection"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Saving…" : "Save Section")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="CloseSectionDialog">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Icon="@SvgIcon.Save"
+                           OnClick="SaveSection"
+                           Enabled="@(!_isBusy)">
+                @(_isBusy ? "Saving…" : "Save Section")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Delete section confirmation ──────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showDeleteSectionDialog"
-               Title="Delete Section"
-               Width="400px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showDeleteSectionDialog" Width="400px" Modal="true">
+    <WindowTitle>Delete Section</WindowTitle>
+    <WindowContent>
         <p>Remove this section from the page?</p>
         @if (_pendingDeleteSection is not null && !string.IsNullOrWhiteSpace(_pendingDeleteSection.Title))
         {
             <p class="text-secondary"><strong>@_pendingDeleteSection.Title</strong></p>
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="@(() => { _showDeleteSectionDialog = false; _pendingDeleteSection = null; })">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                       OnClick="ConfirmDeleteSection"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Deleting…" : "Delete")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="@(() => { _showDeleteSectionDialog = false; _pendingDeleteSection = null; })">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           OnClick="ConfirmDeleteSection"
+                           Enabled="@(!_isBusy)">
+                @(_isBusy ? "Deleting…" : "Delete")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Add/Edit Permission dialog ───────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showPermissionDialog"
-               Title="@(_editingPerm is null ? "Add Permission" : "Edit Permission")"
-               Width="480px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showPermissionDialog" Width="480px" Modal="true">
+    <WindowTitle>@(_editingPerm is null ? "Add Permission" : "Edit Permission")</WindowTitle>
+    <WindowContent>
         @if (_editingPerm is null)
         {
             <div class="mb-3">
@@ -399,14 +400,16 @@
         </div>
         @if (_permDialogError is not null)
         { <div class="alert alert-danger py-2 mt-2">@_permDialogError</div> }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       OnClick="SavePermissionAsync">Save</TelerikButton>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="@(() => _showPermissionDialog = false)">Cancel</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           OnClick="SavePermissionAsync">Save</TelerikButton>
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           OnClick="@(() => _showPermissionDialog = false)">Cancel</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @code {
     [Parameter] public Guid OrgId  { get; set; }

@@ -662,22 +662,26 @@ else
 }
 
 @* ── Region label edit dialog ────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showEditLabelDialog" Title="Edit Region Label" Width="360px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showEditLabelDialog" Width="360px" Modal="true">
+    <WindowTitle>Edit Region Label</WindowTitle>
+    <WindowContent>
         <label class="form-label fw-semibold">Label</label>
         <TelerikTextBox @bind-Value="@_editLabelText" Width="100%" />
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="@(() => _showEditLabelDialog = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       OnClick="SaveRegionLabelAsync">Save</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           OnClick="@(() => _showEditLabelDialog = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           OnClick="SaveRegionLabelAsync">Save</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── EVP marker add/edit dialog ─────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showMarkerDialog" Title="@(_editingMarker is null ? "Add EVP Marker" : "Edit EVP Marker")" Width="400px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showMarkerDialog" Width="400px" Modal="true">
+    <WindowTitle>@(_editingMarker is null ? "Add EVP Marker" : "Edit EVP Marker")</WindowTitle>
+    <WindowContent>
         <div class="mb-2">
             <label class="form-label fw-semibold">Time</label>
             <div>
@@ -716,19 +720,22 @@ else
             <label class="form-label fw-semibold">Note</label>
             <TelerikTextArea @bind-Value="@_markerNote" Rows="3" Width="100%" />
         </div>
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="@(() => _showMarkerDialog = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Enabled="@(!string.IsNullOrWhiteSpace(_markerLabel))"
-                       OnClick="SaveMarkerAsync">Save</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           OnClick="@(() => _showMarkerDialog = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Enabled="@(!string.IsNullOrWhiteSpace(_markerLabel))"
+                           OnClick="SaveMarkerAsync">Save</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Confirm a detected candidate ────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showConfirmCandidateDialog" Title="Keep this as an EVP" Width="420px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showConfirmCandidateDialog" Width="420px" Modal="true">
+    <WindowTitle>Keep this as an EVP</WindowTitle>
+    <WindowContent>
         @if (_confirmingCandidate is { } cc)
         {
             <div class="mb-2 small text-secondary">
@@ -762,23 +769,24 @@ else
                 The detector's score and bounds are kept alongside your label.
             </div>
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="@(() => _showConfirmCandidateDialog = false)">Cancel</TelerikButton>
-        @* Deliberately always enabled. Gating this on the label deadlocked the dialog: the field
-           only pushed its value on blur, and the one thing left to click was the disabled button,
-           so focus never left and the label never bound. Validation lives in the handler instead. *@
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       OnClick="ConfirmCandidateAsync">Keep it</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           OnClick="@(() => _showConfirmCandidateDialog = false)">Cancel</TelerikButton>
+            @* Deliberately always enabled. Gating this on the label deadlocked the dialog: the field
+               only pushed its value on blur, and the one thing left to click was the disabled button,
+               so focus never left and the label never bound. Validation lives in the handler instead. *@
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           OnClick="ConfirmCandidateAsync">Keep it</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Save region as clip dialog ──────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showSaveClipDialog"
-               Title="Create Audio File from Region"
-               Width="460px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showSaveClipDialog" Width="460px" Modal="true">
+    <WindowTitle>Create Audio File from Region</WindowTitle>
+    <WindowContent>
         @if (_clipSourceMarker is { } clipMarker)
         {
             <p class="text-secondary small mb-3">
@@ -849,26 +857,28 @@ else
         {
             <div class="alert alert-danger mt-3 mb-0 py-2 small">@_saveClipError</div>
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="@(() => { _showSaveClipDialog = false; _saveClipError = null; })">
-            Cancel
-        </TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Icon="@SvgIcon.Save"
-                       Enabled="@(!_isSavingClip && _saveClipTypeId != Guid.Empty)"
-                       OnClick="SaveClipAsync">
-            @(_isSavingClip ? "Saving…" : "Save as WAV")
-        </TelerikButton>
-        @* Nothing else in this dialog is gated on the file type, so a missing type reads as a dead
-           button. Say why. *@
-        @if (_saveClipTypeId == Guid.Empty)
-        {
-            <span class="small text-secondary ms-2">Pick a file type first.</span>
-        }
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           OnClick="@(() => { _showSaveClipDialog = false; _saveClipError = null; })">
+                Cancel
+            </TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Icon="@SvgIcon.Save"
+                           Enabled="@(!_isSavingClip && _saveClipTypeId != Guid.Empty)"
+                           OnClick="SaveClipAsync">
+                @(_isSavingClip ? "Saving…" : "Save as WAV")
+            </TelerikButton>
+            @* Nothing else in this dialog is gated on the file type, so a missing type reads as a dead
+               button. Say why. *@
+            @if (_saveClipTypeId == Guid.Empty)
+            {
+                <span class="small text-secondary ms-2">Pick a file type first.</span>
+            }
+        </div>
+    </WindowContent>
+</TelerikWindow>
 @* ── Toast notifications ────────────────────────────────────────────── *@
 <TelerikNotification @ref="_toast"
                      HorizontalPosition="@NotificationHorizontalPosition.Right"

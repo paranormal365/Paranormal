@@ -946,6 +946,11 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<OrgCalendarEventAttendeeRecord?> AddCalendarAttendeeAsync(Guid orgId, Guid eventId, AddAttendeeRequest request, CancellationToken token = default)
         => _api.PostAsync<AddAttendeeRequest, OrgCalendarEventAttendeeRecord>($"/api/organizations/{orgId}/calendar/{eventId}/attendees", request, token);
 
+    public Task<OrgCalendarEventAttendeeRecord?> AddCalendarAttendeeByEmailAsync(Guid orgId, Guid eventId, string email, CancellationToken token = default)
+        => _api.PostAsync<AddAttendeeByEmailRequest, OrgCalendarEventAttendeeRecord>(
+               $"/api/organizations/{orgId}/calendar/{eventId}/attendees/by-email",
+               new AddAttendeeByEmailRequest(email), token);
+
     public Task<OrgCalendarEventAttendeeRecord?> RsvpCalendarEventAsync(Guid orgId, Guid eventId, Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus status, CancellationToken token = default)
         => _api.PutAsync<object, OrgCalendarEventAttendeeRecord>(
                $"/api/organizations/{orgId}/calendar/{eventId}/attendees/{attendeeId}/rsvp",

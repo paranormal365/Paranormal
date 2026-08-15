@@ -279,10 +279,9 @@ else
 }
 
 @* ══ Sub-entity dialog (shared for address/email/phone/link/note) ═══════════ *@
-<TelerikDialog @bind-Visible="@_showSubDialog"
-               Title="@_subDialogTitle"
-               Width="580px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showSubDialog" Width="580px" Modal="true">
+    <WindowTitle>@_subDialogTitle</WindowTitle>
+    <WindowContent>
         @if (_subEntityType == "address")
         {
             <div class="row g-3">
@@ -432,21 +431,22 @@ else
         }
 
         @if (_subError is not null) { <div class="alert alert-danger mt-3 mb-0">@_subError</div> }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="CloseSubDialog">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" Icon="@SvgIcon.Save"
-                       OnClick="SaveSubEntity" Enabled="@(!_isSaving)">
-            @(_isSaving ? "Saving…" : "Save")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="CloseSubDialog">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" Icon="@SvgIcon.Save"
+                           OnClick="SaveSubEntity" Enabled="@(!_isSaving)">
+                @(_isSaving ? "Saving…" : "Save")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Add New Type mini-dialog ─────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showAddTypeDialog"
-               Title="@($"New {_addTypeFor} Type")"
-               Width="500px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showAddTypeDialog" Width="500px" Modal="true">
+    <WindowTitle>@($"New {_addTypeFor} Type")</WindowTitle>
+    <WindowContent>
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
@@ -482,20 +482,21 @@ else
             </div>
         </div>
         @if (_typeError is not null) { <div class="alert alert-danger mt-2 mb-0">@_typeError</div> }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="@(() => { _showAddTypeDialog = false; _typeError = null; })">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" OnClick="SaveNewType"
-                       Enabled="@(!_isSaving)">Save</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="@(() => { _showAddTypeDialog = false; _typeError = null; })">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" OnClick="SaveNewType"
+                           Enabled="@(!_isSaving)">Save</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 
 @* ── Upload File dialog ───────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showUploadDialog"
-               Title="Upload File"
-               Width="520px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showUploadDialog" Width="520px" Modal="true">
+    <WindowTitle>Upload File</WindowTitle>
+    <WindowContent>
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">File Type <span class="text-danger">*</span></label>
@@ -524,15 +525,17 @@ else
             </div>
         </div>
         @if (_uploadError is not null) { <div class="alert alert-danger mt-3 mb-0">@_uploadError</div> }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="@CloseUploadDialog">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" Icon="@SvgIcon.Upload"
-                       OnClick="UploadFile" Enabled="@(!_isUploading)">
-            @(_isUploading ? "Uploading…" : "Upload")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="@CloseUploadDialog">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary" Icon="@SvgIcon.Upload"
+                           OnClick="UploadFile" Enabled="@(!_isUploading)">
+                @(_isUploading ? "Uploading…" : "Upload")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 <ImageEditorPlayer @ref="_imageEditor"
                    UploadFileId="@_editImageId"

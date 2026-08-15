@@ -113,16 +113,19 @@
 </TelerikWindow>
 
 @* ── Delete confirm ──────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="_showDeleteConfirm" Title="Delete Project" Width="360px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="_showDeleteConfirm" Width="360px" Modal="true">
+    <WindowTitle>Delete Project</WindowTitle>
+    <WindowContent>
         <p>Delete <strong>@_deleteTarget?.Name</strong>? This cannot be undone.</p>
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="@(() => _showDeleteConfirm = false)">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                       OnClick="DeleteConfirmedAsync">Delete</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="@(() => _showDeleteConfirm = false)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           OnClick="DeleteConfirmedAsync">Delete</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 <TelerikNotification @ref="_notifications" VerticalPosition="NotificationVerticalPosition.Bottom"
                      HorizontalPosition="NotificationHorizontalPosition.Right" />

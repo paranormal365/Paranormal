@@ -88,10 +88,9 @@
 </div>
 
 @* ── Create / Edit Dialog ── *@
-<TelerikDialog @bind-Visible="@_showTypeDialog"
-               Title="@(_editingType is null ? "New File Type" : "Edit File Type")"
-               Width="500px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showTypeDialog" Width="500px" Modal="true">
+    <WindowTitle>@(_editingType is null ? "New File Type" : "Edit File Type")</WindowTitle>
+    <WindowContent>
         <EditForm Model="_typeForm" OnValidSubmit="SaveType">
             <DataAnnotationsValidator />
             <div class="mb-3">
@@ -155,14 +154,13 @@
                 </TelerikButton>
             </div>
         </EditForm>
-    </DialogContent>
-</TelerikDialog>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Extensions Dialog ── *@
-<TelerikDialog @bind-Visible="@_showExtDialog"
-               Title="@($"Extensions — {_extFileType?.FileType.Name}")"
-               Width="480px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showExtDialog" Width="480px" Modal="true">
+    <WindowTitle>@($"Extensions — {_extFileType?.FileType.Name}")</WindowTitle>
+    <WindowContent>
         @if (_extFileType is not null)
         {
             @if (_extFileType.FileType.AllowAllExtensions)
@@ -241,22 +239,21 @@
                 <TelerikButton OnClick="CloseExtDialog">Close</TelerikButton>
             </div>
         }
-    </DialogContent>
-</TelerikDialog>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Delete Confirmation ── *@
-<TelerikDialog @bind-Visible="@_showDeleteConfirm"
-               Title="Delete File Type"
-               Width="380px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showDeleteConfirm" Width="380px" Modal="true">
+    <WindowTitle>Delete File Type</WindowTitle>
+    <WindowContent>
         <p>Delete <strong>@_deleteTarget?.FileType.Name</strong>? This cannot be undone.</p>
         <div class="d-flex gap-2 justify-content-end">
             <TelerikButton OnClick="@(() => _showDeleteConfirm = false)">Cancel</TelerikButton>
             <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                            OnClick="ExecuteDelete">Delete</TelerikButton>
         </div>
-    </DialogContent>
-</TelerikDialog>
+    </WindowContent>
+</TelerikWindow>
 
 @code {
     // ── State ─────────────────────────────────────────────────────────────────

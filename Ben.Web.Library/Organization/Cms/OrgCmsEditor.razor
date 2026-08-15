@@ -251,10 +251,9 @@
 </div>
 
 @* ── New/Edit Page dialog ─────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showPageDialog"
-               Title="@(_editingPage is null ? "New Page" : "Edit Page")"
-               Width="580px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showPageDialog" Width="580px" Modal="true">
+    <WindowTitle>@(_editingPage is null ? "New Page" : "Edit Page")</WindowTitle>
+    <WindowContent>
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
@@ -299,44 +298,46 @@
         {
             <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="ClosePageDialog">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Icon="@SvgIcon.Save"
-                       OnClick="SavePage"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Saving…" : "Save")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="ClosePageDialog">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Icon="@SvgIcon.Save"
+                           OnClick="SavePage"
+                           Enabled="@(!_isBusy)">
+                @(_isBusy ? "Saving…" : "Save")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Delete page confirmation ─────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showDeletePageDialog"
-               Title="Delete Page"
-               Width="420px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showDeletePageDialog" Width="420px" Modal="true">
+    <WindowTitle>Delete Page</WindowTitle>
+    <WindowContent>
         @if (_pendingDeletePage is not null)
         {
             <p>Permanently delete <strong>@_pendingDeletePage.PageTitle</strong>?</p>
             <p class="text-secondary small mb-0">All sections and permissions for this page will also be removed. Child pages will be re-parented.</p>
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="@(() => { _showDeletePageDialog = false; _pendingDeletePage = null; })">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                       OnClick="ConfirmDeletePage"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Deleting…" : "Delete")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="@(() => { _showDeletePageDialog = false; _pendingDeletePage = null; })">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           OnClick="ConfirmDeletePage"
+                           Enabled="@(!_isBusy)">
+                @(_isBusy ? "Deleting…" : "Delete")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Add Logo dialog ──────────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showLogoDialog"
-               Title="Add Logo"
-               Width="620px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showLogoDialog" Width="620px" Modal="true">
+    <WindowTitle>Add Logo</WindowTitle>
+    <WindowContent>
         @if (_orgImageFiles is null)
         {
             <div class="p-3 text-secondary"><span class="spinner-border spinner-border-sm me-2"></span>Loading…</div>
@@ -405,17 +406,19 @@
         {
             <div class="alert alert-danger mt-3 mb-0">@_logoError</div>
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="CloseLogoDialog">Cancel</TelerikButton>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Icon="@SvgIcon.Save"
-                       OnClick="SaveLogo"
-                       Enabled="@(!_isBusy)">
-            @(_isBusy ? "Saving…" : "Add Logo")
-        </TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="CloseLogoDialog">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Icon="@SvgIcon.Save"
+                           OnClick="SaveLogo"
+                           Enabled="@(!_isBusy)">
+                @(_isBusy ? "Saving…" : "Add Logo")
+            </TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Page preview window ──────────────────────────────────────────────────── *@
 <TelerikWindow @bind-Visible="@_showPreview"
@@ -457,10 +460,9 @@
 </TelerikWindow>
 
 @* ── New/Edit Group dialog ────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showGroupDialog"
-               Title="@(_editingGroup is null ? "New Member Group" : "Edit Member Group")"
-               Width="480px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showGroupDialog" Width="480px" Modal="true">
+    <WindowTitle>@(_editingGroup is null ? "New Member Group" : "Edit Member Group")</WindowTitle>
+    <WindowContent>
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
@@ -481,32 +483,36 @@
             @if (_groupDialogError is not null)
             { <div class="col-12"><div class="alert alert-danger py-2">@_groupDialogError</div></div> }
         </div>
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       OnClick="SaveGroupAsync"
-                       Enabled="@(!string.IsNullOrWhiteSpace(_groupForm.Name))">Save</TelerikButton>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
-                       OnClick="@(() => _showGroupDialog = false)">Cancel</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           OnClick="SaveGroupAsync"
+                           Enabled="@(!string.IsNullOrWhiteSpace(_groupForm.Name))">Save</TelerikButton>
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           OnClick="@(() => _showGroupDialog = false)">Cancel</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Delete Group confirmation ────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showDeleteGroupDialog" Title="Delete Group" Width="400px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showDeleteGroupDialog" Width="400px" Modal="true">
+    <WindowTitle>Delete Group</WindowTitle>
+    <WindowContent>
         <p>Delete group <strong>@_deletingGroup?.Name</strong>? All member assignments will also be removed.</p>
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error" OnClick="ExecuteDeleteGroupAsync">Delete</TelerikButton>
-        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline" OnClick="@(() => _showDeleteGroupDialog = false)">Cancel</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error" OnClick="ExecuteDeleteGroupAsync">Delete</TelerikButton>
+            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline" OnClick="@(() => _showDeleteGroupDialog = false)">Cancel</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @* ── Group Members dialog ─────────────────────────────────────────────────── *@
-<TelerikDialog @bind-Visible="@_showMembersDialog"
-               Title="@($"Members — {_membersGroup?.Name}")"
-               Width="580px">
-    <DialogContent>
+<TelerikWindow @bind-Visible="@_showMembersDialog" Width="580px" Modal="true">
+    <WindowTitle>@($"Members — {_membersGroup?.Name}")</WindowTitle>
+    <WindowContent>
         @if (_membersGroup is not null)
         {
             @* Current members *@
@@ -552,11 +558,13 @@
             @if (_membersDialogError is not null)
             { <div class="alert alert-danger py-2 mt-2">@_membersDialogError</div> }
         }
-    </DialogContent>
-    <DialogButtons>
-        <TelerikButton OnClick="@(() => _showMembersDialog = false)">Close</TelerikButton>
-    </DialogButtons>
-</TelerikDialog>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <TelerikButton OnClick="@(() => _showMembersDialog = false)">Close</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
 
 @code {
     [Parameter] public Guid OrgId        { get; set; }
