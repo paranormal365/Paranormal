@@ -14,6 +14,10 @@ public record CaseRelatedPersonRecord
     public string? Relationship { get; init; }
     public bool LivesAtProperty { get; init; }
     public string? Notes { get; init; }
+
+    /// <summary>Optional photo of this person, or null when none was supplied.</summary>
+    public Guid? UploadFileId { get; init; }
+
     public DateTime DateCreated { get; init; }
 }
 
@@ -22,4 +26,34 @@ public record AddRelatedPersonRequest(
     int? Age,
     string? Relationship,
     bool LivesAtProperty,
-    string? Notes);
+    string? Notes,
+    Guid? UploadFileId = null);
+
+/// <summary>
+/// Replaces a related person's details. Every field is applied as sent, including
+/// <paramref name="UploadFileId"/> — null there means "no photo", which is how a client removes
+/// one. That differs from the profile endpoints, where null means "leave alone"; here the form
+/// always submits the whole person, so there is no partial update to protect.
+/// </summary>
+public record UpdateRelatedPersonRequest(
+    string Name,
+    int? Age,
+    string? Relationship,
+    bool LivesAtProperty,
+    string? Notes,
+    Guid? UploadFileId = null);
+
+/// <summary>
+/// A client's public-facing alias for their case, alongside the org's pseudonym and the name the
+/// public currently sees — so the UI can show the effect without re-deriving the precedence rule.
+/// </summary>
+/// <param name="ClientDisplayAlias">What the client chose, or null.</param>
+/// <param name="OrganizationPseudonym">What the org set, or null. Read-only to the client.</param>
+/// <param name="EffectivePublicName">What public pages show today; null means no name at all.</param>
+public sealed record CaseDisplayAliasRecord(
+    string? ClientDisplayAlias,
+    string? OrganizationPseudonym,
+    string? EffectivePublicName);
+
+/// <param name="DisplayAlias">Empty or whitespace clears the alias.</param>
+public sealed record SetCaseDisplayAliasRequest(string? DisplayAlias);

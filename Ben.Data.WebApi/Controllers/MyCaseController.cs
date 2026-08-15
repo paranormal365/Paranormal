@@ -125,6 +125,11 @@ public sealed class MyCaseController : BenControllerBase
                 .ThenBy(e => e.DateCreated).ThenBy(e => e.Id))
                 .ThenInclude(e => e.Files)
                 .ThenInclude(f => f.UploadFile)
+            // Separate Include chain: ThenInclude above has walked down into Files, so the tag
+            // collection has to be reached from TimelineEntries again or it silently comes back
+            // empty — the projection reads it without complaint and the client sees no tags.
+            .Include(x => x.TimelineEntries)
+                .ThenInclude(e => e.ExperienceTypes)
             .FirstOrDefaultAsync(x => x.Id == caseId, ct);
 
         if (c is null) return NotFound();
@@ -148,7 +153,8 @@ public sealed class MyCaseController : BenControllerBase
             FromInvestigators: e.AuthorAppUserId != userId,
             DateCreated:   e.DateCreated,
             Files:         e.Files.Select(f => new OccurrenceFileItem(
-                f.UploadFileId, f.UploadFile.FileName, f.UploadFile.ContentType, f.UploadFile.FileSize)).ToList())).ToList();
+                f.UploadFileId, f.UploadFile.FileName, f.UploadFile.ContentType, f.UploadFile.FileSize)).ToList(),
+            ExperienceTypeIds: e.ExperienceTypes.Select(t => t.ExperienceTypeId).ToList())).ToList();
 
         // Compute cancellation deadline — requires org's primary address coordinates
         var orgAddr = await db.OrganizationAddresses.AsNoTracking()
@@ -221,6 +227,10 @@ public sealed class MyCaseController : BenControllerBase
         };
         db.CaseTimelineEntries.Add(entry);
         await db.SaveChangesAsync(ct);
+
+        if (!await ApplyExperienceTagsAsync(db, entry.Id, request.ExperienceTypeIds, ct))
+            return BadRequest("One or more experience types do not exist.");
+
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CaseTimelineEntry), entry.Id, entry, userId, AppSources.WebApi, ct));
 
         var loaded = await db.CaseTimelineEntries.AsNoTracking()
@@ -257,6 +267,13 @@ public sealed class MyCaseController : BenControllerBase
         entry.DateUpdated        = DateTime.UtcNow;
         entry.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
+
+        // Null means "not supplied, leave the tags alone" — the edit dialog always sends them, but
+        // an older client that doesn't know about tags must not silently strip them.
+        if (request.ExperienceTypeIds is not null
+            && !await ApplyExperienceTagsAsync(db, entry.Id, request.ExperienceTypeIds, ct))
+            return BadRequest("One or more experience types do not exist.");
+
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(CaseTimelineEntry), entry.Id, before, entry, userId, AppSources.WebApi, ct));
 
         var loaded = await db.CaseTimelineEntries.AsNoTracking()
@@ -264,6 +281,47 @@ public sealed class MyCaseController : BenControllerBase
             .Include(e => e.ExperienceTypes)
             .FirstAsync(e => e.Id == entry.Id, ct);
         return Ok(_mapper.Map<CaseTimelineEntryRecord>(loaded));
+    }
+
+    /// <summary>
+    /// Replaces an entry's experience tags with the supplied set. Returns false when any id isn't
+    /// a real experience type, in which case nothing is written.
+    /// </summary>
+    /// <remarks>
+    /// Ids are validated rather than trusted: they arrive from the client and land in a foreign
+    /// key, so an unchecked bad value is either a 500 from the database or a dangling tag.
+    /// Replace-not-merge because the picker submits the full selection — unticking a tag has to
+    /// be able to remove it.
+    /// </remarks>
+    private static async Task<bool> ApplyExperienceTagsAsync(
+        BenDataContext db, Guid entryId, IReadOnlyList<Guid>? typeIds, CancellationToken ct)
+    {
+        var wanted = (typeIds ?? []).Distinct().ToList();
+
+        if (wanted.Count > 0)
+        {
+            var realCount = await db.ExperienceTypes.CountAsync(t => wanted.Contains(t.Id), ct);
+            if (realCount != wanted.Count) return false;
+        }
+
+        var existing = await db.CaseTimelineEntryExperienceTypes
+            .Where(t => t.CaseTimelineEntryId == entryId)
+            .ToListAsync(ct);
+
+        db.CaseTimelineEntryExperienceTypes.RemoveRange(
+            existing.Where(t => !wanted.Contains(t.ExperienceTypeId)));
+
+        foreach (var id in wanted.Where(id => existing.All(t => t.ExperienceTypeId != id)))
+        {
+            db.CaseTimelineEntryExperienceTypes.Add(new CaseTimelineEntryExperienceType
+            {
+                CaseTimelineEntryId = entryId,
+                ExperienceTypeId    = id,
+            });
+        }
+
+        await db.SaveChangesAsync(ct);
+        return true;
     }
 
     /// <summary>Deletes an occurrence the client previously logged.</summary>
@@ -840,6 +898,75 @@ public sealed class MyCaseController : BenControllerBase
     private static CaseClientInviteRecord ToInviteRecord(Ben.Data.Source.Entities.CaseClientInvite i) =>
         new(i.Id, i.CaseId, i.Email, i.Token, i.DateExpires, i.DateCreated);
 
+    // ── Public display alias ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Sets how the client wants to be named on public pages and in shared documents. Empty or
+    /// whitespace clears it, falling back to whatever the organization set.
+    /// </summary>
+    /// <remarks>
+    /// Primary client only. A co-client changing how the case's client is publicly named would be
+    /// deciding someone else's anonymity for them; there is no public co-client listing for them
+    /// to alias anyway.
+    /// </remarks>
+    [HttpPut("{caseId:guid}/display-alias")]
+    public async Task<ActionResult<CaseDisplayAliasRecord>> SetDisplayAlias(
+        Guid caseId, [FromBody] SetCaseDisplayAliasRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        var alias = request.DisplayAlias?.Trim();
+        if (alias is { Length: > MaxAliasLength })
+            return BadRequest($"Alias cannot exceed {MaxAliasLength} characters.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var caseRow = await db.Cases.Include(c => c.ClientRequest)
+            .FirstOrDefaultAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+        if (caseRow is null) return Forbid();
+
+        var before = new Ben.Data.Source.Entities.Case
+        {
+            Id = caseRow.Id, ClientDisplayAlias = caseRow.ClientDisplayAlias,
+        };
+
+        caseRow.ClientDisplayAlias = string.IsNullOrWhiteSpace(alias) ? null : alias;
+        caseRow.DateUpdated        = DateTime.UtcNow;
+        caseRow.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Ben.Data.Source.Entities.Case), caseRow.Id, before, caseRow, userId, AppSources.WebApi, ct));
+
+        return Ok(new CaseDisplayAliasRecord(
+            caseRow.ClientDisplayAlias,
+            caseRow.PublicPseudonym,
+            // What the public actually sees right now, so the UI never has to re-derive the
+            // precedence rule and get it subtly different.
+            Ben.Data.WebApi.Controllers.Public.PublicClientName.For(caseRow)));
+    }
+
+    /// <summary>Returns the caller's current alias for this case plus what the public sees.</summary>
+    [HttpGet("{caseId:guid}/display-alias")]
+    public async Task<ActionResult<CaseDisplayAliasRecord>> GetDisplayAlias(Guid caseId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var caseRow = await db.Cases.AsNoTracking().FirstOrDefaultAsync(c => c.Id == caseId, ct);
+        if (caseRow is null) return NotFound();
+
+        return Ok(new CaseDisplayAliasRecord(
+            caseRow.ClientDisplayAlias,
+            caseRow.PublicPseudonym,
+            Ben.Data.WebApi.Controllers.Public.PublicClientName.For(caseRow)));
+    }
+
+    private const int MaxAliasLength = 128;
+
     // ── Related people (basic-info, no account) ─────────────────────────────────
 
     /// <summary>Returns people referenced on this case who are not platform users.</summary>
@@ -881,14 +1008,70 @@ public sealed class MyCaseController : BenControllerBase
             Relationship       = request.Relationship?.Trim(),
             LivesAtProperty    = request.LivesAtProperty,
             Notes              = request.Notes?.Trim(),
+            UploadFileId       = request.UploadFileId,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
+        if (request.UploadFileId is { } newFileId
+            && !await ClientOwnsFileAsync(db, newFileId, userId, ct))
+            return Forbid();
         db.CaseRelatedPeople.Add(person);
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseRelatedPerson), person.Id, person, userId, AppSources.WebApi, ct));
         return Ok(ToRecord(person));
     }
+
+    /// <summary>Primary client edits a related person. Previously there was no way to correct one.</summary>
+    [HttpPut("{caseId:guid}/related-people/{personId:guid}")]
+    public async Task<ActionResult<CaseRelatedPersonRecord>> UpdateRelatedPerson(
+        Guid caseId, Guid personId, [FromBody] UpdateRelatedPersonRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name)) return BadRequest("Name is required.");
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var primaryClient = await db.Cases.AsNoTracking().Include(c => c.ClientRequest)
+            .FirstOrDefaultAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+        if (primaryClient is null) return Forbid();
+
+        // Matched on both ids: a person id from another case must read as not-found rather than
+        // letting one client edit a witness recorded on someone else's case.
+        var person = await db.CaseRelatedPeople.FirstOrDefaultAsync(p => p.Id == personId && p.CaseId == caseId, ct);
+        if (person is null) return NotFound();
+
+        // Only a file the client uploaded themselves may be attached, or they could point a
+        // witness photo at any file in the system by id.
+        if (request.UploadFileId is { } fileId
+            && fileId != person.UploadFileId
+            && !await ClientOwnsFileAsync(db, fileId, userId, ct))
+            return Forbid();
+
+        var before = new Ben.Data.Source.Entities.CaseRelatedPerson
+        {
+            Id = person.Id, CaseId = person.CaseId, Name = person.Name, Age = person.Age,
+            Relationship = person.Relationship, LivesAtProperty = person.LivesAtProperty,
+            Notes = person.Notes, UploadFileId = person.UploadFileId,
+        };
+
+        person.Name               = request.Name.Trim();
+        person.Age                = request.Age;
+        person.Relationship       = request.Relationship?.Trim();
+        person.LivesAtProperty    = request.LivesAtProperty;
+        person.Notes              = request.Notes?.Trim();
+        person.UploadFileId       = request.UploadFileId;
+        person.DateUpdated        = DateTime.UtcNow;
+        person.UpdatedByAppUserId = userId;
+
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Ben.Data.Source.Entities.CaseRelatedPerson), person.Id, before, person, userId, AppSources.WebApi, ct));
+        return Ok(ToRecord(person));
+    }
+
+    /// <summary>Whether this file exists and belongs to the caller.</summary>
+    private static Task<bool> ClientOwnsFileAsync(
+        BenDataContext db, Guid fileId, Guid userId, CancellationToken ct)
+        => db.UploadFiles.AsNoTracking().AnyAsync(f => f.Id == fileId && f.AppUserId == userId, ct);
 
     /// <summary>Primary client removes a related-person reference.</summary>
     [HttpDelete("{caseId:guid}/related-people/{personId:guid}")]
@@ -919,6 +1102,7 @@ public sealed class MyCaseController : BenControllerBase
         Relationship    = p.Relationship,
         LivesAtProperty = p.LivesAtProperty,
         Notes           = p.Notes,
+        UploadFileId    = p.UploadFileId,
         DateCreated     = p.DateCreated,
     };
 
@@ -1039,7 +1223,10 @@ public sealed record ClientCaseOccurrence(
     string?   Body,
     bool      FromInvestigators,   // true when the org wrote this, false when the client did
     DateTime  DateCreated,
-    IReadOnlyList<OccurrenceFileItem> Files);
+    IReadOnlyList<OccurrenceFileItem> Files,
+    // Returned as well as accepted: a tag the client sets but can never see back would be a
+    // write-only control, and they'd have no way to tell whether it took.
+    IReadOnlyList<Guid> ExperienceTypeIds);
 
 public sealed record OccurrenceFileItem(
     Guid   FileId,
@@ -1057,10 +1244,14 @@ public sealed record ClientCaseInvestigation(
     DateTime?  EvidenceDueDate = null,
     DateTime?  CancellationDeadlineUtc = null);
 
+// ExperienceTypeIds: optional tags from the shared experience taxonomy. Investigators already
+// read and filter these on the org timeline; letting the client set them means the person who was
+// actually there gets to say what kind of thing it was. Null means "not supplied, leave as-is".
 public sealed record LogOccurrenceRequest(
     DateTime? EventDateTime,
     string?   Title,
-    string?   Body);
+    string?   Body,
+    IReadOnlyList<Guid>? ExperienceTypeIds = null);
 
 public sealed record PostCaseMessageRequest(string Body);
 

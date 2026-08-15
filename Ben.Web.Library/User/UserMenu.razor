@@ -1,0 +1,122 @@
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    Replaces the bare email address that used to sit in the app bar. The email is still shown,
+    but inside the menu rather than occupying the top bar on every page — and it's now a way in
+    to the profile rather than a dead label.
+*@
+
+@if (UserState.IsAuthenticated)
+{
+    <span @ref="_anchor" class="user-menu">
+        <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Clear"
+                       Title="@(UserState.UserEmail ?? "Account")"
+                       OnClick="ToggleMenu">
+            @if (_avatarFileId is { } fileId)
+            {
+                <img src="@AdminClient.GetFileDownloadUrl(fileId)" alt=""
+                     class="rounded-circle"
+                     style="width:28px;height:28px;object-fit:cover;vertical-align:middle;" />
+            }
+            else
+            {
+                @* Initials rather than a generic silhouette: it identifies the account at a
+                   glance and doesn't look like a broken image. *@
+                <span class="rounded-circle d-inline-flex align-items-center justify-content-center bg-secondary text-white"
+                      style="width:28px;height:28px;font-size:.75rem;vertical-align:middle;">@Initials</span>
+            }
+        </TelerikButton>
+    </span>
+
+    <TelerikPopover @ref="_popover"
+                    AnchorSelector=".user-menu"
+                    Position="@PopoverPosition.Bottom"
+                    Width="240px">
+        <PopoverContent>
+            <div class="px-1 pb-2 border-bottom mb-2">
+                <div class="fw-semibold text-truncate">@(_displayName ?? "Your account")</div>
+                <div class="text-secondary small text-truncate">@UserState.UserEmail</div>
+            </div>
+            <div class="d-grid gap-1">
+                <button type="button" class="btn btn-sm btn-light text-start"
+                        @onclick="GoToProfile">My Profile</button>
+                <button type="button" class="btn btn-sm btn-light text-start"
+                        @onclick="SignOutAsync">Sign Out</button>
+            </div>
+        </PopoverContent>
+    </TelerikPopover>
+}
+
+@code {
+    /// <summary>Invoked when the user picks Sign Out — the layout owns what signing out means.</summary>
+    [Parameter] public EventCallback OnSignOut { get; set; }
+
+    private TelerikPopover? _popover;
+    private ElementReference _anchor;
+    private bool _open;
+
+    private Guid?   _avatarFileId;
+    private string? _displayName;
+    private bool    _loaded;
+
+    private string Initials
+    {
+        get
+        {
+            var source = _displayName ?? UserState.UserEmail ?? "?";
+            var parts  = source.Split(new[] { ' ', '.', '@', '-' }, StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length switch
+            {
+                0 => "?",
+                1 => parts[0][..1].ToUpperInvariant(),
+                _ => (parts[0][..1] + parts[1][..1]).ToUpperInvariant(),
+            };
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _loaded) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) return;
+
+        _loaded = true;
+        try
+        {
+            var profile = await AdminClient.GetMyProfileAsync();
+            if (profile is null) return;
+            _displayName = profile.DisplayName;
+            // Public photo only. This chrome renders on every page for the signed-in user
+            // themselves, so there is no audience question to answer here — U3's endpoint is
+            // what decides which photo *other* people see.
+            _avatarFileId = profile.PublicPhoto?.UploadFileId;
+            StateHasChanged();
+        }
+        catch { /* the menu still works without a picture */ }
+    }
+
+    private void ToggleMenu()
+    {
+        _open = !_open;
+        if (_open) _popover?.Show(); else _popover?.Hide();
+    }
+
+    private void GoToProfile()
+    {
+        _open = false;
+        _popover?.Hide();
+        NavManager.NavigateTo("/profile");
+    }
+
+    private async Task SignOutAsync()
+    {
+        _open = false;
+        _popover?.Hide();
+        if (OnSignOut.HasDelegate) await OnSignOut.InvokeAsync();
+    }
+}

@@ -1151,6 +1151,8 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<Case>()
                 .Property(e => e.PublicPseudonym).HasMaxLength(128);
             modelBuilder.Entity<Case>()
+                .Property(e => e.ClientDisplayAlias).HasMaxLength(128);
+            modelBuilder.Entity<Case>()
                 .Property(e => e.StreetAddress1).HasMaxLength(256);
             modelBuilder.Entity<Case>()
                 .Property(e => e.City).HasMaxLength(128);
@@ -1582,6 +1584,12 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<CaseRelatedPerson>()
                 .HasOne(e => e.Case).WithMany(e => e.RelatedPeople)
                 .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction, not Cascade: deleting the photo should never silently delete the record
+            // that this person exists. Clearing the reference is the client's decision, not a
+            // side effect of tidying up files.
+            modelBuilder.Entity<CaseRelatedPerson>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<CaseRelatedPerson>()
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);

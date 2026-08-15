@@ -201,6 +201,10 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         org.PublicPhone             = request.PublicPhone?.Trim();
         org.PublicEmail             = request.PublicEmail?.Trim();
         org.PublicWebsite           = request.PublicWebsite?.Trim();
+        // Null leaves the policy untouched. This endpoint is the general org-settings save, so a
+        // caller editing the name must not be able to revoke a privacy policy it never sent.
+        if (request.AllowMemberPrivatePhotosToClients is { } allow)
+            org.AllowMemberPrivatePhotosToClients = allow;
         org.DateUpdated            = DateTime.UtcNow;
         org.UpdatedByAppUserId     = userId.Value;
 
@@ -320,5 +324,8 @@ public sealed record OrganizationListItemResponse(
 
 public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName,
     bool IsAcceptingApplications = false,
-    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null);
+    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null,
+    // Optional so an existing caller that omits it can't silently switch the policy off.
+    // Null means "leave as-is"; see OrganizationController.Update.
+    bool? AllowMemberPrivatePhotosToClients = null);
 

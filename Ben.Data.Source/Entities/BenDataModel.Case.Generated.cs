@@ -54,7 +54,23 @@ namespace Ben.Data.Source.Entities
         /// Pseudonym shown on public pages instead of the client's real name.
         /// Null = use real name (only applicable when IsPublic = true).
         /// </summary>
+        /// <remarks>
+        /// The organization's lever. <see cref="ClientDisplayAlias"/> is the client's own, and
+        /// takes precedence — an org may choose a pseudonym on a client's behalf, but it cannot
+        /// override one the client chose for themselves.
+        /// </remarks>
         public string? PublicPseudonym { get; set; }
+
+        /// <summary>
+        /// How the client wants to be referred to on public pages and in shared documents.
+        /// Null = no preference expressed, fall back to <see cref="PublicPseudonym"/>.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately public-facing only: organization members always see the real name.
+        /// You cannot investigate a case while blind to who reported it, and an alias that
+        /// concealed the client from their own investigators would make the case file useless.
+        /// </remarks>
+        public string? ClientDisplayAlias { get; set; }
 
         /// <summary>When true, the case and its public pages are visible to everyone.</summary>
         public bool IsPublic { get; set; }

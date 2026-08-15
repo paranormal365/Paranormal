@@ -789,6 +789,363 @@ public class MyCaseControllerTests
         Assert.Single(list);
     }
 
+    // ── Occurrence experience tags (U-Occ) ────────────────────────────────────
+
+    private static async Task<Guid> AddExperienceTypeAsync(
+        IDbContextFactory<BenDataContext> factory, string name)
+    {
+        var categoryId = Guid.NewGuid();
+        var typeId     = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.ExperienceCategories.Add(new ExperienceCategory
+        {
+            Id = categoryId, Name = $"Cat {name}", IsActive = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        db.ExperienceTypes.Add(new ExperienceType
+        {
+            Id = typeId, ExperienceCategoryId = categoryId, Name = name, IsActive = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        await db.SaveChangesAsync();
+        return typeId;
+    }
+
+    private static async Task<List<Guid>> TagsOnAsync(
+        IDbContextFactory<BenDataContext> factory, Guid entryId)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        return await db.CaseTimelineEntryExperienceTypes
+            .Where(t => t.CaseTimelineEntryId == entryId)
+            .Select(t => t.ExperienceTypeId)
+            .ToListAsync();
+    }
+
+    [Fact]
+    public async Task LogOccurrence_StoresExperienceTags()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var cold = await AddExperienceTypeAsync(factory, "Cold spot");
+        var ctrl = Build(factory, clientId);
+
+        var result = await ctrl.LogOccurrence(caseId,
+            new LogOccurrenceRequest(null, "Chill", "It went cold", [cold]), default);
+        var record = Assert.IsType<CaseTimelineEntryRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        Assert.Equal([cold], await TagsOnAsync(factory, record.Id));
+    }
+
+    [Fact]
+    public async Task LogOccurrence_RejectsATagThatDoesNotExist()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+
+        var result = await Build(factory, clientId).LogOccurrence(caseId,
+            new LogOccurrenceRequest(null, "Chill", "It went cold", [Guid.NewGuid()]), default);
+
+        // Unchecked ids land in a foreign key — either a 500 or a dangling tag.
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task UpdateOccurrence_ReplacesTheTagSet()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var cold  = await AddExperienceTypeAsync(factory, "Cold spot");
+        var voice = await AddExperienceTypeAsync(factory, "Voice");
+        var ctrl  = Build(factory, clientId);
+
+        var created = (CaseTimelineEntryRecord)((OkObjectResult)(await ctrl.LogOccurrence(caseId,
+            new LogOccurrenceRequest(null, "T", "B", [cold]), default)).Result!).Value!;
+
+        await ctrl.UpdateOccurrence(caseId, created.Id,
+            new LogOccurrenceRequest(null, "T", "B", [voice]), default);
+
+        // Replace, not merge — the picker submits the whole selection, so unticking must remove.
+        Assert.Equal([voice], await TagsOnAsync(factory, created.Id));
+    }
+
+    [Fact]
+    public async Task UpdateOccurrence_WithNoTagsSupplied_LeavesExistingTagsAlone()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var cold = await AddExperienceTypeAsync(factory, "Cold spot");
+        var ctrl = Build(factory, clientId);
+
+        var created = (CaseTimelineEntryRecord)((OkObjectResult)(await ctrl.LogOccurrence(caseId,
+            new LogOccurrenceRequest(null, "T", "B", [cold]), default)).Result!).Value!;
+
+        // Null, not empty: an older client that knows nothing about tags must not strip them.
+        await ctrl.UpdateOccurrence(caseId, created.Id,
+            new LogOccurrenceRequest(null, "T2", "B2", null), default);
+
+        Assert.Equal([cold], await TagsOnAsync(factory, created.Id));
+    }
+
+    [Fact]
+    public async Task UpdateOccurrence_WithAnEmptyTagList_ClearsThem()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var cold = await AddExperienceTypeAsync(factory, "Cold spot");
+        var ctrl = Build(factory, clientId);
+
+        var created = (CaseTimelineEntryRecord)((OkObjectResult)(await ctrl.LogOccurrence(caseId,
+            new LogOccurrenceRequest(null, "T", "B", [cold]), default)).Result!).Value!;
+
+        await ctrl.UpdateOccurrence(caseId, created.Id,
+            new LogOccurrenceRequest(null, "T", "B", []), default);
+
+        Assert.Empty(await TagsOnAsync(factory, created.Id));
+    }
+
+    [Fact]
+    public async Task GetMyCase_ReturnsTheTagsBackToTheClient()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var cold = await AddExperienceTypeAsync(factory, "Cold spot");
+        var ctrl = Build(factory, clientId);
+        await ctrl.LogOccurrence(caseId, new LogOccurrenceRequest(null, "T", "B", [cold]), default);
+
+        var detail = Assert.IsType<ClientCaseDetail>(
+            Assert.IsType<OkObjectResult>((await ctrl.GetMyCase(caseId, default)).Result).Value);
+
+        // A tag the client can set but never see back is a control that swallows input.
+        var occ = Assert.Single(detail.Occurrences);
+        Assert.Equal([cold], occ.ExperienceTypeIds);
+    }
+
+    // ── Public display alias (U6) ─────────────────────────────────────────────
+
+    private static async Task SetPseudonymAsync(
+        IDbContextFactory<BenDataContext> factory, Guid caseId, string? pseudonym)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var c = await db.Cases.FirstAsync(x => x.Id == caseId);
+        c.PublicPseudonym = pseudonym;
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task<CaseDisplayAliasRecord> SetAliasAsync(
+        MyCaseController ctrl, Guid caseId, string? alias)
+    {
+        var result = await ctrl.SetDisplayAlias(caseId, new SetCaseDisplayAliasRequest(alias), default);
+        return (CaseDisplayAliasRecord)((OkObjectResult)result.Result!).Value!;
+    }
+
+    [Fact]
+    public async Task SetDisplayAlias_StoresTheClientsChoice()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+
+        var record = await SetAliasAsync(Build(factory, clientId), caseId, "  The Miller Family  ");
+
+        Assert.Equal("The Miller Family", record.ClientDisplayAlias);
+        Assert.Equal("The Miller Family", record.EffectivePublicName);
+    }
+
+    [Fact]
+    public async Task ClientAlias_OverridesTheOrganizationsPseudonym()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        await SetPseudonymAsync(factory, caseId, "The Park Family");
+
+        var record = await SetAliasAsync(Build(factory, clientId), caseId, "Anonymous");
+
+        // The org may pick a name on a client's behalf; it cannot override one the client picked.
+        Assert.Equal("The Park Family", record.OrganizationPseudonym);
+        Assert.Equal("Anonymous", record.EffectivePublicName);
+    }
+
+    [Fact]
+    public async Task ClearingTheAlias_FallsBackToTheOrganizationsPseudonym()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        await SetPseudonymAsync(factory, caseId, "The Park Family");
+        var ctrl = Build(factory, clientId);
+        await SetAliasAsync(ctrl, caseId, "Anonymous");
+
+        var record = await SetAliasAsync(ctrl, caseId, "   ");
+
+        // Whitespace is not a choice — it clears, rather than publishing a blank name.
+        Assert.Null(record.ClientDisplayAlias);
+        Assert.Equal("The Park Family", record.EffectivePublicName);
+    }
+
+    [Fact]
+    public async Task WithNeitherAliasNorPseudonym_NoNameIsPublished()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+
+        var record = await SetAliasAsync(Build(factory, clientId), caseId, null);
+
+        // The real name is never a fallback. No name at all is the safe outcome.
+        Assert.Null(record.EffectivePublicName);
+    }
+
+    [Fact]
+    public async Task SetDisplayAlias_RejectsAnOverlongAlias()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+
+        var result = await Build(factory, clientId).SetDisplayAlias(
+            caseId, new SetCaseDisplayAliasRequest(new string('x', 129)), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task SetDisplayAlias_NotPrimaryClient_ReturnsForbid()
+    {
+        var (factory, caseId, _, _) = await SeedClientCaseAsync();
+
+        var result = await Build(factory, Guid.NewGuid()).SetDisplayAlias(
+            caseId, new SetCaseDisplayAliasRequest("Hijacked"), default);
+
+        // Naming someone else publicly is deciding their anonymity for them.
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task SettingAnAlias_DoesNotChangeWhatInvestigatorsSee()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        await SetAliasAsync(Build(factory, clientId), caseId, "Anonymous");
+
+        // The alias is public-facing only. The org-side record still carries the real client
+        // linkage — an investigator blind to who reported the case cannot work it.
+        await using var db = await factory.CreateDbContextAsync();
+        var c = await db.Cases.Include(x => x.ClientRequest).FirstAsync(x => x.Id == caseId);
+        Assert.Equal(clientId, c.ClientRequest!.AppUserId);
+        Assert.Equal("Anonymous", c.ClientDisplayAlias);
+    }
+
+    // ── Witness photos + editing (U5) ─────────────────────────────────────────
+
+    private static async Task<Guid> AddFileOwnedByAsync(
+        IDbContextFactory<BenDataContext> factory, Guid ownerId)
+    {
+        var id = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.UploadFiles.Add(new UploadFile
+        {
+            Id = id, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+            FileName = "witness.jpg", StoredFileName = "w.jpg", ContentType = "image/jpeg",
+            FileSize = 1, DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    private static async Task<CaseRelatedPersonRecord> AddPersonAsync(
+        MyCaseController ctrl, Guid caseId, string name = "Jane Doe", Guid? fileId = null)
+    {
+        var result = await ctrl.AddRelatedPerson(caseId,
+            new AddRelatedPersonRequest(name, null, null, false, null, fileId), default);
+        return (CaseRelatedPersonRecord)((OkObjectResult)result.Result!).Value!;
+    }
+
+    [Fact]
+    public async Task AddRelatedPerson_CanCarryAPhoto()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl   = Build(factory, clientId);
+        var fileId = await AddFileOwnedByAsync(factory, clientId);
+
+        var person = await AddPersonAsync(ctrl, caseId, fileId: fileId);
+
+        Assert.Equal(fileId, person.UploadFileId);
+    }
+
+    [Fact]
+    public async Task AddRelatedPerson_RefusesAPhotoTheClientDoesNotOwn()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl        = Build(factory, clientId);
+        var strangerFile = await AddFileOwnedByAsync(factory, Guid.NewGuid());
+
+        var result = await ctrl.AddRelatedPerson(caseId,
+            new AddRelatedPersonRequest("Jane", null, null, false, null, strangerFile), default);
+
+        // Otherwise a witness photo could be pointed at any file in the system by id.
+        Assert.IsType<ForbidResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.CaseRelatedPeople.AnyAsync());
+    }
+
+    [Fact]
+    public async Task UpdateRelatedPerson_EditsTheDetails()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl   = Build(factory, clientId);
+        var person = await AddPersonAsync(ctrl, caseId);
+
+        var result = await ctrl.UpdateRelatedPerson(caseId, person.Id,
+            new UpdateRelatedPersonRequest("Jane Smith", 41, "Neighbour", true, "Moved in 2024."), default);
+
+        var updated = Assert.IsType<CaseRelatedPersonRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal("Jane Smith", updated.Name);
+        Assert.Equal(41, updated.Age);
+        Assert.True(updated.LivesAtProperty);
+    }
+
+    [Fact]
+    public async Task UpdateRelatedPerson_ClearsThePhotoWhenNoneIsSent()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl   = Build(factory, clientId);
+        var fileId = await AddFileOwnedByAsync(factory, clientId);
+        var person = await AddPersonAsync(ctrl, caseId, fileId: fileId);
+
+        await ctrl.UpdateRelatedPerson(caseId, person.Id,
+            new UpdateRelatedPersonRequest("Jane Doe", null, null, false, null), default);
+
+        // The edit form always submits the whole person, so an absent photo means "removed" —
+        // unlike the profile endpoints, where null means "leave alone".
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Null((await db.CaseRelatedPeople.FindAsync(person.Id))!.UploadFileId);
+        // The file itself survives; only the reference was cleared.
+        Assert.True(await db.UploadFiles.AnyAsync(f => f.Id == fileId));
+    }
+
+    [Fact]
+    public async Task UpdateRelatedPerson_RefusesAPhotoTheClientDoesNotOwn()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl         = Build(factory, clientId);
+        var person       = await AddPersonAsync(ctrl, caseId);
+        var strangerFile = await AddFileOwnedByAsync(factory, Guid.NewGuid());
+
+        var result = await ctrl.UpdateRelatedPerson(caseId, person.Id,
+            new UpdateRelatedPersonRequest("Jane", null, null, false, null, strangerFile), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task UpdateRelatedPerson_NotPrimaryClient_ReturnsForbid()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var person = await AddPersonAsync(Build(factory, clientId), caseId);
+
+        var result = await Build(factory, Guid.NewGuid()).UpdateRelatedPerson(caseId, person.Id,
+            new UpdateRelatedPersonRequest("Hacked", null, null, false, null), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task UpdateRelatedPerson_MissingName_ReturnsBadRequest()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl   = Build(factory, clientId);
+        var person = await AddPersonAsync(ctrl, caseId);
+
+        var result = await ctrl.UpdateRelatedPerson(caseId, person.Id,
+            new UpdateRelatedPersonRequest("   ", null, null, false, null), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
     [Fact]
     public async Task RemoveRelatedPerson_DeletesRow()
     {

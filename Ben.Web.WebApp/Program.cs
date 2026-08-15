@@ -77,6 +77,9 @@ builder.Services.AddScoped<IBenUserState>(sp => (IBenUserState)sp.GetRequiredSer
 // One set of unread counts per circuit, shared by every badge on the page. Scoped, so it is torn
 // down with the circuit — the poll it owns must not outlive the session it polls for.
 builder.Services.AddScoped<NotificationState>();
+// Scoped = per circuit. Avatar resolution depends on who is asking, so this must not be shared
+// across sessions — see AvatarCache.
+builder.Services.AddScoped<AvatarCache>();
 
 // ── Microsoft Entra OIDC ─────────────────────────────────────────────────────
 // EntraTokenHolder is populated by middleware before the Blazor circuit starts

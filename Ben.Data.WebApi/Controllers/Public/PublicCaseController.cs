@@ -11,7 +11,8 @@ namespace Ben.Data.WebApi.Controllers.Public;
 /// <summary>
 /// Public case discovery — no authentication required.
 /// Only cases with IsPublic = true and status Public or Haunted are returned.
-/// Client identity is replaced by PublicPseudonym where set.
+/// Client identity is replaced by the client's alias, or the org's pseudonym, or nothing —
+/// see <see cref="PublicClientName"/>. A real client name is never emitted here.
 /// </summary>
 [ApiController]
 [Route("api/public/organizations/{orgUrlName}")]
@@ -78,8 +79,9 @@ public sealed class PublicCaseController : ControllerBase
                                    && (x.Status == CaseStatus.Public || x.Status == CaseStatus.Haunted), ct);
         if (c is null) return NotFound();
 
-        // Apply pseudonym: replace client identifiers with PublicPseudonym when set
-        var clientName = string.IsNullOrWhiteSpace(c.PublicPseudonym) ? null : c.PublicPseudonym;
+        // The client's own alias when they set one, the org's pseudonym otherwise, and nothing
+        // if neither — the real name is never an outcome here. See PublicClientName.
+        var clientName = PublicClientName.For(c);
 
         var publicTimeline = c.TimelineEntries.Select(e => new PublicTimelineEntry(
             EntryType:      e.EntryType,

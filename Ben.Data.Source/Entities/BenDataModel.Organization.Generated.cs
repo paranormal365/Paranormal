@@ -17,6 +17,13 @@ namespace Ben.Data.Source.Entities
         /// <summary>When true, the org will also consider client requests outside their configured operating area.</summary>
         public bool AcceptsClientsOutsideRange { get; set; }
 
+        /// <summary>
+        /// The organization's half of the two-key rule for member private photos. Lets clients of
+        /// this org see the private photo of a member who has *also* opted in
+        /// (<see cref="AppUser.SharePrivatePhotoWithClients"/>). Either key alone shows nothing.
+        /// </summary>
+        public bool AllowMemberPrivatePhotosToClients { get; set; }
+
         /// <summary>Public phone number shown on the org's public page.</summary>
         public string? PublicPhone { get; set; }
 

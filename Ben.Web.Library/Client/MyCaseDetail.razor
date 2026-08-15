@@ -103,6 +103,18 @@
                                         <div class="text-muted" style="font-size:.72rem;">
                                             @((o.EventDateTime ?? o.DateCreated).ToViewerLocalTime(UserState).ToString("h:mm tt"))
                                         </div>
+                                        @* Shown back so tagging isn't a control that swallows input. *@
+                                        @if (o.ExperienceTypeIds.Count > 0)
+                                        {
+                                            <div class="d-flex flex-wrap gap-1 mt-1">
+                                                @foreach (var tid in o.ExperienceTypeIds)
+                                                {
+                                                    <span class="badge bg-info-subtle text-info-emphasis" style="font-size:.65rem;">
+                                                        @(_expTypeNames.TryGetValue(tid, out var tn) ? tn : "Tagged")
+                                                    </span>
+                                                }
+                                            </div>
+                                        }
                                         @* Attached files *@
                                         @if (o.Files.Count > 0)
                                         {
@@ -332,12 +344,79 @@
     }
 
     @* ── People at the property (basic info, no account) ─────────────────────── *@
+@* ── Public name (U6) ─────────────────────────────────────────────────────────
+   Only meaningful to the primary client: they're the one the public page names. *@
+@if (_isPrimaryClient)
+{
+    <div class="card mt-4">
+        <div class="card-header fw-semibold">
+            <TelerikSvgIcon Icon="@SvgIcon.Eye" /> How You're Named Publicly
+        </div>
+        <div class="card-body">
+            <div class="text-secondary small mb-2">
+                If this case is ever published, this is the name shown on the public page.
+                Your investigators always see your real name — they can't work the case otherwise.
+            </div>
+
+            <div class="d-flex gap-2 align-items-start flex-wrap">
+                <input class="form-control" style="max-width:320px;" maxlength="128"
+                       placeholder="e.g. The Miller Family" value="@_aliasDraft"
+                       @oninput="@(e => _aliasDraft = e.Value?.ToString() ?? string.Empty)" />
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                               Enabled="@(!_aliasSaving)" OnClick="SaveAliasAsync">Save</TelerikButton>
+                @if (!string.IsNullOrWhiteSpace(_alias?.ClientDisplayAlias))
+                {
+                    <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                   Enabled="@(!_aliasSaving)" OnClick="ClearAliasAsync">Clear</TelerikButton>
+                }
+            </div>
+
+            <div class="d-flex gap-1 flex-wrap mt-2">
+                <span class="small text-secondary me-1">Suggestions:</span>
+                @foreach (var s in AliasSuggestions)
+                {
+                    var suggestion = s;
+                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                   FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                   OnClick="@(() => _aliasDraft = suggestion)">@suggestion</TelerikButton>
+                }
+            </div>
+
+            @if (_alias is not null)
+            {
+                <div class="mt-3 small">
+                    @* States what the public actually sees, computed server-side — the client
+                       shouldn't have to work out whose name wins. *@
+                    @if (_alias.EffectivePublicName is { } shown)
+                    {
+                        <span class="text-secondary">Public pages currently show:</span>
+                        <strong class="ms-1">@shown</strong>
+                        @if (string.IsNullOrWhiteSpace(_alias.ClientDisplayAlias)
+                             && !string.IsNullOrWhiteSpace(_alias.OrganizationPseudonym))
+                        {
+                            <span class="d-block text-secondary">
+                                That was chosen by the group. Set your own above to replace it.
+                            </span>
+                        }
+                    }
+                    else
+                    {
+                        <span class="text-secondary">
+                            Public pages currently show no name for you at all.
+                        </span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
     <div class="card mt-4">
         <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
             <span><TelerikSvgIcon Icon="@SvgIcon.Group" /> People at the Property</span>
             @if (_isPrimaryClient)
             {
-                <TelerikButton Size="sm" Icon="@SvgIcon.Plus" OnClick="@(() => _showAddRelatedPerson = true)">Add Person</TelerikButton>
+                <TelerikButton Size="sm" Icon="@SvgIcon.Plus" OnClick="OpenAddPerson">Add Person</TelerikButton>
             }
         </div>
         <div class="card-body">
@@ -352,6 +431,12 @@
                 @foreach (var p in _relatedPeople)
                 {
                     <div class="d-flex align-items-start justify-content-between">
+                        <div class="d-flex align-items-start gap-2">
+                            @if (p.UploadFileId is { } pf && _personPhotos.TryGetValue(pf, out var pfSrc))
+                            {
+                                <img src="@pfSrc" alt="@p.Name" class="rounded border"
+                                     style="width:40px;height:40px;object-fit:cover;flex:0 0 auto;" />
+                            }
                         <div>
                             <span class="small fw-semibold">@p.Name</span>
                             @if (p.Age.HasValue) { <span class="small text-secondary"> · Age @p.Age</span> }
@@ -362,10 +447,17 @@
                                 <div class="text-secondary small">@p.Notes</div>
                             }
                         </div>
+                        </div>
                         @if (_isPrimaryClient)
                         {
-                            <TelerikButton Size="sm" FillMode="flat" ThemeColor="error" Icon="@SvgIcon.X"
-                                           OnClick="@(async () => await RemoveRelatedPerson(p.Id))" />
+                            <div class="d-flex gap-1">
+                                <TelerikButton Size="sm" FillMode="flat" Icon="@SvgIcon.Pencil"
+                                               Title="Edit"
+                                               OnClick="@(() => OpenEditPerson(p))" />
+                                <TelerikButton Size="sm" FillMode="flat" ThemeColor="error" Icon="@SvgIcon.X"
+                                               Title="Remove"
+                                               OnClick="@(async () => await RemoveRelatedPerson(p.Id))" />
+                            </div>
                         }
                     </div>
                 }
@@ -441,6 +533,32 @@
                 <TelerikTextArea @bind-Value="@_form.Body" Rows="5" Width="100%"
                                  Placeholder="Describe what happened in detail…" />
             </div>
+            @if (_taxonomy.Count > 0)
+            {
+                <div class="col-12">
+                    <label class="form-label fw-semibold">What kind of experience? (optional)</label>
+                    <div class="text-secondary small mb-2">
+                        Helps your investigators group similar reports. Pick as many as fit.
+                    </div>
+                    @foreach (var category in _taxonomy)
+                    {
+                        <div class="mb-2">
+                            <div class="small text-secondary">@category.Category.Name</div>
+                            <div class="d-flex gap-1 flex-wrap">
+                                @foreach (var t in category.Types)
+                                {
+                                    var type = t;
+                                    var on = _form.ExperienceTypeIds.Contains(type.Id);
+                                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                                   FillMode="@(on ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Outline)"
+                                                   ThemeColor="@(on ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                                                   OnClick="@(() => ToggleExperienceType(type.Id))">@type.Name</TelerikButton>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
         </div>
         @if (_dialogError is not null)
         {
@@ -555,7 +673,7 @@
 
 @* ── Add related person dialog ────────────────────────────────────────────────── *@
 <TelerikWindow @bind-Visible="@_showAddRelatedPerson" Width="420px" Modal="true">
-    <WindowTitle>Add a Person</WindowTitle>
+    <WindowTitle>@(_editingPersonId is null ? "Add a Person" : "Edit Person")</WindowTitle>
     <WindowContent>
         <div class="row g-3">
             <div class="col-12">
@@ -581,6 +699,29 @@
                 <TelerikTextArea @bind-Value="@_newPersonNotes" Rows="2" Width="100%" />
             </div>
             <div class="col-12">
+                <label class="form-label fw-semibold">Photo (optional)</label>
+                <div class="d-flex align-items-center gap-3">
+                    @if (_personPhotoPreview is not null)
+                    {
+                        <img src="@_personPhotoPreview" alt="" class="rounded border"
+                             style="width:64px;height:64px;object-fit:cover;flex:0 0 auto;" />
+                    }
+                    <div class="d-flex flex-column gap-1 flex-grow-1">
+                        <InputFile OnChange="OnPersonPhotoSelected" class="form-control form-control-sm"
+                                   accept="image/jpeg,image/png,image/gif,image/webp" />
+                        @if (_personPhotoUploading)
+                        {
+                            <span class="text-secondary small">Uploading…</span>
+                        }
+                        else if (_newPersonPhotoFileId is not null)
+                        {
+                            <TelerikButton Size="sm" FillMode="flat" ThemeColor="error"
+                                           OnClick="ClearPersonPhoto">Remove photo</TelerikButton>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-12">
                 <div class="text-secondary small">This information is never made public, even if the case is.</div>
             </div>
         </div>
@@ -589,8 +730,10 @@
     <WindowFooter>
         <div class="d-flex gap-2 justify-content-end w-100">
             <TelerikButton OnClick="@(() => _showAddRelatedPerson = false)">Cancel</TelerikButton>
-            <TelerikButton ThemeColor="primary" OnClick="AddRelatedPerson"
-                           Enabled="@(!string.IsNullOrWhiteSpace(_newPersonName))">Add</TelerikButton>
+            <TelerikButton ThemeColor="primary" OnClick="SaveRelatedPerson"
+                           Enabled="@(!string.IsNullOrWhiteSpace(_newPersonName) && !_personPhotoUploading)">
+                @(_editingPersonId is null ? "Add" : "Save")
+            </TelerikButton>
         </div>
     </WindowFooter>
 </TelerikWindow>
@@ -651,6 +794,33 @@
     private bool _isInviting;
     private List<CaseRelatedPersonRecord> _relatedPeople = [];
     private bool _showAddRelatedPerson;
+
+    private CaseDisplayAliasRecord? _alias;
+    private string _aliasDraft = string.Empty;
+    private bool   _aliasSaving;
+
+    /// <summary>
+    /// Starting points, not a fixed list — the field stays free text. Offered because "what should
+    /// I call myself" is a harder question than it looks when someone is deciding how exposed to be.
+    /// </summary>
+    private static readonly string[] AliasSuggestions =
+        ["The homeowner", "A local family", "Anonymous", "The tenant", "A neighbour"];
+
+    /// <summary>Which person is being edited; null while adding a new one.</summary>
+    private Guid? _editingPersonId;
+    private Guid? _newPersonPhotoFileId;
+    private string? _personPhotoPreview;
+    private bool _personPhotoUploading;
+
+    /// <summary>
+    /// Witness photo thumbnails as data URIs, keyed by upload-file id. Fetched through the
+    /// authenticated client rather than linked directly: these files are private, and a browser
+    /// sends no bearer token with an &lt;img&gt; request, so a direct URL renders broken.
+    /// </summary>
+    private readonly Dictionary<Guid, string> _personPhotos = [];
+
+    /// <summary>Witness photos are case evidence — same upload type as everything else on a case.</summary>
+    private static readonly Guid EvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
     private string _newPersonName = "";
     private int? _newPersonAge;
     private string _newPersonRelationship = "";
@@ -702,7 +872,14 @@
             catch { /* silent — Shared Access card just shows its empty state */ }
         }
 
-        try { _relatedPeople = (await AdminClient.GetRelatedPeopleAsync(CaseId)).ToList(); StateHasChanged(); }
+        try
+        {
+            _relatedPeople = (await AdminClient.GetRelatedPeopleAsync(CaseId)).ToList();
+            await LoadPersonPhotosAsync();
+            await LoadAliasAsync();
+            await LoadTaxonomyAsync();
+            StateHasChanged();
+        }
         catch { /* silent */ }
     }
 
@@ -712,6 +889,30 @@
             .OrderBy(o => o.EventDateTime ?? o.DateCreated)
             .ThenBy(o => o.DateCreated).ThenBy(o => o.Id)
             .ToList() ?? [];
+
+    /// <summary>
+    /// The shared experience taxonomy, used for optional tagging. Read-only here — clients pick
+    /// from the platform's list rather than inventing their own, so investigators can actually
+    /// group reports across cases.
+    /// </summary>
+    private List<ExperienceCategoryWithTypesResponse> _taxonomy = [];
+    private Dictionary<Guid, string> _expTypeNames = [];
+
+    private void ToggleExperienceType(Guid id)
+    {
+        if (!_form.ExperienceTypeIds.Remove(id)) _form.ExperienceTypeIds.Add(id);
+    }
+
+    private async Task LoadTaxonomyAsync()
+    {
+        if (_taxonomy.Count > 0) return;
+        try
+        {
+            _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).ToList();
+            _expTypeNames = _taxonomy.SelectMany(c => c.Types).ToDictionary(t => t.Id, t => t.Name);
+        }
+        catch { /* tagging is optional — the dialog still works without the list */ }
+    }
 
     private void OpenLogDialog()
     {
@@ -730,6 +931,7 @@
             Title         = occ.Title ?? "",
             Body          = occ.Body ?? "",
         };
+        foreach (var id in occ.ExperienceTypeIds) _form.ExperienceTypeIds.Add(id);
         _dialogError = null;
         _showDialog = true;
     }
@@ -742,7 +944,10 @@
         _isBusy = true; _dialogError = null;
         try
         {
-            var req = new LogOccurrenceRequest(_form.EventDateTime!.Value.ToUtcFromViewerLocal(UserState), _form.Title?.Trim(), _form.Body.Trim());
+            var req = new LogOccurrenceRequest(
+                _form.EventDateTime!.Value.ToUtcFromViewerLocal(UserState),
+                _form.Title?.Trim(), _form.Body.Trim(),
+                _form.ExperienceTypeIds.ToList());
             if (_editOcc is null)
                 await AdminClient.LogOccurrenceAsync(CaseId, req);
             else
@@ -790,6 +995,7 @@
         public DateTime? EventDateTime { get; set; } = DateTime.Now;
         public string    Title         { get; set; } = "";
         public string    Body          { get; set; } = "";
+        public HashSet<Guid> ExperienceTypeIds { get; } = [];
     }
 
     private async Task RemoveCoClient(Guid accessId)
@@ -873,23 +1079,148 @@
         StateHasChanged();
     }
 
-    private async Task AddRelatedPerson()
+    private async Task LoadAliasAsync()
+    {
+        try
+        {
+            _alias = await AdminClient.GetCaseDisplayAliasAsync(CaseId);
+            _aliasDraft = _alias?.ClientDisplayAlias ?? string.Empty;
+        }
+        catch { /* the rest of the page is still useful without it */ }
+    }
+
+    private async Task SaveAliasAsync()
+    {
+        _aliasSaving = true;
+        try
+        {
+            var updated = await AdminClient.SetCaseDisplayAliasAsync(
+                CaseId, new SetCaseDisplayAliasRequest(_aliasDraft));
+            if (updated is null) { _error = "Couldn't save that name."; return; }
+            _alias = updated;
+            _aliasDraft = updated.ClientDisplayAlias ?? string.Empty;
+        }
+        catch { _error = "Couldn't save that name."; }
+        finally { _aliasSaving = false; StateHasChanged(); }
+    }
+
+    private async Task ClearAliasAsync()
+    {
+        _aliasDraft = string.Empty;
+        await SaveAliasAsync();
+    }
+
+    private void OpenAddPerson()
+    {
+        _editingPersonId = null;
+        ResetPersonForm();
+        _showAddRelatedPerson = true;
+    }
+
+    private void OpenEditPerson(CaseRelatedPersonRecord p)
+    {
+        _editingPersonId          = p.Id;
+        _newPersonName            = p.Name;
+        _newPersonAge             = p.Age;
+        _newPersonRelationship    = p.Relationship ?? "";
+        _newPersonLivesAtProperty = p.LivesAtProperty;
+        _newPersonNotes           = p.Notes ?? "";
+        _newPersonPhotoFileId     = p.UploadFileId;
+        _personPhotoPreview       = p.UploadFileId is { } f && _personPhotos.TryGetValue(f, out var src) ? src : null;
+        _showAddRelatedPerson     = true;
+    }
+
+    private void ResetPersonForm()
+    {
+        _newPersonName = ""; _newPersonAge = null; _newPersonRelationship = "";
+        _newPersonLivesAtProperty = false; _newPersonNotes = "";
+        _newPersonPhotoFileId = null; _personPhotoPreview = null;
+    }
+
+    private void ClearPersonPhoto()
+    {
+        _newPersonPhotoFileId = null;
+        _personPhotoPreview   = null;
+    }
+
+    private async Task OnPersonPhotoSelected(InputFileChangeEventArgs e)
+    {
+        _personPhotoUploading = true;
+        try
+        {
+            var file = e.File;
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(maxAllowedSize: long.MaxValue).CopyToAsync(ms);
+            var bytes = ms.ToArray();
+
+            var uploaded = await AdminClient.UploadUserFileAsync(
+                EvidenceFileTypeId, UserState.UserId ?? Guid.Empty,
+                file.Name, file.ContentType, bytes,
+                description: "Witness photo", isPublic: false);
+            if (uploaded is null) { _error = "Couldn't upload that photo."; return; }
+
+            _newPersonPhotoFileId = uploaded.Id;
+            // Preview from the bytes already in hand — no round trip, and it works regardless of
+            // the file being private.
+            _personPhotoPreview   = $"data:{file.ContentType};base64,{Convert.ToBase64String(bytes)}";
+            _personPhotos[uploaded.Id] = _personPhotoPreview;
+        }
+        catch { _error = "Couldn't upload that photo."; }
+        finally { _personPhotoUploading = false; StateHasChanged(); }
+    }
+
+    private async Task SaveRelatedPerson()
     {
         if (string.IsNullOrWhiteSpace(_newPersonName)) return;
-        var request = new AddRelatedPersonRequest(
-            _newPersonName.Trim(), _newPersonAge,
-            string.IsNullOrWhiteSpace(_newPersonRelationship) ? null : _newPersonRelationship.Trim(),
-            _newPersonLivesAtProperty,
-            string.IsNullOrWhiteSpace(_newPersonNotes) ? null : _newPersonNotes.Trim());
-        var result = await AdminClient.AddRelatedPersonAsync(CaseId, request);
-        if (result is not null)
+
+        var name         = _newPersonName.Trim();
+        var relationship = string.IsNullOrWhiteSpace(_newPersonRelationship) ? null : _newPersonRelationship.Trim();
+        var notes        = string.IsNullOrWhiteSpace(_newPersonNotes) ? null : _newPersonNotes.Trim();
+
+        if (_editingPersonId is { } editId)
         {
-            _relatedPeople.Add(result);
-            _showAddRelatedPerson = false;
-            _newPersonName = ""; _newPersonAge = null; _newPersonRelationship = "";
-            _newPersonLivesAtProperty = false; _newPersonNotes = "";
+            var updated = await AdminClient.UpdateRelatedPersonAsync(CaseId, editId,
+                new UpdateRelatedPersonRequest(name, _newPersonAge, relationship,
+                                               _newPersonLivesAtProperty, notes, _newPersonPhotoFileId));
+            if (updated is not null)
+            {
+                var idx = _relatedPeople.FindIndex(p => p.Id == editId);
+                if (idx >= 0) _relatedPeople[idx] = updated;
+                _showAddRelatedPerson = false;
+                _editingPersonId = null;
+            }
+            else { _error = "Couldn't save that person."; }
+        }
+        else
+        {
+            var added = await AdminClient.AddRelatedPersonAsync(CaseId,
+                new AddRelatedPersonRequest(name, _newPersonAge, relationship,
+                                            _newPersonLivesAtProperty, notes, _newPersonPhotoFileId));
+            if (added is not null)
+            {
+                _relatedPeople.Add(added);
+                _showAddRelatedPerson = false;
+                ResetPersonForm();
+            }
+            else { _error = "Couldn't add that person."; }
         }
         StateHasChanged();
+    }
+
+    /// <summary>Fetches thumbnails for any witness photos not already cached.</summary>
+    private async Task LoadPersonPhotosAsync()
+    {
+        foreach (var id in _relatedPeople.Select(p => p.UploadFileId).OfType<Guid>().Distinct())
+        {
+            if (_personPhotos.ContainsKey(id)) continue;
+            try
+            {
+                var file = await AdminClient.GetFileDataAsync(id);
+                if (file is { } f)
+                    _personPhotos[id] = $"data:{f.ContentType};base64,{Convert.ToBase64String(f.Data)}";
+            }
+            catch { /* a missing thumbnail is not worth failing the page over */ }
+        }
     }
 
     private Task<IReadOnlyList<CaseMessageRecord>> LoadClientMessages()

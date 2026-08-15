@@ -4,6 +4,7 @@ using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Ben.Data.Source.Migrations
 {
     [DbContext(typeof(BenDataContext))]
-    partial class BenDataContextModelSnapshot : ModelSnapshot
+    [Migration("20260815002108_AddPrivatePhotoConsentFlags")]
+    partial class AddPrivatePhotoConsentFlags
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -267,10 +270,6 @@ namespace Ben.Data.Source.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("City")
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
-
-                    b.Property<string>("ClientDisplayAlias")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
@@ -636,9 +635,6 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid?>("UpdatedByAppUserId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("UploadFileId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CaseId");
@@ -646,8 +642,6 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("CreatedByAppUserId");
 
                     b.HasIndex("UpdatedByAppUserId");
-
-                    b.HasIndex("UploadFileId");
 
                     b.ToTable("CaseRelatedPeople");
                 });
@@ -5272,18 +5266,11 @@ namespace Ben.Data.Source.Migrations
                         .HasForeignKey("UpdatedByAppUserId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "UploadFile")
-                        .WithMany()
-                        .HasForeignKey("UploadFileId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.Navigation("Case");
 
                     b.Navigation("CreatedByAppUser");
 
                     b.Navigation("UpdatedByAppUser");
-
-                    b.Navigation("UploadFile");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.CaseReport", b =>

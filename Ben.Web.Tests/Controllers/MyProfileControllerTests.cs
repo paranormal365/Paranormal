@@ -1,7 +1,9 @@
 using AutoMapper;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
+using Ben.Data.Common.Enums;
 using Ben.Data.WebApi.Controllers;
+using Ben.Data.WebApi.Controllers.Entities;
 using Ben.Service.Models.Entities;
 using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Http;
@@ -360,5 +362,135 @@ public class MyProfileControllerTests
 
         Assert.Single(photos);
         Assert.Equal(mine, photos[0].UploadFileId);
+    }
+
+    // ── Private-photo consent (U2a) ───────────────────────────────────────────
+
+    private static async Task AddMembershipAsync(
+        IDbContextFactory<BenDataContext> factory, Guid userId, bool orgAllows, bool isActive = true)
+    {
+        var orgId = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.Organizations.Add(new Organization
+        {
+            Id = orgId, Name = "Org", UrlName = $"org-{orgId:N}",
+            AllowMemberPrivatePhotosToClients = orgAllows,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+        {
+            Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = userId,
+            Role = OrganizationMemberRole.Member, IsActive = isActive,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task Profile_ConsentDefaultsToWithheld()
+    {
+        var (factory, userId) = await SeedAsync();
+
+        // Consent is something you give. A new account must not start out sharing.
+        Assert.False((await GetProfileAsync(factory, userId)).SharePrivatePhotoWithClients);
+    }
+
+    [Fact]
+    public async Task UpdateProfile_TogglesTheConsentOptIn()
+    {
+        var (factory, userId) = await SeedAsync();
+
+        await Build(factory, userId).UpdateProfile(
+            new UpdateMyProfileRequest(null, SharePrivatePhotoWithClients: true), default);
+        Assert.True((await GetProfileAsync(factory, userId)).SharePrivatePhotoWithClients);
+
+        await Build(factory, userId).UpdateProfile(
+            new UpdateMyProfileRequest(null, SharePrivatePhotoWithClients: false), default);
+        Assert.False((await GetProfileAsync(factory, userId)).SharePrivatePhotoWithClients);
+    }
+
+    [Fact]
+    public async Task UpdateProfile_EditingTheNameLeavesConsentAlone()
+    {
+        var (factory, userId) = await SeedAsync();
+        var ctrl = Build(factory, userId);
+        await ctrl.UpdateProfile(new UpdateMyProfileRequest(null, true), default);
+
+        // Renaming yourself must not silently revoke consent you already gave — the whole reason
+        // the request field is nullable rather than a plain bool.
+        await ctrl.UpdateProfile(new UpdateMyProfileRequest("New Name"), default);
+
+        var profile = await GetProfileAsync(factory, userId);
+        Assert.Equal("New Name", profile.DisplayName);
+        Assert.True(profile.SharePrivatePhotoWithClients);
+    }
+
+    [Theory]
+    [InlineData(true,  true)]
+    [InlineData(false, false)]
+    public async Task Profile_ReportsWhetherAnyOrgPermitsSharing(bool orgAllows, bool expected)
+    {
+        var (factory, userId) = await SeedAsync();
+        await AddMembershipAsync(factory, userId, orgAllows);
+
+        Assert.Equal(expected, (await GetProfileAsync(factory, userId)).AnyOrgAllowsPrivatePhotoSharing);
+    }
+
+    [Fact]
+    public async Task Profile_IgnoresPermissiveOrgsTheUserHasLeft()
+    {
+        var (factory, userId) = await SeedAsync();
+        await AddMembershipAsync(factory, userId, orgAllows: true, isActive: false);
+
+        // A lapsed membership is not a current relationship, so it must not make the opt-in look
+        // effective — nor, later, actually share anything.
+        Assert.False((await GetProfileAsync(factory, userId)).AnyOrgAllowsPrivatePhotoSharing);
+    }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true,  false, false)]
+    [InlineData(false, true,  false)]
+    [InlineData(true,  true,  true)]
+    public void Consent_RequiresBothKeys(bool memberOptedIn, bool orgAllows, bool expected)
+    {
+        // The rule the whole feature rests on, asserted on the single helper both U3 and U4 will
+        // call. Three of these four rows are the ones that matter: any single yes is still a no.
+        Assert.Equal(expected, PrivatePhotoConsent.MayShowToClient(memberOptedIn, orgAllows));
+
+        var member = new AppUser
+        {
+            Id = Guid.NewGuid(), UserName = "u", DateCreated = DateTime.UtcNow,
+            SharePrivatePhotoWithClients = memberOptedIn,
+        };
+        var org = new Organization
+        {
+            Id = Guid.NewGuid(), Name = "O", UrlName = "o",
+            AllowMemberPrivatePhotosToClients = orgAllows,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = member.Id,
+        };
+        Assert.Equal(expected, PrivatePhotoConsent.MayShowToClient(member, org));
+    }
+
+    [Fact]
+    public void Consent_TreatsAMissingUserOrOrgAsNo()
+    {
+        // A null row must never read as permission — the failure mode is showing a face to
+        // someone who was never agreed to.
+        var member = new AppUser
+        {
+            Id = Guid.NewGuid(), UserName = "u", DateCreated = DateTime.UtcNow,
+            SharePrivatePhotoWithClients = true,
+        };
+        var org = new Organization
+        {
+            Id = Guid.NewGuid(), Name = "O", UrlName = "o",
+            AllowMemberPrivatePhotosToClients = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = member.Id,
+        };
+
+        Assert.False(PrivatePhotoConsent.MayShowToClient(null, org));
+        Assert.False(PrivatePhotoConsent.MayShowToClient(member, null));
+        Assert.False(PrivatePhotoConsent.MayShowToClient(null, null));
     }
 }

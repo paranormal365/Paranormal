@@ -122,6 +122,12 @@ public interface IBenAdminClient
     /// <summary>The UploadFileType new profile-photo uploads belong to.</summary>
     Task<Guid?> GetProfilePhotoFileTypeIdAsync(CancellationToken token = default);
 
+    /// <summary>
+    /// Another user's profile photo, already resolved to whichever one the caller may see.
+    /// Null when they have no visible photo — render initials rather than a broken image.
+    /// </summary>
+    Task<(byte[] Data, string ContentType)?> GetUserAvatarAsync(Guid userId, CancellationToken token = default);
+
     /// <summary>Approves or denies a file-permission request. Returns false when the API rejects it.</summary>
     Task<bool> ReviewPermissionRequestAsync(
         Guid requestId, FilePermissionRequestStatus status, string? reviewNotes, CancellationToken token = default);
@@ -683,6 +689,17 @@ public interface IBenAdminClient
     /// <summary>Removes a related-person reference.</summary>
     Task<bool> RemoveRelatedPersonAsync(Guid caseId, Guid personId, CancellationToken token = default);
 
+    /// <summary>The caller's public-facing alias for a case, plus what the public sees today.</summary>
+    Task<CaseDisplayAliasRecord?> GetCaseDisplayAliasAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Sets the caller's public-facing alias. Empty clears it. Primary client only.</summary>
+    Task<CaseDisplayAliasRecord?> SetCaseDisplayAliasAsync(
+        Guid caseId, SetCaseDisplayAliasRequest request, CancellationToken token = default);
+
+    /// <summary>Edits a related person. Sends the whole person — a null photo id clears it.</summary>
+    Task<CaseRelatedPersonRecord?> UpdateRelatedPersonAsync(
+        Guid caseId, Guid personId, UpdateRelatedPersonRequest request, CancellationToken token = default);
+
     /// <summary>Attaches a file to an occurrence entry using case-scoped storage.</summary>
     Task<OccurrenceFileItem?> AttachOccurrenceFileAsync(Guid caseId, Guid entryId, Stream content, string fileName, string contentType, CancellationToken token = default);
 
@@ -971,7 +988,10 @@ public sealed record AdminCreateOrganizationRequest(string Name, string UrlName,
 /// <summary>Request body for updating an organization's Name and UrlName.</summary>
 public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName,
     bool IsAcceptingApplications = false,
-    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null);
+    string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null,
+    // Optional so an existing caller that omits it can't silently switch the policy off.
+    // Null means "leave as-is"; see OrganizationController.Update.
+    bool? AllowMemberPrivatePhotosToClients = null);
 
 /// <summary>Role record paired with its current user count.</summary>
 public sealed record AdminRoleWithCountResponse(AppRoleAdminRecord Role, int UserCount);
@@ -1473,7 +1493,10 @@ public sealed record ClientCaseOccurrence(
     string?   Body,
     bool      FromInvestigators,   // true when the org wrote this and shared it
     DateTime  DateCreated,
-    IReadOnlyList<OccurrenceFileItem> Files);
+    IReadOnlyList<OccurrenceFileItem> Files,
+    // Returned as well as accepted: a tag the client sets but can never see back would be a
+    // write-only control, and they'd have no way to tell whether it took.
+    IReadOnlyList<Guid> ExperienceTypeIds);
 
 public sealed record OccurrenceFileItem(
     Guid   FileId,
@@ -1542,10 +1565,16 @@ public sealed record ClientCaseInvestigation(
     DateTime?  EvidenceDueDate = null,
     DateTime?  CancellationDeadlineUtc = null);
 
+/// <param name="ExperienceTypeIds">
+/// Optional tags from the shared experience taxonomy. Investigators already filter and read these
+/// on the org timeline; letting the client set them means the person who was actually there gets
+/// to say what kind of thing it was.
+/// </param>
 public sealed record LogOccurrenceRequest(
     DateTime? EventDateTime,
     string?   Title,
-    string?   Body);
+    string?   Body,
+    IReadOnlyList<Guid>? ExperienceTypeIds = null);
 
 // ── Case message board response records ──────────────────────────────────────
 public sealed record CaseMessageRecord(
