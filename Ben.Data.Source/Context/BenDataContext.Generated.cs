@@ -71,6 +71,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<ClientRequest> ClientRequests { get; set; }
         public virtual DbSet<ClientRequestOrganization> ClientRequestOrganizations { get; set; }
         public virtual DbSet<ClientRequestFile> ClientRequestFiles { get; set; }
+        public virtual DbSet<Place> Places { get; set; }
         public virtual DbSet<Case> Cases { get; set; }
         public virtual DbSet<CaseTimelineEntry> CaseTimelineEntries { get; set; }
         public virtual DbSet<CaseTimelineEntryExperienceType> CaseTimelineEntryExperienceTypes { get; set; }
@@ -1199,10 +1200,49 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<ClientRequestFile>()
                 .HasIndex(e => new { e.ClientRequestId, e.UploadFileId }).IsUnique();
 
+            // ── Place ─────────────────────────────────────────────────────────
+            modelBuilder.Entity<Place>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Place>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Place>()
+                .Property(e => e.Latitude).HasPrecision(18, 10);
+            modelBuilder.Entity<Place>()
+                .Property(e => e.Longitude).HasPrecision(18, 10);
+            modelBuilder.Entity<Place>()
+                .Property(e => e.Name).HasMaxLength(256);
+            modelBuilder.Entity<Place>()
+                .Property(e => e.StreetAddress1).HasMaxLength(256);
+            modelBuilder.Entity<Place>()
+                .Property(e => e.StreetAddress2).HasMaxLength(256);
+            modelBuilder.Entity<Place>()
+                .Property(e => e.City).HasMaxLength(128);
+            modelBuilder.Entity<Place>()
+                .Property(e => e.State).HasMaxLength(64);
+            modelBuilder.Entity<Place>()
+                .Property(e => e.ZipCode).HasMaxLength(20);
+            modelBuilder.Entity<Place>()
+                .Property(e => e.Country).HasMaxLength(64);
+            modelBuilder.Entity<Place>()
+                .Property(e => e.GeocodeNote).HasMaxLength(512);
+            // Rounded coordinates are what P8's deduplication will search on, and a name-only
+            // landmark has none — so this indexes the lookup rather than enforcing uniqueness.
+            // Uniqueness would be wrong here: two flats at one postcode are two places.
+            modelBuilder.Entity<Place>()
+                .HasIndex(e => new { e.Latitude, e.Longitude });
+
             // ── Case ──────────────────────────────────────────────────────────
             modelBuilder.Entity<Case>()
                 .HasOne(e => e.Organization).WithMany()
                 .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            // NoAction, not Cascade: deleting a place must never delete the cases that happened
+            // there. Every FK added on this branch is NoAction anyway — both tables already reach
+            // AppUser by another path, and SQL Server rejects the second cascade route (error 1785).
+            modelBuilder.Entity<Case>()
+                .HasOne(e => e.Place).WithMany(e => e.Cases)
+                .HasForeignKey(e => e.PlaceId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<Case>()
                 .HasOne(e => e.ClientRequest).WithMany()
                 .HasForeignKey(e => e.ClientRequestId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
@@ -1408,6 +1448,9 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<Investigation>()
                 .HasOne(e => e.OrgCalendarEvent).WithMany()
                 .HasForeignKey(e => e.OrgCalendarEventId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<Investigation>()
+                .HasOne(e => e.Place).WithMany(e => e.Investigations)
+                .HasForeignKey(e => e.PlaceId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<Investigation>()
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);

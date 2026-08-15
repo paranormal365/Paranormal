@@ -59,6 +59,20 @@ namespace Ben.Data.Source.Entities
         public Guid CreatedByAppUserId { get; set; }
         public Guid? UpdatedByAppUserId { get; set; }
 
+        /// <summary>
+        /// Where this investigation happened, as a shared location rather than free text.
+        /// </summary>
+        /// <remarks>
+        /// Nullable for now: today every investigation reaches a location through its case, and
+        /// P2 is what makes a case-less investigation possible. Until then this is the map's
+        /// identity for the visit, and it does not replace <see cref="Location"/> — a team often
+        /// works somewhere other than the address on file, and that free text is still how they
+        /// say so.
+        /// </remarks>
+        public Guid? PlaceId { get; set; }
+
+        public virtual Place? Place { get; set; }
+
         public virtual Case Case { get; set; } = null!;
         public virtual OrgCalendarEvent? OrgCalendarEvent { get; set; }
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
