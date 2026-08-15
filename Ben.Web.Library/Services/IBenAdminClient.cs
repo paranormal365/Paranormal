@@ -562,6 +562,12 @@ public interface IBenAdminClient
 
     Task<IReadOnlyList<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default);
     Task<OrgCalendarEventAttendeeRecord?> AddCalendarAttendeeAsync(Guid orgId, Guid eventId, AddAttendeeRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// Invites someone to an event by email address — for people outside the organization.
+    /// Returns null when nobody with that address has an account.
+    /// </summary>
+    Task<OrgCalendarEventAttendeeRecord?> AddCalendarAttendeeByEmailAsync(Guid orgId, Guid eventId, string email, CancellationToken token = default);
     Task<OrgCalendarEventAttendeeRecord?> RsvpCalendarEventAsync(Guid orgId, Guid eventId, Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus status, CancellationToken token = default);
     Task<bool> RemoveCalendarAttendeeAsync(Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default);
 
@@ -1512,6 +1518,8 @@ public sealed record UpsertCalendarEventRequest(
     string? MeetingUrl = null);
 
 public sealed record AddAttendeeRequest(Guid AppUserId, string? AssignedTask);
+
+public sealed record AddAttendeeByEmailRequest(string? Email);
 
 // ── Membership Phase 3 request records ────────────────────────────────────────
 public sealed record UpsertMembershipQuestionRequest(
