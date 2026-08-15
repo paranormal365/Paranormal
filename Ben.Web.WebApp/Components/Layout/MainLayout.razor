@@ -32,11 +32,9 @@
             @if (TokenStore.IsAuthenticated)
             {
                 <NotificationBell />
-                <span class="me-2 text-secondary small">@TokenStore.UserEmail</span>
-                <TelerikButton Icon="@SvgIcon.Logout"
-                               FillMode="@ThemeConstants.Button.FillMode.Clear"
-                               Title="Sign out"
-                               OnClick="HandleLogout">Sign Out</TelerikButton>
+                @* Email + Sign Out moved into the menu — the top bar now carries an identity,
+                   and a way to reach the profile, instead of a label and a logout button. *@
+                <UserMenu OnSignOut="HandleLogout" />
             }
             else
             {

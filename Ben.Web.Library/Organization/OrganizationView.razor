@@ -80,6 +80,21 @@
                 <TelerikCheckBox @bind-Value="@_editIsAcceptingApplications" Id="edit-accepting-apps" />
                 <label for="edit-accepting-apps" class="form-label mb-0">Accepting Membership Applications</label>
             </div>
+            @* Half of a two-key rule — the member must opt in as well, so this switch alone
+               shares nothing. The label says so, because an admin who thinks flipping this
+               exposes their team's photos would reasonably leave it off forever. *@
+            <div class="col-12 d-flex align-items-start gap-2">
+                <input type="checkbox" class="form-check-input mt-1" id="edit-member-photos"
+                       checked="@_editAllowMemberPrivatePhotos"
+                       @onchange="@(e => _editAllowMemberPrivatePhotos = (bool)(e.Value ?? false))" />
+                <label for="edit-member-photos" class="form-label mb-0">
+                    Let clients see members' private photos
+                    <span class="d-block text-secondary small">
+                        Only for members who have also turned this on for themselves. Nothing is
+                        shared unless both the group and the member agree.
+                    </span>
+                </label>
+            </div>
             @if (_isOwnerOrSuperAdmin)
             {
                 <div class="col-12">
@@ -267,6 +282,7 @@
     private string? _editPublicEmail;
     private string? _editPublicWebsite;
     private bool    _editIsAcceptingApplications;
+    private bool    _editAllowMemberPrivatePhotos;
 
     protected override async Task OnInitializedAsync()
     {
@@ -352,6 +368,7 @@
         _editPublicEmail            = _org.PublicEmail;
         _editPublicWebsite          = _org.PublicWebsite;
         _editIsAcceptingApplications = _org.IsAcceptingApplications;
+        _editAllowMemberPrivatePhotos = _org.AllowMemberPrivatePhotosToClients;
         _editMode = true;
     }
 
@@ -372,7 +389,8 @@
                 IsAcceptingApplications: _editIsAcceptingApplications,
                 PublicPhone:    _editPublicPhone?.Trim(),
                 PublicEmail:    _editPublicEmail?.Trim(),
-                PublicWebsite:  _editPublicWebsite?.Trim()));
+                PublicWebsite:  _editPublicWebsite?.Trim(),
+                AllowMemberPrivatePhotosToClients: _editAllowMemberPrivatePhotos));
 
         _isSaving = false;
 
