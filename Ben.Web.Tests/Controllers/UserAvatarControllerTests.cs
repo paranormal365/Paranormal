@@ -94,7 +94,8 @@ public class UserAvatarControllerTests
 
     /// <summary>Makes <paramref name="clientId"/> the originating client of a case at an org.</summary>
     private static async Task AddClientCaseAsync(
-        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid clientId)
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid clientId,
+        CaseStatus status = CaseStatus.Active)
     {
         await using var db = await factory.CreateDbContextAsync();
         var requestId = Guid.NewGuid();
@@ -107,7 +108,7 @@ public class UserAvatarControllerTests
         db.Cases.Add(new Case
         {
             Id = Guid.NewGuid(), OrganizationId = orgId, ClientRequestId = requestId,
-            Title = "Case", CaseYear = 2026, OrgCaseNumber = 1,
+            Title = "Case", Status = status, CaseYear = 2026, OrgCaseNumber = 1,
             StreetAddress1 = "1 Main", City = "Nashville", State = "TN", ZipCode = "37201",
             Country = "US", DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId,
         });
@@ -292,5 +293,108 @@ public class UserAvatarControllerTests
 
         // Entitled to the private one, but there isn't one — fall back rather than show nothing.
         Assert.Equal("public", await ResolveAsync(factory, viewer, subject));
+    }
+
+    // ── The mirror direction: an investigator looking at their client (U4) ────
+
+    [Fact]
+    public async Task AnInvestigator_SeesTheirClientsPrivatePhoto()
+    {
+        var factory = CreateFactory();
+        var org     = await AddOrgAsync(factory);
+        var client  = await AddUserAsync(factory, "client@t.com");
+        var member  = await AddUserAsync(factory, "investigator@t.com");
+        await AddMemberAsync(factory, org, member);
+        await AddClientCaseAsync(factory, org, client);
+        await AddPhotosAsync(factory, client);
+
+        // No flags on this side: engaging the org to come to your home is the sharing. The client
+        // has already given them their address and their account of what happened.
+        Assert.Equal("private", await ResolveAsync(factory, member, client));
+    }
+
+    [Theory]
+    [InlineData(CaseStatus.Proposed,   "private")]
+    [InlineData(CaseStatus.Accepted,   "private")]
+    [InlineData(CaseStatus.Active,     "private")]
+    [InlineData(CaseStatus.Summarized, "private")]
+    [InlineData(CaseStatus.Closed,     "public")]
+    [InlineData(CaseStatus.Transferred,"public")]
+    [InlineData(CaseStatus.Public,     "public")]
+    [InlineData(CaseStatus.Haunted,    "public")]
+    public async Task AccessEndsWhenTheCaseDoes(CaseStatus status, string expected)
+    {
+        var factory = CreateFactory();
+        var org     = await AddOrgAsync(factory);
+        var client  = await AddUserAsync(factory, "client@t.com");
+        var member  = await AddUserAsync(factory, "investigator@t.com");
+        await AddMemberAsync(factory, org, member);
+        await AddClientCaseAsync(factory, org, client, status);
+        await AddPhotosAsync(factory, client);
+
+        // Access that outlives the working relationship is the kind nobody remembers granting.
+        Assert.Equal(expected, await ResolveAsync(factory, member, client));
+    }
+
+    [Fact]
+    public async Task ACoClient_IsTreatedLikeTheOriginatingClient()
+    {
+        var factory  = CreateFactory();
+        var org      = await AddOrgAsync(factory);
+        var owner    = await AddUserAsync(factory, "owner@t.com");
+        var coClient = await AddUserAsync(factory, "spouse@t.com");
+        var member   = await AddUserAsync(factory, "investigator@t.com");
+        await AddMemberAsync(factory, org, member);
+        await AddClientCaseAsync(factory, org, owner);
+        await AddPhotosAsync(factory, coClient);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var caseId = await db.Cases.Select(c => c.Id).FirstAsync();
+            db.CaseClientAccesses.Add(new CaseClientAccess
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, AppUserId = coClient,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = owner,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // They were invited onto the case as a participant, not as a bystander.
+        Assert.Equal("private", await ResolveAsync(factory, member, coClient));
+    }
+
+    [Fact]
+    public async Task AnInvestigatorAtAnotherOrg_SeesOnlyTheClientsPublicPhoto()
+    {
+        var factory   = CreateFactory();
+        var theirOrg  = await AddOrgAsync(factory);
+        var otherOrg  = await AddOrgAsync(factory);
+        var client    = await AddUserAsync(factory, "client@t.com");
+        var outsider  = await AddUserAsync(factory, "elsewhere@t.com");
+        await AddMemberAsync(factory, otherOrg, outsider);
+        await AddClientCaseAsync(factory, theirOrg, client);
+        await AddPhotosAsync(factory, client);
+
+        // Being an investigator somewhere is not a relationship with this client.
+        Assert.Equal("public", await ResolveAsync(factory, outsider, client));
+    }
+
+    [Fact]
+    public async Task SomeoneWhoIsBothAMemberAndAClientElsewhere_IsResolvedByEitherRoute()
+    {
+        var factory   = CreateFactory();
+        var theirOrg  = await AddOrgAsync(factory);   // where the subject works
+        var clientOrg = await AddOrgAsync(factory);   // where the subject is a client
+        var subject   = await AddUserAsync(factory, "both@t.com");
+        var viewer    = await AddUserAsync(factory, "investigator@t.com");
+
+        await AddMemberAsync(factory, theirOrg, subject);      // subject has memberships…
+        await AddMemberAsync(factory, clientOrg, viewer);      // …but not one shared with viewer
+        await AddClientCaseAsync(factory, clientOrg, subject); // the client route is the live one
+        await AddPhotosAsync(factory, subject);
+
+        // Regression guard: an early cut returned before ever checking the client route whenever
+        // the subject had any org membership at all.
+        Assert.Equal("private", await ResolveAsync(factory, viewer, subject));
     }
 }

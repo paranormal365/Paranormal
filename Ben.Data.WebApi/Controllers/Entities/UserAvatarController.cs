@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
@@ -18,6 +19,10 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 ///   <item>You share an active org membership with them: colleagues see each other properly.</item>
 ///   <item>You're a client of a case at an org they actively belong to, that org allows it, and
 ///         they opted in — the two-key rule, via <see cref="PrivatePhotoConsent"/>.</item>
+///   <item>The mirror of that: they are your client on a live case at an org you actively belong
+///         to. Engaging an organization to come to your home is itself the sharing — see
+///         <see cref="ClientIsEngagedWithViewersOrgAsync"/> for why this side needs no flags and
+///         why it ends when the case does.</item>
 ///   <item>Otherwise their public photo, if they have set one.</item>
 ///   <item>Otherwise nothing (204), and the caller renders initials.</item>
 /// </list>
@@ -85,31 +90,49 @@ public sealed class UserAvatarController : BenControllerBase
     private static async Task<bool> MaySeePrivatePhotoAsync(
         BenDataContext db, Guid viewerId, Guid subjectId, CancellationToken ct)
     {
+        // Each route is independent and any one of them is sufficient. Written as a flat list on
+        // purpose: an earlier version threaded them together and its "no qualifying orgs" exits
+        // returned before the later routes ran, so someone who was a member at one org and a
+        // client at another was judged only by the route that happened to be checked first.
         if (viewerId == subjectId) return true;
+        if (await SharesAnActiveOrgAsync(db, viewerId, subjectId, ct)) return true;
+        if (await SubjectConsentsToShowClientsAsync(db, viewerId, subjectId, ct)) return true;
+        if (await ClientIsEngagedWithViewersOrgAsync(db, viewerId, subjectId, ct)) return true;
+        return false;
+    }
 
-        var subjectOrgIds = await db.OrganizationUserMemberships.AsNoTracking()
-            .Where(m => m.AppUserId == subjectId && m.IsActive)
-            .Select(m => m.OrganizationId)
-            .ToListAsync(ct);
+    /// <summary>
+    /// Colleagues — an active membership in common. No consent flags: working together is the
+    /// relationship, and org members already see each other's names and case notes.
+    /// </summary>
+    private static async Task<bool> SharesAnActiveOrgAsync(
+        BenDataContext db, Guid viewerId, Guid subjectId, CancellationToken ct)
+    {
+        var subjectOrgIds = await ActiveOrgIdsAsync(db, subjectId, ct);
         if (subjectOrgIds.Count == 0) return false;
 
-        // Colleagues: an active membership in common. No consent flags needed — working together
-        // is the relationship, and org members already see each other's names and notes.
-        var sharesOrg = await db.OrganizationUserMemberships.AsNoTracking()
+        return await db.OrganizationUserMemberships.AsNoTracking()
             .AnyAsync(m => m.AppUserId == viewerId
                         && m.IsActive
                         && subjectOrgIds.Contains(m.OrganizationId), ct);
-        if (sharesOrg) return true;
+    }
 
-        // Client route: only the orgs the viewer actually has a case with count, and only if both
-        // that org and the subject have said yes.
+    /// <summary>
+    /// The member→client direction: the viewer is a client of an org the subject works for, and
+    /// both that org and the subject have said yes. Two keys, via <see cref="PrivatePhotoConsent"/>.
+    /// </summary>
+    private static async Task<bool> SubjectConsentsToShowClientsAsync(
+        BenDataContext db, Guid viewerId, Guid subjectId, CancellationToken ct)
+    {
+        var subjectOrgIds = await ActiveOrgIdsAsync(db, subjectId, ct);
+        if (subjectOrgIds.Count == 0) return false;
+
         var viewerCaseOrgIds = await db.Cases.AsNoTracking()
             .Where(c => (c.ClientRequest != null && c.ClientRequest.AppUserId == viewerId)
                      || db.CaseClientAccesses.Any(a => a.CaseId == c.Id && a.AppUserId == viewerId))
             .Select(c => c.OrganizationId)
             .Distinct()
             .ToListAsync(ct);
-        if (viewerCaseOrgIds.Count == 0) return false;
 
         var sharedOrgIds = subjectOrgIds.Intersect(viewerCaseOrgIds).ToList();
         if (sharedOrgIds.Count == 0) return false;
@@ -119,10 +142,59 @@ public sealed class UserAvatarController : BenControllerBase
         if (subject is null) return false;
 
         // Any one qualifying org is enough, but each is judged on both keys together.
-        var permissiveOrgs = await db.Organizations.AsNoTracking()
+        var candidateOrgs = await db.Organizations.AsNoTracking()
             .Where(o => sharedOrgIds.Contains(o.Id))
             .ToListAsync(ct);
 
-        return permissiveOrgs.Any(org => PrivatePhotoConsent.MayShowToClient(subject, org));
+        return candidateOrgs.Any(org => PrivatePhotoConsent.MayShowToClient(subject, org));
     }
+
+    private static Task<List<Guid>> ActiveOrgIdsAsync(
+        BenDataContext db, Guid userId, CancellationToken ct)
+        => db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.AppUserId == userId && m.IsActive)
+            .Select(m => m.OrganizationId)
+            .ToListAsync(ct);
+
+    /// <summary>
+    /// Whether the subject is a client on a live case at an organization the viewer actively
+    /// belongs to — the investigator-looking-at-their-client direction.
+    /// </summary>
+    /// <remarks>
+    /// <para>Deliberately asymmetric with the member→client direction above, which needs both an
+    /// org policy and a personal opt-in. Here the engagement <i>is</i> the sharing: a client has
+    /// asked this organization into their home and has already given it their address and their
+    /// account of what happened. Investigators knowing which face belongs to that file is a
+    /// smaller disclosure than the ones the client has already chosen to make, and it is the
+    /// arrangement the feature plan specifies. If that ever needs revisiting, the fix is a client
+    /// opt-out flag consulted here — the resolution stays in this one method either way.</para>
+    ///
+    /// <para>Scoped to cases that are still running. Closed, transferred and published cases end
+    /// the engagement, and access that outlives the relationship is exactly the kind that nobody
+    /// remembers granting. Co-clients count the same as the originating client: they were invited
+    /// onto the case as participants, not as bystanders.</para>
+    /// </remarks>
+    private static async Task<bool> ClientIsEngagedWithViewersOrgAsync(
+        BenDataContext db, Guid viewerId, Guid subjectId, CancellationToken ct)
+    {
+        var viewerOrgIds = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.AppUserId == viewerId && m.IsActive)
+            .Select(m => m.OrganizationId)
+            .ToListAsync(ct);
+        if (viewerOrgIds.Count == 0) return false;
+
+        return await db.Cases.AsNoTracking()
+            .AnyAsync(c => viewerOrgIds.Contains(c.OrganizationId)
+                        && LiveCaseStatuses.Contains(c.Status)
+                        && ((c.ClientRequest != null && c.ClientRequest.AppUserId == subjectId)
+                            || db.CaseClientAccesses.Any(a => a.CaseId == c.Id && a.AppUserId == subjectId)),
+                       ct);
+    }
+
+    /// <summary>
+    /// Case states in which the client is still engaged with the organization. Excludes Closed,
+    /// Transferred, Public and Haunted — those are finished files, not live working relationships.
+    /// </summary>
+    private static readonly CaseStatus[] LiveCaseStatuses =
+        [CaseStatus.Proposed, CaseStatus.Accepted, CaseStatus.Active, CaseStatus.Summarized];
 }
