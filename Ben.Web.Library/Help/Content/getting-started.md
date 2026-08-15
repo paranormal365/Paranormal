@@ -37,3 +37,15 @@ address you sign in with is never shown publicly.
 
 Every page that does something non-obvious has a small **?** beside it. That opens the relevant
 part of this documentation in a new tab, so you never lose what you were in the middle of.
+
+## Getting in touch
+
+**Contact**, in the footer, reaches the people who run the site — not a group. Use it for anything
+about the site itself: an account you cannot get into, something that looks broken, a question this
+documentation does not answer. To ask a group to investigate something, send a request instead;
+that is a different thing entirely and goes to the group, not to us.
+
+You do not need an account to write in. After you send the form you are given a **tracking link** —
+keep it. It is how you read the reply and see whether the message has been picked up, and it is the
+only way back to a message sent without an account. If you were signed in when you wrote, the
+message is attached to your account as well.
