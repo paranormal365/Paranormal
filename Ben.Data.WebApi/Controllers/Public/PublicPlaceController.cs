@@ -86,6 +86,8 @@ public sealed record PublicPlaceInvestigationRow(
 /// "N investigations by M groups since Y" — the line that makes a place feel like a history rather
 /// than a list.
 /// </summary>
+/// <param name="InvestigationCount">Visits the caller may see — never the raw total.</param>
+/// <param name="OrganizationCount">Distinct groups among those visits.</param>
 /// <param name="Since">Null when nothing is visible, so the caller can omit the phrase entirely.</param>
 public sealed record PlaceSummary(int InvestigationCount, int OrganizationCount, int? Since)
 {
