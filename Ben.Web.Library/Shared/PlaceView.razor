@@ -32,7 +32,13 @@
     }
     else
     {
-        <h3 class="mb-1">@Title</h3>
+        @* Only for members. The document explaining place pages is written for people who run
+           investigations, and a visitor following this link would land on "topic isn't
+           available" — worse than no link at all. *@
+        <h3 class="mb-1">@Title@if (UserState.IsAuthenticated)
+            {
+                <HelpLink Slug="working-a-case" Anchor="place-pages" />
+            }</h3>
         <p class="text-secondary mb-1">
             @LocationLine
             @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
@@ -75,7 +81,9 @@
 
             @if (mine.Count > 0)
             {
-                <h6 class="fw-semibold mt-4">Your group's visits</h6>
+                @* Plural: somebody can belong to more than one group, and this list then mixes
+                   them — as it does in the dev data. "Your group's" would quietly claim otherwise. *@
+                <h6 class="fw-semibold mt-4">Your groups' visits</h6>
                 @SignedInTable(mine, showVisibility: true)
             }
 

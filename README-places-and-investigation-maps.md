@@ -50,11 +50,33 @@ P1–P3 are the foundation and are worth doing together.
   the read filter goes in **one predicate function**, so a future change is one place.
 - **`IsLead` lands in P3**, with the permission work, rather than waiting for P5b.
 
+## Settled by P8
+
+**Deduplication.** Designed in
+[`ProjectNotes/specs/Place-Deduplication-Design.md`](ProjectNotes/specs/Place-Deduplication-Design.md)
+and built as far as prevention: a place is offered as a probable match when **the address matches
+and it is within a tenth of a mile**. Both, not either — one address can be a block of flats, and
+proximity alone matches next door. The admin merge screen is deliberately not built; preventing new
+duplicates is the cheap win, and merging three backfilled rows is a lot of machinery for a problem
+nobody is looking at yet.
+
 ## Still open
 
-1. **Curation** of user-created public places — open, or approved?
-2. **Client consent** to publish an investigation at a client's property.
-3. **Deduplication** — needs its own design pass before P7 is worth much.
+1. **Curation** of user-created public places — open, or approved? `Place.IsApproved` exists and is
+   inert; nothing reads it.
+2. **Client consent** to publish an investigation at a client's property. Until this exists,
+   `Public` is refused outright at a private residence.
+
+## Breaking change in P3, worth saying plainly
+
+Editing an investigation used to be open to any member of the group. It now requires being the
+person who scheduled it, the case manager, the visit's lead, an owner or administrator, or a holder
+of the **Investigation** permission. Reading stays open to members, and answering for yourself —
+your own RSVP, your own arrival — stays yours.
+
+The existing tests that asserted any-member-edit were inverted deliberately; that inversion is the
+discriminating test for the change. Documented for administrators under **Who can change an
+investigation** in the organization-administration help.
 
 ## Branch state
 

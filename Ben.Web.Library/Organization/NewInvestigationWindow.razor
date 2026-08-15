@@ -165,7 +165,9 @@
         <hr class="my-3" />
 
         @* ── Sharing ──────────────────────────────────────────────────────────── *@
-        <label class="form-label fw-semibold">Who can see the findings</label>
+        <label class="form-label fw-semibold">
+            Who can see the findings<HelpLink Slug="working-a-case" Anchor="who-can-see-the-findings" />
+        </label>
         @* Plain select for the same reason as the case-bound form: a dropdown that dropped its
            selection here would silently leave a wider scope in place. *@
         <select class="form-select" style="max-width:420px;" value="@_visibility"
