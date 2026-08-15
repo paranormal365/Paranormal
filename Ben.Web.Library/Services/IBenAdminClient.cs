@@ -689,6 +689,31 @@ public interface IBenAdminClient
     /// <summary>Removes a related-person reference.</summary>
     Task<bool> RemoveRelatedPersonAsync(Guid caseId, Guid personId, CancellationToken token = default);
 
+    // ── Clipart catalog (SuperAdmin) ─────────────────────────────────────────
+
+    /// <summary>Every catalog asset, active and retired.</summary>
+    Task<List<VideoAssetAdminRecord>> GetVideoAssetsAsync(CancellationToken token = default);
+
+    /// <summary>Publishes an already-uploaded file into the shared catalog.</summary>
+    Task<VideoAssetAdminRecord?> CreateVideoAssetAsync(
+        CreateVideoAssetRequest request, CancellationToken token = default);
+
+    /// <summary>Edits catalog metadata. Also used to restore a retired asset.</summary>
+    Task<VideoAssetAdminRecord?> UpdateVideoAssetAsync(
+        Guid id, UpdateVideoAssetRequest request, CancellationToken token = default);
+
+    /// <summary>Retires an asset — out of the catalog, still downloadable by existing projects.</summary>
+    Task<bool> RetireVideoAssetAsync(Guid id, CancellationToken token = default);
+
+    // ── Sitewide settings (SuperAdmin) ───────────────────────────────────────
+
+    /// <summary>Every sitewide setting, including ones never yet given a value.</summary>
+    Task<List<SiteSettingRecord>> GetSiteSettingsAsync(CancellationToken token = default);
+
+    /// <summary>Sets one sitewide setting. An empty value clears it.</summary>
+    Task<SiteSettingRecord?> SetSiteSettingAsync(
+        string key, SetSiteSettingRequest request, CancellationToken token = default);
+
     /// <summary>The caller's public-facing alias for a case, plus what the public sees today.</summary>
     Task<CaseDisplayAliasRecord?> GetCaseDisplayAliasAsync(Guid caseId, CancellationToken token = default);
 

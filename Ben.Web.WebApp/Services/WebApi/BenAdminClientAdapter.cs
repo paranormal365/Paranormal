@@ -1229,6 +1229,30 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<CaseRelatedPersonRecord?> AddRelatedPersonAsync(Guid caseId, AddRelatedPersonRequest request, CancellationToken token = default)
         => _api.PostAsync<AddRelatedPersonRequest, CaseRelatedPersonRecord>($"/api/my-cases/{caseId}/related-people", request, token);
 
+    public async Task<List<VideoAssetAdminRecord>> GetVideoAssetsAsync(CancellationToken token = default)
+        => await _api.GetAsync<List<VideoAssetAdminRecord>>("/api/admin/video-assets", token) ?? [];
+
+    public Task<VideoAssetAdminRecord?> CreateVideoAssetAsync(
+        CreateVideoAssetRequest request, CancellationToken token = default)
+        => _api.PostAsync<CreateVideoAssetRequest, VideoAssetAdminRecord>(
+               "/api/admin/video-assets", request, token);
+
+    public Task<VideoAssetAdminRecord?> UpdateVideoAssetAsync(
+        Guid id, UpdateVideoAssetRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpdateVideoAssetRequest, VideoAssetAdminRecord>(
+               $"/api/admin/video-assets/{id}", request, token);
+
+    public Task<bool> RetireVideoAssetAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/admin/video-assets/{id}", token);
+
+    public async Task<List<SiteSettingRecord>> GetSiteSettingsAsync(CancellationToken token = default)
+        => await _api.GetAsync<List<SiteSettingRecord>>("/api/admin/site-settings", token) ?? [];
+
+    public Task<SiteSettingRecord?> SetSiteSettingAsync(
+        string key, SetSiteSettingRequest request, CancellationToken token = default)
+        => _api.PutAsync<SetSiteSettingRequest, SiteSettingRecord>(
+               $"/api/admin/site-settings/{Uri.EscapeDataString(key)}", request, token);
+
     public Task<CaseDisplayAliasRecord?> GetCaseDisplayAliasAsync(Guid caseId, CancellationToken token = default)
         => _api.GetAsync<CaseDisplayAliasRecord>($"/api/my-cases/{caseId}/display-alias", token);
 

@@ -4,6 +4,7 @@ using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Ben.Data.Source.Migrations
 {
     [DbContext(typeof(BenDataContext))]
-    partial class BenDataContextModelSnapshot : ModelSnapshot
+    [Migration("20260815110315_AddSiteSettings")]
+    partial class AddSiteSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4843,125 +4846,6 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("UserPhoneTypes");
                 });
 
-            modelBuilder.Entity("Ben.Data.Source.Entities.VideoAsset", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("AllowControlPoints")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("AllowEasing")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("AllowEffects")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("AllowMotion")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("AllowOpacity")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("AllowRecolor")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("AllowResize")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("AllowRotation")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Category")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("ContentHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<Guid>("CreatedByAppUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("DateCreated")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("DateUpdated")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<long>("FileSizeBytes")
-                        .HasColumnType("bigint");
-
-                    b.Property<bool>("FlattenOnExport")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("Format")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<double?>("MaxScale")
-                        .HasColumnType("float");
-
-                    b.Property<double?>("MinScale")
-                        .HasColumnType("float");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<int?>("NativeHeight")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("NativeWidth")
-                        .HasColumnType("int");
-
-                    b.Property<string>("PresetColors")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Tags")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<Guid?>("ThumbnailUploadFileId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("Type")
-                        .HasColumnType("int");
-
-                    b.Property<Guid?>("UpdatedByAppUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("UploadFileId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedByAppUserId");
-
-                    b.HasIndex("ThumbnailUploadFileId");
-
-                    b.HasIndex("UpdatedByAppUserId");
-
-                    b.HasIndex("UploadFileId");
-
-                    b.HasIndex("IsActive", "SortOrder");
-
-                    b.ToTable("VideoAssets");
-                });
-
             modelBuilder.Entity("Ben.Data.Source.Entities.VideoProject", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7747,39 +7631,6 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("CreatedByAppUser");
 
                     b.Navigation("UpdatedByAppUser");
-                });
-
-            modelBuilder.Entity("Ben.Data.Source.Entities.VideoAsset", b =>
-                {
-                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByAppUserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "ThumbnailUploadFile")
-                        .WithMany()
-                        .HasForeignKey("ThumbnailUploadFileId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
-                        .WithMany()
-                        .HasForeignKey("UpdatedByAppUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "UploadFile")
-                        .WithMany()
-                        .HasForeignKey("UploadFileId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.Navigation("CreatedByAppUser");
-
-                    b.Navigation("ThumbnailUploadFile");
-
-                    b.Navigation("UpdatedByAppUser");
-
-                    b.Navigation("UploadFile");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.VideoProject", b =>

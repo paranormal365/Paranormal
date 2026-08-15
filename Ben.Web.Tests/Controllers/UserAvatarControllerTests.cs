@@ -3,6 +3,7 @@ using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Entities;
+using Ben.Data.WebApi.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,7 @@ public class UserAvatarControllerTests
 {
     private static readonly byte[] PublicBytes  = [1, 1, 1, 1];
     private static readonly byte[] PrivateBytes = [2, 2, 2, 2];
+    private static readonly byte[] DefaultBytes = [3, 3, 3, 3];
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -166,6 +168,7 @@ public class UserAvatarControllerTests
         var file = Assert.IsType<FileContentResult>(result);
         if (file.FileContents.SequenceEqual(PrivateBytes)) return "private";
         if (file.FileContents.SequenceEqual(PublicBytes))  return "public";
+        if (file.FileContents.SequenceEqual(DefaultBytes)) return "site-default";
         return "unknown";
     }
 
@@ -492,5 +495,95 @@ public class UserAvatarControllerTests
         // engagement ends; two people who lived through the same events do not stop being those
         // people when the file closes.
         Assert.Equal("private", await ResolveAsync(factory, coClient, owner));
+    }
+
+    // ── Sitewide default avatar ───────────────────────────────────────────────
+
+    /// <summary>Uploads a stand-in default image and points the site setting at it.</summary>
+    private static async Task ConfigureSiteDefaultAsync(
+        IDbContextFactory<BenDataContext> factory, Guid? explicitFileId = null)
+    {
+        var fileId = explicitFileId ?? Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        if (explicitFileId is null)
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = Guid.NewGuid(),
+                FileName = "default.png", StoredFileName = "d.png", ContentType = "image/png",
+                FileSize = DefaultBytes.Length, FileData = DefaultBytes, IsPublic = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+            });
+        }
+        db.SiteSettings.Add(new SiteSetting
+        {
+            Id = Guid.NewGuid(), Key = SiteSettingKeys.DefaultAvatarUploadFileId,
+            Value = fileId.ToString(),
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task WithNoPhotos_TheSiteDefaultIsServed()
+    {
+        var factory = CreateFactory();
+        var subject = await AddUserAsync(factory, "s@t.com");
+        var viewer  = await AddUserAsync(factory, "v@t.com");
+        await ConfigureSiteDefaultAsync(factory);
+
+        Assert.Equal("site-default", await ResolveAsync(factory, viewer, subject));
+    }
+
+    [Fact]
+    public async Task TheSiteDefault_NeverOutranksAPhotoThePersonChose()
+    {
+        var factory = CreateFactory();
+        var subject = await AddUserAsync(factory, "s@t.com");
+        var viewer  = await AddUserAsync(factory, "v@t.com");
+        await AddPhotosAsync(factory, subject);
+        await ConfigureSiteDefaultAsync(factory);
+
+        // A generic house image must lose to anything the person actually set — including the
+        // public photo a stranger is limited to.
+        Assert.Equal("public", await ResolveAsync(factory, viewer, subject));
+    }
+
+    [Fact]
+    public async Task TheSiteDefault_DoesNotOverrideAnEntitledPrivatePhoto()
+    {
+        var factory = CreateFactory();
+        var org     = await AddOrgAsync(factory);
+        var subject = await AddUserAsync(factory, "s@t.com");
+        var viewer  = await AddUserAsync(factory, "v@t.com");
+        await AddMemberAsync(factory, org, subject);
+        await AddMemberAsync(factory, org, viewer);
+        await AddPhotosAsync(factory, subject);
+        await ConfigureSiteDefaultAsync(factory);
+
+        Assert.Equal("private", await ResolveAsync(factory, viewer, subject));
+    }
+
+    [Fact]
+    public async Task ADefaultPointingAtAMissingFile_FallsBackToInitials()
+    {
+        var factory = CreateFactory();
+        var subject = await AddUserAsync(factory, "s@t.com");
+        var viewer  = await AddUserAsync(factory, "v@t.com");
+        // Setting points at a file id that doesn't exist — a mistyped or since-deleted id.
+        await ConfigureSiteDefaultAsync(factory, explicitFileId: Guid.NewGuid());
+
+        // A bad setting must degrade, not break every avatar on the site.
+        Assert.Equal("none", await ResolveAsync(factory, viewer, subject));
+    }
+
+    [Fact]
+    public async Task WithNoDefaultConfigured_NothingIsServed()
+    {
+        var factory = CreateFactory();
+        var subject = await AddUserAsync(factory, "s@t.com");
+        var viewer  = await AddUserAsync(factory, "v@t.com");
+
+        Assert.Equal("none", await ResolveAsync(factory, viewer, subject));
     }
 }

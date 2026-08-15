@@ -1,0 +1,181 @@
+@page "/admin/site-settings"
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>SuperAdmin — Site Settings</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:900px;">
+    <h3 class="mb-1">Site Settings</h3>
+    <p class="text-secondary small mb-4">
+        These apply to the whole site — every group and every visitor. Nothing personal belongs
+        here; settings about one person live on their profile, settings about one group live in
+        that group's settings.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+    @if (_savedKey is not null)
+    {
+        <div class="alert alert-success py-2">Saved.</div>
+    }
+
+    @if (_settings is null)
+    {
+        <p class="text-secondary">Loading…</p>
+    }
+    else
+    {
+        @foreach (var setting in _settings)
+        {
+            var s = setting;
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                        <div class="flex-grow-1">
+                            @* The key is the API's name for it, not a label a person should have
+                               to read first — description leads, key is shown small for support. *@
+                            <div class="fw-semibold">@s.Label</div>
+                            <div class="text-secondary small">@s.Description</div>
+                            <div class="text-muted font-monospace" style="font-size:.7rem;">@s.Key</div>
+                        </div>
+                        <span class="badge @(string.IsNullOrWhiteSpace(_drafts[s.Key]) ? "bg-secondary" : "bg-success")">
+                            @(string.IsNullOrWhiteSpace(_drafts[s.Key]) ? "Not set" : "Set")
+                        </span>
+                    </div>
+
+                    <div class="d-flex gap-2 align-items-start mt-2 flex-wrap">
+                        @* Plain input rather than TelerikTextBox: Telerik inputs bind on blur in
+                           this codebase, which loses the last edit when Save is clicked directly. *@
+                        <input class="form-control" style="max-width:420px;"
+                               placeholder="@Placeholder(s.Key)"
+                               value="@_drafts[s.Key]"
+                               @oninput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)" />
+                        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                       Enabled="@(_savingKey != s.Key)"
+                                       OnClick="@(() => SaveAsync(s.Key))">Save</TelerikButton>
+                        @if (!string.IsNullOrWhiteSpace(s.Value))
+                        {
+                            <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                           Enabled="@(_savingKey != s.Key)"
+                                           OnClick="@(() => ClearAsync(s.Key))">Clear</TelerikButton>
+                        }
+                    </div>
+
+                    @* The default avatar is a file id, which is unreadable as text — show the
+                       image so a wrong or deleted id is obvious rather than silently inert. *@
+                    @if (s.Key == DefaultAvatarKey && _avatarPreview is not null)
+                    {
+                        <div class="mt-2 d-flex align-items-center gap-2">
+                            <img src="@_avatarPreview" alt="Default avatar"
+                                 class="rounded-circle border"
+                                 style="width:56px;height:56px;object-fit:cover;" />
+                            <span class="text-secondary small">Current default</span>
+                        </div>
+                    }
+                    else if (s.Key == DefaultAvatarKey && !string.IsNullOrWhiteSpace(s.Value))
+                    {
+                        <div class="alert alert-warning py-2 mt-2 mb-0 small">
+                            That file id doesn't resolve to a readable image. People with no photo
+                            will fall back to their initials until it's fixed.
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private const string DefaultAvatarKey = "avatar.default.upload-file-id";
+
+    private List<SiteSettingRecord>? _settings;
+    private readonly Dictionary<string, string> _drafts = [];
+    private string? _savingKey;
+    private string? _savedKey;
+    private string? _error;
+    private string? _avatarPreview;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+        await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _settings is not null) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _settings = await AdminClient.GetSiteSettingsAsync();
+            foreach (var s in _settings) _drafts[s.Key] = s.Value ?? string.Empty;
+            await LoadAvatarPreviewAsync();
+        }
+        catch { _error = "Couldn't load site settings."; }
+    }
+
+    /// <summary>
+    /// Fetches the configured default avatar through the authenticated client and renders it as a
+    /// data URI — a plain img src to the file endpoint carries no bearer token and would 401 for
+    /// any non-public file.
+    /// </summary>
+    private async Task LoadAvatarPreviewAsync()
+    {
+        _avatarPreview = null;
+        var raw = _settings?.FirstOrDefault(s => s.Key == DefaultAvatarKey)?.Value;
+        if (!Guid.TryParse(raw, out var fileId)) return;
+        try
+        {
+            var file = await AdminClient.GetFileDataAsync(fileId);
+            if (file is { } f)
+                _avatarPreview = $"data:{f.ContentType};base64,{Convert.ToBase64String(f.Data)}";
+        }
+        catch { /* leaves the "doesn't resolve" warning showing, which is the useful signal */ }
+    }
+
+    private async Task SaveAsync(string key)
+    {
+        _savingKey = key; _error = null; _savedKey = null;
+        try
+        {
+            var updated = await AdminClient.SetSiteSettingAsync(key, new SetSiteSettingRequest(_drafts[key]));
+            if (updated is null) { _error = "Couldn't save that setting."; return; }
+
+            var idx = _settings!.FindIndex(s => s.Key == key);
+            if (idx >= 0) _settings[idx] = updated;
+            _drafts[key] = updated.Value ?? string.Empty;
+            _savedKey = key;
+
+            if (key == DefaultAvatarKey) await LoadAvatarPreviewAsync();
+        }
+        catch { _error = "Couldn't save that setting."; }
+        finally { _savingKey = null; StateHasChanged(); }
+    }
+
+    private async Task ClearAsync(string key)
+    {
+        _drafts[key] = string.Empty;
+        await SaveAsync(key);
+    }
+
+    private static string Placeholder(string key) => key switch
+    {
+        DefaultAvatarKey => "UploadFile id (GUID)",
+        "org.allow-self-registration" => "true or false",
+        "site.public-contact-email" => "contact@example.com",
+        _ => "Leave empty to unset",
+    };
+}
