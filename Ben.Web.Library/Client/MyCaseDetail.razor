@@ -103,6 +103,18 @@
                                         <div class="text-muted" style="font-size:.72rem;">
                                             @((o.EventDateTime ?? o.DateCreated).ToViewerLocalTime(UserState).ToString("h:mm tt"))
                                         </div>
+                                        @* Shown back so tagging isn't a control that swallows input. *@
+                                        @if (o.ExperienceTypeIds.Count > 0)
+                                        {
+                                            <div class="d-flex flex-wrap gap-1 mt-1">
+                                                @foreach (var tid in o.ExperienceTypeIds)
+                                                {
+                                                    <span class="badge bg-info-subtle text-info-emphasis" style="font-size:.65rem;">
+                                                        @(_expTypeNames.TryGetValue(tid, out var tn) ? tn : "Tagged")
+                                                    </span>
+                                                }
+                                            </div>
+                                        }
                                         @* Attached files *@
                                         @if (o.Files.Count > 0)
                                         {
@@ -521,6 +533,32 @@
                 <TelerikTextArea @bind-Value="@_form.Body" Rows="5" Width="100%"
                                  Placeholder="Describe what happened in detail…" />
             </div>
+            @if (_taxonomy.Count > 0)
+            {
+                <div class="col-12">
+                    <label class="form-label fw-semibold">What kind of experience? (optional)</label>
+                    <div class="text-secondary small mb-2">
+                        Helps your investigators group similar reports. Pick as many as fit.
+                    </div>
+                    @foreach (var category in _taxonomy)
+                    {
+                        <div class="mb-2">
+                            <div class="small text-secondary">@category.Category.Name</div>
+                            <div class="d-flex gap-1 flex-wrap">
+                                @foreach (var t in category.Types)
+                                {
+                                    var type = t;
+                                    var on = _form.ExperienceTypeIds.Contains(type.Id);
+                                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                                   FillMode="@(on ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Outline)"
+                                                   ThemeColor="@(on ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                                                   OnClick="@(() => ToggleExperienceType(type.Id))">@type.Name</TelerikButton>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
         </div>
         @if (_dialogError is not null)
         {
@@ -839,6 +877,7 @@
             _relatedPeople = (await AdminClient.GetRelatedPeopleAsync(CaseId)).ToList();
             await LoadPersonPhotosAsync();
             await LoadAliasAsync();
+            await LoadTaxonomyAsync();
             StateHasChanged();
         }
         catch { /* silent */ }
@@ -850,6 +889,30 @@
             .OrderBy(o => o.EventDateTime ?? o.DateCreated)
             .ThenBy(o => o.DateCreated).ThenBy(o => o.Id)
             .ToList() ?? [];
+
+    /// <summary>
+    /// The shared experience taxonomy, used for optional tagging. Read-only here — clients pick
+    /// from the platform's list rather than inventing their own, so investigators can actually
+    /// group reports across cases.
+    /// </summary>
+    private List<ExperienceCategoryWithTypesResponse> _taxonomy = [];
+    private Dictionary<Guid, string> _expTypeNames = [];
+
+    private void ToggleExperienceType(Guid id)
+    {
+        if (!_form.ExperienceTypeIds.Remove(id)) _form.ExperienceTypeIds.Add(id);
+    }
+
+    private async Task LoadTaxonomyAsync()
+    {
+        if (_taxonomy.Count > 0) return;
+        try
+        {
+            _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).ToList();
+            _expTypeNames = _taxonomy.SelectMany(c => c.Types).ToDictionary(t => t.Id, t => t.Name);
+        }
+        catch { /* tagging is optional — the dialog still works without the list */ }
+    }
 
     private void OpenLogDialog()
     {
@@ -868,6 +931,7 @@
             Title         = occ.Title ?? "",
             Body          = occ.Body ?? "",
         };
+        foreach (var id in occ.ExperienceTypeIds) _form.ExperienceTypeIds.Add(id);
         _dialogError = null;
         _showDialog = true;
     }
@@ -880,7 +944,10 @@
         _isBusy = true; _dialogError = null;
         try
         {
-            var req = new LogOccurrenceRequest(_form.EventDateTime!.Value.ToUtcFromViewerLocal(UserState), _form.Title?.Trim(), _form.Body.Trim());
+            var req = new LogOccurrenceRequest(
+                _form.EventDateTime!.Value.ToUtcFromViewerLocal(UserState),
+                _form.Title?.Trim(), _form.Body.Trim(),
+                _form.ExperienceTypeIds.ToList());
             if (_editOcc is null)
                 await AdminClient.LogOccurrenceAsync(CaseId, req);
             else
@@ -928,6 +995,7 @@
         public DateTime? EventDateTime { get; set; } = DateTime.Now;
         public string    Title         { get; set; } = "";
         public string    Body          { get; set; } = "";
+        public HashSet<Guid> ExperienceTypeIds { get; } = [];
     }
 
     private async Task RemoveCoClient(Guid accessId)

@@ -125,6 +125,11 @@ public sealed class MyCaseController : BenControllerBase
                 .ThenBy(e => e.DateCreated).ThenBy(e => e.Id))
                 .ThenInclude(e => e.Files)
                 .ThenInclude(f => f.UploadFile)
+            // Separate Include chain: ThenInclude above has walked down into Files, so the tag
+            // collection has to be reached from TimelineEntries again or it silently comes back
+            // empty — the projection reads it without complaint and the client sees no tags.
+            .Include(x => x.TimelineEntries)
+                .ThenInclude(e => e.ExperienceTypes)
             .FirstOrDefaultAsync(x => x.Id == caseId, ct);
 
         if (c is null) return NotFound();
@@ -148,7 +153,8 @@ public sealed class MyCaseController : BenControllerBase
             FromInvestigators: e.AuthorAppUserId != userId,
             DateCreated:   e.DateCreated,
             Files:         e.Files.Select(f => new OccurrenceFileItem(
-                f.UploadFileId, f.UploadFile.FileName, f.UploadFile.ContentType, f.UploadFile.FileSize)).ToList())).ToList();
+                f.UploadFileId, f.UploadFile.FileName, f.UploadFile.ContentType, f.UploadFile.FileSize)).ToList(),
+            ExperienceTypeIds: e.ExperienceTypes.Select(t => t.ExperienceTypeId).ToList())).ToList();
 
         // Compute cancellation deadline — requires org's primary address coordinates
         var orgAddr = await db.OrganizationAddresses.AsNoTracking()
@@ -221,6 +227,10 @@ public sealed class MyCaseController : BenControllerBase
         };
         db.CaseTimelineEntries.Add(entry);
         await db.SaveChangesAsync(ct);
+
+        if (!await ApplyExperienceTagsAsync(db, entry.Id, request.ExperienceTypeIds, ct))
+            return BadRequest("One or more experience types do not exist.");
+
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CaseTimelineEntry), entry.Id, entry, userId, AppSources.WebApi, ct));
 
         var loaded = await db.CaseTimelineEntries.AsNoTracking()
@@ -257,6 +267,13 @@ public sealed class MyCaseController : BenControllerBase
         entry.DateUpdated        = DateTime.UtcNow;
         entry.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
+
+        // Null means "not supplied, leave the tags alone" — the edit dialog always sends them, but
+        // an older client that doesn't know about tags must not silently strip them.
+        if (request.ExperienceTypeIds is not null
+            && !await ApplyExperienceTagsAsync(db, entry.Id, request.ExperienceTypeIds, ct))
+            return BadRequest("One or more experience types do not exist.");
+
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(CaseTimelineEntry), entry.Id, before, entry, userId, AppSources.WebApi, ct));
 
         var loaded = await db.CaseTimelineEntries.AsNoTracking()
@@ -264,6 +281,47 @@ public sealed class MyCaseController : BenControllerBase
             .Include(e => e.ExperienceTypes)
             .FirstAsync(e => e.Id == entry.Id, ct);
         return Ok(_mapper.Map<CaseTimelineEntryRecord>(loaded));
+    }
+
+    /// <summary>
+    /// Replaces an entry's experience tags with the supplied set. Returns false when any id isn't
+    /// a real experience type, in which case nothing is written.
+    /// </summary>
+    /// <remarks>
+    /// Ids are validated rather than trusted: they arrive from the client and land in a foreign
+    /// key, so an unchecked bad value is either a 500 from the database or a dangling tag.
+    /// Replace-not-merge because the picker submits the full selection — unticking a tag has to
+    /// be able to remove it.
+    /// </remarks>
+    private static async Task<bool> ApplyExperienceTagsAsync(
+        BenDataContext db, Guid entryId, IReadOnlyList<Guid>? typeIds, CancellationToken ct)
+    {
+        var wanted = (typeIds ?? []).Distinct().ToList();
+
+        if (wanted.Count > 0)
+        {
+            var realCount = await db.ExperienceTypes.CountAsync(t => wanted.Contains(t.Id), ct);
+            if (realCount != wanted.Count) return false;
+        }
+
+        var existing = await db.CaseTimelineEntryExperienceTypes
+            .Where(t => t.CaseTimelineEntryId == entryId)
+            .ToListAsync(ct);
+
+        db.CaseTimelineEntryExperienceTypes.RemoveRange(
+            existing.Where(t => !wanted.Contains(t.ExperienceTypeId)));
+
+        foreach (var id in wanted.Where(id => existing.All(t => t.ExperienceTypeId != id)))
+        {
+            db.CaseTimelineEntryExperienceTypes.Add(new CaseTimelineEntryExperienceType
+            {
+                CaseTimelineEntryId = entryId,
+                ExperienceTypeId    = id,
+            });
+        }
+
+        await db.SaveChangesAsync(ct);
+        return true;
     }
 
     /// <summary>Deletes an occurrence the client previously logged.</summary>
@@ -1165,7 +1223,10 @@ public sealed record ClientCaseOccurrence(
     string?   Body,
     bool      FromInvestigators,   // true when the org wrote this, false when the client did
     DateTime  DateCreated,
-    IReadOnlyList<OccurrenceFileItem> Files);
+    IReadOnlyList<OccurrenceFileItem> Files,
+    // Returned as well as accepted: a tag the client sets but can never see back would be a
+    // write-only control, and they'd have no way to tell whether it took.
+    IReadOnlyList<Guid> ExperienceTypeIds);
 
 public sealed record OccurrenceFileItem(
     Guid   FileId,
@@ -1183,10 +1244,14 @@ public sealed record ClientCaseInvestigation(
     DateTime?  EvidenceDueDate = null,
     DateTime?  CancellationDeadlineUtc = null);
 
+// ExperienceTypeIds: optional tags from the shared experience taxonomy. Investigators already
+// read and filter these on the org timeline; letting the client set them means the person who was
+// actually there gets to say what kind of thing it was. Null means "not supplied, leave as-is".
 public sealed record LogOccurrenceRequest(
     DateTime? EventDateTime,
     string?   Title,
-    string?   Body);
+    string?   Body,
+    IReadOnlyList<Guid>? ExperienceTypeIds = null);
 
 public sealed record PostCaseMessageRequest(string Body);
 

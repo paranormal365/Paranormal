@@ -1493,7 +1493,10 @@ public sealed record ClientCaseOccurrence(
     string?   Body,
     bool      FromInvestigators,   // true when the org wrote this and shared it
     DateTime  DateCreated,
-    IReadOnlyList<OccurrenceFileItem> Files);
+    IReadOnlyList<OccurrenceFileItem> Files,
+    // Returned as well as accepted: a tag the client sets but can never see back would be a
+    // write-only control, and they'd have no way to tell whether it took.
+    IReadOnlyList<Guid> ExperienceTypeIds);
 
 public sealed record OccurrenceFileItem(
     Guid   FileId,
@@ -1562,10 +1565,16 @@ public sealed record ClientCaseInvestigation(
     DateTime?  EvidenceDueDate = null,
     DateTime?  CancellationDeadlineUtc = null);
 
+/// <param name="ExperienceTypeIds">
+/// Optional tags from the shared experience taxonomy. Investigators already filter and read these
+/// on the org timeline; letting the client set them means the person who was actually there gets
+/// to say what kind of thing it was.
+/// </param>
 public sealed record LogOccurrenceRequest(
     DateTime? EventDateTime,
     string?   Title,
-    string?   Body);
+    string?   Body,
+    IReadOnlyList<Guid>? ExperienceTypeIds = null);
 
 // ── Case message board response records ──────────────────────────────────────
 public sealed record CaseMessageRecord(

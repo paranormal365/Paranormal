@@ -789,6 +789,131 @@ public class MyCaseControllerTests
         Assert.Single(list);
     }
 
+    // ── Occurrence experience tags (U-Occ) ────────────────────────────────────
+
+    private static async Task<Guid> AddExperienceTypeAsync(
+        IDbContextFactory<BenDataContext> factory, string name)
+    {
+        var categoryId = Guid.NewGuid();
+        var typeId     = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.ExperienceCategories.Add(new ExperienceCategory
+        {
+            Id = categoryId, Name = $"Cat {name}", IsActive = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        db.ExperienceTypes.Add(new ExperienceType
+        {
+            Id = typeId, ExperienceCategoryId = categoryId, Name = name, IsActive = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        await db.SaveChangesAsync();
+        return typeId;
+    }
+
+    private static async Task<List<Guid>> TagsOnAsync(
+        IDbContextFactory<BenDataContext> factory, Guid entryId)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        return await db.CaseTimelineEntryExperienceTypes
+            .Where(t => t.CaseTimelineEntryId == entryId)
+            .Select(t => t.ExperienceTypeId)
+            .ToListAsync();
+    }
+
+    [Fact]
+    public async Task LogOccurrence_StoresExperienceTags()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var cold = await AddExperienceTypeAsync(factory, "Cold spot");
+        var ctrl = Build(factory, clientId);
+
+        var result = await ctrl.LogOccurrence(caseId,
+            new LogOccurrenceRequest(null, "Chill", "It went cold", [cold]), default);
+        var record = Assert.IsType<CaseTimelineEntryRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        Assert.Equal([cold], await TagsOnAsync(factory, record.Id));
+    }
+
+    [Fact]
+    public async Task LogOccurrence_RejectsATagThatDoesNotExist()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+
+        var result = await Build(factory, clientId).LogOccurrence(caseId,
+            new LogOccurrenceRequest(null, "Chill", "It went cold", [Guid.NewGuid()]), default);
+
+        // Unchecked ids land in a foreign key — either a 500 or a dangling tag.
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task UpdateOccurrence_ReplacesTheTagSet()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var cold  = await AddExperienceTypeAsync(factory, "Cold spot");
+        var voice = await AddExperienceTypeAsync(factory, "Voice");
+        var ctrl  = Build(factory, clientId);
+
+        var created = (CaseTimelineEntryRecord)((OkObjectResult)(await ctrl.LogOccurrence(caseId,
+            new LogOccurrenceRequest(null, "T", "B", [cold]), default)).Result!).Value!;
+
+        await ctrl.UpdateOccurrence(caseId, created.Id,
+            new LogOccurrenceRequest(null, "T", "B", [voice]), default);
+
+        // Replace, not merge — the picker submits the whole selection, so unticking must remove.
+        Assert.Equal([voice], await TagsOnAsync(factory, created.Id));
+    }
+
+    [Fact]
+    public async Task UpdateOccurrence_WithNoTagsSupplied_LeavesExistingTagsAlone()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var cold = await AddExperienceTypeAsync(factory, "Cold spot");
+        var ctrl = Build(factory, clientId);
+
+        var created = (CaseTimelineEntryRecord)((OkObjectResult)(await ctrl.LogOccurrence(caseId,
+            new LogOccurrenceRequest(null, "T", "B", [cold]), default)).Result!).Value!;
+
+        // Null, not empty: an older client that knows nothing about tags must not strip them.
+        await ctrl.UpdateOccurrence(caseId, created.Id,
+            new LogOccurrenceRequest(null, "T2", "B2", null), default);
+
+        Assert.Equal([cold], await TagsOnAsync(factory, created.Id));
+    }
+
+    [Fact]
+    public async Task UpdateOccurrence_WithAnEmptyTagList_ClearsThem()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var cold = await AddExperienceTypeAsync(factory, "Cold spot");
+        var ctrl = Build(factory, clientId);
+
+        var created = (CaseTimelineEntryRecord)((OkObjectResult)(await ctrl.LogOccurrence(caseId,
+            new LogOccurrenceRequest(null, "T", "B", [cold]), default)).Result!).Value!;
+
+        await ctrl.UpdateOccurrence(caseId, created.Id,
+            new LogOccurrenceRequest(null, "T", "B", []), default);
+
+        Assert.Empty(await TagsOnAsync(factory, created.Id));
+    }
+
+    [Fact]
+    public async Task GetMyCase_ReturnsTheTagsBackToTheClient()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var cold = await AddExperienceTypeAsync(factory, "Cold spot");
+        var ctrl = Build(factory, clientId);
+        await ctrl.LogOccurrence(caseId, new LogOccurrenceRequest(null, "T", "B", [cold]), default);
+
+        var detail = Assert.IsType<ClientCaseDetail>(
+            Assert.IsType<OkObjectResult>((await ctrl.GetMyCase(caseId, default)).Result).Value);
+
+        // A tag the client can set but never see back is a control that swallows input.
+        var occ = Assert.Single(detail.Occurrences);
+        Assert.Equal([cold], occ.ExperienceTypeIds);
+    }
+
     // ── Public display alias (U6) ─────────────────────────────────────────────
 
     private static async Task SetPseudonymAsync(
