@@ -11,6 +11,7 @@ public sealed class WebApiTokenStore : IWebApiTokenStore, IBenUserState
     public string? UserDisplayName { get; set; }
     public Guid? UserId { get; set; }
     public bool IsSuperAdmin { get; set; }
+    public bool IsAdmin { get; set; }
 
     // Impersonation
     public bool IsImpersonating { get; set; }

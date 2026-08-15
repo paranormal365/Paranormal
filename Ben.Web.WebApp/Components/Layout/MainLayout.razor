@@ -68,6 +68,11 @@
         <AppBarSection>
             <div id="copyright">IsHaunted.com &copy; @DateTime.Today.Year</div>
         </AppBarSection>
+        <AppBarSection>
+            @* Reachable signed out: the guides that explain how to request an investigation are
+               for people who do not have an account yet. *@
+            <NavLink href="/help" class="footer-link">Help</NavLink>
+        </AppBarSection>
         <AppBarSpacer />
     </TelerikAppBar>
 
@@ -197,6 +202,7 @@
 
                 TokenStore.UserId       = me.UserId;
                 TokenStore.IsSuperAdmin = me.IsSuperAdmin;
+                TokenStore.IsAdmin      = me.IsAdmin;
                 // Use the local account email (consistent regardless of which Entra identity was used)
                 if (!string.IsNullOrEmpty(me.Email))
                     TokenStore.UserEmail = me.Email;
@@ -215,7 +221,7 @@
         catch { /* non-fatal — Entra token may be invalid or WebApi unreachable */ }
     }
 
-    private sealed record EntraMeResult(Guid UserId, string Email, bool IsSuperAdmin);
+    private sealed record EntraMeResult(Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin);
 
     // ── Auth persistence ──────────────────────────────────────────────────────
 
@@ -235,7 +241,8 @@
                     TokenStore.AccessTokenExpiresAtUtc?.ToUnixTimeMilliseconds(),
                     TokenStore.UserEmail,
                     TokenStore.UserId?.ToString(),
-                    TokenStore.IsSuperAdmin
+                    TokenStore.IsSuperAdmin,
+                    TokenStore.IsAdmin
                 ));
             }
             else
@@ -261,6 +268,7 @@
                 TokenStore.UserEmail = state.UserEmail;
                 TokenStore.UserId = Guid.TryParse(state.UserId, out var id) ? id : null;
                 TokenStore.IsSuperAdmin = state.IsSuperAdmin;
+                TokenStore.IsAdmin = state.IsAdmin;
                 // NotifyStateChanged would re-persist immediately — skip it here
                 // and just call StateHasChanged directly.
                 StateHasChanged();
@@ -282,7 +290,10 @@
         long? ExpiresAtMs,
         string? UserEmail,
         string? UserId,
-        bool IsSuperAdmin
+        bool IsSuperAdmin,
+        // Defaulted so a session persisted before this field existed still deserializes rather
+        // than throwing the whole restore away and silently signing the user out.
+        bool IsAdmin = false
     );
 
 }

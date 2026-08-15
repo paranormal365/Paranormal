@@ -8,15 +8,15 @@ namespace Ben.Web.WebApp.Services.WebApi;
 public static class JwtClaimsParser
 {
     /// <summary>
-    /// Decodes the JWT payload and returns the user ID (sub claim) and whether
-    /// the token carries the SuperAdmin role.  Returns defaults on any error.
+    /// Decodes the JWT payload and returns the user ID (sub claim) plus which app-wide roles
+    /// the token carries. Returns defaults on any error.
     /// </summary>
-    public static (Guid? UserId, bool IsSuperAdmin) ParseClaims(string token)
+    public static (Guid? UserId, bool IsSuperAdmin, bool IsAdmin) ParseClaims(string token)
     {
         try
         {
             var parts = token.Split('.');
-            if (parts.Length < 2) return (null, false);
+            if (parts.Length < 2) return (null, false, false);
 
             // Convert Base64URL → standard Base64, then add padding
             var raw    = parts[1].Replace('-', '+').Replace('_', '/');
@@ -30,19 +30,20 @@ public static class JwtClaimsParser
                 && Guid.TryParse(sub.GetString(), out var id))
                 userId = id;
 
-            bool isSuperAdmin = false;
+            var roles = new List<string?>();
             if (doc.RootElement.TryGetProperty("role", out var role))
             {
-                isSuperAdmin = role.ValueKind == JsonValueKind.String
-                    ? role.GetString() == RoleNames.SuperAdmin
-                    : role.EnumerateArray().Any(r => r.GetString() == RoleNames.SuperAdmin);
+                if (role.ValueKind == JsonValueKind.String) roles.Add(role.GetString());
+                else roles.AddRange(role.EnumerateArray().Select(r => r.GetString()));
             }
 
-            return (userId, isSuperAdmin);
+            return (userId,
+                    roles.Contains(RoleNames.SuperAdmin),
+                    roles.Contains(RoleNames.Admin));
         }
         catch
         {
-            return (null, false);
+            return (null, false, false);
         }
     }
 }

@@ -329,9 +329,24 @@ Built as planned. What the plan didn't anticipate:
 
 ## Area 6 — In-App Help Documentation (per-role guides)
 
+### ✅ SHIPPED 2026-08-15 — `/help`, audience-filtered, with in-app `?` badges
+
+Built as one catalog filtered by the reader's ceiling rather than a guide per role, which is what
+the user asked for: roles *add* what a person can see, they do not get their own copy. Details,
+decisions and the how-to-add-a-document steps are in `README-help-documentation.md`.
+
+Shipped: `HelpAudience` ladder (Everyone → SignedIn → OrganizationMember →
+OrganizationAdministrator → AppAdministrator), `GET /api/me/help-audience`, embedded markdown
+documents rendered with Markdig, collapsible index at `/help`, per-document page with an
+"On this page" list, the `<HelpLink>` badge ("Link to help...", opens a new tab), a footer link
+that works signed out, and `RoleNames.Admin` — which grants nothing anywhere else.
+
+Seven documents to start, one per audience rung plus extras for clients. Screenshots were
+deliberately left for later; the user chose to start with text.
+
 DECIDED: **in-app help pages**, not standalone documents.
 
-### Plan
+### Original plan
 - New `/help` section in `Ben.Web.WebApp`: an index page routing by role (Client, Group Owner, Group Member, Investigator, SuperAdmin) + one guide page per role, each with a per-section table of contents. Static Razor content (versioned with the app, no CMS) — the existing `OrganizationPage` CMS is org-scoped and wrong for this.
 - Screenshots captured from the live dev site (the browser tooling used for validation passes can produce these), stored under `wwwroot/help/…`, referenced with light/dark-appropriate styling.
 - Contextual entry points: a "Help" item in the nav drawer + `?` links on complex pages (case detail, audio editor) deep-linking to the relevant guide anchor.
@@ -405,7 +420,7 @@ No `OrganizationType` concept exists anywhere — orgs are differentiated only g
 | 8 | Profile photos U1–U4 (Area 4) | M | — |
 | 9 | Witness photos + aliases U5–U6, occurrence enrichment | M | U1–U3 |
 | 10 | Device data spec (Area 7) | S (document) | — |
-| 11 | Help docs (Area 6) | M (content-heavy) | after features settle |
+| 11 | Help docs (Area 6) ✅ | M (content-heavy) | after features settle |
 | 12 | Group types (Area 8) | S–M | deliberately last |
 
 Items 1–2 are quick wins that could open any working session. Items 5–6 can interleave with 3–4 freely (no shared files beyond DTO additions). Once approved, copy this roadmap into `ProjectNotes/` (house convention: planning docs live in the repo) and add a pointer from `Things to Add.md`.

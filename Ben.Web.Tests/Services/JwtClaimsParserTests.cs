@@ -29,7 +29,7 @@ public class JwtClaimsParserTests
     {
         var token = MakeJwt($$"""{"sub":"{{TestUserId}}","role":"Member","exp":9999999999}""");
 
-        var (userId, _) = JwtClaimsParser.ParseClaims(token);
+        var (userId, _, _) = JwtClaimsParser.ParseClaims(token);
 
         Assert.Equal(TestUserId, userId);
     }
@@ -39,7 +39,7 @@ public class JwtClaimsParserTests
     {
         var token = MakeJwt("""{"email":"user@test.com","role":"Member"}""");
 
-        var (userId, _) = JwtClaimsParser.ParseClaims(token);
+        var (userId, _, _) = JwtClaimsParser.ParseClaims(token);
 
         Assert.Null(userId);
     }
@@ -51,7 +51,7 @@ public class JwtClaimsParserTests
     {
         var token = MakeJwt($$"""{"sub":"{{TestUserId}}","role":"SuperAdmin","exp":9999999999}""");
 
-        var (_, isSuperAdmin) = JwtClaimsParser.ParseClaims(token);
+        var (_, isSuperAdmin, _) = JwtClaimsParser.ParseClaims(token);
 
         Assert.True(isSuperAdmin);
     }
@@ -61,7 +61,7 @@ public class JwtClaimsParserTests
     {
         var token = MakeJwt($$"""{"sub":"{{TestUserId}}","role":"Editor","exp":9999999999}""");
 
-        var (_, isSuperAdmin) = JwtClaimsParser.ParseClaims(token);
+        var (_, isSuperAdmin, _) = JwtClaimsParser.ParseClaims(token);
 
         Assert.False(isSuperAdmin);
     }
@@ -71,7 +71,7 @@ public class JwtClaimsParserTests
     {
         var token = MakeJwt($$"""{"sub":"{{TestUserId}}","role":["Editor","SuperAdmin"],"exp":9999999999}""");
 
-        var (_, isSuperAdmin) = JwtClaimsParser.ParseClaims(token);
+        var (_, isSuperAdmin, _) = JwtClaimsParser.ParseClaims(token);
 
         Assert.True(isSuperAdmin);
     }
@@ -81,7 +81,7 @@ public class JwtClaimsParserTests
     {
         var token = MakeJwt($$"""{"sub":"{{TestUserId}}","role":["Editor","Viewer"],"exp":9999999999}""");
 
-        var (_, isSuperAdmin) = JwtClaimsParser.ParseClaims(token);
+        var (_, isSuperAdmin, _) = JwtClaimsParser.ParseClaims(token);
 
         Assert.False(isSuperAdmin);
     }
@@ -91,7 +91,7 @@ public class JwtClaimsParserTests
     {
         var token = MakeJwt($$"""{"sub":"{{TestUserId}}","exp":9999999999}""");
 
-        var (_, isSuperAdmin) = JwtClaimsParser.ParseClaims(token);
+        var (_, isSuperAdmin, _) = JwtClaimsParser.ParseClaims(token);
 
         Assert.False(isSuperAdmin);
     }
@@ -101,7 +101,7 @@ public class JwtClaimsParserTests
     [Fact]
     public void ParseClaims_MalformedToken_ReturnsDefaults()
     {
-        var (userId, isSuperAdmin) = JwtClaimsParser.ParseClaims("not.a.valid.jwt.token.at.all");
+        var (userId, isSuperAdmin, _) = JwtClaimsParser.ParseClaims("not.a.valid.jwt.token.at.all");
 
         Assert.Null(userId);
         Assert.False(isSuperAdmin);
@@ -110,7 +110,7 @@ public class JwtClaimsParserTests
     [Fact]
     public void ParseClaims_EmptyString_ReturnsDefaults()
     {
-        var (userId, isSuperAdmin) = JwtClaimsParser.ParseClaims(string.Empty);
+        var (userId, isSuperAdmin, _) = JwtClaimsParser.ParseClaims(string.Empty);
 
         Assert.Null(userId);
         Assert.False(isSuperAdmin);
@@ -119,7 +119,7 @@ public class JwtClaimsParserTests
     [Fact]
     public void ParseClaims_TwoParts_ReturnsDefaults()
     {
-        var (userId, isSuperAdmin) = JwtClaimsParser.ParseClaims("onlyone");
+        var (userId, isSuperAdmin, _) = JwtClaimsParser.ParseClaims("onlyone");
 
         Assert.Null(userId);
         Assert.False(isSuperAdmin);
@@ -141,9 +141,32 @@ public class JwtClaimsParserTests
             System.Text.Encoding.UTF8.GetBytes("""{"alg":"HS256","typ":"JWT"}"""));
         var token = $"{header}.{base64Url}.sig";
 
-        var (userId, isSuperAdmin) = JwtClaimsParser.ParseClaims(token);
+        var (userId, isSuperAdmin, _) = JwtClaimsParser.ParseClaims(token);
 
         Assert.Equal(TestUserId, userId);
         Assert.True(isSuperAdmin);
+    }
+
+    [Fact]
+    public void ParseClaims_AdminRole_IsReportedSeparatelyFromSuperAdmin()
+    {
+        var token = MakeJwt("""{"role":"Admin"}""");
+
+        var (_, isSuperAdmin, isAdmin) = JwtClaimsParser.ParseClaims(token);
+
+        // Admin must never be mistaken for SuperAdmin — it deliberately grants far less.
+        Assert.False(isSuperAdmin);
+        Assert.True(isAdmin);
+    }
+
+    [Fact]
+    public void ParseClaims_ArrayWithBothRoles_ReportsBoth()
+    {
+        var token = MakeJwt("""{"role":["Admin","SuperAdmin"]}""");
+
+        var (_, isSuperAdmin, isAdmin) = JwtClaimsParser.ParseClaims(token);
+
+        Assert.True(isSuperAdmin);
+        Assert.True(isAdmin);
     }
 }

@@ -28,6 +28,16 @@ internal static class SuperAdminSeeder
                 throw new InvalidOperationException($"Failed to create role '{RoleNames.SuperAdmin}': {string.Join(", ", roleResult.Errors.Select(e => e.Description))}");
         }
 
+        // Ensure the app-wide Admin role exists. Nobody is seeded into it — it is created so a
+        // SuperAdmin can assign it, and so `User.IsInRole(RoleNames.Admin)` is answering a real
+        // question rather than always being false against a role that does not exist.
+        if (!await roleManager.RoleExistsAsync(RoleNames.Admin))
+        {
+            var adminRoleResult = await roleManager.CreateAsync(new IdentityRole<Guid>(RoleNames.Admin));
+            if (!adminRoleResult.Succeeded)
+                throw new InvalidOperationException($"Failed to create role '{RoleNames.Admin}': {string.Join(", ", adminRoleResult.Errors.Select(e => e.Description))}");
+        }
+
         // Ensure SuperAdmin user exists
         var user = await userManager.FindByEmailAsync(email);
         if (user is null)

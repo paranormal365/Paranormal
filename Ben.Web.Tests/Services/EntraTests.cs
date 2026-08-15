@@ -112,7 +112,7 @@ public class EntraTests
 
         // /api/me returns a DIFFERENT userId (simulating opaque token where sub ≠ local user id)
         apiMock.Setup(x => x.GetAsync<MeResult>("/api/me", default))
-               .ReturnsAsync(new MeResult(MeApiUserId, "u@t.com", false));
+               .ReturnsAsync(new MeResult(MeApiUserId, "u@t.com", false, false));
 
         await svc.LoginAsync("u@t.com", "pw");
 
@@ -129,7 +129,7 @@ public class EntraTests
 
         // /api/me says SuperAdmin (server-side role check is authoritative for opaque tokens)
         apiMock.Setup(x => x.GetAsync<MeResult>("/api/me", default))
-               .ReturnsAsync(new MeResult(MeApiUserId, "u@t.com", IsSuperAdmin: true));
+               .ReturnsAsync(new MeResult(MeApiUserId, "u@t.com", IsSuperAdmin: true, IsAdmin: false));
 
         await svc.LoginAsync("u@t.com", "pw");
 
@@ -182,7 +182,7 @@ public class EntraTests
               .ReturnsAsync(TokenResponse(UserId1, "Member"));
 
         apiMock.Setup(x => x.GetAsync<MeResult>("/api/me", default))
-               .ReturnsAsync(new MeResult(UserId1, "u@t.com", false));
+               .ReturnsAsync(new MeResult(UserId1, "u@t.com", false, false));
 
         await svc.LoginAsync("u@t.com", "pw");
 
