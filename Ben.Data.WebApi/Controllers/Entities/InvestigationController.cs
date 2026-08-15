@@ -121,6 +121,12 @@ public sealed class InvestigationController : BenControllerBase
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var entity = await db.Investigations.FirstOrDefaultAsync(i => i.Id == id && i.CaseId == caseId, ct);
         if (entity is null) return NotFound();
+
+        // Gated after the lookup, not before: membership is already proved above, so reading the
+        // row first leaks nothing, and a missing investigation deserves "not found" rather than
+        // "you may not edit the thing that does not exist".
+        if (!await CanManageAsync(id, ct)) return Forbid();
+
         entity.OrgCalendarEventId  = request.OrgCalendarEventId;
         entity.Title               = request.Title.Trim();
         entity.Description         = request.Description?.Trim();
@@ -154,6 +160,8 @@ public sealed class InvestigationController : BenControllerBase
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var entity = await db.Investigations.FirstOrDefaultAsync(i => i.Id == id && i.CaseId == caseId, ct);
         if (entity is null) return NotFound();
+        if (!await CanManageAsync(id, ct)) return Forbid();
+
 
         // Detach the binder entries first. The FK is NoAction (SQL Server won't allow SetNull —
         // see BenDataContext), so without this the delete fails on a referential constraint. The
@@ -175,11 +183,17 @@ public sealed class InvestigationController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var investigation = await db.Investigations.FirstOrDefaultAsync(i => i.Id == id && i.CaseId == caseId, ct);
         if (investigation is null) return NotFound();
+
+        // Cancelling tells the client the visit is off, so it is a management act rather than a
+        // member one — same gate as editing, applied after the row is known to exist.
+        if (!await CanManageAsync(id, ct)) return Forbid();
+
         if (investigation.Status != InvestigationStatus.Scheduled)
             return Conflict($"Investigation is already {investigation.Status}.");
 
@@ -226,6 +240,8 @@ public sealed class InvestigationController : BenControllerBase
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         if (!await db.Investigations.AnyAsync(i => i.Id == id && i.CaseId == caseId, ct))
             return NotFound();
+        if (!await CanManageAsync(id, ct)) return Forbid();
+
         var attendee = new InvestigationAttendee
         {
             Id = Guid.NewGuid(), InvestigationId = id, AppUserId = request.AppUserId,
@@ -250,9 +266,37 @@ public sealed class InvestigationController : BenControllerBase
         var attendee = await db.InvestigationAttendees
             .FirstOrDefaultAsync(a => a.Id == attendeeId && a.InvestigationId == id, ct);
         if (attendee is null) return NotFound();
-        attendee.DidAttend    = request.DidAttend;
-        attendee.AssignedRole = request.AssignedRole?.Trim() ?? attendee.AssignedRole;
-        if (request.Rsvp.HasValue) attendee.Rsvp = request.Rsvp.Value;
+
+        // Two different rights meet on this one endpoint. Answering your own invitation is yours
+        // by definition; saying who turned up, what job they did, or who is leading is managing
+        // the visit. So the RSVP branch is self-gated and everything else needs manage.
+        var userId = GetCurrentUserId();
+        var isSelf = attendee.AppUserId == userId;
+        var canManage = await InvestigationAccess.CanManageAsync(
+            db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct);
+
+        if (request.Rsvp.HasValue)
+        {
+            if (!isSelf && !canManage) return Forbid();
+            attendee.Rsvp = request.Rsvp.Value;
+        }
+
+        var changesSomeoneElsesRecord =
+            request.DidAttend.HasValue
+            || request.AssignedRole is not null
+            || request.IsLead.HasValue;
+
+        if (changesSomeoneElsesRecord)
+        {
+            // Deliberately not "unless it's your own row": marking yourself as having attended, or
+            // making yourself the lead, is precisely what this must not allow.
+            if (!canManage) return Forbid();
+
+            if (request.DidAttend.HasValue) attendee.DidAttend = request.DidAttend;
+            attendee.AssignedRole = request.AssignedRole?.Trim() ?? attendee.AssignedRole;
+            if (request.IsLead.HasValue) attendee.IsLead = request.IsLead.Value;
+        }
+
         await db.SaveChangesAsync(ct);
         var loaded = await db.InvestigationAttendees.AsNoTracking()
             .Include(a => a.AppUser).FirstAsync(a => a.Id == attendee.Id, ct);
@@ -269,6 +313,8 @@ public sealed class InvestigationController : BenControllerBase
         var attendee = await db.InvestigationAttendees
             .FirstOrDefaultAsync(a => a.Id == attendeeId && a.InvestigationId == id, ct);
         if (attendee is null) return NotFound();
+        if (!await CanManageAsync(id, ct)) return Forbid();
+
         db.InvestigationAttendees.Remove(attendee);
         await db.SaveChangesAsync(ct);
         return NoContent();
@@ -280,6 +326,18 @@ public sealed class InvestigationController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         return await FileAudienceAccess.IsOrgMemberAsync(db, orgId, userId, ct);
+    }
+
+    /// <summary>
+    /// Whether the caller may change this particular investigation. See
+    /// <see cref="InvestigationAccess"/> for the five ways to earn it and why membership alone is
+    /// no longer one of them.
+    /// </summary>
+    private async Task<bool> CanManageAsync(Guid investigationId, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        return await InvestigationAccess.CanManageAsync(
+            db, investigationId, GetCurrentUserId(), User.IsInRole(RoleNames.SuperAdmin), ct);
     }
 }
 
@@ -469,7 +527,21 @@ public sealed record UpsertInvestigationRequest(
     NewPlaceRequest? NewPlace = null);
 
 public sealed record AddInvestigationAttendeeRequest(Guid AppUserId, string? AssignedRole);
-public sealed record UpdateAttendanceRequest(bool? DidAttend, string? AssignedRole, Ben.Data.Common.Enums.RsvpStatus? Rsvp = null);
+/// <summary>
+/// Changes one attendee's row. Every field is optional and each is gated separately — see
+/// <c>UpdateAttendance</c>: <see cref="Rsvp"/> is yours to set, the rest belong to whoever manages
+/// the visit.
+/// </summary>
+/// <remarks>
+/// <see cref="DidAttend"/> became nullable-meaning-unchanged rather than nullable-meaning-unknown.
+/// It was previously assigned unconditionally, so a request that only meant to set an RSVP silently
+/// wiped whether the person had turned up.
+/// </remarks>
+public sealed record UpdateAttendanceRequest(
+    bool? DidAttend,
+    string? AssignedRole,
+    Ben.Data.Common.Enums.RsvpStatus? Rsvp = null,
+    bool? IsLead = null);
 public sealed record CastEvidenceVoteRequest(
     Ben.Data.Common.Enums.EvidenceVoteType VoteType,
     string? Comment);

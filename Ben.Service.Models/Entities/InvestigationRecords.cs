@@ -43,7 +43,16 @@ public record InvestigationAttendeeRecord
     public Guid InvestigationId { get; init; }
     public Guid AppUserId { get; init; }
     public string? DisplayName { get; init; }
+
+    /// <summary>Free text describing the job on the night. Grants nothing.</summary>
     public string? AssignedRole { get; init; }
+
+    /// <summary>
+    /// Running this particular visit — delegated authority that expires with it, and distinct from
+    /// both <see cref="AssignedRole"/> and standing rank in the group.
+    /// </summary>
+    public bool IsLead { get; init; }
+
     public RsvpStatus Rsvp { get; init; } = RsvpStatus.Invited;
     public bool? DidAttend { get; init; }
     public DateTime DateCreated { get; init; }
