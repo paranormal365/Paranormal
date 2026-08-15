@@ -958,6 +958,19 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<OrgMessageRecord?> SendOrgMessageAsync(Guid orgId, SendOrgMessageRequest request, CancellationToken token = default)
         => _api.PostAsync<SendOrgMessageRequest, OrgMessageRecord>($"/api/organizations/{orgId}/messages", request, token);
 
+    // ── Org-wide investigations (Area 9) ──────────────────────────────────────
+
+    public async Task<IReadOnlyList<OrgInvestigationRow>> GetOrgInvestigationsAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<OrgInvestigationRow>>($"/api/organizations/{orgId}/investigations", token);
+        return result ?? [];
+    }
+
+    public Task<InvestigationRecord?> CreateOrgInvestigationAsync(
+        Guid orgId, CreateOrgInvestigationRequest request, CancellationToken token = default)
+        => _api.PostAsync<CreateOrgInvestigationRequest, InvestigationRecord>(
+            $"/api/organizations/{orgId}/investigations", request, token);
+
     // ── Calendar ──────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default)

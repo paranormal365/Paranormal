@@ -261,7 +261,7 @@ public class OrgInvestigationsControllerTests
         await Build(factory).Create(OrgId, Request(
             newPlace: new NewPlaceRequest("A landmark", null, null, "Adams", "TN", null, "US")), default);
 
-        var listed = Assert.IsAssignableFrom<IEnumerable<InvestigationRecord>>(
+        var listed = Assert.IsAssignableFrom<IEnumerable<OrgInvestigationRow>>(
             Assert.IsType<OkObjectResult>((await Build(factory).GetAll(OrgId, default)).Result).Value).ToList();
 
         // The whole reason OrganizationId exists on the investigation: a list that joined through
@@ -289,7 +289,7 @@ public class OrgInvestigationsControllerTests
             await db.SaveChangesAsync();
         }
 
-        var listed = Assert.IsAssignableFrom<IEnumerable<InvestigationRecord>>(
+        var listed = Assert.IsAssignableFrom<IEnumerable<OrgInvestigationRow>>(
             Assert.IsType<OkObjectResult>((await Build(factory).GetAll(OrgId, default)).Result).Value).ToList();
         var byId = await Build(factory).GetById(OrgId, foreignId, default);
 
@@ -297,6 +297,94 @@ public class OrgInvestigationsControllerTests
         // NotFound rather than Forbid: a 403 confirms the row exists to somebody who should not
         // know that.
         Assert.IsType<NotFoundResult>(byId.Result);
+    }
+
+    // ── The row's shape and its verdicts ──────────────────────────────────────
+
+    [Fact]
+    public async Task The_row_carries_the_place_and_case_the_map_and_grid_need()
+    {
+        var factory = await SeedAsync();
+        var caseId = await AddCaseAsync(factory, OrgId, 7);
+
+        await Build(factory).Create(OrgId, Request(caseId: caseId,
+            newPlace: new NewPlaceRequest("Shelby Bridge", null, null, "Nashville", "TN", null, "US",
+                Latitude: 36.1043m, Longitude: -86.7714m)), default);
+
+        var row = Assert.Single(Assert.IsAssignableFrom<IEnumerable<OrgInvestigationRow>>(
+            Assert.IsType<OkObjectResult>((await Build(factory).GetAll(OrgId, default)).Result).Value));
+
+        // Denormalised so the map draws a pin and the grid prints a line without a request per row.
+        Assert.Equal("Shelby Bridge", row.PlaceName);
+        Assert.Equal("Nashville", row.PlaceCity);
+        Assert.Equal(36.1043m, row.Latitude);
+        Assert.Equal("#2026-007", row.CaseReference);
+        Assert.Equal("Case 7", row.CaseTitle);
+    }
+
+    [Fact]
+    public async Task A_case_less_row_reports_null_case_fields_rather_than_a_placeholder()
+    {
+        var factory = await SeedAsync();
+
+        await Build(factory).Create(OrgId, Request(
+            newPlace: new NewPlaceRequest("A landmark", null, null, "Adams", "TN", null, "US")), default);
+
+        var row = Assert.Single(Assert.IsAssignableFrom<IEnumerable<OrgInvestigationRow>>(
+            Assert.IsType<OkObjectResult>((await Build(factory).GetAll(OrgId, default)).Result).Value));
+
+        // Null, not "—" or "(none)": how to render an absent case is the UI's business, and a
+        // sentinel string would have to be recognised by every screen that ever shows one.
+        Assert.Null(row.CaseId);
+        Assert.Null(row.CaseReference);
+        Assert.Null(row.CaseTitle);
+    }
+
+    [Fact]
+    public async Task A_row_that_could_not_be_placed_says_why()
+    {
+        var factory = await SeedAsync();
+
+        // No coordinates supplied and no geocoder configured under test.
+        await Build(factory).Create(OrgId, Request(
+            newPlace: new NewPlaceRequest("Somewhere vague", null, null, null, null, null, null)), default);
+
+        var row = Assert.Single(Assert.IsAssignableFrom<IEnumerable<OrgInvestigationRow>>(
+            Assert.IsType<OkObjectResult>((await Build(factory).GetAll(OrgId, default)).Result).Value));
+
+        // The map draws fewer pins than there are investigations, and this is what lets the screen
+        // say so underneath instead of quietly losing one.
+        Assert.Null(row.Latitude);
+        Assert.False(string.IsNullOrWhiteSpace(row.GeocodeNote));
+    }
+
+    [Fact]
+    public async Task The_row_reports_the_servers_verdict_on_editing()
+    {
+        var factory = await SeedAsync();
+        var stranger = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = OrgId, AppUserId = stranger,
+                Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Created by MemberId.
+        await Build(factory).Create(OrgId, Request(
+            newPlace: new NewPlaceRequest("A landmark", null, null, "Adams", "TN", null, "US")), default);
+
+        var mine = Assert.Single(Assert.IsAssignableFrom<IEnumerable<OrgInvestigationRow>>(
+            Assert.IsType<OkObjectResult>((await Build(factory).GetAll(OrgId, default)).Result).Value));
+        var theirs = Assert.Single(Assert.IsAssignableFrom<IEnumerable<OrgInvestigationRow>>(
+            Assert.IsType<OkObjectResult>((await Build(factory, stranger).GetAll(OrgId, default)).Result).Value));
+
+        // Both members see the same investigation; only one of them is offered an Edit button.
+        Assert.True(mine.CanEditRecord);
+        Assert.False(theirs.CanEditRecord);
     }
 
     [Fact]

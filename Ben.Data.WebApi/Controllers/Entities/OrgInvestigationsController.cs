@@ -37,9 +37,18 @@ public sealed class OrgInvestigationsController : BenControllerBase
         _auditLog = auditLog;
     }
 
-    /// <summary>Every investigation this organization ran, with or without a case.</summary>
+    /// <summary>
+    /// Every investigation this organization ran, with or without a case, each carrying what the
+    /// caller may do with it.
+    /// </summary>
+    /// <remarks>
+    /// Returns <see cref="OrgInvestigationRow"/> rather than <c>InvestigationRecord</c> because
+    /// this is the map-and-grid feed: it needs the place and case denormalised for display, and it
+    /// needs the permission verdicts. The UI renders those verdicts and never derives them — a
+    /// client that decides for itself who may edit is a client that can be told otherwise.
+    /// </remarks>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<InvestigationRecord>>> GetAll(
+    public async Task<ActionResult<IEnumerable<OrgInvestigationRow>>> GetAll(
         Guid orgId, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
@@ -49,12 +58,54 @@ public sealed class OrgInvestigationsController : BenControllerBase
         // Filtered on the investigation's own OrganizationId. Joining through the case here would
         // silently exclude exactly the rows this controller exists to serve.
         var list = await db.Investigations.AsNoTracking()
-            .Include(i => i.Attendees)
+            .Include(i => i.Case)
+            .Include(i => i.Place)
             .Where(i => i.OrganizationId == orgId)
+            .Select(i => new
+            {
+                i.Id, i.Title, i.ScheduledDateTime, i.EndDateTime, i.Status, i.Location,
+                i.CaseId, i.Place, i.PlaceId, i.Latitude, i.Longitude, i.GeocodeNote,
+                CaseYear = i.Case == null ? (int?)null : i.Case.CaseYear,
+                CaseNumber = i.Case == null ? (int?)null : i.Case.OrgCaseNumber,
+                CaseTitle = i.Case == null ? null : i.Case.Title,
+                AttendeeCount = i.Attendees.Count,
+            })
             .OrderByDescending(i => i.ScheduledDateTime)
             .ToListAsync(ct);
 
-        return Ok(_mapper.Map<IEnumerable<InvestigationRecord>>(list));
+        var flags = await InvestigationAccess.ComputeFlagsAsync(
+            db, orgId, list.Select(i => i.Id).ToList(),
+            GetCurrentUserId(), User.IsInRole(RoleNames.SuperAdmin), ct);
+
+        return Ok(list.Select(i =>
+        {
+            var f = flags.TryGetValue(i.Id, out var found)
+                ? found
+                // Defaulting to "no" rather than "yes" if a row somehow went missing between the
+                // two queries. A permission gap should close, not open.
+                : new InvestigationPermissionFlags(false, false);
+
+            return new OrgInvestigationRow(
+                Id: i.Id,
+                Title: i.Title,
+                ScheduledDateTime: i.ScheduledDateTime,
+                EndDateTime: i.EndDateTime,
+                Status: i.Status,
+                Location: i.Location,
+                CaseId: i.CaseId,
+                CaseReference: i.CaseYear is null ? null : $"#{i.CaseYear}-{i.CaseNumber:D3}",
+                CaseTitle: i.CaseTitle,
+                PlaceId: i.PlaceId,
+                PlaceName: i.Place?.Name,
+                PlaceCity: i.Place?.City,
+                PlaceState: i.Place?.State,
+                Latitude: i.Latitude,
+                Longitude: i.Longitude,
+                GeocodeNote: i.GeocodeNote,
+                AttendeeCount: i.AttendeeCount,
+                CanEditRecord: f.CanEditRecord,
+                CanCompleteMyFindings: f.CanCompleteMyFindings);
+        }));
     }
 
     [HttpGet("{id:guid}")]
@@ -164,6 +215,44 @@ public sealed class OrgInvestigationsController : BenControllerBase
         return await FileAudienceAccess.IsOrgMemberAsync(db, orgId, GetCurrentUserId(), ct);
     }
 }
+
+/// <summary>
+/// One investigation as the organization's map-and-grid view needs it.
+/// </summary>
+/// <remarks>
+/// <para>Flat and denormalised on purpose: the map draws a pin per row and the grids list them
+/// beside each other, so making the client fetch a case and a place per row would be a request
+/// storm in service of a shape nobody wanted.</para>
+///
+/// <para><c>GeocodeNote</c> travels with the row so the screen can list what it could not place
+/// beneath the map, rather than silently drawing fewer pins than there are investigations.</para>
+///
+/// <para>Field notes: <c>Location</c> is the team's own free text, often somewhere other than the
+/// address on file. <c>CaseId</c>, <c>CaseReference</c> and <c>CaseTitle</c> are null together for
+/// a case-less visit. <c>CanEditRecord</c> is the server's verdict — render it, do not re-derive
+/// it — and <c>CanCompleteMyFindings</c> is attendance-based, so a participant who runs nothing
+/// still qualifies.</para>
+/// </remarks>
+public sealed record OrgInvestigationRow(
+    Guid Id,
+    string Title,
+    DateTime ScheduledDateTime,
+    DateTime? EndDateTime,
+    InvestigationStatus Status,
+    string? Location,
+    Guid? CaseId,
+    string? CaseReference,
+    string? CaseTitle,
+    Guid? PlaceId,
+    string? PlaceName,
+    string? PlaceCity,
+    string? PlaceState,
+    decimal? Latitude,
+    decimal? Longitude,
+    string? GeocodeNote,
+    int AttendeeCount,
+    bool CanEditRecord,
+    bool CanCompleteMyFindings);
 
 /// <summary>
 /// Schedules an investigation against an organization, with a case or without one.

@@ -588,6 +588,31 @@ public interface IBenAdminClient
     // ── Calendar ──────────────────────────────────────────────────────────────
 
     Task<IReadOnlyList<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default);
+
+    // ── Org-wide investigations (Area 9) ──────────────────────────────────────
+
+    /// <summary>
+    /// Every investigation the organization ran — including ones with no client case — each
+    /// carrying the server's verdict on what this viewer may do with it.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="GetInvestigationsAsync"/>, which is nested under one case and
+    /// therefore cannot see a case-less visit at all. Render <c>CanEditRecord</c> as given; a UI
+    /// that works out edit rights for itself will eventually disagree with the endpoint.
+    /// </remarks>
+    Task<IReadOnlyList<OrgInvestigationRow>> GetOrgInvestigationsAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>
+    /// Schedules an investigation, with a case or without one. Needs a place when there is no case.
+    /// </summary>
+    /// <remarks>
+    /// Returns the plain record the endpoint creates, not an <see cref="OrgInvestigationRow"/>:
+    /// the row's denormalised place/case names and permission verdicts are list-view concerns, so
+    /// callers that need them refetch the list rather than have the create path assemble a second,
+    /// subtly different shape.
+    /// </remarks>
+    Task<InvestigationRecord?> CreateOrgInvestigationAsync(
+        Guid orgId, CreateOrgInvestigationRequest request, CancellationToken token = default);
     Task<OrgCalendarEventTypeRecord?> CreateCalendarEventTypeAsync(Guid orgId, UpsertCalendarEventTypeRequest request, CancellationToken token = default);
     Task<OrgCalendarEventTypeRecord?> UpdateCalendarEventTypeAsync(Guid orgId, Guid id, UpsertCalendarEventTypeRequest request, CancellationToken token = default);
     Task<bool> DeleteCalendarEventTypeAsync(Guid orgId, Guid id, CancellationToken token = default);
@@ -1280,6 +1305,63 @@ public sealed record UserNoteUpsertRequest(
     string NoteSubject,
     string NoteBody,
     bool IsPublic);
+
+// ── Org-wide investigation records (Area 9) ───────────────────────────────────
+// Mirrors of the WebApi records in OrgInvestigationsController.cs — this library cannot reference
+// the WebApi project, so the shapes are restated here.
+
+/// <summary>
+/// One investigation for the organization's map-and-grid view. <c>CanEditRecord</c> and
+/// <c>CanCompleteMyFindings</c> are the server's verdicts: render them, never re-derive them.
+/// </summary>
+public sealed record OrgInvestigationRow(
+    Guid Id,
+    string Title,
+    DateTime ScheduledDateTime,
+    DateTime? EndDateTime,
+    Ben.Data.Common.Enums.InvestigationStatus Status,
+    string? Location,
+    Guid? CaseId,
+    string? CaseReference,
+    string? CaseTitle,
+    Guid? PlaceId,
+    string? PlaceName,
+    string? PlaceCity,
+    string? PlaceState,
+    decimal? Latitude,
+    decimal? Longitude,
+    string? GeocodeNote,
+    int AttendeeCount,
+    bool CanEditRecord,
+    bool CanCompleteMyFindings);
+
+/// <summary>
+/// A place being created inline with the investigation held there, so scheduling a visit to
+/// somewhere new is one step rather than two.
+/// </summary>
+public sealed record NewPlaceRequest(
+    string? Name,
+    string? StreetAddress1,
+    string? StreetAddress2,
+    string? City,
+    string? State,
+    string? ZipCode,
+    string? Country,
+    decimal? Latitude = null,
+    decimal? Longitude = null,
+    Ben.Data.Common.Enums.PlaceKind? Kind = null);
+
+/// <summary>Schedules an investigation. With no <c>CaseId</c>, a place is required.</summary>
+public sealed record CreateOrgInvestigationRequest(
+    string Title,
+    DateTime ScheduledDateTime,
+    string? Description = null,
+    string? Location = null,
+    DateTime? EndDateTime = null,
+    DateTime? EvidenceDueDate = null,
+    Guid? CaseId = null,
+    Guid? PlaceId = null,
+    NewPlaceRequest? NewPlace = null);
 
 // ── My contact info request/response records ──────────────────────────────────
 // Mirrors of the WebApi records in MyContactInfoController.cs / PublicEmailValidationController.cs
