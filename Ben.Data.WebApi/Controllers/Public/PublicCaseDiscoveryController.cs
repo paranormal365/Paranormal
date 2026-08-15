@@ -96,7 +96,7 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
                 TotalVotes:        vc?.Total        ?? 0,
                 ApproxLatitude:    c.Latitude,
                 ApproxLongitude:   c.Longitude,
-                ClientName:        string.IsNullOrWhiteSpace(c.PublicPseudonym) ? null : c.PublicPseudonym);
+                ClientName:        PublicClientName.For(c));
         }).ToList();
 
         // Sort

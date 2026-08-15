@@ -689,6 +689,13 @@ public interface IBenAdminClient
     /// <summary>Removes a related-person reference.</summary>
     Task<bool> RemoveRelatedPersonAsync(Guid caseId, Guid personId, CancellationToken token = default);
 
+    /// <summary>The caller's public-facing alias for a case, plus what the public sees today.</summary>
+    Task<CaseDisplayAliasRecord?> GetCaseDisplayAliasAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Sets the caller's public-facing alias. Empty clears it. Primary client only.</summary>
+    Task<CaseDisplayAliasRecord?> SetCaseDisplayAliasAsync(
+        Guid caseId, SetCaseDisplayAliasRequest request, CancellationToken token = default);
+
     /// <summary>Edits a related person. Sends the whole person — a null photo id clears it.</summary>
     Task<CaseRelatedPersonRecord?> UpdateRelatedPersonAsync(
         Guid caseId, Guid personId, UpdateRelatedPersonRequest request, CancellationToken token = default);

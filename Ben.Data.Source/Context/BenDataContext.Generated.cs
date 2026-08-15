@@ -1151,6 +1151,8 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<Case>()
                 .Property(e => e.PublicPseudonym).HasMaxLength(128);
             modelBuilder.Entity<Case>()
+                .Property(e => e.ClientDisplayAlias).HasMaxLength(128);
+            modelBuilder.Entity<Case>()
                 .Property(e => e.StreetAddress1).HasMaxLength(256);
             modelBuilder.Entity<Case>()
                 .Property(e => e.City).HasMaxLength(128);

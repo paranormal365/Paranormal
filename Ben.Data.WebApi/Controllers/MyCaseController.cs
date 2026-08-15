@@ -840,6 +840,75 @@ public sealed class MyCaseController : BenControllerBase
     private static CaseClientInviteRecord ToInviteRecord(Ben.Data.Source.Entities.CaseClientInvite i) =>
         new(i.Id, i.CaseId, i.Email, i.Token, i.DateExpires, i.DateCreated);
 
+    // ── Public display alias ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Sets how the client wants to be named on public pages and in shared documents. Empty or
+    /// whitespace clears it, falling back to whatever the organization set.
+    /// </summary>
+    /// <remarks>
+    /// Primary client only. A co-client changing how the case's client is publicly named would be
+    /// deciding someone else's anonymity for them; there is no public co-client listing for them
+    /// to alias anyway.
+    /// </remarks>
+    [HttpPut("{caseId:guid}/display-alias")]
+    public async Task<ActionResult<CaseDisplayAliasRecord>> SetDisplayAlias(
+        Guid caseId, [FromBody] SetCaseDisplayAliasRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        var alias = request.DisplayAlias?.Trim();
+        if (alias is { Length: > MaxAliasLength })
+            return BadRequest($"Alias cannot exceed {MaxAliasLength} characters.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var caseRow = await db.Cases.Include(c => c.ClientRequest)
+            .FirstOrDefaultAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+        if (caseRow is null) return Forbid();
+
+        var before = new Ben.Data.Source.Entities.Case
+        {
+            Id = caseRow.Id, ClientDisplayAlias = caseRow.ClientDisplayAlias,
+        };
+
+        caseRow.ClientDisplayAlias = string.IsNullOrWhiteSpace(alias) ? null : alias;
+        caseRow.DateUpdated        = DateTime.UtcNow;
+        caseRow.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Ben.Data.Source.Entities.Case), caseRow.Id, before, caseRow, userId, AppSources.WebApi, ct));
+
+        return Ok(new CaseDisplayAliasRecord(
+            caseRow.ClientDisplayAlias,
+            caseRow.PublicPseudonym,
+            // What the public actually sees right now, so the UI never has to re-derive the
+            // precedence rule and get it subtly different.
+            Ben.Data.WebApi.Controllers.Public.PublicClientName.For(caseRow)));
+    }
+
+    /// <summary>Returns the caller's current alias for this case plus what the public sees.</summary>
+    [HttpGet("{caseId:guid}/display-alias")]
+    public async Task<ActionResult<CaseDisplayAliasRecord>> GetDisplayAlias(Guid caseId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var caseRow = await db.Cases.AsNoTracking().FirstOrDefaultAsync(c => c.Id == caseId, ct);
+        if (caseRow is null) return NotFound();
+
+        return Ok(new CaseDisplayAliasRecord(
+            caseRow.ClientDisplayAlias,
+            caseRow.PublicPseudonym,
+            Ben.Data.WebApi.Controllers.Public.PublicClientName.For(caseRow)));
+    }
+
+    private const int MaxAliasLength = 128;
+
     // ── Related people (basic-info, no account) ─────────────────────────────────
 
     /// <summary>Returns people referenced on this case who are not platform users.</summary>

@@ -332,6 +332,73 @@
     }
 
     @* ── People at the property (basic info, no account) ─────────────────────── *@
+@* ── Public name (U6) ─────────────────────────────────────────────────────────
+   Only meaningful to the primary client: they're the one the public page names. *@
+@if (_isPrimaryClient)
+{
+    <div class="card mt-4">
+        <div class="card-header fw-semibold">
+            <TelerikSvgIcon Icon="@SvgIcon.Eye" /> How You're Named Publicly
+        </div>
+        <div class="card-body">
+            <div class="text-secondary small mb-2">
+                If this case is ever published, this is the name shown on the public page.
+                Your investigators always see your real name — they can't work the case otherwise.
+            </div>
+
+            <div class="d-flex gap-2 align-items-start flex-wrap">
+                <input class="form-control" style="max-width:320px;" maxlength="128"
+                       placeholder="e.g. The Miller Family" value="@_aliasDraft"
+                       @oninput="@(e => _aliasDraft = e.Value?.ToString() ?? string.Empty)" />
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                               Enabled="@(!_aliasSaving)" OnClick="SaveAliasAsync">Save</TelerikButton>
+                @if (!string.IsNullOrWhiteSpace(_alias?.ClientDisplayAlias))
+                {
+                    <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                   Enabled="@(!_aliasSaving)" OnClick="ClearAliasAsync">Clear</TelerikButton>
+                }
+            </div>
+
+            <div class="d-flex gap-1 flex-wrap mt-2">
+                <span class="small text-secondary me-1">Suggestions:</span>
+                @foreach (var s in AliasSuggestions)
+                {
+                    var suggestion = s;
+                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                   FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                   OnClick="@(() => _aliasDraft = suggestion)">@suggestion</TelerikButton>
+                }
+            </div>
+
+            @if (_alias is not null)
+            {
+                <div class="mt-3 small">
+                    @* States what the public actually sees, computed server-side — the client
+                       shouldn't have to work out whose name wins. *@
+                    @if (_alias.EffectivePublicName is { } shown)
+                    {
+                        <span class="text-secondary">Public pages currently show:</span>
+                        <strong class="ms-1">@shown</strong>
+                        @if (string.IsNullOrWhiteSpace(_alias.ClientDisplayAlias)
+                             && !string.IsNullOrWhiteSpace(_alias.OrganizationPseudonym))
+                        {
+                            <span class="d-block text-secondary">
+                                That was chosen by the group. Set your own above to replace it.
+                            </span>
+                        }
+                    }
+                    else
+                    {
+                        <span class="text-secondary">
+                            Public pages currently show no name for you at all.
+                        </span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
     <div class="card mt-4">
         <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
             <span><TelerikSvgIcon Icon="@SvgIcon.Group" /> People at the Property</span>
@@ -690,6 +757,17 @@
     private List<CaseRelatedPersonRecord> _relatedPeople = [];
     private bool _showAddRelatedPerson;
 
+    private CaseDisplayAliasRecord? _alias;
+    private string _aliasDraft = string.Empty;
+    private bool   _aliasSaving;
+
+    /// <summary>
+    /// Starting points, not a fixed list — the field stays free text. Offered because "what should
+    /// I call myself" is a harder question than it looks when someone is deciding how exposed to be.
+    /// </summary>
+    private static readonly string[] AliasSuggestions =
+        ["The homeowner", "A local family", "Anonymous", "The tenant", "A neighbour"];
+
     /// <summary>Which person is being edited; null while adding a new one.</summary>
     private Guid? _editingPersonId;
     private Guid? _newPersonPhotoFileId;
@@ -760,6 +838,7 @@
         {
             _relatedPeople = (await AdminClient.GetRelatedPeopleAsync(CaseId)).ToList();
             await LoadPersonPhotosAsync();
+            await LoadAliasAsync();
             StateHasChanged();
         }
         catch { /* silent */ }
@@ -930,6 +1009,37 @@
         await AdminClient.RemoveRelatedPersonAsync(CaseId, personId);
         _relatedPeople.RemoveAll(p => p.Id == personId);
         StateHasChanged();
+    }
+
+    private async Task LoadAliasAsync()
+    {
+        try
+        {
+            _alias = await AdminClient.GetCaseDisplayAliasAsync(CaseId);
+            _aliasDraft = _alias?.ClientDisplayAlias ?? string.Empty;
+        }
+        catch { /* the rest of the page is still useful without it */ }
+    }
+
+    private async Task SaveAliasAsync()
+    {
+        _aliasSaving = true;
+        try
+        {
+            var updated = await AdminClient.SetCaseDisplayAliasAsync(
+                CaseId, new SetCaseDisplayAliasRequest(_aliasDraft));
+            if (updated is null) { _error = "Couldn't save that name."; return; }
+            _alias = updated;
+            _aliasDraft = updated.ClientDisplayAlias ?? string.Empty;
+        }
+        catch { _error = "Couldn't save that name."; }
+        finally { _aliasSaving = false; StateHasChanged(); }
+    }
+
+    private async Task ClearAliasAsync()
+    {
+        _aliasDraft = string.Empty;
+        await SaveAliasAsync();
     }
 
     private void OpenAddPerson()

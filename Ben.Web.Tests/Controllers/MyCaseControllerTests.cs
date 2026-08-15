@@ -789,6 +789,111 @@ public class MyCaseControllerTests
         Assert.Single(list);
     }
 
+    // ── Public display alias (U6) ─────────────────────────────────────────────
+
+    private static async Task SetPseudonymAsync(
+        IDbContextFactory<BenDataContext> factory, Guid caseId, string? pseudonym)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var c = await db.Cases.FirstAsync(x => x.Id == caseId);
+        c.PublicPseudonym = pseudonym;
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task<CaseDisplayAliasRecord> SetAliasAsync(
+        MyCaseController ctrl, Guid caseId, string? alias)
+    {
+        var result = await ctrl.SetDisplayAlias(caseId, new SetCaseDisplayAliasRequest(alias), default);
+        return (CaseDisplayAliasRecord)((OkObjectResult)result.Result!).Value!;
+    }
+
+    [Fact]
+    public async Task SetDisplayAlias_StoresTheClientsChoice()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+
+        var record = await SetAliasAsync(Build(factory, clientId), caseId, "  The Miller Family  ");
+
+        Assert.Equal("The Miller Family", record.ClientDisplayAlias);
+        Assert.Equal("The Miller Family", record.EffectivePublicName);
+    }
+
+    [Fact]
+    public async Task ClientAlias_OverridesTheOrganizationsPseudonym()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        await SetPseudonymAsync(factory, caseId, "The Park Family");
+
+        var record = await SetAliasAsync(Build(factory, clientId), caseId, "Anonymous");
+
+        // The org may pick a name on a client's behalf; it cannot override one the client picked.
+        Assert.Equal("The Park Family", record.OrganizationPseudonym);
+        Assert.Equal("Anonymous", record.EffectivePublicName);
+    }
+
+    [Fact]
+    public async Task ClearingTheAlias_FallsBackToTheOrganizationsPseudonym()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        await SetPseudonymAsync(factory, caseId, "The Park Family");
+        var ctrl = Build(factory, clientId);
+        await SetAliasAsync(ctrl, caseId, "Anonymous");
+
+        var record = await SetAliasAsync(ctrl, caseId, "   ");
+
+        // Whitespace is not a choice — it clears, rather than publishing a blank name.
+        Assert.Null(record.ClientDisplayAlias);
+        Assert.Equal("The Park Family", record.EffectivePublicName);
+    }
+
+    [Fact]
+    public async Task WithNeitherAliasNorPseudonym_NoNameIsPublished()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+
+        var record = await SetAliasAsync(Build(factory, clientId), caseId, null);
+
+        // The real name is never a fallback. No name at all is the safe outcome.
+        Assert.Null(record.EffectivePublicName);
+    }
+
+    [Fact]
+    public async Task SetDisplayAlias_RejectsAnOverlongAlias()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+
+        var result = await Build(factory, clientId).SetDisplayAlias(
+            caseId, new SetCaseDisplayAliasRequest(new string('x', 129)), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task SetDisplayAlias_NotPrimaryClient_ReturnsForbid()
+    {
+        var (factory, caseId, _, _) = await SeedClientCaseAsync();
+
+        var result = await Build(factory, Guid.NewGuid()).SetDisplayAlias(
+            caseId, new SetCaseDisplayAliasRequest("Hijacked"), default);
+
+        // Naming someone else publicly is deciding their anonymity for them.
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task SettingAnAlias_DoesNotChangeWhatInvestigatorsSee()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        await SetAliasAsync(Build(factory, clientId), caseId, "Anonymous");
+
+        // The alias is public-facing only. The org-side record still carries the real client
+        // linkage — an investigator blind to who reported the case cannot work it.
+        await using var db = await factory.CreateDbContextAsync();
+        var c = await db.Cases.Include(x => x.ClientRequest).FirstAsync(x => x.Id == caseId);
+        Assert.Equal(clientId, c.ClientRequest!.AppUserId);
+        Assert.Equal("Anonymous", c.ClientDisplayAlias);
+    }
+
     // ── Witness photos + editing (U5) ─────────────────────────────────────────
 
     private static async Task<Guid> AddFileOwnedByAsync(

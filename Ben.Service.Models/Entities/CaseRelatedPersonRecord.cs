@@ -42,3 +42,18 @@ public record UpdateRelatedPersonRequest(
     bool LivesAtProperty,
     string? Notes,
     Guid? UploadFileId = null);
+
+/// <summary>
+/// A client's public-facing alias for their case, alongside the org's pseudonym and the name the
+/// public currently sees — so the UI can show the effect without re-deriving the precedence rule.
+/// </summary>
+/// <param name="ClientDisplayAlias">What the client chose, or null.</param>
+/// <param name="OrganizationPseudonym">What the org set, or null. Read-only to the client.</param>
+/// <param name="EffectivePublicName">What public pages show today; null means no name at all.</param>
+public sealed record CaseDisplayAliasRecord(
+    string? ClientDisplayAlias,
+    string? OrganizationPseudonym,
+    string? EffectivePublicName);
+
+/// <param name="DisplayAlias">Empty or whitespace clears the alias.</param>
+public sealed record SetCaseDisplayAliasRequest(string? DisplayAlias);
