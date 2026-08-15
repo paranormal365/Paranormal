@@ -5,13 +5,24 @@
 {
     <span>@(DisplayName ?? "Unknown user")</span>
 }
-else if (UserState.IsSuperAdmin && !UserState.IsImpersonating)
-{
-    <a href="/admin/users/@AppUserId">@DisplayName</a>
-}
 else
 {
-    <span>@DisplayName</span>
+    @* Avatar is opt-in per call site: most existing uses are inline in sentences and a picture
+       mid-sentence reads as clutter. Lists and threads pass ShowAvatar. *@
+    <span class="d-inline-flex align-items-center gap-1">
+        @if (ShowAvatar)
+        {
+            <UserAvatar AppUserId="@AppUserId" DisplayName="@DisplayName" Size="@AvatarSize" />
+        }
+        @if (UserState.IsSuperAdmin && !UserState.IsImpersonating)
+        {
+            <a href="/admin/users/@AppUserId">@DisplayName</a>
+        }
+        else
+        {
+            <span>@DisplayName</span>
+        }
+    </span>
 }
 
 @code {
@@ -20,4 +31,10 @@ else
 
     /// <summary>The user's display name. Required to render a link — without it, only a placeholder shows.</summary>
     [Parameter] public string? DisplayName { get; set; }
+
+    /// <summary>Show the user's picture beside the name. Off by default — see the markup.</summary>
+    [Parameter] public bool ShowAvatar { get; set; }
+
+    /// <summary>Avatar size in pixels when <see cref="ShowAvatar"/> is set.</summary>
+    [Parameter] public int AvatarSize { get; set; } = 24;
 }

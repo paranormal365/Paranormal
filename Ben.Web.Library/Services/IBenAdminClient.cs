@@ -122,6 +122,12 @@ public interface IBenAdminClient
     /// <summary>The UploadFileType new profile-photo uploads belong to.</summary>
     Task<Guid?> GetProfilePhotoFileTypeIdAsync(CancellationToken token = default);
 
+    /// <summary>
+    /// Another user's profile photo, already resolved to whichever one the caller may see.
+    /// Null when they have no visible photo — render initials rather than a broken image.
+    /// </summary>
+    Task<(byte[] Data, string ContentType)?> GetUserAvatarAsync(Guid userId, CancellationToken token = default);
+
     /// <summary>Approves or denies a file-permission request. Returns false when the API rejects it.</summary>
     Task<bool> ReviewPermissionRequestAsync(
         Guid requestId, FilePermissionRequestStatus status, string? reviewNotes, CancellationToken token = default);

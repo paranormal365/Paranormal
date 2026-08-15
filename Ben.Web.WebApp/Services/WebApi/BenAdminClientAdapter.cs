@@ -119,6 +119,14 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<Guid?> GetProfilePhotoFileTypeIdAsync(CancellationToken token = default)
         => _api.GetAsync<Guid?>("/api/me/photos/file-type", token);
 
+    public async Task<(byte[] Data, string ContentType)?> GetUserAvatarAsync(
+        Guid userId, CancellationToken token = default)
+    {
+        var result = await _api.GetBytesAsync($"/api/users/{userId}/avatar", "avatar", token);
+        // A 204 (no photo this viewer may see) comes back as empty rather than as an error.
+        return result is { } r && r.Data.Length > 0 ? (r.Data, r.ContentType) : null;
+    }
+
     public async Task<int> MarkAllMyMessagesReadAsync(CancellationToken token = default)
         => await _api.PutAsync<object?, int>("/api/me/messages/read-all", null, token);
 
