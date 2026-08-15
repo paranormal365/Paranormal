@@ -196,7 +196,18 @@ else
                             @row.Title
                             <span class="badge @StatusBadge(row.Status) ms-1">@row.Status</span>
                         </td>
-                        <td>@WhereText(row)</td>
+                        <td>
+                            @if (row.PlaceId is { } placeId)
+                            {
+                                @* The place page is where this visit sits alongside everyone
+                                   else's at the same location — the whole point of Place. *@
+                                <a href="/places/@placeId">@WhereText(row)</a>
+                            }
+                            else
+                            {
+                                @WhereText(row)
+                            }
+                        </td>
                         <td>
                             @if (row.CaseReference is not null)
                             {

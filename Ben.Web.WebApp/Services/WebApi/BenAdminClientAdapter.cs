@@ -971,6 +971,25 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         => _api.PostAsync<CreateOrgInvestigationRequest, InvestigationRecord>(
             $"/api/organizations/{orgId}/investigations", request, token);
 
+    // ── Places (Area 9) ───────────────────────────────────────────────────────
+
+    public Task<PlaceRecord?> GetPlaceAsync(Guid placeId, CancellationToken token = default)
+        => _api.GetAsync<PlaceRecord>($"/api/places/{placeId}", token);
+
+    public async Task<IReadOnlyList<PlaceInvestigationRow>> GetPlaceInvestigationsAsync(
+        Guid placeId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<PlaceInvestigationRow>>(
+            $"/api/places/{placeId}/investigations", token);
+        return result ?? [];
+    }
+
+    public Task<PlaceSummary?> GetPlaceSummaryAsync(Guid placeId, CancellationToken token = default)
+        => _api.GetAsync<PlaceSummary>($"/api/places/{placeId}/summary", token);
+
+    public Task<PublicPlaceResponse?> GetPublicPlaceAsync(Guid placeId, CancellationToken token = default)
+        => _api.GetAnonymousAsync<PublicPlaceResponse>($"/api/public/places/{placeId}", token);
+
     public async Task<IReadOnlyList<InvestigationRosterEntry>> GetInvestigationRosterAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default)
     {

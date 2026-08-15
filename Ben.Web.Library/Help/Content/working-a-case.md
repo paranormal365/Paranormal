@@ -89,3 +89,17 @@ first would mostly deter the cautious.
 Investigations at a **private residence cannot be made public**. Publishing what happened inside
 somebody's home is theirs to agree to, and there is no way to ask them yet, so the option is
 withheld rather than offered without the consent behind it.
+
+## Place pages
+
+Clicking the location on the Investigations tab opens that **place** — every visit recorded there,
+by every group, that you are allowed to see.
+
+The line at the top counts only what is visible to you. It never says how much is being withheld,
+because that would be its own way of telling you what you cannot see.
+
+Your own group's visits are listed separately from what other groups have shared, and only your own
+rows show their sharing setting: how another group chose to share something is their business.
+
+Place pages work for visitors too. Somebody who is not signed in sees only investigations that have
+been published, and nothing else.

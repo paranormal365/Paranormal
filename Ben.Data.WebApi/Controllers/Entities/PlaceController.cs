@@ -1,4 +1,5 @@
 using Ben.Data.Common.Enums;
+using Ben.Data.WebApi.Controllers.Public;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -82,6 +83,42 @@ public sealed class PlaceController : BenControllerBase
             .ToListAsync(ct);
 
         return Ok(rows);
+    }
+
+    /// <summary>
+    /// "N investigations by M groups since Y", counted over what this caller may actually see.
+    /// </summary>
+    /// <remarks>
+    /// Computed from the same filtered set as the list rather than from the raw table. A summary
+    /// that counted everything would tell a visitor how much they are not being shown, which is
+    /// its own small leak.
+    /// </remarks>
+    [HttpGet("{id:guid}/summary")]
+    public async Task<ActionResult<PlaceSummary>> GetSummary(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        if (!await db.Places.AsNoTracking().AnyAsync(p => p.Id == id, ct)) return NotFound();
+
+        var myOrgIds = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.AppUserId == userId && m.IsActive)
+            .Select(m => m.OrganizationId)
+            .ToListAsync(ct);
+        var myPlaces = await InvestigationVisibilityFilter.PlacesInvestigatedByAsync(db, myOrgIds, ct);
+
+        var visible = await db.Investigations.AsNoTracking()
+            .Where(i => i.PlaceId == id)
+            .Where(InvestigationVisibilityFilter.VisibleTo(myOrgIds, myPlaces))
+            .Select(i => new { i.OrganizationId, i.ScheduledDateTime })
+            .ToListAsync(ct);
+
+        // Same record as the public endpoint returns, so both pages phrase the history
+        // identically instead of two near-identical shapes drifting apart.
+        return Ok(new PlaceSummary(
+            visible.Count,
+            visible.Select(v => v.OrganizationId).Distinct().Count(),
+            visible.Count == 0 ? null : visible.Min(v => v.ScheduledDateTime).Year));
     }
 }
 
