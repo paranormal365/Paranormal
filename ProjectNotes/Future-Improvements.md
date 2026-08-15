@@ -3427,7 +3427,7 @@ Deferred by Ben — *"we can work on that later."*
 Found auditing Area 9's permission phase after it shipped. Neither is a bug in what was built —
 both are places where something was built halfway and the missing half is a feature, not a fix.
 
-### 82a. `CanCompleteMyFindings` has nothing to complete
+### 82a. `CanCompleteMyFindings` has nothing to complete ✅ built 2026-08-15
 
 `InvestigationAccess.ComputeFlagsAsync` computes it (attendance-based: you were there, so you have
 something to say), `OrgInvestigationRow` carries it across the wire, and the mirror in
@@ -3435,14 +3435,13 @@ something to say), `OrgInvestigationRow` carries it across the wire, and the mir
 feature to gate.** The nearest thing is the investigation's own `Summary`, which is one field for
 the whole visit and manage-gated — the opposite of what this flag describes.
 
-So either:
+**Built.** Ben chose the feature over deleting the flag. `InvestigationFinding` — one account per
+person per visit, written only by that person, revisable, withdrawable. No manager override, and
+that is the point: whether somebody turned up is a fact another person can attest to, and what they
+experienced is not. The grid shows a **Your write-up** badge on past visits you attended and have
+not written up, which is the flag finally driving something.
 
-- build it — each attendee records what *they* saw, gated on this flag, distinct from the visit's
-  summary; or
-- delete the flag, and stop shipping a promise the app cannot keep.
-
-Worth noting the flag is honest about the intent (a participant's right, not a manager's). The
-question is whether that intent is still wanted.
+Left for later: findings do not feed the case timeline, and there is no way to attach a file to one.
 
 ### 82b. The roster is only on case-bound investigations ✅ fixed 2026-08-15
 

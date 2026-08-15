@@ -255,6 +255,18 @@ else
                                            Icon="@(_openTeam == row.Id ? SvgIcon.ChevronUp : SvgIcon.User)"
                                            OnClick="@(() => ToggleTeam(row.Id))">Team</TelerikButton>
 
+                            @* The nudge CanCompleteMyFindings was computed for: you were on this
+                               visit and have not written up what you saw. Server-decided, like
+                               every other verdict on this row. *@
+                            @if (row.CanCompleteMyFindings && row.ScheduledDateTime < DateTime.UtcNow
+                                 && _openTeam != row.Id)
+                            {
+                                <span class="badge bg-info text-dark ms-1"
+                                      title="You were on this visit — write up what you saw under Team.">
+                                    Your write-up
+                                </span>
+                            }
+
                             @* Shown on the server's verdict alone. Working it out here would mean
                                two answers to one question, and the button would eventually offer
                                something the endpoint then refuses. *@

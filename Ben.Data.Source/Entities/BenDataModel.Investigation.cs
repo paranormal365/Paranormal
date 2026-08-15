@@ -109,5 +109,8 @@ namespace Ben.Data.Source.Entities
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
         public virtual ICollection<InvestigationAttendee> Attendees { get; set; } = new List<InvestigationAttendee>();
+
+        /// <summary>One account per person who was there. See <see cref="InvestigationFinding"/>.</summary>
+        public virtual ICollection<InvestigationFinding> Findings { get; set; } = new List<InvestigationFinding>();
     }
 }

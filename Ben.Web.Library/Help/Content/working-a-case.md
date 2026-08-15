@@ -90,6 +90,26 @@ on site" and "ticked off afterwards" never look like the same thing.
 
 Attendance is what puts a visit on your own map under **My Investigations**.
 
+## Writing up what you saw
+
+Everyone who was on the team files their own account, in the **What people saw** section of the
+investigation's Team panel. One each, in their own words.
+
+They are deliberately separate accounts rather than one shared write-up. Four people in a building
+at night see four different nights, and the places where two accounts disagree are usually the most
+useful part of the record — a single summary, written by whoever holds the edit right, loses them.
+
+**Only you can write yours, and only you can withdraw it.** There is no override, unlike arrival,
+where somebody else can record that you turned up. Whether you were there is something another
+person can vouch for; what you experienced is not, and an account with your name on it that you did
+not write would be worse than no account at all.
+
+You can revise it afterwards — most people write up the next morning and correct it for days after.
+A revised account is marked as revised, so somebody comparing accounts knows whether they are
+reading what you said on the night or what you say now.
+
+Everyone in the group can read all the accounts. That is the point of keeping them.
+
 ## Leading a visit
 
 The **Lead** column on the team list marks who is running this particular investigation. It is not

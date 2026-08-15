@@ -84,6 +84,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrgCalendarEventAttendee> OrgCalendarEventAttendees { get; set; }
         public virtual DbSet<Investigation> Investigations { get; set; }
         public virtual DbSet<InvestigationAttendee> InvestigationAttendees { get; set; }
+        public virtual DbSet<InvestigationFinding> InvestigationFindings { get; set; }
         public virtual DbSet<EvidenceVote> EvidenceVotes { get; set; }
         public virtual DbSet<CaseVote> CaseVotes { get; set; }
         public virtual DbSet<CaseTransferLog> CaseTransferLogs { get; set; }
@@ -1500,6 +1501,21 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<InvestigationAttendee>()
                 .Property(e => e.AssignedRole).HasMaxLength(128);
             modelBuilder.Entity<InvestigationAttendee>()
+                .HasIndex(e => new { e.InvestigationId, e.AppUserId }).IsUnique();
+
+            // ── InvestigationFinding ──────────────────────────────────────────
+            modelBuilder.Entity<InvestigationFinding>()
+                .HasOne(e => e.Investigation).WithMany(e => e.Findings)
+                .HasForeignKey(e => e.InvestigationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<InvestigationFinding>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvestigationFinding>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            // One account per person per visit. The endpoint upserts rather than inserting, and
+            // this is what stops a retry or a double-click turning into two accounts.
+            modelBuilder.Entity<InvestigationFinding>()
                 .HasIndex(e => new { e.InvestigationId, e.AppUserId }).IsUnique();
 
             // ── EvidenceVote ──────────────────────────────────────────────────

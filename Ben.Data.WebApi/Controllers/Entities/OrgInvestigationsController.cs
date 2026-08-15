@@ -374,6 +374,136 @@ public sealed class OrgInvestigationsController : BenControllerBase
         return Ok(await RosterAsync(db, id, ct));
     }
 
+    // ── Findings ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Every account filed for this investigation. Readable by any member of the group.
+    /// </summary>
+    /// <remarks>
+    /// Reading is deliberately open to the group while writing is not: comparing what four people
+    /// each saw is the reason these are separate records, and a set of accounts nobody may read is
+    /// no use to anyone.
+    /// </remarks>
+    [HttpGet("{id:guid}/findings")]
+    public async Task<ActionResult<IEnumerable<InvestigationFindingRecord>>> GetFindings(
+        Guid orgId, Guid id, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await db.Investigations.AsNoTracking()
+                .AnyAsync(i => i.Id == id && i.OrganizationId == orgId, ct))
+            return NotFound();
+
+        return Ok(await FindingsAsync(db, id, ct));
+    }
+
+    /// <summary>
+    /// Files or revises the caller's own account of the visit.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Attendees only, and only their own.</b> There is no manager override, unlike
+    /// arrival: whether somebody turned up is an observable fact another person can attest to,
+    /// while what they experienced is not. An account attributed to somebody who did not write it
+    /// would be worse than no account.</para>
+    ///
+    /// <para>Being on the team is enough — the RSVP and the attendance flag are not checked. People
+    /// write these up the next morning, often before anyone has recorded who arrived, and refusing
+    /// on that basis would block the ordinary case to enforce bookkeeping.</para>
+    ///
+    /// <para>An upsert rather than a create: one account per person per visit, and the unique index
+    /// means a double submission cannot become two.</para>
+    /// </remarks>
+    [HttpPut("{id:guid}/findings/mine")]
+    public async Task<ActionResult<InvestigationFindingRecord>> UpsertMyFinding(
+        Guid orgId, Guid id, [FromBody] UpsertFindingRequest request, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+
+        var narrative = request.Narrative?.Trim();
+        if (string.IsNullOrWhiteSpace(narrative))
+            return BadRequest("An account cannot be empty. Delete it instead if you meant to remove it.");
+
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        if (!await db.Investigations.AsNoTracking()
+                .AnyAsync(i => i.Id == id && i.OrganizationId == orgId, ct))
+            return NotFound();
+
+        // The rule CanCompleteMyFindings describes: you were on the team, so you have something to
+        // say. Not a management right — a manager who stayed at home has nothing to file.
+        if (!await db.InvestigationAttendees.AsNoTracking()
+                .AnyAsync(a => a.InvestigationId == id && a.AppUserId == userId, ct))
+            return Forbid();
+
+        var finding = await db.InvestigationFindings
+            .FirstOrDefaultAsync(f => f.InvestigationId == id && f.AppUserId == userId, ct);
+
+        if (finding is null)
+        {
+            finding = new InvestigationFinding
+            {
+                Id = Guid.NewGuid(), InvestigationId = id, AppUserId = userId,
+                Narrative = narrative,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            };
+            db.InvestigationFindings.Add(finding);
+        }
+        else
+        {
+            finding.Narrative = narrative;
+            // Stamped only on a revision, so a reader can tell a first account from a later one.
+            finding.DateUpdated = DateTime.UtcNow;
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(
+            nameof(InvestigationFinding), finding.Id,
+            new InvestigationFinding { Id = finding.Id }, finding, userId, AppSources.WebApi, ct));
+
+        return Ok((await FindingsAsync(db, id, ct)).First(f => f.AppUserId == userId));
+    }
+
+    /// <summary>Withdraws the caller's own account.</summary>
+    /// <remarks>
+    /// Only their own, for the same reason as writing. Somebody who decides they are no longer sure
+    /// of what they saw should be able to take it back rather than leave a claim standing.
+    /// </remarks>
+    [HttpDelete("{id:guid}/findings/mine")]
+    public async Task<IActionResult> DeleteMyFinding(Guid orgId, Guid id, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var finding = await db.InvestigationFindings
+            .FirstOrDefaultAsync(f => f.InvestigationId == id
+                                   && f.AppUserId == userId
+                                   && f.Investigation.OrganizationId == orgId, ct);
+        if (finding is null) return NotFound();
+
+        db.InvestigationFindings.Remove(finding);
+        await db.SaveChangesAsync(ct);
+
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(
+            nameof(InvestigationFinding), finding.Id, finding, userId, AppSources.WebApi, ct));
+
+        return NoContent();
+    }
+
+    private static async Task<List<InvestigationFindingRecord>> FindingsAsync(
+        BenDataContext db, Guid investigationId, CancellationToken ct)
+        => await db.InvestigationFindings.AsNoTracking()
+            .Where(f => f.InvestigationId == investigationId)
+            .OrderBy(f => f.DateCreated)
+            .Select(f => new InvestigationFindingRecord(
+                f.Id, f.AppUserId, f.AppUser.DisplayName, f.Narrative,
+                f.DateCreated, f.DateUpdated))
+            .ToListAsync(ct);
+
     /// <summary>
     /// The whole team for one investigation, lead first then by name.
     /// </summary>
@@ -498,6 +628,24 @@ public sealed record OverrideAttendanceRequest(bool? DidAttend, DateTime? Stated
 
 /// <summary>Whether this attendee is leading the visit. Naming one clears the previous holder.</summary>
 public sealed record SetLeadRequest(bool IsLead);
+
+/// <summary>
+/// One person's account of a visit.
+/// </summary>
+/// <remarks>
+/// <c>DateUpdated</c> is null until it is revised, which is the difference between what somebody
+/// said on the night and what they say now.
+/// </remarks>
+public sealed record InvestigationFindingRecord(
+    Guid Id,
+    Guid AppUserId,
+    string? DisplayName,
+    string Narrative,
+    DateTime DateCreated,
+    DateTime? DateUpdated);
+
+/// <summary>An account being filed or revised. Empty is refused — delete instead.</summary>
+public sealed record UpsertFindingRequest(string? Narrative);
 
 /// <summary>
 /// Schedules an investigation against an organization, with a case or without one.
