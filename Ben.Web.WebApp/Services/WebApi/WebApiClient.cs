@@ -64,6 +64,13 @@ public sealed class WebApiClient : IWebApiClient
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
     }
 
+    public async Task<bool> PostAnonymousVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = JsonContent.Create(payload) };
+        using var response = await _httpClient.SendAsync(req, token);
+        return response.IsSuccessStatusCode;
+    }
+
     public async Task<TResponse?> PutAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Put, relativeUrl);

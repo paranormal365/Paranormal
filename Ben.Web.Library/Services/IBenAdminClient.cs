@@ -1,4 +1,5 @@
 using Ben.Service.Models.Admin;
+using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
 using Ben.Service.Models.People;
 using Ben.Data.Common.Enums;
@@ -290,6 +291,41 @@ public interface IBenAdminClient
     /// Center coordinates are NOT included in results.
     /// </summary>
     Task<IReadOnlyList<OrgSearchResult>> SearchOrganizationsAsync(double lat, double lon, int maxResults = 20, CancellationToken token = default);
+
+    /// <summary>
+    /// Every organization, paged, with no location required — what the "Browse All Groups"
+    /// entry point needs. Anonymous, like the proximity search beside it.
+    /// </summary>
+    Task<OrgBrowsePage?> BrowseOrganizationsAsync(int page = 1, int pageSize = 24, CancellationToken token = default);
+
+    // ── Support tickets ───────────────────────────────────────────────────────
+
+    /// <summary>The site's published contact details, for the contact page. Anonymous.</summary>
+    Task<SiteContactInfo?> GetSiteContactAsync(CancellationToken token = default);
+
+    /// <summary>Issued when the contact form renders; proves later how long it was on screen.</summary>
+    Task<SupportFormTokenResponse?> GetSupportFormTokenAsync(CancellationToken token = default);
+
+    /// <summary>Sends a contact-form submission. Anonymous.</summary>
+    Task<SubmitSupportTicketResponse?> SubmitSupportTicketAsync(SubmitSupportTicketRequest request, CancellationToken token = default);
+
+    /// <summary>A sender's own ticket, by the token from their tracking link.</summary>
+    Task<SupportTicketPublicRecord?> GetSupportTicketByTokenAsync(Guid accessToken, CancellationToken token = default);
+
+    /// <summary>Adds the sender's own reply through their tracking link.</summary>
+    Task<bool> ReplyToSupportTicketByTokenAsync(Guid accessToken, AddSupportTicketReplyRequest request, CancellationToken token = default);
+
+    /// <summary>The staff queue, filtered and paged on the server.</summary>
+    Task<SupportTicketPage?> GetSupportTicketsAsync(SupportTicketStatus? status = null, SupportTicketTopic? topic = null, string? search = null, int page = 1, int pageSize = 25, CancellationToken token = default);
+
+    /// <summary>One ticket's full thread, internal notes included.</summary>
+    Task<IReadOnlyList<SupportTicketReplyRecord>> GetSupportTicketRepliesAsync(Guid id, CancellationToken token = default);
+
+    /// <summary>Replies to the sender, or leaves an internal note.</summary>
+    Task<bool> AddSupportTicketReplyAsync(Guid id, AddSupportTicketReplyRequest request, CancellationToken token = default);
+
+    /// <summary>Changes a ticket's status and/or assignment.</summary>
+    Task<SupportTicketAdminRecord?> UpdateSupportTicketAsync(Guid id, UpdateSupportTicketRequest request, CancellationToken token = default);
 
     // ── Organization Addresses ────────────────────────────────────────────────
 
@@ -786,6 +822,18 @@ public interface IBenAdminClient
     Task<bool> DeleteExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default);
     Task<ExperienceTypeRecord?> ApproveExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default);
 
+    /// <summary>
+    /// Rejects a group-added type: deletes it and strips it from every entry tagged with it.
+    /// The entries themselves are untouched — only the tagging goes.
+    /// </summary>
+    Task<RejectExperienceTypeResponse?> RejectExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default);
+
+    /// <summary>
+    /// Adds a type a group needs to an existing category. Live immediately and flagged for app
+    /// administrators to review. Returns the existing type when the name is already taken.
+    /// </summary>
+    Task<ExperienceTypeRecord?> AddOrgExperienceTypeAsync(Guid orgId, AddOrgExperienceTypeRequest request, CancellationToken token = default);
+
     // ── CMS File Library ──────────────────────────────────────────────────────
 
     /// <summary>Returns upload files shared with the given organization (for logo/gallery selection).</summary>
@@ -1262,6 +1310,15 @@ public sealed record UpsertExperienceTypeRequest(
     int SortOrder,
     bool IsActive);
 
+/// <summary>A group adding a missing type to an existing category.</summary>
+public sealed record AddOrgExperienceTypeRequest(
+    Guid ExperienceCategoryId,
+    string? Name,
+    string? Description);
+
+/// <summary>What a rejection removed — the type, and how many taggings went with it.</summary>
+public sealed record RejectExperienceTypeResponse(Guid ExperienceTypeId, int UsagesRemoved);
+
 public sealed record ExperienceCategoryWithTypesResponse(
     ExperienceCategoryRecord Category,
     IReadOnlyList<ExperienceTypeRecord> Types);
@@ -1288,6 +1345,26 @@ public sealed record OrgSearchResult(
     bool IsWithinRange,
     bool AcceptsClientsOutsideRange,
     Guid? ActiveLogoFileId);
+
+/// <summary>
+/// One organization in the location-free browse listing. Mirrors the WebApi record of the same
+/// name — the library cannot reference the WebApi project, so the shape is restated here.
+/// </summary>
+public sealed record OrgBrowseResult(
+    Guid OrganizationId,
+    string Name,
+    string UrlName,
+    string? AreaLabel,
+    double? RadiusMiles,
+    bool IsAcceptingClients,
+    Guid? ActiveLogoFileId);
+
+/// <summary>One page of the browse listing.</summary>
+public sealed record OrgBrowsePage(
+    IReadOnlyList<OrgBrowseResult> Items,
+    int TotalCount,
+    int Page,
+    int PageSize);
 
 // ── Phase 6: Case Transfer + Public Discovery records ─────────────────────────
 public sealed record PublicCaseListItem(

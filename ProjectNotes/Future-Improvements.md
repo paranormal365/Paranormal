@@ -3211,3 +3211,80 @@ inherited. SuperAdmin-curated is the recommendation.
    at wizard step 3. Group type answers a different question — what a group *does* — so keep them
    separate, but G5's matching could plausibly be built on experience tags already collected, with
    no new taxonomy at all.
+
+---
+
+## 79. Contact / support page for visitors ✅ Complete (2026-08-15)
+
+A page where a visitor — signed in or not — can ask for help with the site or reach a member of
+staff. Needs CAPTCHA and anti-spam. The site's contact details (PO box, phone, anything else)
+should live in the database, not in markup, so they can be corrected without a deploy.
+
+> **Shipped on `feature/support-tickets`.** Built as recommended below: the ticket is the record,
+> and email is a notification on top that is allowed to fail — so the whole thing works today with
+> SMTP unconfigured. Anti-spam is honeypot + data-protected form token + rate limits by email and
+> IP; **no CAPTCHA**, per the ordering below. The one design addition beyond the sketch is the
+> **tracking link**: an opaque token gives an anonymous sender their own thread to read and reply
+> to, which is how a staff reply reaches somebody with no account and no working mail. Contact
+> details live in `SiteSettingKeys.Seed` as predicted, with a `MultiLineKeys` set added so the
+> postal address gets a textarea. Details in `README-support-tickets.md`.
+
+### Recommendation: build the ticket, send the email as a notification on top
+
+**Build the internal ticket store, not email-only.** Three concrete reasons, all specific to this
+codebase rather than general principle:
+
+1. **The inbox already exists.** `UserMessage`/`UserMessageTo` and the notification bell already
+   deliver system messages to specific users, and item #78's taxonomy notice now uses that same
+   path to reach every SuperAdmin and Admin. A contact ticket landing there is a small addition,
+   not a new subsystem.
+2. **Email-only loses the thing you most need.** With mail alone there is no record of what was
+   asked, no state, no way to tell an answered question from a forgotten one, and no way for a
+   second admin to see that the first already replied. For a site whose whole job is keeping
+   careful records of what people report, "we'll just email it" is the wrong default.
+3. **Email is not actually finished.** `SmtpEmailService` exists (built for the sub-client invite
+   flow, item #4) but SMTP is unconfigured, and there is no `Smtp`/`Email` section in
+   `Ben.Data.WebApi/appsettings.json`. Making the contact page depend on it means the page does
+   not work until that is done — and when a message silently fails to send, nobody finds out. A
+   stored ticket is durable whether or not mail is configured.
+
+So: **the ticket is the record; email is a notification about it, and is allowed to fail.** Send
+mail when SMTP is configured, log and carry on when it is not, and never let a send failure lose
+the message.
+
+### Sketch
+
+- `SupportTicket` entity — from-name, from-email, subject, body, an enum topic
+  (Website Help / Report a Problem / Contact Staff / Other), optional `AppUserId` when signed in,
+  status (New / Open / Answered / Closed), assigned admin, timestamps, source IP.
+- `SupportTicketReply` for the thread, so an answer lives with its question.
+- `POST /api/public/support-tickets`, anonymous. On success, a `UserMessage` to every SuperAdmin
+  and Admin — the exact pattern `OrgExperienceTypeController.NotifyAppAdministratorsAsync` now
+  uses.
+- Admin page under Administration: list, filter by status, reply, close.
+- Contact details from the database (below) rendered on the same page.
+
+### Anti-spam, in the order worth building
+
+1. **Honeypot field** — a hidden input real people never fill. Free, catches most naive bots.
+2. **Rate limit by IP and by email address** — e.g. 3 per hour, 10 per day, enforced server-side.
+   .NET's built-in rate limiting middleware covers this without a dependency.
+3. **Minimum fill time** — a form submitted under ~3 seconds after render was not typed by a
+   human. Needs a signed timestamp so the check cannot be skipped client-side.
+4. **CAPTCHA last.** Prefer a privacy-respecting one (hCaptcha or Cloudflare Turnstile) over
+   reCAPTCHA, and note that it adds a third-party script and a server-side verify call — the first
+   external runtime dependency the public site would carry. Worth adding only if 1–3 prove
+   insufficient in practice, which for a site this size they may not.
+
+Signed-in users should skip the CAPTCHA entirely — the account is the rate limit.
+
+### Site contact details in the database
+
+The existing `SiteSettingKeys.Seed` mechanism (`SiteSettingsService`, admin page at
+`/admin/site-settings`) already does exactly this job: declare a key in code, edit the value in the
+UI, no deploy. Add `contact.address`, `contact.phone`, `contact.email`, `contact.hours` there
+rather than building a parallel table. A fake PO box can go in immediately and be corrected later
+from the admin page.
+
+Only caveat: site settings are single-valued strings, so a multi-line postal address wants either
+one setting per line or a settings page that renders a textarea. Worth deciding when picked up.

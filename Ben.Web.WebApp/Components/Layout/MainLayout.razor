@@ -69,9 +69,12 @@
             <div id="copyright">IsHaunted.com &copy; @DateTime.Today.Year</div>
         </AppBarSection>
         <AppBarSection>
-            @* Reachable signed out: the guides that explain how to request an investigation are
-               for people who do not have an account yet. *@
+            @* Both reachable signed out: the guides explaining how to request an investigation are
+               for people without an account, and so is the contact form. *@
             <NavLink href="/help" class="footer-link">Help</NavLink>
+        </AppBarSection>
+        <AppBarSection>
+            <NavLink href="/contact" class="footer-link">Contact</NavLink>
         </AppBarSection>
         <AppBarSpacer />
     </TelerikAppBar>
