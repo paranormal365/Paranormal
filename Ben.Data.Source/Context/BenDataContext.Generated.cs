@@ -1491,6 +1491,12 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<InvestigationAttendee>()
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            // NoAction like every other AppUser path on this branch — SQL Server rejects a second
+            // cascade route into a table it can already reach (error 1785).
+            modelBuilder.Entity<InvestigationAttendee>()
+                .HasOne(e => e.AttendanceRecordedByAppUser).WithMany()
+                .HasForeignKey(e => e.AttendanceRecordedByAppUserId)
+                .IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<InvestigationAttendee>()
                 .Property(e => e.AssignedRole).HasMaxLength(128);
             modelBuilder.Entity<InvestigationAttendee>()

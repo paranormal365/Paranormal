@@ -204,6 +204,145 @@ public sealed class OrgInvestigationsController : BenControllerBase
             _mapper.Map<InvestigationRecord>(loaded));
     }
 
+    // ── Arrival ───────────────────────────────────────────────────────────────
+
+    /// <summary>Who is on the team and who has turned up. Readable by any member.</summary>
+    [HttpGet("{id:guid}/roster")]
+    public async Task<ActionResult<IEnumerable<InvestigationRosterEntry>>> GetRoster(
+        Guid orgId, Guid id, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await db.Investigations.AsNoTracking()
+                .AnyAsync(i => i.Id == id && i.OrganizationId == orgId, ct))
+            return NotFound();
+
+        var rows = await db.InvestigationAttendees.AsNoTracking()
+            .Where(a => a.InvestigationId == id)
+            .OrderByDescending(a => a.IsLead)
+            .ThenBy(a => a.AppUser.DisplayName)
+            .Select(a => new InvestigationRosterEntry(
+                a.Id,
+                a.AppUserId,
+                a.AppUser.DisplayName,
+                a.AssignedRole,
+                a.IsLead,
+                a.Rsvp,
+                a.DidAttend,
+                a.DateArrived,
+                // Whether it was self-reported, without naming who overrode it — the roster is
+                // read by the whole team and "somebody else recorded this" is the part that
+                // matters to them.
+                a.DidAttend == true && a.AttendanceRecordedByAppUserId == null))
+            .ToListAsync(ct);
+
+        return Ok(rows);
+    }
+
+    /// <summary>
+    /// "I'm here." Records the caller's own arrival on an investigation they are on.
+    /// </summary>
+    /// <remarks>
+    /// <para>Its own endpoint rather than a field on the attendance update, because the two are
+    /// different claims: this one leaves <c>AttendanceRecordedByAppUserId</c> null, which is what
+    /// makes self-reported arrival distinguishable from a manager's later correction.</para>
+    ///
+    /// <para><c>StatedArrivalTime</c> is optional and may be in the past. Sites with no signal are
+    /// the norm, so checking in afterwards and saying when you actually got there is the ordinary
+    /// path — not an exception to apologise for. Future times are refused: that is a typo, not a
+    /// memory.</para>
+    /// </remarks>
+    [HttpPost("{id:guid}/check-in")]
+    public async Task<ActionResult<InvestigationRosterEntry>> CheckIn(
+        Guid orgId, Guid id, [FromBody] CheckInRequest request, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        if (!await db.Investigations.AsNoTracking()
+                .AnyAsync(i => i.Id == id && i.OrganizationId == orgId, ct))
+            return NotFound();
+
+        // Only someone actually on the team can say they were there. Membership of the group is
+        // not enough — otherwise anyone could add themselves to the record of any visit.
+        var attendee = await db.InvestigationAttendees
+            .FirstOrDefaultAsync(a => a.InvestigationId == id && a.AppUserId == userId, ct);
+        if (attendee is null)
+            return Forbid();
+
+        var arrivedAt = request.StatedArrivalTime ?? DateTime.UtcNow;
+        if (arrivedAt > DateTime.UtcNow.AddMinutes(5))
+            return BadRequest("That arrival time is in the future. Check the date and try again.");
+
+        attendee.DidAttend = true;
+        attendee.DateArrived = arrivedAt;
+        // Null, deliberately: see AttendanceRecordedByAppUserId. Cleared rather than left alone so
+        // that checking in after a manager marked you absent restores it to your own account.
+        attendee.AttendanceRecordedByAppUserId = null;
+
+        await db.SaveChangesAsync(ct);
+
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(
+            nameof(InvestigationAttendee), attendee.Id,
+            new InvestigationAttendee { Id = attendee.Id }, attendee, userId, AppSources.WebApi, ct));
+
+        return Ok(await ToRosterEntryAsync(db, attendee.Id, ct));
+    }
+
+    /// <summary>
+    /// Records or corrects somebody else's attendance. Stamps the caller as the source.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart to check-in, for the person who forgot, or had no signal and never got
+    /// round to it. Gated on managing the investigation, and the caller's id is written to
+    /// <c>AttendanceRecordedByAppUserId</c> so the roster can tell the two apart afterwards.
+    /// </remarks>
+    [HttpPut("{id:guid}/attendees/{attendeeId:guid}/attendance")]
+    public async Task<ActionResult<InvestigationRosterEntry>> OverrideAttendance(
+        Guid orgId, Guid id, Guid attendeeId, [FromBody] OverrideAttendanceRequest request, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var attendee = await db.InvestigationAttendees
+            .FirstOrDefaultAsync(a => a.Id == attendeeId
+                                   && a.InvestigationId == id
+                                   && a.Investigation.OrganizationId == orgId, ct);
+        if (attendee is null) return NotFound();
+
+        if (!await InvestigationAccess.CanManageAsync(
+                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct))
+            return Forbid();
+
+        attendee.DidAttend = request.DidAttend;
+        attendee.DateArrived = request.DidAttend == true ? request.StatedArrivalTime : null;
+        // Stamped even when marking someone absent: "who says so" matters just as much for that.
+        attendee.AttendanceRecordedByAppUserId = userId;
+
+        await db.SaveChangesAsync(ct);
+
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(
+            nameof(InvestigationAttendee), attendee.Id,
+            new InvestigationAttendee { Id = attendee.Id }, attendee, userId, AppSources.WebApi, ct));
+
+        return Ok(await ToRosterEntryAsync(db, attendee.Id, ct));
+    }
+
+    private static async Task<InvestigationRosterEntry> ToRosterEntryAsync(
+        BenDataContext db, Guid attendeeId, CancellationToken ct)
+        => await db.InvestigationAttendees.AsNoTracking()
+            .Where(a => a.Id == attendeeId)
+            .Select(a => new InvestigationRosterEntry(
+                a.Id, a.AppUserId, a.AppUser.DisplayName, a.AssignedRole, a.IsLead,
+                a.Rsvp, a.DidAttend, a.DateArrived,
+                a.DidAttend == true && a.AttendanceRecordedByAppUserId == null))
+            .FirstAsync(ct);
+
     /// <summary>
     /// Membership check, delegating to the shared helper rather than adding a seventh hand-copied
     /// <c>IsOrgMemberAsync</c> — the duplication a previous dedupe pass was cleaning up.
@@ -253,6 +392,38 @@ public sealed record OrgInvestigationRow(
     int AttendeeCount,
     bool CanEditRecord,
     bool CanCompleteMyFindings);
+
+/// <summary>
+/// One person on an investigation's team, and whether they turned up.
+/// </summary>
+/// <remarks>
+/// <c>SelfReported</c> is the provenance the whole check-in design exists to preserve: it says the
+/// person recorded their own arrival rather than having it recorded for them. Who did the
+/// recording is not exposed here — the roster is read by the whole team, and the part that matters
+/// to them is that it came from somewhere other than the attendee.
+/// </remarks>
+public sealed record InvestigationRosterEntry(
+    Guid AttendeeId,
+    Guid AppUserId,
+    string? DisplayName,
+    string? AssignedRole,
+    bool IsLead,
+    RsvpStatus Rsvp,
+    bool? DidAttend,
+    DateTime? DateArrived,
+    bool SelfReported);
+
+/// <summary>
+/// "I'm here." <c>StatedArrivalTime</c> null means now.
+/// </summary>
+/// <remarks>
+/// Past times are expected, not exceptional — most sites have no signal, so checking in afterwards
+/// and saying when you got there is the normal path.
+/// </remarks>
+public sealed record CheckInRequest(DateTime? StatedArrivalTime = null);
+
+/// <summary>Records or corrects somebody else's attendance. The caller is stamped as the source.</summary>
+public sealed record OverrideAttendanceRequest(bool? DidAttend, DateTime? StatedArrivalTime = null);
 
 /// <summary>
 /// Schedules an investigation against an organization, with a case or without one.

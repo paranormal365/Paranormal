@@ -51,3 +51,19 @@ The **Edit** button appears only on visits you are allowed to change. That is de
 investigation rather than by rank: the person who scheduled it, the case manager, whoever is
 leading that particular visit, group owners and administrators, and anyone the group has
 specifically granted the investigations permission.
+
+## Arriving on site
+
+The investigation's **Team** panel shows who is expected and who has turned up. A name turns green
+once their attendance is recorded, and the time beside it is when they say they got there.
+
+Press **I've arrived** to check yourself in. The time is editable, and it is meant to be: most
+sites have no signal, so checking in the next morning and correcting the time to when you actually
+got there is the normal way to use it, not a workaround. Times in the future are refused — that is
+a typo rather than a memory.
+
+Whoever manages the investigation can also record attendance for somebody who forgot. Those two
+are kept distinct: the panel marks a row **Recorded** when somebody else entered it, so "checked in
+on site" and "ticked off afterwards" never look like the same thing.
+
+Attendance is what puts a visit on your own map under **My Investigations**.

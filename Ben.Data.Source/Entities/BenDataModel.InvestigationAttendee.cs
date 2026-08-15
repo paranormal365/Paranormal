@@ -38,6 +38,34 @@ namespace Ben.Data.Source.Entities
         /// </summary>
         public bool? DidAttend { get; set; }
 
+        /// <summary>
+        /// When they got there, as stated. Null until somebody says.
+        /// </summary>
+        /// <remarks>
+        /// Separate from <see cref="DateCreated"/> — that is when the invitation was issued — and
+        /// from the moment the record was written, because those are routinely hours or days apart.
+        /// Investigations happen in cellars and woodland; checking in the following morning is the
+        /// ordinary case, not an edge one, so the arrival time is stated rather than assumed from
+        /// when the button was pressed.
+        /// </remarks>
+        public DateTime? DateArrived { get; set; }
+
+        /// <summary>
+        /// Who recorded the attendance. <b>Null means the person recorded it themselves.</b>
+        /// </summary>
+        /// <remarks>
+        /// <para>This is the provenance, and it is the reason check-in is its own endpoint rather
+        /// than a field anybody can set. "Checked in on site at 21:04" and "a manager ticked a box
+        /// the following Tuesday" are different grades of evidence, and a single boolean cannot
+        /// tell them apart.</para>
+        ///
+        /// <para>Null-means-self rather than storing the person's own id: the two states are then
+        /// impossible to confuse, and an override always names somebody other than the attendee.</para>
+        /// </remarks>
+        public Guid? AttendanceRecordedByAppUserId { get; set; }
+
+        public virtual AppUser? AttendanceRecordedByAppUser { get; set; }
+
         public DateTime DateCreated { get; set; }
         public Guid CreatedByAppUserId { get; set; }
 

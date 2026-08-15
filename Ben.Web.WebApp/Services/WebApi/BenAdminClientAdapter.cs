@@ -971,6 +971,27 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         => _api.PostAsync<CreateOrgInvestigationRequest, InvestigationRecord>(
             $"/api/organizations/{orgId}/investigations", request, token);
 
+    public async Task<IReadOnlyList<InvestigationRosterEntry>> GetInvestigationRosterAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<InvestigationRosterEntry>>(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/roster", token);
+        return result ?? [];
+    }
+
+    public Task<InvestigationRosterEntry?> CheckInToInvestigationAsync(
+        Guid orgId, Guid investigationId, DateTime? statedArrivalTime = null, CancellationToken token = default)
+        => _api.PostAsync<object, InvestigationRosterEntry>(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/check-in",
+            new { StatedArrivalTime = statedArrivalTime }, token);
+
+    public Task<InvestigationRosterEntry?> OverrideInvestigationAttendanceAsync(
+        Guid orgId, Guid investigationId, Guid attendeeId, bool? didAttend,
+        DateTime? statedArrivalTime = null, CancellationToken token = default)
+        => _api.PutAsync<object, InvestigationRosterEntry>(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/attendees/{attendeeId}/attendance",
+            new { DidAttend = didAttend, StatedArrivalTime = statedArrivalTime }, token);
+
     // ── Calendar ──────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default)

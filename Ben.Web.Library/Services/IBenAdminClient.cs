@@ -602,6 +602,25 @@ public interface IBenAdminClient
     /// </remarks>
     Task<IReadOnlyList<OrgInvestigationRow>> GetOrgInvestigationsAsync(Guid orgId, CancellationToken token = default);
 
+    /// <summary>Who is on an investigation's team and who has turned up. Any member may read it.</summary>
+    Task<IReadOnlyList<InvestigationRosterEntry>> GetInvestigationRosterAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default);
+
+    /// <summary>
+    /// Records the signed-in person's own arrival. <paramref name="statedArrivalTime"/> null means now.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="OverrideInvestigationAttendanceAsync"/> on purpose: this leaves the
+    /// record self-reported, which is the provenance the roster shows.
+    /// </remarks>
+    Task<InvestigationRosterEntry?> CheckInToInvestigationAsync(
+        Guid orgId, Guid investigationId, DateTime? statedArrivalTime = null, CancellationToken token = default);
+
+    /// <summary>Records or corrects somebody else's attendance. Needs the right to manage the visit.</summary>
+    Task<InvestigationRosterEntry?> OverrideInvestigationAttendanceAsync(
+        Guid orgId, Guid investigationId, Guid attendeeId, bool? didAttend,
+        DateTime? statedArrivalTime = null, CancellationToken token = default);
+
     /// <summary>
     /// Schedules an investigation, with a case or without one. Needs a place when there is no case.
     /// </summary>
@@ -1380,6 +1399,24 @@ public sealed record NewPlaceRequest(
     decimal? Latitude = null,
     decimal? Longitude = null,
     Ben.Data.Common.Enums.PlaceKind? Kind = null);
+
+/// <summary>
+/// One person on an investigation's team, and whether they turned up. Mirror of the WebApi record.
+/// </summary>
+/// <remarks>
+/// <c>SelfReported</c> distinguishes "checked in on site" from "somebody recorded it for them".
+/// Who did the recording is deliberately not carried — the roster is read by the whole team.
+/// </remarks>
+public sealed record InvestigationRosterEntry(
+    Guid AttendeeId,
+    Guid AppUserId,
+    string? DisplayName,
+    string? AssignedRole,
+    bool IsLead,
+    Ben.Data.Common.Enums.RsvpStatus Rsvp,
+    bool? DidAttend,
+    DateTime? DateArrived,
+    bool SelfReported);
 
 /// <summary>Schedules an investigation. With no <c>CaseId</c>, a place is required.</summary>
 public sealed record CreateOrgInvestigationRequest(

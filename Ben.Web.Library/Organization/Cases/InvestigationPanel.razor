@@ -180,6 +180,13 @@
                             }
                             @if (attendeesOpen)
                             {
+                                @* Arrival lives in its own component because it polls, and because
+                                   the same panel is wanted on the org-wide investigations view
+                                   where there is no case in the route at all. *@
+                                <div class="mt-3">
+                                    <InvestigationRoster OrgId="@OrgId" InvestigationId="@i.Id" CanManage="true" />
+                                </div>
+
                                 <div class="mt-3 border rounded p-3 bg-body-secondary">
                                     @if (_attendeeBusy && !_attendeeCache.ContainsKey(i.Id))
                                     {
