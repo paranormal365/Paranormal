@@ -173,14 +173,39 @@ The earlier "presume present when unrecorded" fudge is no longer needed: the com
 self-service, and the fallback is explicit rather than a guess. **The map filter becomes *past* and
 `DidAttend == true`**, which is the honest rule.
 
-##### One gap: "lead investigator" does not exist
+##### Standing rank and the lead of one visit are two different things
 
-`Case.CaseManagerAppUserId` is real and checkable. Organization Owner/Administrator is real and
-checkable. **There is no lead-investigator concept** — `InvestigationAttendee.AssignedRole` is free
-text, so "Lead" is a string somebody typed and nothing can be authorised against it.
+They sound alike and must not share a mechanism.
 
-Smallest honest fix: add `IsLead` to `InvestigationAttendee`. It earns its place beyond attendance —
-it is also the answer to "who is running this visit?", which the roster cannot currently express.
+| | What it is | Where it lives |
+|---|---|---|
+| **Rank** — Investigator-in-Training, Investigator, Senior Investigator | Standing in the group. Persistent, org-wide, granted by organization management. | The **existing** `OrganizationRole` system — org-defined roles with `OrganizationRolePermission.Actions`, managed in `OrgRolesManager`. Nothing new needed. |
+| **Lead of this investigation** | Delegated authority for one visit on one date. Zero, one, or several people. Granted by the case manager. | `IsLead` on `InvestigationAttendee` — new. |
+
+Conflating them fails in both directions. Treat rank as authority and every Senior Investigator can
+edit every investigation the group has ever run. Treat the lead as a rank and there is no way to put
+someone in charge of Saturday night without promoting them permanently.
+
+**The lead's authority expires on its own.** It is attached to an investigation, and an
+investigation has a date; nobody has to remember to revoke it. That is the property that makes this
+the right shape rather than a temporary org role.
+
+Note also that seniority is *descriptive* about competence, while being lead is *operational* about
+a night. A group may well want a trainee shadowing, a senior investigator attending, and a
+mid-level investigator leading — which the two-mechanism model expresses and a single one cannot.
+
+##### What is checkable today
+
+`Case.CaseManagerAppUserId` is real. Organization Owner/Administrator is real. `OrganizationRole`
+with its permission actions is real and already has an admin UI.
+
+**Only `IsLead` is missing** — `InvestigationAttendee.AssignedRole` is free text, so "Lead" is
+currently a string somebody typed that nothing can authorise against. Adding the flag also answers
+"who is running this visit?", which the roster cannot express at all today.
+
+So the override on `DidAttend`, and management of the investigation itself, resolves to:
+case manager **or** an attendee with `IsLead` **or** org management **or** a role carrying the
+relevant `OrganizationSecurityAction`.
 
 #### Attended, not merely invited — and the trap in it
 
@@ -329,7 +354,9 @@ the thing the user described.
 1. **Reciprocity** on `PlaceInvestigators` — contribute-to-see, or not?
 2. ~~Who confirms attendance~~ — **settled**: self check-in on arrival, with a case-manager /
    lead / org-management override. See "Arrival check-in" above. Leaves a smaller question: should
-   `IsLead` be added to `InvestigationAttendee` now, or deferred?
+   `IsLead` be added to `InvestigationAttendee` now, or deferred? (Rank — Investigator,
+   Senior Investigator and so on — needs nothing new; it is the existing `OrganizationRole`
+   system.)
 3. **Curation** of user-created public places — open, or SuperAdmin-approved? (`IsApproved` is
    scaffolded for the latter; leave it unused if the answer is open.)
 4. **Client consent** to publish an investigation at their property — reuse the two-key pattern from
