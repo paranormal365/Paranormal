@@ -115,6 +115,20 @@ public class UserAvatarControllerTests
         await db.SaveChangesAsync();
     }
 
+    /// <summary>Adds <paramref name="userId"/> as a co-client on the case at this org.</summary>
+    private static async Task AddCoClientAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid userId)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var caseId = await db.Cases.Where(c => c.OrganizationId == orgId).Select(c => c.Id).FirstAsync();
+        db.CaseClientAccesses.Add(new CaseClientAccess
+        {
+            Id = Guid.NewGuid(), CaseId = caseId, AppUserId = userId,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        await db.SaveChangesAsync();
+    }
+
     private static async Task AddPhotosAsync(
         IDbContextFactory<BenDataContext> factory, Guid userId,
         bool withPublic = true, bool withPrivate = true)
@@ -396,5 +410,87 @@ public class UserAvatarControllerTests
         // Regression guard: an early cut returned before ever checking the client route whenever
         // the subject had any org membership at all.
         Assert.Equal("private", await ResolveAsync(factory, viewer, subject));
+    }
+
+    // ── People on the same case are not private from each other ───────────────
+
+    [Fact]
+    public async Task ACoClient_SeesTheOriginatingClientsPrivatePhoto()
+    {
+        var factory  = CreateFactory();
+        var org      = await AddOrgAsync(factory);
+        var owner    = await AddUserAsync(factory, "owner@t.com");
+        var coClient = await AddUserAsync(factory, "spouse@t.com");
+        await AddClientCaseAsync(factory, org, owner);
+        await AddCoClientAsync(factory, org, coClient);
+        await AddPhotosAsync(factory, owner);
+
+        // They were invited onto the case by each other and already read each other's
+        // occurrences and messages. Treating them as strangers would be a fiction.
+        Assert.Equal("private", await ResolveAsync(factory, coClient, owner));
+    }
+
+    [Fact]
+    public async Task TheOriginatingClient_SeesACoClientsPrivatePhoto()
+    {
+        var factory  = CreateFactory();
+        var org      = await AddOrgAsync(factory);
+        var owner    = await AddUserAsync(factory, "owner@t.com");
+        var coClient = await AddUserAsync(factory, "spouse@t.com");
+        await AddClientCaseAsync(factory, org, owner);
+        await AddCoClientAsync(factory, org, coClient);
+        await AddPhotosAsync(factory, coClient);
+
+        // Symmetric — neither direction is privileged over the other.
+        Assert.Equal("private", await ResolveAsync(factory, owner, coClient));
+    }
+
+    [Fact]
+    public async Task TwoCoClientsOnOneCase_SeeEachOther()
+    {
+        var factory = CreateFactory();
+        var org     = await AddOrgAsync(factory);
+        var owner   = await AddUserAsync(factory, "owner@t.com");
+        var first   = await AddUserAsync(factory, "a@t.com");
+        var second  = await AddUserAsync(factory, "b@t.com");
+        await AddClientCaseAsync(factory, org, owner);
+        await AddCoClientAsync(factory, org, first);
+        await AddCoClientAsync(factory, org, second);
+        await AddPhotosAsync(factory, second);
+
+        Assert.Equal("private", await ResolveAsync(factory, first, second));
+    }
+
+    [Fact]
+    public async Task ClientsOnDifferentCases_StaySeparate()
+    {
+        var factory = CreateFactory();
+        var orgA    = await AddOrgAsync(factory);
+        var orgB    = await AddOrgAsync(factory);
+        var alice   = await AddUserAsync(factory, "alice@t.com");
+        var bob     = await AddUserAsync(factory, "bob@t.com");
+        await AddClientCaseAsync(factory, orgA, alice);
+        await AddClientCaseAsync(factory, orgB, bob);
+        await AddPhotosAsync(factory, bob);
+
+        // Being a client somewhere is not a relationship with every other client on the platform.
+        Assert.Equal("public", await ResolveAsync(factory, alice, bob));
+    }
+
+    [Fact]
+    public async Task ACoClient_StillSeesThePrivatePhotoAfterTheCaseCloses()
+    {
+        var factory  = CreateFactory();
+        var org      = await AddOrgAsync(factory);
+        var owner    = await AddUserAsync(factory, "owner@t.com");
+        var coClient = await AddUserAsync(factory, "spouse@t.com");
+        await AddClientCaseAsync(factory, org, owner, CaseStatus.Closed);
+        await AddCoClientAsync(factory, org, coClient);
+        await AddPhotosAsync(factory, owner);
+
+        // Deliberately unlike the client↔org route, which ends with the engagement. An
+        // engagement ends; two people who lived through the same events do not stop being those
+        // people when the file closes.
+        Assert.Equal("private", await ResolveAsync(factory, coClient, owner));
     }
 }

@@ -95,10 +95,56 @@ public sealed class UserAvatarController : BenControllerBase
         // returned before the later routes ran, so someone who was a member at one org and a
         // client at another was judged only by the route that happened to be checked first.
         if (viewerId == subjectId) return true;
+        if (await ShareACaseAsClientsAsync(db, viewerId, subjectId, ct)) return true;
         if (await SharesAnActiveOrgAsync(db, viewerId, subjectId, ct)) return true;
         if (await SubjectConsentsToShowClientsAsync(db, viewerId, subjectId, ct)) return true;
         if (await ClientIsEngagedWithViewersOrgAsync(db, viewerId, subjectId, ct)) return true;
         return false;
+    }
+
+    /// <summary>
+    /// Both people are clients on the same case — the originating client and a co-client, or two
+    /// co-clients.
+    /// </summary>
+    /// <remarks>
+    /// <para>No flags and no gating. People on the same case are participants in the same events:
+    /// they already read each other's occurrences and messages, and were invited onto the case by
+    /// one another. Treating them as strangers to each other would be a fiction the rest of the
+    /// product doesn't maintain.</para>
+    ///
+    /// <para>Unlike the client↔org route, this is not limited to live cases. That bound exists
+    /// because an <i>engagement</i> with an organization ends; two people who experienced the same
+    /// events remain who they are after the file closes, and they typically share a household.
+    /// If that ever needs revisiting, add the same status filter used by
+    /// <see cref="ClientIsEngagedWithViewersOrgAsync"/>.</para>
+    ///
+    /// <para>Says nothing about the org or public boundaries — those keep their own rules.</para>
+    /// </remarks>
+    private static async Task<bool> ShareACaseAsClientsAsync(
+        BenDataContext db, Guid viewerId, Guid subjectId, CancellationToken ct)
+    {
+        var viewerCaseIds = await ClientCaseIdsAsync(db, viewerId, ct);
+        if (viewerCaseIds.Count == 0) return false;
+
+        var subjectCaseIds = await ClientCaseIdsAsync(db, subjectId, ct);
+        return subjectCaseIds.Any(viewerCaseIds.Contains);
+    }
+
+    /// <summary>Cases where this user is the originating client or a co-client.</summary>
+    private static async Task<HashSet<Guid>> ClientCaseIdsAsync(
+        BenDataContext db, Guid userId, CancellationToken ct)
+    {
+        var own = await db.Cases.AsNoTracking()
+            .Where(c => c.ClientRequest != null && c.ClientRequest.AppUserId == userId)
+            .Select(c => c.Id)
+            .ToListAsync(ct);
+
+        var shared = await db.CaseClientAccesses.AsNoTracking()
+            .Where(a => a.AppUserId == userId)
+            .Select(a => a.CaseId)
+            .ToListAsync(ct);
+
+        return own.Concat(shared).ToHashSet();
     }
 
     /// <summary>

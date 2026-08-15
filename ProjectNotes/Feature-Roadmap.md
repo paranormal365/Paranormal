@@ -257,13 +257,10 @@ messages, and treating them as strangers would be a fiction. So: no consent flag
 and no photo gating *between people on the same case*. This says nothing about the org boundary or
 the public boundary, which keep their own rules.
 
-⚠ **This is currently a gap, not just a plan.** `UserAvatarController.MaySeePrivatePhotoAsync`
-has four routes — self, shared org membership, member→client (two keys), and client→org-member —
-and none of them fire when both parties are clients on the same case with no org membership
-between them. Two co-clients therefore see only each other's *public* photo today. Closing it is
-one more route in that method (shared case via `ClientRequest.AppUserId` or `CaseClientAccess`),
-plus tests; the method is already shaped as a flat list of independent routes for exactly this
-kind of addition.
+✅ **Closed 2026-08-15.** `UserAvatarController.ShareACaseAsClientsAsync` is the fifth route in
+`MaySeePrivatePhotoAsync`. Deliberately *not* limited to live cases, unlike the client↔org route:
+an engagement with an organization ends, but two people who lived through the same events don't
+stop being those people when the file closes. 5 tests, all of which fail without the route.
 
 **U3 — Avatar resolution + rendering.** New endpoint `GET /api/users/{id}/avatar` that picks which photo the *viewer* may see: private photo if (viewer shares an active org membership with the subject) OR (viewer is a client with a case at an org where the subject is a member AND that org's policy allows it AND the subject opted in) — else public photo — else null (render initials fallback). New `UserAvatar.razor` component (initials fallback, size parameter) + integrate into `UserNameLink`. Because `UserNameLink` does no lookup, add a small circuit-scoped avatar-URL cache service rather than threading file ids through every DTO. Adopt in the 4 existing `UserNameLink` sites + message threads + member lists.
 
