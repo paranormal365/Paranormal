@@ -1,0 +1,18 @@
+{
+  "format_version": "1.0.0",
+  "device": {
+    "manufacturer": "Unknown",
+    "model": "Handheld EMF"
+  },
+  "session": {
+    "started_at": "2026-08-14T20:00:00Z",
+    "trigger": {
+      "mode": "interval",
+      "interval_seconds": 60
+    }
+  },
+  "readings": [
+    { "at": "2026-08-14T20:00:00Z" },
+    { "at": "2026-08-14T20:01:00Z", "measurements": { "emf": { "value": 0.4, "unit": "uT" } } }
+  ]
+}

@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ishaunted.com/schemas/device-data-v1.schema.json",
+  "title": "IsHaunted Device Data Format v1",
+  "description": "A single capture session from one investigation device. See DeviceDataFormat-v1.md for the prose specification and rationale.",
+  "type": "object",
+  "required": ["format_version", "device", "session", "readings"],
+
+  "properties": {
+    "format_version": {
+      "description": "Semantic version of THIS format, not of the device firmware. Consumers accept any 1.x.",
+      "type": "string",
+      "pattern": "^1\\.[0-9]+\\.[0-9]+$"
+    },
+
+    "device": {
+      "type": "object",
+      "description": "What produced the readings. Identifies the instrument, not the operator.",
+      "required": ["manufacturer", "model"],
+      "properties": {
+        "manufacturer": { "type": "string", "minLength": 1 },
+        "model":        { "type": "string", "minLength": 1 },
+        "serial_number": {
+          "description": "Null when the device has none or the operator declined to record it.",
+          "type": ["string", "null"]
+        },
+        "firmware_version": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+
+    "session": {
+      "type": "object",
+      "description": "When and where this capture happened, and how readings were triggered.",
+      "required": ["started_at", "trigger"],
+      "properties": {
+        "started_at": {
+          "description": "UTC, ISO-8601 with offset. When the capture session began.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "ended_at": { "type": ["string", "null"], "format": "date-time" },
+        "device_powered_on_at": {
+          "description": "UTC. Lets a consumer judge warm-up drift on instruments that need it.",
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "battery_percent_at_start": {
+          "description": "0-100. Low battery is a known source of spurious readings on several EMF meters.",
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "location_label": {
+          "description": "Operator's own words: 'back bedroom', 'stairwell landing'.",
+          "type": ["string", "null"]
+        },
+        "property_area": {
+          "description": "Optional structured area tag, for grouping across sessions and devices.",
+          "type": ["string", "null"]
+        },
+        "timezone": {
+          "description": "IANA name of the local zone the operator was working in. Timestamps stay UTC; this is only so a consumer can render local time as the operator experienced it.",
+          "type": ["string", "null"]
+        },
+        "trigger": {
+          "type": "object",
+          "description": "How readings came to be recorded. Determines whether gaps mean 'nothing happened' or 'not sampled'.",
+          "required": ["mode"],
+          "properties": {
+            "mode": { "enum": ["interval", "event", "hybrid"] },
+            "interval_seconds": {
+              "description": "Required for interval and hybrid. The sampling period, or the heartbeat period under hybrid.",
+              "type": ["number", "null"],
+              "exclusiveMinimum": 0
+            },
+            "event_description": {
+              "description": "Required for event and hybrid. Plain language: what causes a record. 'motion detected on PIR', 'field exceeds 2.0 uT'.",
+              "type": ["string", "null"]
+            },
+            "debounce_seconds": {
+              "description": "Minimum quiet period between event records. Null means the device does not debounce.",
+              "type": ["number", "null"],
+              "minimum": 0
+            }
+          },
+          "additionalProperties": true,
+
+          "allOf": [
+            {
+              "if":   { "properties": { "mode": { "const": "interval" } }, "required": ["mode"] },
+              "then": { "required": ["interval_seconds"],
+                        "properties": { "interval_seconds": { "type": "number" } } }
+            },
+            {
+              "if":   { "properties": { "mode": { "const": "event" } }, "required": ["mode"] },
+              "then": { "required": ["event_description"],
+                        "properties": { "event_description": { "type": "string" } } }
+            },
+            {
+              "if":   { "properties": { "mode": { "const": "hybrid" } }, "required": ["mode"] },
+              "then": { "required": ["interval_seconds", "event_description"],
+                        "properties": { "interval_seconds":  { "type": "number" },
+                                        "event_description": { "type": "string" } } }
+            }
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+
+    "readings": {
+      "type": "array",
+      "description": "The records themselves, ordered oldest first. May be empty — a session where nothing triggered is still evidence.",
+      "items": { "$ref": "#/$defs/reading" }
+    }
+  },
+
+  "additionalProperties": true,
+
+  "$defs": {
+    "reading": {
+      "type": "object",
+      "description": "One record. Every field except the timestamp is optional: devices report what they can.",
+      "required": ["at"],
+      "properties": {
+        "at": {
+          "description": "UTC, ISO-8601 with offset.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "precision": {
+          "description": "Meaningful resolution of 'at'. A device stamping whole seconds must say so rather than implying millisecond accuracy it does not have.",
+          "enum": ["second", "millisecond", "microsecond", null]
+        },
+        "sequence": {
+          "description": "Device-assigned counter. Lets a consumer detect dropped records that timestamps alone would hide.",
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "triggered_by": {
+          "description": "Why this particular record exists. Under hybrid, distinguishes a heartbeat from a real event.",
+          "enum": ["interval", "event", "manual", null]
+        },
+        "measurements": {
+          "description": "Device-specific channels, keyed by channel name. The extension point — new instruments add keys here, never new top-level fields.",
+          "type": ["object", "null"],
+          "additionalProperties": { "$ref": "#/$defs/measurement" }
+        },
+        "position": { "$ref": "#/$defs/position" },
+        "motion":   { "$ref": "#/$defs/motion" },
+        "audio_ref": {
+          "description": "Companion audio for this moment, if the device captured any.",
+          "oneOf": [{ "$ref": "#/$defs/file_ref" }, { "type": "null" }]
+        },
+        "note": {
+          "description": "Operator's free-text remark attached to this record.",
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": true
+    },
+
+    "measurement": {
+      "type": "object",
+      "description": "One measured channel. Unit is required whenever a value is present — a bare number is not evidence.",
+      "properties": {
+        "value": { "type": ["number", "string", "boolean", "null"] },
+        "unit": {
+          "description": "Symbol as written: 'uT', 'degC', 'lux', 'dBA', '%'. ASCII only, so encoding can't corrupt it.",
+          "type": ["string", "null"]
+        },
+        "accuracy": {
+          "description": "Plus-or-minus, in the same unit as value.",
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "baseline": {
+          "description": "The ambient reference this device was calibrated against, same unit. Turns an absolute number into a deviation.",
+          "type": ["number", "null"]
+        },
+        "out_of_range": {
+          "description": "True when the reading hit the sensor's limit and the real value is unknown.",
+          "type": ["boolean", "null"]
+        }
+      },
+      "required": ["value"],
+      "additionalProperties": true,
+
+      "if":   { "properties": { "value": { "type": "number" } }, "required": ["value"] },
+      "then": { "required": ["unit"], "properties": { "unit": { "type": "string" } } }
+    },
+
+    "position": {
+      "type": ["object", "null"],
+      "description": "Where the device was. Indoor GPS is usually poor — accuracy_meters is how a consumer knows whether to trust it.",
+      "properties": {
+        "latitude":         { "type": ["number", "null"], "minimum": -90,  "maximum": 90 },
+        "longitude":        { "type": ["number", "null"], "minimum": -180, "maximum": 180 },
+        "elevation_meters": { "type": ["number", "null"] },
+        "accuracy_meters":  { "type": ["number", "null"], "minimum": 0 },
+        "floor": {
+          "description": "Building floor. 0 = ground, negative = below ground.",
+          "type": ["integer", "null"]
+        }
+      },
+      "additionalProperties": true
+    },
+
+    "motion": {
+      "type": ["object", "null"],
+      "description": "How the device was moving. A field spike while the meter was being swung is a different fact from one while it sat still.",
+      "properties": {
+        "heading_degrees": {
+          "description": "0-360, clockwise from true north.",
+          "type": ["number", "null"], "minimum": 0, "maximum": 360
+        },
+        "speed_mps":     { "type": ["number", "null"], "minimum": 0 },
+        "accel_x_mps2":  { "type": ["number", "null"] },
+        "accel_y_mps2":  { "type": ["number", "null"] },
+        "accel_z_mps2":  { "type": ["number", "null"] },
+        "is_stationary": {
+          "description": "Device's own judgement, when it makes one.",
+          "type": ["boolean", "null"]
+        }
+      },
+      "additionalProperties": true
+    },
+
+    "file_ref": {
+      "type": "object",
+      "description": "A companion file shipped alongside the JSON.",
+      "required": ["filename"],
+      "properties": {
+        "filename": {
+          "description": "Relative path within the delivered bundle. Never absolute, never traversing upward.",
+          "type": "string",
+          "pattern": "^[^/\\\\][^\\\\]*$",
+          "not": { "pattern": "\\.\\." }
+        },
+        "media_type":       { "type": ["string", "null"] },
+        "start_offset_seconds": {
+          "description": "Where in the file this reading's moment falls, when the file covers a span.",
+          "type": ["number", "null"], "minimum": 0
+        },
+        "duration_seconds": { "type": ["number", "null"], "minimum": 0 },
+        "sha256": {
+          "description": "Lowercase hex digest of the file, so a consumer can prove the pairing survived transit.",
+          "type": ["string", "null"],
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

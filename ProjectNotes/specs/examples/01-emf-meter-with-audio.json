@@ -1,0 +1,67 @@
+{
+  "format_version": "1.0.0",
+  "device": {
+    "manufacturer": "Tri-Field Instruments",
+    "model": "TF-200 EMF/Audio",
+    "serial_number": "TF200-04871",
+    "firmware_version": "3.2.1"
+  },
+  "session": {
+    "started_at": "2026-08-14T22:05:00Z",
+    "ended_at": "2026-08-14T22:05:12Z",
+    "device_powered_on_at": "2026-08-14T21:48:30Z",
+    "battery_percent_at_start": 88,
+    "location_label": "back bedroom, north wall",
+    "property_area": "first-floor-bedroom-2",
+    "timezone": "America/Chicago",
+    "trigger": {
+      "mode": "hybrid",
+      "interval_seconds": 5,
+      "event_description": "field exceeds 2.0 uT above the 0.3 uT baseline",
+      "debounce_seconds": 1
+    }
+  },
+  "readings": [
+    {
+      "at": "2026-08-14T22:05:00Z",
+      "precision": "second",
+      "sequence": 1,
+      "triggered_by": "interval",
+      "measurements": {
+        "emf": { "value": 0.31, "unit": "uT", "accuracy": 0.05, "baseline": 0.3 },
+        "temperature": { "value": 19.4, "unit": "degC", "accuracy": 0.5 }
+      },
+      "motion": { "is_stationary": true }
+    },
+    {
+      "at": "2026-08-14T22:05:07Z",
+      "precision": "millisecond",
+      "sequence": 2,
+      "triggered_by": "event",
+      "measurements": {
+        "emf": { "value": 4.82, "unit": "uT", "accuracy": 0.05, "baseline": 0.3 },
+        "temperature": { "value": 17.1, "unit": "degC", "accuracy": 0.5 }
+      },
+      "motion": { "is_stationary": true },
+      "audio_ref": {
+        "filename": "audio/22-05-07-spike.wav",
+        "media_type": "audio/wav",
+        "start_offset_seconds": 0,
+        "duration_seconds": 8,
+        "sha256": "9f2c1a4e6b8d0357192a4c6e8f0b2d4a6c8e0f1a3b5c7d9e1f2a3b4c5d6e7f80"
+      },
+      "note": "Sharp rise then decay over about three seconds. Nobody within two metres."
+    },
+    {
+      "at": "2026-08-14T22:05:12Z",
+      "precision": "second",
+      "sequence": 3,
+      "triggered_by": "interval",
+      "measurements": {
+        "emf": { "value": 0.34, "unit": "uT", "accuracy": 0.05, "baseline": 0.3 },
+        "temperature": { "value": 19.2, "unit": "degC", "accuracy": 0.5 }
+      },
+      "motion": { "is_stationary": true }
+    }
+  ]
+}
