@@ -3214,11 +3214,20 @@ inherited. SuperAdmin-curated is the recommendation.
 
 ---
 
-## 79. Contact / support page for visitors (requested 2026-08-15)
+## 79. Contact / support page for visitors ✅ Complete (2026-08-15)
 
 A page where a visitor — signed in or not — can ask for help with the site or reach a member of
 staff. Needs CAPTCHA and anti-spam. The site's contact details (PO box, phone, anything else)
 should live in the database, not in markup, so they can be corrected without a deploy.
+
+> **Shipped on `feature/support-tickets`.** Built as recommended below: the ticket is the record,
+> and email is a notification on top that is allowed to fail — so the whole thing works today with
+> SMTP unconfigured. Anti-spam is honeypot + data-protected form token + rate limits by email and
+> IP; **no CAPTCHA**, per the ordering below. The one design addition beyond the sketch is the
+> **tracking link**: an opaque token gives an anonymous sender their own thread to read and reply
+> to, which is how a staff reply reaches somebody with no account and no working mail. Contact
+> details live in `SiteSettingKeys.Seed` as predicted, with a `MultiLineKeys` set added so the
+> postal address gets a textarea. Details in `README-support-tickets.md`.
 
 ### Recommendation: build the ticket, send the email as a notification on top
 
