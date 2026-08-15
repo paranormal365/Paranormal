@@ -236,10 +236,12 @@ someone already has. Applies to the private slot in particular — a candid take
 exactly the kind of image you'd share with colleagues and not the public page. Notes for whoever
 builds it:
 
-- Two implementations, and the cheap one covers most of the value: `<input type="file"
-  accept="image/*" capture="user">` hands off to the native camera app on phones and needs no new
-  permissions plumbing. A live in-page preview (`getUserMedia` → `<video>` → `<canvas>` →
-  `toBlob`) is the nicer desktop experience but is a real chunk of JS interop.
+- **DECIDED: use the native camera where the device offers it.** `<input type="file"
+  accept="image/*" capture="user">` hands off to the phone's own camera app — no permissions
+  plumbing, no JS interop, and the user gets the camera UI they already know. The in-page
+  `getUserMedia` → `<video>` → `<canvas>` → `toBlob` route is only worth building if desktop
+  capture turns out to matter, since on desktop the `capture` attribute is ignored and the control
+  falls back to a plain file picker. Start native; treat getUserMedia as a later add, not phase one.
 - `getUserMedia` is **secure-context only** — it works on `localhost` but silently fails over plain
   HTTP to a LAN address, so testing from a phone against the dev server needs HTTPS or a tunnel.
 - Output is a `Blob`/`byte[]`, so it can go through the existing upload endpoint unchanged; the
