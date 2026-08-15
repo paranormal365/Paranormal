@@ -416,8 +416,10 @@
         _recurrenceChoice = e.Value?.ToString() ?? RecurrenceNone;
 
         // Custom keeps whatever is already typed; every other choice owns the rule outright.
+        // Empty string rather than null: the textbox is bound to this, and "no recurrence" is an
+        // empty box. Save turns empty back into null.
         if (_recurrenceChoice != RecurrenceCustom)
-            _form.RecurrenceRule = RecurrenceRuleFor(_recurrenceChoice, _form.Start);
+            _form.RecurrenceRule = RecurrenceRuleFor(_recurrenceChoice, _form.Start) ?? "";
     }
     private List<EventTypeOption> _eventTypeOptions = [new(null, "(No type)")];
 

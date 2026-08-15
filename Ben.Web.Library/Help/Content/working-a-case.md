@@ -52,6 +52,26 @@ investigation rather than by rank: the person who scheduled it, the case manager
 leading that particular visit, group owners and administrators, and anyone the group has
 specifically granted the investigations permission.
 
+## Scheduling a visit with no case
+
+**Schedule an investigation** on the group's Investigations tab books a visit that belongs to no
+client case — a landmark, a public building, or the group's own outing. Everything else about it
+works the same way: it appears on the map, the team can check in, and the findings are shared under
+the same rules.
+
+Describe where it is, and the form will tell you if the system already knows the place:
+
+> This place may already be on file.
+
+**Use this place** attaches the visit to the existing record, which is what puts your visit on the
+same page as everyone else's work at that location. If it is genuinely somewhere new — a different
+flat in the same building, a different cabin on the same site — carry on typing and a new place is
+created. The suggestion is only ever offered; nothing is merged behind your back.
+
+A place is only suggested when the address matches **and** it is within about a tenth of a mile.
+Both have to agree, because an address alone cannot tell two flats apart and a map position alone
+would suggest the house next door.
+
 ## Arriving on site
 
 The investigation's **Team** panel shows who is expected and who has turned up. A name turns green
@@ -89,3 +109,17 @@ first would mostly deter the cautious.
 Investigations at a **private residence cannot be made public**. Publishing what happened inside
 somebody's home is theirs to agree to, and there is no way to ask them yet, so the option is
 withheld rather than offered without the consent behind it.
+
+## Place pages
+
+Clicking the location on the Investigations tab opens that **place** — every visit recorded there,
+by every group, that you are allowed to see.
+
+The line at the top counts only what is visible to you. It never says how much is being withheld,
+because that would be its own way of telling you what you cannot see.
+
+Your own group's visits are listed separately from what other groups have shared, and only your own
+rows show their sharing setting: how another group chose to share something is their business.
+
+Place pages work for visitors too. Somebody who is not signed in sees only investigations that have
+been published, and nothing else.

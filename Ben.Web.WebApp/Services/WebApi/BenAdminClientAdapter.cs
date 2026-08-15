@@ -971,6 +971,51 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
         => _api.PostAsync<CreateOrgInvestigationRequest, InvestigationRecord>(
             $"/api/organizations/{orgId}/investigations", request, token);
 
+    // ── Places (Area 9) ───────────────────────────────────────────────────────
+
+    public Task<PlaceRecord?> GetPlaceAsync(Guid placeId, CancellationToken token = default)
+        => _api.GetAsync<PlaceRecord>($"/api/places/{placeId}", token);
+
+    public async Task<IReadOnlyList<PlaceInvestigationRow>> GetPlaceInvestigationsAsync(
+        Guid placeId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<PlaceInvestigationRow>>(
+            $"/api/places/{placeId}/investigations", token);
+        return result ?? [];
+    }
+
+    public Task<PlaceSummary?> GetPlaceSummaryAsync(Guid placeId, CancellationToken token = default)
+        => _api.GetAsync<PlaceSummary>($"/api/places/{placeId}/summary", token);
+
+    public async Task<IReadOnlyList<PlaceCandidate>> FindPlaceCandidatesAsync(
+        string? street, string? city, string? state, string? zip, string? name,
+        decimal? latitude, decimal? longitude, CancellationToken token = default)
+    {
+        var query = new List<string>();
+        void Add(string key, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                query.Add($"{key}={Uri.EscapeDataString(value)}");
+        }
+
+        Add("street", street);
+        Add("city", city);
+        Add("state", state);
+        Add("zip", zip);
+        Add("name", name);
+        // Invariant culture on purpose: a decimal formatted under a comma-decimal locale would
+        // arrive as a different number, and this one is compared against a tenth of a mile.
+        Add("latitude", latitude?.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Add("longitude", longitude?.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        var result = await _api.GetAsync<IReadOnlyList<PlaceCandidate>>(
+            $"/api/places/candidates?{string.Join("&", query)}", token);
+        return result ?? [];
+    }
+
+    public Task<PublicPlaceResponse?> GetPublicPlaceAsync(Guid placeId, CancellationToken token = default)
+        => _api.GetAnonymousAsync<PublicPlaceResponse>($"/api/public/places/{placeId}", token);
+
     public async Task<IReadOnlyList<InvestigationRosterEntry>> GetInvestigationRosterAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default)
     {

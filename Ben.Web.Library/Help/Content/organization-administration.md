@@ -31,6 +31,34 @@ has decided its people stay unidentified to clients.
 | Member | Works cases and attends investigations. |
 | Viewer | Reads without changing anything. |
 
+## The Investigations tab
+
+Every visit the group has run, mapped and listed, including ones that belong to no client case.
+It is visible to every member, not only administrators — knowing where the group has worked is
+ordinary team knowledge, not an administrative secret.
+
+**Schedule an investigation** books a visit with no case behind it. What the group finds there is
+shared under the same rules as any other investigation.
+
+## Who can change an investigation
+
+Being a member is enough to *read* an investigation and to answer for yourself — your own RSVP and
+your own arrival. Changing the record itself is narrower. Any one of these is enough:
+
+- whoever scheduled it
+- the case manager, for a visit attached to a case
+- whoever is leading that particular visit
+- group owners and administrators
+- anyone the group has granted the **Investigation** permission under **Roles**
+
+That last one is the lever you have as an administrator. Grant a role the *Update* action on
+**Investigation**, give somebody that role, and they can edit any of the group's investigations
+without being made an administrator of everything else.
+
+**Leading a visit is not a rank.** It is set per investigation, on the team list, and it ends with
+that visit. Somebody senior enough to lead every visit is better served by the permission above;
+somebody leading one Saturday is better served by the lead flag, which stops mattering on Sunday.
+
 ## Incoming requests
 
 Client requests arrive under the group's **Requests**. Mark one as under review while you decide.

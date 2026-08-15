@@ -17,7 +17,20 @@
             Everywhere this group has worked, including visits with no client case.
         </p>
     </div>
+    <div class="d-flex align-items-center gap-1">
+        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Icon="@SvgIcon.Plus"
+                       OnClick="@(() => _creating = true)">Schedule an investigation</TelerikButton>
+        <HelpLink Slug="working-a-case" Anchor="scheduling-a-visit-with-no-case" />
+    </div>
 </div>
+
+@if (_creating)
+{
+    <NewInvestigationWindow OrgId="@OrgId"
+                            OnCreated="@LoadAsync"
+                            OnClosed="@(() => _creating = false)" />
+}
 
 @if (_error is not null)
 {
@@ -33,8 +46,7 @@ else if (_rows.Count == 0)
     <div class="card">
         <div class="card-body text-center py-5">
             <p class="text-secondary mb-0">
-                No investigations yet. They appear here once the group schedules one, from a case
-                or on its own.
+                No investigations yet. Schedule one above, or start it from a case.
             </p>
         </div>
     </div>
@@ -102,6 +114,7 @@ else
     private List<OrgInvestigationRow> _unplaceable = [];
 
     private bool _loading = true;
+    private bool _creating;
     private string? _error;
     private Guid _loadedForOrg;
 
@@ -196,7 +209,18 @@ else
                             @row.Title
                             <span class="badge @StatusBadge(row.Status) ms-1">@row.Status</span>
                         </td>
-                        <td>@WhereText(row)</td>
+                        <td>
+                            @if (row.PlaceId is { } placeId)
+                            {
+                                @* The place page is where this visit sits alongside everyone
+                                   else's at the same location — the whole point of Place. *@
+                                <a href="/places/@placeId">@WhereText(row)</a>
+                            }
+                            else
+                            {
+                                @WhereText(row)
+                            }
+                        </td>
                         <td>
                             @if (row.CaseReference is not null)
                             {

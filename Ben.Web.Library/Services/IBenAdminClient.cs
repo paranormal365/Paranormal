@@ -602,6 +602,43 @@ public interface IBenAdminClient
     /// </remarks>
     Task<IReadOnlyList<OrgInvestigationRow>> GetOrgInvestigationsAsync(Guid orgId, CancellationToken token = default);
 
+    // ── Places (Area 9) ───────────────────────────────────────────────────────
+
+    /// <summary>One place, for the place page header and map.</summary>
+    Task<PlaceRecord?> GetPlaceAsync(Guid placeId, CancellationToken token = default);
+
+    /// <summary>
+    /// Investigations at a place that the signed-in caller may see — their own group's, anything
+    /// public, and anything shared with groups who have also investigated there.
+    /// </summary>
+    Task<IReadOnlyList<PlaceInvestigationRow>> GetPlaceInvestigationsAsync(
+        Guid placeId, CancellationToken token = default);
+
+    /// <summary>"N investigations by M groups since Y", counted over what this caller may see.</summary>
+    Task<PlaceSummary?> GetPlaceSummaryAsync(Guid placeId, CancellationToken token = default);
+
+    /// <summary>
+    /// Places that are probably the one being typed in — "did you mean this?" before a duplicate
+    /// exists.
+    /// </summary>
+    /// <remarks>
+    /// Read-only. The server decides what counts as a probable match (same address, within a tenth
+    /// of a mile); the caller shows the answer and the person picks. Returns nothing when there is
+    /// neither an address nor a name to go on.
+    /// </remarks>
+    Task<IReadOnlyList<PlaceCandidate>> FindPlaceCandidatesAsync(
+        string? street, string? city, string? state, string? zip, string? name,
+        decimal? latitude, decimal? longitude, CancellationToken token = default);
+
+    /// <summary>
+    /// The visitor's view: the place plus only what has been published about it.
+    /// </summary>
+    /// <remarks>
+    /// Anonymous, so the place page works signed-out. Never returns anything a signed-in call
+    /// would have hidden — both go through the same server-side predicate.
+    /// </remarks>
+    Task<PublicPlaceResponse?> GetPublicPlaceAsync(Guid placeId, CancellationToken token = default);
+
     /// <summary>Who is on an investigation's team and who has turned up. Any member may read it.</summary>
     Task<IReadOnlyList<InvestigationRosterEntry>> GetInvestigationRosterAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default);
@@ -1354,6 +1391,67 @@ public sealed record AttendedInvestigationItem(
     decimal? Longitude,
     string? GeocodeNote,
     bool WasLead);
+
+// ── Place records (Area 9) ────────────────────────────────────────────────────
+// Mirrors of the WebApi records in PlaceController.cs / Public/PublicPlaceController.cs.
+
+public sealed record PlaceRecord(
+    Guid Id,
+    string? Name,
+    string? StreetAddress1,
+    string? City,
+    string? State,
+    string? ZipCode,
+    string? Country,
+    decimal? Latitude,
+    decimal? Longitude,
+    string? GeocodeNote,
+    Ben.Data.Common.Enums.PlaceKind Kind);
+
+/// <summary><c>IsMine</c> lets the page separate our own visits from what others have shared.</summary>
+public sealed record PlaceInvestigationRow(
+    Guid Id,
+    string Title,
+    DateTime ScheduledDateTime,
+    Ben.Data.Common.Enums.InvestigationStatus Status,
+    Ben.Data.Common.Enums.InvestigationVisibility Visibility,
+    Guid OrganizationId,
+    string OrganizationName,
+    bool IsMine);
+
+/// <summary><c>Since</c> is null when nothing is visible, so the phrase can be omitted entirely.</summary>
+public sealed record PlaceSummary(int InvestigationCount, int OrganizationCount, int? Since);
+
+/// <summary>
+/// A place that might be the one somebody is about to create.
+/// </summary>
+/// <remarks>
+/// <c>DistanceMiles</c> is null when either side has no coordinates — unknown, not zero, so a page
+/// must not print it as "0 miles away". <c>InvestigationCount</c> is what tells an established
+/// place from a stray row.
+/// </remarks>
+public sealed record PlaceCandidate(
+    Guid Id,
+    string? Name,
+    string? StreetAddress1,
+    string? City,
+    string? State,
+    Ben.Data.Common.Enums.PlaceKind Kind,
+    double? DistanceMiles,
+    int InvestigationCount);
+
+public sealed record PublicPlaceInvestigationRow(
+    Guid Id,
+    string Title,
+    DateTime ScheduledDateTime,
+    Ben.Data.Common.Enums.InvestigationStatus Status,
+    string OrganizationName,
+    string OrganizationUrlName);
+
+public sealed record PublicPlaceResponse(
+    PlaceRecord Place,
+    IReadOnlyList<PublicPlaceInvestigationRow> Investigations,
+    PlaceSummary Summary);
 
 // ── Org-wide investigation records (Area 9) ───────────────────────────────────
 // Mirrors of the WebApi records in OrgInvestigationsController.cs — this library cannot reference

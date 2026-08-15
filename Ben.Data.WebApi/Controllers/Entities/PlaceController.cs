@@ -1,4 +1,5 @@
 using Ben.Data.Common.Enums;
+using Ben.Data.WebApi.Controllers.Public;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -83,7 +84,127 @@ public sealed class PlaceController : BenControllerBase
 
         return Ok(rows);
     }
+
+    /// <summary>
+    /// Places that are probably the one being described — "did you mean this?" before a second row
+    /// exists.
+    /// </summary>
+    /// <remarks>
+    /// <para>Reads only. It never creates, merges or alters anything; the caller is offered
+    /// candidates and decides. Offering a match is undone by ignoring it, whereas applying one is
+    /// not, and only the person entering the place knows whether it is really the same building.</para>
+    ///
+    /// <para>The rule lives in <see cref="PlaceMatcher"/> — the same address <i>and</i> within a
+    /// tenth of a mile. See the design note in <c>ProjectNotes/specs</c> for why the conjunction.</para>
+    ///
+    /// <para>Candidates are filtered in memory after a coarse city/state narrowing rather than in
+    /// SQL, because the normalisation and the distance maths are not things EF can translate. The
+    /// narrowing keeps that from meaning "load every place".</para>
+    /// </remarks>
+    [HttpGet("candidates")]
+    public async Task<ActionResult<IEnumerable<PlaceCandidate>>> FindCandidates(
+        [FromQuery] string? street,
+        [FromQuery] string? city,
+        [FromQuery] string? state,
+        [FromQuery] string? zip,
+        [FromQuery] string? name,
+        [FromQuery] decimal? latitude,
+        [FromQuery] decimal? longitude,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(street) && string.IsNullOrWhiteSpace(name))
+            return Ok(Array.Empty<PlaceCandidate>());
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var query = db.Places.AsNoTracking();
+
+        // Coarse narrowing only — the real decision happens below. Skipped when no city is given
+        // so that a landmark with coordinates and a name still finds its twin.
+        if (!string.IsNullOrWhiteSpace(city))
+            query = query.Where(p => p.City == null || p.City == city);
+
+        var nearby = await query.ToListAsync(ct);
+
+        var matches = nearby
+            .Where(p => PlaceMatcher.IsProbableMatch(p, street, city, state, zip, name, latitude, longitude))
+            .Select(p => new PlaceCandidate(
+                p.Id,
+                p.Name,
+                p.StreetAddress1,
+                p.City,
+                p.State,
+                p.Kind,
+                DistanceMiles(p, latitude, longitude),
+                // Counted so the caller can tell an established place from a stray row, which is
+                // usually the difference between "yes, that one" and "no, mine is new".
+                db.Investigations.Count(i => i.PlaceId == p.Id)))
+            .OrderBy(c => c.DistanceMiles ?? double.MaxValue)
+            .ToList();
+
+        return Ok(matches);
+    }
+
+    private static double? DistanceMiles(Place place, decimal? latitude, decimal? longitude)
+        => place.Latitude is null || place.Longitude is null || latitude is null || longitude is null
+            ? null
+            : PlaceMatcher.DistanceMiles(
+                (double)place.Latitude.Value, (double)place.Longitude.Value,
+                (double)latitude.Value, (double)longitude.Value);
+
+    /// <summary>
+    /// "N investigations by M groups since Y", counted over what this caller may actually see.
+    /// </summary>
+    /// <remarks>
+    /// Computed from the same filtered set as the list rather than from the raw table. A summary
+    /// that counted everything would tell a visitor how much they are not being shown, which is
+    /// its own small leak.
+    /// </remarks>
+    [HttpGet("{id:guid}/summary")]
+    public async Task<ActionResult<PlaceSummary>> GetSummary(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        if (!await db.Places.AsNoTracking().AnyAsync(p => p.Id == id, ct)) return NotFound();
+
+        var myOrgIds = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.AppUserId == userId && m.IsActive)
+            .Select(m => m.OrganizationId)
+            .ToListAsync(ct);
+        var myPlaces = await InvestigationVisibilityFilter.PlacesInvestigatedByAsync(db, myOrgIds, ct);
+
+        var visible = await db.Investigations.AsNoTracking()
+            .Where(i => i.PlaceId == id)
+            .Where(InvestigationVisibilityFilter.VisibleTo(myOrgIds, myPlaces))
+            .Select(i => new { i.OrganizationId, i.ScheduledDateTime })
+            .ToListAsync(ct);
+
+        // Same record as the public endpoint returns, so both pages phrase the history
+        // identically instead of two near-identical shapes drifting apart.
+        return Ok(new PlaceSummary(
+            visible.Count,
+            visible.Select(v => v.OrganizationId).Distinct().Count(),
+            visible.Count == 0 ? null : visible.Min(v => v.ScheduledDateTime).Year));
+    }
 }
+
+/// <summary>
+/// A place that might be the one somebody is about to create.
+/// </summary>
+/// <remarks>
+/// <c>DistanceMiles</c> is null when either side has no coordinates — unknown, not zero.
+/// <c>InvestigationCount</c> is there so a caller can tell an established place from a stray row.
+/// </remarks>
+public sealed record PlaceCandidate(
+    Guid Id,
+    string? Name,
+    string? StreetAddress1,
+    string? City,
+    string? State,
+    PlaceKind Kind,
+    double? DistanceMiles,
+    int InvestigationCount);
 
 /// <summary>A place as the place page shows it.</summary>
 public sealed record PlaceRecord(
