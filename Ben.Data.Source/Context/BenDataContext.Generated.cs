@@ -18,6 +18,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UserNoteType> UserNoteTypes { get; set; }
         public virtual DbSet<AppUserPhoto> AppUserPhotos { get; set; }
         public virtual DbSet<SiteSetting> SiteSettings { get; set; }
+        public virtual DbSet<VideoAsset> VideoAssets { get; set; }
         public virtual DbSet<UserAddress> UserAddresses { get; set; }
         public virtual DbSet<UserEmail> UserEmails { get; set; }
         public virtual DbSet<UserPhone> UserPhones { get; set; }
@@ -398,6 +399,30 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrganizationPage>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── VideoAsset ───────────────────────────────────────────────────
+            // NoAction on both file FKs: deleting a file must not silently delete the catalog
+            // entry that projects reference by id. Retire it with IsActive instead.
+            modelBuilder.Entity<VideoAsset>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VideoAsset>()
+                .HasOne(e => e.ThumbnailUploadFile).WithMany()
+                .HasForeignKey(e => e.ThumbnailUploadFileId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VideoAsset>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VideoAsset>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VideoAsset>().Property(e => e.Name).HasMaxLength(200).IsRequired();
+            modelBuilder.Entity<VideoAsset>().Property(e => e.Description).HasMaxLength(1000);
+            modelBuilder.Entity<VideoAsset>().Property(e => e.Category).HasMaxLength(100);
+            modelBuilder.Entity<VideoAsset>().Property(e => e.Tags).HasMaxLength(500);
+            modelBuilder.Entity<VideoAsset>().Property(e => e.PresetColors).HasMaxLength(500);
+            modelBuilder.Entity<VideoAsset>().Property(e => e.ContentHash).HasMaxLength(64).IsRequired();
+            // The catalog is read in full on every editor sync — index the filter it uses.
+            modelBuilder.Entity<VideoAsset>().HasIndex(e => new { e.IsActive, e.SortOrder });
 
             // ── SiteSetting ──────────────────────────────────────────────────
             modelBuilder.Entity<SiteSetting>()
