@@ -35,3 +35,16 @@ has decided its people stay unidentified to clients.
 
 Client requests arrive under the group's **Requests**. Mark one as under review while you decide.
 Declining tells the client, and lets them send it elsewhere without rewriting it.
+
+## Calendar event types
+
+Under **Settings**, *Calendar Event Types* is the list the calendar's **Type** dropdown offers —
+Investigation, Meeting, Training, whatever the group actually does. A group with no types can
+still create events; the events simply have no type.
+
+Each type carries a name, an optional colour and icon, and a sort order that decides where it sits
+in the dropdown. Only owners and administrators can change the list.
+
+Clear **Active** to retire a type. It disappears from the dropdown for new events but stays on the
+events that already use it — which is almost always what you want. Deleting one removes it from
+those events too, leaving their date and title untouched.

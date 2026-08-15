@@ -134,6 +134,65 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public async Task<List<PendingPermissionRequestRecord>> GetPendingPermissionRequestsForMeAsync(CancellationToken token = default)
         => await _api.GetAsync<List<PendingPermissionRequestRecord>>("/api/me/permission-requests/pending", token) ?? [];
 
+    // ── My contact info ────────────────────────────────────────────────────────
+
+    public async Task<List<MyEmailRecord>> GetMyEmailsAsync(CancellationToken token = default)
+        => await _api.GetAsync<List<MyEmailRecord>>("/api/me/emails", token) ?? [];
+
+    public Task<MyEmailRecord?> CreateMyEmailAsync(UpsertMyEmailRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertMyEmailRequest, MyEmailRecord>("/api/me/emails", request, token);
+
+    public Task<MyEmailRecord?> UpdateMyEmailAsync(Guid id, UpsertMyEmailRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertMyEmailRequest, MyEmailRecord>($"/api/me/emails/{id}", request, token);
+
+    public Task<bool> DeleteMyEmailAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/me/emails/{id}", token);
+
+    public Task<SendValidationResponse?> SendMyEmailValidationAsync(Guid id, CancellationToken token = default)
+        => _api.PostAsync<object?, SendValidationResponse>($"/api/me/emails/{id}/send-validation", null, token);
+
+    public async Task<List<MyPhoneRecord>> GetMyPhonesAsync(CancellationToken token = default)
+        => await _api.GetAsync<List<MyPhoneRecord>>("/api/me/phones", token) ?? [];
+
+    public Task<MyPhoneRecord?> CreateMyPhoneAsync(UpsertMyPhoneRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertMyPhoneRequest, MyPhoneRecord>("/api/me/phones", request, token);
+
+    public Task<MyPhoneRecord?> UpdateMyPhoneAsync(Guid id, UpsertMyPhoneRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertMyPhoneRequest, MyPhoneRecord>($"/api/me/phones/{id}", request, token);
+
+    public Task<bool> DeleteMyPhoneAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/me/phones/{id}", token);
+
+    public async Task<List<MyAddressRecord>> GetMyAddressesAsync(CancellationToken token = default)
+        => await _api.GetAsync<List<MyAddressRecord>>("/api/me/addresses", token) ?? [];
+
+    public Task<MyAddressRecord?> CreateMyAddressAsync(UpsertMyAddressRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertMyAddressRequest, MyAddressRecord>("/api/me/addresses", request, token);
+
+    public Task<MyAddressRecord?> UpdateMyAddressAsync(Guid id, UpsertMyAddressRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertMyAddressRequest, MyAddressRecord>($"/api/me/addresses/{id}", request, token);
+
+    public Task<bool> DeleteMyAddressAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/me/addresses/{id}", token);
+
+    public async Task<List<MyLinkRecord>> GetMyLinksAsync(CancellationToken token = default)
+        => await _api.GetAsync<List<MyLinkRecord>>("/api/me/links", token) ?? [];
+
+    public Task<MyLinkRecord?> CreateMyLinkAsync(UpsertMyLinkRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertMyLinkRequest, MyLinkRecord>("/api/me/links", request, token);
+
+    public Task<MyLinkRecord?> UpdateMyLinkAsync(Guid id, UpsertMyLinkRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertMyLinkRequest, MyLinkRecord>($"/api/me/links/{id}", request, token);
+
+    public Task<bool> DeleteMyLinkAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/me/links/{id}", token);
+
+    public Task<EmailValidationInfoRecord?> GetEmailValidationInfoAsync(string token, CancellationToken cancellationToken = default)
+        => _api.GetAnonymousAsync<EmailValidationInfoRecord>($"/api/public/email-validation/{Uri.EscapeDataString(token)}", cancellationToken);
+
+    public Task<bool> ConfirmEmailValidationAsync(string token, CancellationToken cancellationToken = default)
+        => _api.PostAnonymousVoidAsync<object?>($"/api/public/email-validation/{Uri.EscapeDataString(token)}", null, cancellationToken);
+
     public async Task<bool> ReviewPermissionRequestAsync(
         Guid requestId, FilePermissionRequestStatus status, string? reviewNotes, CancellationToken token = default)
         => await _api.PutAsync<ReviewPermissionRequestRequest, UploadFilePermissionRequestResponse>(

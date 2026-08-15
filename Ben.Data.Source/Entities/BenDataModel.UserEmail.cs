@@ -14,5 +14,12 @@ namespace Ben.Data.Source.Entities
     public partial class UserEmail : IAuditableEntity
     {
         public Guid Id { get; set; }
+
+        /// <summary>
+        /// When a validation link was last issued. Null until the first send. Used to throttle
+        /// resend requests and to expire a token that was never redeemed — nothing else on this
+        /// row records when a token was issued, only the token itself.
+        /// </summary>
+        public DateTime? DateValidationSent { get; set; }
     }
 }

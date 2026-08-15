@@ -1,12 +1,17 @@
 using AutoMapper;
 using Ben.Data.Common.Enums;
+using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
+using Ben.Data.WebApi.Controllers;
 using Ben.Data.WebApi.Controllers.Entities;
+using Ben.Data.WebApi.Controllers.Public;
 using Ben.Service.Models.Entities;
+using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Moq;
 using System.Security.Claims;
 using Xunit;
@@ -215,5 +220,96 @@ public class CalendarInviteByEmailTests
             .AddAttendeeByEmail(OrgId, EventId, new AddAttendeeByEmailRequest(address), default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    /// <summary>
+    /// The whole self-service chain, end to end: add an address, confirm it, publish it, and only
+    /// then can somebody invite you by it.
+    /// </summary>
+    /// <remarks>
+    /// This endpoint shipped before there was any way for a person to publish an address at all —
+    /// it had never once matched a real row, because every UserEmail in the database was created by
+    /// the admin surface with validation hardcoded off. This test is what proves that gap closed,
+    /// and it fails at a different step for each half that regresses.
+    /// </remarks>
+    [Fact]
+    public async Task An_address_published_through_the_self_service_flow_becomes_invitable()
+    {
+        var outsider = Guid.NewGuid();
+        var emailTypeId = Guid.NewGuid();
+        var factory = TestDbFactory.Create();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization
+            { Id = OrgId, Name = "BenCo", UrlName = "benco", DateCreated = DateTime.UtcNow });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = OrgId, AppUserId = MemberId,
+                Role = OrganizationMemberRole.Owner, IsActive = true, DateCreated = DateTime.UtcNow,
+            });
+            db.OrgCalendarEvents.Add(new OrgCalendarEvent
+            {
+                Id = EventId, OrganizationId = OrgId, Title = "Team briefing",
+                StartDateTime = DateTime.UtcNow, EndDateTime = DateTime.UtcNow.AddHours(1),
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = MemberId,
+            });
+            db.Users.Add(new AppUser
+            { Id = outsider, UserName = "self@example.com", Email = "private-login@example.com", DisplayName = "A Guest" });
+            db.UserEmailTypes.Add(new UserEmailType
+            { Id = emailTypeId, Name = "Personal", DateCreated = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+        }
+
+        var contact = new MyContactInfoController(factory, new Mock<IAuditLogService>().Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.NameIdentifier, outsider.ToString())], "Bearer"))
+                }
+            }
+        };
+
+        // 1. Add the address. It starts private and unvalidated, so an invite must not find it yet.
+        var created = Assert.IsType<MyEmailRecord>(Assert.IsType<OkObjectResult>(
+            (await contact.CreateEmail(new UpsertMyEmailRequest(emailTypeId, "self@example.com", false, false), default)).Result).Value);
+
+        Assert.IsType<NotFoundObjectResult>((await Build(factory)
+            .AddAttendeeByEmail(OrgId, EventId, new AddAttendeeByEmailRequest("self@example.com"), default)).Result);
+
+        // 2. Issue a link.
+        var mail = new Mock<IEmailService>();
+        mail.SetupGet(x => x.IsConfigured).Returns(false);
+        var config = new ConfigurationBuilder().Build();
+
+        Assert.IsType<OkObjectResult>((await contact.SendValidation(created.Id, mail.Object, config, default)).Result);
+
+        string token;
+        await using (var db = await factory.CreateDbContextAsync())
+            token = (await db.UserEmails.FirstAsync(e => e.Id == created.Id)).ValidationToken!;
+
+        // 3. Redeem it as an anonymous visitor would.
+        var redeem = new PublicEmailValidationController(factory, new Mock<IAuditLogService>().Object)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
+        Assert.IsType<NoContentResult>(await redeem.Confirm(token, default));
+
+        // 4. Publish it — only possible now that it is validated.
+        var published = Assert.IsType<MyEmailRecord>(Assert.IsType<OkObjectResult>(
+            (await contact.UpdateEmail(created.Id,
+                new UpsertMyEmailRequest(emailTypeId, "self@example.com", false, IsPublic: true), default)).Result).Value);
+        Assert.True(published.IsPublic);
+        Assert.True(published.IsValidated);
+
+        // 5. Now the invite resolves.
+        Assert.IsType<OkObjectResult>((await Build(factory)
+            .AddAttendeeByEmail(OrgId, EventId, new AddAttendeeByEmailRequest("self@example.com"), default)).Result);
+
+        await using var check = await factory.CreateDbContextAsync();
+        Assert.Equal(outsider, (await check.OrgCalendarEventAttendees.SingleAsync()).AppUserId);
     }
 }

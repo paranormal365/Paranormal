@@ -40,6 +40,10 @@ else
             </div>
         </div>
     </div>
+
+    @* Loads and saves independently of the settings above — its own permission failure has no
+       business blocking the address toggles. *@
+    <OrgCalendarEventTypesManager OrgId="@OrgId" />
 }
 
 @code {

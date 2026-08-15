@@ -93,6 +93,13 @@
                 }
             </div>
         </div>
+
+        @* Contact details. Each card loads and saves on its own — one slow lookup or one failed
+           save has no business blocking the rest of the page. *@
+        <MyEmailsCard />
+        <MyPhonesCard />
+        <MyAddressesCard />
+        <MyLinksCard />
     }
 </div>
 
