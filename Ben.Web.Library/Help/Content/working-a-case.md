@@ -52,6 +52,26 @@ investigation rather than by rank: the person who scheduled it, the case manager
 leading that particular visit, group owners and administrators, and anyone the group has
 specifically granted the investigations permission.
 
+## Scheduling a visit with no case
+
+**Schedule an investigation** on the group's Investigations tab books a visit that belongs to no
+client case — a landmark, a public building, or the group's own outing. Everything else about it
+works the same way: it appears on the map, the team can check in, and the findings are shared under
+the same rules.
+
+Describe where it is, and the form will tell you if the system already knows the place:
+
+> This place may already be on file.
+
+**Use this place** attaches the visit to the existing record, which is what puts your visit on the
+same page as everyone else's work at that location. If it is genuinely somewhere new — a different
+flat in the same building, a different cabin on the same site — carry on typing and a new place is
+created. The suggestion is only ever offered; nothing is merged behind your back.
+
+A place is only suggested when the address matches **and** it is within about a tenth of a mile.
+Both have to agree, because an address alone cannot tell two flats apart and a map position alone
+would suggest the house next door.
+
 ## Arriving on site
 
 The investigation's **Team** panel shows who is expected and who has turned up. A name turns green

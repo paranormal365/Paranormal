@@ -618,6 +618,19 @@ public interface IBenAdminClient
     Task<PlaceSummary?> GetPlaceSummaryAsync(Guid placeId, CancellationToken token = default);
 
     /// <summary>
+    /// Places that are probably the one being typed in — "did you mean this?" before a duplicate
+    /// exists.
+    /// </summary>
+    /// <remarks>
+    /// Read-only. The server decides what counts as a probable match (same address, within a tenth
+    /// of a mile); the caller shows the answer and the person picks. Returns nothing when there is
+    /// neither an address nor a name to go on.
+    /// </remarks>
+    Task<IReadOnlyList<PlaceCandidate>> FindPlaceCandidatesAsync(
+        string? street, string? city, string? state, string? zip, string? name,
+        decimal? latitude, decimal? longitude, CancellationToken token = default);
+
+    /// <summary>
     /// The visitor's view: the place plus only what has been published about it.
     /// </summary>
     /// <remarks>
@@ -1408,6 +1421,24 @@ public sealed record PlaceInvestigationRow(
 
 /// <summary><c>Since</c> is null when nothing is visible, so the phrase can be omitted entirely.</summary>
 public sealed record PlaceSummary(int InvestigationCount, int OrganizationCount, int? Since);
+
+/// <summary>
+/// A place that might be the one somebody is about to create.
+/// </summary>
+/// <remarks>
+/// <c>DistanceMiles</c> is null when either side has no coordinates — unknown, not zero, so a page
+/// must not print it as "0 miles away". <c>InvestigationCount</c> is what tells an established
+/// place from a stray row.
+/// </remarks>
+public sealed record PlaceCandidate(
+    Guid Id,
+    string? Name,
+    string? StreetAddress1,
+    string? City,
+    string? State,
+    Ben.Data.Common.Enums.PlaceKind Kind,
+    double? DistanceMiles,
+    int InvestigationCount);
 
 public sealed record PublicPlaceInvestigationRow(
     Guid Id,

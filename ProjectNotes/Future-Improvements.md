@@ -3387,3 +3387,35 @@ two questions land as decisions rather than as a settings screen.
 
 Both redactions belong in one place each, reusable by any surface, in the shape `PublicClientName`
 already set.
+
+---
+
+## 81. Score the haunting vote instead of only counting it (not started, requested 2026-08-15)
+
+Ben: *"For voting on haunting, we use 3 values. I want the indecisive to equal zero, then +1 for
+haunted and -1 for not convinced."*
+
+Today `EvidenceVoteType` has three members and every surface reports them as three independent
+counts — `ConfirmsCount` / `DisputesCount` / `InconclusiveCount` in `PublicCaseVoteController`,
+`PublicCaseDiscoveryController`, `InvestigationController` and `EvidenceVoteDetailPanel.razor`.
+Three numbers is an accurate report and a poor summary: nothing says whether a case leans haunted,
+and two cases with wildly different weight of opinion can look similar.
+
+The change: a single signed score, `Confirms +1`, `Inconclusive 0`, `Disputes −1`.
+
+**The trap to avoid.** The enum's stored int values are `Confirms = 0, Disputes = 1,
+Inconclusive = 2`, and those numbers are already in the database. The score must come from a
+mapping function, **not** from renumbering the enum — renumbering would silently re-interpret every
+vote ever cast.
+
+Worth settling when this is picked up:
+
+- Does the score go alongside the three counts or replace them? (Alongside, probably — the counts
+  are what make a score trustworthy.)
+- Sum, or average? A sum rewards a busy case; an average says how strongly the people who looked
+  actually felt. Inconclusive votes pull an average towards zero, which is arguably the point of
+  casting one.
+- One place computes it, reused by every surface — the same rule `PublicClientName` follows, and
+  for the same reason: four endpoints each doing their own arithmetic is four answers.
+
+Deferred by Ben — *"we can work on that later."*
