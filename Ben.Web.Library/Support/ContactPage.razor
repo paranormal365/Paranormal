@@ -1,0 +1,254 @@
+@page "/contact"
+@namespace Ben.Web.Library.Support
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Support
+
+@inject IBenAdminClient AdminClient
+@inject NavigationManager NavManager
+
+<PageTitle>Contact Us — IsHaunted</PageTitle>
+
+<div class="container-fluid px-3 py-4" style="max-width:860px; margin:auto;">
+
+    <h1 class="mb-1">Contact Us</h1>
+    <p class="text-secondary mb-4">
+        Trouble with the site, or something you'd like to tell us? Send a message and we'll get
+        back to you. You don't need an account.
+    </p>
+
+    @if (_sent is not null)
+    {
+        <div class="card border-success mb-4">
+            <div class="card-body">
+                <h5 class="card-title text-success mb-2">Message sent</h5>
+                <p class="mb-2">
+                    Your reference is <strong class="font-monospace">@_sent.Reference</strong>.
+                </p>
+                <p class="mb-3">
+                    Keep the link below — it's how you check for a reply, and it's the only way back
+                    to this conversation.
+                </p>
+                <div class="input-group mb-2" style="max-width:640px;">
+                    <input class="form-control font-monospace" readonly value="@TrackingUrl" />
+                    <a class="btn btn-primary" href="@TrackingPath">Open</a>
+                </div>
+                <p class="text-secondary small mb-0">
+                    Anyone with this link can read and reply to your message, so don't share it.
+                </p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            <div class="col-12 col-lg-7">
+                <div class="card">
+                    <div class="card-body">
+                        @if (_error is not null)
+                        {
+                            <div class="alert alert-danger">@_error</div>
+                        }
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Your name</label>
+                            @* Plain inputs throughout: Telerik text boxes bind on blur in this
+                               codebase, which loses the last field edited when Send is clicked. *@
+                            <input class="form-control" maxlength="120"
+                                   value="@_name"
+                                   @oninput="@(e => _name = e.Value?.ToString() ?? "")" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Your email</label>
+                            <input class="form-control" type="email" maxlength="256"
+                                   value="@_email"
+                                   @oninput="@(e => _email = e.Value?.ToString() ?? "")" />
+                            <div class="form-text">So we can reply. We don't use it for anything else.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">What's this about?</label>
+                            <select class="form-select"
+                                    @onchange="@(e => _topic = (SupportTicketTopic)int.Parse(e.Value?.ToString() ?? "0"))">
+                                @foreach (var option in _topics)
+                                {
+                                    <option value="@((int)option.Value)" selected="@(option.Value == _topic)">@option.Label</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Subject</label>
+                            <input class="form-control" maxlength="200"
+                                   value="@_subject"
+                                   @oninput="@(e => _subject = e.Value?.ToString() ?? "")" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Message</label>
+                            <textarea class="form-control" rows="7" maxlength="8000"
+                                      value="@_body"
+                                      @oninput="@(e => _body = e.Value?.ToString() ?? "")"></textarea>
+                        </div>
+
+                        @*
+                            Honeypot. Hidden from people and from screen readers, left in the tab
+                            order's way as little as possible, and named like something a bot wants
+                            to fill. Anything in it means the submission wasn't typed by a human.
+                        *@
+                        <div class="contact-hp" aria-hidden="true">
+                            <label>Website</label>
+                            <input tabindex="-1" autocomplete="off"
+                                   value="@_website"
+                                   @oninput="@(e => _website = e.Value?.ToString() ?? "")" />
+                        </div>
+
+                        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                       Enabled="@(!_sending)"
+                                       OnClick="SendAsync">
+                            @(_sending ? "Sending…" : "Send message")
+                        </TelerikButton>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-5">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-title">Other ways to reach us</h6>
+                        @if (_contact is null)
+                        {
+                            <p class="text-secondary small mb-0">Loading…</p>
+                        }
+                        else if (!HasAnyContactDetail)
+                        {
+                            <p class="text-secondary small mb-0">
+                                The form is the best way to reach us right now.
+                            </p>
+                        }
+                        else
+                        {
+                            @if (!string.IsNullOrWhiteSpace(_contact.Email))
+                            {
+                                <div class="mb-2">
+                                    <div class="text-secondary small">Email</div>
+                                    <a href="mailto:@_contact.Email">@_contact.Email</a>
+                                </div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(_contact.Phone))
+                            {
+                                <div class="mb-2">
+                                    <div class="text-secondary small">Phone</div>
+                                    <a href="tel:@_contact.Phone">@_contact.Phone</a>
+                                </div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(_contact.PostalAddress))
+                            {
+                                <div class="mb-2">
+                                    <div class="text-secondary small">Post</div>
+                                    @* Line breaks come through as typed — see the postal-address
+                                       setting, which is edited in a textarea for this reason. *@
+                                    <div style="white-space:pre-line;">@_contact.PostalAddress</div>
+                                </div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(_contact.Hours))
+                            {
+                                <div>
+                                    <div class="text-secondary small">When we reply</div>
+                                    <div>@_contact.Hours</div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+
+                <div class="card mt-3">
+                    <div class="card-body">
+                        <h6 class="card-title">Looking for a group?</h6>
+                        <p class="text-secondary small mb-2">
+                            To ask a paranormal investigation group for help, use the request form
+                            rather than this one — it reaches them directly.
+                        </p>
+                        <a class="btn btn-sm btn-outline-primary" href="/find">Find a group</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string _name = "";
+    private string _email = "";
+    private string _subject = "";
+    private string _body = "";
+    private string _website = "";           // honeypot — must stay empty
+    private SupportTicketTopic _topic = SupportTicketTopic.WebsiteHelp;
+
+    private string? _formToken;
+    private bool _sending;
+    private string? _error;
+    private SubmitSupportTicketResponse? _sent;
+    private SiteContactInfo? _contact;
+
+    private readonly (SupportTicketTopic Value, string Label)[] _topics =
+    [
+        (SupportTicketTopic.WebsiteHelp,   "Help using the website"),
+        (SupportTicketTopic.ReportProblem, "Report a problem"),
+        (SupportTicketTopic.ContactStaff,  "Contact a member of staff"),
+        (SupportTicketTopic.Other,         "Something else"),
+    ];
+
+    private bool HasAnyContactDetail =>
+        _contact is not null &&
+        (!string.IsNullOrWhiteSpace(_contact.Email)
+         || !string.IsNullOrWhiteSpace(_contact.Phone)
+         || !string.IsNullOrWhiteSpace(_contact.PostalAddress)
+         || !string.IsNullOrWhiteSpace(_contact.Hours));
+
+    private string TrackingPath => _sent is null ? "/" : $"/support/{_sent.AccessToken}";
+    private string TrackingUrl => $"{NavManager.BaseUri.TrimEnd('/')}{TrackingPath}";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !RendererInfo.IsInteractive) return;
+
+        // Fetched on the interactive render, not the prerender: the token's whole job is to measure
+        // how long the form was on screen in front of a person, and a prerendered one would start
+        // its clock before the page even reached the browser.
+        _formToken = (await AdminClient.GetSupportFormTokenAsync())?.FormToken;
+        _contact = await AdminClient.GetSiteContactAsync();
+        StateHasChanged();
+    }
+
+    private async Task SendAsync()
+    {
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_name)) { _error = "Please tell us your name."; return; }
+        if (string.IsNullOrWhiteSpace(_email)) { _error = "Please give us an email address."; return; }
+        if (string.IsNullOrWhiteSpace(_subject)) { _error = "Please give your message a subject."; return; }
+        if (string.IsNullOrWhiteSpace(_body)) { _error = "Please write your message."; return; }
+
+        _sending = true;
+        try
+        {
+            var response = await AdminClient.SubmitSupportTicketAsync(new SubmitSupportTicketRequest(
+                _name, _email, _topic, _subject, _body, _formToken, _website));
+
+            if (response is null)
+            {
+                // The adapter returns null for any non-success, so the server's own wording is not
+                // available here. Reloading re-mints the form token, which fixes the likeliest cause.
+                _error = "We couldn't send that. Please reload the page and try again.";
+                return;
+            }
+
+            _sent = response;
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+}

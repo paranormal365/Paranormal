@@ -8,12 +8,18 @@ namespace Ben.Service.Models.Entities;
 /// <param name="Value">Current value, or null when unset.</param>
 /// <param name="Description">Plain-language explanation of what changing this does.</param>
 /// <param name="DateUpdated">When it last changed; creation time for a row never edited.</param>
+/// <param name="IsMultiLine">
+/// True when the value runs to several lines — a postal address, an announcement — so the editor
+/// gives it a textarea. Decided by the server because the seed that declares settings lives there
+/// and the Blazor library cannot reference it.
+/// </param>
 public sealed record SiteSettingRecord(
     string Key,
     string Label,
     string? Value,
     string? Description,
-    DateTime DateUpdated);
+    DateTime DateUpdated,
+    bool IsMultiLine = false);
 
 /// <param name="Value">Empty or whitespace clears the setting.</param>
 public sealed record SetSiteSettingRequest(string? Value);

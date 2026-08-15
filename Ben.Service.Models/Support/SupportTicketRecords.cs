@@ -81,3 +81,13 @@ public sealed record AddSupportTicketReplyRequest(string? Body, bool IsInternalN
 public sealed record UpdateSupportTicketRequest(
     SupportTicketStatus? Status,
     Guid? AssignedToAppUserId);
+
+/// <summary>
+/// The site's published contact details. Every field is optional — an address that has not been
+/// set yet simply isn't shown, rather than rendering an empty label.
+/// </summary>
+public sealed record SiteContactInfo(
+    string? Email,
+    string? PostalAddress,
+    string? Phone,
+    string? Hours);

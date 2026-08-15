@@ -29,6 +29,15 @@ public static class SiteSettingKeys
     /// <summary>Contact address published on public pages for general enquiries.</summary>
     public const string PublicContactEmail = "site.public-contact-email";
 
+    /// <summary>Postal address shown on the contact page. Line breaks are preserved.</summary>
+    public const string ContactPostalAddress = "contact.postal-address";
+
+    /// <summary>Phone number shown on the contact page.</summary>
+    public const string ContactPhone = "contact.phone";
+
+    /// <summary>When someone can expect an answer, e.g. "Weekdays, 9am–5pm Central".</summary>
+    public const string ContactHours = "contact.hours";
+
     /// <summary>
     /// Every setting the site knows about: its key, the human label, and the description shown in
     /// the admin page. Order here is the order they appear.
@@ -49,7 +58,24 @@ public static class SiteSettingKeys
             "A short notice shown across the site — planned maintenance, known issues. Leave empty to show nothing."),
         (PublicContactEmail, "Public contact email",
             "Contact address published on public pages for general enquiries."),
+        (ContactPostalAddress, "Postal address",
+            "Shown on the contact page. Put each line of the address on its own line — line breaks are preserved as written."),
+        (ContactPhone, "Contact phone",
+            "Phone number shown on the contact page. Leave empty to show none."),
+        (ContactHours, "When we reply",
+            "When someone can expect an answer, e.g. \"Weekdays, 9am–5pm Central\". Leave empty to show nothing."),
     ];
+
+    /// <summary>
+    /// Settings whose value is expected to run to several lines, so the admin page gives them a
+    /// textarea instead of a single-line input.
+    /// </summary>
+    /// <remarks>
+    /// A postal address in a one-line input is technically editable and miserable to edit. Kept as
+    /// a set here rather than a fourth tuple field so the seed stays readable.
+    /// </remarks>
+    public static readonly IReadOnlySet<string> MultiLineKeys =
+        new HashSet<string> { ContactPostalAddress, SiteAnnouncement };
 }
 
 /// <summary>

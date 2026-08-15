@@ -352,3 +352,14 @@ body[data-bs-theme="dark"] .k-drawer {
     opacity: 1;
     text-decoration: underline;
 }
+
+/* Contact form honeypot: kept in the DOM and technically focusable so a naive bot fills it,
+   but out of sight and out of the accessibility tree for people. display:none is avoided
+   deliberately — the better bots skip hidden fields. */
+.contact-hp {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}

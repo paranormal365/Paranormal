@@ -1,0 +1,333 @@
+@page "/admin/support-tickets"
+@namespace Ben.Web.Library.SuperAdmin
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Support
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>Support Tickets</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:1100px;">
+
+    <div class="d-flex align-items-baseline gap-2 mb-1 flex-wrap">
+        <h3 class="mb-0">Support Tickets</h3>
+        <HelpLink Slug="site-administration" Anchor="support-tickets" />
+        @if (_page is not null)
+        {
+            <span class="badge bg-secondary">@_page.TotalCount total</span>
+        }
+    </div>
+    <p class="text-secondary small mb-4">Messages sent through the public contact form.</p>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @* ── Filters ──────────────────────────────────────────────────────────── *@
+    <div class="row g-2 mb-3 align-items-end">
+        <div class="col-auto">
+            <label class="form-label small mb-1">Status</label>
+            <select class="form-select form-select-sm" @onchange="OnStatusChanged">
+                <option value="" selected="@(_status is null)">All</option>
+                @foreach (var s in Enum.GetValues<SupportTicketStatus>())
+                {
+                    <option value="@((int)s)" selected="@(_status == s)">@s</option>
+                }
+            </select>
+        </div>
+        <div class="col-auto">
+            <label class="form-label small mb-1">Topic</label>
+            <select class="form-select form-select-sm" @onchange="OnTopicChanged">
+                <option value="" selected="@(_topic is null)">All</option>
+                @foreach (var t in Enum.GetValues<SupportTicketTopic>())
+                {
+                    <option value="@((int)t)" selected="@(_topic == t)">@t</option>
+                }
+            </select>
+        </div>
+        <div class="col-12 col-md-4">
+            <label class="form-label small mb-1">Search</label>
+            <input class="form-control form-control-sm" placeholder="Reference, subject, name or email"
+                   value="@_search"
+                   @oninput="@(e => _search = e.Value?.ToString() ?? "")" />
+        </div>
+        <div class="col-auto">
+            <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           OnClick="@(() => LoadAsync(1))">Apply</TelerikButton>
+        </div>
+    </div>
+
+    @if (_loading && _page is null)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading tickets…" />
+    }
+    else if (_page is null || _page.Items.Count == 0)
+    {
+        <div class="alert alert-light text-muted text-center py-4">No tickets match those filters.</div>
+    }
+    else
+    {
+        @foreach (var ticket in _page.Items)
+        {
+            <div class="card mb-2">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                        <div style="cursor:pointer;" @onclick="@(() => ToggleAsync(ticket))">
+                            <div class="d-flex align-items-baseline gap-2 flex-wrap">
+                                <span class="font-monospace text-secondary small">@ticket.Reference</span>
+                                <span class="fw-semibold">@ticket.Subject</span>
+                                <span class="badge @StatusClass(ticket.Status)">@ticket.Status</span>
+                                <span class="badge bg-light text-dark">@ticket.Topic</span>
+                            </div>
+                            <div class="text-secondary small">
+                                @ticket.FromName &lt;@ticket.FromEmail&gt;
+                                · @ticket.DateCreated.ToLocalTime().ToString("d MMM yyyy, HH:mm")
+                                @if (ticket.ReplyCount > 0)
+                                {
+                                    <span> · @ticket.ReplyCount @(ticket.ReplyCount == 1 ? "reply" : "replies")</span>
+                                }
+                                @if (ticket.AssignedToDisplayName is not null)
+                                {
+                                    <span> · with @ticket.AssignedToDisplayName</span>
+                                }
+                            </div>
+                        </div>
+                        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                       OnClick="@(() => ToggleAsync(ticket))">
+                            @(_openTicketId == ticket.Id ? "Hide" : "Open")
+                        </TelerikButton>
+                    </div>
+
+                    @if (_openTicketId == ticket.Id)
+                    {
+                        <hr class="my-2" />
+                        <div class="mb-3" style="white-space:pre-wrap;">@ticket.Body</div>
+
+                        @foreach (var reply in _replies)
+                        {
+                            <div class="card mb-2 @(reply.IsInternalNote ? "border-warning" : "")">
+                                <div class="card-body py-2">
+                                    <div class="text-secondary small mb-1">
+                                        @(reply.IsFromStaff ? (reply.AuthorDisplayName ?? "Staff") : ticket.FromName)
+                                        · @reply.DateCreated.ToLocalTime().ToString("d MMM, HH:mm")
+                                        @if (reply.IsInternalNote)
+                                        {
+                                            <span class="badge bg-warning text-dark ms-1">Internal note</span>
+                                        }
+                                    </div>
+                                    <div style="white-space:pre-wrap;">@reply.Body</div>
+                                </div>
+                            </div>
+                        }
+
+                        <textarea class="form-control mb-2" rows="4" maxlength="8000"
+                                  placeholder="Write a reply to the sender, or an internal note"
+                                  value="@_replyDraft"
+                                  @oninput="@(e => _replyDraft = e.Value?.ToString() ?? "")"></textarea>
+
+                        <div class="d-flex gap-2 align-items-center flex-wrap">
+                            <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                           Enabled="@(!_busy && !string.IsNullOrWhiteSpace(_replyDraft))"
+                                           OnClick="@(() => ReplyAsync(ticket, internalNote: false))">Reply to sender</TelerikButton>
+                            <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                           FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                           Enabled="@(!_busy && !string.IsNullOrWhiteSpace(_replyDraft))"
+                                           OnClick="@(() => ReplyAsync(ticket, internalNote: true))">Add internal note</TelerikButton>
+
+                            <span class="ms-auto d-flex gap-2">
+                                @if (ticket.Status != SupportTicketStatus.Closed)
+                                {
+                                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                                   FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                                   Enabled="@(!_busy)"
+                                                   OnClick="@(() => SetStatusAsync(ticket, SupportTicketStatus.Closed))">Close</TelerikButton>
+                                }
+                                else
+                                {
+                                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                                   FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                                   Enabled="@(!_busy)"
+                                                   OnClick="@(() => SetStatusAsync(ticket, SupportTicketStatus.Open))">Reopen</TelerikButton>
+                                }
+                                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                               Enabled="@(!_busy && ticket.AssignedToAppUserId != UserState.UserId)"
+                                               OnClick="@(() => AssignToMeAsync(ticket))">Assign to me</TelerikButton>
+                            </span>
+                        </div>
+
+                        <div class="form-text mt-2">
+                            The sender reads this thread through their tracking link. Internal notes
+                            are never shown there.
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (TotalPages > 1)
+        {
+            <div class="d-flex justify-content-center align-items-center gap-3 mt-3">
+                <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                               Enabled="@(!_loading && _page.Page > 1)"
+                               OnClick="@(() => LoadAsync(_page.Page - 1))">← Previous</TelerikButton>
+                <span class="text-secondary small">Page @_page.Page of @TotalPages</span>
+                <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline"
+                               Enabled="@(!_loading && _page.Page < TotalPages)"
+                               OnClick="@(() => LoadAsync(_page.Page + 1))">Next →</TelerikButton>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private SupportTicketPage? _page;
+    private IReadOnlyList<SupportTicketReplyRecord> _replies = [];
+    private Guid? _openTicketId;
+    private string _replyDraft = "";
+
+    private SupportTicketStatus? _status;
+    private SupportTicketTopic? _topic;
+    private string _search = "";
+
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+
+    private int TotalPages => _page is null || _page.PageSize == 0
+        ? 1
+        : (int)Math.Ceiling(_page.TotalCount / (double)_page.PageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Two things at once, and both matter. AuthReady is only ever signalled from the
+        // interactive circuit, so awaiting it during the static prerender hangs the response
+        // outright — hence the RendererInfo check that WaitUntilAuthReadyAsync wraps. And a fresh
+        // circuit starts unauthenticated until MainLayout restores the session, so checking the
+        // role before it completes would bounce a signed-in administrator to Home.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        if (!UserState.IsSuperAdmin && !UserState.IsAdmin)
+        {
+            NavManager.NavigateTo("/");
+            return;
+        }
+
+        await LoadAsync(1);
+    }
+
+    private async Task LoadAsync(int page)
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+        try
+        {
+            _page = await AdminClient.GetSupportTicketsAsync(_status, _topic, _search, page);
+            if (_page is null) _error = "Could not load tickets.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ToggleAsync(SupportTicketAdminRecord ticket)
+    {
+        if (_openTicketId == ticket.Id)
+        {
+            _openTicketId = null;
+            _replies = [];
+            return;
+        }
+
+        _openTicketId = ticket.Id;
+        _replyDraft = "";
+        _replies = await AdminClient.GetSupportTicketRepliesAsync(ticket.Id);
+    }
+
+    private async Task ReplyAsync(SupportTicketAdminRecord ticket, bool internalNote)
+    {
+        if (string.IsNullOrWhiteSpace(_replyDraft)) return;
+
+        _busy = true;
+        try
+        {
+            var ok = await AdminClient.AddSupportTicketReplyAsync(
+                ticket.Id, new AddSupportTicketReplyRequest(_replyDraft, internalNote));
+
+            if (!ok) { _error = "Could not save that reply."; return; }
+
+            _replyDraft = "";
+            _replies = await AdminClient.GetSupportTicketRepliesAsync(ticket.Id);
+            // Reload the list too: replying changes status and assignment on the server, and a
+            // stale row would show the old ones.
+            await LoadAsync(_page?.Page ?? 1);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SetStatusAsync(SupportTicketAdminRecord ticket, SupportTicketStatus status)
+    {
+        _busy = true;
+        try
+        {
+            var updated = await AdminClient.UpdateSupportTicketAsync(
+                ticket.Id, new UpdateSupportTicketRequest(status, null));
+            if (updated is null) { _error = "Could not update that ticket."; return; }
+            await LoadAsync(_page?.Page ?? 1);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AssignToMeAsync(SupportTicketAdminRecord ticket)
+    {
+        if (UserState.UserId is not { } me) return;
+
+        _busy = true;
+        try
+        {
+            var updated = await AdminClient.UpdateSupportTicketAsync(
+                ticket.Id, new UpdateSupportTicketRequest(null, me));
+            if (updated is null) { _error = "Could not assign that ticket."; return; }
+            await LoadAsync(_page?.Page ?? 1);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void OnStatusChanged(ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString();
+        _status = string.IsNullOrEmpty(raw) ? null : (SupportTicketStatus)int.Parse(raw);
+    }
+
+    private void OnTopicChanged(ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString();
+        _topic = string.IsNullOrEmpty(raw) ? null : (SupportTicketTopic)int.Parse(raw);
+    }
+
+    private static string StatusClass(SupportTicketStatus status) => status switch
+    {
+        SupportTicketStatus.New      => "bg-danger",
+        SupportTicketStatus.Open     => "bg-primary",
+        SupportTicketStatus.Answered => "bg-success",
+        SupportTicketStatus.Closed   => "bg-dark",
+        _                            => "bg-secondary",
+    };
+}

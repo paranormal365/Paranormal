@@ -1,4 +1,5 @@
 using Ben.Service.Models.Admin;
+using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
 using Ben.Service.Models.People;
 using Ben.Data.Common.Enums;
@@ -296,6 +297,35 @@ public interface IBenAdminClient
     /// entry point needs. Anonymous, like the proximity search beside it.
     /// </summary>
     Task<OrgBrowsePage?> BrowseOrganizationsAsync(int page = 1, int pageSize = 24, CancellationToken token = default);
+
+    // ── Support tickets ───────────────────────────────────────────────────────
+
+    /// <summary>The site's published contact details, for the contact page. Anonymous.</summary>
+    Task<SiteContactInfo?> GetSiteContactAsync(CancellationToken token = default);
+
+    /// <summary>Issued when the contact form renders; proves later how long it was on screen.</summary>
+    Task<SupportFormTokenResponse?> GetSupportFormTokenAsync(CancellationToken token = default);
+
+    /// <summary>Sends a contact-form submission. Anonymous.</summary>
+    Task<SubmitSupportTicketResponse?> SubmitSupportTicketAsync(SubmitSupportTicketRequest request, CancellationToken token = default);
+
+    /// <summary>A sender's own ticket, by the token from their tracking link.</summary>
+    Task<SupportTicketPublicRecord?> GetSupportTicketByTokenAsync(Guid accessToken, CancellationToken token = default);
+
+    /// <summary>Adds the sender's own reply through their tracking link.</summary>
+    Task<bool> ReplyToSupportTicketByTokenAsync(Guid accessToken, AddSupportTicketReplyRequest request, CancellationToken token = default);
+
+    /// <summary>The staff queue, filtered and paged on the server.</summary>
+    Task<SupportTicketPage?> GetSupportTicketsAsync(SupportTicketStatus? status = null, SupportTicketTopic? topic = null, string? search = null, int page = 1, int pageSize = 25, CancellationToken token = default);
+
+    /// <summary>One ticket's full thread, internal notes included.</summary>
+    Task<IReadOnlyList<SupportTicketReplyRecord>> GetSupportTicketRepliesAsync(Guid id, CancellationToken token = default);
+
+    /// <summary>Replies to the sender, or leaves an internal note.</summary>
+    Task<bool> AddSupportTicketReplyAsync(Guid id, AddSupportTicketReplyRequest request, CancellationToken token = default);
+
+    /// <summary>Changes a ticket's status and/or assignment.</summary>
+    Task<SupportTicketAdminRecord?> UpdateSupportTicketAsync(Guid id, UpdateSupportTicketRequest request, CancellationToken token = default);
 
     // ── Organization Addresses ────────────────────────────────────────────────
 

@@ -27,6 +27,18 @@ published as something the editor cannot draw.
 Assets are **retired**, never deleted. Projects reference artwork by id, so removing one would
 break renders that already use it. A retired asset leaves the catalog and stays downloadable.
 
+## Support tickets
+
+**Administration → Support Tickets** is the queue for the public contact form. A ticket arrives as
+**New**; replying to the sender marks it **Answered** and assigns it to you if nobody had it.
+
+The sender reads the thread through a private tracking link, whether or not they have an account —
+that is how a reply reaches someone who cannot sign in. **Internal notes are never shown there.**
+They are for staff talking among themselves, and adding one does not mark the ticket answered.
+
+Contact details shown beside the form — postal address, phone, email, when we reply — are site
+settings, so they are corrected on the Site Settings page rather than in a deploy.
+
 ## Audit log
 
 **Administration → Audit Log** records every mutation with who made it. It is filtered and paged
