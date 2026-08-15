@@ -3288,3 +3288,102 @@ from the admin page.
 
 Only caveat: site settings are single-valued strings, so a multi-line postal address wants either
 one setting per line or a settings page that renders a textarea. Worth deciding when picked up.
+
+---
+
+## 80. CMS: preview, templates, publish-when-ready, and embedding cases/investigations safely (not started, requested 2026-08-15)
+
+Ben's request, five parts. The first three are ordinary CMS maturity. The fourth is where the real
+design work is, because it is the point where a group could publish somebody's home address.
+
+### 1. Preview a page and its pending changes
+
+Today `OrgCmsPageEdit.razor` edits sections in place and saves straight to the live row. There is no
+way to see the page as a visitor would before committing. Two shapes, and they are not equal in
+cost:
+
+- **Preview the saved-but-unpublished page** — cheap. `OrganizationPage.IsPublished` already exists
+  and the editor already exposes it. A preview route that renders the page through the public
+  renderer while ignoring the publish flag (for members with `CmsPageAction.View`) is most of the
+  value for very little work.
+- **Preview *unsaved* edits** — expensive, because it needs draft storage. See part 3.
+
+### 2. A template library
+
+Both granularities Ben asked for. A section template (one `CmsSection` with pre-filled
+`ContentJson`) and a whole-page template (an ordered set of sections). The six section types in
+`CmsSectionType` — RichText, ImageBanner, FileGallery, ContactInfo, MemberRoster, CustomHtml — are
+the vocabulary a template is assembled from, so this is mostly a seeding-and-cloning job rather than
+new rendering.
+
+Open question worth settling early: are templates **site-provided only**, or can a group save its
+own page as a template and reuse it? The second is a small extra step (a "save as template" that
+clones sections) but changes ownership and permissions.
+
+### 3. Draft vs live
+
+`IsPublished` exists, the editor exposes it, and `OrgCmsEditor` already shows the state per page.
+What does *not* exist is a draft that differs from what is live — editing a published page edits the
+live page immediately, which is the actual gap behind Ben's "make them live when they are ready".
+
+The honest options:
+
+| Approach | Cost | Notes |
+|---|---|---|
+| Publish flag only (today) | done | Editing a live page is still live-editing |
+| Draft copy of the page + sections, promoted on publish | M | Real drafts; needs a clone + swap and a "discard draft" |
+| Version history with a published-version pointer | L | Gives rollback too; the most work |
+
+Recommend the middle one unless rollback is wanted, in which case go straight to versions rather
+than building drafts twice.
+
+### 4. Embedding cases and investigations — the part with teeth
+
+Appending public cases and investigations to a page is straightforward. **Private investigations are
+not**, and Ben's two safeguards are the right ones. Both must be enforced **server-side, before the
+data leaves the WebApi** — his own stated requirement, and the codebase already has the pattern for
+one half of it.
+
+**4a. Address obfuscation.** Show a ~5-mile circle instead of a pin; show city and state and say the
+address is redacted. The redaction happens in the projection, so the exact coordinates are never in
+the response at all.
+
+> **Finding, worth knowing before this is built:** `PublicCaseDiscoveryController` already has fields
+> named `ApproxLatitude` / `ApproxLongitude` — and passes `c.Latitude` / `c.Longitude` straight
+> through. The name promises an approximation the code does not perform. Any published case's exact
+> coordinates are public today. That is a live exposure independent of this item, and it is the first
+> thing to fix when this is picked up (or sooner).
+
+Note also that a circle drawn *centred on the true point* still leaks the point — the centre is the
+answer. Jitter the centre within the radius, or snap it to a grid cell, so the circle is honest about
+what it hides.
+
+**4b. Client identity.** Replace real names with the alias the client configured, again before the
+response is built, leaving the stored case untouched. **This already exists for cases**:
+`Ben.Data.WebApi/Controllers/Public/PublicClientName.cs` is the single place that decides a client's
+public name, prefers the client's own `ClientDisplayAlias` over the org's `PublicPseudonym`, and
+falls back to *no name* rather than the real one. CMS embedding must route through that same helper
+rather than growing a second answer — the whole reason it exists on its own is that two endpoints
+showing the same person must not drift.
+
+What it does **not** yet cover: other people on a case (`CaseRelatedPerson`, witnesses,
+investigators). If a CMS block can embed those, they need the same treatment, and there is currently
+no alias concept for them at all.
+
+**Warn before, not after.** Ben's flow — warn on adding a private investigation, then ask about
+address, then ask about identities — is worth keeping in that order. The warning is what makes the
+two questions land as decisions rather than as a settings screen.
+
+### 5. Suggested phasing
+
+| | Work | Size |
+|---|---|---|
+| — | **Fix `ApproxLatitude` to actually approximate** (do this regardless) | S |
+| C1 | Preview route for saved-but-unpublished pages | S |
+| C2 | Section + page templates, site-provided | M |
+| C3 | Drafts (or versions) so publishing is a deliberate act | M–L |
+| C4 | Embed public cases / investigations | M |
+| C5 | Private investigations behind the warning + the two redaction switches | M — the careful one |
+
+Both redactions belong in one place each, reusable by any surface, in the shape `PublicClientName`
+already set.
