@@ -21,6 +21,9 @@ public record InvestigationRecord
     /// <summary>Why there are no coordinates, or null when there are. See <c>PlaceGeocoder</c>.</summary>
     public string? GeocodeNote { get; init; }
 
+    /// <summary>How widely the findings may be shared. See <c>InvestigationVisibility</c>.</summary>
+    public InvestigationVisibility Visibility { get; init; } = InvestigationVisibility.GroupOnly;
+
     public Guid? OrgCalendarEventId { get; init; }
     public required string Title { get; init; }
     public string? Description { get; init; }

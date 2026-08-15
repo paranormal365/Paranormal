@@ -95,6 +95,12 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public Guid? PlaceId { get; set; }
 
+        /// <summary>
+        /// How widely this investigation's findings may be shared. See
+        /// <see cref="InvestigationVisibility"/>; the default follows the place's kind.
+        /// </summary>
+        public InvestigationVisibility Visibility { get; set; } = InvestigationVisibility.GroupOnly;
+
         public virtual Place? Place { get; set; }
 
         public virtual Case? Case { get; set; }

@@ -67,3 +67,25 @@ are kept distinct: the panel marks a row **Recorded** when somebody else entered
 on site" and "ticked off afterwards" never look like the same thing.
 
 Attendance is what puts a visit on your own map under **My Investigations**.
+
+## Who can see the findings
+
+Each investigation carries its own sharing setting, on the investigation's edit form.
+
+| Setting | Who reads it |
+|---|---|
+| Just this group | Only your own group. The default for anywhere somebody lives. |
+| Groups who have also investigated this place | Any group with a visit recorded at the same place. |
+| Anyone | Everybody, including visitors who are not signed in. |
+
+The middle one is worth reading twice: the audience is **whoever has investigated the place**, and
+that list keeps growing. A group that goes there next year will be able to read what you shared
+this year. The form says so when you pick it.
+
+You do not have to share your own findings to read what others have shared. The point of the
+setting is that people comparing notes on the same building is useful, and requiring a contribution
+first would mostly deter the cautious.
+
+Investigations at a **private residence cannot be made public**. Publishing what happened inside
+somebody's home is theirs to agree to, and there is no way to ask them yet, so the option is
+withheld rather than offered without the consent behind it.

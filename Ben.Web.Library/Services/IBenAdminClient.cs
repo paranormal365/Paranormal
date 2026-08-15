@@ -1369,6 +1369,7 @@ public sealed record OrgInvestigationRow(
     DateTime ScheduledDateTime,
     DateTime? EndDateTime,
     Ben.Data.Common.Enums.InvestigationStatus Status,
+    Ben.Data.Common.Enums.InvestigationVisibility Visibility,
     string? Location,
     Guid? CaseId,
     string? CaseReference,
@@ -1428,7 +1429,8 @@ public sealed record CreateOrgInvestigationRequest(
     DateTime? EvidenceDueDate = null,
     Guid? CaseId = null,
     Guid? PlaceId = null,
-    NewPlaceRequest? NewPlace = null);
+    NewPlaceRequest? NewPlace = null,
+    Ben.Data.Common.Enums.InvestigationVisibility? Visibility = null);
 
 // ── My contact info request/response records ──────────────────────────────────
 // Mirrors of the WebApi records in MyContactInfoController.cs / PublicEmailValidationController.cs
@@ -1708,7 +1710,12 @@ public sealed record UpsertInvestigationRequest(
     Ben.Data.Common.Enums.InvestigationStatus Status,
     string? Notes,
     Guid? OrgCalendarEventId,
-    DateTime? EvidenceDueDate = null);
+    DateTime? EvidenceDueDate = null,
+    Guid? PlaceId = null,
+    NewPlaceRequest? NewPlace = null,
+    // Null means "leave the sharing scope alone" — defaulted from the place on create, untouched
+    // on an edit that says nothing about it.
+    Ben.Data.Common.Enums.InvestigationVisibility? Visibility = null);
 
 public sealed record AddInvestigationAttendeeRequest(Guid AppUserId, string? AssignedRole);
 

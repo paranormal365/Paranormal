@@ -81,9 +81,15 @@ public sealed class InvestigationController : BenControllerBase
 
         // Inherits the case's place unless the caller named another. This is what finally writes
         // the coordinate columns added by AddInvestigationCoordinates, which nothing had ever set.
-        var placementError = await InvestigationPlacement.ApplyAsync(
+        var placement = await InvestigationPlacement.ApplyAsync(
             db, entity, request.PlaceId, request.NewPlace, userId, ct);
-        if (placementError is not null) return BadRequest(placementError);
+        if (placement.Error is not null) return BadRequest(placement.Error);
+
+        // The sharing scope follows the place unless the caller states one. A case-bound visit is
+        // at somebody's home more often than not, so the cautious default is also the common one.
+        entity.Visibility = request.Visibility ?? InvestigationVisibilityFilter.DefaultFor(placement.Place);
+        if (InvestigationVisibilityFilter.Reject(entity.Visibility, placement.Place) is { } scopeError)
+            return BadRequest(scopeError);
 
         // Auto-create an org calendar event if none was supplied
         if (entity.OrgCalendarEventId is null)
@@ -141,9 +147,15 @@ public sealed class InvestigationController : BenControllerBase
 
         // Re-placed on update too — editing the location and watching the map not move is exactly
         // the sort of silent staleness the GeocodeNote convention exists to prevent.
-        var placementError = await InvestigationPlacement.ApplyAsync(
+        var placement = await InvestigationPlacement.ApplyAsync(
             db, entity, request.PlaceId, request.NewPlace, userId, ct);
-        if (placementError is not null) return BadRequest(placementError);
+        if (placement.Error is not null) return BadRequest(placement.Error);
+
+        // Only changed when the caller says so: an edit that says nothing about sharing should not
+        // silently re-derive a scope somebody may have deliberately narrowed.
+        if (request.Visibility is { } requested) entity.Visibility = requested;
+        if (InvestigationVisibilityFilter.Reject(entity.Visibility, placement.Place) is { } scopeError)
+            return BadRequest(scopeError);
 
         await db.SaveChangesAsync(ct);
         var loaded = await db.Investigations.AsNoTracking()
@@ -524,7 +536,9 @@ public sealed record UpsertInvestigationRequest(
     // Both optional and mutually exclusive in practice: name an existing place, or describe a new
     // one. Neither given, a case-bound visit falls back to the case's own place.
     Guid? PlaceId = null,
-    NewPlaceRequest? NewPlace = null);
+    NewPlaceRequest? NewPlace = null,
+    // Null means "leave it alone": defaulted from the place on create, untouched on update.
+    Ben.Data.Common.Enums.InvestigationVisibility? Visibility = null);
 
 public sealed record AddInvestigationAttendeeRequest(Guid AppUserId, string? AssignedRole);
 /// <summary>

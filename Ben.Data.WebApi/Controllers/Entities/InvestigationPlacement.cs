@@ -30,8 +30,12 @@ internal static class InvestigationPlacement
     /// <param name="newPlace">Inline details for a place being created as part of this request.</param>
     /// <param name="userId">Recorded as the creator of any new place.</param>
     /// <param name="ct">Cancellation for the lookup and any geocoding call.</param>
-    /// <returns>An error message to return as a 400, or null when the placement succeeded.</returns>
-    internal static async Task<string?> ApplyAsync(
+    /// <returns>
+    /// The resolved place, and an error message to return as a 400 when it failed. The place comes
+    /// back rather than being stashed anywhere, because callers need it to work out the default
+    /// sharing scope and a static field on a shared helper would be a race between requests.
+    /// </returns>
+    internal static async Task<PlacementResult> ApplyAsync(
         BenDataContext db,
         Investigation investigation,
         Guid? placeId,
@@ -44,7 +48,7 @@ internal static class InvestigationPlacement
         if (placeId is { } id)
         {
             place = await db.Places.FirstOrDefaultAsync(p => p.Id == id, ct);
-            if (place is null) return "That place could not be found.";
+            if (place is null) return new PlacementResult(null, "That place could not be found.");
         }
         else if (newPlace is not null && newPlace.HasAnything)
         {
@@ -83,7 +87,7 @@ internal static class InvestigationPlacement
             // Not an error for a case-bound visit — it simply has no map position yet, and the
             // note says why rather than leaving a silent blank.
             investigation.GeocodeNote ??= "No location has been set for this investigation yet.";
-            return null;
+            return new PlacementResult(null, null);
         }
 
         investigation.PlaceId = place.Id;
@@ -93,12 +97,17 @@ internal static class InvestigationPlacement
         // same failure two different descriptions depending on which screen you read it from.
         investigation.GeocodeNote = place.GeocodeNote;
         investigation.DateGeocoded = place.DateGeocoded;
-        return null;
+        return new PlacementResult(place, null);
     }
 
     private static string? Trimmed(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
+
+/// <summary>Where an investigation ended up, or why it could not be placed.</summary>
+/// <param name="Place">Null when nothing was resolved — not always an error, see ApplyAsync.</param>
+/// <param name="Error">A message to return as a 400, or null on success.</param>
+internal readonly record struct PlacementResult(Place? Place, string? Error);
 
 /// <summary>
 /// A place being created inline with the investigation that happens there.

@@ -63,7 +63,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
             .Where(i => i.OrganizationId == orgId)
             .Select(i => new
             {
-                i.Id, i.Title, i.ScheduledDateTime, i.EndDateTime, i.Status, i.Location,
+                i.Id, i.Title, i.ScheduledDateTime, i.EndDateTime, i.Status, i.Visibility, i.Location,
                 i.CaseId, i.Place, i.PlaceId, i.Latitude, i.Longitude, i.GeocodeNote,
                 CaseYear = i.Case == null ? (int?)null : i.Case.CaseYear,
                 CaseNumber = i.Case == null ? (int?)null : i.Case.OrgCaseNumber,
@@ -91,6 +91,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
                 ScheduledDateTime: i.ScheduledDateTime,
                 EndDateTime: i.EndDateTime,
                 Status: i.Status,
+                Visibility: i.Visibility,
                 Location: i.Location,
                 CaseId: i.CaseId,
                 CaseReference: i.CaseYear is null ? null : $"#{i.CaseYear}-{i.CaseNumber:D3}",
@@ -166,9 +167,15 @@ public sealed class OrgInvestigationsController : BenControllerBase
         };
         db.Investigations.Add(entity);
 
-        var placementError = await InvestigationPlacement.ApplyAsync(
+        var placement = await InvestigationPlacement.ApplyAsync(
             db, entity, request.PlaceId, request.NewPlace, userId, ct);
-        if (placementError is not null) return BadRequest(placementError);
+        if (placement.Error is not null) return BadRequest(placement.Error);
+
+        // A landmark defaults to sharing with others who have worked it; a home does not. Chosen
+        // from the place rather than left to whoever clicks fastest.
+        entity.Visibility = request.Visibility ?? InvestigationVisibilityFilter.DefaultFor(placement.Place);
+        if (InvestigationVisibilityFilter.Reject(entity.Visibility, placement.Place) is { } scopeError)
+            return BadRequest(scopeError);
 
         // Same auto-calendar-event behaviour as the case-bound controller, so a visit booked this
         // way still shows up on the group's calendar. CaseId is nullable on OrgCalendarEvent, so
@@ -378,6 +385,7 @@ public sealed record OrgInvestigationRow(
     DateTime ScheduledDateTime,
     DateTime? EndDateTime,
     InvestigationStatus Status,
+    InvestigationVisibility Visibility,
     string? Location,
     Guid? CaseId,
     string? CaseReference,
@@ -444,4 +452,5 @@ public sealed record CreateOrgInvestigationRequest(
     DateTime? EvidenceDueDate = null,
     Guid? CaseId = null,
     Guid? PlaceId = null,
-    NewPlaceRequest? NewPlace = null);
+    NewPlaceRequest? NewPlace = null,
+    InvestigationVisibility? Visibility = null);
