@@ -250,6 +250,21 @@ builds it:
   synthesise a camera stream, so this needs either a fake-device browser flag or manual testing on
   a real phone. Budget for that rather than discovering it late.
 
+**Co-clients are not private from each other (decided 2026-08-15).** Within a single case, the
+client and their co-clients have no need for privacy between themselves. They were invited onto
+the case as participants in the same events, they already read each other's occurrences and
+messages, and treating them as strangers would be a fiction. So: no consent flags, no aliasing,
+and no photo gating *between people on the same case*. This says nothing about the org boundary or
+the public boundary, which keep their own rules.
+
+⚠ **This is currently a gap, not just a plan.** `UserAvatarController.MaySeePrivatePhotoAsync`
+has four routes — self, shared org membership, member→client (two keys), and client→org-member —
+and none of them fire when both parties are clients on the same case with no org membership
+between them. Two co-clients therefore see only each other's *public* photo today. Closing it is
+one more route in that method (shared case via `ClientRequest.AppUserId` or `CaseClientAccess`),
+plus tests; the method is already shaped as a flat list of independent routes for exactly this
+kind of addition.
+
 **U3 — Avatar resolution + rendering.** New endpoint `GET /api/users/{id}/avatar` that picks which photo the *viewer* may see: private photo if (viewer shares an active org membership with the subject) OR (viewer is a client with a case at an org where the subject is a member AND that org's policy allows it AND the subject opted in) — else public photo — else null (render initials fallback). New `UserAvatar.razor` component (initials fallback, size parameter) + integrate into `UserNameLink`. Because `UserNameLink` does no lookup, add a small circuit-scoped avatar-URL cache service rather than threading file ids through every DTO. Adopt in the 4 existing `UserNameLink` sites + message threads + member lists.
 
 **U4 — Client private-photo sharing to case orgs.** Per the doc: clients share their private image with a group while they have a case with it; co-clients likewise. This is just an extra clause in U3's resolution logic (subject has `Case→ClientRequest.AppUserId` or `CaseClientAccess` row at viewer's org) — no new tables.
