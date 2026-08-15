@@ -129,6 +129,44 @@ public interface IBenAdminClient
     /// </summary>
     Task<(byte[] Data, string ContentType)?> GetUserAvatarAsync(Guid userId, CancellationToken token = default);
 
+    // ── My contact info (self-service emails/phones/addresses/links) ─────────
+    // Same scoping rule as My profile above: every call is implicitly the signed-in user, so none
+    // of these take a user id — there is no "edit someone else" shape to get wrong.
+
+    Task<List<MyEmailRecord>> GetMyEmailsAsync(CancellationToken token = default);
+    Task<MyEmailRecord?> CreateMyEmailAsync(UpsertMyEmailRequest request, CancellationToken token = default);
+    Task<MyEmailRecord?> UpdateMyEmailAsync(Guid id, UpsertMyEmailRequest request, CancellationToken token = default);
+    Task<bool> DeleteMyEmailAsync(Guid id, CancellationToken token = default);
+
+    /// <summary>
+    /// Issues (or reissues) a validation link for one of the caller's emails. The link is always
+    /// returned, whether or not it could also be emailed — see <see cref="SendValidationResponse"/>.
+    /// </summary>
+    Task<SendValidationResponse?> SendMyEmailValidationAsync(Guid id, CancellationToken token = default);
+
+    Task<List<MyPhoneRecord>> GetMyPhonesAsync(CancellationToken token = default);
+    Task<MyPhoneRecord?> CreateMyPhoneAsync(UpsertMyPhoneRequest request, CancellationToken token = default);
+    Task<MyPhoneRecord?> UpdateMyPhoneAsync(Guid id, UpsertMyPhoneRequest request, CancellationToken token = default);
+    Task<bool> DeleteMyPhoneAsync(Guid id, CancellationToken token = default);
+
+    Task<List<MyAddressRecord>> GetMyAddressesAsync(CancellationToken token = default);
+    Task<MyAddressRecord?> CreateMyAddressAsync(UpsertMyAddressRequest request, CancellationToken token = default);
+    Task<MyAddressRecord?> UpdateMyAddressAsync(Guid id, UpsertMyAddressRequest request, CancellationToken token = default);
+    Task<bool> DeleteMyAddressAsync(Guid id, CancellationToken token = default);
+
+    Task<List<MyLinkRecord>> GetMyLinksAsync(CancellationToken token = default);
+    Task<MyLinkRecord?> CreateMyLinkAsync(UpsertMyLinkRequest request, CancellationToken token = default);
+    Task<MyLinkRecord?> UpdateMyLinkAsync(Guid id, UpsertMyLinkRequest request, CancellationToken token = default);
+    Task<bool> DeleteMyLinkAsync(Guid id, CancellationToken token = default);
+
+    // ── Email validation redemption (anonymous — the confirming visitor may have no session) ──
+
+    /// <summary>Info for the validation landing page: masked address + whether the link is still good.</summary>
+    Task<EmailValidationInfoRecord?> GetEmailValidationInfoAsync(string token, CancellationToken cancellationToken = default);
+
+    /// <summary>Confirms the address the token was issued for. True on success.</summary>
+    Task<bool> ConfirmEmailValidationAsync(string token, CancellationToken cancellationToken = default);
+
     /// <summary>Approves or denies a file-permission request. Returns false when the API rejects it.</summary>
     Task<bool> ReviewPermissionRequestAsync(
         Guid requestId, FilePermissionRequestStatus status, string? reviewNotes, CancellationToken token = default);
@@ -1242,6 +1280,45 @@ public sealed record UserNoteUpsertRequest(
     string NoteSubject,
     string NoteBody,
     bool IsPublic);
+
+// ── My contact info request/response records ──────────────────────────────────
+// Mirrors of the WebApi records in MyContactInfoController.cs / PublicEmailValidationController.cs
+// — this library cannot reference the WebApi project, so the shapes are restated here.
+
+public sealed record MyEmailRecord(
+    Guid Id, Guid UserEmailTypeId, string EmailAddress, bool IsPrimary, bool IsPublic,
+    bool IsValidated, DateTime? DateValidated, DateTime? DateValidationSent, int SortOrder);
+
+public sealed record UpsertMyEmailRequest(
+    Guid UserEmailTypeId, string? EmailAddress, bool IsPrimary, bool IsPublic, int SortOrder = 0);
+
+public sealed record SendValidationResponse(string ValidationLink, bool EmailSent);
+
+public sealed record MyPhoneRecord(
+    Guid Id, Guid UserPhoneTypeId, string PhoneNumber, string? PhoneCountry,
+    bool IsPrimary, bool IsCellular, bool IsPublic);
+
+public sealed record UpsertMyPhoneRequest(
+    Guid UserPhoneTypeId, string? PhoneNumber, string? PhoneCountry,
+    bool IsPrimary, bool IsCellular, bool IsPublic);
+
+public sealed record MyAddressRecord(
+    Guid Id, Guid UserAddressTypeId, string StreetAddress1, string? StreetAddress2,
+    string City, string State, string ZipCode, string Country, bool IsPublic, int SortOrder,
+    decimal? Latitude, decimal? Longitude);
+
+public sealed record UpsertMyAddressRequest(
+    Guid UserAddressTypeId, string? StreetAddress1, string? StreetAddress2,
+    string? City, string? State, string? ZipCode, string? Country, bool IsPublic, int SortOrder = 0,
+    decimal? Latitude = null, decimal? Longitude = null);
+
+public sealed record MyLinkRecord(
+    Guid Id, Guid UserLinkTypeId, string LinkUrl, string? DisplayText, bool IsPublic, bool IsVerifiedApproved);
+
+public sealed record UpsertMyLinkRequest(
+    Guid UserLinkTypeId, string? LinkUrl, string? DisplayText, bool IsPublic);
+
+public sealed record EmailValidationInfoRecord(string MaskedEmail, bool IsExpired);
 
 /// <summary>
 /// Request body for creating or fully replacing a lookup-type row
