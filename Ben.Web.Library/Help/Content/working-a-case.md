@@ -88,6 +88,15 @@ on site" and "ticked off afterwards" never look like the same thing.
 
 Attendance is what puts a visit on your own map under **My Investigations**.
 
+## Leading a visit
+
+The **Lead** column on the team list marks who is running this particular investigation. It is not
+a promotion: it applies to this visit only, and it lapses with it.
+
+The lead can edit the investigation — the schedule, the team, the details — for as long as they
+hold it, and can hand it to somebody else. Only people who can already change the investigation can
+name a lead, so it cannot be taken, only given.
+
 ## Who can see the findings
 
 Each investigation carries its own sharing setting, on the investigation's edit form.

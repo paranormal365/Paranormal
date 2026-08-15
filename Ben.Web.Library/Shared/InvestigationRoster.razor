@@ -91,7 +91,7 @@
                 <div class="table-responsive mt-3">
                     <table class="table table-sm align-middle mb-0">
                         <thead>
-                            <tr><th>Who</th><th>Arrived</th><th class="text-center">Attended</th></tr>
+                            <tr><th>Who</th><th>Arrived</th><th class="text-center">Attended</th><th class="text-center">Lead</th></tr>
                         </thead>
                         <tbody>
                             @foreach (var entry in _roster)
@@ -110,10 +110,29 @@
                                                checked="@(entry.DidAttend == true)"
                                                @onchange="@(e => OverrideAsync(entry, (bool)(e.Value ?? false)))" />
                                     </td>
+                                    <td class="text-center">
+                                        @* A radio, not a checkbox: exactly one person leads a
+                                           visit, and the server clears the previous holder either
+                                           way. A checkbox would suggest several are allowed. *@
+                                        <input type="radio" class="form-check-input"
+                                               name="@($"lead-{InvestigationId}")"
+                                               checked="@entry.IsLead"
+                                               @onchange="@(() => SetLeadAsync(entry, true))" />
+                                    </td>
                                 </tr>
                             }
                         </tbody>
                     </table>
+                </div>
+
+                <div class="form-text mt-1">
+                    The lead can edit this investigation, and stops being able to when the lead
+                    changes.
+                    @if (_roster.FirstOrDefault(r => r.IsLead) is { } lead)
+                    {
+                        <a href="#" class="ms-1" @onclick:preventDefault
+                           @onclick="@(() => SetLeadAsync(lead, false))">Nobody leads this visit</a>
+                    }
                 </div>
             }
         }
@@ -188,6 +207,25 @@
         {
             // A failed poll is not worth an error banner that appears and vanishes on its own —
             // the previous roster stays on screen and the next tick tries again.
+        }
+    }
+
+    private async Task SetLeadAsync(InvestigationRosterEntry entry, bool isLead)
+    {
+        _error = null;
+        try
+        {
+            // The whole roster comes back, because naming a lead also clears somebody else's row.
+            _roster = (await AdminClient.SetInvestigationLeadAsync(
+                OrgId, InvestigationId, entry.AttendeeId, isLead)).ToList();
+            _myEntry = _roster.FirstOrDefault(r => r.AppUserId == UserState.UserId);
+        }
+        catch
+        {
+            // Said out loud, unlike a failed poll: this was a deliberate action, and silently
+            // leaving the old lead in place would look like it worked.
+            _error = "That could not be saved just now.";
+            await LoadAsync();
         }
     }
 

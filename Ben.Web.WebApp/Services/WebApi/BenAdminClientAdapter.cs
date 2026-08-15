@@ -1016,6 +1016,15 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<PublicPlaceResponse?> GetPublicPlaceAsync(Guid placeId, CancellationToken token = default)
         => _api.GetAnonymousAsync<PublicPlaceResponse>($"/api/public/places/{placeId}", token);
 
+    public async Task<IReadOnlyList<InvestigationRosterEntry>> SetInvestigationLeadAsync(
+        Guid orgId, Guid investigationId, Guid attendeeId, bool isLead, CancellationToken token = default)
+    {
+        var result = await _api.PutAsync<object, IReadOnlyList<InvestigationRosterEntry>>(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/attendees/{attendeeId}/lead",
+            new { IsLead = isLead }, token);
+        return result ?? [];
+    }
+
     public async Task<IReadOnlyList<InvestigationRosterEntry>> GetInvestigationRosterAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default)
     {

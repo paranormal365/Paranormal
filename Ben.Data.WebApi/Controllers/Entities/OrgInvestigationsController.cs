@@ -225,24 +225,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
                 .AnyAsync(i => i.Id == id && i.OrganizationId == orgId, ct))
             return NotFound();
 
-        var rows = await db.InvestigationAttendees.AsNoTracking()
-            .Where(a => a.InvestigationId == id)
-            .OrderByDescending(a => a.IsLead)
-            .ThenBy(a => a.AppUser.DisplayName)
-            .Select(a => new InvestigationRosterEntry(
-                a.Id,
-                a.AppUserId,
-                a.AppUser.DisplayName,
-                a.AssignedRole,
-                a.IsLead,
-                a.Rsvp,
-                a.DidAttend,
-                a.DateArrived,
-                // Whether it was self-reported, without naming who overrode it — the roster is
-                // read by the whole team and "somebody else recorded this" is the part that
-                // matters to them.
-                a.DidAttend == true && a.AttendanceRecordedByAppUserId == null))
-            .ToListAsync(ct);
+        var rows = await RosterAsync(db, id, ct);
 
         return Ok(rows);
     }
@@ -340,6 +323,86 @@ public sealed class OrgInvestigationsController : BenControllerBase
         return Ok(await ToRosterEntryAsync(db, attendee.Id, ct));
     }
 
+    /// <summary>
+    /// Hands one attendee the lead of this visit, or takes it back.
+    /// </summary>
+    /// <remarks>
+    /// <para>Leading is delegated per visit and expires with it — the counterpart to a standing
+    /// rank. It is also one of the five ways to earn the right to edit an investigation, so this
+    /// endpoint hands out an edit right and is gated on already holding one.</para>
+    ///
+    /// <para><b>Exclusive.</b> Naming a lead clears whoever held it, because the permission model
+    /// and every screen say "the lead" of a visit, singular. Two people quietly holding an edit
+    /// right when the page shows one would be the worst of both readings.</para>
+    ///
+    /// <para>Lives here rather than on the case-bound controller because the roster is mounted on
+    /// case-less investigations too, and that route has no case id to supply.</para>
+    /// </remarks>
+    [HttpPut("{id:guid}/attendees/{attendeeId:guid}/lead")]
+    public async Task<ActionResult<IEnumerable<InvestigationRosterEntry>>> SetLead(
+        Guid orgId, Guid id, Guid attendeeId, [FromBody] SetLeadRequest request, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var attendees = await db.InvestigationAttendees
+            .Where(a => a.InvestigationId == id && a.Investigation.OrganizationId == orgId)
+            .ToListAsync(ct);
+
+        var target = attendees.FirstOrDefault(a => a.Id == attendeeId);
+        if (target is null) return NotFound();
+
+        if (!await InvestigationAccess.CanManageAsync(
+                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct))
+            return Forbid();
+
+        if (request.IsLead)
+            foreach (var other in attendees) other.IsLead = other.Id == attendeeId;
+        else
+            target.IsLead = false;
+
+        await db.SaveChangesAsync(ct);
+
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(
+            nameof(InvestigationAttendee), target.Id,
+            new InvestigationAttendee { Id = target.Id }, target, userId, AppSources.WebApi, ct));
+
+        // The whole roster comes back, not just the row that was clicked: naming a lead changes
+        // somebody else's row too, and returning one row would leave the old lead's badge showing.
+        return Ok(await RosterAsync(db, id, ct));
+    }
+
+    /// <summary>
+    /// The whole team for one investigation, lead first then by name.
+    /// </summary>
+    /// <remarks>
+    /// Shared by the roster read and by setting a lead, which changes two rows at once. Two copies
+    /// of this projection would be two chances for the badge order or the provenance flag to differ
+    /// between the list you load and the list you get back after a change.
+    /// </remarks>
+    private static async Task<List<InvestigationRosterEntry>> RosterAsync(
+        BenDataContext db, Guid investigationId, CancellationToken ct)
+        => await db.InvestigationAttendees.AsNoTracking()
+            .Where(a => a.InvestigationId == investigationId)
+            .OrderByDescending(a => a.IsLead)
+            .ThenBy(a => a.AppUser.DisplayName)
+            .Select(a => new InvestigationRosterEntry(
+                a.Id,
+                a.AppUserId,
+                a.AppUser.DisplayName,
+                a.AssignedRole,
+                a.IsLead,
+                a.Rsvp,
+                a.DidAttend,
+                a.DateArrived,
+                // Whether it was self-reported, without naming who overrode it — the roster is
+                // read by the whole team and "somebody else recorded this" is the part that
+                // matters to them.
+                a.DidAttend == true && a.AttendanceRecordedByAppUserId == null))
+            .ToListAsync(ct);
+
     private static async Task<InvestigationRosterEntry> ToRosterEntryAsync(
         BenDataContext db, Guid attendeeId, CancellationToken ct)
         => await db.InvestigationAttendees.AsNoTracking()
@@ -432,6 +495,9 @@ public sealed record CheckInRequest(DateTime? StatedArrivalTime = null);
 
 /// <summary>Records or corrects somebody else's attendance. The caller is stamped as the source.</summary>
 public sealed record OverrideAttendanceRequest(bool? DidAttend, DateTime? StatedArrivalTime = null);
+
+/// <summary>Whether this attendee is leading the visit. Naming one clears the previous holder.</summary>
+public sealed record SetLeadRequest(bool IsLead);
 
 /// <summary>
 /// Schedules an investigation against an organization, with a case or without one.

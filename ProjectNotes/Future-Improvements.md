@@ -3419,3 +3419,40 @@ Worth settling when this is picked up:
   for the same reason: four endpoints each doing their own arithmetic is four answers.
 
 Deferred by Ben — *"we can work on that later."*
+
+---
+
+## 82. Two P3 gaps left open: attendee findings, and the roster on case-less visits (found 2026-08-15)
+
+Found auditing Area 9's permission phase after it shipped. Neither is a bug in what was built —
+both are places where something was built halfway and the missing half is a feature, not a fix.
+
+### 82a. `CanCompleteMyFindings` has nothing to complete
+
+`InvestigationAccess.ComputeFlagsAsync` computes it (attendance-based: you were there, so you have
+something to say), `OrgInvestigationRow` carries it across the wire, and the mirror in
+`IBenAdminClient` documents it. **No screen reads it, because there is no per-attendee findings
+feature to gate.** The nearest thing is the investigation's own `Summary`, which is one field for
+the whole visit and manage-gated — the opposite of what this flag describes.
+
+So either:
+
+- build it — each attendee records what *they* saw, gated on this flag, distinct from the visit's
+  summary; or
+- delete the flag, and stop shipping a promise the app cannot keep.
+
+Worth noting the flag is honest about the intent (a participant's right, not a manager's). The
+question is whether that intent is still wanted.
+
+### 82b. The roster is only on case-bound investigations
+
+`InvestigationRoster` — the team list, **I've arrived**, the attendance override, and now the Lead
+column — is mounted in exactly one place: `InvestigationPanel.razor`, on a case's Investigations
+tab. A case-less visit, which is the whole point of P2 and P4, **has no roster UI at all**. Nobody
+can check in to a landmark visit, and nobody can record who turned up.
+
+The endpoints are all case-agnostic already (`api/organizations/{orgId}/investigations/{id}/…`), so
+this is a mounting problem, not a backend one: the org Investigations grid needs a way to open one
+visit and see its team. That probably means a detail view for a case-less investigation, which does
+not exist yet — `OrgInvestigations.GoToInvestigation` deliberately does nothing for case-less rows
+because there is nowhere to send them.

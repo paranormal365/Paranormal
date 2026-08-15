@@ -639,6 +639,17 @@ public interface IBenAdminClient
     /// </remarks>
     Task<PublicPlaceResponse?> GetPublicPlaceAsync(Guid placeId, CancellationToken token = default);
 
+    /// <summary>
+    /// Hands one attendee the lead of this visit, or takes it back. Returns the whole roster.
+    /// </summary>
+    /// <remarks>
+    /// Exclusive — naming a lead clears the previous holder, so the response carries every row
+    /// rather than the one that was clicked. Leading is also an edit right, so the server requires
+    /// the caller to already hold one.
+    /// </remarks>
+    Task<IReadOnlyList<InvestigationRosterEntry>> SetInvestigationLeadAsync(
+        Guid orgId, Guid investigationId, Guid attendeeId, bool isLead, CancellationToken token = default);
+
     /// <summary>Who is on an investigation's team and who has turned up. Any member may read it.</summary>
     Task<IReadOnlyList<InvestigationRosterEntry>> GetInvestigationRosterAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default);
