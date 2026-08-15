@@ -789,6 +789,133 @@ public class MyCaseControllerTests
         Assert.Single(list);
     }
 
+    // ── Witness photos + editing (U5) ─────────────────────────────────────────
+
+    private static async Task<Guid> AddFileOwnedByAsync(
+        IDbContextFactory<BenDataContext> factory, Guid ownerId)
+    {
+        var id = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.UploadFiles.Add(new UploadFile
+        {
+            Id = id, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+            FileName = "witness.jpg", StoredFileName = "w.jpg", ContentType = "image/jpeg",
+            FileSize = 1, DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    private static async Task<CaseRelatedPersonRecord> AddPersonAsync(
+        MyCaseController ctrl, Guid caseId, string name = "Jane Doe", Guid? fileId = null)
+    {
+        var result = await ctrl.AddRelatedPerson(caseId,
+            new AddRelatedPersonRequest(name, null, null, false, null, fileId), default);
+        return (CaseRelatedPersonRecord)((OkObjectResult)result.Result!).Value!;
+    }
+
+    [Fact]
+    public async Task AddRelatedPerson_CanCarryAPhoto()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl   = Build(factory, clientId);
+        var fileId = await AddFileOwnedByAsync(factory, clientId);
+
+        var person = await AddPersonAsync(ctrl, caseId, fileId: fileId);
+
+        Assert.Equal(fileId, person.UploadFileId);
+    }
+
+    [Fact]
+    public async Task AddRelatedPerson_RefusesAPhotoTheClientDoesNotOwn()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl        = Build(factory, clientId);
+        var strangerFile = await AddFileOwnedByAsync(factory, Guid.NewGuid());
+
+        var result = await ctrl.AddRelatedPerson(caseId,
+            new AddRelatedPersonRequest("Jane", null, null, false, null, strangerFile), default);
+
+        // Otherwise a witness photo could be pointed at any file in the system by id.
+        Assert.IsType<ForbidResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.CaseRelatedPeople.AnyAsync());
+    }
+
+    [Fact]
+    public async Task UpdateRelatedPerson_EditsTheDetails()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl   = Build(factory, clientId);
+        var person = await AddPersonAsync(ctrl, caseId);
+
+        var result = await ctrl.UpdateRelatedPerson(caseId, person.Id,
+            new UpdateRelatedPersonRequest("Jane Smith", 41, "Neighbour", true, "Moved in 2024."), default);
+
+        var updated = Assert.IsType<CaseRelatedPersonRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal("Jane Smith", updated.Name);
+        Assert.Equal(41, updated.Age);
+        Assert.True(updated.LivesAtProperty);
+    }
+
+    [Fact]
+    public async Task UpdateRelatedPerson_ClearsThePhotoWhenNoneIsSent()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl   = Build(factory, clientId);
+        var fileId = await AddFileOwnedByAsync(factory, clientId);
+        var person = await AddPersonAsync(ctrl, caseId, fileId: fileId);
+
+        await ctrl.UpdateRelatedPerson(caseId, person.Id,
+            new UpdateRelatedPersonRequest("Jane Doe", null, null, false, null), default);
+
+        // The edit form always submits the whole person, so an absent photo means "removed" —
+        // unlike the profile endpoints, where null means "leave alone".
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Null((await db.CaseRelatedPeople.FindAsync(person.Id))!.UploadFileId);
+        // The file itself survives; only the reference was cleared.
+        Assert.True(await db.UploadFiles.AnyAsync(f => f.Id == fileId));
+    }
+
+    [Fact]
+    public async Task UpdateRelatedPerson_RefusesAPhotoTheClientDoesNotOwn()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl         = Build(factory, clientId);
+        var person       = await AddPersonAsync(ctrl, caseId);
+        var strangerFile = await AddFileOwnedByAsync(factory, Guid.NewGuid());
+
+        var result = await ctrl.UpdateRelatedPerson(caseId, person.Id,
+            new UpdateRelatedPersonRequest("Jane", null, null, false, null, strangerFile), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task UpdateRelatedPerson_NotPrimaryClient_ReturnsForbid()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var person = await AddPersonAsync(Build(factory, clientId), caseId);
+
+        var result = await Build(factory, Guid.NewGuid()).UpdateRelatedPerson(caseId, person.Id,
+            new UpdateRelatedPersonRequest("Hacked", null, null, false, null), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task UpdateRelatedPerson_MissingName_ReturnsBadRequest()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var ctrl   = Build(factory, clientId);
+        var person = await AddPersonAsync(ctrl, caseId);
+
+        var result = await ctrl.UpdateRelatedPerson(caseId, person.Id,
+            new UpdateRelatedPersonRequest("   ", null, null, false, null), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
     [Fact]
     public async Task RemoveRelatedPerson_DeletesRow()
     {

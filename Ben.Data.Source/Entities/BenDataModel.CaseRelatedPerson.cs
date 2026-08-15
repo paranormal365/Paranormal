@@ -19,12 +19,21 @@ namespace Ben.Data.Source.Entities
         public bool LivesAtProperty { get; set; }
         public string? Notes { get; set; }
 
+        /// <summary>
+        /// Optional photo of this person, uploaded by the client. Nullable because most witnesses
+        /// will never have one, and a missing photo must never block recording that someone was
+        /// there. Points at an <see cref="UploadFile"/> like every other image in the system, so
+        /// it inherits the existing storage and access machinery rather than inventing its own.
+        /// </summary>
+        public Guid? UploadFileId { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }
         public Guid? UpdatedByAppUserId { get; set; }
 
         public virtual Case Case { get; set; } = null!;
+        public virtual UploadFile? UploadFile { get; set; }
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
     }

@@ -881,14 +881,70 @@ public sealed class MyCaseController : BenControllerBase
             Relationship       = request.Relationship?.Trim(),
             LivesAtProperty    = request.LivesAtProperty,
             Notes              = request.Notes?.Trim(),
+            UploadFileId       = request.UploadFileId,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
+        if (request.UploadFileId is { } newFileId
+            && !await ClientOwnsFileAsync(db, newFileId, userId, ct))
+            return Forbid();
         db.CaseRelatedPeople.Add(person);
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseRelatedPerson), person.Id, person, userId, AppSources.WebApi, ct));
         return Ok(ToRecord(person));
     }
+
+    /// <summary>Primary client edits a related person. Previously there was no way to correct one.</summary>
+    [HttpPut("{caseId:guid}/related-people/{personId:guid}")]
+    public async Task<ActionResult<CaseRelatedPersonRecord>> UpdateRelatedPerson(
+        Guid caseId, Guid personId, [FromBody] UpdateRelatedPersonRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name)) return BadRequest("Name is required.");
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var primaryClient = await db.Cases.AsNoTracking().Include(c => c.ClientRequest)
+            .FirstOrDefaultAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+        if (primaryClient is null) return Forbid();
+
+        // Matched on both ids: a person id from another case must read as not-found rather than
+        // letting one client edit a witness recorded on someone else's case.
+        var person = await db.CaseRelatedPeople.FirstOrDefaultAsync(p => p.Id == personId && p.CaseId == caseId, ct);
+        if (person is null) return NotFound();
+
+        // Only a file the client uploaded themselves may be attached, or they could point a
+        // witness photo at any file in the system by id.
+        if (request.UploadFileId is { } fileId
+            && fileId != person.UploadFileId
+            && !await ClientOwnsFileAsync(db, fileId, userId, ct))
+            return Forbid();
+
+        var before = new Ben.Data.Source.Entities.CaseRelatedPerson
+        {
+            Id = person.Id, CaseId = person.CaseId, Name = person.Name, Age = person.Age,
+            Relationship = person.Relationship, LivesAtProperty = person.LivesAtProperty,
+            Notes = person.Notes, UploadFileId = person.UploadFileId,
+        };
+
+        person.Name               = request.Name.Trim();
+        person.Age                = request.Age;
+        person.Relationship       = request.Relationship?.Trim();
+        person.LivesAtProperty    = request.LivesAtProperty;
+        person.Notes              = request.Notes?.Trim();
+        person.UploadFileId       = request.UploadFileId;
+        person.DateUpdated        = DateTime.UtcNow;
+        person.UpdatedByAppUserId = userId;
+
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Ben.Data.Source.Entities.CaseRelatedPerson), person.Id, before, person, userId, AppSources.WebApi, ct));
+        return Ok(ToRecord(person));
+    }
+
+    /// <summary>Whether this file exists and belongs to the caller.</summary>
+    private static Task<bool> ClientOwnsFileAsync(
+        BenDataContext db, Guid fileId, Guid userId, CancellationToken ct)
+        => db.UploadFiles.AsNoTracking().AnyAsync(f => f.Id == fileId && f.AppUserId == userId, ct);
 
     /// <summary>Primary client removes a related-person reference.</summary>
     [HttpDelete("{caseId:guid}/related-people/{personId:guid}")]
@@ -919,6 +975,7 @@ public sealed class MyCaseController : BenControllerBase
         Relationship    = p.Relationship,
         LivesAtProperty = p.LivesAtProperty,
         Notes           = p.Notes,
+        UploadFileId    = p.UploadFileId,
         DateCreated     = p.DateCreated,
     };
 

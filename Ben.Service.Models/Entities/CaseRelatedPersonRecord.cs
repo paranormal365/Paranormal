@@ -14,6 +14,10 @@ public record CaseRelatedPersonRecord
     public string? Relationship { get; init; }
     public bool LivesAtProperty { get; init; }
     public string? Notes { get; init; }
+
+    /// <summary>Optional photo of this person, or null when none was supplied.</summary>
+    public Guid? UploadFileId { get; init; }
+
     public DateTime DateCreated { get; init; }
 }
 
@@ -22,4 +26,19 @@ public record AddRelatedPersonRequest(
     int? Age,
     string? Relationship,
     bool LivesAtProperty,
-    string? Notes);
+    string? Notes,
+    Guid? UploadFileId = null);
+
+/// <summary>
+/// Replaces a related person's details. Every field is applied as sent, including
+/// <paramref name="UploadFileId"/> — null there means "no photo", which is how a client removes
+/// one. That differs from the profile endpoints, where null means "leave alone"; here the form
+/// always submits the whole person, so there is no partial update to protect.
+/// </summary>
+public record UpdateRelatedPersonRequest(
+    string Name,
+    int? Age,
+    string? Relationship,
+    bool LivesAtProperty,
+    string? Notes,
+    Guid? UploadFileId = null);

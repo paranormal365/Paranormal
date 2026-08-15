@@ -689,6 +689,10 @@ public interface IBenAdminClient
     /// <summary>Removes a related-person reference.</summary>
     Task<bool> RemoveRelatedPersonAsync(Guid caseId, Guid personId, CancellationToken token = default);
 
+    /// <summary>Edits a related person. Sends the whole person — a null photo id clears it.</summary>
+    Task<CaseRelatedPersonRecord?> UpdateRelatedPersonAsync(
+        Guid caseId, Guid personId, UpdateRelatedPersonRequest request, CancellationToken token = default);
+
     /// <summary>Attaches a file to an occurrence entry using case-scoped storage.</summary>
     Task<OccurrenceFileItem?> AttachOccurrenceFileAsync(Guid caseId, Guid entryId, Stream content, string fileName, string contentType, CancellationToken token = default);
 
