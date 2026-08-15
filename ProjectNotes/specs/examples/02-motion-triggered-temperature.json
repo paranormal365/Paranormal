@@ -1,0 +1,49 @@
+{
+  "format_version": "1.0.0",
+  "device": {
+    "manufacturer": "Field Kit Co",
+    "model": "PIR-Temp Logger",
+    "serial_number": null,
+    "firmware_version": "1.0"
+  },
+  "session": {
+    "started_at": "2026-08-14T23:00:00Z",
+    "ended_at": "2026-08-15T02:00:00Z",
+    "device_powered_on_at": null,
+    "battery_percent_at_start": 41,
+    "location_label": "cellar steps",
+    "property_area": null,
+    "timezone": "America/Chicago",
+    "trigger": {
+      "mode": "event",
+      "interval_seconds": null,
+      "event_description": "PIR motion detected within 4 m",
+      "debounce_seconds": 30
+    }
+  },
+  "readings": [
+    {
+      "at": "2026-08-14T23:41:18Z",
+      "precision": "second",
+      "sequence": 1,
+      "triggered_by": "event",
+      "measurements": {
+        "temperature": { "value": 11.8, "unit": "degC" },
+        "humidity": { "value": 71, "unit": "%" },
+        "motion_detected": { "value": true }
+      }
+    },
+    {
+      "at": "2026-08-15T01:12:44Z",
+      "precision": "second",
+      "sequence": 2,
+      "triggered_by": "event",
+      "measurements": {
+        "temperature": { "value": 9.2, "unit": "degC" },
+        "humidity": { "value": 74, "unit": "%" },
+        "motion_detected": { "value": true }
+      },
+      "note": "Second trigger of the night. No one on site."
+    }
+  ]
+}

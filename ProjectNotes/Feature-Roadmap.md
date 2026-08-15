@@ -342,6 +342,28 @@ DECIDED: **in-app help pages**, not standalone documents.
 
 ## Area 7 — Device Data-Provider JSON Standard (spec document)
 
+### ✅ SHIPPED 2026-08-15 — the spec, its schema, and worked examples
+
+- [`ProjectNotes/specs/DeviceDataFormat-v1.md`](specs/DeviceDataFormat-v1.md) — the specification.
+- [`specs/device-data-v1.schema.json`](specs/device-data-v1.schema.json) — JSON Schema 2020-12.
+- [`specs/examples/`](specs/examples/) — three worked examples, all validating.
+
+Delivered as planned. What the plan didn't say:
+
+- **The schema is enforced, not decorative.** It was run against 14 deliberately malformed
+  documents — missing version, an `interval` trigger with no period, a numeric measurement with no
+  unit, latitude 130, a `..` path, a malformed digest — and rejects all 14, while still accepting a
+  document carrying unknown keys (the forward-compatibility rule). A schema nobody tests against
+  bad input tends to accept everything.
+- **Two rules got teeth via conditional subschemas** rather than prose alone: a numeric `value`
+  requires a `unit`, and each trigger mode requires its own fields. Both are the kind of thing an
+  exporter author would otherwise get wrong and only discover at import time.
+- **Companion filenames are a security boundary, not formatting.** Absolute paths and `..` are
+  schema-invalid so an importer expanding a bundle can't be steered out of its directory.
+- Import remains unbuilt, deliberately. The doc names the three questions that belong to that work
+  (one entry per session or per reading; unknown channels kept or dropped; who may upload) rather
+  than pre-deciding them here.
+
 DECIDED: **spec document only**; import features come later.
 
 ### Plan

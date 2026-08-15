@@ -63,3 +63,7 @@ This will need to be planned out in great detail because accuracy with the audio
 The case page should should show the original request from the client, or the original report used to determine to take this case.  It should have a timeline with links to display what has happened, when investigations have occurred, when contact with the client(S) occurs.  When the page loads, it should be filtered by what is public and private, and what the end user who is looking at it has permission to see.
 
 The case page is most important, but investigations and that process is also just as important.  Investigations are scheduled and managed and should have responses from members who will attend and requests to them as well.  Each investigator will have their own page for the investigation where they can document reading from instruments, upload video, images or audio.  Document findings etc.  This is kinda like their binder to keep everything together during the investigation.  So, they can go back and review it later.  The case manager or investigation manager should be able to see everything collected during the investigation and afterwards.  Not that it has to be updated, but they can request things or verify things during the investigation if they have access to the app.
+
+---
+
+*Device data format: specified in [ProjectNotes/specs/DeviceDataFormat-v1.md](specs/DeviceDataFormat-v1.md) (2026-08-15), with a JSON Schema and worked examples. Import not yet built.*
