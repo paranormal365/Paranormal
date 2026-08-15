@@ -17,6 +17,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UserMessageType> UserMessageTypes { get; set; }
         public virtual DbSet<UserNoteType> UserNoteTypes { get; set; }
         public virtual DbSet<AppUserPhoto> AppUserPhotos { get; set; }
+        public virtual DbSet<SupportTicket> SupportTickets { get; set; }
+        public virtual DbSet<SupportTicketReply> SupportTicketReplies { get; set; }
         public virtual DbSet<SiteSetting> SiteSettings { get; set; }
         public virtual DbSet<VideoAsset> VideoAssets { get; set; }
         public virtual DbSet<UserAddress> UserAddresses { get; set; }
@@ -461,6 +463,38 @@ namespace Ben.Data.Source.Context
                 .HasIndex(e => new { e.AppUserId, e.IsPublic })
                 .HasFilter("[IsActive] = 1")
                 .IsUnique();
+
+            // ── SupportTicket ────────────────────────────────────────────────
+            // Every FK is NoAction. A ticket outlives the account that raised it: deleting a user
+            // must not erase the record of what they reported, or a staff member's replies.
+            modelBuilder.Entity<SupportTicket>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SupportTicket>()
+                .HasOne(e => e.AssignedToAppUser).WithMany()
+                .HasForeignKey(e => e.AssignedToAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // The tracking link is the only credential on an anonymous thread, so a duplicate
+            // token would hand one sender another's conversation.
+            modelBuilder.Entity<SupportTicket>()
+                .HasIndex(e => e.AccessToken).IsUnique();
+            modelBuilder.Entity<SupportTicket>()
+                .HasIndex(e => e.Reference).IsUnique();
+            // The queue is read by status, newest first, on every admin page load.
+            modelBuilder.Entity<SupportTicket>()
+                .HasIndex(e => new { e.Status, e.DateCreated });
+            // Rate limiting looks up recent submissions by sender — both halves of that check.
+            modelBuilder.Entity<SupportTicket>()
+                .HasIndex(e => new { e.FromEmail, e.DateCreated });
+            modelBuilder.Entity<SupportTicket>()
+                .HasIndex(e => new { e.SourceIpHash, e.DateCreated });
+
+            // ── SupportTicketReply ───────────────────────────────────────────
+            modelBuilder.Entity<SupportTicketReply>()
+                .HasOne(e => e.SupportTicket).WithMany(e => e.Replies)
+                .HasForeignKey(e => e.SupportTicketId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<SupportTicketReply>()
+                .HasOne(e => e.AuthorAppUser).WithMany()
+                .HasForeignKey(e => e.AuthorAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
             // ── OrganizationLogo ─────────────────────────────────────────────
             modelBuilder.Entity<OrganizationLogo>()
