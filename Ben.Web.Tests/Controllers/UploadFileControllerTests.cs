@@ -31,6 +31,13 @@ public class UploadFileControllerTests
         return new PooledDbContextFactory<BenDataContext>(options);
     }
 
+    /// <summary>
+    /// Caller identity used by the single-argument <c>BuildController</c>. Fixed rather than
+    /// random so tests can upload *as themselves* — the endpoint now refuses an appUserId that
+    /// isn't the caller's, so a random id would exercise the guard instead of the case at hand.
+    /// </summary>
+    private static readonly Guid DefaultCallerId = new("11111111-1111-1111-1111-111111111111");
+
     private static UploadFileController BuildController(IDbContextFactory<BenDataContext> factory)
     {
         var mapperMock = new Mock<IMapper>();
@@ -52,7 +59,7 @@ public class UploadFileControllerTests
             HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
             {
                 User = new ClaimsPrincipal(new ClaimsIdentity(
-                    [new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString())], "Bearer"))
+                    [new Claim(ClaimTypes.NameIdentifier, DefaultCallerId.ToString())], "Bearer"))
             }
         };
         return ctrl;
@@ -185,7 +192,7 @@ public class UploadFileControllerTests
         var controller = BuildController(factory);
 
         var result = await controller.Upload(
-            Guid.NewGuid(), Guid.NewGuid(), null, false,
+            Guid.NewGuid(), DefaultCallerId, null, false,
             MakeFile("test.txt"), default);
 
         var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
@@ -200,7 +207,7 @@ public class UploadFileControllerTests
         var controller = BuildController(factory);
 
         var result = await controller.Upload(
-            typeId, Guid.NewGuid(), null, false,
+            typeId, DefaultCallerId, null, false,
             MakeFile("archive.xyz"), default);
 
         Assert.IsType<CreatedAtActionResult>(result.Result);
@@ -214,7 +221,7 @@ public class UploadFileControllerTests
         var controller = BuildController(factory);
 
         var result = await controller.Upload(
-            typeId, Guid.NewGuid(), null, false,
+            typeId, DefaultCallerId, null, false,
             MakeFile("report.docx"), default);
 
         Assert.IsType<CreatedAtActionResult>(result.Result);
@@ -228,7 +235,7 @@ public class UploadFileControllerTests
         var controller = BuildController(factory);
 
         var result = await controller.Upload(
-            typeId, Guid.NewGuid(), null, false,
+            typeId, DefaultCallerId, null, false,
             MakeFile("photo.png"), default);
 
         var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
@@ -851,7 +858,7 @@ public class UploadFileControllerTests
         var ctrl      = BuildController(factory, ownerId);
 
         var result = await ctrl.Update(fileId,
-            new UpdateUploadFileRequest(newTypeId, "New description", true, 5, ownerId), default);
+            new UpdateUploadFileRequest(newTypeId, "New description", true, 5), default);
 
         Assert.IsType<OkObjectResult>(result.Result);
         await using var verify = await factory.CreateDbContextAsync();
@@ -879,7 +886,7 @@ public class UploadFileControllerTests
         var ctrl = BuildController(factory, Guid.NewGuid());
 
         var result = await ctrl.Update(fileId,
-            new UpdateUploadFileRequest(Guid.NewGuid(), "hacked", true, 5, null), default);
+            new UpdateUploadFileRequest(Guid.NewGuid(), "hacked", true, 5), default);
 
         Assert.IsType<ForbidResult>(result.Result);
     }
@@ -903,7 +910,7 @@ public class UploadFileControllerTests
         var ctrl = BuildController(factory, Guid.NewGuid(), isSuperAdmin: true);
 
         var result = await ctrl.Update(fileId,
-            new UpdateUploadFileRequest(Guid.NewGuid(), "updated by admin", true, 5, null), default);
+            new UpdateUploadFileRequest(Guid.NewGuid(), "updated by admin", true, 5), default);
 
         Assert.IsType<OkObjectResult>(result.Result);
     }
@@ -915,7 +922,7 @@ public class UploadFileControllerTests
         var ctrl    = BuildController(factory, Guid.NewGuid());
 
         var result = await ctrl.Update(Guid.NewGuid(),
-            new UpdateUploadFileRequest(Guid.NewGuid(), null, false, 0, null), default);
+            new UpdateUploadFileRequest(Guid.NewGuid(), null, false, 0), default);
 
         Assert.IsType<NotFoundResult>(result.Result);
     }
@@ -944,11 +951,126 @@ public class UploadFileControllerTests
         var deleteCtrl = BuildController(factory, ownerId);
 
         var updateTask = updateCtrl.Update(fileId,
-            new UpdateUploadFileRequest(Guid.NewGuid(), "Renamed", true, 1, ownerId), default);
+            new UpdateUploadFileRequest(Guid.NewGuid(), "Renamed", true, 1), default);
         var deleteTask = deleteCtrl.Delete(fileId, default);
         var (updateResult, deleteResult) = (await updateTask, await deleteTask);
 
         Assert.True(updateResult.Result is OkObjectResult or NotFoundResult);
         Assert.True(deleteResult is NoContentResult or NotFoundResult);
+    }
+
+    // ── Upload ownership: the caller cannot create a file owned by someone else ──────────
+    // Before this guard, `appUserId` was taken straight from the form: an attacker could plant
+    // files in a victim's account and storage path, attributed to the victim.
+
+    private static async Task<Guid> SeedUserAsync(IDbContextFactory<BenDataContext> factory, string email)
+    {
+        var id = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.Users.Add(new AppUser
+        {
+            Id = id, UserName = email, NormalizedUserName = email.ToUpperInvariant(),
+            Email = email, NormalizedEmail = email.ToUpperInvariant(), DateCreated = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    [Fact]
+    public async Task Upload_RefusesToCreateAFileOwnedByAnotherUser()
+    {
+        var factory  = CreateFactory();
+        var typeId   = await SeedFileType(factory, allowAll: true);
+        var attacker = Guid.NewGuid();
+        var victim   = await SeedUserAsync(factory, "victim@test.com");
+
+        var result = await BuildController(factory, attacker).Upload(
+            typeId, victim, null, false, MakeFile("planted.txt"), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.UploadFiles.AnyAsync());
+    }
+
+    [Fact]
+    public async Task Upload_WithNoAppUserId_AssignsTheCallerAsOwner()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedFileType(factory, allowAll: true);
+        var caller  = Guid.NewGuid();
+
+        // Guid.Empty is what the WebApp sends when its token store hasn't populated yet. It used
+        // to be written straight to AppUserId and blow up on the foreign key; now it just means
+        // "unspecified", and the caller owns what they uploaded.
+        var result = await BuildController(factory, caller).Upload(
+            typeId, Guid.Empty, null, false, MakeFile("mine.txt"), default);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        var file = await db.UploadFiles.SingleAsync();
+        Assert.Equal(caller, file.AppUserId);
+        Assert.Equal(caller, file.CreatedByAppUserId);
+    }
+
+    [Fact]
+    public async Task Upload_SuperAdmin_MayUploadOnBehalfOfAnotherUser()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedFileType(factory, allowAll: true);
+        var admin   = Guid.NewGuid();
+        var target  = await SeedUserAsync(factory, "target@test.com");
+
+        var result = await BuildController(factory, admin, isSuperAdmin: true).Upload(
+            typeId, target, null, false, MakeFile("for-them.txt"), default);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        var file = await db.UploadFiles.SingleAsync();
+
+        // The /admin/users/{id} page relies on this. Owner and author stay distinct facts, so the
+        // audit trail still records which admin acted rather than crediting the target.
+        Assert.Equal(target, file.AppUserId);
+        Assert.Equal(admin, file.CreatedByAppUserId);
+        Assert.Equal($"users/{target}/{file.StoredFileName}", file.StoragePath);
+    }
+
+    [Fact]
+    public async Task Upload_SuperAdmin_RejectsAnUnknownTargetUser()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedFileType(factory, allowAll: true);
+
+        var result = await BuildController(factory, Guid.NewGuid(), isSuperAdmin: true).Upload(
+            typeId, Guid.NewGuid(), null, false, MakeFile("nowhere.txt"), default);
+
+        // A bad id used to reach the database and surface as an unhandled FK violation.
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("not found", bad.Value?.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Update_RecordsTheCallerAsTheEditor()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "a.jpg", StoredFileName = "a.jpg", ContentType = "image/jpeg", FileSize = 1,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await BuildController(factory, ownerId).Update(fileId,
+            new UpdateUploadFileRequest(Guid.NewGuid(), "edited", true, 0), default);
+
+        // The request used to carry UpdatedByAppUserId, letting an editor name anyone as the
+        // author of their edit. It is server-derived now and the field is gone from the DTO.
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.Equal(ownerId, (await verify.UploadFiles.FindAsync(fileId))!.UpdatedByAppUserId);
     }
 }

@@ -133,7 +133,31 @@ public sealed class UploadFileController : BenControllerBase
         if (file.Length == 0)
             return BadRequest("File is empty.");
 
+        var callerId = GetCurrentUserId();
+        if (callerId == Guid.Empty) return Unauthorized();
+
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        // The owner comes from the caller's token, not the form. This used to be taken straight
+        // from `appUserId`, which meant any authenticated user could create a file owned by
+        // someone else: the row showed up in that person's listings and the bytes landed under
+        // their storage path. Content-planting and attribution forgery, from an unauthenticated
+        // value. (Same reasoning already applied to org sharing, which dropped its client-supplied
+        // actor ids for this reason.)
+        //
+        // The field survives because one caller genuinely needs it: the SuperAdmin user-detail
+        // page (/admin/users/{id}) uploads on behalf of the user being administered. That stays,
+        // gated on the role and with the target checked to exist; for everyone else a mismatch is
+        // refused rather than quietly rewritten, so misuse surfaces instead of hiding.
+        var ownerId = callerId;
+        if (appUserId != Guid.Empty && appUserId != callerId)
+        {
+            if (!User.IsInRole(RoleNames.SuperAdmin))
+                return Forbid();
+            if (!await db.Users.AnyAsync(u => u.Id == appUserId, cancellationToken))
+                return BadRequest("Target user not found.");
+            ownerId = appUserId;
+        }
 
         // Validate file extension against the selected type's allowed patterns
         var fileType = await db.UploadFileTypes
@@ -178,7 +202,7 @@ public sealed class UploadFileController : BenControllerBase
         {
             Id = Guid.NewGuid(),
             UploadFileTypeId = uploadFileTypeId,
-            AppUserId = appUserId,
+            AppUserId = ownerId,
             FileName = file.FileName,
             StoredFileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}",
             ContentType = contentType,
@@ -188,11 +212,14 @@ public sealed class UploadFileController : BenControllerBase
             IsPublic = isPublic,
             SortOrder = 0,
             DateCreated = DateTime.UtcNow,
-            CreatedByAppUserId = appUserId
+            // Owner and author are separate facts: on a SuperAdmin on-behalf-of upload the file
+            // belongs to the target user but was created by the admin, and the audit trail should
+            // say so rather than erase who acted. Identical for ordinary uploads, where they match.
+            CreatedByAppUserId = callerId
         };
 
         // Write to disk first; if this throws the DB record is never committed
-        var relativePath = _fileStorage.UserFilePath(appUserId, entity.StoredFileName);
+        var relativePath = _fileStorage.UserFilePath(ownerId, entity.StoredFileName);
         using (var writeStream = new MemoryStream(fileBytes))
             await _fileStorage.WriteAsync(relativePath, writeStream, cancellationToken);
         entity.StoragePath = relativePath;
@@ -245,7 +272,9 @@ public sealed class UploadFileController : BenControllerBase
         entity.IsPublic = request.IsPublic;
         entity.SortOrder = request.SortOrder;
         entity.DateUpdated = DateTime.UtcNow;
-        entity.UpdatedByAppUserId = request.UpdatedByAppUserId;
+        // Server-derived, never taken from the request: an editor who can name themselves can
+        // name someone else. The request no longer carries the field at all.
+        entity.UpdatedByAppUserId = userId;
 
         await db.SaveChangesAsync(cancellationToken);
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFile), id, before, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
@@ -529,7 +558,6 @@ public sealed record UpdateUploadFileRequest(
     Guid UploadFileTypeId,
     string? Description,
     bool IsPublic,
-    int SortOrder,
-    Guid? UpdatedByAppUserId);
+    int SortOrder);
 
 public sealed record SaveEditStateRequest(string? EditStateJson);

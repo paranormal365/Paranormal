@@ -7,8 +7,7 @@ public sealed record UpdateUploadFileRequest(
     Guid UploadFileTypeId,
     string? Description,
     bool IsPublic,
-    int SortOrder,
-    Guid? UpdatedByAppUserId);
+    int SortOrder);
 
 // ── Org Sharing ──────────────────────────────────────────────────────────────
 // SharedByAppUserId/UpdatedByAppUserId dropped — the server now derives the acting user from the
