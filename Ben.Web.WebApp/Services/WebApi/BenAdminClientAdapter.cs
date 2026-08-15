@@ -1,5 +1,6 @@
 using Ben.Data.Common.Enums;
 using Ben.Service.Models.Admin;
+using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
 using Ben.Service.Models.People;
 using Ben.Web.Library.Services;
@@ -312,6 +313,41 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<OrgBrowsePage?> BrowseOrganizationsAsync(int page = 1, int pageSize = 24, CancellationToken token = default)
         => _api.GetAnonymousAsync<OrgBrowsePage>(
                $"/api/public/organizations/browse?page={page}&pageSize={pageSize}", token);
+
+    // ── Support tickets ───────────────────────────────────────────────────────
+
+    public Task<SiteContactInfo?> GetSiteContactAsync(CancellationToken token = default)
+        => _api.GetAnonymousAsync<SiteContactInfo>("/api/public/site-contact", token);
+
+    public Task<SupportFormTokenResponse?> GetSupportFormTokenAsync(CancellationToken token = default)
+        => _api.GetAnonymousAsync<SupportFormTokenResponse>("/api/public/support-tickets/form-token", token);
+
+    public Task<SubmitSupportTicketResponse?> SubmitSupportTicketAsync(SubmitSupportTicketRequest request, CancellationToken token = default)
+        => _api.PostAnonymousAsync<SubmitSupportTicketRequest, SubmitSupportTicketResponse>("/api/public/support-tickets", request, token);
+
+    public Task<SupportTicketPublicRecord?> GetSupportTicketByTokenAsync(Guid accessToken, CancellationToken token = default)
+        => _api.GetAnonymousAsync<SupportTicketPublicRecord>($"/api/public/support-tickets/{accessToken}", token);
+
+    public Task<bool> ReplyToSupportTicketByTokenAsync(Guid accessToken, AddSupportTicketReplyRequest request, CancellationToken token = default)
+        => _api.PostAnonymousVoidAsync($"/api/public/support-tickets/{accessToken}/replies", request, token);
+
+    public async Task<SupportTicketPage?> GetSupportTicketsAsync(SupportTicketStatus? status = null, SupportTicketTopic? topic = null, string? search = null, int page = 1, int pageSize = 25, CancellationToken token = default)
+    {
+        var query = new List<string> { $"page={page}", $"pageSize={pageSize}" };
+        if (status is not null) query.Add($"status={(int)status}");
+        if (topic is not null) query.Add($"topic={(int)topic}");
+        if (!string.IsNullOrWhiteSpace(search)) query.Add($"search={Uri.EscapeDataString(search)}");
+        return await _api.GetAsync<SupportTicketPage>($"/api/admin/support-tickets?{string.Join("&", query)}", token);
+    }
+
+    public async Task<IReadOnlyList<SupportTicketReplyRecord>> GetSupportTicketRepliesAsync(Guid id, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<SupportTicketReplyRecord>>($"/api/admin/support-tickets/{id}/replies", token) ?? [];
+
+    public Task<bool> AddSupportTicketReplyAsync(Guid id, AddSupportTicketReplyRequest request, CancellationToken token = default)
+        => _api.PostVoidAsync($"/api/admin/support-tickets/{id}/replies", request, token);
+
+    public Task<SupportTicketAdminRecord?> UpdateSupportTicketAsync(Guid id, UpdateSupportTicketRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpdateSupportTicketRequest, SupportTicketAdminRecord>($"/api/admin/support-tickets/{id}", request, token);
 
     // ── Organization Addresses ────────────────────────────────────────────────
 

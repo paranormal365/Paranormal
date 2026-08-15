@@ -51,10 +51,22 @@
                     <div class="d-flex gap-2 align-items-start mt-2 flex-wrap">
                         @* Plain input rather than TelerikTextBox: Telerik inputs bind on blur in
                            this codebase, which loses the last edit when Save is clicked directly. *@
-                        <input class="form-control" style="max-width:420px;"
-                               placeholder="@Placeholder(s.Key)"
-                               value="@_drafts[s.Key]"
-                               @oninput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)" />
+                        @if (s.IsMultiLine)
+                        {
+                            @* A postal address in a one-line input is technically editable and
+                               miserable to edit. The server says which settings need the room. *@
+                            <textarea class="form-control" style="max-width:420px;" rows="4"
+                                      placeholder="@Placeholder(s.Key)"
+                                      value="@_drafts[s.Key]"
+                                      @oninput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)"></textarea>
+                        }
+                        else
+                        {
+                            <input class="form-control" style="max-width:420px;"
+                                   placeholder="@Placeholder(s.Key)"
+                                   value="@_drafts[s.Key]"
+                                   @oninput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)" />
+                        }
                         <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                                        Enabled="@(_savingKey != s.Key)"
                                        OnClick="@(() => SaveAsync(s.Key))">Save</TelerikButton>

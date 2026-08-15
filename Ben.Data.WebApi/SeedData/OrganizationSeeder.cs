@@ -106,6 +106,7 @@ internal static class OrganizationSeeder
         // ── Seed UserMessageType for membership responses ────────────────────
         await EnsureMembershipResponseMessageType(db, owner.Id);
         await EnsureTaxonomyReviewMessageType(db, owner.Id);
+        await EnsureSupportTicketMessageType(db, owner.Id);
     }
 
     /// <summary>
@@ -121,6 +122,35 @@ internal static class OrganizationSeeder
     /// </summary>
     internal static readonly Guid TaxonomyReviewMessageTypeId =
         new("b2c3d4e5-f607-8901-bcde-f23456789012");
+
+    /// <summary>
+    /// Fixed ID for the "Support Ticket" UserMessageType — the notice app administrators get when
+    /// a visitor uses the contact form.
+    /// </summary>
+    internal static readonly Guid SupportTicketMessageTypeId =
+        new("c3d4e5f6-0718-9012-cdef-345678901234");
+
+    private static async Task EnsureSupportTicketMessageType(BenDataContext db, Guid createdByUserId)
+    {
+        if (await db.UserMessageTypes.AnyAsync(t => t.Id == SupportTicketMessageTypeId))
+            return;
+
+        db.UserMessageTypes.Add(new UserMessageType
+        {
+            Id                 = SupportTicketMessageTypeId,
+            Name               = "Support Ticket",
+            Description        = "System-generated notice to app administrators that a visitor submitted the contact form.",
+            IconClass          = "fa-life-ring",
+            ColorClass         = "text-primary",
+            IsActive           = true,
+            IsPublic           = false,
+            SortOrder          = 120,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = createdByUserId,
+        });
+        await db.SaveChangesAsync();
+        Console.WriteLine("[OrganizationSeeder] Seeded 'Support Ticket' UserMessageType.");
+    }
 
     private static async Task EnsureTaxonomyReviewMessageType(BenDataContext db, Guid createdByUserId)
     {
