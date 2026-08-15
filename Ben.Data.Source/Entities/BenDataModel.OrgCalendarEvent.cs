@@ -17,6 +17,19 @@ namespace Ben.Data.Source.Entities
         public string Title { get; set; } = null!;
         public string? Description { get; set; }
         public string? Location { get; set; }
+
+        /// <summary>
+        /// One of the organization's own addresses, when the event is somewhere they have on file.
+        /// </summary>
+        /// <remarks>
+        /// Optional, and independent of <see cref="Location"/>: an event can name a saved address,
+        /// free text, both, or neither. Kept as a reference rather than copied text so a corrected
+        /// address corrects every event held there.
+        /// </remarks>
+        public Guid? OrganizationAddressId { get; set; }
+
+        /// <summary>Video call link — Zoom, Teams, whatever the group uses. Optional.</summary>
+        public string? MeetingUrl { get; set; }
         public DateTime StartDateTime { get; set; }
         public DateTime EndDateTime { get; set; }
         public bool IsAllDay { get; set; }
@@ -36,6 +49,7 @@ namespace Ben.Data.Source.Entities
         public Guid? UpdatedByAppUserId { get; set; }
 
         public virtual Organization Organization { get; set; } = null!;
+        public virtual OrganizationAddress? OrganizationAddress { get; set; }
         public virtual OrgCalendarEventType? EventType { get; set; }
         public virtual Case? Case { get; set; }
         public virtual AppUser CreatedByAppUser { get; set; } = null!;

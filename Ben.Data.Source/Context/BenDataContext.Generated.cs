@@ -1365,6 +1365,12 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrgCalendarEvent>()
                 .HasOne(e => e.Case).WithMany()
                 .HasForeignKey(e => e.CaseId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            // NoAction, not SetNull: SQL Server already refuses multiple cascade paths into this
+            // table (error 1785), and an address removed from the org should surface as a stale
+            // reference to fix rather than silently detaching itself from every event held there.
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .HasOne(e => e.OrganizationAddress).WithMany()
+                .HasForeignKey(e => e.OrganizationAddressId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<OrgCalendarEvent>()
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);

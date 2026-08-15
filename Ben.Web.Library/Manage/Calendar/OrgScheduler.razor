@@ -70,11 +70,42 @@
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Location (optional)</label>
-                <TelerikTextBox @bind-Value="@_form.Location" Width="100%" />
+                <TelerikTextBox @bind-Value="@_form.Location" Width="100%"
+                                Placeholder="Room, landmark, or free text" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Or one of our addresses (optional)</label>
+                @* Plain select — Telerik dropdowns have repeatedly failed to push their selection
+                   in this codebase. Stored as a reference, not copied text, so correcting the
+                   address corrects every event held there. *@
+                <select class="form-select"
+                        @onchange="@(e => _form.OrganizationAddressId =
+                            Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
+                    <option value="" selected="@(_form.OrganizationAddressId is null)">(None)</option>
+                    @foreach (var address in _addresses)
+                    {
+                        <option value="@address.Id" selected="@(address.Id == _form.OrganizationAddressId)">
+                            @address.StreetAddress1, @address.City @address.State
+                        </option>
+                    }
+                </select>
+                @if (_addresses.Count == 0)
+                {
+                    <div class="form-text">This group has no saved addresses yet.</div>
+                }
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Meeting link (optional)</label>
+                <TelerikTextBox @bind-Value="@_form.MeetingUrl" Width="100%"
+                                Placeholder="Zoom, Teams, Meet — paste the join link" />
+                <div class="form-text">A bare address like zoom.us/j/123 is fine; https:// is added for you.</div>
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Description (optional)</label>
-                <TelerikTextArea @bind-Value="@_form.Description" Rows="3" Width="100%" />
+                @* Rich text, because the description is stored and displayed as HTML. Bound with
+                   @bind-Value:after rather than OnChange — OnChange on TelerikEditor threw an
+                   unhandled cast exception (item #58). *@
+                <TelerikEditor @bind-Value="@_form.Description" Height="160px" Tools="@_editorTools" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Repeats</label>
@@ -155,6 +186,25 @@
     private OrgCalendarEventRecord? _editingEvent;
     private string? _dialogError;
     private EventFormModel _form = new();
+
+    private IReadOnlyList<OrganizationAddressRecord> _addresses = [];
+
+    private static readonly List<Telerik.Blazor.Components.IEditorTool> _editorTools =
+    [
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.Bold(),
+            new Telerik.Blazor.Components.Editor.Italic(),
+            new Telerik.Blazor.Components.Editor.Underline()),
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.UnorderedList(),
+            new Telerik.Blazor.Components.Editor.OrderedList()),
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.CreateLink(),
+            new Telerik.Blazor.Components.Editor.Unlink()),
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.Undo(),
+            new Telerik.Blazor.Components.Editor.Redo()),
+    ];
 
     // ── Recurrence presets ────────────────────────────────────────────────────
     // Nobody knows RFC5545 by heart, so the field offers the handful of patterns people actually
@@ -249,6 +299,9 @@
             _eventTypes = (await AdminClient.GetCalendarEventTypesAsync(OrgId)).ToList();
             _eventTypeOptions = [new(null, "(No type)"),
                 .. _eventTypes.Select(t => new EventTypeOption(t.Id, t.Name))];
+            // Loaded once with the calendar, not per dialog open — the list is short and rarely
+            // changes, and fetching it while a dialog is opening is a visible stutter.
+            _addresses = await AdminClient.GetOrgAddressesAsync(OrgId);
             await LoadEventsAsync();
         }
         catch { _error = "Failed to load calendar."; }
@@ -309,6 +362,8 @@
                 IsAllDay       = _editingEvent.IsAllDay,
                 IsPublic       = _editingEvent.IsPublic,
                 EventTypeId    = _editingEvent.EventTypeId,
+                OrganizationAddressId = _editingEvent.OrganizationAddressId,
+                MeetingUrl     = _editingEvent.MeetingUrl ?? "",
                 RecurrenceRule = _editingEvent.RecurrenceRule ?? "",
             };
         }
@@ -354,6 +409,8 @@
                 IsAllDay:       _form.IsAllDay,
                 IsPublic:       _form.IsPublic,
                 EventTypeId:    _form.EventTypeId,
+                OrganizationAddressId: _form.OrganizationAddressId,
+                MeetingUrl:     _form.MeetingUrl,
                 CaseId:         _editingEvent?.CaseId,
                 RecurrenceRule: string.IsNullOrWhiteSpace(_form.RecurrenceRule) ? null : _form.RecurrenceRule.Trim());
 
@@ -415,6 +472,8 @@
         public bool     IsAllDay       { get; set; }
         public bool     IsPublic       { get; set; }
         public Guid?    EventTypeId    { get; set; }
+        public Guid?    OrganizationAddressId { get; set; }
+        public string   MeetingUrl     { get; set; } = "";
         public string   RecurrenceRule { get; set; } = "";
     }
 

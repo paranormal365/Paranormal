@@ -1507,7 +1507,9 @@ public sealed record UpsertCalendarEventRequest(
     bool IsPublic,
     Guid? EventTypeId,
     Guid? CaseId,
-    string? RecurrenceRule);
+    string? RecurrenceRule,
+    Guid? OrganizationAddressId = null,
+    string? MeetingUrl = null);
 
 public sealed record AddAttendeeRequest(Guid AppUserId, string? AssignedTask);
 

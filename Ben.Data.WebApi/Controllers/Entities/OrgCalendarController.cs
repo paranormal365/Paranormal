@@ -123,7 +123,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         var query = db.OrgCalendarEvents.AsNoTracking()
             .Include(e => e.EventType)
             .Include(e => e.Case)
-            .Include(e => e.Attendees)
+            .Include(e => e.Attendees).Include(e => e.OrganizationAddress)
             .Where(e => e.OrganizationId == orgId);
 
         if (from.HasValue) query = query.Where(e => e.EndDateTime >= from.Value);
@@ -140,7 +140,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
         var ev = await db.OrgCalendarEvents.AsNoTracking()
-            .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees)
+            .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees).Include(e => e.OrganizationAddress)
             .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         return ev is null ? NotFound() : Ok(_mapper.Map<OrgCalendarEventRecord>(ev));
     }
@@ -158,6 +158,8 @@ public sealed class OrgCalendarEventController : BenControllerBase
             EventTypeId = request.EventTypeId, CaseId = request.CaseId,
             Title = request.Title.Trim(), Description = request.Description?.Trim(),
             Location = request.Location?.Trim(),
+            OrganizationAddressId = request.OrganizationAddressId,
+            MeetingUrl = NormaliseUrl(request.MeetingUrl),
             StartDateTime = request.StartDateTime, EndDateTime = request.EndDateTime,
             IsAllDay = request.IsAllDay, IsPublic = request.IsPublic,
             RecurrenceRule = request.RecurrenceRule?.Trim(),
@@ -167,7 +169,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         await db.SaveChangesAsync(ct);
 
         var loaded = await db.OrgCalendarEvents.AsNoTracking()
-            .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees)
+            .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees).Include(e => e.OrganizationAddress)
             .FirstAsync(e => e.Id == entity.Id, ct);
         return CreatedAtAction(nameof(GetById), new { orgId, eventId = entity.Id },
             _mapper.Map<OrgCalendarEventRecord>(loaded));
@@ -186,6 +188,8 @@ public sealed class OrgCalendarEventController : BenControllerBase
         entity.EventTypeId = request.EventTypeId; entity.CaseId = request.CaseId;
         entity.Title = request.Title.Trim(); entity.Description = request.Description?.Trim();
         entity.Location = request.Location?.Trim();
+        entity.OrganizationAddressId = request.OrganizationAddressId;
+        entity.MeetingUrl = NormaliseUrl(request.MeetingUrl);
         entity.StartDateTime = request.StartDateTime; entity.EndDateTime = request.EndDateTime;
         entity.IsAllDay = request.IsAllDay; entity.IsPublic = request.IsPublic;
         entity.RecurrenceRule = request.RecurrenceRule?.Trim();
@@ -193,7 +197,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
         await db.SaveChangesAsync(ct);
         var loaded = await db.OrgCalendarEvents.AsNoTracking()
-            .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees)
+            .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees).Include(e => e.OrganizationAddress)
             .FirstAsync(e => e.Id == entity.Id, ct);
         return Ok(_mapper.Map<OrgCalendarEventRecord>(loaded));
     }
@@ -209,6 +213,29 @@ public sealed class OrgCalendarEventController : BenControllerBase
         db.OrgCalendarEvents.Remove(entity);
         await db.SaveChangesAsync(ct);
         return NoContent();
+    }
+
+    /// <summary>
+    /// Tidies a pasted meeting link, or drops it if it isn't a usable web address.
+    /// </summary>
+    /// <remarks>
+    /// People paste "zoom.us/j/123" as often as the full URL, so a bare host gets https://
+    /// rather than being rejected. Anything that still will not parse as http(s) is stored as null
+    /// instead of as text that would render a dead link — a link that goes nowhere is worse than
+    /// no link, because someone will click it while a meeting is starting.
+    /// </remarks>
+    internal static string? NormaliseUrl(string? raw)
+    {
+        var value = raw?.Trim();
+        if (string.IsNullOrWhiteSpace(value)) return null;
+
+        if (!value.Contains("://", StringComparison.Ordinal))
+            value = "https://" + value;
+
+        return Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+                ? uri.ToString()
+                : null;
     }
 
     // ── Attendees ─────────────────────────────────────────────────────────────
@@ -310,7 +337,9 @@ public sealed record UpsertCalendarEventTypeRequest(
 public sealed record UpsertCalendarEventRequest(
     string Title, string? Description, string? Location,
     DateTime StartDateTime, DateTime EndDateTime, bool IsAllDay, bool IsPublic,
-    Guid? EventTypeId, Guid? CaseId, string? RecurrenceRule);
+    Guid? EventTypeId, Guid? CaseId, string? RecurrenceRule,
+    Guid? OrganizationAddressId = null,
+    string? MeetingUrl = null);
 
 public sealed record AddAttendeeRequest(Guid AppUserId, string? AssignedTask);
 public sealed record RsvpRequest(Ben.Data.Common.Enums.RsvpStatus RsvpStatus);
