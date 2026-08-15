@@ -2,6 +2,7 @@ using Ben.Web.WebApp.Services.WebApi;
 using Ben.Web.WebApp.Services;
 using Ben.Web.WebApp.Components;
 using Ben.Web.Library.Services;
+using Ben.Web.Library.Help;
 using Ben.Video.Editor.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -85,6 +86,12 @@ builder.Services.AddScoped<NotificationState>();
 // Scoped = per circuit. Avatar resolution depends on who is asking, so this must not be shared
 // across sessions — see AvatarCache.
 builder.Services.AddScoped<AvatarCache>();
+
+// Help documents are embedded, immutable between deployments and identical for every reader, so
+// one parse for the whole process is right. Who may *see* which document is per-circuit, and lives
+// in the resolver instead.
+builder.Services.AddSingleton<HelpContentService>();
+builder.Services.AddScoped<HelpViewerResolver>();
 
 // ── Microsoft Entra OIDC ─────────────────────────────────────────────────────
 // EntraTokenHolder is populated by middleware before the Blazor circuit starts

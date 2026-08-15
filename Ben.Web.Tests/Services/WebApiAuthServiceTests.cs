@@ -187,7 +187,7 @@ public class WebApiAuthServiceTests
         // production, so StopImpersonatingAsync can only re-derive IsSuperAdmin via
         // /api/me — assert that path is actually exercised, not a JWT re-parse.
         apiMock.Setup(x => x.GetAsync<MeResult>("/api/me", default))
-               .ReturnsAsync(new MeResult(SuperAdminId, "admin@test.com", true));
+               .ReturnsAsync(new MeResult(SuperAdminId, "admin@test.com", true, false));
 
         await svc.StopImpersonatingAsync();
 
@@ -225,7 +225,7 @@ public class WebApiAuthServiceTests
         await svc.ImpersonateAsync(TargetUserId, "target@test.com");
 
         apiMock.Setup(x => x.GetAsync<MeResult>("/api/me", default))
-               .ReturnsAsync(new MeResult(SuperAdminId, "admin@test.com", true));
+               .ReturnsAsync(new MeResult(SuperAdminId, "admin@test.com", true, false));
 
         await svc.StopImpersonatingAsync();
 

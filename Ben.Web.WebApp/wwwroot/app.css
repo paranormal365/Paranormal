@@ -231,3 +231,124 @@ body[data-bs-theme="dark"] .k-drawer {
     background: var(--kendo-color-surface, #f5f5f5);
     flex-shrink: 0;
 }
+
+/* ── Help documentation ──────────────────────────────────────────────────────
+   Global rather than component-scoped: the document body is rendered from
+   markdown as a MarkupString, so its headings, tables and lists never carry a
+   scope attribute and scoped rules would not reach them. */
+
+.help-page {
+    max-width: 1100px;
+}
+
+.help-section > summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+.help-section > summary::-webkit-details-marker {
+    display: none;
+}
+
+.help-section > summary::before {
+    content: "▸";
+    display: inline-block;
+    margin-right: .5rem;
+    transition: transform .15s ease;
+    color: var(--kendo-color-subtle, #666);
+}
+
+.help-section[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.help-contents {
+    position: sticky;
+    top: 1rem;
+}
+
+.help-body h2 {
+    font-size: 1.25rem;
+    margin-top: 1.75rem;
+    margin-bottom: .5rem;
+}
+
+.help-body h2:first-child {
+    margin-top: 0;
+}
+
+.help-body h3 {
+    font-size: 1.05rem;
+    margin-top: 1.25rem;
+    margin-bottom: .5rem;
+}
+
+.help-body p,
+.help-body ul,
+.help-body ol {
+    line-height: 1.65;
+}
+
+.help-body table {
+    width: 100%;
+    margin: 1rem 0;
+    border-collapse: collapse;
+}
+
+.help-body th,
+.help-body td {
+    padding: .5rem .75rem;
+    border: 1px solid var(--kendo-color-border, #e0e0e0);
+    text-align: left;
+    vertical-align: top;
+}
+
+.help-body th {
+    background: var(--kendo-color-surface, #f5f5f5);
+}
+
+.help-body img {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--kendo-color-border, #e0e0e0);
+    border-radius: 6px;
+}
+
+/* The in-app help badge: small enough to sit beside a heading or a field label
+   without competing with it. */
+.help-link-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-left: .35rem;
+    border-radius: 50%;
+    border: 1px solid var(--kendo-color-border, #c8c8c8);
+    background: var(--kendo-color-surface, #f2f2f2);
+    color: var(--kendo-color-subtle, #555);
+    font-size: .7rem;
+    font-weight: 700;
+    line-height: 1;
+    text-decoration: none;
+    vertical-align: middle;
+}
+
+.help-link-badge:hover {
+    background: var(--kendo-color-primary, #4b6cb7);
+    border-color: var(--kendo-color-primary, #4b6cb7);
+    color: #fff;
+    text-decoration: none;
+}
+
+#copyright + * .footer-link,
+.appbar-bottom .footer-link {
+    color: inherit;
+    opacity: .75;
+    text-decoration: none;
+}
+
+.appbar-bottom .footer-link:hover {
+    opacity: 1;
+    text-decoration: underline;
+}

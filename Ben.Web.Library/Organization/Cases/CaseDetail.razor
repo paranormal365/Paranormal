@@ -31,7 +31,7 @@
                 <div class="d-flex align-items-center gap-2 mb-1">
                     <a href="/organizations/@OrgId/cases" class="text-secondary small">← Cases</a>
                 </div>
-                <h3 class="mb-0">@_case.DisplayLabel</h3>
+                <h3 class="mb-0">@_case.DisplayLabel<HelpLink Slug="working-a-case" Anchor="the-case-tabs" /></h3>
                 <div class="text-secondary small mt-1">
                     @_case.City, @_case.State ·
                     Opened @_case.DateCaseOpened.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy")

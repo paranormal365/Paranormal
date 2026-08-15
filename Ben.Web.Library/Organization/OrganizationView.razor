@@ -88,7 +88,7 @@
                        checked="@_editAllowMemberPrivatePhotos"
                        @onchange="@(e => _editAllowMemberPrivatePhotos = (bool)(e.Value ?? false))" />
                 <label for="edit-member-photos" class="form-label mb-0">
-                    Let clients see members' private photos
+                    Let clients see members' private photos<HelpLink Slug="organization-administration" Anchor="group-settings" />
                     <span class="d-block text-secondary small">
                         Only for members who have also turned this on for themselves. Nothing is
                         shared unless both the group and the member agree.

@@ -1229,6 +1229,9 @@ public sealed class BenAdminClientAdapter : IBenAdminClient
     public Task<CaseRelatedPersonRecord?> AddRelatedPersonAsync(Guid caseId, AddRelatedPersonRequest request, CancellationToken token = default)
         => _api.PostAsync<AddRelatedPersonRequest, CaseRelatedPersonRecord>($"/api/my-cases/{caseId}/related-people", request, token);
 
+    public Task<Ben.Data.Common.Enums.HelpAudience?> GetMyHelpAudienceAsync(CancellationToken token = default)
+        => _api.GetAsync<Ben.Data.Common.Enums.HelpAudience?>("/api/me/help-audience", token);
+
     public async Task<List<VideoAssetAdminRecord>> GetVideoAssetsAsync(CancellationToken token = default)
         => await _api.GetAsync<List<VideoAssetAdminRecord>>("/api/admin/video-assets", token) ?? [];
 

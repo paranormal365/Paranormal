@@ -9,6 +9,12 @@ public interface IWebApiTokenStore
     string? UserDisplayName { get; set; }
     Guid? UserId { get; set; }
     bool IsSuperAdmin { get; set; }
+
+    /// <summary>
+    /// App-wide Admin role. Grants nothing on its own today beyond help-document visibility —
+    /// see RoleNames.Admin.
+    /// </summary>
+    bool IsAdmin { get; set; }
     bool IsAuthenticated => !string.IsNullOrWhiteSpace(AccessToken);
 
     // Impersonation

@@ -41,7 +41,8 @@ public sealed class MeController : BenControllerBase
             if (linkedUser is not null)
             {
                 var isSuperAdmin = await _userManager.IsInRoleAsync(linkedUser, RoleNames.SuperAdmin);
-                return Ok(new MeResponse(linkedUser.Id, linkedUser.Email ?? string.Empty, isSuperAdmin));
+                var isAdmin = await _userManager.IsInRoleAsync(linkedUser, RoleNames.Admin);
+                return Ok(new MeResponse(linkedUser.Id, linkedUser.Email ?? string.Empty, isSuperAdmin, isAdmin));
             }
         }
 
@@ -52,7 +53,8 @@ public sealed class MeController : BenControllerBase
             if (user is not null)
             {
                 var isSuperAdmin = await _userManager.IsInRoleAsync(user, RoleNames.SuperAdmin);
-                return Ok(new MeResponse(user.Id, user.Email ?? string.Empty, isSuperAdmin));
+                var isAdmin = await _userManager.IsInRoleAsync(user, RoleNames.Admin);
+                return Ok(new MeResponse(user.Id, user.Email ?? string.Empty, isSuperAdmin, isAdmin));
             }
         }
         catch (FormatException)
@@ -68,8 +70,16 @@ public sealed class MeController : BenControllerBase
                     ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
                     ?? string.Empty;
 
-        return Ok(new MeResponse(Guid.Empty, email, IsSuperAdmin: false));
+        return Ok(new MeResponse(Guid.Empty, email, IsSuperAdmin: false, IsAdmin: false));
     }
 }
 
-public record MeResponse(Guid UserId, string Email, bool IsSuperAdmin);
+/// <param name="UserId">The local AppUser id, or Guid.Empty for an Entra user with no linked account.</param>
+/// <param name="Email">Sign-in address.</param>
+/// <param name="IsSuperAdmin">Holds the SuperAdmin role.</param>
+/// <param name="IsAdmin">
+/// Holds the app-wide Admin role. Reported separately from SuperAdmin rather than folded into it:
+/// Admin is a strictly smaller thing (see RoleNames.Admin), and a client that cannot tell them
+/// apart would have to guess.
+/// </param>
+public record MeResponse(Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin);

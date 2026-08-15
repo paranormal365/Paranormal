@@ -689,6 +689,12 @@ public interface IBenAdminClient
     /// <summary>Removes a related-person reference.</summary>
     Task<bool> RemoveRelatedPersonAsync(Guid caseId, Guid personId, CancellationToken token = default);
 
+    /// <summary>
+    /// How much of the help documentation the signed-in caller may see. Computed server-side —
+    /// the org role needed for the administration documents isn't available to the browser.
+    /// </summary>
+    Task<Ben.Data.Common.Enums.HelpAudience?> GetMyHelpAudienceAsync(CancellationToken token = default);
+
     // ── Clipart catalog (SuperAdmin) ─────────────────────────────────────────
 
     /// <summary>Every catalog asset, active and retired.</summary>

@@ -17,6 +17,12 @@ public interface IBenUserState
     /// <summary>Gets whether the authenticated user holds the <see cref="Ben.Data.Common.Constants.RoleNames.SuperAdmin"/> role.</summary>
     bool IsSuperAdmin { get; }
 
+    /// <summary>
+    /// App-wide Admin role — a tier below SuperAdmin. Today this only reveals the
+    /// app-administration help documents; see RoleNames.Admin for why nothing else reads it yet.
+    /// </summary>
+    bool IsAdmin { get; }
+
     /// <summary>Gets whether the current session is an impersonation session started by a SuperAdmin.</summary>
     bool IsImpersonating { get; }
 

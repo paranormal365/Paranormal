@@ -32,6 +32,7 @@ public sealed class WebApiAuthService : IWebApiAuthService
             if (me is not null)
             {
                 _tokenStore.IsSuperAdmin = me.IsSuperAdmin;
+                _tokenStore.IsAdmin = me.IsAdmin;
                 _tokenStore.UserId = me.UserId;
             }
         }
@@ -67,6 +68,7 @@ public sealed class WebApiAuthService : IWebApiAuthService
         _tokenStore.UserDisplayName = null;
         _tokenStore.UserId = null;
         _tokenStore.IsSuperAdmin = false;
+        _tokenStore.IsAdmin = false;
         _tokenStore.IsImpersonating = false;
         _tokenStore.OriginalAccessToken = null;
         _tokenStore.OriginalRefreshToken = null;
@@ -104,6 +106,7 @@ public sealed class WebApiAuthService : IWebApiAuthService
         _tokenStore.UserEmail = _tokenStore.OriginalUserEmail;
         _tokenStore.UserId = _tokenStore.OriginalUserId;
         _tokenStore.IsSuperAdmin = false;
+        _tokenStore.IsAdmin = false;
 
         // Same reason as LoginAsync: the Identity API's opaque data-protected tokens
         // aren't JWTs, so JwtClaimsParser can't read IsSuperAdmin back out of the
@@ -118,6 +121,7 @@ public sealed class WebApiAuthService : IWebApiAuthService
                 if (me is not null)
                 {
                     _tokenStore.IsSuperAdmin = me.IsSuperAdmin;
+                    _tokenStore.IsAdmin = me.IsAdmin;
                     _tokenStore.UserId = me.UserId;
                 }
             }
@@ -143,12 +147,13 @@ public sealed class WebApiAuthService : IWebApiAuthService
 
         // Note: JwtClaimsParser cannot extract claims from opaque Identity API tokens.
         // UserId and IsSuperAdmin are set via /api/me after login instead.
-        var (userId, isSuperAdmin) = JwtClaimsParser.ParseClaims(response.AccessToken);
+        var (userId, isSuperAdmin, isAdmin) = JwtClaimsParser.ParseClaims(response.AccessToken);
         _tokenStore.UserId = userId;
         _tokenStore.IsSuperAdmin = isSuperAdmin;
+        _tokenStore.IsAdmin = isAdmin;
     }
 }
 
 /// <summary>Matches the JSON shape of MeResponse in Ben.Data.WebApi.</summary>
-internal sealed record MeResult(Guid UserId, string Email, bool IsSuperAdmin);
+internal sealed record MeResult(Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin);
 

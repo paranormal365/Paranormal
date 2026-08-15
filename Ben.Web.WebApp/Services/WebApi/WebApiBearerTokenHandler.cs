@@ -41,9 +41,10 @@ public sealed class WebApiBearerTokenHandler : DelegatingHandler
         _tokenStore.RefreshToken = response.RefreshToken;
         _tokenStore.AccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(Math.Max(0, response.ExpiresIn - 30));
 
-        var (userId, isSuperAdmin) = JwtClaimsParser.ParseClaims(response.AccessToken);
+        var (userId, isSuperAdmin, isAdmin) = JwtClaimsParser.ParseClaims(response.AccessToken);
         _tokenStore.UserId = userId;
         _tokenStore.IsSuperAdmin = isSuperAdmin;
+        _tokenStore.IsAdmin      = isAdmin;
         _tokenStore.NotifyStateChanged();
     }
 }
