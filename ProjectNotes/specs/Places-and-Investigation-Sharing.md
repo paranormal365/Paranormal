@@ -98,15 +98,44 @@ There is no org-wide investigations endpoint today — the existing controller i
 (`api/organizations/{orgId}/cases/{caseId}/investigations`) and `MyInvestigations` is user-scoped.
 All three scopes need new read endpoints.
 
-### Attended, not invited
+### An invitation's life: notification → calendar → map
 
-`InvestigationAttendee` carries both `Rsvp` and `DidAttend`. The personal map must filter on
-**`DidAttend == true`**. Somebody invited to a site they never visited must not get a dot asserting
-they were there — this is a record people may eventually cite, and quiet inaccuracy is the kind that
-survives.
+An invitation surfaces in three places, at different times, and the map is deliberately last:
 
-It also gives the "finish your findings" rule its footing: you may complete your write-up because
-you were actually present, which is the same fact that put the dot on your map.
+| Stage | Where it shows | When |
+|---|---|---|
+| Invited | internal messages, and the unread count on sign-in | immediately |
+| Invited | the user's calendar | immediately |
+| Attended | the personal map and its grids | only once the investigation is in the past |
+
+The map is a record of *where you have been*, not where you intend to go. A dot that appears the
+moment you are invited would assert a visit that has not happened, and this is a record people may
+eventually cite — quiet inaccuracy is the kind that survives.
+
+**Both feeder halves already exist.** `NotificationSummaryResponse.InvestigationInvites` drives the
+bell (Area 5 C4), and `InvestigationController` already creates an `OrgCalendarEvent` and stores its
+id on `Investigation.OrgCalendarEventId`. This spec adds only the third stage.
+
+#### Attended, not merely invited — and the trap in it
+
+`InvestigationAttendee` carries both `Rsvp` and `DidAttend`. The map filter needs *past* **and**
+*attended*.
+
+The trap: `DidAttend` is set by the organizer afterwards, and if nobody does that housekeeping,
+a strict `DidAttend == true` leaves every personal map permanently empty — a feature silently
+dependent on admin hygiene that may never happen.
+
+**Recommendation:** show it when the investigation is past and `DidAttend != false` — i.e. treat
+"not recorded" as presumed present, since they were on the roster, while an explicit "did not
+attend" excludes it. That fails toward a useful map that its owner can correct, rather than an
+empty one nobody can fix.
+
+Worth considering alongside it: let the attendee confirm their own attendance. For a personal
+record, the person who was there is the better authority than the organizer's paperwork, and the
+organization's `DidAttend` can stay the organization's own answer.
+
+Either way this also grounds the "finish your findings" rule: you may complete your write-up
+because you were present, which is the same fact that put the dot on your map.
 
 ---
 
@@ -213,8 +242,10 @@ the thing the user described.
 ## Open questions
 
 1. **Reciprocity** on `PlaceInvestigators` — contribute-to-see, or not?
-2. **Curation** of user-created public places — open, or SuperAdmin-approved? (`IsApproved` is
+2. **Who confirms attendance** for the personal map — the organizer's `DidAttend`, treated as
+   presumed-present when unrecorded, or a self-confirmation by the attendee?
+3. **Curation** of user-created public places — open, or SuperAdmin-approved? (`IsApproved` is
    scaffolded for the latter; leave it unused if the answer is open.)
-3. **Client consent** to publish an investigation at their property — reuse the two-key pattern from
+4. **Client consent** to publish an investigation at their property — reuse the two-key pattern from
    Area 4, or a per-case switch?
-4. **Deduplication** (P8) — needs its own pass before P7 is worth much.
+5. **Deduplication** (P8) — needs its own pass before P7 is worth much.
