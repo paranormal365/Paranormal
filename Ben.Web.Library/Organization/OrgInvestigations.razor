@@ -115,6 +115,9 @@ else
 
     private bool _loading = true;
     private bool _creating;
+
+    /// <summary>Which row has its team open, if any. One at a time — each roster polls.</summary>
+    private Guid? _openTeam;
     private string? _error;
     private Guid _loadedForOrg;
 
@@ -154,15 +157,23 @@ else
         _loading = false;
     }
 
+    /// <summary>
+    /// Opens one row's team, closing any other.
+    /// </summary>
+    /// <remarks>
+    /// One at a time on purpose: every open roster runs its own timer, and a page with a dozen
+    /// expanded would poll a dozen times over.
+    /// </remarks>
+    private void ToggleTeam(Guid id) => _openTeam = _openTeam == id ? null : id;
+
     private void GoToInvestigation(Guid id)
     {
         var row = _rows.FirstOrDefault(r => r.Id == id);
         if (row is null) return;
 
-        // A case-bound visit belongs on its case's Investigations tab, which is where the binder,
-        // attendees and findings already live. A case-less one has nowhere else to go yet — P7's
-        // place pages are its eventual home — so it stays here rather than linking into a page
-        // that would 404.
+        // A case-bound visit belongs on its case's Investigations tab, which is where the binder
+        // and the editing dialog live. A case-less one still has no detail page of its own — its
+        // team is reachable here, via Team, rather than through a link that would 404.
         if (row.CaseId is { } caseId)
             NavManager.NavigateTo($"/organizations/{OrgId}/cases/{caseId}?tab=investigations");
     }
@@ -194,7 +205,9 @@ else
                     <th>Investigation</th>
                     <th>Where</th>
                     <th>Case</th>
-                    <th class="text-center">Team</th>
+                    @* "People" rather than "Team", so the count is not confused with the Team
+                       button beside it, which opens the roster. *@
+                    <th class="text-center">People</th>
                     <th></th>
                 </tr>
             </thead>
@@ -233,7 +246,15 @@ else
                             }
                         </td>
                         <td class="text-center">@row.AttendeeCount</td>
-                        <td class="text-end">
+                        <td class="text-end text-nowrap">
+                            @* The team is here rather than only on a case's tab, because a visit
+                               with no case had nowhere at all to check in from — the endpoints were
+                               always case-agnostic, the screen simply never existed. *@
+                            <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                           Icon="@(_openTeam == row.Id ? SvgIcon.ChevronUp : SvgIcon.User)"
+                                           OnClick="@(() => ToggleTeam(row.Id))">Team</TelerikButton>
+
                             @* Shown on the server's verdict alone. Working it out here would mean
                                two answers to one question, and the button would eventually offer
                                something the endpoint then refuses. *@
@@ -246,6 +267,19 @@ else
                             }
                         </td>
                     </tr>
+
+                    @if (_openTeam == row.Id)
+                    {
+                        <tr>
+                            <td colspan="6" class="bg-body-tertiary">
+                                @* CanEditRecord, not true: the same verdict the Edit button uses,
+                                   so the attendance and lead controls appear for exactly the
+                                   people the endpoints will accept. *@
+                                <InvestigationRoster OrgId="@OrgId" InvestigationId="@row.Id"
+                                                     CanManage="@row.CanEditRecord" />
+                            </td>
+                        </tr>
+                    }
                 }
             </tbody>
         </table>

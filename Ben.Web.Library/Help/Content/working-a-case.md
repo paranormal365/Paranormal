@@ -74,7 +74,9 @@ would suggest the house next door.
 
 ## Arriving on site
 
-The investigation's **Team** panel shows who is expected and who has turned up. A name turns green
+The investigation's **Team** panel shows who is expected and who has turned up. Open it from the
+attendees on a case's Investigations tab, or from **Team** on any row of the group's Investigations
+list — including visits with no case, which is the only way to check in to one of those. A name turns green
 once their attendance is recorded, and the time beside it is when they say they got there.
 
 Press **I've arrived** to check yourself in. The time is editable, and it is meant to be: most

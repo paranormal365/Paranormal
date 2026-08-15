@@ -3444,7 +3444,7 @@ So either:
 Worth noting the flag is honest about the intent (a participant's right, not a manager's). The
 question is whether that intent is still wanted.
 
-### 82b. The roster is only on case-bound investigations
+### 82b. The roster is only on case-bound investigations ✅ fixed 2026-08-15
 
 `InvestigationRoster` — the team list, **I've arrived**, the attendance override, and now the Lead
 column — is mounted in exactly one place: `InvestigationPanel.razor`, on a case's Investigations
@@ -3452,7 +3452,12 @@ tab. A case-less visit, which is the whole point of P2 and P4, **has no roster U
 can check in to a landmark visit, and nobody can record who turned up.
 
 The endpoints are all case-agnostic already (`api/organizations/{orgId}/investigations/{id}/…`), so
-this is a mounting problem, not a backend one: the org Investigations grid needs a way to open one
-visit and see its team. That probably means a detail view for a case-less investigation, which does
-not exist yet — `OrgInvestigations.GoToInvestigation` deliberately does nothing for case-less rows
-because there is nowhere to send them.
+this was a mounting problem, not a backend one.
+
+**Fixed** by putting the roster where the visits already are: every row of the group's
+Investigations grid has a **Team** button that expands the roster inline, gated on the same
+`CanEditRecord` verdict the Edit button uses. One row open at a time, because each roster runs its
+own poll timer. No new page and no detail view — the grid was already the place a case-less visit
+lives.
+
+Live-verified on "Cave return visit", a visit with no case: the team panel opens under the row.
