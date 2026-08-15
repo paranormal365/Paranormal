@@ -224,6 +224,29 @@ anyone having to remember to change a setting on the one that counts.
 | **P6** | Visibility scopes + defaults + the sharing control | M |
 | **P7** | Place pages and cross-group aggregation | M |
 | **P8** | Place deduplication / "did you mean" | M — needs its own design pass |
+| **P9** | **End-user documentation** — required before this is called done | S |
+
+### P9 is not optional
+
+Ben asked for this explicitly, and Area 6's own entry already carries it as a standing rule: a
+user-visible feature is not finished until the in-app help explains it. This application has a
+repeated history of things that were built and then unreachable; an undocumented feature is the same
+failure one layer up.
+
+Docs live in `Ben.Web.Library/Help/Content/*.md` and are audience-gated. Area 9 touches:
+
+| Doc | What changes |
+|---|---|
+| `working-a-case.md` | investigations map, past/future grids, who may edit what |
+| `your-profile.md` | the personal map, and why a dot appears only after you have been |
+| `organization-administration.md` | the Investigations tab, granting edit permission |
+| *(possibly new)* | sharing findings by location — the visibility scopes and what `PlaceInvestigators` really means |
+
+Add a `<HelpLink>` at each screen the docs explain. `HelpLinkTargetTests` fails the build if a link
+points at a document or heading that does not exist, so renames cannot quietly break them.
+
+**Also outstanding from earlier work, and worth folding in:** the contact/support page (#79) and the
+calendar changes (address, meeting link, invites, recurrence) both shipped without doc updates.
 
 P1–P3 are the foundation and are worth doing as one branch. P4–P5 are where it starts to look like
 the thing the user described.
