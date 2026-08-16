@@ -102,6 +102,14 @@ builder.Services.AddSwaggerGen(options =>
 
     options.SchemaFilter<CircularReferenceSchemaFilter>();
 
+    // Schema ids come from the full type name, not the short one. Swashbuckle's default is the
+    // short name, so two types that merely share a name in different namespaces collide and it
+    // throws while generating — which took the whole of /swagger/v1/swagger.json to a 500 and left
+    // the API docs page dead. There are exactly such a pair today: CaseReportSummary exists in
+    // both Controllers and Controllers.Entities. Keying on the full name makes that structurally
+    // impossible rather than something the next duplicated record name breaks again.
+    options.CustomSchemaIds(type => type.FullName?.Replace('+', '.'));
+
     // Include XML doc comments from the compiled documentation file
     var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = System.IO.Path.Combine(AppContext.BaseDirectory, xmlFile);
@@ -312,14 +320,30 @@ app.MapControllers();
 // /login is an unauthenticated password oracle and /register creates accounts.
 app.MapIdentityApi<AppUser>().RequireRateLimiting(RateLimiting.AuthPolicy);
 
-await Ben.Data.WebApi.SeedData.SuperAdminSeeder.SeedAsync(app.Services, app.Configuration);
-await Ben.Data.WebApi.SeedData.OrganizationSeeder.SeedAsync(app.Services, app.Configuration);
-await Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.SeedAsync(app.Services, app.Configuration);
-await Ben.Data.WebApi.SeedData.ExperienceTaxonomySeeder.SeedAsync(app.Services, app.Configuration);
-await Ben.Data.WebApi.SeedData.ContactTypeSeeder.SeedAsync(app.Services, app.Configuration);
-// DevelopmentDataSeeder runs last — depends on all users/orgs above being present.
-// Enable via SeedData:DevData:Enabled = true in appsettings.Development.json.
-await Ben.Data.WebApi.SeedData.DevelopmentDataSeeder.SeedAsync(app.Services, app.Configuration);
+// Startup seeding talks to the database before the host begins listening, so an unreachable
+// database means the process dies rather than starting in a broken state — which is the right
+// behaviour for a real deployment and is left alone.
+//
+// It does make the app unbootable anywhere a database is deliberately absent. CI is the case in
+// hand: it verifies the app can *start* (a class of failure no unit test sees — a malformed
+// logging config once threw here while all 4,137 tests passed), and standing up SQL Server plus
+// 73 migrations to prove that would be a lot of moving parts for the question being asked. So
+// seeding can be switched off, following the flag the dev-data seeder already had.
+if (app.Configuration.GetValue("SeedData:Enabled", true))
+{
+    await Ben.Data.WebApi.SeedData.SuperAdminSeeder.SeedAsync(app.Services, app.Configuration);
+    await Ben.Data.WebApi.SeedData.OrganizationSeeder.SeedAsync(app.Services, app.Configuration);
+    await Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.SeedAsync(app.Services, app.Configuration);
+    await Ben.Data.WebApi.SeedData.ExperienceTaxonomySeeder.SeedAsync(app.Services, app.Configuration);
+    await Ben.Data.WebApi.SeedData.ContactTypeSeeder.SeedAsync(app.Services, app.Configuration);
+    // DevelopmentDataSeeder runs last — depends on all users/orgs above being present.
+    // Enable via SeedData:DevData:Enabled = true in appsettings.Development.json.
+    await Ben.Data.WebApi.SeedData.DevelopmentDataSeeder.SeedAsync(app.Services, app.Configuration);
+}
+else
+{
+    Log.Information("SeedData:Enabled is false — startup seeding skipped");
+}
 
 app.Run();
 

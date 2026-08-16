@@ -1,0 +1,131 @@
+name: CI
+
+# Audit finding B7. Until now 4,137 tests ran only when someone remembered to run them.
+#
+# Two jobs on purpose. `build-and-test` is the fast gate. `smoke` boots the WebApi and asks it for
+# a response, because a whole class of failure never reaches a unit test: on 2026-08-16 a stray
+# comment key in Serilog configuration threw at startup, and every one of those 4,137 tests passed
+# straight through it while the API refused to start. A green suite is not the same claim as
+# "the application runs".
+
+on:
+  push:
+    branches: [develop, master]
+  pull_request:
+    branches: [develop, master]
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  # Telerik components are a licensed private feed; both halves come from repo secrets and neither
+  # is ever committed (.nuget/ is gitignored, and so is the licence file).
+  TELERIK_LICENSE: ${{ secrets.TELERIK_LICENSE }}
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Add the Telerik NuGet feed
+        # Added here rather than committing a NuGet.Config: the local one holds credentials and is
+        # gitignored for that reason. Skipped when the secret is absent so a fork still gets a
+        # useful (if partial) run instead of a confusing restore failure.
+        if: ${{ secrets.TELERIK_NUGET_USERNAME != '' }}
+        run: |
+          dotnet nuget add source https://nuget.telerik.com/v3/index.json \
+            --name Telerik \
+            --username "${{ secrets.TELERIK_NUGET_USERNAME }}" \
+            --password "${{ secrets.TELERIK_NUGET_PASSWORD }}" \
+            --store-password-in-clear-text
+
+      - name: Restore
+        run: dotnet restore Ben.slnx
+
+      - name: Build
+        # Warnings are informative here rather than fatal: the solution builds at zero warnings
+        # today, and -warnaserror would turn an SDK-version nit into a red build on work that is
+        # otherwise fine. Worth revisiting once CI has been stable for a while.
+        run: dotnet build Ben.slnx --no-restore --configuration Release
+
+      - name: Test
+        # No database and no ffmpeg binaries are needed: every suite uses the EF in-memory
+        # provider, and the sidecar's tests run against Ben.Video.Sidecar.FakeFfmpeg. Verified by
+        # deleting the (gitignored) ffmpeg directory locally — all 185 sidecar tests still passed.
+        run: dotnet test Ben.slnx --no-build --configuration Release --logger "trx;LogFileName=results.trx" --results-directory ./TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ./TestResults
+          retention-days: 7
+
+  smoke:
+    # The check that would have caught the Serilog startup crash.
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Add the Telerik NuGet feed
+        if: ${{ secrets.TELERIK_NUGET_USERNAME != '' }}
+        run: |
+          dotnet nuget add source https://nuget.telerik.com/v3/index.json \
+            --name Telerik \
+            --username "${{ secrets.TELERIK_NUGET_USERNAME }}" \
+            --password "${{ secrets.TELERIK_NUGET_PASSWORD }}" \
+            --store-password-in-clear-text
+
+      - name: Boot the WebApi and require a response
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+          ASPNETCORE_URLS: http://localhost:5252
+          # No SQL Server on the runner, and startup seeding would otherwise reach for one before
+          # the host starts listening — measured: SuperAdminSeeder throws and the process dies.
+          # Failing fast on an unreachable database is right for a real deployment, so that stays;
+          # CI opts out instead. Everything this step is checking — configuration parsing, the DI
+          # graph, the middleware pipeline, routing — happens before seeding either way.
+          SeedData__Enabled: "false"
+          ConnectionStrings__BenDbConnectionString: "Server=localhost,1433;Database=BenDb;User Id=sa;Password=unused-in-smoke;Encrypt=False;TrustServerCertificate=True;Connect Timeout=1"
+        run: |
+          dotnet run --project Ben.Data.WebApi --configuration Release --no-launch-profile > webapi-smoke.log 2>&1 &
+          API_PID=$!
+
+          for i in $(seq 1 40); do
+            if curl -fsS http://localhost:5252/swagger/v1/swagger.json > /dev/null 2>&1; then
+              echo "WebApi answered after ~$((i*3))s"
+              kill $API_PID 2>/dev/null || true
+              exit 0
+            fi
+            if ! kill -0 $API_PID 2>/dev/null; then
+              echo "::error::The WebApi process exited before serving a request."
+              tail -50 webapi-smoke.log
+              exit 1
+            fi
+            sleep 3
+          done
+
+          echo "::error::The WebApi never answered within 120s."
+          tail -50 webapi-smoke.log
+          kill $API_PID 2>/dev/null || true
+          exit 1
+
+      - name: Upload smoke log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webapi-smoke-log
+          path: webapi-smoke.log
+          retention-days: 7
