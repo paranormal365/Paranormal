@@ -13,13 +13,13 @@
     <ItemGroup>
         <PackageReference Include="MailKit" Version="4.17.0" />
         <PackageReference Include="MetadataExtractor" Version="2.9.3" />
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
-        <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9">
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
+        <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.11" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.9" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
         <PackageReference Include="NAudio" Version="2.2.1" />
         <PackageReference Include="NLayer.NAudioSupport" Version="2.0.1" />
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
@@ -27,6 +27,11 @@
         <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
         <PackageReference Include="Serilog.Settings.Configuration" Version="10.0.1" />
         <PackageReference Include="Serilog.Sinks.MSSqlServer" Version="10.0.0" />
+        <!-- Pinned to 2026.2.519 deliberately. The Telerik Document Processing packages are a
+             version-locked family: bumping Fixed on its own resolved Telerik.Documents.Core to
+             2026.3.810 while Spreadsheet/Spreadsheet.FormatProviders.Pdf still required
+             2026.2.519, and the PDF namespaces disappeared from the build. They move together or
+             not at all. -->
         <PackageReference Include="Telerik.Documents.Fixed" Version="2026.2.519" />
     </ItemGroup>
 
