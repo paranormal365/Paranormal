@@ -64,6 +64,21 @@ no product line — an Eveready flashlight — the editor's *I don't know the ex
 proposes one conventional generic model under that make, so everyone in that position lands on the
 same row instead of a dozen spellings. Both are ordinary propose-and-dedupe calls.
 
+**Visibility and lendability are separate fields, both off by default.** Ben asked for three
+per-item choices: public listing, which groups see it, and whether it can be lent. Letting a group
+know you own something is not offering it, so `IncludeInGlobalCatalog` and `LoanAudience` are
+independent. `EquipmentLoanAudience` is `[Flags]` rather than a yes/no or a widening scale, because
+the routes differ along two axes at once — a loan to a *shared group* is taken out for that group
+and records which one, while a loan to a fellow group member or to any signed-in user is personal
+and has no borrowing group. "My groups and people in them, but not strangers" is therefore a real
+combination, and it makes `EquipmentCheckout.BorrowedForOrganizationId` nullable in phase 4.
+
+**The public item projection cannot carry what it must not leak.** `PublicEquipmentItemRecord` has
+no owner id, no owner name and no serial property at all, so a filter written wrongly later cannot
+expose them; a test asserts that against the type, not the values. The photo-bytes endpoint drops
+blanket `[Authorize]` for the same feature — a publicly listed item has to show photos to visitors
+with no token — and answers 404 rather than 403 throughout so it cannot be used to probe ids.
+
 **Seeder ships in the same commit as the tables.** `EquipmentTaxonomySeeder`, registered in
 `Program.cs`, idempotent by name. An empty category picker makes every save fail, which is the
 `ContactTypeSeeder` lesson: a feature dead on arrival for every existing deployment is not much of a
@@ -89,9 +104,14 @@ This is the documented `dotnet run` stale-process trap; it cost real time here a
 ## Verification
 
 - Solution builds clean, 0 warnings.
-- Suite **2,369 → 2,392**, all green: 23 new tests across `MyEquipmentControllerTests`,
+- Suite **2,369 → 2,403**, all green: 34 new tests across `MyEquipmentControllerTests`,
   `EquipmentCatalogControllerTests`, `EquipmentTaxonomySeederTests`.
-- Live, anonymously: the catalog renders all 16 seeded categories with their generic models, search
-  and category filter return correct subsets, and `/api/me/equipment` is 401 without a token.
+- **The four privacy tests were run against deliberately broken guards first** — the public-listing
+  filter stubbed to `true` and the photo-access check stubbed to `false` — and all four failed, so
+  they discriminate rather than passing either way. Guards restored and re-run green.
+- Live, anonymously: the catalog renders all 16 seeded categories with their generic models, both
+  tabs switch correctly, search and category filter return correct subsets,
+  `/api/equipment-catalog/items` returns `200` with no owner or serial keys in the payload, and
+  `/api/me/equipment` is `401` without a token.
 - The signed-in screens (My Equipment, the item editor, the admin moderation page) need a login, so
   their click-through is Ben's — including confirming the dialog buttons now sit inside the window.
