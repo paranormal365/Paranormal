@@ -63,4 +63,13 @@ builder.Services.AddHttpClient(Ben.Video.Editor.Extensions.ServiceCollectionExte
 builder.Services.AddHttpClient(Ben.Video.Editor.Extensions.ServiceCollectionExtensions.ProjectPersistenceHttpClientName)
     .AddHttpMessageHandler<Ben.Wasm.Video.Services.BearerTokenHandler>();
 
+// Records a successful sidecar pairing against the signed-in account, so the site can tell who is
+// running a native sidecar and which build. Optional by design — the editor calls it only if a
+// host registers one.
+builder.Services.AddScoped<Ben.Video.Editor.Services.ISidecarPairingReporter>(sp =>
+    new Ben.Wasm.Video.Services.SidecarPairingReporter(
+        sp.GetRequiredService<IHttpClientFactory>(),
+        sp.GetRequiredService<Ben.Wasm.Video.Services.TokenStore>(),
+        apiBaseUrl));
+
 await builder.Build().RunAsync();

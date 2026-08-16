@@ -16,6 +16,7 @@ builder.Services.Configure<SidecarOptions>(builder.Configuration.GetSection("Sid
 builder.Services.AddSingleton<AuthFailureThrottle>();
 builder.Services.AddSingleton<JobRegistry>();
 builder.Services.AddSingleton<SidecarPaths>();
+builder.Services.AddSingleton(sp => new InstallIdentity(sp.GetRequiredService<SidecarPaths>().ConfigDir));
 builder.Services.AddSingleton<SourceCache>();
 builder.Services.AddSingleton<SpecValidator>();
 builder.Services.AddSingleton(sp =>
