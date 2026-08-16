@@ -65,6 +65,10 @@ builder.Services.AddScoped<Ben.Video.Editor.Services.IMediaLibraryProvider, BenM
 // Handles VideoEditor.OnPublishExport — sends a finished render to the server, saving the project
 // first when it has never been saved (the publish endpoint attaches to an existing project row).
 builder.Services.AddScoped<VideoExportPublisher>();
+// Records a sidecar pairing against the signed-in account, using the circuit's token. The WASM
+// host registers its own implementation; the editor calls whichever it finds, or none.
+builder.Services.AddScoped<Ben.Video.Editor.Services.ISidecarPairingReporter,
+    Ben.Web.WebApp.Services.SidecarPairingReporter>();
 builder.Services.Configure<WebApiOptions>(builder.Configuration.GetSection("WebApi"));
 builder.Services.AddScoped<IWebApiTokenStore, WebApiTokenStore>();
 builder.Services.AddHttpClient<IWebApiIdentityClient, WebApiIdentityClient>((sp, client) =>
