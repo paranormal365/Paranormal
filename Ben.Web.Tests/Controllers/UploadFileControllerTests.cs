@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Moq;
 using Xunit;
+using Ben.Data.WebApi.Services.Access;
 
 namespace Ben.Web.Tests.Controllers;
 

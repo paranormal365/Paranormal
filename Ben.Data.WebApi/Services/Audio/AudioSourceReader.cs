@@ -1,7 +1,7 @@
 using NAudio.Wave;
 using NLayer.NAudioSupport;
 
-namespace Ben.Data.WebApi.Controllers.Entities;
+namespace Ben.Data.WebApi.Services.Audio;
 
 /// <summary>
 /// Opens stored audio for reading, in the one place every server-side audio feature goes through.

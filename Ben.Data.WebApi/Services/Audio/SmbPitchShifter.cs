@@ -1,4 +1,4 @@
-namespace Ben.Data.WebApi.Controllers.Entities;
+namespace Ben.Data.WebApi.Services.Audio;
 
 /// <summary>
 /// FFT phase-vocoder pitch shifter, ported from Stephan M. Bernsee's public-domain

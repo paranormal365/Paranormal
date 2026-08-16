@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Ben.Data.WebApi.Services.Access;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 

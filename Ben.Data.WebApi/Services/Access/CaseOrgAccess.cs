@@ -1,7 +1,7 @@
 using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 
-namespace Ben.Data.WebApi.Controllers.Entities;
+namespace Ben.Data.WebApi.Services.Access;
 
 /// <summary>
 /// Verifies that a <c>caseId</c> route parameter actually belongs to the <c>orgId</c> route

@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Moq;
 using System.Security.Claims;
 using Xunit;
+using Ben.Data.WebApi.Services.Access;
 
 namespace Ben.Web.Tests.Controllers;
 

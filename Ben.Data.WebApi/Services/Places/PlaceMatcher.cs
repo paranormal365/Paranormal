@@ -1,7 +1,7 @@
 using Ben.Data.Source.Entities;
 using System.Text;
 
-namespace Ben.Data.WebApi.Controllers.Entities;
+namespace Ben.Data.WebApi.Services.Places;
 
 /// <summary>
 /// Whether two places are probably the same place.

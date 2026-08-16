@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using Xunit;
+using Ben.Data.WebApi.Services.Access;
 
 namespace Ben.Web.Tests.Controllers;
 

@@ -4,7 +4,7 @@ using Ben.Data.Source.Entities;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 
-namespace Ben.Data.WebApi.Controllers.Entities;
+namespace Ben.Data.WebApi.Services.Access;
 
 /// <summary>
 /// The single answer to "may this person see this investigation".

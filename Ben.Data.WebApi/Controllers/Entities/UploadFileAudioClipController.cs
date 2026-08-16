@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using NAudio.Wave;
+using Ben.Data.WebApi.Services.Access;
+using Ben.Data.WebApi.Services.Audio;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 

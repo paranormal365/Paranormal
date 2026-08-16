@@ -2,7 +2,7 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 
-namespace Ben.Data.WebApi.Controllers.Entities;
+namespace Ben.Data.WebApi.Services.Access;
 
 /// <summary>
 /// Which of the four comment/share audiences a user matches for a specific UploadFile, and

@@ -3,6 +3,7 @@ using Ben.Service.Models.Entities;
 using Ben.Data.WebApi.Controllers.Entities;
 using Xunit;
 using Xunit.Abstractions;
+using Ben.Data.WebApi.Services.Audio;
 
 namespace Ben.Web.Tests.Services;
 

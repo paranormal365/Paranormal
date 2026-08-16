@@ -2,7 +2,7 @@ using Ben.Data.Common.Enums;
 using Ben.Service.Models.Entities;
 using NAudio.Wave;
 
-namespace Ben.Data.WebApi.Controllers.Entities;
+namespace Ben.Data.WebApi.Services.Audio;
 
 /// <summary>One stretch of audio the detector thinks is worth a listen.</summary>
 /// <param name="StartSeconds">Start of the span, already padded.</param>
