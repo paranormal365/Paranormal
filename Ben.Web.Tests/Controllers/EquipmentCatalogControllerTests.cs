@@ -1,4 +1,5 @@
 using Ben.Data.Common.Constants;
+using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Entities;
@@ -210,6 +211,107 @@ public class EquipmentCatalogControllerTests
 
         var result = await BuildAdmin(w.Factory).RejectBrand(brandId, default);
         Assert.IsType<ConflictObjectResult>(result);
+    }
+
+    // ── Public item listing (owner opt-in) ───────────────────────────────────
+
+    /// <summary>
+    /// Seeds one owner with two items: one listed publicly, one not.
+    /// </summary>
+    private static async Task<(Guid publicItemId, Guid privateItemId)> SeedItemsAsync(
+        TestDbFactoryWrapper w, EquipmentLoanAudience audience = EquipmentLoanAudience.NotLoanable)
+    {
+        var categoryId = await SeedCategoryAsync(w);
+        await using var db = await w.Factory.CreateDbContextAsync();
+
+        var brand = new EquipmentBrand { Id = Guid.NewGuid(), Name = "Zoom", IsApproved = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = AdminId };
+        db.EquipmentBrands.Add(brand);
+        var model = new EquipmentModel
+        {
+            Id = Guid.NewGuid(), EquipmentBrandId = brand.Id, EquipmentCategoryId = categoryId,
+            Name = "H1n", IsApproved = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = AdminId,
+        };
+        db.EquipmentModels.Add(model);
+
+        var publicItem = new EquipmentItem
+        {
+            Id = Guid.NewGuid(), OwnerAppUserId = ProposerId, EquipmentModelId = model.Id,
+            DisplayName = "Listed publicly", SerialNumber = "SECRET-PUBLIC",
+            IncludeInGlobalCatalog = true, LoanAudience = audience,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ProposerId,
+        };
+        var privateItem = new EquipmentItem
+        {
+            Id = Guid.NewGuid(), OwnerAppUserId = ProposerId, EquipmentModelId = model.Id,
+            DisplayName = "Kept private", SerialNumber = "SECRET-PRIVATE",
+            IncludeInGlobalCatalog = false,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ProposerId,
+        };
+        db.EquipmentItems.AddRange(publicItem, privateItem);
+        await db.SaveChangesAsync();
+
+        return (publicItem.Id, privateItem.Id);
+    }
+
+    [Fact]
+    public async Task GetPublicItems_ReturnsOnlyItemsTheOwnerOptedIn()
+    {
+        var w = await SeedAsync();
+        var (publicItemId, _) = await SeedItemsAsync(w);
+
+        var result = await BuildPublic(w.Factory).GetPublicItems(null, null, default);
+        var items = Assert.IsAssignableFrom<IEnumerable<PublicEquipmentItemRecord>>(Assert.IsType<OkObjectResult>(result.Result).Value).ToList();
+
+        Assert.Single(items);
+        Assert.Equal(publicItemId, items[0].Id);
+        Assert.Equal("Listed publicly", items[0].DisplayName);
+    }
+
+    /// <summary>
+    /// The public projection must not be able to carry an owner or a serial at all — this is the
+    /// rule the whole listing rests on, so it is asserted against the shape, not just the values.
+    /// </summary>
+    [Fact]
+    public async Task PublicItemRecord_HasNoOwnerAndNoSerialProperty()
+    {
+        var props = typeof(PublicEquipmentItemRecord).GetProperties().Select(p => p.Name).ToList();
+
+        Assert.DoesNotContain(props, n => n.Contains("Owner", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(props, n => n.Contains("Serial", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(props, n => n.Contains("Organization", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task GetPublicItems_ExcludesRetiredItems()
+    {
+        var w = await SeedAsync();
+        var (publicItemId, _) = await SeedItemsAsync(w);
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var item = await db.EquipmentItems.SingleAsync(i => i.Id == publicItemId);
+            item.IsRetired = true;
+            await db.SaveChangesAsync();
+        }
+
+        var result = await BuildPublic(w.Factory).GetPublicItems(null, null, default);
+        var items = Assert.IsAssignableFrom<IEnumerable<PublicEquipmentItemRecord>>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Empty(items);
+    }
+
+    [Fact]
+    public async Task GetPublicItems_CarriesTheLoanAudienceSoVisitorsSeeWhatIsBorrowable()
+    {
+        var w = await SeedAsync();
+        await SeedItemsAsync(w, EquipmentLoanAudience.SharedGroups | EquipmentLoanAudience.GroupMembers);
+
+        var result = await BuildPublic(w.Factory).GetPublicItems(null, null, default);
+        var items = Assert.IsAssignableFrom<IEnumerable<PublicEquipmentItemRecord>>(Assert.IsType<OkObjectResult>(result.Result).Value).ToList();
+
+        var audience = items.Single().LoanAudience;
+        Assert.True(audience.HasFlag(EquipmentLoanAudience.SharedGroups));
+        Assert.True(audience.HasFlag(EquipmentLoanAudience.GroupMembers));
+        Assert.False(audience.HasFlag(EquipmentLoanAudience.IndividualUsers));
     }
 
     [Fact]

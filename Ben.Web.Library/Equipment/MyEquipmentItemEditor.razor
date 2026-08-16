@@ -104,10 +104,84 @@
             </div>
         </div>
 
-        <div class="mb-2">
+        <div class="mb-3">
             <label class="form-label fw-semibold">Notes</label>
             <textarea class="form-control" rows="2" maxlength="2000" value="@_notes"
                       @oninput="@(e => _notes = e.Value?.ToString() ?? string.Empty)"></textarea>
+        </div>
+
+        <hr />
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Who can see it</label>
+            <div class="d-flex align-items-start gap-2">
+                <input type="checkbox" class="form-check-input mt-1" id="eq-global"
+                       checked="@_includeInGlobalCatalog"
+                       @onchange="@(e => _includeInGlobalCatalog = (bool)(e.Value ?? false))" />
+                <label for="eq-global" class="mb-0">
+                    List this in the public catalog
+                    <span class="d-block text-secondary small">
+                        Anyone, signed in or not, can see this piece and its photos — but never your
+                        name and never its serial number.
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <div class="mb-2">
+            <label class="form-label fw-semibold">Who can borrow it</label>
+            <span class="d-block text-secondary small mb-2">
+                Separate from who can see it — letting people know you own something isn't offering
+                to lend it. Leave all three unticked to keep it unlendable.
+            </span>
+
+            <div class="d-flex align-items-start gap-2 mb-2">
+                <input type="checkbox" class="form-check-input mt-1" id="eq-loan-groups"
+                       checked="@HasAudience(EquipmentLoanAudience.SharedGroups)"
+                       @onchange="@(e => ToggleAudience(EquipmentLoanAudience.SharedGroups, (bool)(e.Value ?? false)))" />
+                <label for="eq-loan-groups" class="mb-0">
+                    Groups I've shared it with
+                    <span class="d-block text-secondary small">
+                        A group can borrow it for its own use, and the loan records which group —
+                        and which investigation, if there is one.
+                    </span>
+                </label>
+            </div>
+
+            <div class="d-flex align-items-start gap-2 mb-2">
+                <input type="checkbox" class="form-check-input mt-1" id="eq-loan-members"
+                       checked="@HasAudience(EquipmentLoanAudience.GroupMembers)"
+                       @onchange="@(e => ToggleAudience(EquipmentLoanAudience.GroupMembers, (bool)(e.Value ?? false)))" />
+                <label for="eq-loan-members" class="mb-0">
+                    People in my groups
+                    <span class="d-block text-secondary small">
+                        Someone you share a group with can borrow it as themselves, rather than on
+                        the group's behalf.
+                    </span>
+                </label>
+            </div>
+
+            <div class="d-flex align-items-start gap-2">
+                <input type="checkbox" class="form-check-input mt-1" id="eq-loan-anyone"
+                       checked="@HasAudience(EquipmentLoanAudience.IndividualUsers)"
+                       @onchange="@(e => ToggleAudience(EquipmentLoanAudience.IndividualUsers, (bool)(e.Value ?? false)))" />
+                <label for="eq-loan-anyone" class="mb-0">
+                    Anyone with an account
+                    <span class="d-block text-secondary small">
+                        Any signed-in user can ask; you still approve or deny every request.
+                    </span>
+                </label>
+            </div>
+
+            @* An offer nobody can find is not an offer — say so rather than letting it look active. *@
+            @if (HasAudience(EquipmentLoanAudience.IndividualUsers) && !_includeInGlobalCatalog)
+            {
+                <div class="alert alert-warning py-2 mt-2 mb-0 small">
+                    Anyone can borrow this, but it isn't in the public catalog — so people outside
+                    your groups have no way to find it. Tick "List this in the public catalog" above
+                    if you want it discoverable.
+                </div>
+            }
         </div>
 
         @* Buttons live in the content, not Telerik's WindowActions slot: that slot renders
@@ -148,6 +222,13 @@
     private string _notes = string.Empty;
     private string _newBrandName = string.Empty;
     private string _newModelName = string.Empty;
+    private bool _includeInGlobalCatalog;
+    private EquipmentLoanAudience _loanAudience = EquipmentLoanAudience.NotLoanable;
+
+    private bool HasAudience(EquipmentLoanAudience flag) => (_loanAudience & flag) != 0;
+
+    private void ToggleAudience(EquipmentLoanAudience flag, bool on)
+        => _loanAudience = on ? _loanAudience | flag : _loanAudience & ~flag;
 
     private bool _isEdit;
     private bool _busy;
@@ -174,6 +255,8 @@
             _brands = []; _models = [];
             _displayName = string.Empty; _serialNumber = string.Empty;
             _acquisitionDate = null; _notes = string.Empty;
+            _includeInGlobalCatalog = false;
+            _loanAudience = EquipmentLoanAudience.NotLoanable;
         }
         else
         {
@@ -182,6 +265,8 @@
             _serialNumber    = Item.SerialNumber ?? string.Empty;
             _acquisitionDate = Item.AcquisitionDate;
             _notes           = Item.Notes ?? string.Empty;
+            _includeInGlobalCatalog = Item.IncludeInGlobalCatalog;
+            _loanAudience           = Item.LoanAudience;
 
             // Resolve the item's model back to its category/brand so the pickers open populated.
             var model = (await AdminClient.SearchEquipmentModelsAsync()).FirstOrDefault(m => m.Id == Item.EquipmentModelId);
@@ -261,7 +346,9 @@
             _displayName.Trim(),
             string.IsNullOrWhiteSpace(_serialNumber) ? null : _serialNumber.Trim(),
             _acquisitionDate,
-            string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim());
+            string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim(),
+            _includeInGlobalCatalog,
+            _loanAudience);
 
         var saved = Item is null
             ? await AdminClient.CreateMyEquipmentItemAsync(request)

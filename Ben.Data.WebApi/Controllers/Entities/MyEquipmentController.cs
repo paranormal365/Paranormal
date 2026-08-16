@@ -97,6 +97,8 @@ public sealed class MyEquipmentController : BenControllerBase
             AcquisitionDate    = request.AcquisitionDate,
             Notes              = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
             IsRetired          = false,
+            IncludeInGlobalCatalog = request.IncludeInGlobalCatalog,
+            LoanAudience           = request.LoanAudience,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
@@ -125,7 +127,11 @@ public sealed class MyEquipmentController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         var before = await EquipmentAccess.FindOwnedAsync(db, id, userId, ct);
         if (before is null) return NotFound();
-        var beforeSnapshot = new { before.DisplayName, before.SerialNumber, before.AcquisitionDate, before.Notes, before.EquipmentModelId };
+        var beforeSnapshot = new
+        {
+            before.DisplayName, before.SerialNumber, before.AcquisitionDate, before.Notes,
+            before.EquipmentModelId, before.IncludeInGlobalCatalog, before.LoanAudience,
+        };
 
         if (request.EquipmentModelId != before.EquipmentModelId
             && !await db.EquipmentModels.AnyAsync(m => m.Id == request.EquipmentModelId, ct))
@@ -141,6 +147,8 @@ public sealed class MyEquipmentController : BenControllerBase
         entity.SerialNumber     = string.IsNullOrWhiteSpace(request.SerialNumber) ? null : request.SerialNumber.Trim();
         entity.AcquisitionDate  = request.AcquisitionDate;
         entity.Notes            = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
+        entity.IncludeInGlobalCatalog = request.IncludeInGlobalCatalog;
+        entity.LoanAudience           = request.LoanAudience;
         entity.DateUpdated        = DateTime.UtcNow;
         entity.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
@@ -324,6 +332,8 @@ public sealed class MyEquipmentController : BenControllerBase
             item.AcquisitionDate,
             item.Notes,
             item.IsRetired,
+            item.IncludeInGlobalCatalog,
+            item.LoanAudience,
             item.CurrentHolderAppUserId,
             holderName,
             item.LastServicedDate,
@@ -341,7 +351,6 @@ public sealed class MyEquipmentController : BenControllerBase
 /// </summary>
 [ApiController]
 [Route("api/equipment/photos")]
-[Authorize]
 public sealed class EquipmentPhotoContentController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
@@ -353,11 +362,22 @@ public sealed class EquipmentPhotoContentController : BenControllerBase
         _fileStorage = fileStorage;
     }
 
+    /// <summary>
+    /// Photo bytes for one equipment photo.
+    /// </summary>
+    /// <remarks>
+    /// Not blanket <c>[Authorize]</c>, because an item its owner listed publicly has to show its
+    /// photos to visitors who have no token — the same reason the endpoint exists at all is that an
+    /// <c>&lt;img src&gt;</c> sends no bearer token. Anonymous callers therefore reach exactly the
+    /// photos of publicly-listed, non-retired items and nothing else; everything narrower still
+    /// requires being the owner (or SuperAdmin). Answers 404 rather than 403 throughout, so the
+    /// endpoint cannot be used to probe which photo ids exist.
+    /// </remarks>
     [HttpGet("{photoId:guid}/content")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetContent(Guid photoId, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
-        if (userId == Guid.Empty) return Unauthorized();
         var isSuperAdmin = User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
 
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -367,10 +387,13 @@ public sealed class EquipmentPhotoContentController : BenControllerBase
             .FirstOrDefaultAsync(p => p.Id == photoId, ct);
         if (photo is null) return NotFound();
 
-        // Phase 1: visible to the owner or SuperAdmin only. Phase 2/3 extend this with
-        // shared-with-my-org and org-member visibility once those exist.
+        // Publicly listed by its owner — anyone may see it, signed in or not.
+        var isPubliclyListed = photo.EquipmentItem.IncludeInGlobalCatalog && !photo.EquipmentItem.IsRetired;
+
+        // Otherwise: owner or SuperAdmin only. Phase 2/3 widen this to shared-with-my-group and
+        // org-member visibility once those exist.
         var flags = EquipmentAccess.ComputeItemFlags(photo.EquipmentItem, userId, isSuperAdmin);
-        if (!flags.IsOwner && !isSuperAdmin) return NotFound();
+        if (!isPubliclyListed && !flags.IsOwner && !isSuperAdmin) return NotFound();
 
         if (photo.UploadFile.StoragePath is null) return NotFound();
         var stream = await _fileStorage.OpenReadAsync(photo.UploadFile.StoragePath, ct);

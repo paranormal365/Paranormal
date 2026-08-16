@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 
 namespace Ben.Data.Source.Entities
@@ -43,6 +44,22 @@ namespace Ben.Data.Source.Entities
         /// be retired (hidden from browsing/borrowing, history preserved).
         /// </summary>
         public bool IsRetired { get; set; }
+
+        /// <summary>
+        /// The owner has chosen to list this piece publicly. Anonymous visitors then see the item,
+        /// its make/model and its photos — but never <see cref="OwnerAppUserId"/>'s name and never
+        /// <see cref="SerialNumber"/>. Off by default: publishing someone's property is a decision
+        /// they make, not one they discover.
+        /// </summary>
+        public bool IncludeInGlobalCatalog { get; set; }
+
+        /// <summary>
+        /// Who the owner is willing to lend this piece to — the group itself, fellow group members
+        /// personally, anyone signed in, or any combination. Independent of who can <i>see</i> it;
+        /// see <see cref="EquipmentLoanAudience"/> for why the routes differ by attribution as well
+        /// as reach. Defaults to not loanable.
+        /// </summary>
+        public EquipmentLoanAudience LoanAudience { get; set; }
 
         // ── Org-owned-only fields (null on personal items) ──────────────────────────
         public Guid? CurrentHolderAppUserId { get; set; }

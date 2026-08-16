@@ -64,6 +64,31 @@
                                 <span class="mx-1">·</span>
                                 @item.CategoryName
                             </div>
+                            <div class="mt-1 d-flex flex-wrap gap-1">
+                                @if (item.IncludeInGlobalCatalog)
+                                {
+                                    <span class="badge bg-info text-dark" title="Visible in the public catalog, without your name">Public</span>
+                                }
+                                @if (item.LoanAudience == EquipmentLoanAudience.NotLoanable)
+                                {
+                                    <span class="badge bg-light text-secondary border">Not lent out</span>
+                                }
+                                else
+                                {
+                                    @if ((item.LoanAudience & EquipmentLoanAudience.SharedGroups) != 0)
+                                    {
+                                        <span class="badge bg-success">Lends to my groups</span>
+                                    }
+                                    @if ((item.LoanAudience & EquipmentLoanAudience.GroupMembers) != 0)
+                                    {
+                                        <span class="badge bg-success">Lends to people in my groups</span>
+                                    }
+                                    @if ((item.LoanAudience & EquipmentLoanAudience.IndividualUsers) != 0)
+                                    {
+                                        <span class="badge bg-success">Lends to anyone</span>
+                                    }
+                                }
+                            </div>
                         </div>
                         <div class="d-flex gap-2">
                             <TelerikButton Icon="@SvgIcon.Pencil" Size="@ThemeConstants.Button.Size.Small"

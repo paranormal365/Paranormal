@@ -111,6 +111,55 @@ public sealed class EquipmentCatalogController : BenControllerBase
     }
 
     /// <summary>
+    /// Items their owners have chosen to list publicly.
+    /// </summary>
+    /// <remarks>
+    /// Opt-in only: <c>IncludeInGlobalCatalog</c> defaults to false, so nothing lands here because
+    /// somebody forgot to hide it. Projects to <see cref="PublicEquipmentItemRecord"/>, which has
+    /// no owner id, no owner name and no serial number on the shape at all — a projection that
+    /// cannot carry them cannot leak them if a filter is later written wrongly. Retired items are
+    /// excluded.
+    /// </remarks>
+    [HttpGet("items")]
+    [AllowAnonymous]
+    public async Task<ActionResult<IEnumerable<PublicEquipmentItemRecord>>> GetPublicItems(
+        [FromQuery] string? search, [FromQuery] Guid? categoryId, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var query = db.EquipmentItems.AsNoTracking()
+            .Include(i => i.EquipmentModel).ThenInclude(m => m.EquipmentBrand)
+            .Include(i => i.EquipmentModel).ThenInclude(m => m.EquipmentCategory)
+            .Include(i => i.Photos)
+            .Where(i => i.IncludeInGlobalCatalog && !i.IsRetired);
+
+        if (categoryId is not null)
+            query = query.Where(i => i.EquipmentModel.EquipmentCategoryId == categoryId);
+        if (!string.IsNullOrWhiteSpace(search))
+            query = query.Where(i =>
+                EF.Functions.Like(i.DisplayName, $"%{search}%")
+                || EF.Functions.Like(i.EquipmentModel.Name, $"%{search}%")
+                || EF.Functions.Like(i.EquipmentModel.EquipmentBrand.Name, $"%{search}%"));
+
+        var items = await query
+            .OrderBy(i => i.EquipmentModel.EquipmentBrand.Name).ThenBy(i => i.DisplayName)
+            .Select(i => new PublicEquipmentItemRecord(
+                i.Id,
+                i.DisplayName,
+                i.EquipmentModel.EquipmentBrand.Name,
+                i.EquipmentModel.Name,
+                i.EquipmentModel.EquipmentCategory.Name,
+                i.AcquisitionDate,
+                i.Notes,
+                i.LoanAudience,
+                i.Photos.OrderBy(p => p.SortOrder)
+                    .Select(p => new EquipmentItemPhotoRecord(p.Id, p.EquipmentItemId, p.UploadFileId, p.IsPrimary, p.Caption, p.SortOrder))
+                    .ToList()))
+            .ToListAsync(ct);
+
+        return Ok(items);
+    }
+
+    /// <summary>
     /// Proposes a brand. SuperAdmin-created entries are auto-approved; everyone else starts
     /// unapproved but can use their own entry right away. Dedupes by name (case-insensitive) —
     /// returns the existing row rather than 409, which is friendlier for an accumulating catalog

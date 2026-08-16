@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
@@ -237,6 +238,142 @@ public class MyEquipmentControllerTests
         Assert.False(await db.EquipmentItems.AnyAsync(i => i.Id == itemId));
         Assert.False(await db.EquipmentItemPhotos.AnyAsync(p => p.EquipmentItemId == itemId));
         storageMock.Verify(s => s.DeleteAsync("fake/path.jpg", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // ── Photo byte access ────────────────────────────────────────────────────
+    //
+    // GetContent is deliberately not blanket [Authorize] — a publicly-listed item has to show its
+    // photos to visitors with no token. These pin the boundary that widening created.
+
+    private static EquipmentPhotoContentController BuildPhotos(
+        IDbContextFactory<BenDataContext> f, Guid? userId, Mock<IFileStorageService>? storageMock = null)
+    {
+        var storage = storageMock ?? new Mock<IFileStorageService>();
+        storage.Setup(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+               .ReturnsAsync(() => new MemoryStream([1, 2, 3]));
+
+        var identity = userId is null
+            ? new ClaimsIdentity()   // anonymous: no authentication type, no claims
+            : new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, userId.Value.ToString())], "Bearer");
+
+        return new EquipmentPhotoContentController(f, storage.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+            }
+        };
+    }
+
+    private static async Task<Guid> AttachPhotoAndGetIdAsync(World w, Guid itemId)
+    {
+        var ctrl = Build(w.Factory, OwnerId);
+        var photoResult = await ctrl.AttachPhoto(itemId, MakeFile(), default);
+        return ((EquipmentItemPhotoRecord)((OkObjectResult)photoResult.Result!).Value!).Id;
+    }
+
+    private static async Task<Guid> CreateItemAsync(World w, bool publiclyListed)
+    {
+        var ctrl = Build(w.Factory, OwnerId);
+        var created = await ctrl.Create(
+            new UpsertEquipmentItemRequest(w.ModelId, "Recorder", "SN-9", null, null, publiclyListed), default);
+        return ((EquipmentItemRecord)((OkObjectResult)created.Result!).Value!).Id;
+    }
+
+    [Fact]
+    public async Task PhotoContent_OfAPrivateItem_IsNotFoundForAnAnonymousCaller()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: false);
+        var photoId = await AttachPhotoAndGetIdAsync(w, itemId);
+
+        var result = await BuildPhotos(w.Factory, userId: null).GetContent(photoId, default);
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task PhotoContent_OfAPrivateItem_IsNotFoundForAnotherSignedInUser()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: false);
+        var photoId = await AttachPhotoAndGetIdAsync(w, itemId);
+
+        var result = await BuildPhotos(w.Factory, StrangerId).GetContent(photoId, default);
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task PhotoContent_OfAPubliclyListedItem_IsServedToAnAnonymousCaller()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: true);
+        var photoId = await AttachPhotoAndGetIdAsync(w, itemId);
+
+        var result = await BuildPhotos(w.Factory, userId: null).GetContent(photoId, default);
+        Assert.IsType<FileStreamResult>(result);
+    }
+
+    [Fact]
+    public async Task PhotoContent_OfAPubliclyListedButRetiredItem_IsNotFoundAnonymously()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: true);
+        var photoId = await AttachPhotoAndGetIdAsync(w, itemId);
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var item = await db.EquipmentItems.SingleAsync(i => i.Id == itemId);
+            item.IsRetired = true;
+            await db.SaveChangesAsync();
+        }
+
+        var result = await BuildPhotos(w.Factory, userId: null).GetContent(photoId, default);
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task PhotoContent_OfAPrivateItem_IsServedToItsOwner()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: false);
+        var photoId = await AttachPhotoAndGetIdAsync(w, itemId);
+
+        var result = await BuildPhotos(w.Factory, OwnerId).GetContent(photoId, default);
+        Assert.IsType<FileStreamResult>(result);
+    }
+
+    // ── Visibility and lending fields ────────────────────────────────────────
+
+    [Fact]
+    public async Task Create_DefaultsToPrivateAndNotLoanable()
+    {
+        var w = await SeedAsync();
+        var ctrl = Build(w.Factory, OwnerId);
+
+        var created = await ctrl.Create(new UpsertEquipmentItemRequest(w.ModelId, "Recorder", null, null, null), default);
+        var record = (EquipmentItemRecord)((OkObjectResult)created.Result!).Value!;
+
+        // Publishing property and offering to lend it are both opt-in.
+        Assert.False(record.IncludeInGlobalCatalog);
+        Assert.Equal(EquipmentLoanAudience.NotLoanable, record.LoanAudience);
+    }
+
+    [Fact]
+    public async Task Update_PersistsCombinedLoanAudience()
+    {
+        var w = await SeedAsync();
+        var ctrl = Build(w.Factory, OwnerId);
+        var itemId = await CreateItemAsync(w, publiclyListed: false);
+
+        var both = EquipmentLoanAudience.SharedGroups | EquipmentLoanAudience.GroupMembers;
+        var updated = await ctrl.Update(itemId,
+            new UpsertEquipmentItemRequest(w.ModelId, "Recorder", null, null, null, true, both), default);
+        var record = (EquipmentItemRecord)((OkObjectResult)updated.Result!).Value!;
+
+        Assert.True(record.IncludeInGlobalCatalog);
+        Assert.Equal(both, record.LoanAudience);
+        Assert.True(record.LoanAudience.HasFlag(EquipmentLoanAudience.SharedGroups));
+        Assert.False(record.LoanAudience.HasFlag(EquipmentLoanAudience.IndividualUsers));
     }
 
     [Fact]

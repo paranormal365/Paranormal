@@ -44,6 +44,16 @@ public sealed partial class BenAdminClientAdapter
         return result ?? [];
     }
 
+    public async Task<IReadOnlyList<PublicEquipmentItemRecord>> GetPublicEquipmentItemsAsync(string? search = null, Guid? categoryId = null, CancellationToken token = default)
+    {
+        var query = new List<string>();
+        if (!string.IsNullOrWhiteSpace(search)) query.Add($"search={Uri.EscapeDataString(search)}");
+        if (categoryId is not null) query.Add($"categoryId={categoryId}");
+        var url = "/api/equipment-catalog/items" + (query.Count == 0 ? "" : "?" + string.Join("&", query));
+        var result = await _api.GetAnonymousAsync<IReadOnlyList<PublicEquipmentItemRecord>>(url, token);
+        return result ?? [];
+    }
+
     public Task<EquipmentBrandRecord?> ProposeEquipmentBrandAsync(string name, CancellationToken token = default)
         => _api.PostAsync<UpsertEquipmentBrandRequest, EquipmentBrandRecord>(
                "/api/equipment-catalog/brands", new UpsertEquipmentBrandRequest(name), token);

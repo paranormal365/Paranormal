@@ -19,6 +19,9 @@ public interface IBenEquipmentClient
     Task<IReadOnlyList<EquipmentBrandRecord>> GetEquipmentBrandsAsync(string? search = null, CancellationToken token = default);
     Task<IReadOnlyList<EquipmentModelRecord>> GetEquipmentModelsForBrandAsync(Guid brandId, Guid? categoryId = null, CancellationToken token = default);
     Task<IReadOnlyList<EquipmentModelRecord>> SearchEquipmentModelsAsync(string? search = null, Guid? categoryId = null, CancellationToken token = default);
+    /// <summary>Items their owners chose to list publicly. Carries no owner identity and no serial.</summary>
+    Task<IReadOnlyList<PublicEquipmentItemRecord>> GetPublicEquipmentItemsAsync(string? search = null, Guid? categoryId = null, CancellationToken token = default);
+
     Task<EquipmentBrandRecord?> ProposeEquipmentBrandAsync(string name, CancellationToken token = default);
     Task<EquipmentModelRecord?> ProposeEquipmentModelAsync(UpsertEquipmentModelRequest request, CancellationToken token = default);
 

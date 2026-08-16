@@ -1,3 +1,5 @@
+using Ben.Data.Common.Enums;
+
 namespace Ben.Service.Models.Entities;
 
 // ── Backlog item #55 — Equipment inventory & checkout tracking ────────────────
@@ -97,6 +99,8 @@ public sealed record EquipmentItemRecord(
     DateTime? AcquisitionDate,
     string? Notes,
     bool IsRetired,
+    bool IncludeInGlobalCatalog,
+    EquipmentLoanAudience LoanAudience,
     Guid? CurrentHolderAppUserId,
     string? CurrentHolderDisplayName,
     DateTime? LastServicedDate,
@@ -109,4 +113,23 @@ public sealed record UpsertEquipmentItemRequest(
     string DisplayName,
     string? SerialNumber,
     DateTime? AcquisitionDate,
-    string? Notes);
+    string? Notes,
+    bool IncludeInGlobalCatalog = false,
+    EquipmentLoanAudience LoanAudience = EquipmentLoanAudience.NotLoanable);
+
+/// <summary>
+/// One publicly-listed item as an anonymous visitor sees it. Deliberately not
+/// <see cref="EquipmentItemRecord"/>: there is no owner id, no owner name, no serial and no
+/// permission flags on this shape at all, so a public projection cannot leak them by omission of a
+/// check somewhere downstream.
+/// </summary>
+public sealed record PublicEquipmentItemRecord(
+    Guid Id,
+    string DisplayName,
+    string BrandName,
+    string ModelName,
+    string CategoryName,
+    DateTime? AcquisitionDate,
+    string? Notes,
+    EquipmentLoanAudience LoanAudience,
+    IReadOnlyList<EquipmentItemPhotoRecord> Photos);

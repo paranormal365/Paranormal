@@ -8,14 +8,15 @@
 
 <PageTitle>Equipment Catalog</PageTitle>
 
-@* Deliberately anonymous: the catalog is make/model reference data only. It never carries who
-   owns what, or any serial number — those live on EquipmentItem and resolve server-side. *@
+@* Deliberately anonymous. "Makes & models" is pure reference data. "Gear people own" lists only
+   items whose owners opted in, and its projection carries no owner identity and no serial — see
+   PublicEquipmentItemRecord. *@
 
 <div class="container-fluid py-3" style="max-width:900px;">
     <h3 class="mb-1">Equipment Catalog<HelpLink Slug="your-equipment" Anchor="the-public-catalog" /></h3>
     <p class="text-secondary small mb-4">
-        Gear people use for paranormal investigation, by make and model. This list grows as members
-        add their own equipment. It never shows who owns anything.
+        Gear used for paranormal investigation. The makes and models grow as members add their own
+        equipment. Nothing here shows who owns anything.
     </p>
 
     <div class="row g-2 mb-3">
@@ -42,39 +43,95 @@
     {
         <TelerikLoaderContainer Visible="true" Text="Loading the catalog…" />
     }
-    else if (_models.Count == 0)
-    {
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <h6 class="mb-2">Nothing matches that yet</h6>
-                <p class="text-secondary small mb-0">
-                    @if (_isAuthenticated)
-                    {
-                        <span>Add the gear you own and it will show up here once approved.</span>
-                    }
-                    else
-                    {
-                        <span>Sign in to add the gear you own.</span>
-                    }
-                </p>
-            </div>
-        </div>
-    }
     else
     {
-        <TelerikGrid Data="@_models" TItem="EquipmentModelRecord"
-                     Sortable="true" Pageable="true" PageSize="25">
-            <GridColumns>
-                <GridColumn Field="@nameof(EquipmentModelRecord.BrandName)" Title="Make" Width="200px" />
-                <GridColumn Field="@nameof(EquipmentModelRecord.Name)" Title="Model" />
-                <GridColumn Field="@nameof(EquipmentModelRecord.ModelNumber)" Title="Model #" Width="140px" />
-                <GridColumn Field="@nameof(EquipmentModelRecord.CategoryName)" Title="Category" Width="200px" />
-            </GridColumns>
-        </TelerikGrid>
+        <TelerikTabStrip @bind-ActiveTabId="@_activeTab">
 
-        <p class="text-secondary small mt-2 mb-0">
-            Showing @_models.Count approved @(_models.Count == 1 ? "entry" : "entries").
-        </p>
+            <TabStripTab Title="Makes &amp; models" Id="models">
+                @if (_models.Count == 0)
+                {
+                    <div class="card mt-2">
+                        <div class="card-body text-center py-5">
+                            <h6 class="mb-2">Nothing matches that yet</h6>
+                            <p class="text-secondary small mb-0">
+                                @(_isAuthenticated
+                                    ? "Add the gear you own and its make and model show up here once approved."
+                                    : "Sign in to add the gear you own.")
+                            </p>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <TelerikGrid Data="@_models" TItem="EquipmentModelRecord"
+                                 Sortable="true" Pageable="true" PageSize="25">
+                        <GridColumns>
+                            <GridColumn Field="@nameof(EquipmentModelRecord.BrandName)" Title="Make" Width="200px" />
+                            <GridColumn Field="@nameof(EquipmentModelRecord.Name)" Title="Model" />
+                            <GridColumn Field="@nameof(EquipmentModelRecord.ModelNumber)" Title="Model #" Width="140px" />
+                            <GridColumn Field="@nameof(EquipmentModelRecord.CategoryName)" Title="Category" Width="200px" />
+                        </GridColumns>
+                    </TelerikGrid>
+                    <p class="text-secondary small mt-2 mb-0">
+                        @_models.Count approved @(_models.Count == 1 ? "entry" : "entries").
+                    </p>
+                }
+            </TabStripTab>
+
+            <TabStripTab Title="Gear people own" Id="items">
+                @if (_items.Count == 0)
+                {
+                    <div class="card mt-2">
+                        <div class="card-body text-center py-5">
+                            <h6 class="mb-2">Nobody has listed a piece publicly yet</h6>
+                            <p class="text-secondary small mb-0">
+                                Members choose, piece by piece, whether to list their own gear here.
+                            </p>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="row g-3 mt-1">
+                        @foreach (var item in _items)
+                        {
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title mb-1">@item.DisplayName</h6>
+                                        <div class="text-secondary small">
+                                            @item.BrandName · @item.ModelName
+                                            <span class="mx-1">·</span>@item.CategoryName
+                                        </div>
+
+                                        @if (item.LoanAudience != EquipmentLoanAudience.NotLoanable)
+                                        {
+                                            <span class="badge bg-success mt-2">Available to borrow</span>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(item.Notes))
+                                        {
+                                            <p class="small mt-2 mb-0">@item.Notes</p>
+                                        }
+
+                                        @if (item.Photos.Count > 0)
+                                        {
+                                            <div class="mt-2">
+                                                <PublicEquipmentPhotos Photos="@item.Photos" />
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <p class="text-secondary small mt-3 mb-0">
+                        @_items.Count publicly listed @(_items.Count == 1 ? "piece" : "pieces").
+                    </p>
+                }
+            </TabStripTab>
+
+        </TelerikTabStrip>
     }
 
     @if (_isAuthenticated)
@@ -88,8 +145,10 @@
 @code {
     private List<EquipmentCategoryRecord> _categories = [];
     private List<EquipmentModelRecord> _models = [];
+    private List<PublicEquipmentItemRecord> _items = [];
     private Guid? _categoryId;
     private string _search = string.Empty;
+    private string _activeTab = "models";
     private bool _loading = true;
     private bool _isAuthenticated;
 
@@ -97,7 +156,7 @@
     {
         if (!firstRender) return;
 
-        // The page itself is anonymous, but knowing whether someone is signed in decides which
+        // The page itself is anonymous, but whether someone is signed in decides which
         // call-to-action to show — so still wait for auth to settle rather than guessing.
         await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive);
         _isAuthenticated = UserState.IsAuthenticated;
@@ -117,8 +176,11 @@
     {
         _loading = true;
         StateHasChanged();
-        _models = [.. await AdminClient.SearchEquipmentModelsAsync(
-            string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(), _categoryId)];
+
+        var search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
+        _models = [.. await AdminClient.SearchEquipmentModelsAsync(search, _categoryId)];
+        _items  = [.. await AdminClient.GetPublicEquipmentItemsAsync(search, _categoryId)];
+
         _loading = false;
         StateHasChanged();
     }
