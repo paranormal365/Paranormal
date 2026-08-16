@@ -96,7 +96,7 @@ public sealed class OrganizationAddressCrudController : OrgCmsControllerBase
 
         db.OrganizationAddresses.Add(entity);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationAddress), entity.Id, entity, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationAddress), entity.Id, entity, userId.Value, AppSources.WebApi));
 
         return CreatedAtAction(nameof(GetAll), new { orgId }, Mapper.Map<OrganizationAddressRecord>(entity));
     }
@@ -148,7 +148,7 @@ public sealed class OrganizationAddressCrudController : OrgCmsControllerBase
         entity.UpdatedByAppUserId        = userId.Value;
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationAddress), addressId, before, entity, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationAddress), addressId, before, entity, userId.Value, AppSources.WebApi));
 
         return Ok(Mapper.Map<OrganizationAddressRecord>(entity));
     }
@@ -170,7 +170,7 @@ public sealed class OrganizationAddressCrudController : OrgCmsControllerBase
 
         db.OrganizationAddresses.Remove(entity);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationAddress), addressId, entity, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationAddress), addressId, entity, userId.Value, AppSources.WebApi));
 
         return NoContent();
     }
@@ -220,7 +220,7 @@ public sealed class OrganizationAddressCrudController : OrgCmsControllerBase
         };
         db.OrganizationAddressMemberAccesses.Add(entity);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationAddressMemberAccess), entity.Id, entity, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationAddressMemberAccess), entity.Id, entity, userId.Value, AppSources.WebApi));
         return CreatedAtAction(nameof(GetMemberAccess), new { orgId, addressId }, Mapper.Map<OrganizationAddressMemberAccessRecord>(entity));
     }
 
@@ -239,7 +239,7 @@ public sealed class OrganizationAddressCrudController : OrgCmsControllerBase
         if (entity is null) return NotFound();
         db.OrganizationAddressMemberAccesses.Remove(entity);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationAddressMemberAccess), accessId, entity, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationAddressMemberAccess), accessId, entity, userId.Value, AppSources.WebApi));
         return NoContent();
     }
 

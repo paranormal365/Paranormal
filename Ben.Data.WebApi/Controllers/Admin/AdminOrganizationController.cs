@@ -57,7 +57,7 @@ public sealed class AdminOrganizationController : AdminEntityControllerBase<Orga
 
         db.Organizations.Add(org);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi));
 
         return CreatedAtAction(nameof(GetById), new { id = org.Id }, _mapper.Map<OrganizationAdminRecord>(org));
     }

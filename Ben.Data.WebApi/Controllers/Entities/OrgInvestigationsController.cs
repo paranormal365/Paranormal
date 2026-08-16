@@ -201,7 +201,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         await db.SaveChangesAsync(ct);
 
         _ = TryAuditAsync(_auditLog.LogCreateAsync(
-            nameof(Investigation), entity.Id, entity, userId, AppSources.WebApi, ct));
+            nameof(Investigation), entity.Id, entity, userId, AppSources.WebApi));
 
         var loaded = await db.Investigations.AsNoTracking()
             .Include(i => i.Attendees)
@@ -277,7 +277,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
 
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(
             nameof(InvestigationAttendee), attendee.Id,
-            new InvestigationAttendee { Id = attendee.Id }, attendee, userId, AppSources.WebApi, ct));
+            new InvestigationAttendee { Id = attendee.Id }, attendee, userId, AppSources.WebApi));
 
         return Ok(await ToRosterEntryAsync(db, attendee.Id, ct));
     }
@@ -318,7 +318,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
 
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(
             nameof(InvestigationAttendee), attendee.Id,
-            new InvestigationAttendee { Id = attendee.Id }, attendee, userId, AppSources.WebApi, ct));
+            new InvestigationAttendee { Id = attendee.Id }, attendee, userId, AppSources.WebApi));
 
         return Ok(await ToRosterEntryAsync(db, attendee.Id, ct));
     }
@@ -367,7 +367,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
 
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(
             nameof(InvestigationAttendee), target.Id,
-            new InvestigationAttendee { Id = target.Id }, target, userId, AppSources.WebApi, ct));
+            new InvestigationAttendee { Id = target.Id }, target, userId, AppSources.WebApi));
 
         // The whole roster comes back, not just the row that was clicked: naming a lead changes
         // somebody else's row too, and returning one row would leave the old lead's badge showing.
@@ -461,7 +461,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
 
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(
             nameof(InvestigationFinding), finding.Id,
-            new InvestigationFinding { Id = finding.Id }, finding, userId, AppSources.WebApi, ct));
+            new InvestigationFinding { Id = finding.Id }, finding, userId, AppSources.WebApi));
 
         return Ok((await FindingsAsync(db, id, ct)).First(f => f.AppUserId == userId));
     }
@@ -489,7 +489,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         await db.SaveChangesAsync(ct);
 
         _ = TryAuditAsync(_auditLog.LogDeleteAsync(
-            nameof(InvestigationFinding), finding.Id, finding, userId, AppSources.WebApi, ct));
+            nameof(InvestigationFinding), finding.Id, finding, userId, AppSources.WebApi));
 
         return NoContent();
     }

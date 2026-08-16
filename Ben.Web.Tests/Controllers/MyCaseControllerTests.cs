@@ -1187,7 +1187,7 @@ public class MyCaseControllerTests
         await ctrl.LogOccurrence(caseId, new LogOccurrenceRequest(DateTime.UtcNow, "Title", "Body"), default);
 
         auditLog.Verify(a => a.LogCreateAsync(
-            nameof(CaseTimelineEntry), It.IsAny<Guid>(), It.IsAny<object>(), clientId, AppSources.WebApi, It.IsAny<CancellationToken>()),
+            nameof(CaseTimelineEntry), It.IsAny<Guid>(), It.IsAny<object>(), clientId, AppSources.WebApi),
             Times.Once);
     }
 
@@ -1201,7 +1201,7 @@ public class MyCaseControllerTests
         await ctrl.AddRelatedPerson(caseId, new AddRelatedPersonRequest("Jane Doe", null, null, false, null), default);
 
         auditLog.Verify(a => a.LogCreateAsync(
-            nameof(Ben.Data.Source.Entities.CaseRelatedPerson), It.IsAny<Guid>(), It.IsAny<object>(), clientId, AppSources.WebApi, It.IsAny<CancellationToken>()),
+            nameof(Ben.Data.Source.Entities.CaseRelatedPerson), It.IsAny<Guid>(), It.IsAny<object>(), clientId, AppSources.WebApi),
             Times.Once);
     }
 

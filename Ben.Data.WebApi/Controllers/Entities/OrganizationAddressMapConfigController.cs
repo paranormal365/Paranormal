@@ -133,9 +133,9 @@ public sealed class OrganizationAddressMapConfigController : ControllerBase
 
         await db.SaveChangesAsync(ct);
         if (cfgBefore is null)
-            _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationAddressMapConfig), cfg.Id, cfg, userId.Value, AppSources.WebApi, ct));
+            _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationAddressMapConfig), cfg.Id, cfg, userId.Value, AppSources.WebApi));
         else
-            _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationAddressMapConfig), cfg.Id, cfgBefore, cfg, userId.Value, AppSources.WebApi, ct));
+            _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationAddressMapConfig), cfg.Id, cfgBefore, cfg, userId.Value, AppSources.WebApi));
         return Ok(_mapper.Map<AddressMapConfigRecord>(cfg));
     }
 
@@ -163,7 +163,7 @@ public sealed class OrganizationAddressMapConfigController : ControllerBase
 
         db.OrganizationAddressMapConfigs.Remove(cfg);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationAddressMapConfig), cfg.Id, cfg, userId!.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationAddressMapConfig), cfg.Id, cfg, userId!.Value, AppSources.WebApi));
         return NoContent();
     }
 

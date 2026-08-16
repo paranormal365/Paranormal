@@ -162,7 +162,7 @@ public sealed class OrganizationFileController : ControllerBase
         };
         db.OrganizationFiles.Add(orgFile);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationFile), orgFile.Id, orgFile, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationFile), orgFile.Id, orgFile, userId.Value, AppSources.WebApi));
         var created = await WithIncludes(db.OrganizationFiles).AsNoTracking().FirstAsync(f => f.Id == orgFile.Id, ct);
         return CreatedAtAction(nameof(GetAll), new { orgId }, _mapper.Map<OrganizationFileRecord>(created));
     }
@@ -232,7 +232,7 @@ public sealed class OrganizationFileController : ControllerBase
         };
         db.OrganizationFiles.Add(orgFile);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationFile), orgFile.Id, orgFile, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationFile), orgFile.Id, orgFile, userId.Value, AppSources.WebApi));
 
         var created = await WithIncludes(db.OrganizationFiles).AsNoTracking().FirstAsync(f => f.Id == orgFile.Id, ct);
         return CreatedAtAction(nameof(GetAll), new { orgId },
@@ -266,7 +266,7 @@ public sealed class OrganizationFileController : ControllerBase
         file.DatePublished        = request.IsPublic ? now : null;
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationFile), id, fileBefore!, file, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationFile), id, fileBefore!, file, userId.Value, AppSources.WebApi));
         var updated = await WithIncludes(db.OrganizationFiles).AsNoTracking().FirstAsync(f => f.Id == id, ct);
         return Ok(_mapper.Map<OrganizationFileRecord>(updated));
     }
@@ -293,7 +293,7 @@ public sealed class OrganizationFileController : ControllerBase
         file.DateUpdated        = DateTime.UtcNow;
         file.UpdatedByAppUserId = userId.Value;
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationFile), id, fileBefore!, file, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationFile), id, fileBefore!, file, userId.Value, AppSources.WebApi));
         var updated = await WithIncludes(db.OrganizationFiles).AsNoTracking().FirstAsync(f => f.Id == id, ct);
         return Ok(_mapper.Map<OrganizationFileRecord>(updated));
     }
@@ -346,7 +346,7 @@ public sealed class OrganizationFileController : ControllerBase
 
         db.OrganizationFiles.Remove(file);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationFile), id, file, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationFile), id, file, userId.Value, AppSources.WebApi));
         return NoContent();
     }
 

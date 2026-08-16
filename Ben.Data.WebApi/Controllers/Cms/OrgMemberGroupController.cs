@@ -68,7 +68,7 @@ public sealed class OrgMemberGroupController : OrgCmsControllerBase
 
         db.OrgMemberGroups.Add(group);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrgMemberGroup), group.Id, group, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrgMemberGroup), group.Id, group, userId.Value, AppSources.WebApi));
         return CreatedAtAction(nameof(GetAll), new { orgId }, Mapper.Map<OrgMemberGroupRecord>(group));
     }
 
@@ -98,7 +98,7 @@ public sealed class OrgMemberGroupController : OrgCmsControllerBase
         group.UpdatedByAppUserId = userId.Value;
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrgMemberGroup), groupId, before, group!, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrgMemberGroup), groupId, before, group!, userId.Value, AppSources.WebApi));
         return Ok(Mapper.Map<OrgMemberGroupRecord>(group));
     }
 
@@ -118,7 +118,7 @@ public sealed class OrgMemberGroupController : OrgCmsControllerBase
 
         db.OrgMemberGroups.Remove(group);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrgMemberGroup), groupId, group, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrgMemberGroup), groupId, group, userId.Value, AppSources.WebApi));
         return NoContent();
     }
 
@@ -179,7 +179,7 @@ public sealed class OrgMemberGroupController : OrgCmsControllerBase
 
         db.OrgMemberGroupMemberships.Add(membership);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrgMemberGroupMembership), membership.Id, membership, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrgMemberGroupMembership), membership.Id, membership, userId.Value, AppSources.WebApi));
         return CreatedAtAction(nameof(GetMembers), new { orgId, groupId },
             Mapper.Map<OrgMemberGroupMembershipRecord>(membership));
     }
@@ -200,7 +200,7 @@ public sealed class OrgMemberGroupController : OrgCmsControllerBase
 
         db.OrgMemberGroupMemberships.Remove(gm);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrgMemberGroupMembership), membershipId, gm, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrgMemberGroupMembership), membershipId, gm, userId.Value, AppSources.WebApi));
         return NoContent();
     }
 }

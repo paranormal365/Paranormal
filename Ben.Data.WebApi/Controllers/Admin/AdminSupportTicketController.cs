@@ -199,7 +199,7 @@ public sealed class AdminSupportTicketController : BenControllerBase
         await db.SaveChangesAsync(ct);
 
         await _auditLog.LogUpdateAsync(
-            nameof(SupportTicket), ticket.Id, before, ticket, userId, AppSources.WebApi, ct);
+            nameof(SupportTicket), ticket.Id, before, ticket, userId, AppSources.WebApi);
 
         return Ok(new SupportTicketAdminRecord(
             ticket.Id, ticket.Reference, ticket.FromName, ticket.FromEmail, ticket.Topic,

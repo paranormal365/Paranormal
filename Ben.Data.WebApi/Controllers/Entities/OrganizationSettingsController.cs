@@ -46,7 +46,7 @@ public sealed class OrganizationSettingsController : OrgCmsControllerBase
         org.ShowAddressMap        = request.ShowAddressMap;
         org.ShowAddressDirections = request.ShowAddressDirections;
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Organization), orgId, before, org, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Organization), orgId, before, org, userId.Value, AppSources.WebApi));
         return Ok(new OrgSettingsResponse(org.ShowAddressMap, org.ShowAddressDirections));
     }
 }

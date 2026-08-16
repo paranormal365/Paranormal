@@ -76,7 +76,7 @@ public sealed class CmsPagePermissionController : OrgCmsControllerBase
 
         db.CmsPagePermissions.Add(perm);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CmsPagePermission), perm.Id, perm, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CmsPagePermission), perm.Id, perm, userId.Value, AppSources.WebApi));
         return CreatedAtAction(nameof(GetAll), new { orgId, pageId },
             Mapper.Map<CmsPagePermissionRecord>(perm));
     }
@@ -106,7 +106,7 @@ public sealed class CmsPagePermissionController : OrgCmsControllerBase
         perm.UpdatedByAppUserId = userId.Value;
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(CmsPagePermission), permissionId, before, perm!, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(CmsPagePermission), permissionId, before, perm!, userId.Value, AppSources.WebApi));
         return Ok(Mapper.Map<CmsPagePermissionRecord>(perm));
     }
 
@@ -126,7 +126,7 @@ public sealed class CmsPagePermissionController : OrgCmsControllerBase
 
         db.CmsPagePermissions.Remove(perm);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(CmsPagePermission), permissionId, perm, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(CmsPagePermission), permissionId, perm, userId.Value, AppSources.WebApi));
         return NoContent();
     }
 }

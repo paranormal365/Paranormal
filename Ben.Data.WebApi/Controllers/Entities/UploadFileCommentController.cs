@@ -88,7 +88,7 @@ public sealed class UploadFileCommentController : BenControllerBase
         };
         db.UploadFileComments.Add(entity);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileComment), entity.Id, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileComment), entity.Id, entity, userId, AppSources.WebApi));
         var authorName = await db.AppUsers.AsNoTracking().Where(a => a.Id == userId).Select(a => a.DisplayName).FirstOrDefaultAsync(ct);
         return Ok(_mapper.Map<UploadFileCommentRecord>(entity) with { AuthorDisplayName = authorName });
     }
@@ -111,7 +111,7 @@ public sealed class UploadFileCommentController : BenControllerBase
         entity.DateUpdated = DateTime.UtcNow;
         entity.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileComment), commentId, before, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileComment), commentId, before, entity, userId, AppSources.WebApi));
         var authorName = await db.AppUsers.AsNoTracking().Where(a => a.Id == entity.AuthorAppUserId).Select(a => a.DisplayName).FirstOrDefaultAsync(ct);
         return Ok(_mapper.Map<UploadFileCommentRecord>(entity) with { AuthorDisplayName = authorName });
     }
@@ -130,7 +130,7 @@ public sealed class UploadFileCommentController : BenControllerBase
 
         db.UploadFileComments.Remove(entity);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFileComment), commentId, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFileComment), commentId, entity, userId, AppSources.WebApi));
         return NoContent();
     }
 

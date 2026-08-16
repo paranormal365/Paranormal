@@ -68,9 +68,9 @@ public class AdminAppUserControllerTests
             userStore.Object, null!, null!, null!, null!, null!, null!, null!, null!);
         var auditMock  = new Mock<IAuditLogService>();
         auditMock.Setup(x => x.LogCreateAsync(It.IsAny<string>(), It.IsAny<Guid>(),
-            It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>(), default)).Returns(Task.CompletedTask);
+            It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>())).Returns(Task.CompletedTask);
         auditMock.Setup(x => x.LogUpdateAsync(It.IsAny<string>(), It.IsAny<Guid>(),
-            It.IsAny<object>(), It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>(), default)).Returns(Task.CompletedTask);
+            It.IsAny<object>(), It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>())).Returns(Task.CompletedTask);
 
         var ctrl = new AdminAppUserController(factory, CreateMapper(), auditMock.Object, userMgr.Object);
         ctrl.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
@@ -156,7 +156,7 @@ public class AdminAppUserControllerTests
                .ReturnsAsync(IdentityResult.Failed(new IdentityError { Code = "WeakPw", Description = "Too weak." }));
         var audit = new Mock<IAuditLogService>();
         audit.Setup(x => x.LogCreateAsync(It.IsAny<string>(), It.IsAny<Guid>(),
-            It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>(), default)).Returns(Task.CompletedTask);
+            It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>())).Returns(Task.CompletedTask);
 
         var c = new AdminAppUserController(factory, CreateMapper(), audit.Object, userMgr.Object);
         c.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
@@ -184,7 +184,7 @@ public class AdminAppUserControllerTests
                .ReturnsAsync(IdentityResult.Success);
         var audit = new Mock<IAuditLogService>();
         audit.Setup(x => x.LogCreateAsync(It.IsAny<string>(), It.IsAny<Guid>(),
-            It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>(), default)).Returns(Task.CompletedTask);
+            It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>())).Returns(Task.CompletedTask);
 
         var c = new AdminAppUserController(factory, CreateMapper(), audit.Object, userMgr.Object);
         c.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext

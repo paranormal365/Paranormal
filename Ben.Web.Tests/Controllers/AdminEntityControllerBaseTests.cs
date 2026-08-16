@@ -61,13 +61,13 @@ public class AdminEntityControllerBaseTests
     {
         var auditMock = new Mock<IAuditLogService>();
         auditMock.Setup(x => x.LogCreateAsync(It.IsAny<string>(), It.IsAny<Guid>(),
-            It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>(), default))
+            It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
         auditMock.Setup(x => x.LogUpdateAsync(It.IsAny<string>(), It.IsAny<Guid>(),
-            It.IsAny<object>(), It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>(), default))
+            It.IsAny<object>(), It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
         auditMock.Setup(x => x.LogDeleteAsync(It.IsAny<string>(), It.IsAny<Guid>(),
-            It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>(), default))
+            It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
 
         var ctrl = new AdminUserAddressTypeController(factory, CreateMapper(), auditMock.Object);

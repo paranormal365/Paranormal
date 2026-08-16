@@ -93,8 +93,8 @@ public sealed class CaseInviteController : BenControllerBase
         invite.UpdatedByAppUserId = user.Id;
         invite.DateUpdated = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(AppUser), user.Id, user, user.Id, AppSources.WebApi, ct));
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CaseClientAccess), access.Id, access, user.Id, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(AppUser), user.Id, user, user.Id, AppSources.WebApi));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CaseClientAccess), access.Id, access, user.Id, AppSources.WebApi));
 
         return Ok(new AcceptInviteResult(invite.CaseId));
     }
@@ -129,7 +129,7 @@ public sealed class CaseInviteController : BenControllerBase
                 DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
             };
             db.CaseClientAccesses.Add(access);
-            _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CaseClientAccess), access.Id, access, userId, AppSources.WebApi, ct));
+            _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CaseClientAccess), access.Id, access, userId, AppSources.WebApi));
         }
 
         invite.DateAccepted = DateTime.UtcNow;

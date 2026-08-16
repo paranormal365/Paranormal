@@ -97,7 +97,7 @@ public sealed class OrgExperienceTypeController : BenControllerBase
         await NotifyAppAdministratorsAsync(db, entity, category.Name, orgId, userId, ct);
 
         await db.SaveChangesAsync(ct);
-        await _auditLog.LogCreateAsync(nameof(ExperienceType), entity.Id, entity, userId, AppSources.WebApi, ct);
+        await _auditLog.LogCreateAsync(nameof(ExperienceType), entity.Id, entity, userId, AppSources.WebApi);
 
         return Ok(_mapper.Map<ExperienceTypeRecord>(entity));
     }

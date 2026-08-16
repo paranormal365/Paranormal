@@ -59,7 +59,7 @@ public sealed class AdminSiteSettingController : BenControllerBase
         // Audited like any other mutation: a sitewide switch changing under everyone is exactly
         // the kind of thing someone needs to be able to trace later.
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(
-            nameof(SiteSetting), row.Id, beforeSnapshot, row, userId, AppSources.WebApi, ct));
+            nameof(SiteSetting), row.Id, beforeSnapshot, row, userId, AppSources.WebApi));
 
         return Ok(ToRecord(row));
     }

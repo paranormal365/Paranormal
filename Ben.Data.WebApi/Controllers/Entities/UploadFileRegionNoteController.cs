@@ -92,7 +92,7 @@ public sealed class UploadFileRegionNoteController : BenControllerBase
         };
         db.UploadFileRegionNotes.Add(entity);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileRegionNote), entity.Id, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileRegionNote), entity.Id, entity, userId, AppSources.WebApi));
         return CreatedAtAction(nameof(GetById), new { fileId, noteId = entity.Id },
             _mapper.Map<UploadFileRegionNoteRecord>(entity));
     }
@@ -120,7 +120,7 @@ public sealed class UploadFileRegionNoteController : BenControllerBase
         entity.UpdatedByAppUserId = userId;
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileRegionNote), noteId, before, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileRegionNote), noteId, before, entity, userId, AppSources.WebApi));
         return Ok(_mapper.Map<UploadFileRegionNoteRecord>(entity));
     }
 
@@ -136,7 +136,7 @@ public sealed class UploadFileRegionNoteController : BenControllerBase
 
         db.UploadFileRegionNotes.Remove(entity);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFileRegionNote), noteId, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFileRegionNote), noteId, entity, userId, AppSources.WebApi));
         return NoContent();
     }
 

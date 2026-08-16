@@ -209,7 +209,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         org.UpdatedByAppUserId     = userId.Value;
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Organization), id, before, org, GetCurrentUserId(), AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Organization), id, before, org, GetCurrentUserId(), AppSources.WebApi));
         return Ok(_mapper2.Map<OrganizationAdminRecord>(org));
     }
 
@@ -233,7 +233,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
 
         db.Organizations.Remove(org);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(Organization), id, org, GetCurrentUserId(), AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(Organization), id, org, GetCurrentUserId(), AppSources.WebApi));
         return NoContent();
     }
 
@@ -269,7 +269,7 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
 
         db.Organizations.Add(org);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi));
 
         return CreatedAtAction(nameof(GetByIdWithPermissions), new { id = org.Id },
             _mapper2.Map<OrganizationAdminRecord>(org));

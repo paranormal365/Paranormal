@@ -86,7 +86,7 @@ public sealed class AdminUploadFileTypeController : BenControllerBase
 
         db.UploadFileTypes.Add(entity);
         await db.SaveChangesAsync(cancellationToken);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileType), entity.Id, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileType), entity.Id, entity, GetCurrentUserId(), AppSources.WebApi));
 
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, _mapper.Map<UploadFileTypeRecord>(entity));
     }
@@ -116,7 +116,7 @@ public sealed class AdminUploadFileTypeController : BenControllerBase
         entity.UpdatedByAppUserId = request.UpdatedByAppUserId;
 
         await db.SaveChangesAsync(cancellationToken);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileType), id, before, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileType), id, before, entity, GetCurrentUserId(), AppSources.WebApi));
 
         return Ok(_mapper.Map<UploadFileTypeRecord>(entity));
     }
@@ -131,7 +131,7 @@ public sealed class AdminUploadFileTypeController : BenControllerBase
 
         db.UploadFileTypes.Remove(entity);
         await db.SaveChangesAsync(cancellationToken);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFileType), id, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFileType), id, entity, GetCurrentUserId(), AppSources.WebApi));
         return NoContent();
     }
 }

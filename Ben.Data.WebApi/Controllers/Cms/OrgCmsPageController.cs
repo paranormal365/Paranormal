@@ -135,7 +135,7 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
 
         db.OrganizationPages.Add(page);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationPage), page.Id, page, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationPage), page.Id, page, userId.Value, AppSources.WebApi));
 
         return CreatedAtAction(nameof(GetById), new { orgId, pageId = page.Id },
             new CmsPageDetailResponse(page.Id, page.OrganizationId, page.ParentPageId,
@@ -187,7 +187,7 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
         page.UpdatedByAppUserId = userId.Value;
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationPage), pageId, before, page!, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationPage), pageId, before, page!, userId.Value, AppSources.WebApi));
 
         var sectionCount = await db.CmsSections.CountAsync(s => s.OrganizationPageId == pageId, ct);
         return Ok(new CmsPageDetailResponse(page.Id, page.OrganizationId, page.ParentPageId,
@@ -220,7 +220,7 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
 
         db.OrganizationPages.Remove(page);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationPage), pageId, page, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationPage), pageId, page, userId.Value, AppSources.WebApi));
         return NoContent();
     }
 }

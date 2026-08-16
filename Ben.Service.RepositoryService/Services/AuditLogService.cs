@@ -35,31 +35,34 @@ public sealed class AuditLogService : IAuditLogService
     public AuditLogService(IDbContextFactory<BenDataContext> dbContextFactory)
         => _dbContextFactory = dbContextFactory;
 
-    public Task LogCreateAsync(string entityType, Guid entityId, object entity, Guid userId, string source, CancellationToken ct = default)
+    public Task LogCreateAsync(string entityType, Guid entityId, object entity, Guid userId, string source)
     {
         var snapshot = AuditChangeTracker.ToPropertySnapshot(entity);
         var changesJson = JsonSerializer.Serialize(snapshot, _jsonOptions);
-        return WriteAsync(AuditAction.Create, entityType, entityId, userId, source, changesJson, ct);
+        return WriteAsync(AuditAction.Create, entityType, entityId, userId, source, changesJson);
     }
 
-    public Task LogUpdateAsync(string entityType, Guid entityId, object before, object after, Guid userId, string source, CancellationToken ct = default)
+    public Task LogUpdateAsync(string entityType, Guid entityId, object before, object after, Guid userId, string source)
     {
         var changes = AuditChangeTracker.GetChanges(before, after);
         var changesJson = JsonSerializer.Serialize(changes, _jsonOptions);
-        return WriteAsync(AuditAction.Update, entityType, entityId, userId, source, changesJson, ct);
+        return WriteAsync(AuditAction.Update, entityType, entityId, userId, source, changesJson);
     }
 
-    public Task LogDeleteAsync(string entityType, Guid entityId, object entity, Guid userId, string source, CancellationToken ct = default)
+    public Task LogDeleteAsync(string entityType, Guid entityId, object entity, Guid userId, string source)
     {
         var snapshot = AuditChangeTracker.ToPropertySnapshot(entity);
         var changesJson = JsonSerializer.Serialize(snapshot, _jsonOptions);
-        return WriteAsync(AuditAction.Delete, entityType, entityId, userId, source, changesJson, ct);
+        return WriteAsync(AuditAction.Delete, entityType, entityId, userId, source, changesJson);
     }
 
     private async Task WriteAsync(AuditAction action, string entityType, Guid entityId, Guid userId,
-        string source, string changesJson, CancellationToken ct)
+        string source, string changesJson)
     {
-        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(ct);
+        // CancellationToken.None, deliberately: see IAuditLogService. The row describes a change
+        // that has already been committed, so nothing about the caller going away should stop it
+        // being recorded.
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
         dbContext.AuditLogs.Add(new AuditLog
         {
             Id          = Guid.NewGuid(),
@@ -71,6 +74,6 @@ public sealed class AuditLogService : IAuditLogService
             OccurredAt  = DateTime.UtcNow,
             ChangesJson = changesJson
         });
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
     }
 }
