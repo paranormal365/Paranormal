@@ -1790,6 +1790,43 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<ScheduleProposalSlot>()
                 .HasOne(e => e.Proposal).WithMany(e => e.Slots)
                 .HasForeignKey(e => e.ProposalId).OnDelete(DeleteBehavior.Cascade);
+
+            // ── String lengths (audit C5, first slice) ─────────────────────────
+            //
+            // Without an explicit length EF maps string to nvarchar(max): it cannot be indexed,
+            // it inflates the query optimiser's memory grants, and it accepts 2 GB into a field
+            // meant to hold a city name. 257 string properties existed against 82 length
+            // configurations; this bounds the five most-queried entities, which is where the
+            // indexing and memory cost actually lands.
+            //
+            // Only lengths are set here — never IsRequired — so nullability stays exactly as the
+            // entity and any earlier configuration already declared it. Genuinely long free text
+            // (Case.Description) and serialized documents (UploadFile.EditStateJson) keep max on
+            // purpose; a limit there would be a functional change, not a tightening.
+            //
+            // Only columns that were actually nvarchar(max) appear below. A first attempt set a
+            // length on every string of these entities and scaffolded 14 alterations to columns
+            // that were ALREADY bounded — deliberately, at 256/128/64 — including narrowing
+            // Places.GeocodeNote from 512 to 500, which could have truncated live data. Guessing a
+            // number for a column somebody already chose a number for is not a tightening; it is
+            // an unrequested schema change.
+
+            modelBuilder.Entity<AppUser>().Property(e => e.DisplayName).HasMaxLength(200);
+
+            modelBuilder.Entity<Organization>().Property(e => e.Name).HasMaxLength(200);
+            modelBuilder.Entity<Organization>().Property(e => e.UrlName).HasMaxLength(100);
+            modelBuilder.Entity<Organization>().Property(e => e.PublicPhone).HasMaxLength(50);
+            modelBuilder.Entity<Organization>().Property(e => e.PublicEmail).HasMaxLength(256);
+            modelBuilder.Entity<Organization>().Property(e => e.PublicWebsite).HasMaxLength(500);
+
+            modelBuilder.Entity<Case>().Property(e => e.StreetAddress2).HasMaxLength(300);
+            modelBuilder.Entity<Case>().Property(e => e.Country).HasMaxLength(100);
+
+            modelBuilder.Entity<UploadFile>().Property(e => e.FileName).HasMaxLength(500);
+            modelBuilder.Entity<UploadFile>().Property(e => e.StoredFileName).HasMaxLength(300);
+            modelBuilder.Entity<UploadFile>().Property(e => e.ContentType).HasMaxLength(200);
+            modelBuilder.Entity<UploadFile>().Property(e => e.Description).HasMaxLength(2000);
+
         }
     }
 }
