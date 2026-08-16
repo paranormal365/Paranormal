@@ -37,6 +37,13 @@ public interface IBenPlatformClient
     /// <summary>Pending file-permission requests awaiting the current user, with names resolved.</summary>
     Task<List<PendingPermissionRequestRecord>> GetPendingPermissionRequestsForMeAsync(CancellationToken token = default);
 
+    // ── Sidecar telemetry ─────────────────────────────────────────────────────
+    /// <summary>Recorded sidecar install/pair events, newest first (SuperAdmin).</summary>
+    Task<IReadOnlyList<SidecarInstallLogRecord>> GetSidecarTelemetryAsync(int take = 200, CancellationToken token = default);
+
+    /// <summary>Distinct-install counts and a per-version breakdown (SuperAdmin).</summary>
+    Task<SidecarTelemetrySummaryRecord?> GetSidecarTelemetrySummaryAsync(CancellationToken token = default);
+
     // ── Audit Log ─────────────────────────────────────────────────────────────
 
     Task<AuditLogPagedResponse?> GetAuditLogsAsync(int page = 1, int pageSize = 50, string? entityType = null, int? action = null, Guid? userId = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken token = default);

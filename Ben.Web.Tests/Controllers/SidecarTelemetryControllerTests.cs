@@ -146,4 +146,43 @@ public class SidecarTelemetryControllerTests
 
         Assert.IsType<NoContentResult>(result);
     }
+
+    [Fact]
+    public async Task Summary_counts_installations_not_events()
+    {
+        // Three events from two machines, one of them paired. The counts are per INSTALLATION —
+        // counting rows would say three installs exist when two do.
+        var userId = Guid.NewGuid();
+        var machineA = Guid.NewGuid();
+        var machineB = Guid.NewGuid();
+        var (controller, _) = Build(userId);
+
+        await controller.RecordInstall(new SidecarInstallRequest(machineA, "1.0.0.0", "osx-arm64"), default);
+        await controller.RecordPairing(new SidecarInstallRequest(machineA, "1.0.0.0", "osx-arm64"), default);
+        await controller.RecordInstall(new SidecarInstallRequest(machineB, "2.0.0.0", "win-x64"), default);
+
+        var summary = Assert.IsType<OkObjectResult>((await controller.GetSummary(default)).Result).Value;
+        var s = Assert.IsType<SidecarTelemetrySummary>(summary);
+
+        Assert.Equal(2, s.DistinctInstalls);
+        Assert.Equal(1, s.InstallsPairedToAnAccount);
+        Assert.Equal(1, s.DistinctPeople);
+        Assert.Equal(2, s.ByVersion.Count);
+        Assert.All(s.ByVersion, v => Assert.Equal(1, v.Installs));
+    }
+
+    [Fact]
+    public async Task Events_come_back_newest_first()
+    {
+        var (controller, _) = Build();
+        await controller.RecordInstall(new SidecarInstallRequest(Guid.NewGuid(), "1.0", "osx-arm64"), default);
+        await Task.Delay(10);
+        await controller.RecordInstall(new SidecarInstallRequest(Guid.NewGuid(), "2.0", "win-x64"), default);
+
+        var rows = Assert.IsType<OkObjectResult>((await controller.GetAll()).Result).Value
+                   as IReadOnlyList<SidecarInstallLogRecord>;
+
+        Assert.Equal(2, rows!.Count);
+        Assert.True(rows[0].DateCreated >= rows[1].DateCreated);
+    }
 }

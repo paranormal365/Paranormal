@@ -1007,3 +1007,27 @@ public sealed record CaseNoteDto(
     DateTime? DateUpdated);
 
 public sealed record UpsertCaseNoteDto(string? Title, string Body, bool IsPinned = false);
+
+// ── Sidecar telemetry records ────────────────────────────────────────────────
+
+/// <summary>One recorded sidecar install or pairing.</summary>
+public sealed record SidecarInstallLogRecord(
+    Guid Id,
+    Guid InstallId,
+    string EventType,
+    string? Version,
+    string? Platform,
+    Guid? AppUserId,
+    string? AppUserDisplay,
+    string? IpAddress,
+    DateTime DateCreated);
+
+/// <summary>Distinct installations reporting a given sidecar version.</summary>
+public sealed record SidecarVersionCountRecord(string Version, int Installs);
+
+/// <summary>Counts worth having without reading the whole event list.</summary>
+public sealed record SidecarTelemetrySummaryRecord(
+    int DistinctInstalls,
+    int InstallsPairedToAnAccount,
+    int DistinctPeople,
+    IReadOnlyList<SidecarVersionCountRecord> ByVersion);

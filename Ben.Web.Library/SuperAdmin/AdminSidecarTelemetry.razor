@@ -1,0 +1,133 @@
+@page "/admin/sidecar-telemetry"
+@namespace Ben.Web.Library.SuperAdmin
+@using Ben.Web.Library.Services
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState   UserState
+@inject NavigationManager NavManager
+
+<PageTitle>SuperAdmin — Sidecar Installs</PageTitle>
+
+@* Makes the telemetry table readable. Writing rows nobody can see is the write-only pattern the
+   code audit flagged elsewhere in this app; recording who is running which sidecar build is only
+   useful if the answer can actually be looked up. *@
+
+<div class="container-fluid px-3">
+
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Sidecar Installs</h3>
+            <p class="text-secondary small mb-0">
+                The native sidecar runs on a user's own machine and talks only to their browser, so
+                these events are the only way to see which builds are in use.
+            </p>
+        </div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger" role="alert">@_error</div>
+    }
+
+    @if (_summary is not null)
+    {
+        <div class="row g-2 mb-3">
+            <div class="col-sm-4">
+                <div class="card"><div class="card-body py-2">
+                    <div class="small text-secondary">Installations seen</div>
+                    <div class="fs-4">@_summary.DistinctInstalls</div>
+                </div></div>
+            </div>
+            <div class="col-sm-4">
+                <div class="card"><div class="card-body py-2">
+                    <div class="small text-secondary">Paired to an account</div>
+                    <div class="fs-4">@_summary.InstallsPairedToAnAccount</div>
+                </div></div>
+            </div>
+            <div class="col-sm-4">
+                <div class="card"><div class="card-body py-2">
+                    <div class="small text-secondary">People</div>
+                    <div class="fs-4">@_summary.DistinctPeople</div>
+                </div></div>
+            </div>
+        </div>
+
+        @if (_summary.ByVersion.Count > 0)
+        {
+            <div class="card mb-3"><div class="card-body py-2">
+                <div class="small text-secondary mb-1">Installations by version</div>
+                @foreach (var v in _summary.ByVersion)
+                {
+                    <span class="badge bg-secondary me-2">@v.Version — @v.Installs</span>
+                }
+            </div></div>
+        }
+    }
+
+    @if (_loading)
+    {
+        <p class="text-secondary">Loading…</p>
+    }
+    else if (_rows.Count == 0)
+    {
+        <p class="text-secondary">
+            Nothing recorded yet. Installs are reported only when the installer is given a site URL;
+            pairings are reported whenever a signed-in browser pairs.
+        </p>
+    }
+    else
+    {
+        <TelerikGrid Data="@_rows" Pageable="true" PageSize="25" Sortable="true" Height="60vh">
+            <GridColumns>
+                <GridColumn Field="@nameof(SidecarInstallLogRecord.DateCreated)" Title="When" Width="180px" />
+                <GridColumn Field="@nameof(SidecarInstallLogRecord.EventType)" Title="Event" Width="100px" />
+                <GridColumn Field="@nameof(SidecarInstallLogRecord.Version)" Title="Version" Width="120px" />
+                <GridColumn Field="@nameof(SidecarInstallLogRecord.Platform)" Title="Platform" Width="120px" />
+                <GridColumn Field="@nameof(SidecarInstallLogRecord.AppUserDisplay)" Title="Account">
+                    <Template>
+                        @{ var row = (SidecarInstallLogRecord)context; }
+                        @if (row.AppUserDisplay is null)
+                        {
+                            <span class="text-secondary">— not signed in</span>
+                        }
+                        else
+                        {
+                            @row.AppUserDisplay
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Field="@nameof(SidecarInstallLogRecord.IpAddress)" Title="Address" Width="150px" />
+                <GridColumn Field="@nameof(SidecarInstallLogRecord.InstallId)" Title="Installation" Width="300px" />
+            </GridColumns>
+        </TelerikGrid>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<SidecarInstallLogRecord> _rows = [];
+    private SidecarTelemetrySummaryRecord? _summary;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+
+        try
+        {
+            _summary = await AdminClient.GetSidecarTelemetrySummaryAsync();
+            _rows    = await AdminClient.GetSidecarTelemetryAsync();
+        }
+        catch (Exception ex)
+        {
+            // Said out loud rather than left as an empty grid — an empty grid here would read as
+            // "no sidecars are installed", which is a different and misleading answer.
+            _error = $"Could not load sidecar telemetry. {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

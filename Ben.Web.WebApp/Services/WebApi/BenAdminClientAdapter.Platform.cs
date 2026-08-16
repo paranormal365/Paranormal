@@ -246,4 +246,15 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<bool> RemoveMyVoteAsync(Guid fileId, CancellationToken token = default)
         => _api.RemoveMyVoteAsync(fileId, token);
+
+    // ── Sidecar telemetry ─────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<SidecarInstallLogRecord>> GetSidecarTelemetryAsync(
+        int take = 200, CancellationToken token = default)
+        => await _api.GetAsync<List<SidecarInstallLogRecord>>(
+               $"/api/sidecar-telemetry?take={take}", token) ?? [];
+
+    public Task<SidecarTelemetrySummaryRecord?> GetSidecarTelemetrySummaryAsync(
+        CancellationToken token = default)
+        => _api.GetAsync<SidecarTelemetrySummaryRecord>("/api/sidecar-telemetry/summary", token);
 }
