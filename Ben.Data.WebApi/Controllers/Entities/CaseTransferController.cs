@@ -7,6 +7,7 @@ using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Ben.Data.WebApi.Services.Access;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 

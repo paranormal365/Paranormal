@@ -97,7 +97,14 @@
             _avatarFileId = profile.PublicPhoto?.UploadFileId;
             StateHasChanged();
         }
-        catch { /* the menu still works without a picture */ }
+        catch
+        {
+            // Quiet on purpose, and narrowly so: this is chrome on every page, and an error banner
+            // in the app bar because a picture didn't load would be worse than the initials that
+            // appear instead. Note the limit — a failed fetch is indistinguishable from having no
+            // public photo, so "my avatar is missing" needs checking against the profile page
+            // rather than assumed to be a display bug.
+        }
     }
 
     private void ToggleMenu()

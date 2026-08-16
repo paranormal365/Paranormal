@@ -1,6 +1,6 @@
 using Ben.Data.Source.Entities;
 
-namespace Ben.Data.WebApi.Controllers.Entities;
+namespace Ben.Data.WebApi.Services.Access;
 
 /// <summary>
 /// The one place the private-photo consent rule is expressed.

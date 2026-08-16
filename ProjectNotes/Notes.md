@@ -150,7 +150,7 @@ docker logs bendb-sql
 To ensure Docker Desktop and the `bendb-sql` container are running before launching the WebApi, use the provided helper script:
 
 ```bash
-bash scripts/ensure-docker-running.sh
+# (removed — no Docker; the dev database is a dedicated SQL Server)
 ```
 
 **What it does:**
@@ -164,7 +164,7 @@ bash scripts/ensure-docker-running.sh
 
 ```bash
 # From solution root:
-bash scripts/ensure-docker-running.sh
+# (removed — no Docker; the dev database is a dedicated SQL Server)
 # Then launch the WebApi from your IDE or CLI
 ```
 

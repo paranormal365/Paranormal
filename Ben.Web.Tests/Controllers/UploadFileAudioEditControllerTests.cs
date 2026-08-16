@@ -10,6 +10,8 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Moq;
 using System.Security.Claims;
 using Xunit;
+using Ben.Data.WebApi.Services.Access;
+using Ben.Data.WebApi.Services.Audio;
 
 namespace Ben.Web.Tests.Controllers;
 

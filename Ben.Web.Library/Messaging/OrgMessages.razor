@@ -18,6 +18,11 @@
         </div>
     }
 
+    @if (_loadError is not null)
+    {
+        <div class="alert alert-danger" role="alert">@_loadError</div>
+    }
+
     @* ── Tab strip: Inbox / Sent ──────────────────────────────────────────── *@
     <TelerikTabStrip ActiveTabId="@_activeTabId"
                      ActiveTabIdChanged="@((string id) => { _activeTabId = id; _ = LoadActiveTabAsync(); })">
@@ -143,6 +148,7 @@
     private string _composeBody    = "";
     private bool _composeEncrypted;
     private string? _composeError;
+    private string? _loadError;
     private bool _isBusy;
 
     private static readonly List<ChannelOption> _channelOptions =
@@ -176,6 +182,7 @@
 
     private async Task LoadActiveTabAsync()
     {
+        _loadError = null;
         try
         {
             if (_activeTabId == "inbox")
@@ -183,7 +190,13 @@
             else
                 _sent = (await AdminClient.GetOrgSentAsync(OrgId)).ToList();
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // Swallowing this left the list empty and the page calm, so a failed load was
+            // indistinguishable from having no messages — the reader concludes nobody wrote to
+            // them. Say the load failed instead.
+            _loadError = $"Messages could not be loaded. {ex.Message}";
+        }
         StateHasChanged();
     }
 

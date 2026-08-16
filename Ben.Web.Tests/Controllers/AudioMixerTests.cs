@@ -1,5 +1,6 @@
 using Ben.Data.WebApi.Controllers.Entities;
 using Xunit;
+using Ben.Data.WebApi.Services.Audio;
 
 namespace Ben.Web.Tests.Controllers;
 

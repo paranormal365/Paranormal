@@ -1,6 +1,6 @@
 using NAudio.Wave;
 
-namespace Ben.Data.WebApi.Controllers.Entities;
+namespace Ben.Data.WebApi.Services.Audio;
 
 /// <summary>
 /// Sums multiple offset, gained, and panned tracks down to a single stereo WAV.

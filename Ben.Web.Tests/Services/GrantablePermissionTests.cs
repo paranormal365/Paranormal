@@ -1,6 +1,7 @@
 using Ben.Data.Common.Enums;
 using System.Text.RegularExpressions;
 using Xunit;
+using Ben.Data.WebApi.Services.Access;
 
 namespace Ben.Web.Tests.Services;
 

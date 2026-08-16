@@ -799,7 +799,13 @@
                 if (doc.RootElement.TryGetProperty("html", out var el))
                     return el.GetString() ?? string.Empty;
             }
-            catch { }
+            catch (JsonException)
+            {
+                // A section whose stored JSON won't parse renders as empty rather than taking the
+                // page down with it — this runs on the read path, where throwing would replace a
+                // mostly-good page with an error. The editor is where a broken section is reported
+                // (see CmsSectionEditor); here the job is to keep rendering.
+            }
         }
         return string.Empty;
     }

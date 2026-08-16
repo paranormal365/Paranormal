@@ -2,7 +2,7 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 
-namespace Ben.Data.WebApi.Controllers.Entities;
+namespace Ben.Data.WebApi.Services.Access;
 
 /// <summary>
 /// Who may edit an investigation, and what a viewer is allowed to do with each row in a list.

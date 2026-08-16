@@ -348,28 +348,69 @@ else
 app.Run();
 
 /// <summary>
-/// Schema filter to exclude circular reference properties from Swagger schema
+/// Drops entity navigation properties from generated schemas, so an entity that references another
+/// entity does not drag the whole object graph — or a cycle — into the documentation.
 /// </summary>
+/// <remarks>
+/// Decided by the property's TYPE, not the spelling of its name. The previous version removed
+/// anything whose name ended in "s", meaning to catch plural collections like
+/// <c>UserAddresses</c>; it also removed <c>Status</c>, <c>Address</c>, <c>Notes</c> and
+/// <c>Radius</c>, which are ordinary scalars that happen to end in that letter. The documentation
+/// therefore described an API subtly different from the real one. That went unnoticed because the
+/// document did not generate at all until the duplicate-schema-id fix — nobody could read it to
+/// see what was missing.
+/// </remarks>
 internal class CircularReferenceSchemaFilter : ISchemaFilter
 {
     public void Apply(OpenApiSchema schema, SchemaFilterContext context)
     {
-        if (schema.Properties == null || schema.Properties.Count == 0)
+        if (schema.Properties is null || schema.Properties.Count == 0 || context.Type is null)
             return;
 
-        var propertiesToRemove = schema.Properties
-            .Where(p =>
-                p.Key.EndsWith("s") ||  // Collections (plural names like "UserAddresses")
-                p.Key == "CreatedByAppUser" ||
-                p.Key == "UpdatedByAppUser" ||
-                p.Key.StartsWith("CreatedBy") ||
-                p.Key.StartsWith("UpdatedBy"))
-            .Select(p => p.Key)
+        // Match on the CLR properties of the type being described, case-insensitively: OpenAPI
+        // keys are camelCased by the serializer while the CLR names are PascalCase.
+        var clrProperties = context.Type
+            .GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .ToDictionary(p => p.Name, p => p.PropertyType, StringComparer.OrdinalIgnoreCase);
+
+        var toRemove = schema.Properties.Keys
+            .Where(key => clrProperties.TryGetValue(key, out var type) && IsEntityReference(type))
             .ToList();
 
-        foreach (var key in propertiesToRemove)
-        {
+        foreach (var key in toRemove)
             schema.Properties.Remove(key);
-        }
+    }
+
+    /// <summary>
+    /// True for a property that points at another entity — either one directly, or a collection of
+    /// them. Scalars, strings, enums, and collections of scalars are left alone.
+    /// </summary>
+    private static bool IsEntityReference(Type type)
+    {
+        if (type == typeof(string)) return false;
+
+        var elementType = CollectionElementType(type) ?? type;
+        elementType = Nullable.GetUnderlyingType(elementType) ?? elementType;
+
+        if (elementType.IsPrimitive || elementType.IsEnum) return false;
+        if (elementType == typeof(string) || elementType == typeof(decimal)
+            || elementType == typeof(DateTime) || elementType == typeof(DateTimeOffset)
+            || elementType == typeof(Guid) || elementType == typeof(TimeSpan)
+            || elementType == typeof(byte[])) return false;
+
+        // What's left is a class from the model — an entity or a nested record. Those are the
+        // navigations this filter exists to cut.
+        return elementType.IsClass || (elementType.IsValueType && !elementType.IsPrimitive
+                                       && elementType.Namespace?.StartsWith("System") != true);
+    }
+
+    private static Type? CollectionElementType(Type type)
+    {
+        if (type.IsArray) return type.GetElementType();
+
+        return type.GetInterfaces().Append(type)
+            .FirstOrDefault(i => i.IsGenericType
+                              && i.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            ?.GetGenericArguments()[0];
     }
 }

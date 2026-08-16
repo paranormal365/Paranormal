@@ -1,6 +1,6 @@
 using NAudio.Wave;
 
-namespace Ben.Data.WebApi.Controllers.Entities;
+namespace Ben.Data.WebApi.Services.Audio;
 
 /// <summary>
 /// Destructive audio edit operations (cut, silence, normalize, gain, fade, reverse).

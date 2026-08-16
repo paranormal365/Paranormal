@@ -4,7 +4,7 @@ using Ben.Data.Source.Entities;
 using Ben.Service.RepositoryService.Services;
 using Microsoft.EntityFrameworkCore;
 
-namespace Ben.Data.WebApi.Controllers.Entities;
+namespace Ben.Data.WebApi.Services.Places;
 
 /// <summary>
 /// Works out where an investigation happened and writes that onto it.

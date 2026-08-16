@@ -4,6 +4,7 @@ using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Entities;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
+using Ben.Data.WebApi.Services.Access;
 
 namespace Ben.Web.Tests.Controllers;
 

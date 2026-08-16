@@ -4,6 +4,11 @@
 @using System.Text.Json.Nodes
 @using Ben.Data.Common.Enums
 
+@if (_contentWarning is not null)
+{
+    <div class="alert alert-warning" role="alert">@_contentWarning</div>
+}
+
 @if (SectionType is CmsSectionType.RichText or CmsSectionType.CustomHtml)
 {
     <div class="mt-3">
@@ -97,6 +102,7 @@ else
 
     // RichText / CustomHtml
     private string _html = "";
+    private string? _contentWarning;
 
     // ImageBanner
     private string _imgFileId = "";
@@ -116,6 +122,9 @@ else
 
     private void ParseContentJson()
     {
+        // Cleared each parse: OnParametersSet re-runs this, and a warning left over from earlier
+        // content would outlive the problem it described.
+        _contentWarning = null;
         if (string.IsNullOrWhiteSpace(ContentJson)) return;
         try
         {
@@ -140,7 +149,15 @@ else
                 _contactShowLinks     = GetBool(root, "showLinks",     true);
             }
         }
-        catch { }
+        catch (JsonException)
+        {
+            // Stored content that won't parse. The editor keeps its defaults rather than throwing,
+            // so the section stays editable and can be saved back into a good state — but say so,
+            // because silently showing defaults looks identical to the settings never having been
+            // set, and the next save would overwrite whatever is really stored.
+            _contentWarning = "This section's saved content could not be read, so the fields below "
+                            + "show defaults. Saving will replace the stored content.";
+        }
     }
 
     private static bool GetBool(JsonElement root, string key, bool fallback)

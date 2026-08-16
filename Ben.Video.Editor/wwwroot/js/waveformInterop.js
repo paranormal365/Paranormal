@@ -4,9 +4,13 @@
  * Blazor JS-isolation module for the AudioWaveform component.
  * Served at: /_content/Ben.Video.Editor/js/waveformInterop.js
  *
- * Depends on WaveSurfer.js v7 UMD loaded globally by the host (window.WaveSurfer).
- * AverageBen host loads it from: /js/wavesurfer/wavesurfer.esm.js (build artefact).
- * Ben.Video.App dev shell loads it from CDN (see index.html).
+ * Loads WaveSurfer itself, from the copy shipped beside this file
+ * (/_content/Ben.Video.Editor/js/wavesurfer.esm.js).
+ *
+ * It used to expect the host to have put a UMD build on window.WaveSurfer, which every host did by
+ * fetching it from unpkg on a floating @7 tag: a third-party runtime dependency for a core feature,
+ * broken offline, and free to change under us. Owning the file removes all three, and removes the
+ * ordering trap where this module could run before the host's script tag had finished.
  *
  * API summary
  * ───────────
@@ -21,6 +25,23 @@
 
 // containerId → WaveSurfer instance
 const _instances = new Map()
+
+/**
+ * WaveSurfer, loaded once and shared. Deferred to first use rather than fetched with this module,
+ * so pages that never show a waveform never pay for it. The path is relative to this file, so it
+ * resolves under whichever host is serving the RCL without either of them configuring anything.
+ */
+let _wsPromise = null
+function _loadWaveSurfer() {
+  _wsPromise ??= import('./wavesurfer.esm.js')
+    .then(m => m.default)
+    .catch(err => {
+      console.error('[waveformInterop] could not load wavesurfer.esm.js', err)
+      _wsPromise = null   // let a later attempt retry rather than caching the failure forever
+      return null
+    })
+  return _wsPromise
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -55,14 +76,14 @@ function _resolveColors() {
  * @param {object}               options      { height, showControls, waveColor, progressColor }
  * @param {DotNetObjectReference} dotnetRef   .NET callbacks (OnReady, OnTimeUpdate, OnFinish)
  */
-export function create(containerId, blobUrl, peaks, options, dotnetRef) {
+export async function create(containerId, blobUrl, peaks, options, dotnetRef) {
   if (_instances.has(containerId)) {
     destroy(containerId)
   }
 
-  const WS = window.WaveSurfer
+  const WS = await _loadWaveSurfer()
   if (!WS) {
-    console.error('[waveformInterop] WaveSurfer not loaded globally. Add the CDN script to index.html.')
+    console.error('[waveformInterop] WaveSurfer failed to load from _content/Ben.Video.Editor/js/wavesurfer.esm.js')
     return
   }
 
