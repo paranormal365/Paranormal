@@ -1,0 +1,101 @@
+/* ── AudioWaveform component ────────────────────────────────────────────────── */
+
+/* ── Root container ─────────────────────────────────────────────────────────── */
+:host,
+.bv-waveform {
+    --bv-waveform-height: 64px;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    overflow: hidden;
+    background: transparent;
+}
+
+/* ── Mini mode (inside timeline chip) ──────────────────────────────────────── */
+.bv-waveform--mini {
+    --bv-waveform-height: 36px;
+    pointer-events: none; /* clicks handled by the chip, not the canvas */
+}
+
+/* ── Full mode (preview panel) ──────────────────────────────────────────────── */
+.bv-waveform--full {
+    background: var(--kendo-color-surface-alt, var(--bv-surface-1));
+    border-radius: 4px;
+    padding: .375rem;
+    gap: .375rem;
+}
+
+/* ── WaveSurfer canvas host ─────────────────────────────────────────────────── */
+.bv-waveform__canvas {
+    width: 100%;
+    position: relative; /* anchor for .bv-waveform__sync-line */
+    height: var(--bv-waveform-height);
+    min-height: var(--bv-waveform-height);
+    overflow: hidden;
+}
+
+/* ── Sync playhead line ──────────────────────────────────────────────────────── */
+.bv-waveform__sync-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    left: calc(var(--bv-wf-progress, 0) * 100%);
+    background: var(--kendo-color-primary, var(--bv-accent));
+    opacity: .85;
+    pointer-events: none;
+    border-radius: 1px;
+    box-shadow: 0 0 4px var(--kendo-color-primary, var(--bv-accent));
+    transform: translateX(-50%);
+    z-index: 2;
+}
+
+/* ── Loading spinner ────────────────────────────────────────────────────────── */
+.bv-waveform__loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--bv-waveform-height);
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    gap: .5rem;
+    font-size: .75rem;
+}
+
+/* ── Error message ──────────────────────────────────────────────────────────── */
+.bv-waveform__error {
+    font-size: .72rem;
+    color: var(--kendo-color-error, #f38ba8);
+    padding: .25rem .5rem;
+}
+
+/* ── Controls bar ───────────────────────────────────────────────────────────── */
+.bv-waveform__controls {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .25rem 0;
+    border-top: 1px solid var(--kendo-color-border, var(--bv-border));
+    flex-wrap: wrap;
+}
+
+.bv-waveform__time {
+    font-size: .72rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    min-width: 8rem;
+}
+
+.bv-waveform__vol-label {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    font-size: .72rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    margin-left: auto;
+}
+
+.bv-waveform__vol-slider {
+    width: 5rem;
+    cursor: pointer;
+    accent-color: var(--kendo-color-primary, #6c8ebf);
+}

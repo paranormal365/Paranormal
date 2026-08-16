@@ -3419,3 +3419,44 @@ Worth settling when this is picked up:
   for the same reason: four endpoints each doing their own arithmetic is four answers.
 
 Deferred by Ben — *"we can work on that later."*
+
+---
+
+## 82. Two P3 gaps left open: attendee findings, and the roster on case-less visits (found 2026-08-15)
+
+Found auditing Area 9's permission phase after it shipped. Neither is a bug in what was built —
+both are places where something was built halfway and the missing half is a feature, not a fix.
+
+### 82a. `CanCompleteMyFindings` has nothing to complete ✅ built 2026-08-15
+
+`InvestigationAccess.ComputeFlagsAsync` computes it (attendance-based: you were there, so you have
+something to say), `OrgInvestigationRow` carries it across the wire, and the mirror in
+`IBenAdminClient` documents it. **No screen reads it, because there is no per-attendee findings
+feature to gate.** The nearest thing is the investigation's own `Summary`, which is one field for
+the whole visit and manage-gated — the opposite of what this flag describes.
+
+**Built.** Ben chose the feature over deleting the flag. `InvestigationFinding` — one account per
+person per visit, written only by that person, revisable, withdrawable. No manager override, and
+that is the point: whether somebody turned up is a fact another person can attest to, and what they
+experienced is not. The grid shows a **Your write-up** badge on past visits you attended and have
+not written up, which is the flag finally driving something.
+
+Left for later: findings do not feed the case timeline, and there is no way to attach a file to one.
+
+### 82b. The roster is only on case-bound investigations ✅ fixed 2026-08-15
+
+`InvestigationRoster` — the team list, **I've arrived**, the attendance override, and now the Lead
+column — is mounted in exactly one place: `InvestigationPanel.razor`, on a case's Investigations
+tab. A case-less visit, which is the whole point of P2 and P4, **has no roster UI at all**. Nobody
+can check in to a landmark visit, and nobody can record who turned up.
+
+The endpoints are all case-agnostic already (`api/organizations/{orgId}/investigations/{id}/…`), so
+this was a mounting problem, not a backend one.
+
+**Fixed** by putting the roster where the visits already are: every row of the group's
+Investigations grid has a **Team** button that expands the roster inline, gated on the same
+`CanEditRecord` verdict the Edit button uses. One row open at a time, because each roster runs its
+own poll timer. No new page and no detail view — the grid was already the place a case-less visit
+lives.
+
+Live-verified on "Cave return visit", a visit with no case: the team panel opens under the row.

@@ -524,14 +524,9 @@ public sealed class MyCaseController : BenControllerBase
                 && e.AuthorAppUserId == userId, ct);
         if (entry is null) return NotFound();
 
-        using var ms = new MemoryStream();
-        await file.CopyToAsync(ms, ct);
-        var fileBytes = ms.ToArray();
-
         var storedName   = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
         var storagePath  = _fileStorage.CaseFilePath(caseId, storedName);
-        using (var ws = new MemoryStream(fileBytes))
-            await _fileStorage.WriteAsync(storagePath, ws, ct);
+        await _fileStorage.WriteFormFileAsync(storagePath, file, ct);
 
         var uploadFile = new UploadFile
         {
@@ -541,7 +536,7 @@ public sealed class MyCaseController : BenControllerBase
             FileName           = file.FileName,
             StoredFileName     = storedName,
             ContentType        = file.ContentType,
-            FileSize           = fileBytes.Length,
+            FileSize           = file.Length,
             StoragePath        = storagePath,
             IsPublic           = false,
             DateCreated        = DateTime.UtcNow,
@@ -561,15 +556,17 @@ public sealed class MyCaseController : BenControllerBase
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CaseTimelineEntryFile), entryFile.Id, entryFile, userId, AppSources.WebApi, ct));
 
-        // Metadata extraction fire-and-forget
-        var capturedBytes = fileBytes;
+        // Metadata extraction fire-and-forget. Reads the stored file rather than capturing the
+        // upload's bytes, which would keep the whole thing resident until extraction finished.
+        var capturedPath  = storagePath;
         var capturedType  = file.ContentType;
         var capturedId    = uploadFile.Id;
         _ = Task.Run(async () =>
         {
             try
             {
-                var meta = _metadataExtractor.Extract(capturedId, capturedType, capturedBytes);
+                await using var stored = await _fileStorage.OpenReadAsync(capturedPath, CancellationToken.None);
+                var meta = _metadataExtractor.Extract(capturedId, capturedType, stored);
                 await using var dbMeta = await _db.CreateDbContextAsync(CancellationToken.None);
                 dbMeta.UploadFileMetadata.Add(meta);
                 await dbMeta.SaveChangesAsync(CancellationToken.None);

@@ -66,3 +66,12 @@ SECRETS.md
 ProjectNotes/Art/IsHauntedLogo.ai
 ProjectNotes/Agent007/
 .uploads/
+
+# Ben.Wasm.Video's wwwroot config is browser-fetched client configuration (a dev API URL), not
+# server secrets — the blanket appsettings exclusion above exists for secret-bearing server files.
+!Ben.Wasm.Video/wwwroot/appsettings.Development.json
+
+# Ben.Video.Sidecar build outputs — fetched/built locally by scripts/fetch-ffmpeg.* and
+# installer/macos/build.sh, never committed (100+ MB of binaries; also environment-specific).
+Ben.Video.Sidecar/ffmpeg/
+Ben.Video.Sidecar/installer/dist/

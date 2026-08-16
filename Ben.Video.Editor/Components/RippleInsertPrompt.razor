@@ -1,0 +1,50 @@
+@* Shown when "Add to Timeline" would land a new clip on top of existing ones — offers standard
+   NLE overlap handling (item #49): "Insert" shifts the clips after this point later to make room
+   (item #25's ripple-insert), "Overwrite" trims/splits/removes whatever's underneath instead,
+   leaving everything else in place. Either beats silently dumping the new clip at the end of the
+   whole track. *@
+@if (Visible)
+{
+    <TelerikWindow Visible="true"
+                   VisibleChanged="@(async v => { if (!v) await OnCancel.InvokeAsync(); })"
+                   Width="420px"
+                   Modal="true"
+                   Draggable="true"
+                   Resizable="false"
+                   Class="bv-ripple-insert-prompt">
+        <WindowTitle>Not Enough Room</WindowTitle>
+        <WindowContent>
+            <p class="bv-ripple-insert-prompt__text">
+                "@ClipName" would land on top of an existing clip. Shift the clips after this
+                point later to make room (Insert), or trim/replace what's underneath instead
+                (Overwrite)?
+            </p>
+        </WindowContent>
+        <WindowFooter>
+            <TelerikButton OnClick="OnConfirm"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Insert (Make Room)
+            </TelerikButton>
+            <TelerikButton OnClick="OnOverwrite"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Overwrite
+            </TelerikButton>
+            <TelerikButton OnClick="OnCancel"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Cancel
+            </TelerikButton>
+        </WindowFooter>
+    </TelerikWindow>
+}
+
+@code {
+    [Parameter] public bool     Visible  { get; set; }
+    [Parameter] public string   ClipName { get; set; } = "this clip";
+
+    [Parameter] public EventCallback OnConfirm   { get; set; }
+    [Parameter] public EventCallback OnOverwrite { get; set; }
+    [Parameter] public EventCallback OnCancel    { get; set; }
+}

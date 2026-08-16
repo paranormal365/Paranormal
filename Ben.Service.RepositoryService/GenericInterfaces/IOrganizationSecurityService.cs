@@ -8,11 +8,10 @@ namespace Ben.Service.RepositoryService.GenericInterfaces;
 /// WebApi controller layer.
 /// </summary>
 /// <remarks>
-/// This interface is distinct from
-/// <c>Ben.Service.Security.Services.IOrganizationSecurityService</c>, which
-/// is used by the middleware/attribute layer.  Both are registered in DI and
-/// routed to the same concrete implementation in
-/// <c>Ben.Service.RepositoryService.Services.OrganizationSecurityService</c>.
+/// Implemented by <c>Ben.Service.RepositoryService.Services.OrganizationSecurityService</c>, which
+/// controllers inject directly. A second, identically-named interface used to exist in a
+/// <c>Ben.Service.Security</c> project for a middleware/attribute layer that was never applied to
+/// any route; both it and that project have been removed, so this is the only one.
 /// </remarks>
 public interface IOrganizationSecurityService
 {

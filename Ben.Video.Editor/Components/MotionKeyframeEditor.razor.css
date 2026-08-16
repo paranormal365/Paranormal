@@ -1,0 +1,88 @@
+.bv-mkf-editor {
+    display: flex;
+    flex-direction: column;
+    gap: .375rem;
+    padding: .5rem .75rem;
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    border-left: 1px solid var(--kendo-color-border, var(--bv-border));
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.bv-mkf-editor--empty {
+    align-items: center;
+    justify-content: center;
+    gap: .75rem;
+    text-align: center;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    font-size: .8125rem;
+}
+
+.bv-mkf-editor--empty p { margin: 0; }
+
+.bv-mkf-editor__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: .375rem;
+    border-bottom: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+.bv-mkf-editor__title {
+    font-size: .8rem;
+    font-weight: 600;
+    font-family: monospace;
+    color: var(--kendo-color-primary, var(--bv-accent));
+}
+
+.bv-mkf-editor__section {
+    font-size: .65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    padding-top: .25rem;
+}
+
+.bv-mkf-editor__field {
+    display: flex;
+    flex-direction: column;
+    gap: .125rem;
+}
+
+.bv-mkf-editor__row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .375rem;
+}
+
+.bv-mkf-editor__label {
+    font-size: .7rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+}
+
+.bv-mkf-editor__toggle-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+.bv-mkf-editor__hint {
+    font-size: .7rem;
+    line-height: 1.3;
+    color: var(--kendo-color-warning, #f59e0b);
+    padding: .35rem .5rem;
+    margin-top: .25rem;
+    background: color-mix(in srgb, var(--kendo-color-warning, #f59e0b) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--kendo-color-warning, #f59e0b) 35%, transparent);
+    border-radius: 4px;
+}
+
+.bv-mkf-editor__actions {
+    display: flex;
+    gap: .25rem;
+    flex-wrap: wrap;
+    padding-top: .25rem;
+    border-top: 1px solid var(--kendo-color-border, var(--bv-border));
+    margin-top: .25rem;
+}

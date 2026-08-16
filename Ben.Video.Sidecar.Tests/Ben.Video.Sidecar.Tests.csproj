@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Real ASP.NET integration tests against the sidecar's actual HTTP pipeline (WebApplicationFactory)
+    — a new test project (Ben.Video.Tests stays pure xunit) since this is the first place this repo
+    needs Microsoft.AspNetCore.Mvc.Testing. Every security defense in
+    DESIGN-item38-long-form-memory.md §5.4 is proven here, not just described.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector" Version="6.0.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ben.Video.Sidecar\Ben.Video.Sidecar.csproj" />
+    <ProjectReference Include="..\Ben.Video.Core\Ben.Video.Core.csproj" />
+  </ItemGroup>
+
+  <!-- A normal project reference so the fake ffmpeg apphost binary gets built and copied into
+       this project's own output directory automatically — tests locate it at
+       AppContext.BaseDirectory/fakeffmpeg (see FakeFfmpegFixture.cs) with no extra MSBuild wiring. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Ben.Video.Sidecar.FakeFfmpeg\Ben.Video.Sidecar.FakeFfmpeg.csproj" />
+  </ItemGroup>
+
+</Project>

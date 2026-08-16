@@ -1,0 +1,198 @@
+@inject ProjectStore Store
+@inject IJSRuntime JS
+
+@if (Visible)
+{
+    <TelerikWindow Visible="true"
+                   VisibleChanged="@(async v => { if (!v) await Close(); })"
+                   Width="560px"
+                   Height="440px"
+                   Modal="true"
+                   Draggable="true"
+                   Resizable="true"
+                   Class="bv-proj-dialog">
+        <WindowTitle>Open Project</WindowTitle>
+        <WindowContent>
+            @if (_errorMessage is not null)
+            {
+                @* Audit #6 — ProjectStore logs to the diagnostics panel, which a user may never
+                   open. A failed delete/rename previously looked like nothing happened at all. *@
+                <div class="bv-proj-dialog__error" role="alert">⚠ @_errorMessage</div>
+            }
+
+            @if (!Store.Projects.Any())
+            {
+                <div class="bv-proj-dialog__empty">
+                    <p>No saved projects yet.</p>
+                    <p>Use <strong>File → Save</strong> to save the current session.</p>
+                </div>
+            }
+            else
+            {
+                <TelerikGrid Data="@Store.Projects"
+                             Height="100%"
+                             Sortable="true"
+                             Resizable="true"
+                             Class="bv-proj-grid">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(ProjectSummary.Name)"
+                                    Title="Name"
+                                    Editable="true">
+                            <Template>
+                                @{
+                                    var row = (ProjectSummary)context;
+                                    @if (_editingId == row.Id)
+                                    {
+                                        <input class="bv-proj-name-input"
+                                               type="text"
+                                               @bind="_editingName"
+                                               @bind:event="oninput"
+                                               @onblur="CommitRename"
+                                               @onkeydown="OnRenameKeyDown"
+                                               @onclick:stopPropagation />
+                                    }
+                                    else
+                                    {
+                                        <span class="bv-proj-name"
+                                              @ondblclick="() => StartRename(row)"
+                                              title="Double-click to rename">
+                                            @row.Name
+                                        </span>
+                                    }
+                                }
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="@nameof(ProjectSummary.FormattedDate)"
+                                    Title="Saved"
+                                    Width="160px" />
+                        <GridColumn Field="@nameof(ProjectSummary.FormattedSize)"
+                                    Title="Size"
+                                    Width="90px" />
+                        <GridColumn Title="" Width="130px">
+                            <Template>
+                                @{
+                                    var row = (ProjectSummary)context;
+                                    <div class="bv-proj-actions">
+                                        <TelerikButton OnClick="() => OpenProject(row)"
+                                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                                       Size="@ThemeConstants.Button.Size.Small">
+                                            Open
+                                        </TelerikButton>
+                                        @* Audit #5 — deleting a project is the one destructive
+                                           action in the editor with NO undo path: it is a
+                                           localStorage removeItem, not a ClipStore command, so a
+                                           misclick permanently destroys saved work. (Clip removal
+                                           deliberately has no confirm — that one IS undoable.)
+                                           Inline two-step rather than a nested dialog: item #68
+                                           established that a TelerikWindow inside a TelerikWindow
+                                           has real footer-positioning quirks here. *@
+                                        @if (_confirmDeleteId == row.Id)
+                                        {
+                                            <TelerikButton OnClick="() => DeleteProject(row)"
+                                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                                           Size="@ThemeConstants.Button.Size.Small"
+                                                           Title="@($"Permanently delete \"{row.Name}\" — this cannot be undone")">
+                                                Delete?
+                                            </TelerikButton>
+                                            <TelerikButton OnClick="() => _confirmDeleteId = null"
+                                                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                           Size="@ThemeConstants.Button.Size.Small"
+                                                           Title="Keep this project">
+                                                No
+                                            </TelerikButton>
+                                        }
+                                        else
+                                        {
+                                            <TelerikButton OnClick="() => _confirmDeleteId = row.Id"
+                                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                           Size="@ThemeConstants.Button.Size.Small"
+                                                           Icon="@SvgIcon.Trash"
+                                                           Title="Delete" />
+                                        }
+                                    </div>
+                                }
+                            </Template>
+                        </GridColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            }
+        </WindowContent>
+        <WindowFooter>
+            <TelerikButton OnClick="Close"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Cancel
+            </TelerikButton>
+        </WindowFooter>
+    </TelerikWindow>
+}
+
+@code {
+    [Parameter] public bool                    Visible          { get; set; }
+    [Parameter] public EventCallback<bool>     VisibleChanged   { get; set; }
+    [Parameter] public EventCallback<ProjectSummary> OnOpen     { get; set; }
+
+    private Guid?  _editingId;
+    private string _editingName = string.Empty;
+    private Guid?  _confirmDeleteId;
+    private string? _errorMessage;
+
+    private void StartRename(ProjectSummary row)
+    {
+        _editingId   = row.Id;
+        _editingName = row.Name;
+    }
+
+    private async Task CommitRename()
+    {
+        if (_editingId.HasValue && !string.IsNullOrWhiteSpace(_editingName))
+        {
+            try
+            {
+                _errorMessage = null;
+                await Store.RenameAsync(_editingId.Value, _editingName);
+            }
+            catch (Exception ex)
+            {
+                _errorMessage = $"Couldn't rename that project: {ex.Message}";
+            }
+        }
+        _editingId = null;
+    }
+
+    private async Task OnRenameKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")  await CommitRename();
+        if (e.Key == "Escape") _editingId = null;
+    }
+
+    private async Task OpenProject(ProjectSummary row)
+    {
+        await OnOpen.InvokeAsync(row);
+        await Close();
+    }
+
+    private async Task DeleteProject(ProjectSummary row)
+    {
+        _confirmDeleteId = null;
+        try
+        {
+            _errorMessage = null;
+            await Store.DeleteAsync(row.Id);
+        }
+        catch (Exception ex)
+        {
+            // Without this the row would simply stay in the list with no explanation — the exact
+            // silent-failure shape audit #6 flagged.
+            _errorMessage = $"Couldn't delete \"{row.Name}\": {ex.Message}";
+        }
+    }
+
+    private async Task Close()
+    {
+        // Don't let a pending "Delete?" or a stale error survive into the next time this opens.
+        _confirmDeleteId = null;
+        _errorMessage    = null;
+        await VisibleChanged.InvokeAsync(false);
+    }
+}

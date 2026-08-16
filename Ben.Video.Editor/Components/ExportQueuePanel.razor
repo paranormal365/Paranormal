@@ -1,0 +1,126 @@
+@inject ExportQueueService Queue
+@implements IDisposable
+
+@if (Visible)
+{
+    <TelerikWindow Visible="true"
+                   VisibleChanged="@(async v => { if (!v) await VisibleChanged.InvokeAsync(false); })"
+                   Width="520px"
+                   Height="420px"
+                   Modal="false"
+                   Draggable="true"
+                   Resizable="true"
+                   Class="bv-queue-panel">
+        <WindowTitle>
+            <div class="bv-queue-panel__title-bar">
+                <span>Export Queue</span>
+                @if (Queue.ActiveCount > 0)
+                {
+                    <span class="bv-queue-badge">@Queue.ActiveCount</span>
+                }
+            </div>
+        </WindowTitle>
+        <WindowContent>
+            @if (!Queue.Entries.Any())
+            {
+                <div class="bv-queue-empty">
+                    <p>No jobs in the queue.</p>
+                    <p>Click <strong>Add to Queue</strong> in the Export dialog.</p>
+                </div>
+            }
+            else
+            {
+                <div class="bv-queue-list">
+                    @foreach (var entry in Queue.Entries)
+                    {
+                        <div class="bv-queue-item bv-queue-item--@entry.State.ToString().ToLowerInvariant()">
+                            <div class="bv-queue-item__header">
+                                <span class="bv-queue-item__name" title="@entry.Name">@entry.Name</span>
+                                <span class="bv-queue-state bv-queue-state--@entry.State.ToString().ToLowerInvariant()">
+                                    @StateLabel(entry.State)
+                                </span>
+                                <span class="bv-queue-item__elapsed">@entry.ElapsedDisplay</span>
+                                @if (entry.State is QueueEntryState.Queued or QueueEntryState.Running)
+                                {
+                                    <TelerikButton OnClick="() => Queue.Cancel(entry.Id)"
+                                                   Icon="@SvgIcon.X"
+                                                   Size="@ThemeConstants.Button.Size.Small"
+                                                   FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                                   Title="Cancel" />
+                                }
+                            </div>
+
+                            @if (entry.State is QueueEntryState.Running or QueueEntryState.Queued)
+                            {
+                                <TelerikProgressBar Value="@((double)entry.ProgressPercent)"
+                                                    Max="100"
+                                                    Indeterminate="@(entry.State == QueueEntryState.Queued)"
+                                                    Class="bv-queue-item__bar" />
+                                @if (entry.Job?.PhaseLabel is { Length: > 0 } label)
+                                {
+                                    <div class="bv-queue-item__phase">@label</div>
+                                }
+                            }
+
+                            @if (entry.State == QueueEntryState.Failed && entry.ErrorMessage is not null)
+                            {
+                                <div class="bv-queue-item__error">⚠ @entry.ErrorMessage</div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @* ── Combined progress ── *@
+                @if (Queue.ActiveCount > 0)
+                {
+                    <div class="bv-queue-footer">
+                        <span class="bv-queue-footer__label">
+                            Overall @Queue.CombinedPercent% —
+                            @Queue.Pending.Count() pending
+                            @(Queue.Active is not null ? "· 1 running" : "")
+                        </span>
+                        <TelerikProgressBar Value="@((double)Queue.CombinedPercent)"
+                                            Max="100"
+                                            Class="bv-queue-footer__bar" />
+                    </div>
+                }
+                else
+                {
+                    <div class="bv-queue-footer">
+                        <TelerikButton OnClick="Queue.ClearFinished"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                       Icon="@SvgIcon.Trash"
+                                       Title="Clear finished jobs">
+                            Clear Finished
+                        </TelerikButton>
+                    </div>
+                }
+            }
+        </WindowContent>
+    </TelerikWindow>
+}
+
+@code {
+    [Parameter] public bool                Visible        { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    protected override void OnInitialized()
+        => Queue.OnChanged += OnQueueChanged;
+
+    private void OnQueueChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+        => Queue.OnChanged -= OnQueueChanged;
+
+    private static string StateLabel(QueueEntryState s) => s switch
+    {
+        QueueEntryState.Queued    => "Queued",
+        QueueEntryState.Running   => "Running…",
+        QueueEntryState.Completed => "Done ✓",
+        QueueEntryState.Cancelled => "Cancelled",
+        QueueEntryState.Failed    => "Failed ✗",
+        _                          => s.ToString(),
+    };
+}

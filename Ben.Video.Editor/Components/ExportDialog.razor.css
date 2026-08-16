@@ -1,0 +1,188 @@
+/* ── Export dialog body ──────────────────────────────────────────────────── */
+/* WindowActions renders as a document-flow child of #app, detached from the
+   window's own box (confirmed Telerik behavior in this app) — the footer
+   lives inside WindowContent instead so it's actually reachable. */
+.bv-export-dialog__body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+.bv-export-dialog__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: .5rem;
+    padding-top: .75rem;
+    margin-top: .5rem;
+    flex-shrink: 0;
+    border-top: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+/* ── Export dialog form ──────────────────────────────────────────────────── */
+.bv-export-form {
+    display: flex;
+    flex-direction: column;
+    gap: .875rem;
+    padding: .25rem 0;
+    min-width: 360px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* ── Form rows ───────────────────────────────────────────────────────────── */
+.bv-export-row {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+}
+
+.bv-export-label {
+    width: 120px;
+    flex-shrink: 0;
+    font-size: .8125rem;
+    font-weight: 500;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+}
+
+.bv-export-control {
+    flex: 1;
+}
+
+/* Kendo's .k-slider-horizontal carries its own fixed default width — flex: 1
+   on the wrapper alone doesn't override it, unlike DropDownList/TextBox.
+   ::deep is required: TelerikSlider's root div is rendered by a child
+   component, so it never receives this component's CSS-isolation scope
+   attribute and a non-::deep rule silently never matches it. */
+::deep .bv-export-control.k-slider {
+    width: 100%;
+}
+
+.bv-export-toggle {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: .8125rem;
+}
+
+/* ── Progress section ────────────────────────────────────────────────────── */
+.bv-export-form__progress {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .625rem;
+    padding: .5rem 0;
+}
+
+.bv-export-form__phase {
+    font-size: .875rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    margin: 0;
+    text-align: center;
+}
+
+.bv-export-form__bar {
+    width: 100%;
+    height: 8px;
+}
+
+/* Audit #1 — explains why a requested cancel hasn't taken effect yet. */
+.bv-export-form__cancel-hint {
+    font-size: .7rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    text-align: center;
+    max-width: 34ch;
+    line-height: 1.4;
+}
+
+.bv-export-form__pct {
+    font-size: .75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--kendo-color-primary, var(--bv-accent));
+}
+
+.bv-export-form__phases {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: .75rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    width: 100%;
+}
+
+.bv-export-form__phases li {
+    padding: .125rem 0;
+    border-bottom: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+/* ── Summary ─────────────────────────────────────────────────────────────── */
+.bv-export-form__summary {
+    font-size: .75rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    padding: .25rem 0;
+    border-top: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+/* ── State banners ────────────────────────────────────────────────────────── */
+.bv-export-form__error {
+    padding: .5rem .75rem;
+    background: #3b1a1a;
+    color: #e06c75;
+    font-size: .8rem;
+    border-radius: 5px;
+    border: 1px solid #5c2a2a;
+}
+
+.bv-export-form__success {
+    padding: .5rem .75rem;
+    background: #1a3b1a;
+    color: #4caf89;
+    font-size: .8rem;
+    border-radius: 5px;
+    border: 1px solid #2a5a2a;
+}
+
+.bv-export-form__note {
+    font-size: .72rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    padding: .5rem .75rem;
+    border-radius: 4px;
+    background: var(--kendo-color-surface-alt, var(--bv-surface-1));
+    border-left: 3px solid var(--kendo-color-primary, var(--bv-accent));
+    margin-top: .5rem;
+    line-height: 1.5;
+}
+
+/* \u2500\u2500 Preset quick-select \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.bv-export-presets {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .375rem;
+    padding-bottom: .5rem;
+    border-bottom: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+.bv-export-presets__label {
+    font-size: .75rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    flex-shrink: 0;
+}
+
+.bv-export-preset-btn {
+    padding: .2rem .6rem;
+    font-size: .75rem;
+    border: 1px solid var(--kendo-color-border, var(--bv-border));
+    border-radius: 4px;
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    color: var(--kendo-color-on-surface, var(--bv-text));
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+
+.bv-export-preset-btn:hover {
+    background: var(--bv-accent-muted);
+    border-color: var(--kendo-color-primary, var(--bv-accent));
+}
+

@@ -1,6 +1,6 @@
 using AutoMapper;
+using Ben.Data.WebApi.Services;
 using Ben.Service.Mappings;
-using Ben.Service.RepositoryService.Services;
 using Serilog;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Microsoft.OpenApi.Models;
@@ -34,15 +34,37 @@ builder.Host.UseSerilog();
 
 builder.Services.AddControllers();
 builder.Services.AddMemoryCache();
+builder.Services.AddBenRateLimiting(builder.Configuration);
+
+// Audit finding B4, pulled forward from phase 3 because Ben.Wasm.Video needs it: with a WASM host
+// the *browser* calls this API, so cross-origin is real whenever the two aren't behind one origin.
+// Origins come from configuration — hardcoded localhost values would silently break the first real
+// deployment. An EMPTY list is valid and meaningful: it's the same-origin / reverse-proxied case
+// (the preferred deployment), where CORS never applies. Wildcards are refused rather than honored:
+// this API serves authenticated personal data, and "*" here is always a misconfiguration.
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+corsOrigins = corsOrigins.Where(o => !string.IsNullOrWhiteSpace(o) && o != "*").ToArray();
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("WebAppPolicy", policy =>
+    {
+        if (corsOrigins.Length == 0) return; // same-origin deployment — no cross-origin grants
+
         policy
-            .WithOrigins("http://localhost:5078", "https://localhost:7078")
+            .WithOrigins(corsOrigins)
             .AllowAnyMethod()
             .AllowAnyHeader()
-            .AllowCredentials());
+            // Bearer-token auth, not cookies: credentials (in the CORS sense) are never sent
+            // cross-origin, so don't invite them. The Authorization header is covered by
+            // AllowAnyHeader above.
+            // Range/media headers the editor's scrubbing needs to *read*, not just receive:
+            .WithExposedHeaders("Content-Range", "Accept-Ranges", "Content-Length")
+            // One preflight per endpoint per 10 minutes instead of one per request — media
+            // scrubbing makes many small authenticated GETs and each would otherwise pay a
+            // preflight round-trip.
+            .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+    });
 });
 
 builder.Services.AddSwaggerGen(options =>
@@ -62,7 +84,12 @@ builder.Services.AddSwaggerGen(options =>
 
             **SuperAdmin**
             All `/api/admin/*` routes require the `SuperAdmin` role.
-            Other routes enforce org-level membership via `OrganizationSecurityAuthorize`.
+
+            **Everything else**
+            Access is enforced per-route inside each action, not by a blanket filter: the
+            shared helpers (`FileAudienceAccess`, `CaseOrgAccess`, `InvestigationAccess`,
+            `InvestigationVisibilityFilter`) decide what the caller may see, and org-level
+            permission grants are checked through `IOrganizationSecurityService`.
 
             **File storage**
             Uploaded files are stored on the local filesystem under the configured
@@ -112,8 +139,6 @@ builder.Services.AddDbContextFactory<Ben.Data.Source.Context.BenDataContext>(opt
 {
     options.UseSqlServer(builder.Configuration.GetConnectionString("BenDbConnectionString"));
 });
-builder.Services.AddScoped<IRepositoryManager, RepositoryManager>();
-builder.Services.AddScoped<Ben.Service.Security.Services.IOrganizationSecurityService, Ben.Service.Security.Services.OrganizationSecurityService>();
 builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService, Ben.Service.RepositoryService.Services.OrganizationSecurityService>();
 builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService, Ben.Service.RepositoryService.Services.AuditLogService>();
 builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IFileStorageService, Ben.Data.WebApi.Services.LocalFileStorageService>();
@@ -128,6 +153,12 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);
 builder.Services.AddTransient<Microsoft.AspNetCore.Authentication.IClaimsTransformation, Ben.Data.WebApi.Services.EntraClaimsTransformation>();
 
+// Sends Identity's confirmation / password-reset mail. Registered before AddIdentityApiEndpoints
+// so it wins over the framework's silent no-op sender — which, with RequireConfirmedAccount below,
+// would otherwise mean every new account is created and then locked out with no error anywhere.
+builder.Services.AddTransient<Microsoft.AspNetCore.Identity.IEmailSender<AppUser>,
+    Ben.Data.WebApi.Services.IdentityEmailSender>();
+
 builder.Services.AddIdentityApiEndpoints<AppUser>(options =>
        {
            options.Password.RequireDigit           = true;
@@ -136,6 +167,11 @@ builder.Services.AddIdentityApiEndpoints<AppUser>(options =>
            options.Password.RequireUppercase       = true;
            options.Password.RequireLowercase       = true;
            options.User.RequireUniqueEmail         = true;
+           // /register is anonymous, so without this anyone can mint a working account at an
+           // address they do not own — including someone else's. Confirmation gates sign-in only;
+           // Entra sign-up and invite acceptance create their users through their own paths and
+           // are unaffected.
+           options.SignIn.RequireConfirmedAccount  = true;
        })
        .AddRoles<IdentityRole<Guid>>()
        .AddEntityFrameworkStores<BenDataContext>()
@@ -215,6 +251,13 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
+// Say what the CORS posture is at startup — a misconfigured deploy should fail loudly here, not
+// as a mystery in a browser console three layers away.
+if (corsOrigins.Length == 0)
+    Log.Information("CORS: no cross-origin browser origins allowed (same-origin deployment)");
+else
+    Log.Information("CORS: allowing browser origins {Origins}", (object)corsOrigins);
+
 // Initialise geocod.io — API key stored in Geocodio:ApiKey in appsettings
 Ben.Service.RepositoryService.Services.AddressGeocodingService.Configure(
     builder.Configuration["Geocodio:ApiKey"] ?? string.Empty,
@@ -256,9 +299,14 @@ if (!app.Environment.IsDevelopment())
 app.UseCors("WebAppPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
+// After authentication, so the limiter can partition signed-in callers by user id rather than
+// lumping everyone behind a shared address together.
+app.UseRateLimiter();
 app.MapControllers();
 
-app.MapIdentityApi<AppUser>();
+// Identity's endpoints are mapped by the framework, so the throttle goes on the whole group:
+// /login is an unauthenticated password oracle and /register creates accounts.
+app.MapIdentityApi<AppUser>().RequireRateLimiting(RateLimiting.AuthPolicy);
 
 await Ben.Data.WebApi.SeedData.SuperAdminSeeder.SeedAsync(app.Services, app.Configuration);
 await Ben.Data.WebApi.SeedData.OrganizationSeeder.SeedAsync(app.Services, app.Configuration);

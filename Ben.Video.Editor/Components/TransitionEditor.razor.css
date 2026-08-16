@@ -1,0 +1,174 @@
+.bv-transition-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 14px;
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    border-left: 1px solid var(--kendo-color-border, var(--bv-border));
+    height: 100%;
+    overflow-y: auto;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+.bv-transition-editor__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+.bv-transition-editor__title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--bv-title-trans);
+    letter-spacing: .03em;
+}
+
+/* ── Fields ──────────────────────────────────────────────────────────────── */
+
+.bv-transition-editor__field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.bv-transition-editor__label {
+    font-size: 11px;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.bv-transition-editor__value {
+    font-size: 12px;
+    color: var(--kendo-color-on-surface, var(--bv-text));
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+/* ── Duration row (item #57 T4) ─────────────────────────────────────────── */
+
+.bv-transition-editor__duration-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ::deep required — TelerikSlider's root div is rendered by a child component and never
+   receives this component's Blazor CSS-isolation scope attribute (see item #68/#30). */
+.bv-transition-editor__duration-row ::deep .k-slider {
+    flex: 1;
+}
+
+/* ── Style picker (item #57 T4) — same two-rect CSS-animated-thumbnail idea as
+   AssetBrowser's Transitions gallery cards, duplicated here (not shared, since Blazor CSS
+   isolation scopes each component's stylesheet to its own markup) at a more compact size to
+   fit this side panel. ─────────────────────────────────────────────────────────────────── */
+
+.bv-transition-editor__style-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.bv-transition-editor__style-card {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    background: var(--kendo-color-base-subtle, var(--bv-clip-bg));
+    border: 1px solid var(--kendo-color-border, var(--bv-border));
+    border-radius: 4px;
+    padding: 4px;
+    cursor: pointer;
+}
+
+.bv-transition-editor__style-card:hover {
+    border-color: var(--kendo-color-primary, var(--bv-accent));
+}
+
+.bv-transition-editor__style-card--selected {
+    border-color: var(--kendo-color-primary, var(--bv-accent));
+    box-shadow: 0 0 0 1px var(--kendo-color-primary, var(--bv-accent));
+}
+
+.bv-transition-editor__style-name {
+    font-size: 10px;
+    text-align: center;
+    color: var(--kendo-color-on-base, var(--bv-text));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bv-transition-editor__style-thumb {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: var(--kendo-color-base, var(--bv-bg));
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.bv-transition-editor__style-thumb-a,
+.bv-transition-editor__style-thumb-b {
+    position: absolute;
+    inset: 0;
+}
+
+.bv-transition-editor__style-thumb-a { background: #585b70; }
+.bv-transition-editor__style-thumb-b {
+    background: #89b4fa;
+    transition: opacity 600ms ease, clip-path 600ms ease, transform 600ms ease;
+}
+
+/* The selected card shows its "landed" state permanently, not just on hover — it IS the
+   currently-applied style, so its thumbnail should read as applied at a glance. Everything
+   else still previews on hover, same as the gallery. */
+.bv-transition-editor__style-thumb--fade:hover .bv-transition-editor__style-thumb-b,
+.bv-transition-editor__style-card--selected.bv-transition-editor__style-thumb--fade .bv-transition-editor__style-thumb-b
+    { opacity: 1; }
+.bv-transition-editor__style-thumb--fade .bv-transition-editor__style-thumb-b { opacity: 0; }
+
+.bv-transition-editor__style-thumb--dissolve .bv-transition-editor__style-thumb-b { opacity: 0; }
+.bv-transition-editor__style-thumb--dissolve:hover .bv-transition-editor__style-thumb-a,
+.bv-transition-editor__style-card--selected.bv-transition-editor__style-thumb--dissolve .bv-transition-editor__style-thumb-a
+    { opacity: 0.25; }
+.bv-transition-editor__style-thumb--dissolve:hover .bv-transition-editor__style-thumb-b,
+.bv-transition-editor__style-card--selected.bv-transition-editor__style-thumb--dissolve .bv-transition-editor__style-thumb-b
+    { opacity: 1; }
+
+.bv-transition-editor__style-thumb--wipeleft .bv-transition-editor__style-thumb-b { clip-path: inset(0 0 0 100%); }
+.bv-transition-editor__style-thumb--wipeleft:hover .bv-transition-editor__style-thumb-b,
+.bv-transition-editor__style-card--selected.bv-transition-editor__style-thumb--wipeleft .bv-transition-editor__style-thumb-b
+    { clip-path: inset(0 0 0 0); }
+
+.bv-transition-editor__style-thumb--wiperight .bv-transition-editor__style-thumb-b { clip-path: inset(0 100% 0 0); }
+.bv-transition-editor__style-thumb--wiperight:hover .bv-transition-editor__style-thumb-b,
+.bv-transition-editor__style-card--selected.bv-transition-editor__style-thumb--wiperight .bv-transition-editor__style-thumb-b
+    { clip-path: inset(0 0 0 0); }
+
+.bv-transition-editor__style-thumb--slideleft .bv-transition-editor__style-thumb-b { transform: translateX(100%); }
+.bv-transition-editor__style-thumb--slideleft:hover .bv-transition-editor__style-thumb-b,
+.bv-transition-editor__style-card--selected.bv-transition-editor__style-thumb--slideleft .bv-transition-editor__style-thumb-b
+    { transform: translateX(0); }
+
+.bv-transition-editor__style-thumb--zoom .bv-transition-editor__style-thumb-b { opacity: 0; transform: scale(0); }
+.bv-transition-editor__style-thumb--zoom:hover .bv-transition-editor__style-thumb-b,
+.bv-transition-editor__style-card--selected.bv-transition-editor__style-thumb--zoom .bv-transition-editor__style-thumb-b
+    { opacity: 1; transform: scale(1); }
+
+/* ── Actions ─────────────────────────────────────────────────────────────── */
+
+.bv-transition-editor__actions {
+    display: flex;
+    gap: 8px;
+    padding-top: 4px;
+    border-top: 1px solid var(--kendo-color-border, var(--bv-border));
+}

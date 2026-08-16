@@ -1,0 +1,115 @@
+/* ── Image editor panel ──────────────────────────────────────────────────── */
+.bv-image-editor {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    border-left: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.bv-image-editor__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--kendo-color-border, var(--bv-border));
+    flex-shrink: 0;
+}
+
+.bv-image-editor__title {
+    font-size: .8125rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Thumbnail preview — constrained, never fills page ──────────────────── */
+.bv-image-editor__preview {
+    flex-shrink: 0;
+    padding: .5rem .75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    border-bottom: 1px solid var(--kendo-color-border, var(--bv-border));
+    height: 120px;           /* fixed height thumbnail strip */
+    overflow: hidden;
+}
+
+.bv-image-editor__thumb {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 3px;
+}
+
+/* ── Info, fields, effects ───────────────────────────────────────────────── */
+.bv-image-editor__info {
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+    padding: .5rem .75rem;
+    font-size: .72rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    border-bottom: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+.bv-image-editor__field {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    padding: .5rem .75rem;
+}
+
+.bv-image-editor__label {
+    font-size: .72rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+}
+
+/* ::deep required — TelerikSlider's root div is rendered by a child component and never
+   receives this component's Blazor CSS-isolation scope attribute (see item #68/#30). */
+::deep .bv-image-editor__slider {
+    width: 100%;
+}
+
+.bv-image-editor__time {
+    font-size:  .7rem;
+    color:      var(--kendo-color-subtle-text, var(--bv-text-muted));
+    text-align: right;
+}
+
+.bv-image-editor__section-heading {
+    font-size: .7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    padding: .5rem .75rem .25rem;
+}
+
+.bv-image-editor__effect-card {
+    padding: .25rem .75rem;
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    border-bottom: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+.bv-image-editor__effect-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.bv-image-editor__effect-name {
+    font-size: .75rem;
+    font-weight: 500;
+}
+
+.bv-image-editor__remove-btn {
+    flex-shrink: 0;
+}

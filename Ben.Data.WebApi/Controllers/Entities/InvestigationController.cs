@@ -34,7 +34,17 @@ public sealed class InvestigationController : BenControllerBase
             .Where(i => i.CaseId == caseId)
             .OrderBy(i => i.ScheduledDateTime)
             .ToListAsync(ct);
-        return Ok(_mapper.Map<IEnumerable<InvestigationRecord>>(list));
+
+        // Batched, not per row: the panel renders manage controls from this and a query each
+        // would be one per investigation on every case page.
+        var flags = await InvestigationAccess.ComputeFlagsAsync(
+            db, orgId, list.Select(i => i.Id).ToList(),
+            GetCurrentUserId(), User.IsInRole(RoleNames.SuperAdmin), ct);
+
+        var records = _mapper.Map<IEnumerable<InvestigationRecord>>(list)
+            .Select(r => r with { CanEditRecord = flags[r.Id].CanEditRecord });
+
+        return Ok(records);
     }
 
     [HttpGet("{id:guid}")]
@@ -47,7 +57,12 @@ public sealed class InvestigationController : BenControllerBase
         var inv = await db.Investigations.AsNoTracking()
             .Include(i => i.Attendees)
             .FirstOrDefaultAsync(i => i.Id == id && i.CaseId == caseId, ct);
-        return inv is null ? NotFound() : Ok(_mapper.Map<InvestigationRecord>(inv));
+        if (inv is null) return NotFound();
+
+        return Ok(_mapper.Map<InvestigationRecord>(inv) with
+        {
+            CanEditRecord = await CanManageAsync(id, ct),
+        });
     }
 
     [HttpPost]
@@ -113,8 +128,10 @@ public sealed class InvestigationController : BenControllerBase
         var loaded = await db.Investigations.AsNoTracking()
             .Include(i => i.Attendees)
             .FirstAsync(i => i.Id == entity.Id, ct);
+        // The creator can always manage what they just scheduled — one of the five rules, so this
+        // needs no second query either.
         return CreatedAtAction(nameof(GetById), new { orgId, caseId, id = entity.Id },
-            _mapper.Map<InvestigationRecord>(loaded));
+            _mapper.Map<InvestigationRecord>(loaded) with { CanEditRecord = true });
     }
 
     [HttpPut("{id:guid}")]
@@ -161,7 +178,10 @@ public sealed class InvestigationController : BenControllerBase
         var loaded = await db.Investigations.AsNoTracking()
             .Include(i => i.Attendees)
             .FirstAsync(i => i.Id == entity.Id, ct);
-        return Ok(_mapper.Map<InvestigationRecord>(loaded));
+
+        // True by construction rather than by another query: this endpoint already refused
+        // everyone who cannot manage it, several lines above.
+        return Ok(_mapper.Map<InvestigationRecord>(loaded) with { CanEditRecord = true });
     }
 
     [HttpDelete("{id:guid}")]

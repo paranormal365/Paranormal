@@ -1,0 +1,219 @@
+@implements IDisposable
+@inject ClipStore Clips
+@inject MotionKeyframeService Motion
+@inject OPFSService Opfs
+@using Ben.Video.Editor.Effects
+@using Ben.Video.Editor.Models
+@using Ben.Video.Editor.Models.Assets
+@using Ben.Video.Editor.Services
+
+@* Renders the actual visual appearance (not just an editing handle) of every Callout/TextOverlay/
+   ClipArt active at the current playhead time, reusing the exact same SVG-generation code the real
+   export pipeline uses (CalloutShapeRenderer/TextOverlayRenderer) — so what you see here matches
+   what Export/the full-quality Preview popout produce, pixel-for-pixel (item #43). ClipArt (item
+   #47) is different: its asset lives in OPFS and needs an async resolve-once-then-cache step
+   before anything can be shown, unlike Callout/TextOverlay which are self-contained SVG strings
+   computed purely from clip properties. Only meant for the Working Window (raw/background-rendered
+   video, not yet overlay-composited) — never mount this next to a preview that's already playing
+   the real rendered output, or overlays would double up. *@
+
+@if (_svgMarkups.Count > 0 || _clipArtItems.Count > 0)
+{
+    <div class="bv-live-overlay-preview">
+        @foreach (var svg in _svgMarkups)
+        {
+            @((MarkupString)svg)
+        }
+        @foreach (var art in _clipArtItems)
+        {
+            <div class="bv-live-overlay-preview__clipart"
+                 style="left:@(F(art.Clip.X * 100))%; top:@(F(art.Clip.Y * 100))%; width:@(F(art.Clip.Width * 100))%; height:@(F(EffectiveHeight(art.Clip) * 100))%; opacity:@(F(art.Clip.Opacity)); transform: rotate(@(F(art.Clip.Rotation))deg);">
+                @if (art.Visual.IsSvg)
+                {
+                    @((MarkupString)art.Visual.Content)
+                }
+                else
+                {
+                    <img src="@art.Visual.Content" alt="" />
+                }
+                @if (TintStyle(art.Clip.TintColor, art.Visual) is { } tintStyle)
+                {
+                    <div class="bv-live-overlay-preview__clipart-tint" style="@tintStyle"></div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public double CurrentTime  { get; set; }
+    [Parameter]                 public int    CanvasWidth  { get; set; } = 1920;
+    [Parameter]                 public int    CanvasHeight { get; set; } = 1080;
+
+    private List<string> _svgMarkups   = [];
+    private List<(ClipArtClip Clip, ClipArtVisual Visual)> _clipArtItems = [];
+
+    /// <summary>Resolved asset per AssetId — resolved once, reused by every clip/instance that
+    /// references the same asset. Null means resolution was attempted and failed (asset missing
+    /// from OPFS); still cached so we don't retry every frame.</summary>
+    private readonly Dictionary<string, ClipArtVisual?> _assetCache = [];
+    private readonly HashSet<string> _resolving = [];
+
+    private sealed record ClipArtVisual(bool IsSvg, string Content);
+
+    protected override void OnInitialized()
+    {
+        // Recompute on any clip-store change (item added/moved/duration edited/motion keyframe
+        // set), not just when CurrentTime changes via OnParametersSet — otherwise adding a new
+        // overlay while paused never shows it until the next timeupdate tick.
+        Clips.OnChange += Refresh;
+        Motion.OnChanged += Refresh;
+        Refresh();
+    }
+
+    protected override void OnParametersSet() => RecomputeMarkups();
+
+    private void Refresh()
+    {
+        RecomputeMarkups();
+        StateHasChanged();
+    }
+
+    private void RecomputeMarkups()
+    {
+        var active = Clips.PrimaryVideoTrack.Items
+            .Where(i => CurrentTime >= i.TimelinePosition && CurrentTime < i.TimelinePosition + i.Duration)
+            .OrderBy(i => i.LayerIndex)
+            .ToList();
+
+        _svgMarkups = active
+            .Where(i => i is CalloutClip or TextOverlay)
+            .Select(RenderItem)
+            .Where(svg => !string.IsNullOrEmpty(svg))
+            .ToList();
+
+        _clipArtItems = [];
+        foreach (var clip in active.OfType<ClipArtClip>())
+        {
+            if (!_assetCache.TryGetValue(clip.AssetId, out var visual))
+            {
+                _ = ResolveAssetAsync(clip.AssetId, clip.AssetFormat); // fire-and-forget; re-Refresh()es on completion
+                continue;
+            }
+            if (visual is null) continue; // resolution already failed for this asset
+
+            var effective = MotionEffectiveGeometry.Effective(Motion, clip, CurrentTime);
+            _clipArtItems.Add((effective, visual));
+        }
+    }
+
+    private static double EffectiveHeight(ClipArtClip clip) => MotionEffectiveGeometry.EffectiveClipArtHeight(clip);
+
+    /// <summary>
+    /// Inline CSS for the recolor-tint overlay div, or null when there's nothing to tint. Uses a
+    /// <c>mask-image</c> sourced from the visual's own content (the raster blob URL, or a data-URI
+    /// of the SVG markup) so the tint only paints over the asset's own alpha shape — the CSS
+    /// analogue of the canvas <c>source-atop</c> technique <c>rasterClipArtRenderer.js</c> uses and
+    /// the <c>colorchannelmixer</c> matrix <see cref="Services.ExportArgBuilders.BuildClipArtTintMixer"/>
+    /// uses at export, so all three paths agree visually.
+    /// </summary>
+    private static string? TintStyle(double? packedTint, ClipArtVisual visual)
+    {
+        if (packedTint is not { } packed) return null;
+        var (r, g, b, a) = ColorHelper.Unpack(packed);
+        if (a == 0) return null;
+
+        var maskUri = visual.IsSvg
+            ? $"data:image/svg+xml;utf8,{Uri.EscapeDataString(visual.Content)}"
+            : visual.Content;
+
+        return $"background-color: rgb({r},{g},{b}); opacity: {F(a / 255.0)}; " +
+               $"mask-image: url('{maskUri}'); -webkit-mask-image: url('{maskUri}'); " +
+               "mask-size: 100% 100%; -webkit-mask-size: 100% 100%; " +
+               "mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat;";
+    }
+
+    private async Task ResolveAssetAsync(string assetId, VideoAssetFormat format)
+    {
+        if (_resolving.Contains(assetId)) return;
+        if (!Guid.TryParse(assetId, out var guid)) { _assetCache[assetId] = null; return; }
+        _resolving.Add(assetId);
+
+        ClipArtVisual? visual = null;
+        try
+        {
+            var ext = FormatExt(format);
+            visual = format == VideoAssetFormat.Svg
+                ? await ResolveSvgAsync(guid, ext)
+                : await ResolveRasterAsync(guid, ext);
+        }
+        finally
+        {
+            _resolving.Remove(assetId);
+            _assetCache[assetId] = visual;
+            Refresh();
+        }
+    }
+
+    private async Task<ClipArtVisual?> ResolveRasterAsync(Guid assetGuid, string ext)
+    {
+        var url = await Opfs.ReadAsBlobUrlAsync(assetGuid, $".{ext}");
+        return url is null ? null : new ClipArtVisual(IsSvg: false, url);
+    }
+
+    private async Task<ClipArtVisual?> ResolveSvgAsync(Guid assetGuid, string ext)
+    {
+        var text = await Opfs.ReadAsTextAsync(assetGuid, $".{ext}");
+        return text is null ? null : new ClipArtVisual(IsSvg: true, SvgStretchHelper.ForceFillDimensions(text));
+    }
+
+    private static string FormatExt(VideoAssetFormat f) => f switch
+    {
+        VideoAssetFormat.Avif => "avif",
+        VideoAssetFormat.WebP => "webp",
+        VideoAssetFormat.Gif  => "gif",
+        VideoAssetFormat.Svg  => "svg",
+        _                     => "png",
+    };
+
+    public void Dispose()
+    {
+        Clips.OnChange -= Refresh;
+        Motion.OnChanged -= Refresh;
+        foreach (var visual in _assetCache.Values)
+        {
+            if (visual is { IsSvg: false } raster)
+                _ = Opfs.RevokeBlobUrlAsync(raster.Content); // fire-and-forget; component is unmounting
+        }
+    }
+
+    private string RenderItem(TrackItem item)
+    {
+        var elapsed = CurrentTime - item.TimelinePosition;
+        return item switch
+        {
+            CalloutClip c => RenderCallout(c, elapsed),
+            TextOverlay t => RenderText(t, elapsed),
+            _             => string.Empty,
+        };
+    }
+
+    /// <summary>Mirrors ExportService.ApplyCalloutsAsync's animated-frame path exactly — same
+    /// motion-frame evaluation, same fallback, same fade-alpha multiplication — so a callout with
+    /// a motion path shows its real interpolated position/size here too, not just its base value.</summary>
+    private string RenderCallout(CalloutClip callout, double elapsed)
+    {
+        var effective = MotionEffectiveGeometry.Effective(Motion, callout, CurrentTime);
+        effective = effective with { Opacity = effective.Opacity * callout.ComputeFadeAlpha(elapsed) };
+        return CalloutShapeRenderer.Render(effective, CanvasWidth, CanvasHeight);
+    }
+
+    private string RenderText(TextOverlay overlay, double elapsed)
+    {
+        var effective = MotionEffectiveGeometry.Effective(Motion, overlay, CurrentTime);
+        effective = effective with { Opacity = effective.Opacity * overlay.ComputeFadeAlpha(elapsed) };
+        return TextOverlayRenderer.Render(effective, CanvasWidth, CanvasHeight);
+    }
+
+    private static string F(double v) => v.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+}

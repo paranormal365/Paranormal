@@ -43,15 +43,16 @@ Ben.Data.Source/Entities/BenDataModel.{Name}.Generated.cs  ← all properties + 
 - **Interface:** all entities implement `IIDStd`
 - **Audit cols:** `DateCreated`, `DateUpdated?`, `CreatedByAppUserId`, `UpdatedByAppUserId?`
 - **Cascade deletes:** ownership FKs only; audit FKs use `DeleteBehavior.NoAction`
-- All entity configurations go in `Ben.Data.Source/Context/BenDataContext.Generated.cs`
+- All entity configurations go in `Ben.Data.Source/Context/BenDataContext.cs`
 
 ### Adding a new entity:
-1. Create stub: `BenDataModel.{Name}.cs` with empty partial implementing `IIDStd`
-2. Create generated: `BenDataModel.{Name}.Generated.cs` with all properties + nav props
-3. Add `DbSet<{Name}>` + model config to `BenDataContext.Generated.cs`
-4. Create record in `Ben.Service.Models/Entities/{Name}Record.cs`
-5. Create AutoMapper profile in `Ben.Service.Mappings/Entities/{Name}Profile.cs`
-6. Add migration (see below)
+1. Create `BenDataModel.{Name}.cs` with the class implementing `IIDStd`, properties, and nav props.
+   (Older entities are split into a `.cs` stub plus a `.Generated.cs` partial — a fossil of a
+   retired Entity Developer workflow. Nothing generates them now; new entities use a single file.)
+2. Add `DbSet<{Name}>` + model config to `BenDataContext.cs`
+3. Create record in `Ben.Service.Models/Entities/{Name}Record.cs`
+4. Create AutoMapper profile in `Ben.Service.Mappings/Entities/{Name}Profile.cs`
+5. Add migration (see below)
 
 ---
 

@@ -38,6 +38,15 @@ public static class SiteSettingKeys
     /// <summary>When someone can expect an answer, e.g. "Weekdays, 9am–5pm Central".</summary>
     public const string ContactHours = "contact.hours";
 
+    /// <summary>Requests per minute, per caller, allowed against the geocoding endpoints.</summary>
+    public const string RateLimitGeocodingPerMinute = "ratelimit.geocoding-per-minute";
+
+    /// <summary>Requests per minute, per caller, allowed against sign-in and registration.</summary>
+    public const string RateLimitAuthPerMinute = "ratelimit.auth-per-minute";
+
+    /// <summary>Requests per minute, per caller, allowed against everything else.</summary>
+    public const string RateLimitGlobalPerMinute = "ratelimit.global-per-minute";
+
     /// <summary>
     /// Every setting the site knows about: its key, the human label, and the description shown in
     /// the admin page. Order here is the order they appear.
@@ -64,6 +73,12 @@ public static class SiteSettingKeys
             "Phone number shown on the contact page. Leave empty to show none."),
         (ContactHours, "When we reply",
             "When someone can expect an answer, e.g. \"Weekdays, 9am–5pm Central\". Leave empty to show nothing."),
+        (RateLimitGeocodingPerMinute, "Rate limit — address lookup (per minute)",
+            "How many address lookups one caller may make each minute. Geocoding is billed per lookup by the outside service, so this is the setting that caps that bill. Leave empty to use the built-in default. Changes take effect within a minute; no restart needed."),
+        (RateLimitAuthPerMinute, "Rate limit — sign in and register (per minute)",
+            "How many sign-in or registration attempts one caller may make each minute. Low enough to stop password guessing, high enough that a person mistyping their password never notices. Leave empty for the default."),
+        (RateLimitGlobalPerMinute, "Rate limit — everything else (per minute)",
+            "A ceiling on all other requests from one caller each minute, so a runaway client cannot saturate the server. Generous by design — normal use should never reach it. Leave empty for the default."),
     ];
 
     /// <summary>

@@ -1,0 +1,186 @@
+/* ── Preview panel ──────────────────────────────────────────────────────── */
+:host,
+.bv-preview {
+    display: flex;
+    flex-direction: column;
+    flex: 1;           /* expand to fill remaining workspace width */
+    min-width: 0;      /* allow shrinking below content width */
+    height: 100%;
+    overflow: hidden;
+    background: var(--kendo-color-surface-alt, var(--bv-surface-1));
+}
+
+/* Row holding the screen + DbMeter side by side. No explicit rule here meant
+   this flex item fell back to its content's min-content size (driven by the
+   canvas's aspect-ratio at full available width), which could exceed the
+   space left after the transport controls row — pushing play/pause etc.
+   below the visible/clipped area entirely instead of shrinking to fit. */
+.bv-preview__screen-row {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* ── Screen area ────────────────────────────────────────────────────────── */
+.bv-preview__screen {
+    flex: 1;
+    position: relative;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.bv-preview__video {
+    max-width: 100%;
+    max-height: 100%;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+/* ── Placeholder overlay ────────────────────────────────────────────────── */
+.bv-preview__placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .375rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    pointer-events: none;
+}
+
+.bv-preview__placeholder span:first-child {
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.bv-preview__placeholder-sub {
+    font-size: .75rem;
+}
+
+/* ── Canvas background (shown when no clip is loaded) ───────────────────── */
+.bv-preview__canvas {
+    background: #000;
+    max-width: 100%;
+    max-height: 100%;
+    border: 1px solid rgba(255, 255, 255, .08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+/* ── Still-image overlay (image-only timeline preview) ──────────────────── */
+.bv-preview__image-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.bv-preview__canvas-dims {
+    color: rgba(255, 255, 255, .18);
+    font-size: .7rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .04em;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* ── Canvas size picker in controls ─────────────────────────────────────── */
+.bv-preview__canvas-picker {
+    font-size: .7rem;
+}
+
+/* ── Transport controls ─────────────────────────────────────────────────── */
+.bv-preview__controls {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    padding: .375rem .625rem;
+    border-top: 1px solid var(--kendo-color-border, var(--bv-border));
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    flex-shrink: 0;
+}
+
+.bv-preview__timecode {
+    font-size: .75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    letter-spacing: .02em;
+    padding: 0 .25rem;
+}
+
+.bv-preview__frame-count {
+    font-size: .7rem;
+    font-variant-numeric: tabular-nums;
+    font-family: monospace;
+    color: var(--kendo-color-primary, var(--bv-accent));
+    letter-spacing: .03em;
+    padding: 0 .25rem;
+    opacity: .85;
+}
+
+.bv-preview__fps-picker {
+    width: 72px !important;
+    font-size: .7rem;
+}
+
+.bv-preview__spacer {
+    flex: 1;
+}
+
+/* ── Scrub bar ──────────────────────────────────────────────────────────── */
+.bv-preview__scrubber {
+    padding: .25rem .625rem .375rem;
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    border-top: 1px solid var(--kendo-color-border, var(--bv-border));
+    flex-shrink: 0;
+}
+
+.bv-preview__slider {
+    width: 100%;
+}
+
+/* Inline scrubber — replaces the quality/fps dropdowns in the controls row for the read-only
+   output player (ShowWorkingWindowControls=false), instead of a whole separate row underneath. */
+.bv-preview__inline-scrubber {
+    flex: 1;
+    max-width: 260px;
+    display: flex;
+    align-items: center;
+}
+
+/* Compact variant (item #36 phase 84's read-only output player, inline in the controls row next
+   to small toolbar buttons): tick labels are suppressed natively via TickPosition="None" on the
+   TelerikSlider itself, not CSS — this rule just constrains its width. */
+.bv-preview ::deep .bv-preview__slider--compact {
+    width: 100%;
+}
+
+/* Mode badge overlaid on the video screen */
+.bv-preview__mode-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, .55);
+    color: #fff;
+    font-size: .72rem;
+    letter-spacing: .04em;
+    pointer-events: none;
+    z-index: 2;
+}

@@ -1,0 +1,6 @@
+.bv-ripple-insert-prompt__text {
+    margin: 0;
+    font-size: .875rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    line-height: 1.4;
+}

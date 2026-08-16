@@ -173,21 +173,20 @@ public sealed class AdminVideoAssetController : BenControllerBase
     /// </summary>
     private async Task<(string? Hash, long Size)> HashAsync(UploadFile file, CancellationToken ct)
     {
-        byte[] bytes;
+        // Hashed incrementally off the stored file. Reading a whole video into a byte[] just to
+        // digest it costs as much memory as the asset is large, and SHA256 never needs more than
+        // its block at a time.
         if (!string.IsNullOrEmpty(file.StoragePath))
         {
             await using var stream = await _fileStorage.OpenReadAsync(file.StoragePath, ct);
-            using var ms = new MemoryStream();
-            await stream.CopyToAsync(ms, ct);
-            bytes = ms.ToArray();
+            var hash = await SHA256.HashDataAsync(stream, ct);
+            return (Convert.ToHexString(hash).ToLowerInvariant(), stream.Length);
         }
-        else if (file.FileData is not null)
-        {
-            bytes = file.FileData;
-        }
-        else return (null, 0);
 
-        return (Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(), bytes.LongLength);
+        if (file.FileData is not null)
+            return (Convert.ToHexString(SHA256.HashData(file.FileData)).ToLowerInvariant(), file.FileData.LongLength);
+
+        return (null, 0);
     }
 
     /// <summary>

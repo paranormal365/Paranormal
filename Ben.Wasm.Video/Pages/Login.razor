@@ -1,0 +1,60 @@
+@page "/login"
+@using Ben.Wasm.Video.Services
+@inject AuthService Auth
+@inject TokenStore Tokens
+@inject NavigationManager Nav
+
+<PageTitle>Sign in — Video Editor</PageTitle>
+
+@* Plain Blazor-bound inputs by deliberate convention: Telerik inputs ignore synthetically-set
+   values (JS-set text never reaches the bound field), which makes automated verification lie.
+   A login form is exactly where that must not happen. *@
+<div class="bwv-login">
+    <h1>Sign in</h1>
+    <p class="bwv-login__hint">
+        Uses your regular site account. Signing in lets the editor list your uploaded media,
+        save projects to the server, and publish finished renders.
+    </p>
+
+    <EditForm Model="this" OnValidSubmit="SubmitAsync">
+        <label for="email">Email</label>
+        <InputText id="email" type="email" @bind-Value="Email" autocomplete="username" />
+
+        <label for="password">Password</label>
+        <InputText id="password" type="password" @bind-Value="Password" autocomplete="current-password" />
+
+        <button type="submit" disabled="@_busy">@(_busy ? "Signing in…" : "Sign in")</button>
+    </EditForm>
+
+    @if (_error is not null)
+    {
+        <p class="bwv-login__error" role="alert">@_error</p>
+    }
+
+    @if (Tokens.IsAuthenticated)
+    {
+        <p class="bwv-login__ok">Signed in. <a href="/">Back to the editor</a></p>
+    }
+</div>
+
+@code {
+    private bool _busy;
+    private string? _error;
+
+    public string Email { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+
+    private async Task SubmitAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            _error = await Auth.LoginAsync(Email, Password);
+            if (_error is null) Nav.NavigateTo("/");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,0 +1,489 @@
+@inject MotionKeyframeService Motion
+@inject PlaybackService Playback
+@inject ClipStore Clips
+@inject ExportResolutionService ResolutionService
+@using Ben.Video.Editor.Effects
+@implements IDisposable
+
+@if (_path is not null && _kf is not null)
+{
+    <div class="bv-mkf-editor">
+
+        <div class="bv-mkf-editor__header">
+            <span class="bv-mkf-editor__title">⏱ Keyframe  t=@_kf.Time.ToString("F2")s</span>
+            <TelerikButton OnClick="Close"
+                           Icon="@SvgIcon.X"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat" />
+        </div>
+
+        <!-- Position -->
+        <div class="bv-mkf-editor__section">Position (canvas %)</div>
+        <div class="bv-mkf-editor__row">
+            <div class="bv-mkf-editor__field">
+                <label class="bv-mkf-editor__label">X @((_kf.X * 100).ToString("F0"))%</label>
+                <TelerikSlider @bind-Value="_x" Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                               Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)" OnChange="Apply" />
+            </div>
+            <div class="bv-mkf-editor__field">
+                <label class="bv-mkf-editor__label">Y @((_kf.Y * 100).ToString("F0"))%</label>
+                <TelerikSlider @bind-Value="_y" Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                               Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)" OnChange="Apply" />
+            </div>
+        </div>
+
+        @if (LayerType == "TextOverlay")
+        {
+            <!-- Scale — text has one axis (FontSize), no independent X/Y to scale. -->
+            <div class="bv-mkf-editor__field">
+                <label class="bv-mkf-editor__label">Scale @_scale.ToString("F2")×</label>
+                <TelerikSlider @bind-Value="_scale" Min="0.1" Max="5.0" SmallStep="0.05" LargeStep="0.5"
+                               Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.1, 5.0, 0.5)" OnChange="Apply" />
+            </div>
+        }
+        else
+        {
+            <!-- Scale X / Scale Y (item #57 P3) — independent per-axis scale for Callout/ClipArt. -->
+            <div class="bv-mkf-editor__row">
+                <div class="bv-mkf-editor__field">
+                    <label class="bv-mkf-editor__label">Scale X @_scaleX.ToString("F2")×</label>
+                    <TelerikSlider @bind-Value="_scaleX" Min="0.1" Max="5.0" SmallStep="0.05" LargeStep="0.5"
+                                   Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.1, 5.0, 0.5)" OnChange="Apply" />
+                </div>
+                <div class="bv-mkf-editor__field">
+                    <label class="bv-mkf-editor__label">Scale Y @_scaleY.ToString("F2")×</label>
+                    <TelerikSlider @bind-Value="_scaleY" Min="0.1" Max="5.0" SmallStep="0.05" LargeStep="0.5"
+                                   Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.1, 5.0, 0.5)" OnChange="Apply" />
+                </div>
+            </div>
+        }
+
+        @if (LayerType == "ClipArtClip")
+        {
+            <!-- Rotation (item #57 P3) — ClipArt-only; Callout/TextOverlay's SVG renderers have
+                 no rotation support at all, matching this arc's locked scope decision. -->
+            <div class="bv-mkf-editor__field">
+                <label class="bv-mkf-editor__label">Rotation @_rotation.ToString("F0")°</label>
+                <TelerikSlider @bind-Value="_rotation" Min="-180" Max="180" SmallStep="1" LargeStep="15"
+                               Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(-180.0, 180.0, 15.0)" OnChange="Apply" />
+            </div>
+        }
+
+        <!-- Alpha -->
+        <div class="bv-mkf-editor__field">
+            <label class="bv-mkf-editor__label">Opacity @_alpha.ToString("P0")</label>
+            <TelerikSlider @bind-Value="_alpha" Min="0.0" Max="1.0" SmallStep="0.05" LargeStep="0.25"
+                           Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)" OnChange="Apply" />
+        </div>
+
+        @{ var callout = ResolveCallout(); }
+        @if (callout is not null)
+        {
+            <!-- Colours (callout only) -->
+            <div class="bv-mkf-editor__section">Colours</div>
+            <ColorPickerField Label="Fill" Value="_fillColor"
+                              ValueChanged="@(v => { _fillColor = v; Apply(); })"
+                              ShowAlpha="true" />
+            <ColorPickerField Label="Stroke" Value="_strokeColor"
+                              ValueChanged="@(v => { _strokeColor = v; Apply(); })"
+                              ShowAlpha="true" />
+
+            <!-- Shape points (callout only, shape-dependent) -->
+            @if (callout.Shape is ShapeType.Arrow or ShapeType.Line)
+            {
+                <div class="bv-mkf-editor__section">Shape points</div>
+                @foreach (var key in CalloutControlPoints.ArrowKeys)
+                {
+                    var label = key switch
+                    {
+                        CalloutControlPoints.StartX => "Start X",
+                        CalloutControlPoints.StartY => "Start Y",
+                        CalloutControlPoints.EndX   => "End X",
+                        CalloutControlPoints.EndY   => "End Y",
+                        CalloutControlPoints.MidX   => "Curve X",
+                        CalloutControlPoints.MidY   => "Curve Y",
+                        _                           => key,
+                    };
+                    <div class="bv-mkf-editor__field">
+                        <label class="bv-mkf-editor__label">@label</label>
+                        <TelerikSlider Value="@GetCp(key, callout)"
+                                       ValueChanged="(double v) => SetCp(key, v)"
+                                       Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1" Width="100%"
+                                       LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)" />
+                    </div>
+                }
+            }
+            else if (callout.Shape == ShapeType.Star)
+            {
+                <div class="bv-mkf-editor__section">Star shape</div>
+                <div class="bv-mkf-editor__field">
+                    <label class="bv-mkf-editor__label">Outer radius</label>
+                    <TelerikSlider Value="@GetCp(CalloutControlPoints.OuterRadius, callout)"
+                                   ValueChanged="(double v) => SetCp(CalloutControlPoints.OuterRadius, v)"
+                                   Min="0.3" Max="1.0" SmallStep="0.05" LargeStep="0.1" Width="100%"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.3, 1.0, 0.1)" />
+                </div>
+                <div class="bv-mkf-editor__field">
+                    <label class="bv-mkf-editor__label">Inner radius</label>
+                    <TelerikSlider Value="@GetCp(CalloutControlPoints.InnerRadius, callout)"
+                                   ValueChanged="(double v) => SetCp(CalloutControlPoints.InnerRadius, v)"
+                                   Min="0.1" Max="0.9" SmallStep="0.05" LargeStep="0.1" Width="100%"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.1, 0.9, 0.1)" />
+                </div>
+                <div class="bv-mkf-editor__field">
+                    <label class="bv-mkf-editor__label">Points (@((int)GetCp(CalloutControlPoints.Points, callout)))</label>
+                    <TelerikSlider Value="@GetCp(CalloutControlPoints.Points, callout)"
+                                   ValueChanged="(double v) => SetCp(CalloutControlPoints.Points, Math.Round(v))"
+                                   Min="3" Max="12" SmallStep="1" LargeStep="3" Width="100%"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(3.0, 12.0, 3.0)" />
+                </div>
+            }
+            else if (callout.Shape == ShapeType.Rectangle)
+            {
+                <div class="bv-mkf-editor__section">Corners</div>
+                <div class="bv-mkf-editor__field">
+                    <label class="bv-mkf-editor__label">Corner radius (px)</label>
+                    <TelerikSlider Value="@GetCp(CalloutControlPoints.CornerRadius, callout)"
+                                   ValueChanged="(double v) => SetCp(CalloutControlPoints.CornerRadius, v)"
+                                   Min="0" Max="40" SmallStep="1" LargeStep="5" Width="100%"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 40.0, 5.0)" />
+                </div>
+            }
+        }
+
+        @{ var textOverlay = ResolveTextOverlay(); }
+        @if (callout is not null || textOverlay is not null)
+        {
+            <!-- Shadow (Callout + TextOverlay) -->
+            <div class="bv-mkf-editor__section">Shadow</div>
+            <ColorPickerField Label="Shadow colour" Value="_shadowColor"
+                              ValueChanged="@(v => { _shadowColor = v; Apply(); })"
+                              ShowAlpha="true" />
+            <div class="bv-mkf-editor__row">
+                <div class="bv-mkf-editor__field">
+                    <label class="bv-mkf-editor__label">Offset X @_shadowOffsetX</label>
+                    <TelerikSlider @bind-Value="_shadowOffsetX" Min="-30" Max="30" SmallStep="1" LargeStep="5"
+                                   Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(-30.0, 30.0, 5.0)" OnChange="Apply" />
+                </div>
+                <div class="bv-mkf-editor__field">
+                    <label class="bv-mkf-editor__label">Offset Y @_shadowOffsetY</label>
+                    <TelerikSlider @bind-Value="_shadowOffsetY" Min="-30" Max="30" SmallStep="1" LargeStep="5"
+                                   Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(-30.0, 30.0, 5.0)" OnChange="Apply" />
+                </div>
+            </div>
+            <div class="bv-mkf-editor__field">
+                <label class="bv-mkf-editor__label">Blur @_shadowBlur px</label>
+                <TelerikSlider @bind-Value="_shadowBlur" Min="0" Max="30" SmallStep="1" LargeStep="5"
+                               Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 30.0, 5.0)" OnChange="Apply" />
+            </div>
+        }
+
+        <!-- Easing -->
+        <div class="bv-mkf-editor__field">
+            <label class="bv-mkf-editor__label">Easing into this keyframe</label>
+            <TelerikDropDownList Data="@EasingHelper.Labels"
+                                 @bind-Value="_easing"
+                                 Width="100%"
+                                 OnChange="Apply" />
+        </div>
+
+        <!-- Bezier handles -->
+        <div class="bv-mkf-editor__section">Bezier Handles (optional — creates curve)</div>
+        <div class="bv-mkf-editor__toggle-row">
+            <TelerikCheckBox @bind-Value="_hasHandleOut" />
+            <label class="bv-mkf-editor__label">Out handle (leaving this keyframe)</label>
+        </div>
+        @if (_hasHandleOut)
+        {
+            <div class="bv-mkf-editor__row">
+                <div class="bv-mkf-editor__field">
+                    <label class="bv-mkf-editor__label">Out X @((_handleOutX * 100).ToString("F0"))%</label>
+                    <TelerikSlider @bind-Value="_handleOutX" Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                                   Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)" OnChange="Apply" />
+                </div>
+                <div class="bv-mkf-editor__field">
+                    <label class="bv-mkf-editor__label">Out Y @((_handleOutY * 100).ToString("F0"))%</label>
+                    <TelerikSlider @bind-Value="_handleOutY" Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                                   Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)" OnChange="Apply" />
+                </div>
+            </div>
+        }
+
+        <div class="bv-mkf-editor__toggle-row">
+            <TelerikCheckBox @bind-Value="_hasHandleIn" />
+            <label class="bv-mkf-editor__label">In handle (arriving at this keyframe)</label>
+        </div>
+        @if (_hasHandleIn)
+        {
+            <div class="bv-mkf-editor__row">
+                <div class="bv-mkf-editor__field">
+                    <label class="bv-mkf-editor__label">In X @((_handleInX * 100).ToString("F0"))%</label>
+                    <TelerikSlider @bind-Value="_handleInX" Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                                   Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)" OnChange="Apply" />
+                </div>
+                <div class="bv-mkf-editor__field">
+                    <label class="bv-mkf-editor__label">In Y @((_handleInY * 100).ToString("F0"))%</label>
+                    <TelerikSlider @bind-Value="_handleInY" Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1"
+                                   Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)" OnChange="Apply" />
+                </div>
+            </div>
+        }
+
+        @if (IsAddingMidInterpolation())
+        {
+            <div class="bv-mkf-editor__hint" title="Adding a keyframe here captures the current interpolated values (the values shown are a live blend between the surrounding keyframes, not yet committed) — the animation will hold flat from this point onward until you adjust the new keyframe's values.">
+                ⚠ Adding here captures the interpolated value — the curve will hold flat past this point until you adjust it.
+            </div>
+        }
+
+        <!-- Actions -->
+        <div class="bv-mkf-editor__actions">
+            <TelerikButton OnClick="AddKeyframeAtPlayhead"
+                           Icon="@SvgIcon.Plus"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Title="Add a new keyframe at the current playhead position">
+                + Keyframe
+            </TelerikButton>
+            <TelerikButton OnClick="DeleteKeyframe"
+                           Icon="@SvgIcon.Trash"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           Title="Delete this keyframe" />
+            <TelerikButton OnClick="Close"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat">
+                Close
+            </TelerikButton>
+        </div>
+    </div>
+}
+else if (LayerId.HasValue)
+{
+    <div class="bv-mkf-editor bv-mkf-editor--empty">
+        <p>No keyframes yet for this layer.</p>
+        <TelerikButton OnClick="AddKeyframeAtPlayhead"
+                       Icon="@SvgIcon.Plus"
+                       Size="@ThemeConstants.Button.Size.Small"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary">
+            Add keyframe at playhead
+        </TelerikButton>
+        <TelerikButton OnClick="Close"
+                       Size="@ThemeConstants.Button.Size.Small"
+                       FillMode="@ThemeConstants.Button.FillMode.Flat">Close</TelerikButton>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid?   LayerId   { get; set; }
+    [Parameter] public string? LayerType { get; set; }
+    [Parameter] public int     KeyframeIndex { get; set; } = -1;
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private MotionPath?      _path;
+    private MotionKeyframe?  _kf;
+
+    private double _x, _y, _scale, _alpha;
+    private double _scaleX, _scaleY;   // item #57 P3
+    private double _rotation;          // item #57 P3 — ClipArt-only
+    private string _easing      = "Linear";
+    private bool   _hasHandleOut, _hasHandleIn;
+    private double _handleOutX, _handleOutY, _handleInX, _handleInY;
+    private double _fillColor, _strokeColor;
+    private Dictionary<string, double> _controlPointValues = [];
+    private double _shadowColor, _shadowOffsetX, _shadowOffsetY, _shadowBlur;
+
+    protected override void OnInitialized()
+    {
+        // Re-render on playhead scrubbing so IsAddingMidInterpolation()'s hint stays live —
+        // otherwise it'd only recompute the next time this panel's own parameters change.
+        Playback.OnStateChanged += OnPlaybackStateChanged;
+
+        // Backlog #40: this component only recomputed _path/_kf in OnParametersSet, which fires
+        // when the *parent* passes new LayerId/KeyframeIndex — not when this component's own
+        // AddKeyframeAtPlayhead() adds a layer's first keyframe. That upsert genuinely reached
+        // MotionKeyframeService (confirmed live: closing/reopening the panel showed it), but the
+        // empty-state view never refreshed to show it. Subscribing here — matching the existing
+        // Playback.OnStateChanged pattern above — means any change to this layer's path (from
+        // this component's own Apply()/AddKeyframeAtPlayhead(), or from a sibling like
+        // MotionPathOverlay dragging a keyframe dot) refreshes the view immediately.
+        Motion.OnChanged += OnMotionChanged;
+    }
+
+    private void OnPlaybackStateChanged() => StateHasChanged();
+
+    private void OnMotionChanged()
+    {
+        RefreshFromService();
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        Playback.OnStateChanged -= OnPlaybackStateChanged;
+        Motion.OnChanged        -= OnMotionChanged;
+    }
+
+    protected override void OnParametersSet() => RefreshFromService();
+
+    /// <summary>Re-reads <see cref="_path"/>/<see cref="_kf"/> from <see cref="Motion"/> and copies
+    /// the resolved keyframe's values into this editor's local fields. Called both when this
+    /// component's own parameters change (parent selected a different layer/keyframe) and when
+    /// <see cref="Motion"/>'s data changes for any reason (see <see cref="OnMotionChanged"/>).</summary>
+    private void RefreshFromService()
+    {
+        _path = LayerId.HasValue ? Motion.GetPath(LayerId.Value) : null;
+        _kf   = (_path is not null && KeyframeIndex >= 0 && KeyframeIndex < _path.Keyframes.Count)
+                ? _path.Keyframes[KeyframeIndex]
+                : _path?.Keyframes.FirstOrDefault();
+
+        if (_kf is null) return;
+
+        _x           = _kf.X;
+        _y           = _kf.Y;
+        _scale       = _kf.Scale;
+        _scaleX      = _kf.ScaleX ?? _kf.Scale;
+        _scaleY      = _kf.ScaleY ?? _kf.Scale;
+        _rotation    = _kf.Rotation ?? 0.0;
+        _alpha       = _kf.Alpha;
+        _easing      = _kf.Easing;
+        _hasHandleOut = _kf.HandleOutX.HasValue;
+        _hasHandleIn  = _kf.HandleInX.HasValue;
+        _handleOutX  = _kf.HandleOutX ?? _kf.X;
+        _handleOutY  = _kf.HandleOutY ?? _kf.Y;
+        _handleInX   = _kf.HandleInX  ?? _kf.X;
+        _handleInY   = _kf.HandleInY  ?? _kf.Y;
+        _fillColor   = _kf.FillColor;
+        _strokeColor = _kf.StrokeColor;
+        _controlPointValues = new Dictionary<string, double>(_kf.ControlPointValues);
+        _shadowColor   = _kf.ShadowColor;
+        _shadowOffsetX = _kf.ShadowOffsetX;
+        _shadowOffsetY = _kf.ShadowOffsetY;
+        _shadowBlur    = _kf.ShadowBlur;
+    }
+
+    private void Apply()
+    {
+        if (_kf is null || !LayerId.HasValue || LayerType is null) return;
+
+        Motion.UpsertKeyframe(LayerId.Value, LayerType, new MotionKeyframe
+        {
+            Time               = _kf.Time,
+            X                  = _x,
+            Y                  = _y,
+            Scale              = _scale,
+            ScaleX             = _scaleX,
+            ScaleY             = _scaleY,
+            // Rotation is ClipArt-only — writing it as a spurious 0.0 (rather than null) for any
+            // other layer type would flip Evaluate()'s "not animated on this path" signal to
+            // "animated, holds at 0", corrupting every future evaluation of this keyframe.
+            Rotation           = LayerType == "ClipArtClip" ? _rotation : null,
+            Alpha              = _alpha,
+            Easing             = _easing,
+            HandleOutX         = _hasHandleOut ? _handleOutX : null,
+            HandleOutY         = _hasHandleOut ? _handleOutY : null,
+            HandleInX          = _hasHandleIn  ? _handleInX  : null,
+            HandleInY          = _hasHandleIn  ? _handleInY  : null,
+            FillColor          = _fillColor,
+            StrokeColor        = _strokeColor,
+            ControlPointValues = _controlPointValues,
+            ShadowColor        = _shadowColor,
+            ShadowOffsetX      = _shadowOffsetX,
+            ShadowOffsetY      = _shadowOffsetY,
+            ShadowBlur         = _shadowBlur,
+        });
+    }
+
+    /// <summary>Resolves the actual <see cref="CalloutClip"/> this editor is animating, or null for
+    /// non-callout layers (TextOverlay/ImageClip) or if the layer no longer exists.</summary>
+    private CalloutClip? ResolveCallout() =>
+        LayerType == "CalloutClip" && LayerId.HasValue
+            ? Clips.AllCalloutClips.FirstOrDefault(c => c.Id == LayerId.Value)
+            : null;
+
+    /// <summary>Resolves the actual <see cref="TextOverlay"/> this editor is animating, or null for
+    /// non-text layers or if the layer no longer exists.</summary>
+    private TextOverlay? ResolveTextOverlay() =>
+        LayerType == "TextOverlay" && LayerId.HasValue
+            ? Clips.AllTextOverlays.FirstOrDefault(o => o.Id == LayerId.Value)
+            : null;
+
+    /// <summary>Resolves the actual <see cref="ClipArtClip"/> this editor is animating, or null for
+    /// non-clipart layers or if the layer no longer exists.</summary>
+    private ClipArtClip? ResolveClipArt() =>
+        LayerType == "ClipArtClip" && LayerId.HasValue
+            ? Clips.AllClipArtClips.FirstOrDefault(a => a.Id == LayerId.Value)
+            : null;
+
+    /// <summary>Reads a shape control-point value for display: this keyframe's animated value if set,
+    /// else the callout's own static value, else the shape's built-in default (matching
+    /// <c>CalloutControlPointOverlay</c>'s equivalent fallback chain).</summary>
+    private double GetCp(string key, CalloutClip callout)
+    {
+        if (_controlPointValues.TryGetValue(key, out var v)) return v;
+        if (callout.ControlPointValues.TryGetValue(key, out var cv)) return cv;
+        return key switch
+        {
+            CalloutControlPoints.StartX      => callout.X,
+            CalloutControlPoints.StartY      => callout.Y + callout.Height / 2,
+            CalloutControlPoints.EndX        => callout.X + callout.Width,
+            CalloutControlPoints.EndY        => callout.Y + callout.Height / 2,
+            CalloutControlPoints.MidX        => callout.X + callout.Width / 2,
+            CalloutControlPoints.MidY        => callout.Y + callout.Height / 2,
+            CalloutControlPoints.OuterRadius => 0.9,
+            CalloutControlPoints.InnerRadius => 0.4,
+            CalloutControlPoints.Points      => 5,
+            CalloutControlPoints.CornerRadius => 4.0,
+            _                                 => 0.0,
+        };
+    }
+
+    private void SetCp(string key, double value)
+    {
+        _controlPointValues[key] = value;
+        Apply();
+    }
+
+    /// <summary>
+    /// True when the playhead sits strictly between two existing keyframes — the case where
+    /// <see cref="AddKeyframeAtPlayhead"/> captures the live-interpolated value rather than a
+    /// fresh one, silently flattening the curve from that point onward unless the user edits the
+    /// new keyframe afterward. See backlog #21. Delegates to <see cref="MotionKeyframeService.IsMidInterpolation"/>
+    /// (item #57 P2) so the canvas-driven editing gestures share the exact same check.
+    /// </summary>
+    private bool IsAddingMidInterpolation() =>
+        LayerId.HasValue && Motion.IsMidInterpolation(LayerId.Value, Playback.State.CurrentTime);
+
+    /// <summary>
+    /// Builds this layer's first-keyframe seed from its current static values (item #57 P2 —
+    /// previously handled inline here for CalloutClip/TextOverlay only; ClipArtClip layers fell
+    /// through to hardcoded X=Y=0.5 defaults instead of their actual position, a real gap closed
+    /// by routing through the same <see cref="MotionEffectiveGeometry"/> builders the new
+    /// canvas-editing gestures use).
+    /// </summary>
+    private MotionKeyframe StaticSeed(double time) => LayerType switch
+    {
+        "CalloutClip" when ResolveCallout()     is { } c => MotionEffectiveGeometry.StaticSeed(c, time),
+        "ClipArtClip" when ResolveClipArt()     is { } a => MotionEffectiveGeometry.StaticSeed(a, time),
+        "TextOverlay" when ResolveTextOverlay() is { } t => MotionEffectiveGeometry.StaticSeed(t, time, ResolutionService.Width, ResolutionService.Height),
+        _ => new MotionKeyframe { Time = time },
+    };
+
+    private void AddKeyframeAtPlayhead()
+    {
+        if (!LayerId.HasValue || LayerType is null) return;
+        var time = Playback.State.CurrentTime;
+        Motion.UpsertKeyframeFromCurrent(LayerId.Value, LayerType, time, () => StaticSeed(time), _ => { });
+    }
+
+    private void DeleteKeyframe()
+    {
+        if (_kf is null || !LayerId.HasValue) return;
+        Motion.RemoveKeyframe(LayerId.Value, _kf.Time);
+        _kf = null;
+    }
+
+    private async Task Close() => await OnClose.InvokeAsync();
+}

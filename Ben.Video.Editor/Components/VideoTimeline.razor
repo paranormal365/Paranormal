@@ -1,0 +1,2315 @@
+﻿@inject ClipStore Clips
+@inject IOptions<VideoEditorOptions> EditorOptionsAccessor
+@inject TimelineViewState Timeline
+@inject PlaybackService Playback
+@inject IJSRuntime JS
+@inject FfmpegService Ffmpeg
+@inject PreviewFreshnessService PreviewFreshness
+@inject RenderStatusService RenderStatus
+@inject MotionKeyframeService Motion
+@using Ben.Video.RenderService
+@implements IAsyncDisposable
+
+<footer class="bv-timeline">
+
+    <!-- Timeline header -->
+    <div class="bv-timeline__header">
+        <span class="bv-timeline__title">Timeline</span>
+        <span class="bv-timeline__duration">@FormatDuration(Clips.TotalDuration)</span>
+
+        @if (_multiSelectedIds.Count >= 2)
+        {
+            <span class="bv-timeline__multiselect-badge">@_multiSelectedIds.Count selected</span>
+            <TelerikButton OnClick="DeleteMultiSelected"
+                           Icon="@SvgIcon.Trash"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Title="Delete selected clips" />
+            <TelerikButton OnClick="() => NudgeMultiSelected(-1.0)"
+                           Icon="@SvgIcon.ArrowLeft"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Title="Nudge left 1 s" />
+            <TelerikButton OnClick="() => NudgeMultiSelected(1.0)"
+                           Icon="@SvgIcon.ArrowRight"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Title="Nudge right 1 s" />
+        }
+
+        <div class="bv-timeline__track-actions">
+            <div class="bv-timeline__zoom-controls">
+                <TelerikButton OnClick="FitToViewAsync"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               Title="Fit timeline to visible width">Fit</TelerikButton>
+                <TelerikSlider @bind-Value="Timeline.ZoomScale"
+                               Min="0.05" Max="20.0"
+                               SmallStep="0.05" LargeStep="1.0"
+                               ShowButtons="false"
+                               Width="100px"
+                               Class="bv-timeline__zoom-slider" />
+                <span class="bv-timeline__zoom-label">@Timeline.ZoomScale.ToString("F1")×</span>
+                <TelerikButton OnClick="ToggleDisplayMode"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               Title="Toggle timecode / frames">
+                    @(Timeline.DisplayMode == TimelineDisplayMode.Time ? "TC" : "Fr")
+                </TelerikButton>
+                <TelerikButton OnClick="() => _rippleOverride = !_rippleOverride"
+                               Icon="@SvgIcon.ArrowRight"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               FillMode="@(_rippleOverride ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
+                               ThemeColor="@(_rippleOverride ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                               Class="@(_rippleOverride ? "bv-toggle--active" : "")"
+                               Title="@(_rippleOverride ? "Ripple edit ON — moves/deletes shift subsequent clips" : "Ripple edit OFF — click to enable")">
+                    Ripple
+                </TelerikButton>
+            </div>
+            @if (EffectiveOptions.MultiTrack)
+            {
+                <TelerikButton OnClick="AddVideoTrack"
+                               Enabled="@CanAddVideoTrack"
+                               Icon="@SvgIcon.Plus"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               Title="Add video track">
+                    + Video
+                </TelerikButton>
+                @if (EffectiveOptions.AudioTracks)
+                {
+                    <TelerikButton OnClick="AddAudioTrack"
+                                   Enabled="@CanAddAudioTrack"
+                                   Icon="@SvgIcon.MusicNotes"
+                                   Size="@ThemeConstants.Button.Size.Small"
+                                   FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                   Title="Add audio track">
+                        + Audio
+                    </TelerikButton>
+                }
+            }
+            @if (EffectiveOptions.TextOverlays)
+            {
+                <TelerikButton OnClick="AddTextOverlay"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               Title="Add text overlay">
+                    T + Text
+                </TelerikButton>
+            }
+            <TelerikButton OnClick="AddCalloutClip"
+                           Icon="@SvgIcon.MapMarker"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Title="Add callout shape (rectangle, ellipse, arrow…)">
+                📌 Callout
+            </TelerikButton>
+            @if (EffectiveOptions.Markers)
+            {
+                <TelerikButton OnClick="AddMarkerAtPlayhead"
+                               Icon="@SvgIcon.MapMarker"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               Title="Add marker at playhead (M)">
+                    Marker
+                </TelerikButton>
+            }
+        </div>
+    </div>
+
+    @* Marker ruler: rendered below the header, above the track rows *@
+    @if (EffectiveOptions.Markers && Clips.Markers.Count > 0 && Clips.TotalDuration > 0)
+    {
+        <div class="bv-timeline__marker-ruler">
+            <div class="bv-timeline__marker-ruler-gutter"></div>
+            <div class="bv-timeline__marker-ruler-track">
+                @foreach (var marker in Clips.Markers)
+                {
+                    var capturedMarker = marker;
+                    var pct = marker.TimeSeconds / Clips.TotalDuration * 100;
+                    var editingThis = _editingMarkerId == marker.Id;
+                    <div class="bv-marker-flag @(_draggingMarker?.Id == marker.Id ? "bv-marker-flag--dragging" : "")"
+                         style="left: @pct.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)%; --bv-marker-color: @marker.Color"
+                         title="@marker.Label (@FormatDuration(marker.TimeSeconds)) — drag to move, double-click to rename"
+                         @onpointerdown="e => OnMarkerPointerDown(e, capturedMarker)"
+                         @onpointermove="OnMarkerPointerMove"
+                         @onpointerup="OnMarkerPointerUp"
+                         @ondblclick="() => StartEditMarkerLabel(capturedMarker)"
+                         @oncontextmenu="e => OpenMarkerMenu(e, capturedMarker)"
+                         @oncontextmenu:preventDefault>
+                        <div class="bv-marker-flag__stem"></div>
+                        @if (editingThis)
+                        {
+                            <input class="bv-marker-flag__label-input"
+                                   type="text"
+                                   @bind="_editingMarkerLabel"
+                                   @bind:event="oninput"
+                                   @onblur="CommitMarkerLabelEdit"
+                                   @onkeydown="OnMarkerLabelKeyDown"
+                                   @onclick:stopPropagation
+                                   @onpointerdown:stopPropagation />
+                        }
+                        else
+                        {
+                            <div class="bv-marker-flag__label">@marker.Label</div>
+                        }
+                        <button class="bv-marker-flag__remove"
+                                @onclick="() => RemoveMarker(capturedMarker.Id)"
+                                @onclick:stopPropagation="true"
+                                @onpointerdown:stopPropagation="true"
+                                title="Remove marker">×</button>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Track rows -->
+    <div class="bv-timeline__tracks">
+
+        @* Time ruler — sticky across all tracks *@
+        @if (Clips.TotalDuration > 0)
+        {
+            var ticks    = Timeline.ComputeTicks(Clips.TotalDuration);
+            var canvasW  = Timeline.CanvasWidth(Clips.TotalDuration);
+            <div class="bv-timeline__ruler">
+                <div class="bv-timeline__ruler-gutter"></div>
+                <div class="bv-timeline__ruler-canvas" style="width: @canvasW.ToString("F0", System.Globalization.CultureInfo.InvariantCulture)px"
+                     @onpointerdown="OnRulerPointerDown"
+                     @onpointermove="OnRulerPointerMove"
+                     @onpointerup="OnRulerPointerUp"
+                     @onpointercancel="OnRulerPointerUp"
+                     @onpointerdown:preventDefault="true">
+                    @foreach (var tick in ticks)
+                    {
+                        var pxLeft = tick * Timeline.PxPerSecond;
+                        <div class="bv-ruler-tick @(tick == 0 ? "bv-ruler-tick--start" : "")"
+                             style="left: @pxLeft.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)px">
+                            <span class="bv-ruler-tick__label">@Timeline.FormatTick(tick)</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @* Render-progress indicator — per-region (item #36 phase A) when the primary track has
+               clips with tracked regions; falls back to the old whole-timeline bar
+               (PreviewFreshnessService) otherwise, e.g. before any clip has been added. *@
+            {
+                var regions = RenderStatus.Regions;
+                <div class="bv-timeline__render-progress">
+                    <div class="bv-timeline__render-progress-gutter"></div>
+                    <div class="bv-timeline__render-progress-track">
+                        @if (regions.Count > 0)
+                        {
+                            @foreach (var region in regions)
+                            {
+                                var left  = region.Start * Timeline.PxPerSecond;
+                                var width = region.Duration * Timeline.PxPerSecond;
+                                var stateClass = region.State switch
+                                {
+                                    RenderRegionState.Fine           => "bv-render-region--fine",
+                                    RenderRegionState.RenderingFine  => "bv-render-region--rendering-fine",
+                                    RenderRegionState.Rough          => "bv-render-region--rough",
+                                    RenderRegionState.RenderingRough => "bv-render-region--rendering-rough",
+                                    _                                 => "bv-render-region--stale",
+                                };
+                                <div class="bv-render-region @stateClass"
+                                     style="left: @(left.ToString("F1", System.Globalization.CultureInfo.InvariantCulture))px; width: @(width.ToString("F1", System.Globalization.CultureInfo.InvariantCulture))px"
+                                     title="@RegionTooltip(region)">
+                                    @if (region.State is RenderRegionState.RenderingFine or RenderRegionState.RenderingRough)
+                                    {
+                                        <div class="bv-render-region__progress" style="width: @(region.ProgressPct)%"></div>
+                                    }
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            var progressWidth = Clips.TotalDuration * Timeline.PxPerSecond;
+                            <div class="bv-render-progress-bar @(PreviewFreshness.IsFresh ? "bv-render-progress-bar--fresh" : "bv-render-progress-bar--stale")"
+                                 style="width: @progressWidth.ToString("F0", System.Globalization.CultureInfo.InvariantCulture)px"
+                                 title="@(PreviewFreshness.IsFresh ? "Preview is up to date" : "Preview is out of date — click Preview to refresh")">
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+
+        @if (!Clips.Tracks.Any())
+        {
+            <div class="bv-timeline__empty">
+                Add clips from the browser panel to get started.
+            </div>
+        }
+
+        @foreach (var track in Clips.Tracks.OrderBy(t => t.Order))
+        {
+            <div class="bv-track bv-track--@track.Type.ToString().ToLowerInvariant() @(track.IsMuted ? "bv-track--muted" : "") @(track.IsLocked ? "bv-track--locked" : "") @(_dropTargetTrackId == track.Id ? "bv-track--drop-target" : "") @(_collapsedTrackIds.Contains(track.Id) ? "bv-track--collapsed" : "") @(_movingItem is not null && _moveHoverTrackId == track.Id && track.Id != _moveOriginalTrackId ? "bv-track--move-hover" : "")"
+                 data-track-id="@track.Id"
+                 style="@(GetTrackHeightOverride(track.Id) is { } trackH ? $"height: {trackH.ToString("F0", System.Globalization.CultureInfo.InvariantCulture)}px; min-height: 0; overflow: hidden;" : "")"
+                 @ondragover:preventDefault
+                 @ondragover="e => OnTrackDragOver(e, track)"
+                 @ondragenter="e => OnTrackDragEnterAsync(e, track)"
+                 @ondragleave="() => OnTrackDragLeave(track)"
+                 @ondrop="e => OnTrackDrop(e, track)">
+
+                <!-- Label strip -->
+                <div class="bv-track__label"
+                     @oncontextmenu="e => OpenTrackMenu(e, track)"
+                     @oncontextmenu:preventDefault>
+                    <span class="bv-track__type-icon">@TrackIcon(track.Type)</span>
+
+                    @if (_editingTrackId == track.Id)
+                    {
+                        <input class="bv-track__name-input"
+                               type="text"
+                               @bind="_editingTrackLabel"
+                               @bind:event="oninput"
+                               @onblur="CommitTrackNameEdit"
+                               @onkeydown="OnTrackNameKeyDown"
+                               @onclick:stopPropagation />
+                    }
+                    else
+                    {
+                        <span class="bv-track__name"
+                              title="@track.Label — double-click to rename"
+                              @ondblclick="() => StartEditTrackName(track)">
+                            @track.Label
+                        </span>
+                    }
+
+                    <div class="bv-track__controls">
+                        @{
+                            var vTracks  = Clips.Tracks.Where(t => t.Type == TrackType.Video).OrderBy(t => t.Order).ToList();
+                            var tIdx     = vTracks.FindIndex(t => t.Id == track.Id);
+                            var isPrimary = track.Id == Clips.PrimaryVideoTrack.Id;
+                            var canMoveUp   = EffectiveOptions.MultiTrack && track.Type == TrackType.Video && tIdx > 0;
+                            var canMoveDown = EffectiveOptions.MultiTrack && track.Type == TrackType.Video && tIdx >= 0 && tIdx < vTracks.Count - 1;
+                        }
+                        <TelerikButton OnClick="() => ToggleTrackCollapsed(track.Id)"
+                                       Icon="@(_collapsedTrackIds.Contains(track.Id) ? SvgIcon.ChevronDown : SvgIcon.ChevronUp)"
+                                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Class="bv-track__collapse-btn"
+                                       Title="@(_collapsedTrackIds.Contains(track.Id) ? "Expand track" : "Collapse track")" />
+                        <TelerikDropDownButton Icon="@SvgIcon.MoreVertical"
+                                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                               Size="@ThemeConstants.Button.Size.Small"
+                                               Class="bv-track__menu-btn"
+                                               Title="Track options">
+                            <DropDownButtonItems>
+                                <DropDownButtonItem Icon="@(track.IsMuted ? SvgIcon.VolumeUp : SvgIcon.VolumeMute)"
+                                                   OnClick="() => ToggleMute(track)">
+                                    @(track.IsMuted ? "Unmute" : "Mute")
+                                </DropDownButtonItem>
+                                <DropDownButtonItem Icon="@SvgIcon.Lock"
+                                                   OnClick="() => ToggleLock(track)">
+                                    @(track.IsLocked ? "Unlock" : "Lock")
+                                </DropDownButtonItem>
+                                <DropDownButtonItem Icon="@SvgIcon.Pencil"
+                                                   OnClick="() => StartEditTrackName(track)">
+                                    Rename
+                                </DropDownButtonItem>
+                                <DropDownButtonItem Icon="@SvgIcon.ChevronUp"
+                                                   Enabled="@canMoveUp"
+                                                   OnClick="() => MoveTrackUp(track)">
+                                    Move Up
+                                </DropDownButtonItem>
+                                <DropDownButtonItem Icon="@SvgIcon.ChevronDown"
+                                                   Enabled="@canMoveDown"
+                                                   OnClick="() => MoveTrackDown(track)">
+                                    Move Down
+                                </DropDownButtonItem>
+                                <DropDownButtonItem Icon="@SvgIcon.Trash"
+                                                   Enabled="@(!isPrimary)"
+                                                   OnClick="() => RemoveTrack(track)">
+                                    Remove
+                                </DropDownButtonItem>
+                            </DropDownButtonItems>
+                        </TelerikDropDownButton>
+                    </div>
+                </div>
+
+                <!-- Clip chips — HTML5 drag-and-drop for reorder -->
+                <div class="bv-track__items"
+                     style="min-width: @(Timeline.CanvasWidth(Clips.TotalDuration).ToString("F0", System.Globalization.CultureInfo.InvariantCulture))px">
+                    @if (EffectiveOptions.Snapping && _snapGuidePx.HasValue &&
+                         (_dropTargetTrackId == track.Id || (_movingItem is not null && _moveItemTrackId == track.Id)))
+                    {
+                        <div class="bv-snap-guide" style="left: @(_snapGuidePx!.Value.ToString("F1", System.Globalization.CultureInfo.InvariantCulture))px"></div>
+                    }
+                    @{
+                        // Overlay items (Callout/Text/ClipArt) are rendered in their own
+                        // absolutely-positioned row below, not in this sequential flex row — see
+                        // .bv-track__overlays. They're excluded here entirely; the sequential
+                        // gap-margin layout below (runningEndSeconds) assumes non-overlapping
+                        // items packed front-to-back, which overlay items — meant to coexist with
+                        // video content at the same time, not compete for space after it —
+                        // fundamentally violate (backlog item #39).
+                        //
+                        // Transitions (item #57 T1) are excluded here for the same class of
+                        // reason, but the opposite direction: a transition doesn't sit *after* its
+                        // two clips, it overlaps their shared junction — TimelinePosition/Duration
+                        // already encode that overlap (AddTransition centres it on the boundary).
+                        // Keeping it in this sequential flex flow was the old (pre-T1) behavior:
+                        // it rendered as a small inline pill consuming its own flex width, visually
+                        // inflating the apparent gap between the two clips with no relationship to
+                        // its actual duration. It's now rendered separately, absolutely positioned,
+                        // straddling the real cut — see the loop below this one.
+                        var orderedItems = track.Items
+                            .Where(i => i is not (CalloutClip or TextOverlay or ClipArtClip or Transition))
+                            .OrderBy(i => i.Order)
+                            .ToList();
+                        var overlayItems = track.Items
+                            .Where(i => i is CalloutClip or TextOverlay or ClipArtClip)
+                            .OrderByDescending(i => i.LayerIndex)
+                            .ToList();
+                        var isVideoTrack = track.Type == TrackType.Video;
+                        var transitionsOn = EffectiveOptions.Transitions && isVideoTrack;
+                        var trackTransitions = track.Items.OfType<Transition>().ToList();
+                        // Build a set of FromClipIds that already have a transition on this track
+                        var coveredFromIds = trackTransitions.Select(t => t.FromClipId).ToHashSet();
+                        // Chips render in flex flow (Order), not absolutely positioned — a
+                        // moved-off-of-flow-position clip (e.g. after a middle-drag, or a
+                        // ripple-off drop that intentionally leaves a gap) needs that gap
+                        // rendered as leading margin, or it silently snaps back to looking
+                        // adjacent to the previous clip while TimelinePosition (the real,
+                        // exported arrangement) has already moved on.
+                        double runningEndSeconds = 0;
+                    }
+
+                    @for (var idx = 0; idx < orderedItems.Count; idx++)
+                    {
+                        var item     = orderedItems[idx];
+                        var captured = item;
+
+                        // Gap (in px) between where flex-flow would naturally place this chip
+                        // (right after the previous one) and where TimelinePosition says it
+                        // actually starts. Zero for normally-adjacent items. Transitions no longer
+                        // appear in this loop at all (see above), so two clips with a transition
+                        // between them are correctly treated as directly adjacent here — exactly
+                        // right, since AddTransition never moves either clip; it only overlays the
+                        // shared boundary.
+                        var gapPx = Math.Max(0, (item.TimelinePosition - runningEndSeconds) * Timeline.PxPerSecond);
+                        var gapPxStr = gapPx.ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "px";
+                        runningEndSeconds = item.TimelinePosition + ItemDuration(item);
+
+                        {
+                            var trimOn  = EffectiveOptions.InlineTrimming && item is VideoClip or ImageClip && !track.IsLocked;
+                            var chipWpx = (ItemDuration(item) * Timeline.PxPerSecond).ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "px";
+                            var trimmingThis = _trimmingClip?.Id == item.Id;
+                            var movingThis   = _movingItem?.Id   == item.Id;
+                            var trimCls = trimmingThis
+                                ? (_trimmingSide == TrimSide.Start ? "bv-clip-chip--trimming bv-clip-chip--trimming-start"
+                                                                    : "bv-clip-chip--trimming bv-clip-chip--trimming-end")
+                                : "";
+                            var moveCls = movingThis ? "bv-clip-chip--moving" : "";
+                            <div @key="item.Id"
+                                 class="bv-clip-chip bv-clip-chip--@ChipType(item) @(_selectedItemId == item.Id ? "bv-clip-chip--selected" : "") @(IsMultiSelected(item.Id) ? "bv-clip-chip--multi-selected" : "") @(_draggingId == item.Id ? "bv-clip-chip--dragging" : "") @trimCls @moveCls @(item.IsMediaMissing ? "bv-clip-chip--missing" : "") @(item.LinkedClipId is not null ? "bv-clip-chip--linked" : "")"
+                                 style="width: @chipWpx; min-width: @chipWpx; max-width: none; margin-left: @gapPxStr"
+                                 data-item-id="@item.Id"
+                                 draggable="@(track.IsLocked || _trimmingClip != null || _trimmingImageClip != null || _movingItem != null ? "false" : "true")"
+                                 @onpointerdown="e => OnChipPointerDown(e, captured, track)"
+                                 @onclick="e => SelectItemWithModifier(captured, e.CtrlKey || e.MetaKey)"
+                                 @ondragstart="() => OnDragStart(captured)"
+                                 @ondragend="OnDragEnd"
+                                 @ondragover:preventDefault
+                                 @ondragover="() => OnDragOver(captured)"
+                                 @onpointermove="OnTrimPointerMove"
+                                 @onpointerup="OnTrimPointerUp"
+                                 @oncontextmenu="e => OpenClipMenu(e, captured)"
+                                 @oncontextmenu:preventDefault
+                                 title="@ItemTitle(item)">
+
+                                @if (item is VideoClip vc && vc.ThumbnailUrls.Count > 0)
+                                {
+                                    <div class="bv-clip-chip__thumbstrip">
+                                        @* Item #62 phase 170 — @key on the URL itself. Without it
+                                           Blazor diffs this list positionally and reuses the same
+                                           <img> elements when a lazy thumbnail fill replaces the
+                                           strip, so an element can keep a released blob in its src
+                                           across the swap. Keying by URL makes a changed strip
+                                           replace the elements outright. *@
+                                        @foreach (var url in vc.ThumbnailUrls)
+                                        {
+                                            <img @key="url" class="bv-clip-chip__thumbframe" src="@url" alt="" />
+                                        }
+                                    </div>
+                                }
+
+                                @if (item is ImageClip ic && ic.ThumbnailUrl is not null)
+                                {
+                                    <img class="bv-clip-chip__thumb" src="@ic.ThumbnailUrl" alt="" draggable="false" />
+                                }
+
+                                @if (item is CalloutClip cc)
+                                {
+                                    <span class="bv-clip-chip__callout-icon">📌</span>
+                                    <span class="bv-clip-chip__icon">@CalloutIcon(cc.Shape)</span>
+                                }
+
+                                @if (item is AudioClip ac && ac.BlobUrl is not null)
+                                {
+                                    @* Compute playhead position within the full audio file, accounting for StartTrim *@
+                                    var t          = Playback.State.CurrentTime;
+                                    var clipStart  = ac.TimelinePosition;
+                                    var clipEnd    = ac.TimelinePosition + ac.Duration - ac.StartTrim -
+                                                     (ac.EndTrim > 0 ? ac.Duration - ac.EndTrim : 0);
+                                    var syncProg   = (t >= clipStart && t <= clipEnd && ac.Duration > 0)
+                                                     ? Math.Clamp((t - clipStart + ac.StartTrim) / ac.Duration, 0.0, 1.0)
+                                                     : -1.0;
+                                    <div class="bv-clip-chip__waveform">
+                                        <AudioWaveform BlobUrl="@ac.BlobUrl"
+                                                       Peaks="@ac.WaveformPeaks"
+                                                       Height="0"
+                                                       ShowControls="false"
+                                                       SyncProgress="@syncProg"
+                                                       OnPeaksDecoded="@((float[] p) => ac.WaveformPeaks = p)" />
+                                    </div>
+                                }
+
+                                @if (item is IHasVolumeAutomation volClip)
+                                {
+                                    <div class="bv-clip-chip__automation">
+                                        <VolumeAutomationLane Clip="@volClip"
+                                                              ClipId="@item.Id"
+                                                              LaneHeight="40" />
+                                    </div>
+                                }
+
+                                @if (trimOn)
+                                {
+                                    @if (item is VideoClip chipVc)
+                                    {
+                                        <div class="bv-trim-handle bv-trim-handle--start"
+                                             title="Drag to trim start"
+                                             @onpointerdown="e => OnTrimHandlePointerDown(e, chipVc, TrimSide.Start)"
+                                             @onpointerdown:stopPropagation="true"
+                                             @onclick:stopPropagation="true" />
+                                        <div class="bv-trim-handle bv-trim-handle--end"
+                                             title="Drag to trim end"
+                                             @onpointerdown="e => OnTrimHandlePointerDown(e, chipVc, TrimSide.End)"
+                                             @onpointerdown:stopPropagation="true"
+                                             @onclick:stopPropagation="true" />
+                                    }
+                                    else if (item is ImageClip chipImg)
+                                    {
+                                        @* Image clips: start handle shifts TimelinePosition+shrinks Duration; end handle extends/shrinks Duration *@
+                                        <div class="bv-trim-handle bv-trim-handle--start"
+                                             title="Drag to shift clip start"
+                                             @onpointerdown="e => OnImageStartTrimHandlePointerDown(e, chipImg)"
+                                             @onpointerdown:stopPropagation="true"
+                                             @onclick:stopPropagation="true" />
+                                        <div class="bv-trim-handle bv-trim-handle--end"
+                                             title="Drag to adjust display duration"
+                                             @onpointerdown="e => OnImageTrimHandlePointerDown(e, chipImg)"
+                                             @onpointerdown:stopPropagation="true"
+                                             @onclick:stopPropagation="true" />
+                                    }
+                                }
+
+                                @if (item.IsMediaMissing)
+                                {
+                                    <span class="bv-clip-chip__missing" title="Media missing — re-link via Add button">⚠</span>
+                                }
+
+                                <span class="bv-clip-chip__icon">@ItemIcon(item)</span>
+                                <span class="bv-clip-chip__label">@ShortName(ItemTitle(item))</span>
+                                <span class="bv-clip-chip__dur">@FormatDuration(ItemDuration(item))</span>
+
+                                <TelerikButton OnClick="() => RemoveItem(track, captured)"
+                                               Icon="@SvgIcon.X"
+                                               Size="@ThemeConstants.Button.Size.Small"
+                                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                               Class="bv-clip-chip__remove"
+                                               Enabled="@(!track.IsLocked)"
+                                               Title="Remove" />
+                            </div>
+
+                            @* Between-clip transition insert button — shown when Transitions enabled,
+                               there is a next non-Transition clip, and no transition already exists
+                               for this clip as the 'from' clip. *@
+                            @if (transitionsOn && idx < orderedItems.Count - 1)
+                            {
+                                // orderedItems no longer contains Transitions at all (see above),
+                                // so the very next entry is always the actual next clip.
+                                var nextClip = orderedItems[idx + 1];
+
+                                @if (!coveredFromIds.Contains(item.Id))
+                                {
+                                    var fromId = item.Id;
+                                    var toId   = nextClip.Id;
+                                    var trkId  = track.Id;
+                                    var junction = (trkId, fromId, toId);
+
+                                    <div class="bv-transition-insert-wrap">
+                                        <button class="bv-transition-insert"
+                                                title="Add transition — drag a style from the Transitions tab, or click to choose"
+                                                data-track-id="@trkId"
+                                                data-from-id="@fromId"
+                                                data-to-id="@toId"
+                                                @onclick="() => ToggleStylePicker(junction)">
+                                            …
+                                        </button>
+
+                                        @if (_openStylePickerFor == junction)
+                                        {
+                                            <div class="bv-transition-style-picker__backdrop" @onclick="ClosePicker"></div>
+                                            <div class="bv-transition-style-picker">
+                                                @foreach (var style in _pickerStyles)
+                                                {
+                                                    var capturedStyle = style;
+                                                    <button class="bv-transition-style-picker__item"
+                                                            @onclick="() => InsertTransition(trkId, fromId, toId, capturedStyle)">
+                                                        @capturedStyle
+                                                    </button>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            }
+                        }
+                    }
+
+                    @* Transitions (item #57 T1) — absolutely positioned within this same
+                       position:relative container, straddling the real cut between their two
+                       clips (TimelinePosition/Duration already encode the overlap — see
+                       AddTransition). Rendered after the clip loop so they paint on top by
+                       default DOM order, no explicit stacking context needed beyond the z-index
+                       below (which still keeps the underlying clips' own trim handles, z-index
+                       10, grabbable at the very edges). *@
+                    @if (transitionsOn)
+                    {
+                        @foreach (var transition in trackTransitions)
+                        {
+                            var leftPx  = (transition.TimelinePosition * Timeline.PxPerSecond).ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "px";
+                            var widthPx = (transition.Duration * Timeline.PxPerSecond).ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "px";
+                            var capturedT = transition;
+
+                            var resizingThis = _resizingTransition?.Id == transition.Id;
+
+                            <div class="bv-transition-chip @(_selectedItemId == transition.Id ? "bv-transition-chip--selected" : "") @(resizingThis ? "bv-transition-chip--resizing" : "")"
+                                 style="left: @leftPx; width: @widthPx"
+                                 data-item-id="@transition.Id"
+                                 @onclick="() => SelectItem(capturedT)"
+                                 @onpointermove="OnTrimPointerMove"
+                                 @onpointerup="OnTrimPointerUp"
+                                 @oncontextmenu="e => OpenTransitionMenu(e, track, capturedT)"
+                                 @oncontextmenu:preventDefault
+                                 title="@ItemTitle(transition): @FormatDuration(transition.Duration)s">
+                                @if (!track.IsLocked)
+                                {
+                                    <div class="bv-transition-resize-handle bv-transition-resize-handle--start"
+                                         title="Drag to resize transition"
+                                         @onpointerdown="e => OnTransitionResizeHandlePointerDown(e, capturedT, TrimSide.Start)"
+                                         @onpointerdown:stopPropagation="true"
+                                         @onclick:stopPropagation="true" />
+                                    <div class="bv-transition-resize-handle bv-transition-resize-handle--end"
+                                         title="Drag to resize transition"
+                                         @onpointerdown="e => OnTransitionResizeHandlePointerDown(e, capturedT, TrimSide.End)"
+                                         @onpointerdown:stopPropagation="true"
+                                         @onclick:stopPropagation="true" />
+                                }
+                                <span class="bv-transition-chip__icon">…</span>
+                                <span class="bv-transition-chip__label">@(resizingThis ? $"{FormatDuration(transition.Duration)}s" : ShortName(ItemTitle(transition)))</span>
+                                <TelerikButton OnClick="() => RemoveItem(track, capturedT)"
+                                               Icon="@SvgIcon.X"
+                                               Size="@ThemeConstants.Button.Size.Small"
+                                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                               Class="bv-transition-chip__remove"
+                                               Enabled="@(!track.IsLocked)"
+                                               Title="Remove transition" />
+                            </div>
+                        }
+                    }
+                </div>
+
+            </div>
+
+            <!-- Row-height resize handle (item #44) — measures/resizes the immediately-preceding
+                 .bv-track via ResizableDivider's own "previousElementSibling" convention, so this
+                 must stay directly after .bv-track's closing tag, before the overlay row below. -->
+            <ResizableDivider Direction="vertical" OnResize="@(px => OnTrackResize(track.Id, px))" />
+
+            <!-- Overlay layers (Callout/Text/ClipArt) — item #36-adjacent backlog #39: each gets
+                 its own row, absolutely positioned by TimelinePosition so items can freely overlap
+                 each other and the sequential row's video/audio content in time, unlike the
+                 flex-gap layout above (which assumes non-overlapping, front-to-back items and
+                 cannot represent overlays at all). A sibling row below .bv-track, not a child of
+                 it — .bv-track is itself a horizontal flex row (label | items), so a third child
+                 there would render beside .bv-track__items, not below it. Mirrors .bv-track's own
+                 120px label-gutter so horizontal position matches the ruler exactly. Ordered
+                 highest-LayerIndex-first (newest layer = topmost row), matching "everything added
+                 gets its own layer, each layer higher than any added before it." -->
+            @if (overlayItems.Count > 0)
+            {
+                <div class="bv-track bv-track__overlay-row">
+                    <div class="bv-track__label bv-track__overlay-gutter"
+                         style="height: @(overlayItems.Count * 40)px">
+                        @foreach (var item in overlayItems)
+                        {
+                            var rowIndex = overlayItems.IndexOf(item);
+                            var topPx    = rowIndex * 40;
+                            <div class="bv-track__overlay-lane-label" style="top: @(topPx)px" title="@(LaneTypeName(item)): @ItemTitle(item)">
+                                <span class="bv-track__type-icon">@ItemIcon(item)</span>
+                                <span>@LaneTypeName(item)</span>
+                            </div>
+                        }
+                    </div>
+                    <div class="bv-track__overlays"
+                         style="height: @(overlayItems.Count * 40)px; min-width: @(Timeline.CanvasWidth(Clips.TotalDuration).ToString("F0", System.Globalization.CultureInfo.InvariantCulture))px">
+                        @foreach (var item in overlayItems)
+                        {
+                            var captured  = item;
+                            var rowIndex  = overlayItems.IndexOf(item);
+                            var leftPx    = (item.TimelinePosition * Timeline.PxPerSecond)
+                                .ToString("F0", System.Globalization.CultureInfo.InvariantCulture);
+                            var widthPx   = (ItemDuration(item) * Timeline.PxPerSecond)
+                                .ToString("F0", System.Globalization.CultureInfo.InvariantCulture);
+                            var topPx     = rowIndex * 40;
+
+                            // Drag-to-extend start/end trim (item #28) — Callout/TextOverlay only,
+                            // mirroring ImageClip's trim handles: no source in/out points, just a
+                            // TimelinePosition + Duration on the timeline.
+                            var overlayTrimOn = EffectiveOptions.InlineTrimming && item is CalloutClip or TextOverlay && !track.IsLocked;
+                            var trimmingThisOverlay = _trimmingOverlay?.Id == item.Id || _overlayStartTrimClip?.Id == item.Id;
+                            var overlayTrimCls = trimmingThisOverlay
+                                ? (_overlayStartTrimClip?.Id == item.Id ? "bv-clip-chip--trimming bv-clip-chip--trimming-start"
+                                                                          : "bv-clip-chip--trimming bv-clip-chip--trimming-end")
+                                : "";
+
+                            <div class="bv-clip-chip bv-clip-chip--@ChipType(item) bv-clip-chip--overlay @(_selectedItemId == item.Id ? "bv-clip-chip--selected" : "") @(IsMultiSelected(item.Id) ? "bv-clip-chip--multi-selected" : "") @(item.IsMediaMissing ? "bv-clip-chip--missing" : "") @overlayTrimCls"
+                                 style="position: absolute; left: @(leftPx)px; top: @(topPx)px; width: @(widthPx)px; height: 40px"
+                                 data-item-id="@item.Id"
+                                 @onpointerdown="e => OnChipPointerDown(e, captured, track)"
+                                 @onpointermove="OnTrimPointerMove"
+                                 @onpointerup="OnTrimPointerUp"
+                                 @onclick="e => SelectItemWithModifier(captured, e.CtrlKey || e.MetaKey)"
+                                 @oncontextmenu="e => OpenClipMenu(e, captured)"
+                                 @oncontextmenu:preventDefault
+                                 title="@ItemTitle(item)">
+
+                                @if (item is CalloutClip cc)
+                                {
+                                    <span class="bv-clip-chip__callout-icon">📌</span>
+                                    <span class="bv-clip-chip__icon">@CalloutIcon(cc.Shape)</span>
+                                }
+                                else
+                                {
+                                    <span class="bv-clip-chip__icon">@ItemIcon(item)</span>
+                                }
+
+                                @if (item.IsMediaMissing)
+                                {
+                                    <span class="bv-clip-chip__missing" title="Media missing — re-link via Add button">⚠</span>
+                                }
+
+                                <span class="bv-clip-chip__label">@ShortName(ItemTitle(item))</span>
+                                <span class="bv-clip-chip__dur">@FormatDuration(ItemDuration(item))</span>
+
+                                @if (Motion.GetPath(item.Id) is { } motionPath)
+                                {
+                                    @for (var ki = 0; ki < motionPath.Keyframes.Count; ki++)
+                                    {
+                                        var kfIndex  = ki;
+                                        var isDraggingThis = _draggingKeyframeItem?.Id == item.Id && _draggingKeyframeIndex == kfIndex;
+                                        var kfTime   = isDraggingThis ? _kfDragLiveTime : motionPath.Keyframes[ki].Time;
+                                        var kfLeftPx = ((kfTime - item.TimelinePosition) * Timeline.PxPerSecond)
+                                            .ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+                                        <div class="bv-timeline-kf-diamond @(isDraggingThis ? "bv-timeline-kf-diamond--dragging" : "")"
+                                             style="left: @(kfLeftPx)px"
+                                             title="Keyframe at @FormatDuration(kfTime) — click to select, drag to retime"
+                                             @onpointerdown="e => OnKeyframeDiamondPointerDown(e, captured, kfIndex)"
+                                             @onpointerdown:stopPropagation="true"
+                                             @onclick="() => SelectTimelineKeyframe(captured, kfIndex)"
+                                             @onclick:stopPropagation="true" />
+                                    }
+                                }
+
+                                @if (overlayTrimOn)
+                                {
+                                    <div class="bv-trim-handle bv-trim-handle--start"
+                                         title="Drag to shift start"
+                                         @onpointerdown="e => OnOverlayStartTrimHandlePointerDown(e, captured)"
+                                         @onpointerdown:stopPropagation="true"
+                                         @onclick:stopPropagation="true" />
+                                    <div class="bv-trim-handle bv-trim-handle--end"
+                                         title="Drag to adjust duration"
+                                         @onpointerdown="e => OnOverlayTrimHandlePointerDown(e, captured)"
+                                         @onpointerdown:stopPropagation="true"
+                                         @onclick:stopPropagation="true" />
+                                }
+
+                                <TelerikButton OnClick="() => RemoveItem(track, captured)"
+                                               Icon="@SvgIcon.X"
+                                               Size="@ThemeConstants.Button.Size.Small"
+                                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                               Class="bv-clip-chip__remove"
+                                               Enabled="@(!track.IsLocked)"
+                                               Title="Remove" />
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+
+        <!-- Playhead inside tracks — aligned with clip area, contained by isolation:isolate -->
+        @if (Clips.TotalDuration > 0)
+        {
+            var phPx = 120 + Playback.State.CurrentTime * Timeline.PxPerSecond;
+            <div class="bv-timeline__playhead" style="left: @phPx.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)px">
+                <div class="bv-timeline__playhead-line"></div>
+                <div class="bv-timeline__playhead-head"></div>
+            </div>
+        }
+    </div>
+
+    <!-- Context menus -->
+
+    <TelerikContextMenu @ref="_clipMenu"
+                        Data="@_clipMenuItems"
+                        TextField="Text"
+                        IconField="Icon"
+                        SeparatorField="IsSeparator"
+                        DisabledField="IsDisabled"
+                        OnClick="@(async (BvMenuItem i) => { if (i.Action is not null) await i.Action(); })">
+    </TelerikContextMenu>
+
+    <TelerikContextMenu @ref="_trackMenu"
+                        Data="@_trackMenuItems"
+                        TextField="Text"
+                        IconField="Icon"
+                        SeparatorField="IsSeparator"
+                        DisabledField="IsDisabled"
+                        OnClick="@(async (BvMenuItem i) => { if (i.Action is not null) await i.Action(); })">
+    </TelerikContextMenu>
+
+    <TelerikContextMenu @ref="_markerMenu"
+                        Data="@_markerMenuItems"
+                        TextField="Text"
+                        IconField="Icon"
+                        SeparatorField="IsSeparator"
+                        DisabledField="IsDisabled"
+                        OnClick="@(async (BvMenuItem i) => { if (i.Action is not null) await i.Action(); })">
+    </TelerikContextMenu>
+
+    <!-- Item #57 T4 — its own dedicated menu rather than folding into _clipMenu: a Transition
+         has none of _clipMenu's items in common (Duplicate/Split/Speed/Replace Source all
+         disabled for it there today) and needs a "Replace ▸ style" list _clipMenu's flat
+         BvMenuItem model has no submenu support for; a second flat menu is simpler and safer
+         than retrofitting submenus onto the shared model all three other menus also use. -->
+    <TelerikContextMenu @ref="_transitionMenu"
+                        Data="@_transitionMenuItems"
+                        TextField="Text"
+                        IconField="Icon"
+                        SeparatorField="IsSeparator"
+                        DisabledField="IsDisabled"
+                        OnClick="@(async (BvMenuItem i) => { if (i.Action is not null) await i.Action(); })">
+    </TelerikContextMenu>
+
+</footer>
+
+@code {
+    // Audit #4 — typed DOM helpers instead of eval'd source strings; every lookup is null-guarded
+    // (see audit #7, where a missing element crashed the whole circuit).
+    private IJSObjectReference? _dom;
+
+    private async Task<IJSObjectReference> DomAsync() =>
+        _dom ??= await JS.InvokeAsync<IJSObjectReference>(
+            "import", "/_content/Ben.Video.Editor/js/domInterop.js");
+
+    [Parameter] public bool? MultiTrack   { get; set; }
+    [Parameter] public bool? AudioTracks  { get; set; }
+    /// <summary>Effective options from the parent VideoEditor. Null = use the IOptions value from DI.</summary>
+    [Parameter] public VideoEditorOptions? EditorOptions { get; set; }
+    [Parameter] public EventCallback<TrackItem>   OnItemSelected     { get; set; }
+    [Parameter] public EventCallback<Guid>        OnItemRemoved      { get; set; }
+    [Parameter] public EventCallback<Guid>        OnRelinkRequested  { get; set; }
+    [Parameter] public EventCallback<IReadOnlyList<Guid>> OnBulkDelete { get; set; }
+    [Parameter] public EventCallback<(IReadOnlyList<Guid> Ids, double DeltaSeconds)> OnBulkMove { get; set; }
+
+    /// <summary>Raised when a keyframe diamond (item #57 P6) is clicked — seeks the playhead to
+    /// the keyframe's own time first, then reports which layer/keyframe so the parent can open/
+    /// focus the MotionKeyframeEditor panel on it, mirroring what clicking the same keyframe's dot
+    /// on the canvas overlay already does.</summary>
+    [Parameter] public EventCallback<(Guid LayerId, string LayerType, int KeyframeIndex, double Time)> OnTimelineKeyframeSelected { get; set; }
+
+ // --- Context menu state ---
+
+    private TelerikContextMenu<BvMenuItem>? _clipMenu;
+    private TelerikContextMenu<BvMenuItem>? _trackMenu;
+    private TelerikContextMenu<BvMenuItem>? _markerMenu;
+    private TelerikContextMenu<BvMenuItem>? _transitionMenu;
+
+    private List<BvMenuItem> _clipMenuItems       = [];
+    private List<BvMenuItem> _trackMenuItems      = [];
+    private List<BvMenuItem> _markerMenuItems     = [];
+    private List<BvMenuItem> _transitionMenuItems = [];
+
+    private async Task OpenClipMenu(MouseEventArgs e, TrackItem item)
+    {
+        await SelectItem(item);
+        var canSplit  = item is VideoClip vc2 &&
+                        Playback.State.CurrentTime > 0 &&
+                        Playback.State.CurrentTime < vc2.TrimmedDuration;
+        var isMedia   = item is VideoClip or AudioClip;
+        var isRemovable = item is not Transition;
+        var canSeparateAudio = item is VideoClip vcAudio && vcAudio.MemFsName is not null && !vcAudio.MuteAudio;
+        var crossTrackTarget = EffectiveOptions.Transitions && EffectiveOptions.MultiTrack && item is VideoClip vcOverlap
+            ? FindCrossTrackOverlapCandidate(vcOverlap)
+            : null;
+
+        _clipMenuItems =
+        [
+            new() { Text = "Edit Properties", Icon = SvgIcon.Pencil,
+                    Action = () => Task.CompletedTask /* properties panel already opened by SelectItem */ },
+            new() { Text = "Duplicate",  Icon = SvgIcon.Copy,
+                    Action = () => { Clips.DuplicateClip(item.Id); return Task.CompletedTask; },
+                    IsDisabled = !isMedia },
+            new() { IsSeparator = true },
+            new() { Text = "Split at Playhead", Icon = SvgIcon.Cut,
+                    Action = () =>
+                    {
+                        if (item is VideoClip vc3)
+                            try { Clips.SplitClip(vc3.Id, Playback.State.CurrentTime); } catch { }
+                        return Task.CompletedTask;
+                    }, IsDisabled = !canSplit },
+            new() { Text = "Separate Audio", Icon = SvgIcon.VolumeUp,
+                    Action = async () =>
+                    {
+                        if (item is VideoClip vc4)
+                            await SeparateAudioAsync(vc4);
+                    }, IsDisabled = !canSeparateAudio },
+            new() { Text = "Add Crossfade to Overlapping Clip",
+                    Action = () =>
+                    {
+                        if (crossTrackTarget is not null)
+                            try { Clips.AddCrossTrackTransition(item.Id, crossTrackTarget.Id); } catch { }
+                        return Task.CompletedTask;
+                    }, IsDisabled = crossTrackTarget is null },
+            new() { IsSeparator = true },
+            new() { Text = "Speed: 0.5×", Action = () => { SetSpeed(item, 0.5); return Task.CompletedTask; }, IsDisabled = item is not VideoClip },
+            new() { Text = "Speed: 1×",   Action = () => { SetSpeed(item, 1.0); return Task.CompletedTask; }, IsDisabled = item is not VideoClip },
+            new() { Text = "Speed: 2×",   Action = () => { SetSpeed(item, 2.0); return Task.CompletedTask; }, IsDisabled = item is not VideoClip },
+            new() { IsSeparator = true },
+            new() { Text = item.IsMediaMissing ? "Replace Media…" : "Replace Source…",
+                    Icon = SvgIcon.Link,
+                    Action = async () => await OnRelinkRequested.InvokeAsync(item.Id),
+                    IsDisabled = !isMedia },
+            new() { IsSeparator = true },
+            new() { Text = "Remove",        Icon = SvgIcon.Trash,
+                    Action = async () =>
+                    {
+                        switch (item)
+                        {
+                            case CalloutClip c:  Clips.RemoveCallout(c.Id); break;
+                            case ClipArtClip ca: Clips.RemoveClipArtClip(ca.Id); break;
+                            case ImageClip im:   Clips.RemoveClip(im.Id); break;
+                            default:             Clips.RemoveClip(item.Id); break;
+                        }
+                        if (_selectedItemId == item.Id) _selectedItemId = null;
+                        _multiSelectedIds.Remove(item.Id);
+                        await OnItemRemoved.InvokeAsync(item.Id);
+                    }, IsDisabled = !isRemovable },
+            new() { Text = "Ripple Delete", Icon = SvgIcon.Minus,
+                    Action = async () =>
+                    {
+                        Clips.RippleDeleteClip(item.Id);
+                        if (_selectedItemId == item.Id) _selectedItemId = null;
+                        _multiSelectedIds.Remove(item.Id);
+                        await OnItemRemoved.InvokeAsync(item.Id);
+                    }, IsDisabled = !isMedia },
+        ];
+
+        if (_clipMenu is not null)
+            await _clipMenu.ShowAsync(e.ClientX, e.ClientY);
+    }
+
+    /// <summary>Item #57 T4 — right-click menu for a transition chip: "Replace" with any real
+    /// style (flat list, not a true submenu — see the markup comment above <c>_transitionMenu</c>
+    /// for why; item #57 T5 grew this list from 6 to 16 styles, still flat) plus Remove.</summary>
+    private async Task OpenTransitionMenu(MouseEventArgs e, TimelineTrack track, Transition transition)
+    {
+        await SelectItem(transition);
+
+        _transitionMenuItems =
+        [
+            .. _pickerStyles.Select(style => new BvMenuItem
+            {
+                Text   = $"Replace: {style}",
+                Action = () =>
+                {
+                    Clips.UpdateTransition(transition.Id, style, transition.Duration);
+                    return Task.CompletedTask;
+                },
+                IsDisabled = track.IsLocked,
+            }),
+            new() { IsSeparator = true },
+            new() { Text = "Remove", Icon = SvgIcon.Trash,
+                    Action = async () =>
+                    {
+                        Clips.RemoveTransition(transition.Id);
+                        if (_selectedItemId == transition.Id) _selectedItemId = null;
+                        await OnItemRemoved.InvokeAsync(transition.Id);
+                    }, IsDisabled = track.IsLocked },
+        ];
+
+        if (_transitionMenu is not null)
+            await _transitionMenu.ShowAsync(e.ClientX, e.ClientY);
+    }
+
+    private async Task OpenTrackMenu(MouseEventArgs e, TimelineTrack track)
+    {
+        var isPrimary = track.Id == Clips.PrimaryVideoTrack?.Id;
+        var vTracks   = Clips.Tracks.Where(t => t.Type == TrackType.Video).OrderBy(t => t.Order).ToList();
+        var tIdx      = vTracks.FindIndex(t => t.Id == track.Id);
+        _trackMenuItems =
+        [
+            new() { Text = track.IsMuted ? "Unmute Track" : "Mute Track",
+                    Icon = track.IsMuted ? SvgIcon.VolumeUp : SvgIcon.VolumeMute,
+                    Action = () => { ToggleMute(track); return Task.CompletedTask; } },
+            new() { Text = track.IsLocked ? "Unlock Track" : "Lock Track",
+                    Icon = SvgIcon.Lock,
+                    Action = () => { ToggleLock(track); return Task.CompletedTask; } },
+            new() { Text = "Rename Track", Icon = SvgIcon.Pencil,
+                    Action = () => { StartEditTrackName(track); return Task.CompletedTask; } },
+            new() { IsSeparator = true },
+            new() { Text = "Move Up",   Icon = SvgIcon.ChevronUp,
+                    IsDisabled = !(EffectiveOptions.MultiTrack && track.Type == TrackType.Video && tIdx > 0),
+                    Action = () => { MoveTrackUp(track); return Task.CompletedTask; } },
+            new() { Text = "Move Down", Icon = SvgIcon.ChevronDown,
+                    IsDisabled = !(EffectiveOptions.MultiTrack && track.Type == TrackType.Video && tIdx >= 0 && tIdx < vTracks.Count - 1),
+                    Action = () => { MoveTrackDown(track); return Task.CompletedTask; } },
+            new() { IsSeparator = true },
+            new() { Text = "Remove Track", Icon = SvgIcon.Trash,
+                    Action = () => { RemoveTrack(track); return Task.CompletedTask; },
+                    IsDisabled = isPrimary },
+        ];
+
+        if (_trackMenu is not null)
+            await _trackMenu.ShowAsync(e.ClientX, e.ClientY);
+    }
+
+    private async Task OpenMarkerMenu(MouseEventArgs e, TimelineMarker marker)
+    {
+        _markerMenuItems =
+        [
+            new() { Text = "Rename Marker", Icon = SvgIcon.Pencil,
+                    Action = () => { StartEditMarkerLabel(marker); return Task.CompletedTask; } },
+            new() { Text = "Apply Fade to Black",
+                    Action = () => { Clips.ApplyFadeToBlackAt(marker.TimeSeconds); return Task.CompletedTask; } },
+            new() { IsSeparator = true },
+            new() { Text = "Delete Marker", Icon = SvgIcon.Trash,
+                    Action = () => { RemoveMarker(marker.Id); return Task.CompletedTask; } },
+        ];
+
+        if (_markerMenu is not null)
+            await _markerMenu.ShowAsync(e.ClientX, e.ClientY);
+    }
+
+    private void SetSpeed(TrackItem item, double speed)
+    {
+        if (item is VideoClip vc) { vc.Speed = speed; Clips.NotifyChanged(); }
+    }
+
+    private async Task SeparateAudioAsync(VideoClip clip)
+    {
+        if (clip.MemFsName is null || clip.MuteAudio) return;
+
+        // Ensure an audio track exists (create one if none present)
+        var audioTrack = Clips.Tracks.FirstOrDefault(t => t.Type == TrackType.Audio)
+                         ?? Clips.AddAudioTrack();
+
+        // Extract the audio stream to a new MEMFS file
+        var audioMemFs = $"detached_{clip.Id:N}.aac";
+        await Ffmpeg.ExtractAudioAsync(clip.MemFsName, audioMemFs);
+
+        // Create a blob URL so WaveSurfer can render the waveform
+        var blobUrl = await Ffmpeg.CreatePreviewUrlAsync(audioMemFs, "audio/aac");
+
+        // Build the AudioClip at the same timeline position and duration
+        var audioClip = new AudioClip
+        {
+            Name             = $"{clip.Name} (Audio)",
+            TimelinePosition = clip.TimelinePosition,
+            Duration         = clip.EffectiveDuration,
+            MemFsName        = audioMemFs,
+            BlobUrl          = blobUrl,
+            OriginalFileName = clip.OriginalFileName,
+        };
+
+        // Apply mutation + push undo command
+        Clips.DetachAudio(clip.Id, audioClip, audioTrack.Id);
+    }
+
+    private void ToggleLock(TimelineTrack track)
+    {
+        Clips.LockTrack(track.Id, !track.IsLocked);
+    }
+
+    protected override void OnInitialized()
+    {
+        Playback.OnStateChanged  += OnPlaybackChanged;
+        Clips.OnChange           += OnClipsChanged;
+        PreviewFreshness.OnChanged += OnClipsChanged;
+        RenderStatus.OnChanged   += OnClipsChanged;
+        Timeline.ZoomScale   = EffectiveOptions.DefaultTimelineZoom;
+        Timeline.DisplayMode = EffectiveOptions.TimelineDisplayMode;
+        _rippleOverride      = EffectiveOptions.RippleEdit;
+    }
+
+    // Backlog #39 (second half): the configured default zoom is a fixed pixels-per-second value,
+    // independent of clip length — a short clip forced horizontal scrolling even on a normal
+    // window. Auto-fit once, the first time real content appears (duration goes from 0 to >0),
+    // so the initial view never needs scrolling for a short clip. Resets when the timeline empties
+    // back out (all clips removed) so the next clip added also gets a fresh auto-fit, but never
+    // fires again while content already exists — a user's own manual zoom during editing is never
+    // overridden.
+    private bool   _hasAutoFitted;
+    private double _lastKnownDuration;
+
+    private void OnClipsChanged()
+    {
+        var duration = Clips.TotalDuration;
+        if (_lastKnownDuration <= 0 && duration > 0 && !_hasAutoFitted)
+        {
+            _hasAutoFitted     = true;
+            _lastKnownDuration = duration;
+            InvokeAsync(FitToViewAsync);
+            return;
+        }
+
+        if (duration <= 0) _hasAutoFitted = false;
+        _lastKnownDuration = duration;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void ToggleDisplayMode()
+    {
+        Timeline.DisplayMode = Timeline.DisplayMode == TimelineDisplayMode.Time
+            ? TimelineDisplayMode.Frames
+            : TimelineDisplayMode.Time;
+    }
+
+    public void Dispose()
+    {
+        Playback.OnStateChanged -= OnPlaybackChanged;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // Audit #4 — release the cached interop module handles. Guarded because teardown races
+        // circuit shutdown: once the circuit is gone the module is already unreachable and
+        // disposing it throws, which must not surface as an error during a normal navigation.
+        if (_dom is not null)
+        {
+            try { await _dom.DisposeAsync(); } catch (JSDisconnectedException) { } catch (ObjectDisposedException) { }
+            _dom = null;
+        }
+
+        Playback.OnStateChanged  -= OnPlaybackChanged;
+        Clips.OnChange           -= OnClipsChanged;
+        PreviewFreshness.OnChanged -= OnClipsChanged;
+        RenderStatus.OnChanged   -= OnClipsChanged;
+        if (_dragBridgeModule is not null)
+        {
+            try { await _dragBridgeModule.InvokeVoidAsync("unregisterDropTarget"); } catch { }
+            try { await _dragBridgeModule.InvokeVoidAsync("unregisterTransitionDropTarget"); } catch { }
+            await _dragBridgeModule.DisposeAsync();
+        }
+        _dropBridgeRef?.Dispose();
+        if (_jsModule is not null)
+            await _jsModule.DisposeAsync();
+    }
+
+    // ── ClipBrowser → track pointer-based drop (item #24) ───────────────────
+
+    private IJSObjectReference?                    _dragBridgeModule;
+    private DotNetObjectReference<VideoTimeline>?   _dropBridgeRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            _dragBridgeModule = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Video.Editor/js/clipDragBridge.js");
+            _dropBridgeRef = DotNetObjectReference.Create(this);
+            await _dragBridgeModule.InvokeVoidAsync("registerDropTarget", _dropBridgeRef);
+            await _dragBridgeModule.InvokeVoidAsync("registerTransitionDropTarget", _dropBridgeRef);
+        }
+        catch { /* JS interop unavailable (e.g. prerendering) — pointer-based drop stays inert */ }
+    }
+
+    /// <summary>
+    /// Completes a pointer-based drag-drop of a transition style from the AssetBrowser's
+    /// Transitions gallery onto a brand-new junction (item #57 T3) — called from JS
+    /// (<c>clipDragBridge.js</c>) once the pointer lands on a <c>.bv-transition-insert</c>
+    /// button. Mirrors <see cref="InsertTransition"/>, just with a style chosen by drag instead
+    /// of the style-picker popover.
+    /// </summary>
+    [JSInvokable]
+    public void HandleTransitionDropOnJunction(string trackIdStr, string fromIdStr, string toIdStr, string styleStr)
+    {
+        if (!Guid.TryParse(trackIdStr, out var trackId)) return;
+        if (!Guid.TryParse(fromIdStr, out var fromId)) return;
+        if (!Guid.TryParse(toIdStr, out var toId)) return;
+        if (!Enum.TryParse<TransitionStyle>(styleStr, out var style)) return;
+
+        InsertTransition(trackId, fromId, toId, style);
+    }
+
+    /// <summary>
+    /// Completes a pointer-based drag-drop of a transition style onto an EXISTING transition
+    /// chip (item #57 T3) — an undoable style replace, called from JS once the pointer lands on
+    /// a <c>.bv-transition-chip</c>. Keeps the chip's current duration; only the style changes.
+    /// </summary>
+    [JSInvokable]
+    public void HandleTransitionDropOnChip(string transitionIdStr, string styleStr)
+    {
+        if (!Guid.TryParse(transitionIdStr, out var transitionId)) return;
+        if (!Enum.TryParse<TransitionStyle>(styleStr, out var style)) return;
+
+        var transition = Clips.AllTransitions.FirstOrDefault(t => t.Id == transitionId);
+        if (transition is null) return;
+
+        Clips.UpdateTransition(transitionId, style, transition.Duration);
+    }
+
+    /// <summary>
+    /// Completes a pointer-based drag-drop of a new clip from <c>ClipBrowser</c> onto this track
+    /// — the pointer-event replacement for the old native-HTML5-drag browser-source branch of
+    /// <see cref="OnTrackDrop"/> (item #24). Called from JS (<c>clipDragBridge.js</c>) once the
+    /// user releases the pointer over a track. Mirrors that branch's logic exactly: video clips
+    /// only, onto video tracks only, with the same snap/position-resolution pipeline.
+    /// </summary>
+    [JSInvokable]
+    public async Task HandlePointerDropFromJs(string clipIdStr, string trackIdStr, double clientX)
+    {
+        if (!Guid.TryParse(clipIdStr, out var clipId)) return;
+        if (!Guid.TryParse(trackIdStr, out var trackId)) return;
+
+        var track = Clips.Tracks.FirstOrDefault(t => t.Id == trackId);
+        if (track is null || track.IsLocked) return;
+        if (track.Type != TrackType.Video) return;
+
+        var clip = Clips.Clips.FirstOrDefault(c => c.Id == clipId);
+        if (clip is null) return;
+
+        var js   = await GetJsModuleAsync();
+        var rect = await js.InvokeAsync<TrackContentRect>("measureTrackContent", track.Id.ToString());
+
+        var dropSeconds = TimelineDropCalculator.DropPositionSeconds(
+            clientX, rect.Left, rect.ScrollLeft, Timeline.PxPerSecond);
+
+        var snappedSeconds = EffectiveOptions.Snapping
+            ? SnapEngine.Snap(dropSeconds, SnapEngine.CollectSnapTargets(Clips.Tracks, Clips.Markers), EffectiveOptions.SnapThresholdSeconds)
+            : dropSeconds;
+
+        var existingClips = track.VideoClips.Select(c => (c.TimelinePosition, c.EffectiveDuration));
+        var position = TimelineDropCalculator.ResolvePosition(
+            snappedSeconds, clip.EffectiveDuration, existingClips);
+
+        var placed = clip with { TimelinePosition = position };
+        Clips.AddClipToTrack(track.Id, placed);
+        _ = ScrollItemIntoViewAsync(placed.Id); // item #25 — fire-and-forget, purely cosmetic
+    }
+
+    /// <summary>
+    /// Scrolls the given item's chip into view if it isn't already fully visible (item #25) —
+    /// called after placing a new clip or committing an existing-clip move. Fire-and-forget from
+    /// the caller: this is cosmetic, never something a failure here should block or surface to
+    /// the user, so exceptions (e.g. JS interop unavailable during prerendering, matching the
+    /// same guard already used for the drag-bridge import in OnAfterRenderAsync) are swallowed.
+    /// </summary>
+    private async Task ScrollItemIntoViewAsync(Guid itemId)
+    {
+        try
+        {
+            var js = await GetJsModuleAsync();
+            await js.InvokeVoidAsync("scrollItemIntoView", itemId.ToString());
+        }
+        catch { /* cosmetic only — JS interop unavailable is not worth surfacing */ }
+    }
+
+    private void OnPlaybackChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task FitToViewAsync()
+    {
+        if (Clips.TotalDuration <= 0) { Timeline.ResetZoom(); return; }
+        try
+        {
+            var js    = await GetJsModuleAsync();
+            var width = await js.InvokeAsync<double>("getTracksAreaWidth");
+            if (width > 0)
+                Timeline.FitToView(Clips.TotalDuration, width);
+            else
+                Timeline.ResetZoom();
+        }
+        catch { Timeline.ResetZoom(); }
+        StateHasChanged();
+    }
+
+ // --- Ruler scrub state ---
+
+    private bool _rulerScrubbing;
+
+    private void OnRulerPointerDown(PointerEventArgs e)
+    {
+        if (Clips.TotalDuration <= 0) return;
+        _rulerScrubbing = true;
+        // pointer capture is handled by @onpointerdown:preventDefault + touch-action:none in CSS;
+        // JS setPointerCapture is not needed in Blazor WASM because the browser retains capture
+        // as long as preventDefault is called on pointerdown.
+        SeekFromRuler(e.OffsetX);
+    }
+
+    private void OnRulerPointerMove(PointerEventArgs e)
+    {
+        if (!_rulerScrubbing) return;
+        SeekFromRuler(e.OffsetX);
+    }
+
+    private void OnRulerPointerUp(PointerEventArgs e) => _rulerScrubbing = false;
+
+    private void SeekFromRuler(double offsetX)
+    {
+        // offsetX is relative to the ruler-canvas element (already excludes the gutter)
+        var seconds = Math.Max(0, Math.Min(offsetX / Timeline.PxPerSecond, Clips.TotalDuration));
+        Playback.RequestSeek(seconds);
+    }
+
+ // --- Drag state ---
+
+    private Guid?      _draggingId;
+    private TrackItem? _draggingItem;
+    private Guid?      _selectedItemId;
+    private readonly HashSet<Guid> _multiSelectedIds = [];
+
+ // --- Browser-to-timeline drop state ---
+
+    private Guid? _dropTargetTrackId;
+    private int   _dragEnterCount;    // counter prevents false-leave when over children
+    // Snap state
+
+    private IReadOnlyList<double> _snapTargets    = [];
+    private double?               _snapGuidePx;       // left px inside bv-track__items for the snap guide line
+    private TrackContentRect?     _cachedTrackRect;   // track rect cached per drag session
+
+
+ // --- JS module ---
+
+    private IJSObjectReference? _jsModule;
+
+    private async Task<IJSObjectReference> GetJsModuleAsync()
+    {
+        _jsModule ??= await JS.InvokeAsync<IJSObjectReference>(
+            "import", "/_content/Ben.Video.Editor/Components/VideoTimeline.razor.js");
+        return _jsModule;
+    }
+
+    /// <summary>
+    /// Captures the pointer on the chip/trim-handle at the pointerdown coordinates, so
+    /// pointermove/pointerup keep firing on it for the rest of the gesture even if a fast
+    /// drag moves the cursor off the element before the next render lands — see #27.
+    /// </summary>
+    private async Task CapturePointerAsync(PointerEventArgs e)
+    {
+        try
+        {
+            var js = await GetJsModuleAsync();
+            await js.InvokeVoidAsync("capturePointerAt", e.ClientX, e.ClientY, e.PointerId);
+        }
+        catch { /* non-fatal — worst case, falls back to pre-#27 behavior */ }
+    }
+
+ // --- drag state ---
+
+    private enum TrimSide { Start, End }
+
+    private VideoClip? _trimmingClip;
+    private TrimSide   _trimmingSide;
+    private double     _trimDragStartX;    // clientX at pointerdown
+    private double     _trimChipWidthPx;   // chip pixel width measured at drag start
+    private double     _trimOriginalStart; // StartTrim value at drag start
+    private double     _trimOriginalEnd;   // EndTrim value at drag start
+
+    // --- Transition chip edge-drag resize (item #57 T4) ---
+    // Live preview during the drag mutates the Transition object directly (no PushCommand) —
+    // mirrors the body-drag (_movingItem) pattern, not clip trim's per-pointermove PushCommand,
+    // since the plan calls for exactly one undo entry per whole gesture ("undoable on
+    // release"). The one authoritative commit happens once, in OnTrimPointerUp, via the normal
+    // undoable Clips.UpdateTransition — which recomputes TimelinePosition itself, so the cached
+    // _transitionResizeFromEndSeconds below only needs to be "close enough" for a smooth live
+    // preview, not bit-exact.
+    private Transition? _resizingTransition;
+    private TrimSide     _resizingTransitionSide;
+    private double       _transitionResizeStartX;
+    private double       _transitionResizeOriginalDuration;
+    private double       _transitionResizeFromEndSeconds;
+    private double       _transitionResizeFromDur;
+    private double       _transitionResizeToDur;
+
+ // --- Options ---
+
+    private VideoEditorOptions EffectiveOptions
+    {
+        get
+        {
+            // Base: use the explicit EditorOptions parameter when provided, otherwise fall back to DI —
+            // same pattern as VideoEditor.razor's own EffectiveOptions.
+            var base_ = EditorOptions ?? EditorOptionsAccessor.Value;
+            return new()
+            {
+                MultiTrack           = MultiTrack  ?? base_.MultiTrack,
+                AudioTracks          = AudioTracks ?? base_.AudioTracks,
+                Transitions          = base_.Transitions,
+                TextOverlays         = base_.TextOverlays,
+                InlineTrimming       = base_.InlineTrimming,
+                Markers              = base_.Markers,
+                MaxVideoTracks       = base_.MaxVideoTracks,
+                MaxAudioTracks       = base_.MaxAudioTracks,
+                Snapping             = base_.Snapping,
+                SnapThresholdSeconds = base_.SnapThresholdSeconds,
+                DefaultTimelineZoom  = base_.DefaultTimelineZoom,
+                TimelineDisplayMode  = base_.TimelineDisplayMode,
+                RippleEdit           = base_.RippleEdit,
+            };
+        }
+    }
+
+    private bool CanAddVideoTrack =>
+        Clips.VideoTracks.Count() < EffectiveOptions.MaxVideoTracks;
+
+    private bool CanAddAudioTrack =>
+        Clips.AudioTracks.Count() < EffectiveOptions.MaxAudioTracks;
+
+ // --- Track management ---
+
+    private void AddVideoTrack() => Clips.AddVideoTrack();
+    private void AddAudioTrack() => Clips.AddAudioTrack();
+    private void RemoveTrack(TimelineTrack track) => Clips.RemoveTrack(track.Id);
+
+    private void MoveTrackUp(TimelineTrack track)
+    {
+        var videoTracks = Clips.Tracks.Where(t => t.Type == TrackType.Video).OrderBy(t => t.Order).ToList();
+        var idx = videoTracks.FindIndex(t => t.Id == track.Id);
+        if (idx <= 0) return;
+        Clips.ReorderTrack(track.Id, videoTracks[idx - 1].Order);
+    }
+
+    private void MoveTrackDown(TimelineTrack track)
+    {
+        var videoTracks = Clips.Tracks.Where(t => t.Type == TrackType.Video).OrderBy(t => t.Order).ToList();
+        var idx = videoTracks.FindIndex(t => t.Id == track.Id);
+        if (idx < 0 || idx >= videoTracks.Count - 1) return;
+        Clips.ReorderTrack(track.Id, videoTracks[idx + 1].Order);
+    }
+
+ // --- Marker actions ---
+
+    private void AddMarkerAtPlayhead()
+    {
+        var t = Clips.TotalDuration > 0
+            ? Playback.State.Progress * Clips.TotalDuration
+            : 0;
+        Clips.AddMarker(t);
+    }
+
+    private void RemoveMarker(Guid markerId) => Clips.RemoveMarker(markerId);
+
+    // ── Marker drag (reposition) ────────────────────────────────────────────────
+
+    private TimelineMarker? _draggingMarker;
+    private double          _markerDragStartX;
+    private double          _markerOriginalTime;
+
+    private void OnMarkerPointerDown(PointerEventArgs e, TimelineMarker marker)
+    {
+        if (e.Button != 0) return;
+        _draggingMarker      = marker;
+        _markerDragStartX    = e.ClientX;
+        _markerOriginalTime  = marker.TimeSeconds;
+    }
+
+    private void OnMarkerPointerMove(PointerEventArgs e)
+    {
+        if (_draggingMarker is null) return;
+        var deltaSec = (e.ClientX - _markerDragStartX) / Timeline.PxPerSecond;
+        _draggingMarker.TimeSeconds = Math.Max(0, _markerOriginalTime + deltaSec);
+        StateHasChanged();
+    }
+
+    private void OnMarkerPointerUp(PointerEventArgs e)
+    {
+        if (_draggingMarker is null) return;
+        Clips.CommitMarkerPosition(_draggingMarker.Id, _markerOriginalTime);
+        _draggingMarker = null;
+    }
+
+    // ── Marker rename ────────────────────────────────────────────────────────────
+
+    private Guid?  _editingMarkerId;
+    private string _editingMarkerLabel = string.Empty;
+
+    private void StartEditMarkerLabel(TimelineMarker marker)
+    {
+        _editingMarkerId    = marker.Id;
+        _editingMarkerLabel = marker.Label;
+        InvokeAsync(async () =>
+        {
+            StateHasChanged();
+            await (await DomAsync()).InvokeVoidAsync("focusAndSelect", ".bv-marker-flag__label-input");
+        });
+    }
+
+    private void CommitMarkerLabelEdit()
+    {
+        if (_editingMarkerId is Guid id)
+        {
+            var marker = Clips.Markers.FirstOrDefault(m => m.Id == id);
+            if (marker is not null)
+                Clips.UpdateMarker(id, _editingMarkerLabel, marker.TimeSeconds);
+        }
+        _editingMarkerId = null;
+    }
+
+    private void OnMarkerLabelKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")  CommitMarkerLabelEdit();
+        if (e.Key == "Escape") _editingMarkerId = null;
+    }
+
+    private void ToggleMute(TimelineTrack track)
+    {
+        track.IsMuted = !track.IsMuted;
+        Clips.NotifyChanged();
+    }
+
+    // ── Resizable / collapsible track row height (item #44) ─────────────────────
+    // Purely visual, UI-only state — doesn't touch track/clip data, doesn't persist
+    // to project JSON. Untouched tracks are left alone entirely (no inline style at
+    // all — CSS's own min-height:56px still governs them, unchanged); only a track
+    // the user has actually resized or collapsed gets an explicit height + overflow:
+    // hidden override, so this can never re-introduce phase 94's "content taller
+    // than its row" overflow bug for the common, never-touched case.
+
+    private const double MinTrackHeight       = 32;
+    private const double MaxTrackHeight       = 240;
+    private const double CollapsedTrackHeight = 28;
+
+    private readonly Dictionary<Guid, double> _customTrackHeights = new();
+    private readonly HashSet<Guid>            _collapsedTrackIds  = new();
+
+    /// <summary>Non-null only when this track has an explicit height override (resized or
+    /// collapsed) — null means "leave it to the default CSS," not "use some default pixel value."</summary>
+    private double? GetTrackHeightOverride(Guid trackId)
+    {
+        if (_collapsedTrackIds.Contains(trackId)) return CollapsedTrackHeight;
+        return _customTrackHeights.TryGetValue(trackId, out var h) ? h : null;
+    }
+
+    private void OnTrackResize(Guid trackId, int pixels) =>
+        _customTrackHeights[trackId] = Math.Clamp(pixels, MinTrackHeight, MaxTrackHeight);
+
+    private void ToggleTrackCollapsed(Guid trackId)
+    {
+        if (!_collapsedTrackIds.Remove(trackId))
+            _collapsedTrackIds.Add(trackId);
+    }
+
+    // ── Track rename ──────────────────────────────────────────────────────────
+
+    private Guid?  _editingTrackId;
+    private string _editingTrackLabel = string.Empty;
+
+    private void StartEditTrackName(TimelineTrack track)
+    {
+        _editingTrackId    = track.Id;
+        _editingTrackLabel = track.Label;
+        // Focus is applied after render via JS in OnAfterRenderAsync-style; use a tiny eval here
+        // because the input doesn't exist until StateHasChanged runs.
+        InvokeAsync(async () =>
+        {
+            StateHasChanged();
+            await (await DomAsync()).InvokeVoidAsync("focusAndSelect", ".bv-track__name-input");
+        });
+    }
+
+    private void CommitTrackNameEdit()
+    {
+        if (_editingTrackId.HasValue)
+            Clips.RenameTrack(_editingTrackId.Value, _editingTrackLabel);
+        _editingTrackId = null;
+    }
+
+    private void OnTrackNameKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")  CommitTrackNameEdit();
+        if (e.Key == "Escape") _editingTrackId = null;
+    }
+
+ // --- Item selection ---
+
+    private async Task SelectItem(TrackItem item)
+    {
+        _selectedItemId = item.Id;
+        await OnItemSelected.InvokeAsync(item);
+    }
+
+    private async Task SelectItemWithModifier(TrackItem item, bool ctrlHeld)
+    {
+        if (ctrlHeld)
+        {
+            // Toggle this item in/out of the multi-selection set
+            if (!_multiSelectedIds.Add(item.Id))
+                _multiSelectedIds.Remove(item.Id);
+            // Keep _selectedItemId tracking for the properties panel
+            _selectedItemId = item.Id;
+        }
+        else
+        {
+            // Normal click — clear multi-selection and select only this item
+            _multiSelectedIds.Clear();
+            await SelectItem(item);
+        }
+    }
+
+    /// <summary>Returns true if the given id is part of an active multi-selection (2+ items).</summary>
+    private bool IsMultiSelected(Guid id) =>
+        _multiSelectedIds.Count >= 2 && _multiSelectedIds.Contains(id);
+
+    private async Task RemoveItem(TimelineTrack track, TrackItem item)
+    {
+        if (_selectedItemId == item.Id) _selectedItemId = null;
+        _multiSelectedIds.Remove(item.Id);
+        if (item is Transition)
+            Clips.RemoveTransition(item.Id);
+        else if (_rippleOverride)
+            Clips.RippleDeleteClip(item.Id);
+        else
+            Clips.RemoveClip(item.Id);
+        await OnItemRemoved.InvokeAsync(item.Id);
+    }
+
+ // --- Multi-select bulk operations ---
+
+    public IReadOnlyList<Guid> GetMultiSelectedIds() => _multiSelectedIds.ToList();
+
+    public void ClearMultiSelection()
+    {
+        _multiSelectedIds.Clear();
+        StateHasChanged();
+    }
+
+    private async Task DeleteMultiSelected()
+    {
+        var ids = _multiSelectedIds.ToList();
+        if (ids.Count == 0) return;
+        _multiSelectedIds.Clear();
+        _selectedItemId = null;
+        await OnBulkDelete.InvokeAsync(ids);
+    }
+
+    private async Task NudgeMultiSelected(double deltaSeconds)
+    {
+        var ids = _multiSelectedIds.ToList();
+        if (ids.Count == 0) return;
+        await OnBulkMove.InvokeAsync((ids, deltaSeconds));
+    }
+
+    // ── Transition style picker (item #57 T3 — replaces the old hardcoded-Fade insert) ──────
+
+    private (Guid TrackId, Guid FromId, Guid ToId)? _openStylePickerFor;
+    private static readonly List<TransitionStyle> _pickerStyles =
+        Enum.GetValues<TransitionStyle>().Where(s => s != TransitionStyle.Cut).ToList();
+
+    private void ToggleStylePicker((Guid TrackId, Guid FromId, Guid ToId) junction) =>
+        _openStylePickerFor = _openStylePickerFor == junction ? null : junction;
+
+    private void ClosePicker() => _openStylePickerFor = null;
+
+    private void InsertTransition(Guid trackId, Guid fromId, Guid toId, TransitionStyle style = TransitionStyle.Fade)
+    {
+        Clips.AddTransition(trackId, fromId, toId, style, 1.0);
+        _openStylePickerFor = null;
+    }
+
+    /// <summary>
+    /// Finds a VideoClip on a different video track that overlaps <paramref name="clip"/> in
+    /// time and isn't already linked to it by a transition — the candidate for
+    /// "Add Crossfade to Overlapping Clip" in the clip context menu.
+    /// </summary>
+    private VideoClip? FindCrossTrackOverlapCandidate(VideoClip clip)
+    {
+        var clipTrack = Clips.FindTrackOf(clip.Id);
+        if (clipTrack is null) return null;
+
+        var clipEnd = clip.TimelinePosition + clip.TrimmedDuration;
+        var linkedIds = Clips.AllTransitions
+            .Where(t => t.FromClipId == clip.Id || t.ToClipId == clip.Id)
+            .SelectMany(t => new[] { t.FromClipId, t.ToClipId })
+            .ToHashSet();
+
+        return Clips.VideoTracks
+            .Where(t => t.Id != clipTrack.Id)
+            .SelectMany(t => t.VideoClips)
+            .FirstOrDefault(other =>
+                !linkedIds.Contains(other.Id) &&
+                other.TimelinePosition < clipEnd &&
+                other.TimelinePosition + other.TrimmedDuration > clip.TimelinePosition);
+    }
+
+    private void AddTextOverlay()
+    {
+        var position = Clips.TotalDuration > 0
+            ? Playback.State.Progress * Clips.TotalDuration
+            : 0;
+        var overlay  = new TextOverlay
+        {
+            Name             = "New Text",
+            Text             = "New Text",
+            TimelinePosition = position,
+            Duration         = Math.Min(5.0, Math.Max(1.0, Clips.TotalDuration)),
+        };
+        Clips.AddTextOverlay(overlay);
+    }
+
+    private void AddCalloutClip()
+    {
+        var clip = new CalloutClip
+        {
+            Name             = "New Callout",
+            TimelinePosition = Playback.State.CurrentTime,
+            Duration         = Math.Min(5.0, Math.Max(1.0, Clips.TotalDuration)),
+        };
+        Clips.AddCallout(clip);
+    }
+
+ // --- Drag-and-drop reorder ---
+
+    private void OnDragStart(TrackItem item)
+    {
+        _draggingId   = item.Id;
+        _draggingItem = item;
+    }
+
+    private void OnDragEnd()
+    {
+        _draggingId   = null;
+        _draggingItem = null;
+        // Safety net for #27 — see FinalizeMove's doc comment.
+        FinalizeMove();
+    }
+
+    private void OnDragOver(TrackItem target)
+    {
+        if (_draggingItem is null || _draggingItem.Id == target.Id) return;
+
+        // Find the track that owns the target
+        var track = Clips.Tracks.FirstOrDefault(t => t.Items.Any(i => i.Id == target.Id));
+        if (track is null) return;
+
+        var items = track.Items.OrderBy(i => i.Order).ToList();
+        var fromIndex = items.FindIndex(i => i.Id == _draggingItem.Id);
+        var toIndex   = items.FindIndex(i => i.Id == target.Id);
+
+        if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex) return;
+
+        items.RemoveAt(fromIndex);
+        items.Insert(toIndex, _draggingItem);
+
+        Clips.ReorderTrackItems(track.Id, items);
+    }
+
+    private async Task OnTrackDragEnterAsync(DragEventArgs _, TimelineTrack track)
+    {
+        // Only highlight when a browser-source drag is active (_draggingItem is null = not a reorder)
+        if (_draggingItem is not null) return;
+        if (track.IsLocked) return;
+        if (_dropTargetTrackId != track.Id)
+        {
+            _dropTargetTrackId = track.Id;
+            _dragEnterCount    = 0;
+            _snapGuidePx       = null;
+
+            // Cache the track content rect once per drag enter (avoids repeated JS calls in dragover)
+            try
+            {
+                var js = await GetJsModuleAsync();
+                _cachedTrackRect = await js.InvokeAsync<TrackContentRect>(
+                    "measureTrackContent", track.Id.ToString());
+            }
+            catch { _cachedTrackRect = null; }
+
+            // Build snap targets from all markers and clip edges
+            if (EffectiveOptions.Snapping)
+                _snapTargets = SnapEngine.CollectSnapTargets(Clips.Tracks, Clips.Markers);
+        }
+        _dragEnterCount++;
+    }
+
+    private void OnTrackDragLeave(TimelineTrack track)
+    {
+        if (_draggingItem is not null) return;
+        if (_dropTargetTrackId != track.Id) return;
+        _dragEnterCount--;
+        if (_dragEnterCount <= 0)
+        {
+            _dropTargetTrackId = null;
+            _dragEnterCount    = 0;
+            _snapGuidePx       = null;
+            _cachedTrackRect   = null;
+        }
+    }
+
+    private void OnTrackDragOver(DragEventArgs e, TimelineTrack track)
+    {
+        // Keep the snap guide in sync with the cursor position — runs synchronously on every dragover
+        if (!EffectiveOptions.Snapping || _cachedTrackRect is null || Clips.TotalDuration <= 0)
+        {
+            _snapGuidePx = null;
+            return;
+        }
+
+        var raw    = TimelineDropCalculator.DropPositionSeconds(e.ClientX, _cachedTrackRect.Left, _cachedTrackRect.ScrollLeft, Timeline.PxPerSecond);
+        var target = SnapEngine.ActiveSnapTarget(raw, _snapTargets, EffectiveOptions.SnapThresholdSeconds);
+
+        _snapGuidePx = target.HasValue
+            ? target.Value * Timeline.PxPerSecond
+            : null;
+    }
+
+    /// <summary>
+    /// Handles the drop end of the native-HTML5-drag same-track/cross-track item **reorder**
+    /// gesture only (see <see cref="OnDragStart"/>/<see cref="OnDragOver"/>) — <c>_draggingItem</c>
+    /// is non-null exactly when that gesture is active. Dragging a *new* clip in from
+    /// <c>ClipBrowser</c> is a separate, pointer-based path now (item #24) — see
+    /// <see cref="HandlePointerDropFromJs"/> — which never sets <c>_draggingItem</c> and so never
+    /// reaches this method at all; it no longer needs a browser-source-drop branch here.
+    /// </summary>
+    private void OnTrackDrop(DragEventArgs e, TimelineTrack track)
+    {
+        // Clear drop-target highlight and snap guide
+        _dropTargetTrackId = null;
+        _dragEnterCount    = 0;
+        _snapGuidePx       = null;
+        _cachedTrackRect   = null;
+
+        _draggingId   = null;
+        _draggingItem = null;
+    }
+
+    // Small record to deserialize the JS measureTrackContent result
+    private sealed record TrackContentRect(double Left, double Width, double ScrollLeft);
+
+    // -- Inline trim drag --------------------------------------------------------
+
+    private async Task OnTrimHandlePointerDown(PointerEventArgs e, VideoClip clip, TrimSide side)
+    {
+        _trimmingClip      = clip;
+        _trimmingSide      = side;
+        _trimDragStartX    = e.ClientX;
+        _trimOriginalStart = clip.StartTrim;
+        _trimOriginalEnd   = clip.EndTrim > 0 ? clip.EndTrim : clip.Duration;
+        try
+        {
+            var js = await GetJsModuleAsync();
+            _trimChipWidthPx = await js.InvokeAsync<double>("measureWidth", (object?)null);
+        }
+        catch { _trimChipWidthPx = 0; }
+        if (_trimChipWidthPx <= 0) _trimChipWidthPx = 160.0;
+        await CapturePointerAsync(e);
+    }
+
+    /// <summary>Item #57 T4 — starts an edge-drag resize of a transition chip's Duration. Caches
+    /// the two adjacent clips' own durations up front so <see cref="OnTrimPointerMove"/> can
+    /// clamp locally every frame without re-walking the track on each pointermove.</summary>
+    private async Task OnTransitionResizeHandlePointerDown(PointerEventArgs e, Transition transition, TrimSide side)
+    {
+        var track = Clips.FindTrackOf(transition.Id);
+        if (track is null || track.IsLocked) return;
+
+        var fromItem = track.Items.FirstOrDefault(i => i.Id == transition.FromClipId);
+        var toItem   = track.Items.FirstOrDefault(i => i.Id == transition.ToClipId);
+        if (fromItem is null || toItem is null) return;
+
+        _resizingTransition               = transition;
+        _resizingTransitionSide           = side;
+        _transitionResizeStartX           = e.ClientX;
+        _transitionResizeOriginalDuration = transition.Duration;
+        _transitionResizeFromEndSeconds   = fromItem.TimelinePosition + (fromItem is VideoClip fromVc ? fromVc.TrimmedDuration : fromItem.Duration);
+        _transitionResizeFromDur          = fromItem is VideoClip fvc ? fvc.TrimmedDuration : fromItem.Duration;
+        _transitionResizeToDur            = toItem   is VideoClip tvc ? tvc.TrimmedDuration : toItem.Duration;
+
+        await CapturePointerAsync(e);
+    }
+
+    private void OnTrimPointerMove(PointerEventArgs e)
+    {
+        // Transition chip edge resize (item #57 T4) — see the field-group comment above for why
+        // this stays a local, un-pushed mutation until pointerup.
+        if (_resizingTransition is not null)
+        {
+            var deltaSec  = (e.ClientX - _transitionResizeStartX) / Timeline.PxPerSecond;
+            var requested = _resizingTransitionSide == TrimSide.End
+                ? _transitionResizeOriginalDuration + deltaSec
+                : _transitionResizeOriginalDuration - deltaSec;
+            var newDuration = TransitionDurationClamp.Clamp(requested, _transitionResizeFromDur, _transitionResizeToDur);
+
+            _resizingTransition.Duration         = newDuration;
+            _resizingTransition.TimelinePosition = _transitionResizeFromEndSeconds - newDuration / 2;
+            StateHasChanged();
+            return;
+        }
+
+        // Video clip trim
+        if (_trimmingClip is not null)
+        {
+            var deltaX   = e.ClientX - _trimDragStartX;
+            var duration = _trimOriginalEnd - _trimOriginalStart;
+            if (duration <= 0) return;
+            var deltaSec = deltaX / Timeline.PxPerSecond;
+            double newStart = _trimOriginalStart;
+            double newEnd   = _trimOriginalEnd;
+            if (_trimmingSide == TrimSide.Start)
+                newStart = Math.Clamp(_trimOriginalStart + deltaSec, 0, newEnd - 0.1);
+            else
+                newEnd   = Math.Clamp(_trimOriginalEnd + deltaSec, newStart + 0.1, _trimmingClip.Duration);
+            Clips.UpdateTrim(_trimmingClip.Id, newStart, newEnd);
+            return;
+        }
+
+        // Image clip duration drag (end handle)
+        if (_trimmingImageClip is not null)
+        {
+            var deltaX   = e.ClientX - _trimDragStartX;
+            var deltaSec = deltaX / Timeline.PxPerSecond;
+            var newDur   = Math.Max(0.1, _imageOriginalDuration + deltaSec);
+            Clips.UpdateImageDuration(_trimmingImageClip.Id, newDur);
+            return;
+        }
+
+        // Image clip start trim (start handle — shifts position forward, shrinks duration)
+        if (_imageStartTrimClip is not null)
+        {
+            var deltaX      = e.ClientX - _trimDragStartX;
+            var deltaSec    = deltaX / Timeline.PxPerSecond;
+            var newPosition = Math.Max(0, _imageStartOriginalPosition + deltaSec);
+            var newDuration = Math.Max(0.1, _imageStartOriginalDuration - (newPosition - _imageStartOriginalPosition));
+            _imageStartTrimClip.TimelinePosition = newPosition;
+            Clips.UpdateImageDuration(_imageStartTrimClip.Id, newDuration);
+            return;
+        }
+
+        // Overlay (Callout/TextOverlay) end handle — extends/shrinks Duration (item #28)
+        if (_trimmingOverlay is not null)
+        {
+            var deltaX   = e.ClientX - _trimDragStartX;
+            var deltaSec = deltaX / Timeline.PxPerSecond;
+            var newDur   = Math.Max(0.1, _overlayOriginalDuration + deltaSec);
+            ApplyOverlayDuration(_trimmingOverlay, newDur);
+            return;
+        }
+
+        // Overlay start handle — shifts position forward, shrinks duration (item #28)
+        if (_overlayStartTrimClip is not null)
+        {
+            var deltaX      = e.ClientX - _trimDragStartX;
+            var deltaSec    = deltaX / Timeline.PxPerSecond;
+            var newPosition = Math.Max(0, _overlayStartOriginalPosition + deltaSec);
+            var newDuration = Math.Max(0.1, _overlayStartOriginalDuration - (newPosition - _overlayStartOriginalPosition));
+            _overlayStartTrimClip.TimelinePosition = newPosition;
+            ApplyOverlayDuration(_overlayStartTrimClip, newDuration);
+            return;
+        }
+
+        // Keyframe diamond retime (item #57 P6) — live preview only (MotionKeyframe is an
+        // immutable record, so there's nothing to mutate in place the way a plain TrackItem field
+        // can be); clamped to the layer's own visible span on the timeline. The one authoritative
+        // Motion.MoveKeyframeTime commit happens once, at pointerup, below.
+        if (_draggingKeyframeItem is not null)
+        {
+            var item     = _draggingKeyframeItem;
+            var deltaSec = (e.ClientX - _kfDragStartX) / Timeline.PxPerSecond;
+            var minTime  = item.TimelinePosition;
+            var maxTime  = item.TimelinePosition + ItemDuration(item);
+            _kfDragLiveTime = Math.Clamp(_kfDragOriginalTime + deltaSec, minTime, maxTime);
+            StateHasChanged();
+            return;
+        }
+
+        // Body drag — move TimelinePosition (live preview, no undo entry yet)
+        if (_movingItem is not null)
+        {
+            // Cross-track vertical move (item #25) — only track which row is hovered, for visual
+            // feedback (a highlighted row). The actual track-membership change happens once, at
+            // drop, in FinalizeMove/ClipStore.CommitDraggedPositionAndTrack — relocating the item
+            // between tracks' Items lists mid-drag would move its chip into a different track's
+            // @foreach, destroying and recreating its DOM element and breaking the pointer
+            // capture the rest of this drag depends on (same class of bug as #27, a new trigger).
+            if (_moveTrackRows.Count > 0)
+            {
+                var hovered = _moveTrackRows.FirstOrDefault(r => e.ClientY >= r.Top && e.ClientY <= r.Bottom);
+                _moveHoverTrackId = hovered is not null && Guid.TryParse(hovered.TrackId, out var hoveredTrackId)
+                    ? hoveredTrackId
+                    : null;
+            }
+
+            var deltaSec = (e.ClientX - _moveDragStartX) / Timeline.PxPerSecond;
+            var raw      = Math.Max(0, _moveOriginalPosition + deltaSec);
+            var snapped  = EffectiveOptions.Snapping
+                ? SnapEngine.Snap(raw, _moveSnapTargets, EffectiveOptions.SnapThresholdSeconds)
+                : raw;
+            _movingItem.TimelinePosition = snapped;
+            _snapGuidePx = EffectiveOptions.Snapping
+                ? SnapEngine.ActiveSnapTarget(raw, _moveSnapTargets, EffectiveOptions.SnapThresholdSeconds) is { } target
+                    ? target * Timeline.PxPerSecond
+                    : null
+                : null;
+            StateHasChanged();
+        }
+    }
+
+    private void OnTrimPointerUp(PointerEventArgs e)
+    {
+        _trimmingClip        = null;
+        _trimmingImageClip   = null;
+        _imageStartTrimClip  = null;
+        _trimmingOverlay     = null;
+        _overlayStartTrimClip = null;
+
+        // Item #57 P6 — the one authoritative retime commit, only if the keyframe actually moved
+        // (a plain click that never crossed the retime path leaves _kfDragLiveTime == the original
+        // time, so this is a no-op then — SelectTimelineKeyframe's sibling @onclick handles that
+        // case instead).
+        if (_draggingKeyframeItem is not null)
+        {
+            var item = _draggingKeyframeItem;
+            _draggingKeyframeItem = null;
+            if (Math.Abs(_kfDragLiveTime - _kfDragOriginalTime) > 0.001)
+                Motion.MoveKeyframeTime(item.Id, _kfDragOriginalTime, _kfDragLiveTime);
+            _draggingKeyframeIndex = -1;
+        }
+
+        // Item #57 T4 — the one authoritative, undoable commit for the whole resize gesture.
+        // Re-derives everything fresh via Clips.UpdateTransition (which recomputes
+        // TimelinePosition itself from current state) rather than trusting the live-preview
+        // mutation's own cached numbers, so a stale cache can never leave the model wrong even
+        // if something else changed the adjacent clips mid-drag.
+        if (_resizingTransition is not null)
+        {
+            var transition = _resizingTransition;
+            _resizingTransition = null;
+            try { Clips.UpdateTransition(transition.Id, transition.Style, transition.Duration); }
+            catch { /* transition or track vanished mid-drag — nothing to commit */ }
+        }
+
+        FinalizeMove();
+    }
+
+    /// <summary>Commits (or no-ops, if it never actually moved) and clears an in-progress
+    /// body-drag. Called from the normal pointerup path, and also as a fallback from
+    /// <see cref="OnDragEnd"/> — see #27: if native drag-and-drop ever wins the race against
+    /// the draggable="false" gate below, the browser suppresses pointerup delivery to the chip
+    /// entirely, which would otherwise leave <see cref="_movingItem"/> stuck set forever (the
+    /// clip visually stays in "moving" state and can never be dragged again).</summary>
+    private void FinalizeMove()
+    {
+        if (_movingItem is null) return;
+        var movedItemId = _movingItem.Id;
+        var targetTrackId = _moveHoverTrackId is { } hovered && hovered != _moveOriginalTrackId
+            ? hovered
+            : (Guid?)null;
+        if (targetTrackId.HasValue && _moveOriginalTrackId.HasValue)
+            Clips.CommitDraggedPositionAndTrack(_movingItem.Id, _moveOriginalTrackId.Value, _moveOriginalPosition, targetTrackId);
+        else if (_rippleOverride)
+            Clips.RippleCommitDraggedPosition(_movingItem.Id, _moveOriginalPosition);
+        else
+            Clips.CommitDraggedPosition(_movingItem.Id, _moveOriginalPosition);
+        _ = ScrollItemIntoViewAsync(movedItemId); // item #25 — fire-and-forget, purely cosmetic
+        _movingItem           = null;
+        _moveItemTrackId      = null;
+        _moveOriginalTrackId  = null;
+        _moveHoverTrackId     = null;
+        _moveTrackRows        = [];
+        _moveSnapTargets      = [];
+        _snapGuidePx          = null;
+    }
+
+    // ── Middle-drag (move clip position) ──────────────────────────────────────
+
+    private TrackItem? _movingItem;
+    private double     _moveOriginalPosition;
+    private double     _moveDragStartX;
+    private bool       _rippleOverride; // initialized from VideoEditorOptions.RippleEdit
+    private Guid?       _moveItemTrackId;
+    private Guid?       _moveOriginalTrackId;
+    private Guid?       _moveHoverTrackId; // item #25 — row currently hovered during a cross-track drag, visual only
+    private IReadOnlyList<double>       _moveSnapTargets = [];
+    private IReadOnlyList<TrackRowRect> _moveTrackRows   = [];
+
+    private sealed record TrackRowRect(string TrackId, double Top, double Bottom);
+
+    private async Task OnChipPointerDown(PointerEventArgs e, TrackItem item, TimelineTrack track)
+    {
+        // Only left button; only when InlineTrimming is on; trim handles stop propagation
+        // so this fires only for the chip body (middle zone).
+        if (e.Button != 0 || !EffectiveOptions.InlineTrimming || track.IsLocked) return;
+        _movingItem           = item;
+        _moveOriginalPosition = item.TimelinePosition;
+        _moveDragStartX       = e.ClientX;
+        _moveItemTrackId      = track.Id;
+        _moveOriginalTrackId  = track.Id;
+        _moveSnapTargets      = EffectiveOptions.Snapping
+            ? SnapEngine.CollectSnapTargets(Clips.Tracks, Clips.Markers, excludeItemId: item.Id)
+            : [];
+
+        // Cross-track vertical drag (item #25) — only VideoClip/AudioClip move freely between
+        // same-type tracks; overlay items (Callout/Text/ClipArt) stay pinned to their owning
+        // video track's overlay lane, so there's nothing to measure for them.
+        _moveTrackRows = [];
+        if (EffectiveOptions.MultiTrack && item is VideoClip or AudioClip)
+        {
+            try
+            {
+                var js   = await GetJsModuleAsync();
+                var rows = await js.InvokeAsync<TrackRowRect[]>("measureAllTrackRows");
+                var sameTypeTrackIds = Clips.Tracks
+                    .Where(t => t.Type == track.Type)
+                    .Select(t => t.Id.ToString())
+                    .ToHashSet();
+                _moveTrackRows = rows.Where(r => sameTypeTrackIds.Contains(r.TrackId)).ToList();
+            }
+            catch { _moveTrackRows = []; }
+        }
+
+        await CapturePointerAsync(e);
+    }
+
+    // Image clips: only the end handle adjusts display duration
+    private ImageClip? _trimmingImageClip;
+    private double     _imageOriginalDuration;
+
+    private async Task OnImageTrimHandlePointerDown(PointerEventArgs e, ImageClip clip)
+    {
+        _trimmingImageClip     = clip;
+        _trimmingClip          = null;
+        _trimDragStartX        = e.ClientX;
+        _imageOriginalDuration = clip.Duration;
+        try
+        {
+            var js = await GetJsModuleAsync();
+            _trimChipWidthPx = await js.InvokeAsync<double>("measureWidth", (object?)null);
+        }
+        catch { _trimChipWidthPx = 0; }
+        if (_trimChipWidthPx <= 0) _trimChipWidthPx = 160.0;
+        await CapturePointerAsync(e);
+    }
+
+    // Start-trim for image clips: moves the TimelinePosition forward and shrinks Duration
+    private ImageClip?  _imageStartTrimClip;
+    private double      _imageStartOriginalPosition;
+    private double      _imageStartOriginalDuration;
+
+    private async Task OnImageStartTrimHandlePointerDown(PointerEventArgs e, ImageClip clip)
+    {
+        _imageStartTrimClip          = clip;
+        _trimmingImageClip           = null;
+        _trimmingClip                = null;
+        _trimDragStartX              = e.ClientX;
+        _imageStartOriginalPosition  = clip.TimelinePosition;
+        _imageStartOriginalDuration  = clip.Duration;
+        await CapturePointerAsync(e);
+    }
+
+    // Overlay items (CalloutClip/TextOverlay) — no source in/out points, just TimelinePosition +
+    // Duration on the timeline. End handle adjusts duration directly; start handle shifts
+    // TimelinePosition forward and shrinks duration to compensate (item #28, mirrors ImageClip above).
+    private TrackItem? _trimmingOverlay;
+    private double     _overlayOriginalDuration;
+
+    private async Task OnOverlayTrimHandlePointerDown(PointerEventArgs e, TrackItem clip)
+    {
+        _trimmingOverlay         = clip;
+        _overlayStartTrimClip    = null;
+        _trimDragStartX          = e.ClientX;
+        _overlayOriginalDuration = clip.Duration;
+        await CapturePointerAsync(e);
+    }
+
+    private TrackItem? _overlayStartTrimClip;
+    private double     _overlayStartOriginalPosition;
+    private double     _overlayStartOriginalDuration;
+
+    private async Task OnOverlayStartTrimHandlePointerDown(PointerEventArgs e, TrackItem clip)
+    {
+        _overlayStartTrimClip        = clip;
+        _trimmingOverlay             = null;
+        _trimDragStartX              = e.ClientX;
+        _overlayStartOriginalPosition = clip.TimelinePosition;
+        _overlayStartOriginalDuration = clip.Duration;
+        await CapturePointerAsync(e);
+    }
+
+    /// <summary>Applies a live (no-undo) duration change to a CalloutClip or TextOverlay during
+    /// an inline-trim drag — mirrors <see cref="ClipStore.UpdateImageDuration"/> for ImageClip.</summary>
+    private void ApplyOverlayDuration(TrackItem item, double duration)
+    {
+        switch (item)
+        {
+            case CalloutClip:
+                Clips.UpdateCallout(item.Id, c => c.Duration = duration);
+                break;
+            case TextOverlay to:
+                Clips.UpdateTextOverlay(to with { Duration = duration });
+                break;
+        }
+    }
+
+    // ── Keyframe diamonds (item #57 P6) ─────────────────────────────────────────
+    // Live drag mutates the path directly via MoveKeyframeTime on every pointermove (matching
+    // MotionKeyframeService's own no-undo-mid-gesture style — its keyframe mutations aren't wired
+    // into ClipStore's undo stack at all yet, a pre-existing gap tracked separately as item #63,
+    // not something this phase can fix incidentally). A plain click (no real movement) is handled
+    // by the sibling @onclick below instead — SelectTimelineKeyframe — the same "separate @onclick
+    // alongside @onpointerdown" pattern this file already uses for chip body-drag vs. selection.
+
+    private TrackItem? _draggingKeyframeItem;
+    private int        _draggingKeyframeIndex = -1;
+    private double     _kfDragStartX;
+    private double     _kfDragOriginalTime;
+    private double     _kfDragLiveTime;
+
+    private async Task OnKeyframeDiamondPointerDown(PointerEventArgs e, TrackItem item, int keyframeIndex)
+    {
+        var track = Clips.FindTrackOf(item.Id);
+        if (track is null || track.IsLocked) return;
+        var path = Motion.GetPath(item.Id);
+        if (path is null || keyframeIndex < 0 || keyframeIndex >= path.Keyframes.Count) return;
+
+        _draggingKeyframeItem  = item;
+        _draggingKeyframeIndex = keyframeIndex;
+        _kfDragStartX          = e.ClientX;
+        _kfDragOriginalTime    = path.Keyframes[keyframeIndex].Time;
+        _kfDragLiveTime        = _kfDragOriginalTime;
+        await CapturePointerAsync(e);
+    }
+
+    /// <summary>Click (not drag) on a keyframe diamond — seeks the playhead to the keyframe's own
+    /// time and reports it upward so the parent can open/focus the MotionKeyframeEditor panel.
+    /// Uses the keyframe's actual current time from <see cref="Motion"/> rather than any live drag
+    /// state, so a plain click always selects the real, settled keyframe.</summary>
+    private async Task SelectTimelineKeyframe(TrackItem item, int keyframeIndex)
+    {
+        var path = Motion.GetPath(item.Id);
+        if (path is null || keyframeIndex < 0 || keyframeIndex >= path.Keyframes.Count) return;
+
+        var time = path.Keyframes[keyframeIndex].Time;
+        Playback.RequestSeek(time);
+        await OnTimelineKeyframeSelected.InvokeAsync((item.Id, LayerTypeOf(item), keyframeIndex, time));
+    }
+
+    private static string LayerTypeOf(TrackItem item) => item switch
+    {
+        CalloutClip => "CalloutClip",
+        ClipArtClip => "ClipArtClip",
+        TextOverlay => "TextOverlay",
+        _           => string.Empty,
+    };
+
+ // --- Helpers ---
+
+    private string RegionTooltip(RenderRegion region)
+    {
+        var item = Clips.PrimaryVideoTrack.Items.FirstOrDefault(i => i.Id == region.ClipId);
+        var clipName = item is not null ? ItemTitle(item) : "Clip";
+        var state = region.State switch
+        {
+            RenderRegionState.Fine           => "rendered — matches cached preview",
+            RenderRegionState.RenderingFine  => $"rendering ({region.ProgressPct}%)",
+            RenderRegionState.Rough          => "rough render cached",
+            RenderRegionState.RenderingRough => $"rendering rough pass ({region.ProgressPct}%)",
+            _                                 => "not yet rendered — click Preview to refresh",
+        };
+        return $"{clipName}: {state}";
+    }
+
+    private static string ChipType(TrackItem item) => item switch
+    {
+        VideoClip    => "video",
+        AudioClip    => "audio",
+        TextOverlay  => "text",
+        Transition   => "transition",
+        ImageClip    => "image",
+        CalloutClip  => "callout",
+        ClipArtClip  => "clipart",
+        _            => "video"
+    };
+
+    private static string ItemIcon(TrackItem item) => item switch
+    {
+        AudioClip    => "🎵",
+        TextOverlay  => "T",
+        Transition   => "…",
+        CalloutClip  => "📌",
+        ClipArtClip  => "🖼",
+        _            => ""
+    };
+
+    private static string CalloutIcon(ShapeType shape) => shape switch
+    {
+        ShapeType.Rectangle => "▭",
+        ShapeType.Ellipse   => "◎",
+        ShapeType.Arrow     => "→",
+        ShapeType.Line      => "—",
+        ShapeType.Star      => "★",
+        ShapeType.Custom    => "✦",
+        _                   => "▭"
+    };
+
+    private static string ItemTitle(TrackItem item) => item switch
+    {
+        TextOverlay to => to.Text,
+        _              => item.Name
+    };
+
+    /// <summary>Label shown in the overlay row's named-lane gutter (item #42) — the item's
+    /// type, not its own name/text (which is already shown inside the chip itself).</summary>
+    private static string LaneTypeName(TrackItem item) => item switch
+    {
+        CalloutClip  => "Callout",
+        TextOverlay  => "Text",
+        ClipArtClip  => "Clipart",
+        _            => "Layer"
+    };
+
+    private static double ItemDuration(TrackItem item) => item switch
+    {
+        VideoClip vc => vc.TrimmedDuration,
+        _            => item.Duration
+    };
+
+    private static string TrackIcon(TrackType type) => type switch
+    {
+        TrackType.Video => "🎬",
+        TrackType.Audio => "🎵",
+        _               => "♪"
+    };
+
+    private static string ShortName(string name) =>
+        name.Length <= 18 ? name : name[..15] + "…";
+
+    private static string FormatDuration(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.TotalHours >= 1
+            ? ts.ToString(@"h\:mm\:ss")
+            : ts.ToString(@"m\:ss\.f");
+    }
+}

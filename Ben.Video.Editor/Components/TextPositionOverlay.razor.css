@@ -1,0 +1,17 @@
+/* ── Text position overlay ──────────────────────────────────────────────────
+   SVG positioned absolute over the VideoPreview screen.
+   Pointer events handled by SVG children; the SVG root is transparent.      */
+
+.bv-text-position-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+    z-index: 4;
+}
+
+.bv-text-position-overlay circle {
+    pointer-events: visiblePainted;
+}

@@ -1,0 +1,322 @@
+/*
+ * CSS custom properties written by VideoEditor.razor via style attribute:
+ *   --bv-browser-w   : clip browser width  (px)
+ *   --bv-timeline-h  : timeline height     (px)
+ */
+.bv-editor {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background: var(--kendo-color-surface-alt, var(--bv-surface-1));
+    color: var(--kendo-color-on-surface, var(--bv-text));
+}
+
+/* ── Workspace row — content moved to floating TelerikWindow panel ──────────── */
+.bv-workspace {
+    display: none;
+}
+
+/* Clip browser — width driven by --bv-browser-w */
+.bv-workspace__browser {
+    width: var(--bv-browser-w, 240px);
+    flex-shrink: 0;
+    overflow: hidden;
+    transition: width 150ms ease;
+}
+
+.bv-workspace__browser--hidden {
+    width: 0 !important;
+    overflow: hidden;
+}
+
+/* Center preview grows to fill remaining space */
+.bv-workspace__preview {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    transition: flex 150ms ease;
+}
+
+.bv-workspace__preview--hidden {
+    display: none;
+}
+
+/* Right properties panel(s) */
+.bv-workspace__props {
+    flex-shrink: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* ── Asset browser side panel ────────────────────────────────────────────── */
+.bv-asset-browser-panel {
+    width: 260px;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-right: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+/* ── Floating Media & Properties panel (TelerikWindow) ──────────────────── */
+/* TelerikWindow doesn't forward the Blazor scope attribute onto its own root
+   element, so `.bv-media-panel-window` alone never matches once compiled to
+   `.bv-media-panel-window[b-xxx] ...`. Root the ::deep at `.bv-editor`
+   instead — a plain authored <div> that reliably carries the scope
+   attribute — then match the rest by class name regardless of scope. */
+.bv-editor ::deep .bv-media-panel-window .k-window-content {
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* MinHeight="200px" on the TelerikWindow (so the content area can't be resized
+   too small in normal use) also fights the minimized state, where Telerik tries
+   to shrink to just the titlebar — leaving a tall empty box below the titlebar
+   with the content hidden inside it. Drop the floor once minimized. */
+.bv-editor ::deep .bv-media-panel-window.k-window-minimized {
+    height: auto !important;
+    min-height: 0 !important;
+}
+
+/* Telerik's theme only ever gives .k-window-titlebar top-corner radius (it relies on
+   .k-window's own radius + overflow to round the bottom edge while content is showing).
+   Once minimized, the titlebar's own rectangle IS the whole visible window, so its
+   un-rounded bottom corners show through square — add the missing bottom radius here. */
+.bv-editor ::deep .bv-media-panel-window.k-window-minimized .k-window-titlebar {
+    border-end-start-radius: var(--kendo-border-radius-xxl);
+    border-end-end-radius: var(--kendo-border-radius-xxl);
+}
+
+.bv-media-panel-title {
+    font-size: .8rem;
+    font-weight: 600;
+}
+
+/* ── Preview popout window (TelerikWindow) ───────────────────────────────── */
+/* Same root cause/workaround as .bv-media-panel-window above: TelerikWindow's
+   root doesn't carry the Blazor scope attribute, so this must go through
+   .bv-editor ::deep instead of a plain scoped selector. */
+.bv-editor ::deep .bv-preview-popout-window .k-window-content {
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Full-quality Preview output (item #36 phase 84) — "Rendering…" status shown in place of the
+   video element while ExportService's pipeline runs. */
+.bv-fullquality-preview__status {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    text-align: center;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    font-size: .875rem;
+    background: #000;
+}
+
+/* Props tab: fill the window content area, scroll internally.
+   Same root cause as the TelerikWindow note above: TelerikTabStrip's own
+   root element (.k-tabstrip) doesn't carry the Blazor scope attribute
+   either (verified via getAttribute — no b-xxx present), so a plain
+   `.bv-media-panel-tabs { ... }` here compiles to a scoped selector that
+   can never match it, regardless of !important; it silently no-ops. Must
+   go through .bv-editor ::deep the same way.
+   Once it actually applies: .k-tabstrip's own default flex:0 1 auto (no
+   min-height override) means it sizes to its OWN content height instead of
+   the space .k-window-content actually gives it. When that content (tab
+   nav + .bv-props-tab's sliders) is taller than the window, the excess
+   silently gets clipped by .k-window-content's overflow:hidden instead of
+   becoming reachable via .bv-props-tab's own overflow-y:auto — so anything
+   past ~Speed (Effects, Volume automation, ...) was invisible AND
+   unscrollable. flex:1 1 0 + min-height:0 forces it to take only the space
+   it's actually given, so the scroll happens where it's supposed to. */
+.bv-editor ::deep .bv-media-panel-tabs {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.bv-props-tab {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+}
+
+/* Empty-state hint in Properties tab */
+.bv-props-empty {
+    padding: 1rem .75rem;
+    font-size: .8rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    text-align: center;
+}
+
+/* ── Timeline row ──────────────────────────────────────────────────────────── */
+/* height is the user's drag-resized preference (LayoutService.TimelineHeight, up
+   to 600px) but flex-shrink:0 let it stay that size even when the toolbar +
+   this row + the preview row together exceed the viewport — .bv-editor's own
+   overflow:hidden then silently clipped whatever didn't fit (usually the
+   preview row's transport controls). flex-shrink:1 lets both resizable rows
+   compress together instead, so the container never grows past its own box. */
+.bv-timeline-row {
+    height: var(--bv-timeline-h, 180px);   /* slightly shorter — preview gets more space */
+    min-height: 90px;
+    flex-shrink: 1;
+    overflow: hidden;
+    transition: height 150ms ease;
+}
+
+/* ── Preview row (below timeline) ──────────────────────────────────────────── */
+.bv-preview-row {
+    height: var(--bv-preview-h, 180px);  /* compact default; user can override via --bv-preview-h */
+    min-height: 90px;
+    flex-shrink: 1;
+    overflow: hidden;
+    display: flex;
+    border-top: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+/* ── Three-point editing marks (item #51) ──────────────────────────────────── */
+.bv-mark-inout {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .3rem .6rem;
+    flex-shrink: 0;
+    border-top: 1px solid var(--kendo-color-border, var(--bv-border));
+    background: var(--kendo-color-surface-alt, var(--bv-surface-1));
+}
+
+.bv-mark-inout__summary {
+    font-size: .75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+}
+
+.bv-timeline-row--hidden {
+    height: 0 !important;
+    overflow: hidden;
+}
+
+/* ── Responsive — narrow viewport ─────────────────────────────────────────── */
+@media (max-width: 700px) {
+    .bv-workspace__browser { display: none; }
+    .bv-workspace__browser--hidden { display: none; }
+}
+
+/* ── Audio waveform side panel ─────────────────────────────────────────────── */
+.bv-audio-panel {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    padding: .75rem;
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    border-left: 1px solid var(--kendo-color-border, var(--bv-border));
+    min-width: 220px;
+    max-width: 300px;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.bv-audio-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+}
+
+.bv-audio-panel__title {
+    font-size: .8125rem;
+    font-weight: 600;
+    color: var(--kendo-color-on-surface, var(--bv-text));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Keyboard shortcut help overlay ─────────────────────────────────── */
+.bv-kbd-help {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.bv-kbd-help__panel {
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    border: 1px solid var(--kendo-color-border, var(--bv-border));
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    min-width: 340px;
+    max-width: 480px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+}
+
+.bv-kbd-help__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: .9rem;
+    font-weight: 600;
+    color: var(--kendo-color-on-surface, var(--bv-text));
+    margin-bottom: .75rem;
+    border-bottom: 1px solid var(--kendo-color-border, var(--bv-border));
+    padding-bottom: .5rem;
+}
+
+.bv-kbd-help__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .8rem;
+    color: var(--kendo-color-on-surface, var(--bv-text));
+}
+
+.bv-kbd-help__table td {
+    padding: .3rem .25rem;
+    vertical-align: middle;
+}
+
+.bv-kbd-help__table td:first-child {
+    white-space: nowrap;
+    padding-right: 1rem;
+}
+
+kbd {
+    display: inline-block;
+    padding: .1em .4em;
+    font-size: .75em;
+    font-family: ui-monospace, monospace;
+    background: var(--kendo-color-surface-alt, var(--bv-surface-1));
+    border: 1px solid var(--kendo-color-border, var(--bv-border));
+    border-radius: 3px;
+    margin: .05rem;
+}
+
+/* ── Transition editor side panel ─────────────────────────────────────────── */
+.bv-transition-panel {
+    width: 260px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--kendo-color-border, var(--bv-border));
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    overflow-y: auto;
+}
+
+/* ── Text overlay editor side panel ─────────────────────────────────── */
+.bv-text-overlay-panel {
+    width: 300px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--kendo-color-border, var(--bv-border));
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    overflow-y: auto;
+}

@@ -1,0 +1,430 @@
+@inject ExportService Exporter
+@inject ClipStore Clips
+@inject PlaybackService Playback
+@inject ExportQueueService ExportQueue
+@inject ExportResolutionService ResolutionService
+
+@if (_visible)
+{
+    <TelerikWindow Visible="true"
+                   Modal="true"
+                   Width="520px"
+                   Height="640px"
+                   Resizable="true"
+                   Class="bv-export-dialog"
+                   VisibleChanged="OnVisibleChanged">
+
+        <WindowTitle>Render &amp; Export</WindowTitle>
+        <WindowContent>
+            <div class="bv-export-dialog__body">
+            <div class="bv-export-form">
+
+                @if (_job is { State: ExportJobState.Running })
+                {
+                    <!-- ── Running: show live progress ── -->
+                    <div class="bv-export-form__progress">
+
+                        <p class="bv-export-form__phase">@_job.PhaseLabel</p>
+
+                        <TelerikProgressBar Value="@((double)_job.OverallPercent)"
+                                            Max="100"
+                                            Class="bv-export-form__bar" />
+
+                        <span class="bv-export-form__pct">@_job.OverallPercent%</span>
+
+                        @if (_job.CompletedPhases.Count > 0)
+                        {
+                            <ul class="bv-export-form__phases">
+                                @foreach (var phase in _job.CompletedPhases.TakeLast(4))
+                                {
+                                    <li>✓ @phase</li>
+                                }
+                            </ul>
+                        }
+
+                        @* Audit #1 — Cancel can't interrupt an ffmpeg.wasm command that's already
+                           running (the worker is synchronous and has no abort channel), so without
+                           this the button looked broken: you'd click it and nothing would visibly
+                           happen until the current command finished. Now it disables itself and
+                           says what it's actually waiting for. *@
+                        <TelerikButton OnClick="CancelExport"
+                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                       Enabled="@(!_job.CancelRequested)"
+                                       Size="@ThemeConstants.Button.Size.Small">
+                            @(_job.CancelRequested ? "Cancelling…" : "Cancel")
+                        </TelerikButton>
+
+                        @if (_job.CancelRequested)
+                        {
+                            <span class="bv-export-form__cancel-hint">
+                                Stopping after the current step finishes — ffmpeg can't be
+                                interrupted mid-command.
+                            </span>
+                        }
+
+                    </div>
+                }
+                else
+                {
+                    <!-- ── Settings form ── -->
+
+                    <!-- ── Preset quick-select ── -->
+                    <div class="bv-export-presets">
+                        <span class="bv-export-presets__label">Presets:</span>
+                        @foreach (var (label, factory) in ExportPresets.All)
+                        {
+                            var f = factory;
+                            <button class="bv-export-preset-btn" @onclick="() => ApplyPreset(f)">@label</button>
+                        }
+                    </div>
+
+                    <!-- Output format -->
+                    <div class="bv-export-row">
+                        <label class="bv-export-label">Format</label>
+                        <TelerikDropDownList Data="@_formats"
+                                             @bind-Value="@_settings.OutputFormat"
+                                             Class="bv-export-control" />
+                    </div>
+
+                    <!-- Video codec -->
+                    <div class="bv-export-row">
+                        <label class="bv-export-label">Video Codec</label>
+                        <TelerikDropDownList Data="@VideoCodecs"
+                                             @bind-Value="@_settings.VideoCodec"
+                                             Class="bv-export-control" />
+                    </div>
+
+                    <!-- Quality mode -->
+                    <div class="bv-export-row">
+                        <label class="bv-export-label">Quality Mode</label>
+                        <div class="bv-export-toggle">
+                            <TelerikCheckBox @bind-Value="@_settings.UseCrf" />
+                            <span>CRF (constant quality)</span>
+                        </div>
+                    </div>
+
+                    @if (_settings.UseCrf)
+                    {
+                        <div class="bv-export-row">
+                            <label class="bv-export-label">CRF (@_settings.Crf)</label>
+                            <TelerikSlider @bind-Value="@_settings.Crf"
+                                           Min="0"
+                                           Max="51"
+                                           SmallStep="1"
+                                           LargeStep="5"
+                                           Class="bv-export-control" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="bv-export-row">
+                            <label class="bv-export-label">Bitrate (kbps)</label>
+                            <TelerikNumericTextBox @bind-Value="@_settings.Bitrate"
+                                                   Min="500"
+                                                   Max="50000"
+                                                   Step="500"
+                                                   Class="bv-export-control" />
+                        </div>
+                    }
+
+                    <!-- Preset -->
+                    @if (_settings.VideoCodec is "libx264" or "libx265")
+                    {
+                        <div class="bv-export-row">
+                            <label class="bv-export-label">Preset</label>
+                            <TelerikDropDownList Data="@_presets"
+                                                 @bind-Value="@_settings.Preset"
+                                                 Class="bv-export-control" />
+                        </div>
+                    }
+
+                    <!-- Resolution -->
+                    <div class="bv-export-row">
+                        <label class="bv-export-label">Resolution</label>
+                        <TelerikDropDownList TItem="ResolutionItem"
+                                             TValue="string"
+                                             Data="@_resolutionItems"
+                                             Value="@_settings.Resolution"
+                                             ValueChanged="@OnResolutionChanged"
+                                             TextField="Label"
+                                             ValueField="Value"
+                                             Class="bv-export-control" />
+                    </div>
+
+                    <!-- Frame rate -->
+                    <div class="bv-export-row">
+                        <label class="bv-export-label">Frame Rate</label>
+                        <TelerikDropDownList Data="@_fpsItems"
+                                             Value="@_settings.Fps"
+                                             ValueChanged="@((int v) => { _settings.Fps = v; Playback.SetSessionFps(v); })"
+                                             TextField="Label"
+                                             ValueField="Value"
+                                             Class="bv-export-control" />
+                    </div>
+
+                    <!-- Audio -->
+                    <div class="bv-export-row">
+                        <label class="bv-export-label">Audio</label>
+                        <div class="bv-export-toggle">
+                            <TelerikCheckBox @bind-Value="@_settings.IncludeAudio" />
+                            <span>Include audio</span>
+                        </div>
+                    </div>
+
+                    @if (_settings.IncludeAudio)
+                    {
+                        <div class="bv-export-row">
+                            <label class="bv-export-label">Audio Codec</label>
+                            <TelerikDropDownList Data="@AudioCodecs"
+                                                 @bind-Value="@_settings.AudioCodec"
+                                                 Class="bv-export-control" />
+                        </div>
+                        <div class="bv-export-row">
+                            <label class="bv-export-label">Audio Bitrate</label>
+                            <TelerikDropDownList Data="@_audioBitrates"
+                                                 @bind-Value="@_settings.AudioBitrate"
+                                                 Class="bv-export-control" />
+                        </div>
+                    }
+
+                    <!-- Filename -->
+                    <div class="bv-export-row">
+                        <label class="bv-export-label">Filename</label>
+                        <TelerikTextBox @bind-Value="@_settings.OutputFilename"
+                                        Class="bv-export-control"
+                                        PlaceHolder="output" />
+                    </div>
+
+                    <!-- Chapters -->
+                    @if (Clips.Markers.Count > 0 && _settings.OutputFormat != "webm")
+                    {
+                        <div class="bv-export-row">
+                            <label class="bv-export-label">Chapters</label>
+                            <div class="bv-export-toggle">
+                                <TelerikCheckBox @bind-Value="@_settings.EmbedChapters" />
+                                <span>Embed @Clips.Markers.Count marker(s) as chapters</span>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Summary -->
+                    <div class="bv-export-form__summary">
+                        @ClipSummary
+                    </div>
+
+                    <!-- Architecture note -->
+                    <p class="bv-export-form__note">
+                        ℹ Rendering runs entirely in your browser using ffmpeg.wasm.
+                        Your original clips are not modified (non-destructive editing).
+                        The rendered file is saved locally; optionally upload it to a server after export.
+                    </p>
+                }
+
+                @if (_job is { State: ExportJobState.Failed })
+                {
+                    <div class="bv-export-form__error">⚠ @_job.ErrorMessage</div>
+                }
+
+                @if (_job is { State: ExportJobState.Completed })
+                {
+                    <div class="bv-export-form__success">
+                        ✓ Export complete in @_job.Elapsed.TotalSeconds.ToString("F1")s (@FormatBytes(_job.OutputSizeBytes))
+                    </div>
+                }
+
+            </div>
+
+            @if (_job is not { State: ExportJobState.Running })
+            {
+                <div class="bv-export-dialog__footer">
+                    <TelerikButton OnClick="AddToQueueAsync"
+                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
+                                   Icon="@SvgIcon.Plus"
+                                   Enabled="@CanExport"
+                                   Title="Add this export to the queue without blocking">
+                        Add to Queue
+                    </TelerikButton>
+                    <TelerikButton OnClick="StartExportAsync"
+                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
+                                   Icon="@SvgIcon.Download"
+                                   Enabled="@CanExport">
+                        Export Now
+                    </TelerikButton>
+                    <TelerikButton OnClick="Close"
+                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Base">
+                        @(_job?.State == ExportJobState.Completed ? "Done" : "Cancel")
+                    </TelerikButton>
+                </div>
+            }
+            </div>
+        </WindowContent>
+
+    </TelerikWindow>
+}
+
+@code {
+    [Parameter] public EventCallback OnExportComplete { get; set; }
+
+    /// <summary>
+    /// Phase 176 — when true, an immediate export stops short of the browser download and leaves
+    /// its output retained in OPFS for <c>VideoEditor</c>'s destination prompt to place. Set only
+    /// when the host supplied an OnPublishExport handler; otherwise there is nowhere else for the
+    /// file to go and the download stays the unconditional end of the pipeline, exactly as before.
+    ///
+    /// <para>Applies to "Export Now" only. A queued export has no prompt to answer — the user has
+    /// walked away by definition — so <c>ExportQueueService</c> keeps downloading directly.</para>
+    /// </summary>
+    [Parameter] public bool DeferDelivery { get; set; }
+
+    // ── State ─────────────────────────────────────────────────────────────────
+
+    private bool        _visible;
+    private ExportJob?  _job;
+    private readonly ExportSettings _settings = new();
+
+    private static string FormatBytes(long b) => b switch
+    {
+        < 1_024         => $"{b} B",
+        < 1_048_576     => $"{b / 1_024.0:F1} KB",
+        < 1_073_741_824 => $"{b / 1_048_576.0:F1} MB",
+        _               => $"{b / 1_073_741_824.0:F1} GB",
+    };
+
+    // ── Lookup data ───────────────────────────────────────────────────────────
+
+    private static readonly List<string> _formats      = ["mp4", "webm", "mov"];
+    private static readonly List<string> _resolutions  = ["3840x2160", "1920x1080", "1280x720", "854x480", ""];
+    private sealed record ResolutionItem(string Label, string Value);
+    private static readonly List<ResolutionItem> _resolutionItems =
+    [
+        new("4K — 3840×2160",           "3840x2160"),
+        new("Full HD — 1920×1080",     "1920x1080"),
+        new("HD — 1280×720",           "1280x720"),
+        new("SD — 854×480",            "854x480"),
+        new("TikTok / Stories — 1080×1920", "1080x1920"),
+        new("Instagram Square — 1080×1080", "1080x1080"),
+        new("Instagram Portrait — 1080×1350", "1080x1350"),
+        new("YouTube Shorts — 720×1280", "720x1280"),
+        new("Source resolution",         ""),
+    ];
+    private sealed record FpsItem(string Label, int Value);
+    private static readonly List<FpsItem> _fpsItems =
+    [
+        new("30 fps (default)",  30),
+        new("25 fps (PAL/web)",  25),
+        new("24 fps (cinematic)", 24),
+        new("15 fps (low bandwidth)", 15),
+    ];
+    private static readonly List<string> _presets      = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "veryslow"];
+    private static readonly List<int>    _audioBitrates = [96, 128, 192, 256, 320];
+
+    private IEnumerable<string> VideoCodecs => _settings.OutputFormat switch
+    {
+        "webm" => ["libvpx-vp9", "libvpx"],
+        _      => ["libx264", "libx265", "libaom-av1"]
+    };
+
+    private IEnumerable<string> AudioCodecs => _settings.OutputFormat switch
+    {
+        "webm" => ["libopus", "libvorbis"],
+        _      => ["aac", "mp3", "libopus"]
+    };
+
+    private bool CanExport => Clips.Clips.Any() &&
+                              Exporter.CurrentJob?.State != ExportJobState.Running;
+
+    private string ClipSummary =>
+        $"{Clips.Clips.Count()} clip(s) · " +
+        $"{TimeSpan.FromSeconds(Clips.TotalDuration):m\\:ss\\.f} total";
+
+    // ── Public API ────────────────────────────────────────────────────────────
+
+    public void Open()
+    {
+        _visible = true;
+        _job     = null;
+        ResolutionService.SetResolution(_settings.Resolution);
+        StateHasChanged();
+    }
+
+    private void OnResolutionChanged(string value)
+    {
+        _settings.Resolution = value;
+        ResolutionService.SetResolution(value);
+    }
+
+    public void Close()
+    {
+        _visible = false;
+        StateHasChanged();
+    }
+
+    // ── Export ────────────────────────────────────────────────────────────────
+
+    private async Task StartExportAsync()
+    {
+        if (!CanExport) return;
+
+        var exportTask = Exporter.ExportAsync(_settings, downloadToDisk: !DeferDelivery);
+        _job = Exporter.CurrentJob!;
+        _job.OnProgress += OnJobProgress;
+        StateHasChanged();
+
+        await exportTask;
+
+        await OnExportComplete.InvokeAsync();
+        StateHasChanged();
+    }
+
+    private async Task AddToQueueAsync()
+    {
+        if (!CanExport) return;
+        // Copy settings to give the queue entry a stable snapshot
+        var snapshot = new ExportSettings
+        {
+            OutputFilename = _settings.OutputFilename,
+            OutputFormat   = _settings.OutputFormat,
+            VideoCodec     = _settings.VideoCodec,
+            AudioCodec     = _settings.AudioCodec,
+            Resolution     = _settings.Resolution,
+            Fps            = _settings.Fps,
+            Bitrate        = _settings.Bitrate,
+            Crf            = _settings.Crf,
+            UseCrf         = _settings.UseCrf,
+            Preset         = _settings.Preset,
+            IncludeAudio   = _settings.IncludeAudio,
+            AudioBitrate   = _settings.AudioBitrate,
+            PixelFormat    = _settings.PixelFormat,
+            EmbedChapters  = _settings.EmbedChapters,
+        };
+        await ExportQueue.EnqueueAsync(snapshot, snapshot.OutputFilename);
+        Close();
+        await OnExportComplete.InvokeAsync();
+    }
+
+    private void CancelExport() => _job?.Cancel();
+
+    private void OnJobProgress() => InvokeAsync(StateHasChanged);
+
+    private void ApplyPreset(Func<ExportSettings> factory)
+    {
+        var p = factory();
+        _settings.OutputFormat   = p.OutputFormat;
+        _settings.VideoCodec     = p.VideoCodec;
+        _settings.AudioCodec     = p.AudioCodec;
+        _settings.Resolution     = p.Resolution;
+        ResolutionService.SetResolution(p.Resolution);
+        _settings.UseCrf         = p.UseCrf;
+        _settings.Crf            = p.Crf;
+        _settings.Preset         = p.Preset;
+        _settings.IncludeAudio   = p.IncludeAudio;
+        _settings.AudioBitrate   = p.AudioBitrate;
+        _settings.OutputFilename = p.OutputFilename;
+    }
+
+    private void OnVisibleChanged(bool visible)
+    {
+        if (!visible) Close();
+    }
+}

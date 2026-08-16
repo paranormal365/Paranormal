@@ -1,0 +1,62 @@
+/* ── Color picker field ──────────────────────────────────────────────────── */
+.bv-color-field {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+}
+
+.bv-color-field__label {
+    font-size: .75rem;
+    color: var(--kendo-color-subtle-text, #7f849c);
+    font-weight: 500;
+}
+
+.bv-color-field__swatch-row {
+    display: flex;
+    align-items: center;
+    gap: .375rem;
+}
+
+/* Checkerboard wrapper — always visible beneath the colour overlay */
+.bv-color-field__swatch-wrap {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    border: 1px solid var(--kendo-color-border, #313244);
+    cursor: pointer;
+    flex-shrink: 0;
+    background-image:
+        linear-gradient(45deg, #888 25%, transparent 25%),
+        linear-gradient(-45deg, #888 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #888 75%),
+        linear-gradient(-45deg, transparent 75%, #888 75%);
+    background-size: 8px 8px;
+    background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+    background-color: #fff;
+    overflow: hidden;
+}
+
+/* The actual colour — floats on top of the checkerboard via absolute fill */
+.bv-color-field__swatch-color {
+    width: 100%;
+    height: 100%;
+    border-radius: 3px;
+}
+
+.bv-color-field__hex {
+    font-size: .7rem;
+    font-family: monospace;
+    color: var(--kendo-color-subtle-text, #7f849c);
+    cursor: pointer;
+    flex: 1;
+    letter-spacing: .04em;
+}
+
+.bv-color-field__picker {
+    margin-top: .25rem;
+}
+
+/* Force the ColorGradient to fill available width */
+.bv-color-field__picker .k-colorgradient {
+    width: 100% !important;
+}

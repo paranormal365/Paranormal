@@ -1,0 +1,44 @@
+.bv-sidecar-panel {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    padding: .25rem;
+}
+
+.bv-sidecar-panel__intro {
+    font-size: .8rem;
+    color: var(--kendo-color-subtle, #999);
+    margin: 0;
+}
+
+.bv-sidecar-panel__state {
+    display: flex;
+    flex-direction: column;
+    gap: .6rem;
+    align-items: flex-start;
+}
+
+.bv-sidecar-panel__badge {
+    font-size: .75rem;
+    font-weight: 600;
+    padding: .2rem .6rem;
+    border-radius: 999px;
+}
+
+.bv-sidecar-panel__badge--off   { color: #888; border: 1px solid #444; }
+.bv-sidecar-panel__badge--found { color: #f5c542; border: 1px solid #f5c542; }
+.bv-sidecar-panel__badge--on    { color: #4caf89; border: 1px solid #4caf89; }
+
+.bv-sidecar-panel__error {
+    color: #e06c75;
+    font-size: .8rem;
+    margin: 0;
+}
+
+/* Item #70 phase 158 — capability list under the connected badge; informational, deliberately
+   quieter than the ffmpeg version line above it. */
+.bv-sidecar-panel__caps {
+    font-size: .72rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    font-variant-numeric: tabular-nums;
+}

@@ -69,7 +69,11 @@
             <div class="d-flex flex-wrap gap-2 mt-3">
                 @foreach (var entry in _roster)
                 {
-                    <span class="badge rounded-pill @ChipClass(entry) d-inline-flex align-items-center gap-1"
+                    @* Keyed: naming a lead reorders this list, and without a key Blazor reuses
+                       elements by position, so the badges would follow the slot rather than the
+                       person. *@
+                    <span @key="entry.AttendeeId"
+                          class="badge rounded-pill @ChipClass(entry) d-inline-flex align-items-center gap-1"
                           style="font-size:.8rem;padding:.45rem .7rem;"
                           title="@ChipTitle(entry)">
                         @entry.DisplayName
@@ -85,18 +89,98 @@
                 }
             </div>
 
+            @* ── What people saw ──────────────────────────────────────────── *@
+            <div class="mt-4">
+                <h6 class="fw-semibold mb-1">
+                    What people saw<HelpLink Slug="working-a-case" Anchor="writing-up-what-you-saw" />
+                </h6>
+                <p class="text-secondary small">
+                    One account each, in their own words. Four people in a building at night see
+                    four different nights.
+                </p>
+
+                @if (_findings.Count == 0 && _myEntry is null)
+                {
+                    <p class="text-secondary small fst-italic mb-0">Nothing written up yet.</p>
+                }
+
+                @foreach (var finding in _findings.Where(f => f.AppUserId != UserState.UserId))
+                {
+                    <div class="border rounded p-3 mb-2">
+                        <div class="d-flex justify-content-between align-items-baseline">
+                            <span class="fw-semibold">@(finding.DisplayName ?? "Somebody")</span>
+                            <span class="text-secondary small">
+                                @finding.DateCreated.ToLocalTime().ToString("d MMM yyyy")
+                                @if (finding.DateUpdated is { } revised)
+                                {
+                                    @* Said out loud: a first draft and a revision a week later are
+                                       different claims, and a reader comparing accounts wants to
+                                       know which one they have. *@
+                                    <span title="@revised.ToLocalTime().ToString("d MMM yyyy, HH:mm")"> · revised</span>
+                                }
+                            </span>
+                        </div>
+                        <div class="mt-1" style="white-space:pre-wrap;">@finding.Narrative</div>
+                    </div>
+                }
+
+                @* Only people who were on the team have anything to file — the server refuses
+                   anyone else, so offering the box would be offering a rejection. *@
+                @if (_myEntry is not null)
+                {
+                    <div class="border rounded p-3 bg-body-tertiary">
+                        <div class="d-flex justify-content-between align-items-baseline mb-1">
+                            <span class="fw-semibold">Your account</span>
+                            @if (_myFinding is { } mine)
+                            {
+                                <span class="text-secondary small">
+                                    Filed @mine.DateCreated.ToLocalTime().ToString("d MMM yyyy")
+                                </span>
+                            }
+                        </div>
+
+                        @* Plain textarea: this gates the Save button, and Telerik binds on blur —
+                           somebody who types and clicks Save without leaving the box would be told
+                           it is empty while looking at their own words. *@
+                        <textarea class="form-control" rows="4" value="@_narrative"
+                                  placeholder="What did you see, hear, or measure? Anything that struck you as ordinary is worth saying too."
+                                  @oninput="@(e => _narrative = e.Value?.ToString() ?? string.Empty)"></textarea>
+
+                        <div class="d-flex gap-2 mt-2">
+                            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                           Enabled="@(!string.IsNullOrWhiteSpace(_narrative) && !_savingFinding)"
+                                           OnClick="SaveMyFindingAsync">
+                                @(_savingFinding ? "Saving…" : _myFinding is null ? "File it" : "Save changes")
+                            </TelerikButton>
+
+                            @if (_myFinding is not null)
+                            {
+                                <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                               Enabled="@(!_savingFinding)"
+                                               OnClick="DeleteMyFindingAsync">Withdraw</TelerikButton>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
             @* Manage-gated: correcting somebody else's attendance is not a participant's job. *@
             @if (CanManage)
             {
                 <div class="table-responsive mt-3">
                     <table class="table table-sm align-middle mb-0">
                         <thead>
-                            <tr><th>Who</th><th>Arrived</th><th class="text-center">Attended</th></tr>
+                            <tr><th>Who</th><th>Arrived</th><th class="text-center">Attended</th><th class="text-center">Lead</th></tr>
                         </thead>
                         <tbody>
                             @foreach (var entry in _roster)
                             {
-                                <tr>
+                                @* Keyed, and this row is why: the checkbox and the radio hold
+                                   their own DOM state, so an unkeyed reorder leaves the previous
+                                   lead's radio marked next to the new lead's name. Seen live —
+                                   the chips above said one person and the radio below said the
+                                   other. *@
+                                <tr @key="entry.AttendeeId">
                                     <td>@entry.DisplayName</td>
                                     <td class="text-nowrap">
                                         @(entry.DateArrived?.ToLocalTime().ToString("d MMM, HH:mm") ?? "—")
@@ -110,10 +194,29 @@
                                                checked="@(entry.DidAttend == true)"
                                                @onchange="@(e => OverrideAsync(entry, (bool)(e.Value ?? false)))" />
                                     </td>
+                                    <td class="text-center">
+                                        @* A radio, not a checkbox: exactly one person leads a
+                                           visit, and the server clears the previous holder either
+                                           way. A checkbox would suggest several are allowed. *@
+                                        <input type="radio" class="form-check-input"
+                                               name="@($"lead-{InvestigationId}")"
+                                               checked="@entry.IsLead"
+                                               @onchange="@(() => SetLeadAsync(entry, true))" />
+                                    </td>
                                 </tr>
                             }
                         </tbody>
                     </table>
+                </div>
+
+                <div class="form-text mt-1">
+                    The lead can edit this investigation, and stops being able to when the lead
+                    changes.
+                    @if (_roster.FirstOrDefault(r => r.IsLead) is { } lead)
+                    {
+                        <a href="#" class="ms-1" @onclick:preventDefault
+                           @onclick="@(() => SetLeadAsync(lead, false))">Nobody leads this visit</a>
+                    }
                 </div>
             }
         }
@@ -133,6 +236,11 @@
     private List<InvestigationRosterEntry> _roster = [];
     private InvestigationRosterEntry? _myEntry;
     private int _arrivedCount;
+
+    private List<InvestigationFindingRecord> _findings = [];
+    private InvestigationFindingRecord? _myFinding;
+    private string _narrative = string.Empty;
+    private bool _savingFinding;
 
     private bool _showCheckIn;
     private bool _checkingIn;
@@ -183,11 +291,80 @@
             _roster = (await AdminClient.GetInvestigationRosterAsync(OrgId, InvestigationId)).ToList();
             _arrivedCount = _roster.Count(r => r.DidAttend == true);
             _myEntry = _roster.FirstOrDefault(r => r.AppUserId == UserState.UserId);
+
+            _findings = (await AdminClient.GetInvestigationFindingsAsync(OrgId, InvestigationId)).ToList();
+            _myFinding = _findings.FirstOrDefault(f => f.AppUserId == UserState.UserId);
+
+            // Only seeded from the server when the box is untouched. Overwriting what somebody is
+            // halfway through typing, on a poll they did not ask for, would be its own small
+            // disaster.
+            if (!_savingFinding && string.IsNullOrWhiteSpace(_narrative))
+                _narrative = _myFinding?.Narrative ?? string.Empty;
         }
         catch
         {
             // A failed poll is not worth an error banner that appears and vanishes on its own —
             // the previous roster stays on screen and the next tick tries again.
+        }
+    }
+
+    private async Task SaveMyFindingAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_narrative) || _savingFinding) return;
+
+        _savingFinding = true;
+        _error = null;
+
+        try
+        {
+            _myFinding = await AdminClient.SaveMyInvestigationFindingAsync(
+                OrgId, InvestigationId, _narrative);
+            await LoadAsync();
+        }
+        catch
+        {
+            _error = "That could not be saved just now.";
+        }
+
+        _savingFinding = false;
+    }
+
+    private async Task DeleteMyFindingAsync()
+    {
+        _savingFinding = true;
+        _error = null;
+
+        try
+        {
+            await AdminClient.DeleteMyInvestigationFindingAsync(OrgId, InvestigationId);
+            _myFinding = null;
+            _narrative = string.Empty;
+            await LoadAsync();
+        }
+        catch
+        {
+            _error = "That could not be withdrawn just now.";
+        }
+
+        _savingFinding = false;
+    }
+
+    private async Task SetLeadAsync(InvestigationRosterEntry entry, bool isLead)
+    {
+        _error = null;
+        try
+        {
+            // The whole roster comes back, because naming a lead also clears somebody else's row.
+            _roster = (await AdminClient.SetInvestigationLeadAsync(
+                OrgId, InvestigationId, entry.AttendeeId, isLead)).ToList();
+            _myEntry = _roster.FirstOrDefault(r => r.AppUserId == UserState.UserId);
+        }
+        catch
+        {
+            // Said out loud, unlike a failed poll: this was a deliberate action, and silently
+            // leaving the old lead in place would look like it worked.
+            _error = "That could not be saved just now.";
+            await LoadAsync();
         }
     }
 

@@ -1,0 +1,472 @@
+@implements IDisposable
+@inject ClipStore Clips
+@inject MotionKeyframeService Motion
+@inject PlaybackService Playback
+@inject RichTextRunParserService RunParser
+@inject GoogleFontService GoogleFontService
+@using Ben.Video.Editor.Effects
+@using Ben.Video.Editor.Services
+@using EditorTools = Telerik.Blazor.Components.Editor
+
+@if (Overlay is not null)
+{
+    <div class="bv-text-overlay-editor">
+
+        <div class="bv-toe__header">
+            <span class="bv-toe__title">T Text Overlay</span>
+            <TelerikButton OnClick="Close"
+                           Icon="@SvgIcon.X"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Title="Close" />
+        </div>
+
+        <!-- Text content (item #16 — inline runs: Bold/Underline/Sub/Superscript/Color per selection) -->
+        <div class="bv-toe__field">
+            <label class="bv-toe__label">Text</label>
+            <TelerikEditor @bind-Value="_richTextHtml"
+                           Tools="@_editorTools"
+                           Height="120px" />
+        </div>
+
+        <!-- Font family -->
+        <div class="bv-toe__field">
+            <label class="bv-toe__label">Font</label>
+            <TelerikDropDownList Data="@_fontFamilies"
+                                 @bind-Value="_fontFamily"
+                                 Width="100%"
+                                 OnChange="@(async () => await GoogleFontService.EnsureLoadedAsync(_fontFamily))" />
+        </div>
+
+        <!-- Font size -->
+        <div class="bv-toe__field">
+            <label class="bv-toe__label">
+                Size &nbsp;<span class="bv-toe__value">@_fontSize pt</span>
+                @if (_showingLiveValues)
+                {
+                    <span class="bv-toe__live-badge" title="This layer has a motion path — size below tracks the interpolated scale at the current playhead time, not a fixed value.">● Live</span>
+                }
+            </label>
+            <TelerikSlider @bind-Value="_fontSize"
+                           Min="12"
+                           Max="120"
+                           SmallStep="2"
+                           LargeStep="10"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(12, 120, 10)"
+                           Width="100%" />
+        </div>
+
+        <!-- Font color -->
+        <div class="bv-toe__field">
+            <ColorPickerField Label="Font color"
+                              Value="@ColorHelper.FromHex(_fontColor)"
+                              ValueChanged="@OnFontColorChanged"
+                              ShowAlpha="false" />
+        </div>
+
+        <!-- Background box -->
+        <div class="bv-toe__field bv-toe__field--row">
+            <label class="bv-toe__label">Background box</label>
+            <input type="checkbox" @bind="_hasBox" />
+        </div>
+        @if (_hasBox)
+        {
+            <div class="bv-toe__field">
+                <ColorPickerField Label="Box color + opacity"
+                                  Value="@BoxColorToDouble()"
+                                  ValueChanged="@OnBoxColorChanged"
+                                  ShowAlpha="true" />
+            </div>
+        }
+
+        <!-- Horizontal alignment -->
+        <div class="bv-toe__field">
+            <label class="bv-toe__label">Horizontal align</label>
+            <TelerikDropDownList Data="@_hAligns"
+                                 @bind-Value="_hAlign"
+                                 Width="100%" />
+        </div>
+
+        <!-- Vertical alignment -->
+        <div class="bv-toe__field">
+            <label class="bv-toe__label">Vertical align</label>
+            <TelerikDropDownList Data="@_vAligns"
+                                 @bind-Value="_vAlign"
+                                 Width="100%" />
+        </div>
+
+        <!-- Offsets -->
+        <div class="bv-toe__field bv-toe__field--two-col">
+            <div>
+                <label class="bv-toe__label">X offset <span class="bv-toe__value">@_offsetX px</span></label>
+                <TelerikNumericTextBox @bind-Value="_offsetX" Min="0" Max="1920" Width="100%" />
+            </div>
+            <div>
+                <label class="bv-toe__label">Y offset <span class="bv-toe__value">@_offsetY px</span></label>
+                <TelerikNumericTextBox @bind-Value="_offsetY" Min="0" Max="1080" Width="100%" />
+            </div>
+        </div>
+
+        @if (_showingLiveValues)
+        {
+            <div class="bv-toe__field">
+                <label class="bv-toe__label">
+                    Position <span class="bv-toe__live-badge" title="This layer has a motion path — position is driven entirely by the interpolated value at the current playhead time, not the alignment/offset fields above.">● Live</span>
+                    &nbsp;<span class="bv-toe__value">X @((_liveX * 100).ToString("F0"))% Y @((_liveY * 100).ToString("F0"))%</span>
+                </label>
+            </div>
+        }
+        else if (Overlay?.OverrideX is not null || Overlay?.OverrideY is not null)
+        {
+            <div class="bv-toe__field">
+                <TelerikButton OnClick="ResetPosition"
+                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               Title="Position was set by dragging on the preview — clear it and go back to alignment + offsets above">
+                    Reset position
+                </TelerikButton>
+            </div>
+        }
+
+        <!-- Timeline position / duration -->
+        <div class="bv-toe__field">
+            <label class="bv-toe__label">
+                Start &nbsp;<span class="bv-toe__value">@FormatTime(_position)</span>
+            </label>
+            <TelerikSlider @bind-Value="_position"
+                           Min="0.0"
+                           Max="@_maxPosition"
+                           SmallStep="0.1"
+                           LargeStep="1.0"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, _maxPosition, 1.0)"
+                           Width="100%" />
+        </div>
+        <div class="bv-toe__field">
+            <label class="bv-toe__label">
+                Duration &nbsp;<span class="bv-toe__value">@FormatTime(_duration)</span>
+            </label>
+            <TelerikSlider @bind-Value="_duration"
+                           Min="0.5"
+                           Max="@_maxDuration"
+                           SmallStep="0.1"
+                           LargeStep="1.0"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0.5, _maxDuration, 1.0)"
+                           Width="100%" />
+        </div>
+
+        <!-- Fade -->
+        <div class="bv-toe__field bv-toe__field--two-col">
+            <div>
+                <label class="bv-toe__label">Fade in <span class="bv-toe__value">@_fadeIn.ToString("F1")s</span></label>
+                <TelerikSlider @bind-Value="_fadeIn" Min="0.0" Max="2.0" SmallStep="0.1" LargeStep="0.5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 2.0, 0.5)" />
+            </div>
+            <div>
+                <label class="bv-toe__label">Fade out <span class="bv-toe__value">@_fadeOut.ToString("F1")s</span></label>
+                <TelerikSlider @bind-Value="_fadeOut" Min="0.0" Max="2.0" SmallStep="0.1" LargeStep="0.5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 2.0, 0.5)" />
+            </div>
+        </div>
+
+        <!-- Shadow -->
+        <div class="bv-toe__section">
+            Shadow
+            @if (_showingLiveValues)
+            {
+                <span class="bv-toe__live-badge" title="This layer has a motion path — shadow below tracks the interpolated value at the current playhead time, not a fixed value.">● Live</span>
+            }
+        </div>
+        <div class="bv-toe__field">
+            <ColorPickerField Label="Shadow colour" Value="_shadowColor"
+                              ValueChanged="@(v => { _shadowColor = v; })"
+                              ShowAlpha="true" />
+        </div>
+        <div class="bv-toe__field bv-toe__field--two-col">
+            <div>
+                <label class="bv-toe__label">Offset X <span class="bv-toe__value">@_shadowOffsetX</span></label>
+                <TelerikSlider @bind-Value="_shadowOffsetX" Min="-30" Max="30" SmallStep="1" LargeStep="5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(-30.0, 30.0, 5.0)" />
+            </div>
+            <div>
+                <label class="bv-toe__label">Offset Y <span class="bv-toe__value">@_shadowOffsetY</span></label>
+                <TelerikSlider @bind-Value="_shadowOffsetY" Min="-30" Max="30" SmallStep="1" LargeStep="5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(-30.0, 30.0, 5.0)" />
+            </div>
+        </div>
+        <div class="bv-toe__field">
+            <label class="bv-toe__label">Blur <span class="bv-toe__value">@_shadowBlur px</span></label>
+            <TelerikSlider @bind-Value="_shadowBlur" Min="0" Max="30" SmallStep="1" LargeStep="5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 30.0, 5.0)" />
+        </div>
+
+        <!-- Actions -->
+        <div class="bv-toe__actions">
+            <TelerikButton OnClick="Apply"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Apply
+            </TelerikButton>
+            <TelerikButton OnClick="OnAnimateClicked"
+                           Icon="@SvgIcon.MapMarker"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           Title="Animate this layer — add motion keyframes for position, scale, opacity">
+                ⏱ Animate
+            </TelerikButton>
+            <TelerikButton OnClick="Remove"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Remove
+            </TelerikButton>
+        </div>
+
+    </div>
+}
+
+@code {
+    [Parameter] public TextOverlay?  Overlay    { get; set; }
+    [Parameter] public EventCallback OnClose    { get; set; }
+    [Parameter] public EventCallback OnRemoved  { get; set; }
+    [Parameter] public EventCallback<(Guid Id, string Type)> OnAnimate { get; set; }
+
+    private async Task OnAnimateClicked()
+    {
+        if (Overlay is not null)
+            await OnAnimate.InvokeAsync((Overlay.Id, "TextOverlay"));
+    }
+
+    // ── Field state ──────────────────────────────────────────────────────────
+
+    private string                _text         = string.Empty;
+    private string                _richTextHtml = string.Empty;
+    private string               _fontFamily = "Arial";
+    private int                  _fontSize   = 48;
+    private string               _fontColor  = "#FFFFFF";
+    private bool                 _hasBox;
+    private string               _boxColor   = "#000000";
+    private double               _boxOpacity = 0.5;
+    private TextHorizontalAlign  _hAlign     = TextHorizontalAlign.Center;
+    private TextVerticalAlign    _vAlign     = TextVerticalAlign.Bottom;
+    private int                  _offsetX;
+    private int                  _offsetY    = 40;
+    private double               _position;
+    private double               _duration   = 5.0;
+    private double               _fadeIn     = 0.3;
+    private double               _fadeOut    = 0.3;
+    private double                _shadowColor   = ColorHelper.Pack(0, 0, 0, 120);
+    private double                _shadowOffsetX = 3.0;
+    private double                _shadowOffsetY = 3.0;
+    private double                _shadowBlur    = 4.0;
+
+    private double _maxPosition = 60.0;
+    private double _maxDuration = 60.0;
+
+    private bool   _showingLiveValues;
+    private double _liveX;
+    private double _liveY;
+
+    // Item #16, phase 116 — system fonts first, then the curated Google Fonts list.
+    private static readonly IReadOnlyList<string> _fontFamilies =
+        [.. StandardFonts.Names, .. GoogleFonts.Names];
+
+    // Item #16 — inline formatting toolbar. Font family/size stay whole-block, governed by the
+    // dropdown/slider above; this restricted tool set covers only what a TextRun can express.
+    private static readonly List<IEditorTool> _editorTools =
+    [
+        new EditorTools.Bold(), new EditorTools.Underline(),
+        new EditorTools.SubScript(), new EditorTools.SuperScript(),
+        new EditorTools.ForeColor(),
+    ];
+
+    private static readonly List<TextHorizontalAlign> _hAligns =
+        Enum.GetValues<TextHorizontalAlign>().ToList();
+
+    private static readonly List<TextVerticalAlign> _vAligns =
+        Enum.GetValues<TextVerticalAlign>().ToList();
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────
+
+    protected override void OnInitialized()
+    {
+        Clips.OnChange          += RefreshAndRender;
+        Motion.OnChanged        += RefreshAndRender;
+        Playback.OnStateChanged += RefreshAndRender;
+    }
+
+    protected override void OnParametersSet() => RefreshFromSource();
+
+    private void RefreshAndRender()
+    {
+        RefreshFromSource();
+        StateHasChanged();
+    }
+
+    // Item #64 — this panel is an edit-then-click-Apply design (unlike CalloutEditor's per-field
+    // auto-commit), so it holds locally-edited, not-yet-committed field values between renders.
+    // RefreshFromSource used to overwrite all of them unconditionally on every call, but it's
+    // wired to three external, high-frequency event sources below (Clips.OnChange fires on any
+    // mutation anywhere in the whole project; Playback.OnStateChanged fires every frame during
+    // normal playback) — any of them firing while an edit was pending silently discarded it
+    // before Apply could ever run. Same bug class as TransitionEditor.OnParametersSet (phase
+    // 132); fixed the same way — only reload the editable fields when a *different* overlay is
+    // now selected, tracked by Id.
+    private Guid? _lastOverlayId;
+
+    private void RefreshFromSource()
+    {
+        if (Overlay is null) return;
+
+        if (Overlay.Id != _lastOverlayId)
+        {
+            _lastOverlayId = Overlay.Id;
+
+            _text       = Overlay.Text;
+            _fontFamily = Overlay.FontFamily;
+            // Reopening a project that already used a Google Font — make sure it's actually
+            // loaded so the live preview doesn't silently fall back to the browser's default
+            // font. No-op for a system font (EnsureLoadedAsync checks IsGoogleFont itself).
+            _ = GoogleFontService.EnsureLoadedAsync(_fontFamily);
+            _fontSize   = Overlay.FontSize;
+            _fontColor  = Overlay.FontColor;
+            _richTextHtml = TextRun.ToHtml(EffectiveRuns(Overlay));
+            _hasBox     = Overlay.BoxColor is not null;
+            _hAlign     = Overlay.HorizontalAlign;
+            _vAlign     = Overlay.VerticalAlign;
+            _offsetX    = Overlay.OffsetX;
+            _offsetY    = Overlay.OffsetY;
+            _position   = Overlay.TimelinePosition;
+            _duration   = Overlay.Duration;
+            _fadeIn     = Overlay.FadeInSeconds;
+            _fadeOut    = Overlay.FadeOutSeconds;
+            _shadowColor   = Overlay.ShadowColor;
+            _shadowOffsetX = Overlay.ShadowOffsetX;
+            _shadowOffsetY = Overlay.ShadowOffsetY;
+            _shadowBlur    = Overlay.ShadowBlur;
+
+            if (Overlay.BoxColor is not null)
+            {
+                // Parse "#rrggbb@opacity" format stored by the model
+                var parts = Overlay.BoxColor.Split('@');
+                _boxColor   = parts[0];
+                _boxOpacity = parts.Length > 1 && double.TryParse(
+                    parts[1], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var op) ? op : 0.5;
+            }
+        }
+
+        // Slider bounds only — always safe to refresh live, never discards a pending edit.
+        var totalDur   = Clips.TotalDuration;
+        _maxPosition   = totalDur > 0 ? totalDur : 60.0;
+        _maxDuration   = totalDur > 0 ? totalDur : 60.0;
+
+        _showingLiveValues = Motion.HasPath(Overlay.Id);
+        if (_showingLiveValues)
+        {
+            var frame = Motion.Evaluate(Overlay.Id, Playback.State.CurrentTime)
+                ?? new MotionFrame(Overlay.OverrideX ?? 0.5, Overlay.OverrideY ?? 0.5, 1.0, 1.0);
+            var effective = ExportArgBuilders.ApplyMotionFrame(Overlay, frame);
+            _liveX = effective.OverrideX ?? frame.X;
+            _liveY = effective.OverrideY ?? frame.Y;
+            _fontSize      = effective.FontSize;
+            _shadowColor   = effective.ShadowColor;
+            _shadowOffsetX = effective.ShadowOffsetX;
+            _shadowOffsetY = effective.ShadowOffsetY;
+            _shadowBlur    = effective.ShadowBlur;
+        }
+    }
+
+    public void Dispose()
+    {
+        Clips.OnChange          -= RefreshAndRender;
+        Motion.OnChanged        -= RefreshAndRender;
+        Playback.OnStateChanged -= RefreshAndRender;
+    }
+
+    // ── Box colour helpers (ColorPickerField ↔ internal _boxColor/_boxOpacity) ──
+
+    private void OnFontColorChanged(double val)
+    {
+        var (r, g, b, _) = ColorHelper.Unpack(val);
+        _fontColor = $"#{r:X2}{g:X2}{b:X2}";
+    }
+
+    private double BoxColorToDouble()
+    {
+        // Combine hex colour + opacity into a single ARGB packed double
+        byte a = (byte)Math.Round(_boxOpacity * 255);
+        var packed = ColorHelper.FromHex(_boxColor);
+        var (r, g, b, _) = ColorHelper.Unpack(packed);
+        return ColorHelper.Pack(r, g, b, a);
+    }
+
+    private void OnBoxColorChanged(double val)
+    {
+        var (r, g, b, a) = ColorHelper.Unpack(val);
+        _boxColor   = $"#{r:X2}{g:X2}{b:X2}";
+        _boxOpacity = a / 255.0;
+    }
+
+    // ── Actions ──────────────────────────────────────────────────────────────
+
+    /// <summary>Item #16 — the runs source of truth for the editor's rich-text HTML: the overlay's
+    /// own <see cref="TextOverlay.Runs"/> when set, else a synthetic single-run list built from the
+    /// legacy whole-block fields, so old saved content still displays its existing Bold/Underline
+    /// the first time it's reopened in the new toolbar-based editor.</summary>
+    private static List<TextRun> EffectiveRuns(TextOverlay overlay) =>
+        overlay.Runs is { Count: > 0 } runs
+            ? runs
+            : [new TextRun { Text = overlay.Text, Bold = overlay.FontBold, Underline = overlay.FontUnderline }];
+
+    private async Task Apply()
+    {
+        if (Overlay is null) return;
+
+        var runs = await RunParser.HtmlToRunsAsync(_richTextHtml);
+        var plainText = string.Concat(runs.Select(r => r.Text));
+
+        var updated = Overlay with
+        {
+            Text             = plainText,
+            Name             = string.IsNullOrWhiteSpace(plainText) ? "Text" : plainText[..Math.Min(plainText.Length, 20)],
+            Runs             = runs,
+            FontFamily       = _fontFamily,
+            FontSize         = _fontSize,
+            FontColor        = _fontColor,
+            BoxColor         = _hasBox ? $"{_boxColor}@{_boxOpacity.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}" : null,
+            HorizontalAlign  = _hAlign,
+            VerticalAlign    = _vAlign,
+            OffsetX          = _offsetX,
+            OffsetY          = _offsetY,
+            TimelinePosition = _position,
+            Duration         = _duration,
+            FadeInSeconds    = _fadeIn,
+            FadeOutSeconds   = _fadeOut,
+            ShadowColor      = _shadowColor,
+            ShadowOffsetX    = _shadowOffsetX,
+            ShadowOffsetY    = _shadowOffsetY,
+            ShadowBlur       = _shadowBlur,
+        };
+
+        Clips.UpdateTextOverlay(updated);
+    }
+
+    /// <summary>Clears a drag-set on-canvas position, reverting to alignment + offsets.</summary>
+    private void ResetPosition()
+    {
+        if (Overlay is null) return;
+        Clips.UpdateTextOverlay(Overlay with { OverrideX = null, OverrideY = null });
+    }
+
+    private async Task Remove()
+    {
+        if (Overlay is null) return;
+        Clips.RemoveTextOverlay(Overlay.Id);
+        await OnRemoved.InvokeAsync();
+    }
+
+    private async Task Close() => await OnClose.InvokeAsync();
+
+    private static string FormatTime(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.TotalHours >= 1
+            ? ts.ToString(@"h\:mm\:ss")
+            : ts.ToString(@"m\:ss\.f");
+    }
+}

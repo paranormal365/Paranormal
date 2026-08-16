@@ -1,0 +1,110 @@
+.bv-text-overlay-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    border-left: 1px solid var(--kendo-color-border, var(--bv-border));
+    height: 100%;
+    overflow-y: auto;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+.bv-toe__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+.bv-toe__title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--bv-title-text);
+    letter-spacing: .03em;
+}
+
+/* ── Fields ──────────────────────────────────────────────────────────────── */
+
+.bv-toe__field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.bv-toe__field--row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.bv-toe__field--two-col {
+    flex-direction: row;
+    gap: 10px;
+}
+
+.bv-toe__field--two-col > div {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.bv-toe__label {
+    font-size: 11px;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.bv-toe__value {
+    font-size: 12px;
+    color: var(--kendo-color-on-surface, var(--bv-text));
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+/* ── Color swatch input ──────────────────────────────────────────────────── */
+
+.bv-toe__color-swatch {
+    width: 36px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid var(--kendo-color-border, var(--bv-border));
+    border-radius: 4px;
+    cursor: pointer;
+    background: none;
+}
+
+/* ── Actions ─────────────────────────────────────────────────────────────── */
+
+.bv-toe__actions {
+    display: flex;
+    gap: 8px;
+    padding-top: 6px;
+    border-top: 1px solid var(--kendo-color-border, var(--bv-border));
+    margin-top: auto;
+}
+
+/* ── Live-interpolated-value badge (mirrors CalloutEditor's) ───────────────── */
+
+.bv-toe__live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .2rem;
+    margin-left: .4rem;
+    padding: .05rem .35rem;
+    border-radius: 3px;
+    font-size: .6rem;
+    font-weight: 600;
+    letter-spacing: .02em;
+    color: var(--kendo-color-success, #a6e3a1);
+    background: color-mix(in srgb, var(--kendo-color-success, #a6e3a1) 15%, transparent);
+    vertical-align: middle;
+}

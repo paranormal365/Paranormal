@@ -36,7 +36,6 @@
       <ProjectReference Include="..\Ben.Service.Mappings\Ben.Service.Mappings.csproj" />
       <ProjectReference Include="..\Ben.Service.Models\Ben.Service.Models.csproj" />
       <ProjectReference Include="..\Ben.Service.RepositoryService\Ben.Service.RepositoryService.csproj" />
-      <ProjectReference Include="..\Ben.Service.Security\Ben.Service.Security.csproj" />
     </ItemGroup>
 
 </Project>

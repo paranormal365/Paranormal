@@ -55,9 +55,12 @@ That last one is the lever you have as an administrator. Grant a role the *Updat
 **Investigation**, give somebody that role, and they can edit any of the group's investigations
 without being made an administrator of everything else.
 
-**Leading a visit is not a rank.** It is set per investigation, on the team list, and it ends with
-that visit. Somebody senior enough to lead every visit is better served by the permission above;
-somebody leading one Saturday is better served by the lead flag, which stops mattering on Sunday.
+**Leading a visit is not a rank.** It is set per investigation, in the **Lead** column of the
+investigation's team list, and it ends with that visit. One person leads at a time — naming a lead
+takes it from whoever held it — and the current lead can hand it on, which is what happens when
+somebody leaves halfway through the night. Somebody senior enough to lead every visit is better
+served by the permission above; somebody leading one Saturday is better served by the lead flag,
+which stops mattering on Sunday.
 
 ## Incoming requests
 

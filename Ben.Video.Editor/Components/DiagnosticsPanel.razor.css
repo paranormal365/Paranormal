@@ -1,0 +1,66 @@
+.bv-diagnostics-panel {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    padding: .25rem;
+    font-size: .8rem;
+}
+
+.bv-diagnostics-panel__row {
+    display: flex;
+    justify-content: space-between;
+    gap: .75rem;
+}
+
+.bv-diagnostics-panel__label {
+    color: var(--kendo-color-subtle, #999);
+}
+
+.bv-diagnostics-panel__value--error {
+    color: #e06c75;
+}
+
+.bv-diagnostics-panel__heading {
+    margin: .5rem 0 0;
+    font-size: .75rem;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: var(--kendo-color-subtle, #999);
+}
+
+.bv-diagnostics-panel__empty {
+    color: var(--kendo-color-subtle, #999);
+    margin: 0;
+}
+
+.bv-diagnostics-panel__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    max-height: 140px;
+    overflow-y: auto;
+}
+
+.bv-diagnostics-panel__name {
+    font-family: monospace;
+}
+
+.bv-diagnostics-panel__muted {
+    color: var(--kendo-color-subtle, #999);
+}
+
+.bv-diagnostics-panel__log {
+    font-family: monospace;
+    font-size: .7rem;
+    max-height: 120px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0;
+    background: rgba(128, 128, 128, .08);
+    padding: .4rem;
+    border-radius: 4px;
+}

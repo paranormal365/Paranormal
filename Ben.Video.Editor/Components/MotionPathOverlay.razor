@@ -1,0 +1,354 @@
+@using Ben.Video.Editor.Effects
+@inject MotionKeyframeService Motion
+@inject PlaybackService Playback
+@inject PreviewGeometryService Geometry
+@implements IDisposable
+
+@*
+  Editor-only SVG overlay rendered on top of VideoPreview.
+  Shows motion path lines (straight or bezier), keyframe dots, bezier handles.
+  NEVER included in ffmpeg export — purely a visual editing aid.
+*@
+@if (LayerId.HasValue && Motion.HasPath(LayerId.Value))
+{
+    var path = Motion.GetPath(LayerId.Value)!;
+    var kfs  = path.Keyframes;
+
+    <svg class="bv-motion-overlay"
+         viewBox="0 0 1 1"
+         preserveAspectRatio="none"
+         xmlns="http://www.w3.org/2000/svg"
+         @onpointermove="OnSvgPointerMove"
+         @onpointerup="OnSvgPointerUp"
+         @onpointercancel="OnSvgPointerUp">
+
+        @* ── Path line(s) between keyframes ── (item #57 P4: straight and bezier segments now
+             share one "d" computation and a wide invisible hit-path, since a 1px-equivalent
+             visible stroke is too thin a target for reliable hover/right-click.) *@
+        @for (var i = 0; i < kfs.Count - 1; i++)
+        {
+            var a      = kfs[i];
+            var b      = kfs[i + 1];
+            var segIdx = i;
+            var d = a.HandleOutX.HasValue && b.HandleInX.HasValue
+                ? $"M {Px(a.X)} {Px(a.Y)} C {Px(a.HandleOutX!.Value)} {Px(a.HandleOutY!.Value)} {Px(b.HandleInX!.Value)} {Px(b.HandleInY!.Value)} {Px(b.X)} {Px(b.Y)}"
+                : $"M {Px(a.X)} {Px(a.Y)} L {Px(b.X)} {Px(b.Y)}";
+            var hoverCls = _hoveredSegmentIndex == segIdx ? " bv-motion-path__line--hover" : "";
+
+            <path d="@d" class="bv-motion-path__hit" fill="none"
+                  @onmouseenter="() => _hoveredSegmentIndex = segIdx"
+                  @onmouseleave="() => _hoveredSegmentIndex = -1"
+                  @oncontextmenu="e => OpenEasingMenu(e, segIdx)"
+                  @oncontextmenu:preventDefault="true" />
+            <path d="@d" class="@("bv-motion-path__line" + hoverCls)" fill="none" style="pointer-events:none" />
+        }
+
+        @* ── Bezier handles (shown for selected keyframe) ── *@
+        @for (var i = 0; i < kfs.Count; i++)
+        {
+            var kf  = kfs[i];
+            // Item #57 P4 — a fresh per-iteration local, not the shared `for`-loop variable `i`
+            // itself: event lambdas run long after this render pass finishes (by which time a
+            // directly-captured `i` has advanced to kfs.Count, out of range for every keyframe),
+            // a real pre-existing bug this phase's own live verification caught — every drag on
+            // an already-selected keyframe's handle was deselecting it instead of moving it.
+            var handleKfIndex = i;
+
+            @if (_selectedIndex == i)
+            {
+                @if (kf.HandleOutX.HasValue)
+                {
+                    <line x1="@Px(kf.X)" y1="@Px(kf.Y)"
+                          x2="@Px(kf.HandleOutX.Value)" y2="@Px(kf.HandleOutY!.Value)"
+                          class="bv-motion-handle__arm" />
+                    <circle cx="@Px(kf.HandleOutX.Value)" cy="@Px(kf.HandleOutY!.Value)" r="0.016"
+                            fill="transparent" class="bv-motion-handle__hit" style="cursor:grab"
+                            @onpointerdown="e => StartDragHandle(e, handleKfIndex, false)"
+                            @onpointermove="OnSvgPointerMove"
+                            @onpointerup="OnSvgPointerUp"
+                            @onpointerdown:stopPropagation="true"
+                            @ondblclick="() => RemoveHandle(handleKfIndex, false)"
+                            @ondblclick:stopPropagation="true"
+                            title="Drag to adjust (hold Shift to move independently) — double-click to remove">
+                    </circle>
+                    <circle cx="@Px(kf.HandleOutX.Value)" cy="@Px(kf.HandleOutY!.Value)" r="0.010"
+                            class="bv-motion-handle__dot" style="pointer-events:none" />
+                }
+                @if (kf.HandleInX.HasValue)
+                {
+                    <line x1="@Px(kf.X)" y1="@Px(kf.Y)"
+                          x2="@Px(kf.HandleInX.Value)" y2="@Px(kf.HandleInY!.Value)"
+                          class="bv-motion-handle__arm" />
+                    <circle cx="@Px(kf.HandleInX.Value)" cy="@Px(kf.HandleInY!.Value)" r="0.016"
+                            fill="transparent" class="bv-motion-handle__hit" style="cursor:grab"
+                            @onpointerdown="e => StartDragHandle(e, handleKfIndex, true)"
+                            @onpointermove="OnSvgPointerMove"
+                            @onpointerup="OnSvgPointerUp"
+                            @onpointerdown:stopPropagation="true"
+                            @ondblclick="() => RemoveHandle(handleKfIndex, true)"
+                            @ondblclick:stopPropagation="true"
+                            title="Drag to adjust (hold Shift to move independently) — double-click to remove">
+                    </circle>
+                    <circle cx="@Px(kf.HandleInX.Value)" cy="@Px(kf.HandleInY!.Value)" r="0.010"
+                            class="bv-motion-handle__dot" style="pointer-events:none" />
+                }
+            }
+        }
+
+        @* ── Keyframe dots ── *@
+        @for (var i = 0; i < kfs.Count; i++)
+        {
+            var kf  = kfs[i];
+            var idx = i;
+            var isCurrent = Math.Abs(kf.Time - Playback.State.CurrentTime) < 0.05;
+            var cls = $"bv-motion-kf{(_selectedIndex == idx ? " bv-motion-kf--selected" : "")}{(isCurrent ? " bv-motion-kf--current" : "")}";
+            <circle cx="@Px(kf.X)" cy="@Px(kf.Y)" r="0.018"
+                    class="@cls"
+                    @onclick="() => SelectKeyframe(idx)"
+                    @onpointerdown="e => OnKeyframeDotPointerDown(e, idx)"
+                    @onpointermove="OnSvgPointerMove"
+                    @onpointerup="OnSvgPointerUp"
+                    @onpointerdown:stopPropagation="true"
+                    style="cursor: grab"
+                    title="@($"t={kf.Time:F2}s  X={kf.X:F2}  Y={kf.Y:F2}  (drag to move — Alt+drag to add bezier handles)")">
+            </circle>
+        }
+
+        @* ── Playhead position dot (current interpolated position) ── *@
+        @{
+            var frame = LayerId.HasValue ? Motion.Evaluate(LayerId.Value, Playback.State.CurrentTime) : null;
+        }
+        @if (frame is not null)
+        {
+            <circle cx="@Px(frame.X)" cy="@Px(frame.Y)" r="0.010"
+                    class="bv-motion-playhead"
+                    title="Current position" />
+        }
+
+    </svg>
+
+    @* ── Easing quick-menu (item #57 P4) — a lightweight custom popover, screen-pixel positioned
+         at the right-click point, matching VideoTimeline's own transition style-picker popover
+         rather than pulling in a Telerik menu for a plain component with no other Telerik
+         dependency. Lives outside the SVG (viewBox 0 0 1 1 makes screen-pixel positioning inside
+         it awkward) as a plain HTML sibling. *@
+    @if (_easingMenuTarget is { } menu)
+    {
+        <div class="bv-motion-easing-menu__backdrop" @onclick="CloseEasingMenu" @oncontextmenu="CloseEasingMenu" @oncontextmenu:preventDefault="true"></div>
+        <div class="bv-motion-easing-menu" style="left: @(menu.ClientX.ToString("F0", System.Globalization.CultureInfo.InvariantCulture))px; top: @(menu.ClientY.ToString("F0", System.Globalization.CultureInfo.InvariantCulture))px">
+            @foreach (var label in EasingHelper.Labels)
+            {
+                var captured = label;
+                <button class="bv-motion-easing-menu__item" @onclick="() => ApplyEasing(menu.SegmentIndex, captured)">@label</button>
+            }
+        </div>
+    }
+}
+
+@code {
+    /// <summary>The layer whose motion path is displayed. Null = overlay hidden.</summary>
+    [Parameter] public Guid? LayerId { get; set; }
+
+    [Parameter, EditorRequired] public ElementReference ScreenElement { get; set; }
+    [Parameter] public int CanvasWidth  { get; set; } = 1920;
+    [Parameter] public int CanvasHeight { get; set; } = 1080;
+
+    /// <summary>Raised when the user clicks a keyframe dot to select it.</summary>
+    [Parameter] public EventCallback<int> OnKeyframeSelected { get; set; }
+
+    private int    _selectedIndex = -1;
+    // Bezier handle drag state
+    private int    _dragKfIndex   = -1;
+    private bool   _dragIsIn;
+    // Keyframe-position drag state (dragging the dot itself, not a Bezier handle)
+    private int    _dragPosIndex  = -1;
+    private double _dragStartX;
+    private double _dragStartY;
+
+    // Item #57 P4 — segment hover highlight and the easing quick-menu's target (segment index +
+    // the right-click's own screen coordinates, since the menu is a plain HTML popover outside
+    // the SVG's 0..1 viewBox).
+    private int _hoveredSegmentIndex = -1;
+    private (int SegmentIndex, double ClientX, double ClientY)? _easingMenuTarget;
+
+    protected override void OnInitialized()
+        => Motion.OnChanged += OnMotionChanged;
+
+    private void OnMotionChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task SelectKeyframe(int idx)
+    {
+        _selectedIndex = idx;
+        await OnKeyframeSelected.InvokeAsync(idx);
+    }
+
+    private async Task StartDragHandle(PointerEventArgs e, int kfIndex, bool isIn)
+    {
+        await Geometry.RefreshAsync(ScreenElement, CanvasWidth, CanvasHeight);
+        _dragKfIndex  = kfIndex;
+        _dragIsIn     = isIn;
+        _dragStartX   = e.ClientX;
+        _dragStartY   = e.ClientY;
+        _selectedIndex = kfIndex;
+        StateHasChanged();
+    }
+
+    private async Task StartDragKeyframe(PointerEventArgs e, int kfIndex)
+    {
+        await Geometry.RefreshAsync(ScreenElement, CanvasWidth, CanvasHeight);
+        _dragPosIndex  = kfIndex;
+        _dragStartX    = e.ClientX;
+        _dragStartY    = e.ClientY;
+        _selectedIndex = kfIndex;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Item #57 P4 — Alt/Option-drag starting on the keyframe dot itself (not an existing
+    /// handle) pulls out a brand-new, symmetric bezier handle pair instead of moving the
+    /// keyframe. Seeds both handles at the dot's own position (zero-length) and starts an
+    /// ordinary HandleOut drag from there — <see cref="OnSvgPointerMove"/>'s existing
+    /// symmetric-mirroring (default-on, Shift breaks it) then pulls HandleIn out to match as the
+    /// user drags, with no separate "creation" code path to keep in sync.
+    /// </summary>
+    private async Task OnKeyframeDotPointerDown(PointerEventArgs e, int kfIndex)
+    {
+        if (!e.AltKey)
+        {
+            await StartDragKeyframe(e, kfIndex);
+            return;
+        }
+
+        if (!LayerId.HasValue) return;
+        var path = Motion.GetPath(LayerId.Value);
+        if (path is null || kfIndex < 0 || kfIndex >= path.Keyframes.Count) return;
+        var kf = path.Keyframes[kfIndex];
+
+        Motion.UpsertKeyframe(LayerId.Value, path.LayerType, kf with
+        {
+            HandleOutX = kf.X, HandleOutY = kf.Y,
+            HandleInX  = kf.X, HandleInY  = kf.Y,
+        });
+
+        await StartDragHandle(e, kfIndex, isIn: false);
+    }
+
+    /// <summary>Item #57 P4 — removes one bezier handle (double-clicking its own dot), reverting
+    /// just the one adjacent segment that handle controls to a straight line. The other handle on
+    /// the same keyframe (if any) is untouched.</summary>
+    private void RemoveHandle(int kfIndex, bool isIn)
+    {
+        if (!LayerId.HasValue) return;
+        var path = Motion.GetPath(LayerId.Value);
+        if (path is null || kfIndex < 0 || kfIndex >= path.Keyframes.Count) return;
+        var kf = path.Keyframes[kfIndex];
+
+        Motion.UpsertKeyframe(LayerId.Value, path.LayerType, isIn
+            ? kf with { HandleInX = null, HandleInY = null }
+            : kf with { HandleOutX = null, HandleOutY = null });
+    }
+
+    /// <summary>Item #57 P4 — right-click on a path segment opens the easing quick-menu at the
+    /// click's screen position.</summary>
+    private void OpenEasingMenu(MouseEventArgs e, int segmentIndex) =>
+        _easingMenuTarget = (segmentIndex, e.ClientX, e.ClientY);
+
+    private void CloseEasingMenu() => _easingMenuTarget = null;
+
+    /// <summary>Writes the chosen easing to the LATER keyframe of the segment (kf2) — matches
+    /// <see cref="Ben.Video.Editor.Models.MotionKeyframe.Easing"/>'s own documented convention:
+    /// "the segment ending at this keyframe".</summary>
+    private void ApplyEasing(int segmentIndex, string easing)
+    {
+        _easingMenuTarget = null;
+        if (!LayerId.HasValue) return;
+        var path = Motion.GetPath(LayerId.Value);
+        if (path is null) return;
+
+        var kf2Index = segmentIndex + 1;
+        if (kf2Index < 0 || kf2Index >= path.Keyframes.Count) return;
+        var kf2 = path.Keyframes[kf2Index];
+
+        Motion.UpsertKeyframe(LayerId.Value, path.LayerType, kf2 with { Easing = easing });
+    }
+
+    private void OnSvgPointerMove(PointerEventArgs e)
+    {
+        if (!LayerId.HasValue) return;
+        var path = Motion.GetPath(LayerId.Value);
+        if (path is null) return;
+
+        // Convert the on-screen pixel delta to a canvas-fraction delta using the preview's actual
+        // rendered (possibly letterboxed) content box, not a fixed/guessed pixel size.
+        var dxPx = e.ClientX - _dragStartX;
+        var dyPx = e.ClientY - _dragStartY;
+        var (dx, dy) = Geometry.DeltaToFraction(dxPx, dyPx);
+        _dragStartX = e.ClientX;
+        _dragStartY = e.ClientY;
+
+        if (_dragPosIndex >= 0 && _dragPosIndex < path.Keyframes.Count)
+        {
+            var kf = path.Keyframes[_dragPosIndex];
+            Motion.UpsertKeyframe(LayerId.Value, path.LayerType, kf with
+            {
+                X = Math.Clamp(kf.X + dx, 0, 1),
+                Y = Math.Clamp(kf.Y + dy, 0, 1),
+            });
+            return;
+        }
+
+        if (_dragKfIndex < 0 || _dragKfIndex >= path.Keyframes.Count) return;
+
+        var handleKf = path.Keyframes[_dragKfIndex];
+
+        double? outX = handleKf.HandleOutX, outY = handleKf.HandleOutY;
+        double? inX  = handleKf.HandleInX,  inY  = handleKf.HandleInY;
+
+        if (_dragIsIn)
+        {
+            inX = Math.Clamp((handleKf.HandleInX ?? handleKf.X) + dx, 0, 1);
+            inY = Math.Clamp((handleKf.HandleInY ?? handleKf.Y) + dy, 0, 1);
+        }
+        else
+        {
+            outX = Math.Clamp((handleKf.HandleOutX ?? handleKf.X) + dx, 0, 1);
+            outY = Math.Clamp((handleKf.HandleOutY ?? handleKf.Y) + dy, 0, 1);
+        }
+
+        // Item #57 P4 — symmetric by default (mirror the OPPOSITE handle through the keyframe
+        // point, matching the plan's "moving HandleOut mirrors HandleIn about the dot"), only
+        // when that opposite handle already exists — dragging a handle that's never had a
+        // counterpart shouldn't spontaneously grow one and curve the OTHER, untouched segment as
+        // a side effect. Hold Shift to move only the dragged handle, independent as before P4.
+        if (!e.ShiftKey)
+        {
+            if (_dragIsIn && handleKf.HandleOutX.HasValue)
+            {
+                outX = Math.Clamp(2 * handleKf.X - inX!.Value, 0, 1);
+                outY = Math.Clamp(2 * handleKf.Y - inY!.Value, 0, 1);
+            }
+            else if (!_dragIsIn && handleKf.HandleInX.HasValue)
+            {
+                inX = Math.Clamp(2 * handleKf.X - outX!.Value, 0, 1);
+                inY = Math.Clamp(2 * handleKf.Y - outY!.Value, 0, 1);
+            }
+        }
+
+        Motion.UpsertKeyframe(LayerId.Value, path.LayerType, handleKf with
+        {
+            HandleOutX = outX, HandleOutY = outY,
+            HandleInX  = inX,  HandleInY  = inY,
+        });
+    }
+
+    private void OnSvgPointerUp(PointerEventArgs _)
+    {
+        _dragKfIndex  = -1;
+        _dragPosIndex = -1;
+    }
+
+    // SVG viewBox is 0 0 1 1; scale canvas fraction to a string
+    private static string Px(double v) => v.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
+
+    public void Dispose() => Motion.OnChanged -= OnMotionChanged;
+}

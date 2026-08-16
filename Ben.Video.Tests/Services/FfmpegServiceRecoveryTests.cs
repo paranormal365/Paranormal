@@ -1,0 +1,221 @@
+using Ben.Video.Editor.Models;
+using Ben.Video.Editor.Services;
+using Microsoft.JSInterop;
+
+namespace Ben.Video.Tests.Services;
+
+/// <summary>
+/// Item #59-#65 flakiness investigation, phase 143 — covers the two state-machine/recovery fixes
+/// that needed a working fake module (same shape as <see cref="FfmpegServiceDiagnosticsTests"/>'s
+/// and <see cref="FfmpegServiceConcurrencyTests"/>'s own fakes, duplicated locally rather than
+/// shared since each file's fake has slightly different configurability needs):
+/// <c>ExtractAudioAsync</c>'s nested-state bug, and <c>SourceMounter.RemountAllAsync</c>'s
+/// drop-on-any-failure bug.
+/// </summary>
+public sealed class FfmpegServiceRecoveryTests
+{
+    private sealed class ConfigurableFakeModule : IJSObjectReference
+    {
+        public List<string> Calls { get; } = [];
+        public HashSet<string> ThrowingIdentifiers { get; } = [];
+        public Dictionary<string, object?> Results { get; } = [];
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
+        {
+            Calls.Add(identifier);
+            if (ThrowingIdentifiers.Contains(identifier))
+                throw new InvalidOperationException($"simulated failure for {identifier}");
+            if (Results.TryGetValue(identifier, out var result))
+                return ValueTask.FromResult((TValue)result!);
+            return ValueTask.FromResult(default(TValue)!);
+        }
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken ct, object?[]? args)
+            => InvokeAsync<TValue>(identifier, args);
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class MultiModuleFakeJsRuntime : IJSRuntime
+    {
+        public ConfigurableFakeModule FfmpegModule { get; } = new();
+        public ConfigurableFakeModule OpfsModule { get; } = new();
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
+        {
+            if (identifier == "import" && args?[0] is string path)
+            {
+                if (path.Contains("ffmpegInterop")) return ValueTask.FromResult((TValue)(object)FfmpegModule);
+                if (path.Contains("opfsInterop")) return ValueTask.FromResult((TValue)(object)OpfsModule);
+            }
+            throw new NotSupportedException($"unexpected top-level invoke: {identifier}");
+        }
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken ct, object?[]? args)
+            => InvokeAsync<TValue>(identifier, args);
+    }
+
+    // ── ExtractAudioAsync nested-state bug ───────────────────────────────────
+
+    [Fact]
+    public async Task ExtractAudioAsync_CommandFailure_ResolvesToReadyNotError()
+    {
+        var js = new MultiModuleFakeJsRuntime();
+        js.FfmpegModule.Results["exec"] = 1; // non-zero exit — a normal failed command, not a crash
+        var svc = new FfmpegService(js, new ErrorLogService(), new MemFsLedger(), new WorkerWatchdog());
+        await svc.LoadAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ExtractAudioAsync("in.mp4", "out.aac"));
+
+        // The actual bug: this used to unconditionally end up Error, forcing a full reload for
+        // what's just an incompatible-codec-style command failure the core survives fine.
+        Assert.Equal(FfmpegState.Ready, svc.State);
+    }
+
+    [Fact]
+    public async Task ExtractAudioAsync_JsException_StillResolvesToError()
+    {
+        // The fix must not over-correct — a genuine worker-level exception is still Error.
+        var js = new MultiModuleFakeJsRuntime();
+        js.FfmpegModule.ThrowingIdentifiers.Add("exec");
+        var svc = new FfmpegService(js, new ErrorLogService(), new MemFsLedger(), new WorkerWatchdog());
+        await svc.LoadAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ExtractAudioAsync("in.mp4", "out.aac"));
+
+        Assert.Equal(FfmpegState.Error, svc.State);
+    }
+
+    [Fact]
+    public async Task ExtractAudioAsync_Success_ResolvesToReady()
+    {
+        var js = new MultiModuleFakeJsRuntime();
+        var svc = new FfmpegService(js, new ErrorLogService(), new MemFsLedger(), new WorkerWatchdog());
+        await svc.LoadAsync();
+
+        await svc.ExtractAudioAsync("in.mp4", "out.aac");
+
+        Assert.Equal(FfmpegState.Ready, svc.State);
+    }
+
+    // ── SourceMounter.RemountAllAsync drop-on-failure bug ────────────────────
+
+    [Fact]
+    public async Task RemountAllAsync_MountFailsButOpfsCopyStillExists_KeepsTrackingForNextAttempt()
+    {
+        var js = new MultiModuleFakeJsRuntime();
+        js.OpfsModule.Results["opfsIsAvailable"] = true;
+        js.OpfsModule.Results["opfsReadAsFile"] = new ConfigurableFakeModule(); // stand-in File ref
+        js.FfmpegModule.Results["mountWorkerFs"] = "/src_test/clip.mp4";
+
+        var errorLog = new ErrorLogService();
+        var ffmpeg = new FfmpegService(js, errorLog, new MemFsLedger(), new WorkerWatchdog());
+        await ffmpeg.LoadAsync(); // must be Ready-enough to set _module before any mount can work
+        var opfs = new OPFSService(js, errorLog);
+        var mounter = new SourceMounter(ffmpeg, opfs);
+
+        var clipId = Guid.NewGuid();
+        var mounted = await mounter.MountAsync(clipId, ".mp4");
+        Assert.NotNull(mounted); // sanity: it's actually tracked to begin with
+
+        // Simulate the EEXIST-style transient failure (or any other mount hiccup) — the OPFS copy
+        // itself is completely fine; only this one mount attempt fails.
+        js.FfmpegModule.ThrowingIdentifiers.Add("mountWorkerFs");
+        var failedAttempt = await mounter.RemountAllAsync();
+        Assert.Empty(failedAttempt);
+
+        // The actual bug: before the fix, that failure alone permanently dropped the clip from
+        // tracking. Prove it's still tracked by letting a later attempt succeed.
+        js.FfmpegModule.ThrowingIdentifiers.Remove("mountWorkerFs");
+        var secondAttempt = await mounter.RemountAllAsync();
+        Assert.True(secondAttempt.ContainsKey(clipId));
+    }
+
+    [Fact]
+    public async Task RemountAllAsync_OpfsCopyGenuinelyGone_DropsTracking()
+    {
+        // The one case that SHOULD permanently drop tracking — contrast with the test above.
+        var js = new MultiModuleFakeJsRuntime();
+        js.OpfsModule.Results["opfsIsAvailable"] = true;
+        js.OpfsModule.Results["opfsReadAsFile"] = new ConfigurableFakeModule();
+        js.FfmpegModule.Results["mountWorkerFs"] = "/src_test/clip.mp4";
+
+        var errorLog = new ErrorLogService();
+        var ffmpeg = new FfmpegService(js, errorLog, new MemFsLedger(), new WorkerWatchdog());
+        await ffmpeg.LoadAsync(); // must be Ready-enough to set _module before any mount can work
+        var opfs = new OPFSService(js, errorLog);
+        var mounter = new SourceMounter(ffmpeg, opfs);
+
+        var clipId = Guid.NewGuid();
+        var mounted = await mounter.MountAsync(clipId, ".mp4");
+        Assert.NotNull(mounted);
+
+        js.OpfsModule.Results["opfsReadAsFile"] = null; // OPFS copy is now confirmed gone
+        var remounted = await mounter.RemountAllAsync();
+        Assert.Empty(remounted);
+
+        // Now even a working mount can't bring it back — it was correctly dropped.
+        js.OpfsModule.Results["opfsReadAsFile"] = new ConfigurableFakeModule();
+        var secondAttempt = await mounter.RemountAllAsync();
+        Assert.False(secondAttempt.ContainsKey(clipId));
+    }
+
+    // ── Watchdog wiring integration (short poll interval so this doesn't need a real 45s wait) ──
+
+    private sealed class GatedFakeModule : IJSObjectReference
+    {
+        private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public void Release() => _gate.TrySetResult();
+
+        public async ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
+        {
+            if (identifier == "exec") await _gate.Task; // never completes until released
+            return default!;
+        }
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken ct, object?[]? args)
+            => InvokeAsync<TValue>(identifier, args);
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class GatedFakeJsRuntime : IJSRuntime
+    {
+        public GatedFakeModule Module { get; } = new();
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
+            => identifier == "import"
+                ? ValueTask.FromResult((TValue)(object)Module)
+                : throw new NotSupportedException(identifier);
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken ct, object?[]? args)
+            => InvokeAsync<TValue>(identifier, args);
+    }
+
+    [Fact]
+    public async Task Watchdog_GenuinelyStuckCommand_FlagsIsWorkerWedged()
+    {
+        var js = new GatedFakeJsRuntime();
+        var watchdog = new WorkerWatchdog(TimeSpan.FromMilliseconds(30));
+        var svc = new FfmpegService(js, new ErrorLogService(), new MemFsLedger(), watchdog,
+            watchdogPollInterval: TimeSpan.FromMilliseconds(10));
+        await svc.LoadAsync();
+
+        var fired = false;
+        svc.OnWorkerWedged += () => fired = true;
+
+        var stuckTask = svc.ExecAsync(["-i", "a.mp4"]); // never resolves until the gate releases
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        while (!svc.IsWorkerWedged && !cts.IsCancellationRequested)
+            await Task.Delay(10);
+
+        Assert.True(svc.IsWorkerWedged);
+        Assert.True(fired);
+
+        js.Module.Release(); // the gate finally opens — proves the watchdog flag didn't kill anything
+        var code = await stuckTask;
+
+        Assert.Equal(0, code);
+        Assert.Equal(FfmpegState.Ready, svc.State);
+        Assert.False(svc.IsWorkerWedged); // CommandFinished clears it once the command actually ends
+    }
+}

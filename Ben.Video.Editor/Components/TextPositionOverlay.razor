@@ -1,0 +1,75 @@
+@inject ClipStore Clips
+@inject PreviewGeometryService Geometry
+
+@* Editor-only overlay — never exported. A single draggable handle marking the text overlay's
+   position; no resize handles — text sizing stays the Properties panel's FontSize slider. *@
+<svg class="bv-text-position-overlay"
+     viewBox="0 0 @CanvasWidth @CanvasHeight"
+     xmlns="http://www.w3.org/2000/svg"
+     @onpointermove="OnPointerMove"
+     @onpointerup="OnPointerUp"
+     @onpointercancel="OnPointerUp">
+
+    @if (Overlay is not null)
+    {
+        <circle cx="@F(HandleX * CanvasWidth)" cy="@F(HandleY * CanvasHeight)" r="16"
+                fill="transparent" style="cursor:grab"
+                @onpointerdown="OnHandlePointerDown"
+                @onpointermove="OnPointerMove"
+                @onpointerup="OnPointerUp"
+                @onpointercancel="OnPointerUp"
+                @onpointerdown:stopPropagation="true" />
+        <circle cx="@F(HandleX * CanvasWidth)" cy="@F(HandleY * CanvasHeight)"
+                r="@(_dragging ? "8" : "6")"
+                fill="@(_dragging ? "#f9e2af" : "#89b4fa")"
+                stroke="#1e1e2e" stroke-width="1.5"
+                style="pointer-events:none" />
+        <title>Text position (drag)</title>
+    }
+</svg>
+
+@code {
+    [Parameter, EditorRequired] public TextOverlay?     Overlay       { get; set; }
+    [Parameter, EditorRequired] public ElementReference ScreenElement { get; set; }
+    [Parameter]                  public int             CanvasWidth   { get; set; } = 1920;
+    [Parameter]                  public int             CanvasHeight  { get; set; } = 1080;
+
+    private bool   _dragging;
+    private double _dragStartPxX;
+    private double _dragStartPxY;
+
+    private double HandleX => Overlay is null ? 0.5 : MotionEffectiveGeometry.TextAnchorX(Overlay, CanvasWidth);
+    private double HandleY => Overlay is null ? 0.5 : MotionEffectiveGeometry.TextAnchorY(Overlay, CanvasHeight);
+
+    private async Task OnHandlePointerDown(PointerEventArgs e)
+    {
+        if (Overlay is null) return;
+        await Geometry.RefreshAsync(ScreenElement, CanvasWidth, CanvasHeight);
+        _dragging     = true;
+        _dragStartPxX = e.ClientX;
+        _dragStartPxY = e.ClientY;
+    }
+
+    private void OnPointerMove(PointerEventArgs e)
+    {
+        if (!_dragging || Overlay is null) return;
+
+        var dxPx = e.ClientX - _dragStartPxX;
+        var dyPx = e.ClientY - _dragStartPxY;
+        _dragStartPxX = e.ClientX;
+        _dragStartPxY = e.ClientY;
+
+        var (fdx, fdy) = Geometry.DeltaToFraction(dxPx, dyPx);
+        var nx = Math.Clamp(HandleX + fdx, 0.0, 1.0);
+        var ny = Math.Clamp(HandleY + fdy, 0.0, 1.0);
+
+        // No undo tier here — TextOverlay edits have no undo support anywhere today (Properties-panel
+        // slider edits included), matching that existing, pre-existing behavior rather than
+        // selectively adding it just for this new drag path.
+        Clips.UpdateTextOverlay(Overlay with { OverrideX = nx, OverrideY = ny });
+    }
+
+    private void OnPointerUp(PointerEventArgs e) => _dragging = false;
+
+    private static string F(double v) => v.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+}

@@ -38,6 +38,18 @@ public record InvestigationRecord
     public DateTime? DateUpdated { get; init; }
     public Guid CreatedByAppUserId { get; init; }
     public Guid? UpdatedByAppUserId { get; init; }
+
+    /// <summary>
+    /// Whether the caller may change this investigation. The server's verdict, not a hint.
+    /// </summary>
+    /// <remarks>
+    /// Editing is narrower than membership — see <c>InvestigationAccess.CanManageAsync</c> for the
+    /// five ways to earn it. A screen must render this rather than work it out, or it will
+    /// eventually offer a control the endpoint refuses. It is not mapped from the entity; the
+    /// controllers set it per caller, and it defaults to <c>false</c> so a path that forgets shows
+    /// too little rather than too much.
+    /// </remarks>
+    public bool CanEditRecord { get; init; }
 }
 
 public record InvestigationAttendeeRecord

@@ -1,0 +1,1750 @@
+@inject FfmpegService Ffmpeg
+@inject SidecarMediaProbe SidecarMedia
+@inject ClipStore Clips
+@inject IJSRuntime JS
+@inject Microsoft.Extensions.Options.IOptions<VideoEditorOptions> EditorOptionsAccessor
+@inject IMediaLibraryProvider MediaLib
+@inject OPFSService OPFS
+@inject SourceMounter Mounter
+@inject ErrorLogService ErrorLog
+@inject BlobUrlLifecycle BlobLifecycle
+@implements IAsyncDisposable
+
+@* ── Sidebar panel (unpinned) ────────────────────────────────────────────── *@
+<aside class="bv-browser @(_isPinned ? "bv-browser--collapsed" : "")">
+    @if (!_isPinned)
+    {
+        <div class="bv-browser__header">
+            <span class="bv-browser__title">Media Library</span>
+            <div class="bv-browser__header-actions">
+                <TelerikButton OnClick="PickFilesAsync"
+                               Enabled="@(Ffmpeg.State == FfmpegState.Ready)"
+                               ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                               Icon="@SvgIcon.Plus"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               Title="Import local files">
+                    Add
+                </TelerikButton>
+                <TelerikButton OnClick="TogglePinAsync"
+                               Icon="@SvgIcon.Pin"
+                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               Title="Float as window" />
+            </div>
+        </div>
+        @BrowserTabs
+        @if (_errorMessage is not null)
+        {
+            <div class="bv-browser__error">⚠ @_errorMessage</div>
+        }
+    }
+</aside>
+
+@* ── Floating window (pinned) ───────────────────────────────────────────── *@
+<TelerikWindow Visible="@_isPinned"
+               VisibleChanged="@OnWindowVisibleChangedAsync"
+               Draggable="true"
+               Resizable="true"
+               Width="320px"
+               Height="540px"
+               Modal="false"
+               Class="bv-browser-window">
+    <WindowTitle>
+        <div class="bv-browser-window__title-bar">
+            <span class="bv-browser-window__title">Media Library</span>
+            <TelerikButton OnClick="PickFilesAsync"
+                           Enabled="@(Ffmpeg.State == FfmpegState.Ready)"
+                           Icon="@SvgIcon.Plus"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           Title="Import local files" />
+        </div>
+    </WindowTitle>
+    <WindowContent>
+        @if (_isPinned)
+        {
+            @BrowserTabs
+            @if (_errorMessage is not null)
+            {
+                <div class="bv-browser__error">⚠ @_errorMessage</div>
+            }
+        }
+    </WindowContent>
+</TelerikWindow>
+
+@* ── Always rendered ─────────────────────────────────────────────────────── *@
+<input type="file" id="bv-file-input" multiple accept="video/*,audio/*,image/*"
+       style="display:none" @onchange="OnFileInputChangeAsync" />
+
+<TelerikContextMenu @ref="_videoCardMenu"
+                    Data="@_videoCardMenuItems"
+                    TextField="Text"
+                    IconField="Icon"
+                    SeparatorField="IsSeparator"
+                    DisabledField="IsDisabled"
+                    OnClick="@(async (BvMenuItem i) => { if (i.Action is not null) await i.Action(); })">
+</TelerikContextMenu>
+
+<TelerikContextMenu @ref="_audioCardMenu"
+                    Data="@_audioCardMenuItems"
+                    TextField="Text"
+                    IconField="Icon"
+                    SeparatorField="IsSeparator"
+                    DisabledField="IsDisabled"
+                    OnClick="@(async (BvMenuItem i) => { if (i.Action is not null) await i.Action(); })">
+</TelerikContextMenu>
+
+<TelerikContextMenu @ref="_imageCardMenu"
+                    Data="@_imageCardMenuItems"
+                    TextField="Text"
+                    IconField="Icon"
+                    SeparatorField="IsSeparator"
+                    DisabledField="IsDisabled"
+                    OnClick="@(async (BvMenuItem i) => { if (i.Action is not null) await i.Action(); })">
+</TelerikContextMenu>
+
+
+@* ── Import progress window ──────────────────────────────────────────────── *@
+<TelerikWindow @bind-Visible="_showImportWindow"
+               Width="600px"
+               Modal="true"
+               Draggable="true"
+               Resizable="false"
+               CloseOnOverlayClick="false">
+    <WindowTitle>
+        @{
+            var _dc = _importStatuses.Count(s => s.IsDone);
+            var _tc = _importStatuses.Count;
+        }
+        @if (_tc > 0 && _importStatuses.All(s => s.IsDone))
+        {
+            <span>Import Complete (@_tc file@(_tc == 1 ? "" : "s"))</span>
+        }
+        else
+        {
+            <span>Importing @_dc / @_tc file@(_tc == 1 ? "" : "s")…</span>
+        }
+    </WindowTitle>
+    <WindowContent>
+        <div class="bv-import-list">
+            @foreach (var item in _importStatuses)
+            {
+                <div class="bv-import-row bv-import-row--@item.Stage.ToString().ToLowerInvariant()">
+
+                    <div class="bv-import-row__thumb">
+                        @if (item.PreviewUrl is not null)
+                        {
+                            @* Item #62 phase 170 — branch on what the URL actually IS, not on the
+                               file type. PreviewUrl starts life as an object URL for the selected
+                               file (a real video, so <video> is right), then the pipeline replaces
+                               it with an extracted thumbnail FRAME — an image/webp blob. Keying
+                               this off IsVideo meant that second, longer-lived value was handed to
+                               a <video> element, which can never decode it: one failed blob load
+                               per video import, no exception and no visible symptom beyond an
+                               empty thumb box in a transient row. That is item #62's "solo blob:
+                               URL 404". *@
+                            @if (item.PreviewIsVideo)
+                            {
+                                <video src="@item.PreviewUrl" class="bv-import-row__thumb-img" muted preload="metadata" />
+                            }
+                            else
+                            {
+                                <img src="@item.PreviewUrl" alt="@item.FileName" class="bv-import-row__thumb-img" />
+                            }
+                        }
+                        else
+                        {
+                            <div class="bv-import-row__thumb-icon">
+                                <TelerikSvgIcon Icon="@FileTypeIcon(item.FileName)" />
+                            </div>
+                        }
+                    </div>
+
+                    <div class="bv-import-row__body">
+                        <div class="bv-import-row__name" title="@item.FileName">@item.FileName</div>
+                        <div class="bv-import-row__meta">
+                            <span class="bv-import-row__size">@item.OriginalSizeText</span>
+                            @if (item.MetaText is not null)
+                            {
+                                <span class="bv-import-row__dims"> · @item.MetaText</span>
+                            }
+                            @if (item.MemFsSizeText is not null)
+                            {
+                                <span class="bv-import-row__wasm"> → @item.MemFsSizeText in WASM</span>
+                            }
+                        </div>
+                        @if (item.Stage is not ImportStage.Queued and not ImportStage.Done and not ImportStage.Error)
+                        {
+                            <TelerikProgressBar Value="@((double)item.Progress)"
+                                                Max="100"
+                                                Indeterminate="@(item.Progress == 0)"
+                                                Class="bv-import-row__bar"
+                                                AriaLabel="@item.FileName" />
+                        }
+                        @if (item.Stage == ImportStage.Error && item.ErrorText is not null)
+                        {
+                            <div class="bv-import-row__error">@item.ErrorText</div>
+                        }
+                    </div>
+
+                    <div class="bv-import-badge bv-import-badge--@item.Stage.ToString().ToLowerInvariant()">
+                        @StageBadge(item.Stage)
+                    </div>
+
+                    @if (!item.IsDone && item.Cts is not null)
+                    {
+                        <TelerikButton OnClick="() => item.Cts!.Cancel()"
+                                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Title="Cancel this import"
+                                       Class="bv-import-row__cancel">
+                            Cancel
+                        </TelerikButton>
+                    }
+
+                </div>
+            }
+        </div>
+    </WindowContent>
+    <WindowFooter>
+        @if (_importStatuses.Count > 0 && _importStatuses.All(s => s.IsDone))
+        {
+            <TelerikButton OnClick="CloseImportWindow"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           ButtonType="ButtonType.Button">
+                Done
+            </TelerikButton>
+        }
+    </WindowFooter>
+</TelerikWindow>
+
+@code {
+    // Audit #4 — typed DOM/storage helpers instead of eval'd source strings.
+    private IJSObjectReference? _dom;
+    private IJSObjectReference? _storage;
+
+    private async Task<IJSObjectReference> DomAsync() =>
+        _dom ??= await JS.InvokeAsync<IJSObjectReference>(
+            "import", "/_content/Ben.Video.Editor/js/domInterop.js");
+
+    private async Task<IJSObjectReference> StorageAsync() =>
+        _storage ??= await JS.InvokeAsync<IJSObjectReference>(
+            "import", "/_content/Ben.Video.Editor/js/storageInterop.js");
+
+
+    // The grids below (VideoClipGrid/AudioClipGrid/ImageClipGrid/LibraryFileGrid) are built with raw
+    // RenderTreeBuilder calls, so the Razor compiler's CSS-isolation pass never sees these elements and
+    // never stamps them with this component's scope attribute — every ClipBrowser.razor.css rule
+    // silently fails to apply to them (e.g. thumbnails render at native image size instead of the
+    // intended 64×40 box). Adding the attribute by hand here restores scoping for the card visuals.
+    // Value must match the "aside" element's live b-xxxxxxxx attribute if this file is ever moved/renamed.
+    private const string CssScope = "b-xbjan6uni8";
+
+    // ── Parameters ───────────────────────────────────────────────────────────
+    [Parameter] public EventCallback<VideoClip> OnClipSelected   { get; set; }
+    [Parameter] public EventCallback<VideoClip> OnAddToTimeline  { get; set; }
+    [Parameter] public EventCallback<AudioClip> OnAudioClipAdded { get; set; }
+
+    /// <summary>Effective options from the parent VideoEditor. Null = use the IOptions value from DI.</summary>
+    [Parameter] public VideoEditorOptions? EditorOptions { get; set; }
+
+    private VideoEditorOptions Options => EditorOptions ?? EditorOptionsAccessor.Value;
+
+    // ── Local state ───────────────────────────────────────────────────────────
+    private Guid?   _selectedId;
+    private bool    _loading;
+    private string  _loadingMessage = string.Empty;
+    private string? _errorMessage;
+    private bool    _isDragging;
+    private string  _activeLocalTab = "video";
+
+    // ── ClipBrowser → track pointer-based drag source (item #24) ───────────────
+    private IJSObjectReference?                  _dragBridgeModule;
+    private DotNetObjectReference<ClipBrowser>?  _dragSourceRef;
+
+    // ── Pin state ─────────────────────────────────────────────────────────────
+    private bool _isPinned;
+    private const string PinStateKey = "bv-browser-pinned";
+
+    // ── Library state ─────────────────────────────────────────────────────────
+    private bool                           _libraryLoading;
+    private string?                        _libraryError;
+    private IReadOnlyList<MediaLibraryFile> _libraryFiles = [];
+    private readonly HashSet<Guid>          _libraryImporting = [];
+
+    // Phase 150 — decouples "have a local copy" from "placed on the timeline". A card's click
+    // downloads + OPFS-caches the file (keyed by the library file's own stable Id, same OPFS
+    // directory/convention every placed clip's own source already uses — see OPFSService) without
+    // touching ClipStore at all; a SECOND click, once cached, adds it to the timeline by copying
+    // the cached OPFS entry under a fresh clip id (mirrors how a placed clip's own source is
+    // stored) rather than re-downloading. _libraryCached is seeded from a real OPFS existence
+    // check on load (LoadLibraryAsync) so the "downloaded locally" badge survives a reload.
+    private readonly HashSet<Guid>            _libraryCached           = [];
+    private readonly HashSet<Guid>            _libraryDownloading      = [];
+    private readonly Dictionary<Guid, double> _libraryDownloadProgress = [];
+
+    // ── Server-tab preview thumbnails (separate from the real import flow —
+    // these are one-off frame grabs for the browsing list, nothing is added to
+    // the timeline and any temp MEMFS file is cleaned up immediately after) ───
+    private readonly Dictionary<Guid, string> _serverThumbnails = [];
+    private readonly HashSet<Guid>            _serverThumbnailsLoading = [];
+
+    // ── Import progress ───────────────────────────────────────────────────────
+    private bool                   _showImportWindow;
+    private List<FileImportStatus> _importStatuses = [];
+
+    /// <summary>
+    /// Item #62 phase 170 — owner label for thumbnails produced by the wasm worker
+    /// (<see cref="FfmpegService.ExtractThumbnailsAsync"/>), mirroring
+    /// <see cref="SidecarMediaProbe.ThumbnailOwner"/> for the native path.
+    ///
+    /// <para>Phase 144 built <see cref="BlobUrlLifecycle"/> precisely to catch double-revokes and
+    /// revoke-while-attached, then only ever pointed it at preview URLs; phase 159 added the
+    /// sidecar's thumbnails. The wasm thumbnails — the majority of blob URLs in the app, and the
+    /// ones carrying item #62's bug — were never registered, so the detector built for this class
+    /// of bug was structurally blind to it. Registering them is the reason a regression here would
+    /// now show up in the error log instead of only as a silent 404 in devtools.</para>
+    /// </summary>
+    private const string WasmThumbnailOwner = "ClipBrowser.wasmThumbnail";
+
+    /// <summary>
+    /// Item #62 phase 170 — points an import row's preview at an extracted thumbnail frame,
+    /// keeping <see cref="FileImportStatus.PreviewIsVideo"/> in step with the URL's actual kind so
+    /// the markup picks &lt;img&gt; rather than &lt;video&gt;.
+    ///
+    /// <para>Also releases the object URL this supersedes. That URL comes from
+    /// <c>domInterop.fileObjectUrl</c> (a plain <c>URL.createObjectURL(file)</c> over the whole
+    /// picked file) and nothing else ever revoked it, so every video import used to strand one
+    /// full-file blob for the page's lifetime. Safe to revoke here precisely because the render
+    /// that swaps the element happens before this runs.</para>
+    /// </summary>
+    private async Task SetThumbnailPreviewAsync(FileImportStatus status, string thumbnailUrl)
+    {
+        var superseded = status.PreviewUrl;
+        status.PreviewUrl = thumbnailUrl;
+        status.PreviewIsVideo = false;
+        StateHasChanged();
+        await Task.Yield(); // let the <video>→<img> swap flush before releasing the old blob
+
+        if (superseded is not null && superseded != thumbnailUrl)
+        {
+            try { await Ffmpeg.RevokePreviewUrlAsync(superseded); } catch { }
+        }
+    }
+
+    /// <summary>Registers wasm-produced thumbnails; sidecar ones self-register in
+    /// <see cref="SidecarMediaProbe.TryExtractThumbnailsAsync"/>, so they are skipped here.</summary>
+    private void RegisterWasmThumbnails(IEnumerable<string> urls)
+    {
+        foreach (var url in urls)
+        {
+            if (!SidecarMedia.OwnsThumbnail(url)) BlobLifecycle.Created(url, WasmThumbnailOwner);
+        }
+    }
+
+    private enum ImportStage { Queued, Preview, Downloading, Writing, Metadata, Thumbnails, Audio, Done, Error }
+
+    private sealed class FileImportStatus
+    {
+        public required string FileName    { get; init; }
+        public required long   SizeBytes   { get; init; }
+        public required bool   IsVideo     { get; init; }
+        public string?         PreviewUrl  { get; set; }
+
+        /// <summary>
+        /// Item #62 phase 170 — whether <see cref="PreviewUrl"/> currently holds a *video* blob
+        /// rather than a still image, which is NOT the same question as <see cref="IsVideo"/>:
+        /// a video import's preview starts as an object URL for the picked file and is then
+        /// replaced by an extracted thumbnail frame. Only the markup's element choice depends on
+        /// this; everything else keys off <see cref="IsVideo"/> as before.
+        /// </summary>
+        public bool            PreviewIsVideo { get; set; }
+        public ImportStage     Stage       { get; set; } = ImportStage.Queued;
+        public int             Progress    { get; set; }
+        public string?         ErrorText   { get; set; }
+        public string?         MetaText    { get; set; }
+        public long?           MemFsBytes  { get; set; }
+        /// <summary>Item #59-#65 flakiness investigation, phase 145 — set only for imports that
+        /// support cancellation (currently just the server-library path). Null for the local
+        /// file-picker path, which has no long-running network stage to cancel.</summary>
+        public CancellationTokenSource? Cts { get; set; }
+
+        public bool    IsDone          => Stage is ImportStage.Done or ImportStage.Error;
+        public string  OriginalSizeText => FormatBytes(SizeBytes);
+        public string? MemFsSizeText    => MemFsBytes.HasValue ? FormatBytes(MemFsBytes.Value) : null;
+
+        private static string FormatBytes(long b) => b switch
+        {
+            < 1024        => $"{b} B",
+            < 1_048_576   => $"{b / 1024.0:F1} KB",
+            _             => $"{b / 1_048_576.0:F1} MB",
+        };
+    }
+
+    // ── Render fragments ──────────────────────────────────────────────────────
+
+    private RenderFragment BrowserTabs => __builder =>
+    {
+        __builder.OpenComponent<TelerikTabStrip>(0);
+        __builder.AddAttribute(1, "ActiveTabId", _activeLocalTab);
+        __builder.AddAttribute(2, "ActiveTabIdChanged",
+            EventCallback.Factory.Create<string>(this, v => { _activeLocalTab = v; }));
+        __builder.AddAttribute(3, "Size", ThemeConstants.TabStrip.Size.Small);
+        __builder.AddAttribute(4, "Class", "bv-browser__tabs");
+        __builder.AddAttribute(5, "OnStateChanged",
+            EventCallback.Factory.Create<TabStripStateEventArgs>(this, OnTabStateChanged));
+        __builder.AddAttribute(6, "ChildContent", (RenderFragment)(__b2 =>
+        {
+            // Video tab
+            __b2.OpenComponent<TabStripTab>(0);
+            __b2.AddAttribute(1, "Title", "Video");
+            __b2.AddAttribute(2, "Id", "video");
+            __b2.AddAttribute(3, "ChildContent", VideoClipGrid);
+            __b2.CloseComponent();
+
+            // Audio tab
+            __b2.OpenComponent<TabStripTab>(4);
+            __b2.AddAttribute(5, "Title", "Audio");
+            __b2.AddAttribute(6, "Id", "audio");
+            __b2.AddAttribute(7, "ChildContent", AudioClipGrid);
+            __b2.CloseComponent();
+
+            // Image tab (conditional)
+            if (Options.ImageClips)
+            {
+                __b2.OpenComponent<TabStripTab>(8);
+                __b2.AddAttribute(9, "Title", "Image");
+                __b2.AddAttribute(10, "Id", "image");
+                __b2.AddAttribute(11, "ChildContent", ImageClipGrid);
+                __b2.CloseComponent();
+            }
+
+            // Server tab (conditional)
+            if (Options.MediaLibrary)
+            {
+                __b2.OpenComponent<TabStripTab>(12);
+                __b2.AddAttribute(13, "Title", "Server");
+                __b2.AddAttribute(14, "Id", "server");
+                __b2.AddAttribute(15, "ChildContent", LibraryFileGrid);
+                __b2.CloseComponent();
+            }
+        }));
+        __builder.CloseComponent();
+    };
+
+    private RenderFragment VideoClipGrid => __builder =>
+    {
+        if (_loading)
+        {
+            __builder.AddMarkupContent(0,
+                "<div class=\"bv-browser__loading\">");
+            __builder.OpenComponent<TelerikLoader>(1);
+            __builder.AddAttribute(2, "Type", LoaderType.InfiniteSpinner);
+            __builder.AddAttribute(3, "Size", ThemeConstants.Loader.Size.Medium);
+            __builder.CloseComponent();
+            __builder.OpenElement(4, "span"); __builder.AddContent(5, _loadingMessage); __builder.CloseElement();
+            __builder.AddMarkupContent(6, "</div>");
+        }
+        else if (!Clips.AllVideoClips.Any())
+        {
+            __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty");
+            __builder.OpenElement(12, "p"); __builder.AddContent(13, "No video clips yet."); __builder.CloseElement();
+            __builder.OpenElement(14, "p");
+            __builder.AddContent(15, "Click ");
+            __builder.OpenElement(16, "strong"); __builder.AddContent(17, "Add"); __builder.CloseElement();
+            __builder.AddContent(18, " to import video files.");
+            __builder.CloseElement();
+            __builder.CloseElement();
+        }
+        else
+        {
+            __builder.OpenElement(20, "div"); __builder.AddAttribute(21, "class", "bv-browser__grid"); __builder.AddAttribute(22, CssScope, "");
+            int seq = 30;
+            foreach (var clip in Clips.AllVideoClips)
+            {
+                var c = clip;
+                var cls = $"bv-clip-card {(_selectedId == clip.Id ? "bv-clip-card--selected" : "")} {(_isDragging && _selectedId == clip.Id ? "bv-clip-card--dragging" : "")}";
+                __builder.OpenElement(seq++, "div");
+                __builder.AddAttribute(seq++, CssScope, "");
+                __builder.AddAttribute(seq++, "class", cls);
+                __builder.AddAttribute(seq++, "onpointerdown", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.PointerEventArgs>(this, e => OnClipPointerDown(e, c)));
+                __builder.AddAttribute(seq++, "onclick",       Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => SelectClip(c)));
+                __builder.AddAttribute(seq++, "oncontextmenu", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, e => OpenVideoCardMenu(e, c)));
+                __builder.AddEventPreventDefaultAttribute(seq++, "oncontextmenu", true);
+
+                // Thumb
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb");
+                if (clip.ThumbnailUrls.Count > 0)
+                {
+                    __builder.OpenElement(seq++, "img");
+                    __builder.AddAttribute(seq++, CssScope, "");
+                    __builder.AddAttribute(seq++, "src",       clip.ThumbnailUrls[0]);
+                    __builder.AddAttribute(seq++, "alt",       clip.Name);
+                    __builder.AddAttribute(seq++, "loading",   "lazy");
+                    __builder.AddAttribute(seq++, "draggable", "false");
+                    __builder.CloseElement();
+                }
+                else
+                {
+                    __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb-placeholder");
+                    __builder.AddContent(seq++, "▶"); __builder.CloseElement();
+                }
+                __builder.CloseElement();
+
+                // Info
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", clip.Name); __builder.AddContent(seq++, clip.Name); __builder.CloseElement();
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__meta"); __builder.AddContent(seq++, FormatDuration(clip.TrimmedDuration)); __builder.CloseElement();
+                __builder.CloseElement();
+
+                // Actions
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__actions");
+                __builder.OpenComponent<TelerikButton>(seq++);
+                __builder.AddAttribute(seq++, "OnClick",    Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, _ => AddToTimelineAsync(c)));
+                __builder.AddAttribute(seq++, "Title",      "Add to timeline");
+                __builder.AddAttribute(seq++, "Icon",       (object)SvgIcon.Plus);
+                __builder.AddAttribute(seq++, "Size",       ThemeConstants.Button.Size.Small);
+                __builder.AddAttribute(seq++, "FillMode",   ThemeConstants.Button.FillMode.Flat);
+                __builder.AddAttribute(seq++, "ThemeColor", ThemeConstants.Button.ThemeColor.Primary);
+                __builder.CloseComponent();
+                __builder.OpenComponent<TelerikButton>(seq++);
+                __builder.AddAttribute(seq++, "OnClick",    Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, _ => RemoveClip(c)));
+                __builder.AddAttribute(seq++, "Title",      "Remove clip");
+                __builder.AddAttribute(seq++, "Icon",       (object)SvgIcon.Trash);
+                __builder.AddAttribute(seq++, "Size",       ThemeConstants.Button.Size.Small);
+                __builder.AddAttribute(seq++, "FillMode",   ThemeConstants.Button.FillMode.Flat);
+                __builder.AddAttribute(seq++, "ThemeColor", ThemeConstants.Button.ThemeColor.Error);
+                __builder.CloseComponent();
+                __builder.CloseElement(); // actions
+                __builder.CloseElement(); // card
+            }
+            __builder.CloseElement(); // grid
+        }
+    };
+
+    private RenderFragment AudioClipGrid => __builder =>
+    {
+        var allAudio = Clips.AllAudioClips.ToList();
+        if (!allAudio.Any())
+        {
+            __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty");
+            __builder.OpenElement(12, "p"); __builder.AddContent(13, "No audio clips yet."); __builder.CloseElement();
+            __builder.OpenElement(14, "p");
+            __builder.AddContent(15, "Click ");
+            __builder.OpenElement(16, "strong"); __builder.AddContent(17, "Add"); __builder.CloseElement();
+            __builder.AddContent(18, " to import audio files.");
+            __builder.CloseElement();
+            __builder.CloseElement();
+        }
+        else
+        {
+            __builder.OpenElement(20, "div"); __builder.AddAttribute(21, "class", "bv-browser__grid"); __builder.AddAttribute(22, CssScope, "");
+            int seq = 30;
+            foreach (var clip in allAudio)
+            {
+                var a = clip;
+                __builder.OpenElement(seq++, "div");
+                __builder.AddAttribute(seq++, CssScope, "");
+                __builder.AddAttribute(seq++, "class", "bv-clip-card");
+                __builder.AddAttribute(seq++, "oncontextmenu", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, e => OpenAudioCardMenu(e, a)));
+                __builder.AddEventPreventDefaultAttribute(seq++, "oncontextmenu", true);
+
+                // Thumb — audio icon
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb bv-clip-card__thumb--icon");
+                __builder.OpenComponent<TelerikSvgIcon>(seq++);
+                __builder.AddAttribute(seq++, "Icon", (object)SvgIcon.FileAudio);
+                __builder.CloseComponent();
+                __builder.CloseElement();
+
+                // Info
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", clip.Name); __builder.AddContent(seq++, clip.Name); __builder.CloseElement();
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__meta"); __builder.AddContent(seq++, FormatDuration(clip.Duration)); __builder.CloseElement();
+                __builder.CloseElement();
+
+                // Actions
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__actions");
+                __builder.OpenComponent<TelerikButton>(seq++);
+                __builder.AddAttribute(seq++, "OnClick",    Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, _ => RemoveAudioClip(a)));
+                __builder.AddAttribute(seq++, "Title",      "Remove audio clip");
+                __builder.AddAttribute(seq++, "Icon",       (object)SvgIcon.Trash);
+                __builder.AddAttribute(seq++, "Size",       ThemeConstants.Button.Size.Small);
+                __builder.AddAttribute(seq++, "FillMode",   ThemeConstants.Button.FillMode.Flat);
+                __builder.AddAttribute(seq++, "ThemeColor", ThemeConstants.Button.ThemeColor.Error);
+                __builder.CloseComponent();
+                __builder.CloseElement(); // actions
+                __builder.CloseElement(); // card
+            }
+            __builder.CloseElement(); // grid
+        }
+    };
+
+    private RenderFragment ImageClipGrid => __builder =>
+    {
+        var allImages = Clips.AllImageClips.ToList();
+        if (!allImages.Any())
+        {
+            __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty");
+            __builder.OpenElement(12, "p"); __builder.AddContent(13, "No image clips yet."); __builder.CloseElement();
+            __builder.OpenElement(14, "p");
+            __builder.AddContent(15, "Click ");
+            __builder.OpenElement(16, "strong"); __builder.AddContent(17, "Add"); __builder.CloseElement();
+            __builder.AddContent(18, " to import image files.");
+            __builder.CloseElement();
+            __builder.CloseElement();
+        }
+        else
+        {
+            __builder.OpenElement(20, "div"); __builder.AddAttribute(21, "class", "bv-browser__grid"); __builder.AddAttribute(22, CssScope, "");
+            int seq = 30;
+            foreach (var clip in allImages)
+            {
+                var img = clip;
+                __builder.OpenElement(seq++, "div");
+                __builder.AddAttribute(seq++, CssScope, "");
+                __builder.AddAttribute(seq++, "class", "bv-clip-card");
+                __builder.AddAttribute(seq++, "oncontextmenu", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, e => OpenImageCardMenu(e, img)));
+                __builder.AddEventPreventDefaultAttribute(seq++, "oncontextmenu", true);
+
+                // Thumb
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb");
+                if (clip.ThumbnailUrl is not null)
+                {
+                    __builder.OpenElement(seq++, "img");
+                    __builder.AddAttribute(seq++, CssScope, "");
+                    __builder.AddAttribute(seq++, "src",     clip.ThumbnailUrl);
+                    __builder.AddAttribute(seq++, "alt",     clip.Name);
+                    __builder.AddAttribute(seq++, "loading", "lazy");
+                    __builder.CloseElement();
+                }
+                else
+                {
+                    __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb--icon");
+                    __builder.OpenComponent<TelerikSvgIcon>(seq++);
+                    __builder.AddAttribute(seq++, "Icon", (object)SvgIcon.Image);
+                    __builder.CloseComponent();
+                    __builder.CloseElement();
+                }
+                __builder.CloseElement();
+
+                // Info
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", clip.Name); __builder.AddContent(seq++, clip.Name); __builder.CloseElement();
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__meta"); __builder.AddContent(seq++, $"{FormatDuration(clip.Duration)} · still"); __builder.CloseElement();
+                __builder.CloseElement();
+
+                // Actions
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__actions");
+                __builder.OpenComponent<TelerikButton>(seq++);
+                __builder.AddAttribute(seq++, "OnClick",    Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, _ => RemoveImageClip(img)));
+                __builder.AddAttribute(seq++, "Title",      "Remove image clip");
+                __builder.AddAttribute(seq++, "Icon",       (object)SvgIcon.Trash);
+                __builder.AddAttribute(seq++, "Size",       ThemeConstants.Button.Size.Small);
+                __builder.AddAttribute(seq++, "FillMode",   ThemeConstants.Button.FillMode.Flat);
+                __builder.AddAttribute(seq++, "ThemeColor", ThemeConstants.Button.ThemeColor.Error);
+                __builder.CloseComponent();
+                __builder.CloseElement(); // actions
+                __builder.CloseElement(); // card
+            }
+            __builder.CloseElement(); // grid
+        }
+    };
+
+    private RenderFragment LibraryFileGrid => __builder =>
+    {
+        int seq = 0;
+        if (_libraryLoading)
+        {
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__loading");
+            __builder.OpenComponent<TelerikLoader>(seq++);
+            __builder.AddAttribute(seq++, "Type", LoaderType.InfiniteSpinner);
+            __builder.AddAttribute(seq++, "Size", ThemeConstants.Loader.Size.Medium);
+            __builder.CloseComponent();
+            __builder.OpenElement(seq++, "span"); __builder.AddContent(seq++, "Loading library…"); __builder.CloseElement();
+            __builder.CloseElement();
+        }
+        else if (_libraryError is not null)
+        {
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__error");
+            __builder.AddContent(seq++, $"⚠ {_libraryError}");
+            __builder.CloseElement();
+        }
+        else if (!_libraryFiles.Any())
+        {
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__empty");
+            __builder.OpenElement(seq++, "p"); __builder.AddContent(seq++, "No files in the media library."); __builder.CloseElement();
+            __builder.CloseElement();
+        }
+        else
+        {
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-browser__grid");
+            foreach (var file in _libraryFiles)
+            {
+                var f = file;
+                // Phase 150 — "busy" (adding an already-cached file to the timeline) and
+                // "downloading" (fetching+caching, not yet on the timeline) are now distinct
+                // states with their own visuals; see OnLibraryCardClickedAsync's dispatch.
+                var busy        = _libraryImporting.Contains(f.Id);
+                var downloading = _libraryDownloading.Contains(f.Id);
+                var cached      = _libraryCached.Contains(f.Id);
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", $"bv-clip-card {(busy || downloading ? "bv-clip-card--busy" : "")}");
+                __builder.AddAttribute(seq++, "onclick", Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => OnLibraryCardClickedAsync(f)));
+
+                // Thumb
+                var hasThumb    = _serverThumbnails.TryGetValue(f.Id, out var serverThumbUrl);
+                var thumbLoading = _serverThumbnailsLoading.Contains(f.Id);
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb");
+                if (hasThumb)
+                {
+                    __builder.OpenElement(seq++, "img");
+                    __builder.AddAttribute(seq++, CssScope, "");
+                    __builder.AddAttribute(seq++, "src", serverThumbUrl);
+                    __builder.AddAttribute(seq++, "alt", file.FileName);
+                    __builder.CloseElement();
+                }
+                else
+                {
+                    __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb-placeholder");
+                    if (thumbLoading)
+                    {
+                        __builder.OpenComponent<TelerikLoader>(seq++);
+                        __builder.AddAttribute(seq++, "Type", LoaderType.Pulsing);
+                        __builder.AddAttribute(seq++, "Size", ThemeConstants.Loader.Size.Small);
+                        __builder.CloseComponent();
+                    }
+                    else
+                    {
+                        __builder.OpenComponent<TelerikSvgIcon>(seq++);
+                        __builder.AddAttribute(seq++, "Icon", (object)(file.IsVideo ? SvgIcon.FileVideo : file.IsAudio ? SvgIcon.FileAudio : SvgIcon.Image));
+                        __builder.CloseComponent();
+                    }
+                    // On-demand preview trigger — video only, and only before a thumbnail exists.
+                    // A plain native <button> (not TelerikButton) so AddEventStopPropagationAttribute
+                    // can target its own onclick directly and keep this from also bubbling up to the
+                    // card's onclick (which triggers a full import).
+                    if (file.IsVideo && !thumbLoading)
+                    {
+                        __builder.OpenElement(seq++, "button");
+                        __builder.AddAttribute(seq++, CssScope, "");
+                        __builder.AddAttribute(seq++, "class", "bv-clip-card__preview-btn");
+                        __builder.AddAttribute(seq++, "title", "Load a preview thumbnail");
+                        __builder.AddAttribute(seq++, "onclick", Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => LoadServerVideoPreviewAsync(f)));
+                        __builder.AddEventStopPropagationAttribute(seq++, "onclick", true);
+                        __builder.OpenComponent<TelerikSvgIcon>(seq++);
+                        __builder.AddAttribute(seq++, "Icon", (object)SvgIcon.Eye);
+                        __builder.CloseComponent();
+                        __builder.CloseElement(); // preview button
+                    }
+                    __builder.CloseElement(); // placeholder
+                }
+                __builder.CloseElement(); // thumb
+
+                // Info
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", file.FileName); __builder.AddContent(seq++, file.FileName); __builder.CloseElement();
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__meta"); __builder.AddContent(seq++, file.FileSizeDisplay); __builder.CloseElement();
+                __builder.CloseElement();
+
+                // Actions
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__actions");
+                if (busy)
+                {
+                    // Adding an already-cached file to the timeline — local/fast, a spinner is enough.
+                    __builder.OpenComponent<TelerikLoader>(seq++);
+                    __builder.AddAttribute(seq++, "Type", LoaderType.Pulsing);
+                    __builder.AddAttribute(seq++, "Size", ThemeConstants.Loader.Size.Small);
+                    __builder.CloseComponent();
+                }
+                else if (downloading)
+                {
+                    var pct = _libraryDownloadProgress.TryGetValue(f.Id, out var p) ? p : 0;
+                    var pctWhole = (double)(int)Math.Round(pct * 100); // whole-number percent — matches the import dialog's own TelerikProgressBar (Value is an int there too)
+                    __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__download-progress");
+                    __builder.OpenComponent<TelerikProgressBar>(seq++);
+                    __builder.AddAttribute(seq++, "Value", pctWhole);
+                    __builder.AddAttribute(seq++, "Max", 100.0);
+                    __builder.AddAttribute(seq++, "Indeterminate", pct <= 0);
+                    __builder.AddAttribute(seq++, "Class", "bv-clip-card__download-bar");
+                    __builder.AddAttribute(seq++, "AriaLabel", $"Downloading {file.FileName}");
+                    __builder.CloseComponent();
+                    __builder.CloseElement();
+                }
+                else if (cached)
+                {
+                    // Phase 150 — downloaded locally, not yet on the timeline. Click again to add.
+                    __builder.OpenElement(seq++, "span");
+                    __builder.AddAttribute(seq++, CssScope, "");
+                    __builder.AddAttribute(seq++, "class", "bv-clip-card__cached-badge");
+                    __builder.AddAttribute(seq++, "title", "Downloaded locally — click to add to the timeline");
+                    __builder.OpenComponent<TelerikSvgIcon>(seq++);
+                    __builder.AddAttribute(seq++, "Icon", (object)SvgIcon.Check);
+                    __builder.CloseComponent();
+                    __builder.CloseElement();
+                }
+                else
+                {
+                    // Item #67 fix — downloading no longer needs ffmpeg at all (see
+                    // DownloadAndCacheAsync's own note), so this button is always enabled now,
+                    // even before Initialize or while ffmpeg is busy elsewhere.
+                    __builder.OpenComponent<TelerikButton>(seq++);
+                    __builder.AddAttribute(seq++, "Title",      "Download");
+                    __builder.AddAttribute(seq++, "Icon",       (object)SvgIcon.Download);
+                    __builder.AddAttribute(seq++, "Size",       ThemeConstants.Button.Size.Small);
+                    __builder.AddAttribute(seq++, "FillMode",   ThemeConstants.Button.FillMode.Flat);
+                    __builder.AddAttribute(seq++, "ThemeColor", ThemeConstants.Button.ThemeColor.Primary);
+                    __builder.CloseComponent();
+                }
+                __builder.CloseElement();
+
+                __builder.CloseElement(); // card
+            }
+            __builder.CloseElement(); // grid
+        }
+    };
+
+    // ── Helper methods ────────────────────────────────────────────────────────
+
+    private static string StageBadge(ImportStage s) => s switch
+    {
+        ImportStage.Queued      => "Queued",
+        ImportStage.Preview     => "Preview…",
+        ImportStage.Downloading => "Fetching…",   // downloading bytes from the web API
+        ImportStage.Writing     => "To WASM…",    // writing into ffmpeg MEMFS (local)
+        ImportStage.Metadata    => "Reading…",
+        ImportStage.Thumbnails  => "Thumbnails…",
+        ImportStage.Audio       => "Audio…",
+        ImportStage.Done        => "Done ✓",
+        ImportStage.Error       => "Error ✗",
+        _                       => string.Empty,
+    };
+
+    private static ISvgIcon FileTypeIcon(string name)
+    {
+        var ext = System.IO.Path.GetExtension(name).ToLowerInvariant();
+        return ext is ".mp3" or ".wav" or ".aac" or ".ogg" or ".flac" or ".m4a" or ".opus" or ".wma"
+            ? SvgIcon.FileAudio
+            : ext is ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp"
+                ? SvgIcon.Image
+                : SvgIcon.FileVideo;
+    }
+
+    private void Update(FileImportStatus s, ImportStage stage, int pct = 0)
+    {
+        s.Stage    = stage;
+        s.Progress = pct;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void CloseImportWindow()
+    {
+        _showImportWindow = false;
+        _importStatuses.Clear();
+    }
+
+    // ── Drag (item #24 — pointer-based bridge to VideoTimeline) ────────────────
+
+    private async Task OnClipPointerDown(Microsoft.AspNetCore.Components.Web.PointerEventArgs e, VideoClip clip)
+    {
+        _isDragging = true;
+        if (_dragBridgeModule is not null)
+        {
+            await _dragBridgeModule.InvokeVoidAsync("startClipDrag", clip.Id.ToString());
+        }
+    }
+
+    /// <summary>Called from JS (<c>clipDragBridge.js</c>) once the pointer-based drag ends,
+    /// whether or not it landed on a track — mirrors the old <c>ondragend</c> reset.</summary>
+    [JSInvokable]
+    public void OnClipDragEnded()
+    {
+        _isDragging = false;
+        StateHasChanged();
+    }
+
+    // ── Context menu ──────────────────────────────────────────────────────────
+
+    private TelerikContextMenu<BvMenuItem>? _videoCardMenu;
+    private TelerikContextMenu<BvMenuItem>? _audioCardMenu;
+    private TelerikContextMenu<BvMenuItem>? _imageCardMenu;
+    private List<BvMenuItem> _videoCardMenuItems = [];
+    private List<BvMenuItem> _audioCardMenuItems = [];
+    private List<BvMenuItem> _imageCardMenuItems = [];
+
+    private async Task OpenVideoCardMenu(Microsoft.AspNetCore.Components.Web.MouseEventArgs e, VideoClip clip)
+    {
+        _videoCardMenuItems =
+        [
+            new() { Text = "Preview",          Icon = SvgIcon.Eye,   Action = async () => await SelectClip(clip) },
+            new() { Text = "Add to Timeline",  Icon = SvgIcon.Plus,  Action = async () => await AddToTimelineAsync(clip) },
+            new() { IsSeparator = true },
+            new() { Text = "Remove",           Icon = SvgIcon.Trash, Action = () => { RemoveClip(clip); return Task.CompletedTask; } },
+        ];
+        if (_videoCardMenu is not null)
+            await _videoCardMenu.ShowAsync(e.ClientX, e.ClientY);
+    }
+
+    private async Task OpenAudioCardMenu(Microsoft.AspNetCore.Components.Web.MouseEventArgs e, AudioClip clip)
+    {
+        _audioCardMenuItems =
+        [
+            new() { Text = "Remove", Icon = SvgIcon.Trash, Action = () => { RemoveAudioClip(clip); return Task.CompletedTask; } },
+        ];
+        if (_audioCardMenu is not null)
+            await _audioCardMenu.ShowAsync(e.ClientX, e.ClientY);
+    }
+
+    private async Task OpenImageCardMenu(Microsoft.AspNetCore.Components.Web.MouseEventArgs e, ImageClip clip)
+    {
+        _imageCardMenuItems =
+        [
+            new() { Text = "Remove", Icon = SvgIcon.Trash, Action = () => { RemoveImageClip(clip); return Task.CompletedTask; } },
+        ];
+        if (_imageCardMenu is not null)
+            await _imageCardMenu.ShowAsync(e.ClientX, e.ClientY);
+    }
+
+    // ── Library tab ───────────────────────────────────────────────────────────
+
+    private async Task OnTabStateChanged(TabStripStateEventArgs _)
+    {
+        if (_activeLocalTab == "server" && !_libraryFiles.Any() && !_libraryLoading)
+            await LoadLibraryAsync();
+    }
+
+    private async Task LoadLibraryAsync()
+    {
+        _libraryLoading = true;
+        _libraryError   = null;
+        StateHasChanged();
+        try   { _libraryFiles = await MediaLib.GetFilesAsync(); }
+        catch (Exception ex) { _libraryError = ex.Message; ErrorLog.Log("ClipBrowser.LoadLibraryAsync", ex); }
+        finally { _libraryLoading = false; StateHasChanged(); }
+
+        // Phase 150 — seed the "downloaded locally" badge from a real OPFS check so it survives a
+        // reload, instead of only reflecting downloads from the current session. Best-effort: an
+        // ExistsAsync failure (or OPFS being unavailable) just leaves that file showing as
+        // not-yet-cached, same as a brand-new session.
+        foreach (var file in _libraryFiles)
+        {
+            var ext = System.IO.Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (await OPFS.ExistsAsync(file.Id, ext)) _libraryCached.Add(file.Id);
+        }
+        StateHasChanged();
+
+        // Images are small enough to eagerly thumbnail; fire-and-forget so the list
+        // renders immediately and thumbnails pop in as each one finishes.
+        if (Ffmpeg.State == FfmpegState.Ready)
+            _ = LoadServerImageThumbnailsAsync();
+    }
+
+    /// <summary>
+    /// Eagerly fetches and caches a real thumbnail for every image on the Server tab.
+    /// Silently skipped per-file on any error — the row just keeps its icon placeholder.
+    /// </summary>
+    private async Task LoadServerImageThumbnailsAsync()
+    {
+        var images = _libraryFiles.Where(f => !f.IsVideo && !f.IsAudio && !_serverThumbnails.ContainsKey(f.Id));
+        foreach (var file in images)
+        {
+            if (!_serverThumbnailsLoading.Add(file.Id)) continue;
+            try
+            {
+                var bytes     = await MediaLib.DownloadFileAsync(file.Id);
+                var memFsName = $"srvthumb_{Guid.NewGuid():N}_{file.FileName}";
+                await Ffmpeg.WriteFileFromBytesAsync(memFsName, bytes);
+                var mime = GetImageMimeType(file.FileName);
+                _serverThumbnails[file.Id] = await Ffmpeg.CreatePreviewUrlAsync(memFsName, mime);
+                await Ffmpeg.DeleteFileAsync(memFsName);
+            }
+            catch (Exception ex)
+            {
+                // Item #59-#65 flakiness investigation — leaving this row on its icon placeholder
+                // is still the right UX (a thumbnail failure for one server file shouldn't block
+                // the list), but it was previously completely invisible.
+                ErrorLog.Log("ClipBrowser.LoadServerImageThumbnailsAsync", $"thumbnail failed for {file.FileName}: {ex.Message}", ex.ToString());
+            }
+            finally
+            {
+                _serverThumbnailsLoading.Remove(file.Id);
+                StateHasChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// On-demand preview for a Server-tab video row — downloads the file, grabs a single frame, and
+    /// cleans up the temp MEMFS entry. Distinct from <see cref="DownloadAndCacheAsync"/>: nothing is
+    /// added to the timeline, OPFS, or clip store — this only populates <see cref="_serverThumbnails"/>.
+    /// </summary>
+    private async Task LoadServerVideoPreviewAsync(MediaLibraryFile file)
+    {
+        if (Ffmpeg.State != FfmpegState.Ready) return;
+        if (_serverThumbnails.ContainsKey(file.Id)) return;
+        if (!_serverThumbnailsLoading.Add(file.Id)) return;
+        StateHasChanged();
+
+        try
+        {
+            var bytes     = await MediaLib.DownloadFileAsync(file.Id);
+            var memFsName = $"srvthumb_{Guid.NewGuid():N}_{file.FileName}";
+            await Ffmpeg.WriteFileFromBytesAsync(memFsName, bytes);
+            var meta   = await Ffmpeg.GetMetadataAsync(memFsName);
+            var thumbs = await Ffmpeg.ExtractThumbnailsAsync(memFsName, count: 1, meta.Duration);
+            if (thumbs.Length > 0) _serverThumbnails[file.Id] = thumbs[0];
+            await Ffmpeg.DeleteFileAsync(memFsName);
+        }
+        catch (Exception ex)
+        {
+            ErrorLog.Log("ClipBrowser.LoadServerVideoPreviewAsync", $"preview failed for {file.FileName}: {ex.Message}", ex.ToString());
+        }
+        finally
+        {
+            _serverThumbnailsLoading.Remove(file.Id);
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Item #59-#65 flakiness investigation, phase 145 (symptom S3) — fires and forgets the
+    /// remaining thumbnails for a clip that only got <see cref="ThumbnailPlanner.UpfrontCount"/>
+    /// generated synchronously during import. No explicit "idle" detection needed: the request
+    /// goes through the same <c>FfmpegService</c> worker lock (phase 142) as everything else, so
+    /// it naturally queues behind whatever's currently running and executes whenever the worker
+    /// is next free — which in practice IS idle, since nothing else fires immediately after an
+    /// import completes.
+    /// </summary>
+    private void ScheduleLazyThumbnailFill(VideoClip clip, string memFsName, double duration, int upfrontCount, int fullCount)
+    {
+        if (upfrontCount >= fullCount) return; // the upfront batch already covers the full target
+        _ = LazyFillThumbnailsAsync(clip, memFsName, duration, fullCount);
+    }
+
+    private async Task LazyFillThumbnailsAsync(VideoClip clip, string memFsName, double duration, int fullCount)
+    {
+        try
+        {
+            // Re-requesting the FULL count (not just the delta) rather than trying to append —
+            // extractThumbnails' per-frame timestamps depend on the requested count (interval =
+            // duration / (count + 1)), so a 3-frame batch and an 8-frame batch land at genuinely
+            // different timestamps; there's no clean "delta" to append. The redundant regeneration
+            // of the first few frames is cheap and happens off the import's own critical path.
+            var thumbs = await SidecarMedia.TryExtractThumbnailsAsync(clip.Id, clip.OpfsExt, fullCount, duration, CancellationToken.None)
+                         ?? await Ffmpeg.ExtractThumbnailsAsync(memFsName, fullCount, duration);
+            var previous = clip.ThumbnailUrls;
+            clip.ThumbnailUrls = [.. thumbs];
+            RegisterWasmThumbnails(thumbs);
+
+            // Item #62 phase 170 — swap FIRST, revoke LAST, and only what nothing else holds.
+            //
+            // Ordering (mechanism 1): this used to revoke before NotifyChanged(), so for the gap
+            // between the two the DOM still carried <img src="{old}"> — VideoTimeline's thumbstrip
+            // and ClipBrowser's own card — pointing at blobs the browser had already released.
+            // Any repaint or lazy re-request in that window 404s. Nothing throws and the strip is
+            // replaced a moment later, which is exactly why item #62 read as "harmless" for four
+            // phases. This is the same swap-then-revoke rule phase 144 established for the preview
+            // URL; it simply never reached thumbnails.
+            Clips.NotifyChanged();
+            await Task.Yield(); // let the queued render actually flush before releasing anything
+
+            // Ownership (mechanism 2): strips share string instances across duplicated clips, and
+            // the import row holds thumbs[0] — see ThumbnailRevokePlan for why that makes a
+            // wholesale revoke wrong.
+            var stillReferenced = Clips.AllVideoClips
+                .Where(c => !ReferenceEquals(c, clip))
+                .SelectMany(c => c.ThumbnailUrls)
+                .Concat(clip.ThumbnailUrls)
+                .Concat(_importStatuses.Select(s => s.PreviewUrl).OfType<string>());
+
+            foreach (var url in ThumbnailRevokePlan.Orphaned(previous, stillReferenced))
+            {
+                // Item #70 phase 159 — the replaced strip can contain URLs from EITHER path, and
+                // they must be revoked by their own owner: the wasm revoke goes through the
+                // phase-142 worker lock (correct for MEMFS-backed URLs, but needless contention
+                // for a sidecar one) and phase 144's registry rejects a mismatched owner outright.
+                try
+                {
+                    if (SidecarMedia.OwnsThumbnail(url))
+                    {
+                        // RevokeThumbnailAsync reports to BlobLifecycle itself — reporting here too
+                        // would consume the registration and make the second call look untracked.
+                        await SidecarMedia.RevokeThumbnailAsync(url);
+                    }
+                    else
+                    {
+                        BlobLifecycle.Revoking(url, WasmThumbnailOwner);
+                        await Ffmpeg.RevokePreviewUrlAsync(url);
+                    }
+                }
+                catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Non-fatal — the clip already has its upfront thumbnails; losing the lazy-filled
+            // remainder just means a shorter thumbnail strip, not a broken import.
+            ErrorLog.Log($"ClipBrowser.LazyFillThumbnails({clip.Name})", ex);
+        }
+    }
+
+    // Phase 150 — dispatcher for a Server-tab card click: download+cache when the file isn't
+    // local yet, add-to-timeline when it already is. Cards no longer combine both into one click.
+    private Task OnLibraryCardClickedAsync(MediaLibraryFile file) =>
+        _libraryCached.Contains(file.Id)
+            ? AddCachedFileToTimelineAsync(file)
+            : DownloadAndCacheAsync(file);
+
+    /// <summary>
+    /// Downloads a Server-tab file and OPFS-caches it under the library file's own stable Id —
+    /// WITHOUT adding anything to the timeline. See the design note on <see cref="_libraryCached"/>.
+    /// </summary>
+    private async Task DownloadAndCacheAsync(MediaLibraryFile file)
+    {
+        // Item #67 fix — this method never touched ffmpeg in the first place (download + OPFS
+        // write only; see the class doc comment on DownloadAndCacheAsync's OPFS write), so the
+        // upfront "Click Initialize" gate that used to guard the old combined download+import
+        // flow was pure dead weight once phase 150 split the two steps apart. Removed outright
+        // rather than just fixing its wording — a user can now download/cache a Server-tab file
+        // even while ffmpeg is still loading or busy elsewhere; only AddCachedFileToTimelineAsync
+        // (which actually calls into ffmpeg) needs a readiness check.
+        _errorMessage = null;
+        if (_libraryCached.Contains(file.Id)) return; // already cached — OnLibraryCardClickedAsync routes elsewhere
+        if (!_libraryDownloading.Add(file.Id)) return; // already downloading — ignore the duplicate dispatch
+        _libraryDownloadProgress[file.Id] = 0;
+        StateHasChanged();
+
+        try
+        {
+            var reporter = new Progress<double>(p =>
+            {
+                _libraryDownloadProgress[file.Id] = p;
+                InvokeAsync(StateHasChanged);
+            });
+
+            byte[] bytes;
+            try
+            {
+                bytes = await MediaLib.DownloadFileAsync(file.Id, CancellationToken.None, reporter);
+            }
+            catch (OperationCanceledException ocex)
+            {
+                // Item #66 (phase 149) — the provider's own internal timeout fired. Blazor WASM's
+                // single main thread hosts both this HttpClient call's continuations and all the
+                // JS-interop marshaling for ffmpeg's own worker traffic, so heavy concurrent
+                // ffmpeg activity (e.g. the Server tab's own automatic eager thumbnail prefetch)
+                // can measurably delay an otherwise-fast download's completion callback —
+                // live-reproduced at 31.2s for a normally-68ms request. See
+                // DemoMediaLibraryProvider's own HttpClient.Timeout comment for the full story.
+                throw new TimeoutException($"Downloading {file.FileName} timed out.", ocex);
+            }
+
+            var ext = System.IO.Path.GetExtension(file.FileName).ToLowerInvariant();
+            await OPFS.WriteFromBytesAsync(file.Id, ext, bytes);
+            _libraryCached.Add(file.Id);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Download failed: {ex.Message}";
+            ErrorLog.Log($"ClipBrowser.DownloadAndCacheAsync({file.FileName})", ex);
+        }
+        finally
+        {
+            _libraryDownloading.Remove(file.Id);
+            _libraryDownloadProgress.Remove(file.Id);
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Adds an already-cached (<see cref="_libraryCached"/>) Server-tab file to the timeline. No
+    /// network access — reads the cached OPFS entry (keyed by the library file's Id) and copies it
+    /// under a fresh clip Id, mirroring how every other placed clip owns its own independent OPFS
+    /// copy (see <see cref="SourceMounter"/>), then runs the same
+    /// metadata/thumbnail/add-to-timeline tail <see cref="DownloadAndCacheAsync"/> used to run
+    /// inline before this phase split the two steps apart.
+    /// </summary>
+    private async Task AddCachedFileToTimelineAsync(MediaLibraryFile file)
+    {
+        if (!_libraryImporting.Add(file.Id)) return; // already adding this file — ignore the duplicate dispatch
+        _errorMessage = null;
+
+        var status = new FileImportStatus
+        {
+            FileName  = file.FileName,
+            SizeBytes = file.FileSize,
+            IsVideo   = file.IsVideo,
+        };
+        _importStatuses.Add(status);
+        _showImportWindow = true;
+        StateHasChanged();
+
+        try
+        {
+            // Item #67 fix — wait out a legitimate Processing state (e.g. an auto-preview
+            // re-render already in flight) instead of hard-rejecting with a message that wrongly
+            // implies the worker needs re-initializing. Matches phase 145's original "queue on
+            // the mutex" design decision, never actually wired into this call site until now.
+            if (!await WaitForFfmpegReadyAsync(status)) return;
+
+            var clipId = Guid.NewGuid();
+            var ext    = System.IO.Path.GetExtension(file.FileName).ToLowerInvariant();
+
+            Update(status, ImportStage.Writing);
+            var cachedFile = await OPFS.ReadAsJSFileAsync(file.Id, ext);
+            if (cachedFile is null)
+            {
+                // The cache entry vanished by some path other than this component (OPFS cleared
+                // externally, quota eviction, etc.) — the badge lied. Drop the stale cached-state
+                // and fall back to a fresh download rather than failing outright.
+                _libraryCached.Remove(file.Id);
+                throw new FileNotFoundException($"{file.FileName} is no longer available locally — try downloading it again.");
+            }
+
+            // Item #38 phase A/B pattern, same as every other placed clip: OPFS is the copy of
+            // record, the main ffmpeg instance mounts it (zero-copy WORKERFS) rather than a full
+            // MEMFS byte write — falling back to a real write only when mounting isn't possible.
+            await OPFS.WriteAsync(clipId, ext, cachedFile);
+            var memFsName = await Mounter.MountAsync(clipId, ext);
+            if (memFsName is null)
+            {
+                memFsName = $"lib_{Guid.NewGuid():N}_{file.FileName}";
+                await Ffmpeg.WriteFileAsync(memFsName, cachedFile);
+            }
+
+            if (file.IsVideo || (!file.IsAudio && !IsImageFile(file.FileName)))
+            {
+                Update(status, ImportStage.Metadata, 33);
+                // Item #70 phase 159 — try the native sidecar first (ffprobe out-of-process, off
+                // the WASM main thread); null means not connected/not capable/failed, and the
+                // existing wasm path runs exactly as before.
+                var meta  = await SidecarMedia.TryGetMetadataAsync(clipId, ext, CancellationToken.None)
+                            ?? await Ffmpeg.GetMetadataAsync(memFsName);
+                status.MetaText = $"{FormatDuration(meta.Duration)} · {meta.Width}×{meta.Height}";
+
+                Update(status, ImportStage.Thumbnails, 66);
+                // Item #59-#65 flakiness investigation, phase 145 (symptom S3) — only a small
+                // upfront batch generates synchronously (blocking this import); the rest fill in
+                // lazily afterward through ScheduleLazyThumbnailFill, per the user's explicit
+                // decision to accept a smaller initial strip for a faster import.
+                var fullCount = ThumbnailPlanner.FullCount(meta.Duration);
+                var upfrontCount = ThumbnailPlanner.UpfrontCount(meta.Duration);
+                var thumbs = await SidecarMedia.TryExtractThumbnailsAsync(clipId, ext, upfrontCount, meta.Duration, CancellationToken.None)
+                             ?? await Ffmpeg.ExtractThumbnailsAsync(memFsName, upfrontCount, meta.Duration);
+                RegisterWasmThumbnails(thumbs);
+                if (thumbs.Length > 0) await SetThumbnailPreviewAsync(status, thumbs[0]);
+
+                var clip = new VideoClip
+                {
+                    Id = clipId, Name = file.FileName, MemFsName = memFsName,
+                    Duration = meta.Duration, Width = meta.Width, Height = meta.Height,
+                    ThumbnailUrls = [.. thumbs], OpfsExt = ext,
+                };
+                // OnAddToTimeline (→ VideoEditor.AddClipToTimeline) both registers the clip on
+                // the primary track AND computes its TimelinePosition — calling Clips.AddClip
+                // here too double-adds the same clip instance to the track's Items list.
+                await OnAddToTimeline.InvokeAsync(clip);
+                ScheduleLazyThumbnailFill(clip, memFsName, meta.Duration, upfrontCount, fullCount);
+            }
+            else if (file.IsAudio)
+            {
+                Update(status, ImportStage.Audio, 50);
+                var meta   = await SidecarMedia.TryGetMetadataAsync(clipId, ext, CancellationToken.None)
+                             ?? await Ffmpeg.GetMetadataAsync(memFsName);
+                var blobUrl = await Ffmpeg.CreatePreviewUrlAsync(memFsName, file.ContentType);
+                status.MetaText = FormatDuration(meta.Duration);
+
+                var audioClip = new AudioClip
+                {
+                    Id = clipId, Name = file.FileName, MemFsName = memFsName,
+                    Duration = meta.Duration, BlobUrl = blobUrl, OpfsExt = ext,
+                };
+                // Without an audio track to land on, the clip would silently vanish —
+                // decoded and reported "done" but never placed anywhere. Create one
+                // on demand, same as the always-present default video track — but
+                // only when the host has actually enabled the AudioTracks feature.
+                if (Options.AudioTracks)
+                {
+                    var t = Clips.AudioTracks.FirstOrDefault() ?? Clips.AddAudioTrack();
+                    audioClip.TimelinePosition = t.Items.Any() ? t.Items.Max(i => i.TimelinePosition + i.Duration) : 0;
+                    Clips.AddClipToTrack(t.Id, audioClip);
+                }
+                await OnAudioClipAdded.InvokeAsync(audioClip);
+            }
+            else
+            {
+                var mime    = GetImageMimeType(file.FileName);
+                var thumbUrl = await Ffmpeg.CreatePreviewUrlAsync(memFsName, mime);
+                await SetThumbnailPreviewAsync(status, thumbUrl);
+
+                // Item #9 — the media-library import path never populated Width/Height at all
+                // (the local-file path at ImportImageFileAtIndexAsync always has). Export no
+                // longer depends on these (it scales to the project canvas), but they are the
+                // clip's only record of its real size, so leaving them 0 keeps the two import
+                // paths producing different clips from the same file.
+                var libDims = await (await DomAsync()).InvokeAsync<int[]>("imageDimensions", thumbUrl);
+                int libW = libDims.Length > 0 ? libDims[0] : 0, libH = libDims.Length > 1 ? libDims[1] : 0;
+                if (libW > 0) status.MetaText = $"{libW}×{libH}";
+
+                var imgTrack = Clips.PrimaryVideoTrack;
+                var imgPos   = imgTrack.Items.Any() ? imgTrack.Items.Max(i => i.TimelinePosition + i.Duration) : 0;
+                Clips.AddImageClip(new ImageClip
+                {
+                    Id = clipId, Name = file.FileName, MemFsName = memFsName,
+                    Duration = 5.0, Width = libW, Height = libH,
+                    ThumbnailUrl = thumbUrl, TimelinePosition = imgPos, OpfsExt = ext,
+                });
+            }
+            Update(status, ImportStage.Done, 100);
+        }
+        catch (Exception ex)
+        {
+            // status.ErrorText already surfaces this in the transient import-window row (that
+            // path was never silent); ErrorLog additionally makes it exportable/persistent past
+            // the row's own lifetime (CloseImportWindow clears _importStatuses once every row is
+            // done) — item #59-#65 flakiness investigation.
+            status.ErrorText = $"{status.Stage}: {ex.Message}";
+            ErrorLog.Log($"ClipBrowser.AddCachedFileToTimelineAsync({file.FileName})", ex);
+            Update(status, ImportStage.Error);
+        }
+        finally
+        {
+            _libraryImporting.Remove(file.Id);
+        }
+    }
+
+    // Item #67 fix — how long to wait out a Processing state before giving up. Generous, matching
+    // this codebase's general timeout scale elsewhere (see FfmpegTimeoutPolicy), since a healthy
+    // but slow operation (e.g. a multi-clip concatClips re-render) can legitimately take 40+
+    // seconds — confirmed live during the phase 141-147 flakiness investigation.
+    private const int FfmpegBusyWaitTimeoutMs = 60_000;
+    private const int FfmpegBusyPollIntervalMs = 250;
+
+    /// <summary>
+    /// Waits out a legitimate <see cref="FfmpegState.Processing"/> state instead of hard-rejecting
+    /// with a message that wrongly implies the worker needs re-initializing — the gate this
+    /// replaced fired even for a perfectly healthy, if slow, operation elsewhere (confirmed live:
+    /// a two-clip <c>concatClips</c> re-render took 44+ seconds). Only <see cref="FfmpegState.Idle"/>/
+    /// <see cref="FfmpegState.LoadingCore"/>/<see cref="FfmpegState.Error"/> fail immediately, each
+    /// with its own accurate message; a wedged worker (per the phase 143 watchdog) or a wait
+    /// exceeding <see cref="FfmpegBusyWaitTimeoutMs"/> also fail, rather than waiting forever.
+    /// </summary>
+    private async Task<bool> WaitForFfmpegReadyAsync(FileImportStatus status)
+    {
+        var immediateFailure = FfmpegBusyPolicy.ImmediateFailureMessage(Ffmpeg.State);
+        if (immediateFailure is not null)
+        {
+            status.ErrorText = immediateFailure;
+            Update(status, ImportStage.Error);
+            return false;
+        }
+        if (Ffmpeg.State == FfmpegState.Ready) return true;
+
+        // Processing — wait for it to clear rather than rejecting outright.
+        Update(status, ImportStage.Queued);
+        var waited = 0;
+        while (Ffmpeg.State == FfmpegState.Processing && waited < FfmpegBusyWaitTimeoutMs)
+        {
+            if (Ffmpeg.IsWorkerWedged)
+            {
+                status.ErrorText = FfmpegBusyPolicy.WedgedMessage;
+                Update(status, ImportStage.Error);
+                return false;
+            }
+            await Task.Delay(FfmpegBusyPollIntervalMs);
+            waited += FfmpegBusyPollIntervalMs;
+        }
+
+        if (Ffmpeg.State != FfmpegState.Ready)
+        {
+            status.ErrorText = FfmpegBusyPolicy.TimedOutWaitingMessage;
+            Update(status, ImportStage.Error);
+            return false;
+        }
+        return true;
+    }
+
+    // ── File picking ──────────────────────────────────────────────────────────
+
+    public async Task PickFilesAsync()
+        // Audit #7 — this used to be `getElementById(...).click()`, which throws a TypeError when
+        // the element is absent. That is not hypothetical: the input is only "always rendered"
+        // relative to ClipBrowser's OWN internal @if — the whole component unmounts when the Media
+        // & Properties panel is closed, so clicking the toolbar's Open button with that panel shut
+        // null-dereferenced and took down the entire circuit ("An unhandled error has occurred",
+        // requiring a full reload). The optional call makes the crash structurally impossible;
+        // VideoEditor.OpenFilesAsync is what makes the button actually *work* in that state.
+        => await (await DomAsync()).InvokeVoidAsync("click", "#bv-file-input", false);
+
+    // ── Pin / float window ────────────────────────────────────────────────────
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Item #51 — mark-in/out (and any other external mutation of a library clip, e.g. trim)
+        // happens on the same VideoClip instance this grid reads via Clips.AllVideoClips, not via
+        // a parameter change, so this component needs its own OnChange subscription to see it —
+        // OnParametersSet alone misses shared-state changes (same lesson as phase 95/LiveOverlayPreview).
+        Clips.OnChange += StateHasChanged;
+
+        try
+        {
+            var stored = await (await StorageAsync()).InvokeAsync<string?>("getItem", PinStateKey);
+            _isPinned = stored == "true";
+        }
+        catch { /* localStorage unavailable */ }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            _dragBridgeModule = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Video.Editor/js/clipDragBridge.js");
+            _dragSourceRef = DotNetObjectReference.Create(this);
+            await _dragBridgeModule.InvokeVoidAsync("registerDragSource", _dragSourceRef);
+        }
+        catch { /* JS interop unavailable (e.g. prerendering) — pointer-based drag stays inert */ }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // Audit #4 — release the cached interop module handles. Guarded because teardown races
+        // circuit shutdown: once the circuit is gone the module is already unreachable and
+        // disposing it throws, which must not surface as an error during a normal navigation.
+        if (_dom is not null)
+        {
+            try { await _dom.DisposeAsync(); } catch (JSDisconnectedException) { } catch (ObjectDisposedException) { }
+            _dom = null;
+        }
+        if (_storage is not null)
+        {
+            try { await _storage.DisposeAsync(); } catch (JSDisconnectedException) { } catch (ObjectDisposedException) { }
+            _storage = null;
+        }
+
+        Clips.OnChange -= StateHasChanged;
+
+        if (_dragBridgeModule is not null)
+        {
+            try { await _dragBridgeModule.InvokeVoidAsync("unregisterDragSource"); } catch { }
+            await _dragBridgeModule.DisposeAsync();
+        }
+        _dragSourceRef?.Dispose();
+    }
+
+    private async Task TogglePinAsync()
+    {
+        _isPinned = !_isPinned;
+        await SavePinStateAsync();
+        StateHasChanged();
+    }
+
+    private async Task OnWindowVisibleChangedAsync(bool visible)
+    {
+        if (!visible)
+        {
+            _isPinned = false;
+            await SavePinStateAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task SavePinStateAsync()
+    {
+        try
+        {
+            await (await StorageAsync()).InvokeVoidAsync("setItem", PinStateKey, _isPinned ? "true" : "false");
+        }
+        catch { /* localStorage unavailable */ }
+    }
+
+    private async Task OnFileInputChangeAsync(ChangeEventArgs _)
+    {
+        _errorMessage = null;
+        try
+        {
+            var count = await (await DomAsync()).InvokeAsync<int>("fileCount", "bv-file-input");
+            if (count == 0) return;
+
+            _importStatuses.Clear();
+            for (var i = 0; i < count; i++)
+            {
+                var dom   = await DomAsync();
+                var name  = await dom.InvokeAsync<string>("fileName", "bv-file-input", i);
+                var size  = await dom.InvokeAsync<long>  ("fileSize", "bv-file-input", i);
+                _importStatuses.Add(new FileImportStatus
+                {
+                    FileName  = name,
+                    SizeBytes = size,
+                    IsVideo   = !IsAudioFile(name) && !IsImageFile(name),
+                });
+            }
+            _showImportWindow = true;
+            StateHasChanged();
+
+            // Generate instant browser preview URLs before touching ffmpeg
+            for (var i = 0; i < count; i++)
+            {
+                var status = _importStatuses[i];
+                Update(status, ImportStage.Preview);
+                try
+                {
+                    var url = await (await DomAsync()).InvokeAsync<string>("fileObjectUrl", "bv-file-input", i);
+                    status.PreviewUrl = url;
+                    // This one IS an object URL over the picked file, so a video file really does
+                    // want a <video> here — it's the later thumbnail swap that changes the kind.
+                    status.PreviewIsVideo = status.IsVideo;
+                    StateHasChanged();
+                }
+                catch (Exception ex) { ErrorLog.Log("ClipBrowser.PreviewUrl", $"preview failed for {status.FileName} (non-fatal): {ex.Message}", ex.ToString()); }
+            }
+
+            // Import each file. Item #59-#65 flakiness investigation, phase 145 — batched so
+            // ClipStore.OnChange (and therefore VideoEditor's auto-preview reschedule) fires at
+            // most once for the whole import, after the last clip lands, instead of once per file.
+            using (Clips.BeginBatch())
+            {
+                for (var i = 0; i < count; i++)
+                {
+                    var status = _importStatuses[i];
+                    try
+                    {
+                        if (IsAudioFile(status.FileName))
+                            await ImportAudioFileAtIndexAsync(i, status);
+                        else if (IsImageFile(status.FileName))
+                            await ImportImageFileAtIndexAsync(i, status);
+                        else
+                            await ImportVideoFileAtIndexAsync(i, status);
+                    }
+                    catch (Exception ex)
+                    {
+                        status.ErrorText = ex.Message;
+                        ErrorLog.Log($"ClipBrowser.ImportLocalFile({status.FileName})", ex);
+                        Update(status, ImportStage.Error);
+                    }
+                }
+            }
+
+            if (_importStatuses.All(s => s.Stage == ImportStage.Done))
+            {
+                await Task.Delay(1200);
+                CloseImportWindow();
+            }
+
+            await (await DomAsync()).InvokeVoidAsync("clearFileInput", "bv-file-input");
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; ErrorLog.Log("ClipBrowser.OnFilesSelected", ex); }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    // ── Import methods ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Item #38 phase B — writes <paramref name="fileRef"/> to OPFS under <paramref name="clipId"/>
+    /// then mounts that OPFS copy into the main ffmpeg instance (zero-copy WORKERFS, no MEMFS byte
+    /// copy at all). Falls back to a normal <see cref="FfmpegService.WriteFileAsync"/> of the same
+    /// <paramref name="fileRef"/> when mounting isn't possible (OPFS unavailable, or the mount call
+    /// fails for any other reason) — import always succeeds either way, just without the memory win
+    /// in the fallback case, exactly matching every import path's behavior before this phase.
+    /// </summary>
+    private async Task<string> WriteAndMountAsync(
+        Guid clipId, string ext, string fallbackPrefix, string fileName, IJSObjectReference fileRef)
+    {
+        await OPFS.WriteAsync(clipId, ext, fileRef);
+        var mounted = await Mounter.MountAsync(clipId, ext);
+        if (mounted is not null) return mounted;
+
+        var memFsName = $"{fallbackPrefix}_{Guid.NewGuid():N}_{fileName}";
+        await Ffmpeg.WriteFileAsync(memFsName, fileRef);
+        return memFsName;
+    }
+
+    private async Task ImportVideoFileAtIndexAsync(int index, FileImportStatus status)
+    {
+        IJSObjectReference? fileRef = null;
+        try
+        {
+            fileRef = await (await DomAsync()).InvokeAsync<IJSObjectReference>(
+                "fileAt", "bv-file-input", index);
+            var clipId = Guid.NewGuid();
+            var ext    = System.IO.Path.GetExtension(status.FileName).ToLowerInvariant();
+
+            Update(status, ImportStage.Writing);
+            var memFsName = await WriteAndMountAsync(clipId, ext, "input", status.FileName, fileRef);
+            status.MemFsBytes = status.SizeBytes;
+
+            Update(status, ImportStage.Metadata, 33);
+            // Item #70 phase 159 — sidecar first, wasm on null (see AddCachedFileToTimelineAsync).
+            var meta = await SidecarMedia.TryGetMetadataAsync(clipId, ext, CancellationToken.None)
+                       ?? await Ffmpeg.GetMetadataAsync(memFsName);
+            status.MetaText = $"{FormatDuration(meta.Duration)} · {meta.Width}×{meta.Height}";
+
+            Update(status, ImportStage.Thumbnails, 66);
+            var fullCount = ThumbnailPlanner.FullCount(meta.Duration);
+            var upfrontCount = ThumbnailPlanner.UpfrontCount(meta.Duration);
+            var thumbs = await SidecarMedia.TryExtractThumbnailsAsync(clipId, ext, upfrontCount, meta.Duration, CancellationToken.None)
+                         ?? await Ffmpeg.ExtractThumbnailsAsync(memFsName, upfrontCount, meta.Duration);
+            RegisterWasmThumbnails(thumbs);
+            if (thumbs.Length > 0) await SetThumbnailPreviewAsync(status, thumbs[0]);
+
+            var videoClip = new VideoClip
+            {
+                Id = clipId, Name = status.FileName, MemFsName = memFsName,
+                Duration = meta.Duration, Width = meta.Width, Height = meta.Height,
+                ThumbnailUrls = [.. thumbs], OpfsExt = ext,
+            };
+            Clips.AddClip(videoClip);
+            ScheduleLazyThumbnailFill(videoClip, memFsName, meta.Duration, upfrontCount, fullCount);
+            Update(status, ImportStage.Done, 100);
+        }
+        finally { if (fileRef is not null) await fileRef.DisposeAsync(); }
+    }
+
+    private async Task ImportImageFileAtIndexAsync(int index, FileImportStatus status)
+    {
+        if (!Options.ImageClips) { Update(status, ImportStage.Done); return; }
+        IJSObjectReference? fileRef = null;
+        try
+        {
+            fileRef = await (await DomAsync()).InvokeAsync<IJSObjectReference>(
+                "fileAt", "bv-file-input", index);
+            var imgClipId2 = Guid.NewGuid();
+            var imgExt2    = System.IO.Path.GetExtension(status.FileName).ToLowerInvariant();
+
+            Update(status, ImportStage.Writing);
+            var memFsName = await WriteAndMountAsync(imgClipId2, imgExt2, "img", status.FileName, fileRef);
+            status.MemFsBytes = status.SizeBytes;
+
+            Update(status, ImportStage.Metadata, 50);
+            var mime    = GetImageMimeType(status.FileName);
+            var thumbUrl = await Ffmpeg.CreatePreviewUrlAsync(memFsName, mime);
+            await SetThumbnailPreviewAsync(status, thumbUrl);
+
+            // Audit #4 — the eval version read naturalWidth synchronously on the statement after
+            // setting src, so it returned [0,0] essentially always. domInterop.imageDimensions
+            // awaits decode, which is what makes this value real.
+            var dims = await (await DomAsync()).InvokeAsync<int[]>("imageDimensions", thumbUrl);
+            int w = dims.Length > 0 ? dims[0] : 0, h = dims.Length > 1 ? dims[1] : 0;
+            if (w > 0) status.MetaText = $"{w}×{h}";
+
+            var imgTrack2  = Clips.PrimaryVideoTrack;
+            var imgPos2    = imgTrack2.Items.Any() ? imgTrack2.Items.Max(i => i.TimelinePosition + i.Duration) : 0;
+
+            Clips.AddImageClip(new ImageClip
+            {
+                Id               = imgClipId2,
+                Name             = status.FileName,
+                MemFsName        = memFsName,
+                Duration         = 5.0,
+                Width            = w,
+                Height           = h,
+                ThumbnailUrl     = thumbUrl,
+                TimelinePosition = imgPos2,
+                OpfsExt          = imgExt2,
+            });
+            Update(status, ImportStage.Done, 100);
+        }
+        finally { if (fileRef is not null) await fileRef.DisposeAsync(); }
+    }
+
+    private async Task ImportAudioFileAtIndexAsync(int index, FileImportStatus status)
+    {
+        IJSObjectReference? fileRef = null;
+        try
+        {
+            fileRef = await (await DomAsync()).InvokeAsync<IJSObjectReference>(
+                "fileAt", "bv-file-input", index);
+            var audioClipId = Guid.NewGuid();
+            var audioExt    = System.IO.Path.GetExtension(status.FileName).ToLowerInvariant();
+
+            Update(status, ImportStage.Writing);
+            var memFsName = await WriteAndMountAsync(audioClipId, audioExt, "audio", status.FileName, fileRef);
+            status.MemFsBytes = status.SizeBytes;
+
+            Update(status, ImportStage.Audio, 50);
+            var meta    = await SidecarMedia.TryGetMetadataAsync(audioClipId, audioExt, CancellationToken.None)
+                          ?? await Ffmpeg.GetMetadataAsync(memFsName);
+            var blobUrl = await Ffmpeg.CreatePreviewUrlAsync(memFsName, "audio/mpeg");
+            status.MetaText = FormatDuration(meta.Duration);
+
+            var clip = new AudioClip
+            {
+                Id = audioClipId, Name = status.FileName, MemFsName = memFsName,
+                Duration = meta.Duration, BlobUrl = blobUrl, OpfsExt = audioExt,
+            };
+            // Without an audio track to land on, the clip would silently vanish —
+            // decoded and reported "done" but never placed anywhere. Create one
+            // on demand, same as the always-present default video track — but
+            // only when the host has actually enabled the AudioTracks feature.
+            if (Options.AudioTracks)
+            {
+                var t = Clips.AudioTracks.FirstOrDefault() ?? Clips.AddAudioTrack();
+                clip.TimelinePosition = t.Items.Any() ? t.Items.Max(i => i.TimelinePosition + i.Duration) : 0;
+                Clips.AddClipToTrack(t.Id, clip);
+            }
+            await OnAudioClipAdded.InvokeAsync(clip);
+            Update(status, ImportStage.Done, 100);
+        }
+        finally { if (fileRef is not null) await fileRef.DisposeAsync(); }
+    }
+
+    // ── Clip actions ──────────────────────────────────────────────────────────
+
+    private async Task SelectClip(VideoClip clip)
+    {
+        _selectedId = clip.Id;
+        await OnClipSelected.InvokeAsync(clip);
+    }
+
+    private async Task AddToTimelineAsync(VideoClip clip)
+    {
+        _selectedId = clip.Id;
+        await OnAddToTimeline.InvokeAsync(clip);
+    }
+
+    private void RemoveClip(VideoClip clip)
+    {
+        if (_selectedId == clip.Id) _selectedId = null;
+        Clips.RemoveClip(clip.Id);
+    }
+
+    private void RemoveAudioClip(AudioClip clip) => Clips.RemoveClip(clip.Id);
+
+    private void RemoveImageClip(ImageClip clip) => Clips.RemoveClip(clip.Id);
+
+    // ── Utilities ─────────────────────────────────────────────────────────────
+
+    private static bool IsAudioFile(string name)
+    {
+        var ext = System.IO.Path.GetExtension(name).ToLowerInvariant();
+        return ext is ".mp3" or ".wav" or ".aac" or ".ogg" or ".flac" or ".m4a" or ".opus" or ".wma";
+    }
+
+    private static bool IsImageFile(string name)
+    {
+        var ext = System.IO.Path.GetExtension(name).ToLowerInvariant();
+        return ext is ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp" or ".svg";
+    }
+
+    private static string GetImageMimeType(string name)
+    {
+        return System.IO.Path.GetExtension(name).ToLowerInvariant() switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png"            => "image/png",
+            ".gif"            => "image/gif",
+            ".webp"           => "image/webp",
+            ".bmp"            => "image/bmp",
+            _                 => "image/png",
+        };
+    }
+
+    private static string FormatDuration(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.TotalHours >= 1
+            ? $"{(int)ts.TotalHours}:{ts.Minutes:D2}:{ts.Seconds:D2}"
+            : $"{ts.Minutes}:{ts.Seconds:D2}";
+    }
+}

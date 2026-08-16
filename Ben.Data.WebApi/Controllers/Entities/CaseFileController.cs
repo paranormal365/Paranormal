@@ -1,6 +1,7 @@
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
+using Ben.Data.WebApi.Services;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -61,20 +62,15 @@ public sealed class CaseFileController : BenControllerBase
         if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
         if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct)) return NotFound();
 
-        using var ms = new MemoryStream();
-        await file.CopyToAsync(ms, ct);
-        var fileBytes = ms.ToArray();
-
         var storedName  = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
         var storagePath = _fileStorage.CaseFilePath(caseId, $"files/{storedName}");
-        using (var ws = new MemoryStream(fileBytes))
-            await _fileStorage.WriteAsync(storagePath, ws, ct);
+        await _fileStorage.WriteFormFileAsync(storagePath, file, ct);
 
         var uploadFile = new UploadFile
         {
             Id = Guid.NewGuid(), UploadFileTypeId = CaseEvidenceFileTypeId, AppUserId = userId,
             FileName = file.FileName, StoredFileName = storedName,
-            ContentType = file.ContentType, FileSize = fileBytes.Length,
+            ContentType = file.ContentType, FileSize = file.Length,
             StoragePath = storagePath, IsPublic = false,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         };
@@ -133,21 +129,18 @@ public sealed class CaseFileController : BenControllerBase
         else
             return UnprocessableEntity("Source file has no stored content to copy — it needs to be re-saved first.");
 
-        using var ms = new MemoryStream();
-        await using (sourceStream)
-            await sourceStream.CopyToAsync(ms, ct);
-        var fileBytes = ms.ToArray();
-
         var storedName  = $"{Guid.NewGuid()}{Path.GetExtension(sourceFile.FileName)}";
         var storagePath = _fileStorage.CaseFilePath(caseId, $"files/{storedName}");
-        using (var ws = new MemoryStream(fileBytes))
-            await _fileStorage.WriteAsync(storagePath, ws, ct);
+        // Straight source-to-destination copy — no reason to land the whole file in memory between
+        // two streams that are both already streams.
+        await using (sourceStream)
+            await _fileStorage.WriteAsync(storagePath, sourceStream, ct);
 
         var copy = new UploadFile
         {
             Id = Guid.NewGuid(), UploadFileTypeId = CaseEvidenceFileTypeId, AppUserId = userId,
             FileName = sourceFile.FileName, StoredFileName = storedName,
-            ContentType = sourceFile.ContentType, FileSize = fileBytes.Length,
+            ContentType = sourceFile.ContentType, FileSize = sourceFile.FileSize,
             StoragePath = storagePath, IsPublic = false,
             CaseCopyOfUploadFileId = sourceFile.Id,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,

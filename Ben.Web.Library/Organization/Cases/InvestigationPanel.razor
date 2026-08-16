@@ -184,7 +184,11 @@
                                    the same panel is wanted on the org-wide investigations view
                                    where there is no case in the route at all. *@
                                 <div class="mt-3">
-                                    <InvestigationRoster OrgId="@OrgId" InvestigationId="@i.Id" CanManage="true" />
+                                    @* The server's verdict, not "true". Passing true meant every
+                                       member saw the attendance and lead controls and got a 403 on
+                                       using them — the exact thing CanEditRecord exists to stop. *@
+                                    <InvestigationRoster OrgId="@OrgId" InvestigationId="@i.Id"
+                                                         CanManage="@i.CanEditRecord" />
                                 </div>
 
                                 <div class="mt-3 border rounded p-3 bg-body-secondary">
@@ -283,9 +287,15 @@
                                 </div>
                             }
                         </div>
-                        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
-                                       Icon="@SvgIcon.Pencil"
-                                       OnClick="@(() => OpenEdit(i))">Edit</TelerikButton>
+                        @* Same rule as the org-wide grid: shown on the server's verdict alone.
+                           Offering Edit to somebody the endpoint will refuse is a worse experience
+                           than not offering it. *@
+                        @if (i.CanEditRecord)
+                        {
+                            <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                           Icon="@SvgIcon.Pencil"
+                                           OnClick="@(() => OpenEdit(i))">Edit</TelerikButton>
+                        }
                     </div>
                 </div>
             }

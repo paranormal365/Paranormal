@@ -1,0 +1,12 @@
+/* Item #61 — <svg> is inline by default, leaving ~4px of descender space below it inside its
+   containing block (a classic CSS gotcha). volumeAutomationLane.js sizes the SVG to exactly the
+   requested LaneHeight, but that stray 4px on the wrapper was enough to get clipped by the parent
+   clip chip's own bounds before the chip's height became content-driven (see VideoTimeline.razor.css). */
+.bv-vol-lane {
+    display: block;
+    width: 100%;
+}
+
+.bv-vol-lane__svg {
+    display: block;
+}

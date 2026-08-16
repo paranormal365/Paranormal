@@ -2,6 +2,7 @@ using Ben.Data.WebApi.Services;
 using Ben.Service.RepositoryService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Ben.Data.WebApi.Controllers;
 
@@ -9,9 +10,15 @@ namespace Ben.Data.WebApi.Controllers;
 /// Lightweight geocoding utilities used by the Blazor admin UI for live map
 /// preview while the user is authoring an address.  No data is persisted.
 /// </summary>
+/// <remarks>
+/// Rate-limited at the class level, not just on the anonymous action: every endpoint here forwards
+/// to geocod.io, which bills per lookup. An authenticated caller can run up the same bill as an
+/// anonymous one.
+/// </remarks>
 [ApiController]
 [Authorize]
 [Route("api/geocode")]
+[EnableRateLimiting(RateLimiting.GeocodingPolicy)]
 public sealed class GeocodingController : ControllerBase
 {
     /// <summary>

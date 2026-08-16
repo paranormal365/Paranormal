@@ -660,7 +660,7 @@ Example (`appsettings.Development.json`):
 
 NOTE: 
 Name: Ben-Dev
-Value: [REDACTED — this value was exposed in git history; rotate the secret in Azure Portal → App Registrations → AverageBen.net → Certificates & Secrets]
+Value: [ROTATED - previous secret was exposed in git history and has been revoked; new secrets belong only in appsettings.Development.json (gitignored), never in this file]
 Secret ID: 2b52e4a6-6361-4a25-adbb-421c6960dd47
 Expires: 7/13/2028
 

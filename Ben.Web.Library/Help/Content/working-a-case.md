@@ -74,7 +74,9 @@ would suggest the house next door.
 
 ## Arriving on site
 
-The investigation's **Team** panel shows who is expected and who has turned up. A name turns green
+The investigation's **Team** panel shows who is expected and who has turned up. Open it from the
+attendees on a case's Investigations tab, or from **Team** on any row of the group's Investigations
+list — including visits with no case, which is the only way to check in to one of those. A name turns green
 once their attendance is recorded, and the time beside it is when they say they got there.
 
 Press **I've arrived** to check yourself in. The time is editable, and it is meant to be: most
@@ -87,6 +89,35 @@ are kept distinct: the panel marks a row **Recorded** when somebody else entered
 on site" and "ticked off afterwards" never look like the same thing.
 
 Attendance is what puts a visit on your own map under **My Investigations**.
+
+## Writing up what you saw
+
+Everyone who was on the team files their own account, in the **What people saw** section of the
+investigation's Team panel. One each, in their own words.
+
+They are deliberately separate accounts rather than one shared write-up. Four people in a building
+at night see four different nights, and the places where two accounts disagree are usually the most
+useful part of the record — a single summary, written by whoever holds the edit right, loses them.
+
+**Only you can write yours, and only you can withdraw it.** There is no override, unlike arrival,
+where somebody else can record that you turned up. Whether you were there is something another
+person can vouch for; what you experienced is not, and an account with your name on it that you did
+not write would be worse than no account at all.
+
+You can revise it afterwards — most people write up the next morning and correct it for days after.
+A revised account is marked as revised, so somebody comparing accounts knows whether they are
+reading what you said on the night or what you say now.
+
+Everyone in the group can read all the accounts. That is the point of keeping them.
+
+## Leading a visit
+
+The **Lead** column on the team list marks who is running this particular investigation. It is not
+a promotion: it applies to this visit only, and it lapses with it.
+
+The lead can edit the investigation — the schedule, the team, the details — for as long as they
+hold it, and can hand it to somebody else. Only people who can already change the investigation can
+name a lead, so it cannot be taken, only given.
 
 ## Who can see the findings
 

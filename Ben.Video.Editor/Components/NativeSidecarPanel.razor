@@ -1,0 +1,117 @@
+@inject NativeSidecarService NativeSidecar
+
+<TelerikWindow Visible="@Visible"
+               VisibleChanged="@OnVisibleChanged"
+               Width="420px"
+               Modal="true">
+    <WindowTitle>Native acceleration</WindowTitle>
+    <WindowContent>
+        <div class="bv-sidecar-panel">
+
+            <p class="bv-sidecar-panel__intro">
+                A small companion app on this machine can render and export using all of your
+                CPU's cores instead of just one. It never sends your files anywhere — everything
+                stays on this computer.
+            </p>
+
+            @switch (NativeSidecar.State)
+            {
+                case NativeSidecarState.Disconnected:
+                    <div class="bv-sidecar-panel__state">
+                        <span class="bv-sidecar-panel__badge bv-sidecar-panel__badge--off">Not detected</span>
+                        <p>No sidecar found on this machine. Download and run it, then click Retry.</p>
+                        <TelerikButton OnClick="RetryAsync" Icon="@SvgIcon.ArrowRotateCw">Retry</TelerikButton>
+                    </div>
+                    break;
+
+                case NativeSidecarState.FoundUnpaired:
+                case NativeSidecarState.TokenRejected:
+                    <div class="bv-sidecar-panel__state">
+                        <span class="bv-sidecar-panel__badge bv-sidecar-panel__badge--found">
+                            Found @(NativeSidecar.Info?.FfmpegVersion is { } v ? $"— {Shorten(v)}" : "")
+                        </span>
+                        @if (NativeSidecar.State == NativeSidecarState.TokenRejected)
+                        {
+                            <p>Your saved pairing no longer works — the sidecar may have been reset. Get a fresh 6-digit code from its pairing page.</p>
+                        }
+                        else
+                        {
+                            <p>Type the 6-digit code from the sidecar's pairing page (it opens when the sidecar is installed; <code>pair.sh</code> reopens it). Each browser pairs once.</p>
+                        }
+                        <TelerikTextBox @bind-Value="_code" PlaceHolder="6-digit code" Width="100%" />
+                        @if (NativeSidecar.LastError is not null)
+                        {
+                            <p class="bv-sidecar-panel__error">⚠ @NativeSidecar.LastError</p>
+                        }
+                        <TelerikButton OnClick="PairAsync"
+                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                       Enabled="@(!string.IsNullOrWhiteSpace(_code) && !_pairing)">
+                            @(_pairing ? "Pairing…" : "Pair")
+                        </TelerikButton>
+                    </div>
+                    break;
+
+                case NativeSidecarState.Paired:
+                    <div class="bv-sidecar-panel__state">
+                        <span class="bv-sidecar-panel__badge bv-sidecar-panel__badge--on">Connected</span>
+                        <p>ffmpeg: @(NativeSidecar.Info?.FfmpegVersion is { } v2 ? Shorten(v2) : "unknown")</p>
+                        @* Item #70 phase 158 — which offload features this particular sidecar
+                           supports. A pre-158 sidecar shows just "segment"; that's not a fault,
+                           it's the legacy capability set and everything still works. *@
+                        <p class="bv-sidecar-panel__caps">
+                            offload: @(NativeSidecar.Capabilities.Capabilities.Count > 0
+                                ? string.Join(", ", NativeSidecar.Capabilities.Capabilities.Order())
+                                : "none")
+                        </p>
+                        <TelerikButton OnClick="ForgetAsync" FillMode="@ThemeConstants.Button.FillMode.Flat">
+                            Forget pairing
+                        </TelerikButton>
+                    </div>
+                    break;
+
+                default:
+                    <div class="bv-sidecar-panel__state">
+                        <TelerikLoader Type="@LoaderType.InfiniteSpinner" Size="@ThemeConstants.Loader.Size.Small" />
+                        <span>Looking for a sidecar…</span>
+                    </div>
+                    break;
+            }
+
+        </div>
+    </WindowContent>
+    <WindowActions>
+        <WindowAction Name="Close" />
+    </WindowActions>
+</TelerikWindow>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    private string _code = string.Empty;
+    private bool _pairing;
+
+    private async Task RetryAsync() => await NativeSidecar.ProbeAsync();
+
+    private async Task PairAsync()
+    {
+        _pairing = true;
+        try { await NativeSidecar.PairAsync(_code); }
+        finally { _pairing = false; }
+    }
+
+    private async Task ForgetAsync() => await NativeSidecar.ForgetPairingAsync();
+
+    private static string Shorten(string ffmpegVersionLine)
+    {
+        // "ffmpeg version 6.1.1 Copyright (c) 2000-2024 ..." -> "ffmpeg 6.1.1"
+        var parts = ffmpegVersionLine.Split(' ', 4);
+        return parts.Length >= 3 ? $"{parts[0]} {parts[2]}" : ffmpegVersionLine;
+    }
+
+    private async Task OnVisibleChanged(bool visible)
+    {
+        Visible = visible;
+        await VisibleChanged.InvokeAsync(visible);
+    }
+}

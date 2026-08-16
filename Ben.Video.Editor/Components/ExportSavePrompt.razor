@@ -1,0 +1,66 @@
+@* Shown once an immediate ("Export Now") render finishes — offers to save the project so the
+   user can come back to it later, without folding save logic into the export flow itself.
+   Reuses VideoEditor's existing SaveProjectAsync/SaveToServerHandlerAsync — no save logic here. *@
+@if (Visible)
+{
+    <TelerikWindow Visible="true"
+                   VisibleChanged="@(async v => { if (!v) await Close(); })"
+                   Width="380px"
+                   Modal="true"
+                   Draggable="true"
+                   Resizable="false"
+                   Class="bv-export-save-prompt">
+        <WindowTitle>Export Complete</WindowTitle>
+        <WindowContent>
+            <p class="bv-export-save-prompt__text">
+                Save this project so you can come back and keep editing it later?
+            </p>
+        </WindowContent>
+        <WindowFooter>
+            <TelerikButton OnClick="SaveLocallyAsync"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Save Locally
+            </TelerikButton>
+            @if (ShowServerOption)
+            {
+                <TelerikButton OnClick="SaveToServerAsync"
+                               ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                               Size="@ThemeConstants.Button.Size.Small">
+                    Save to Server
+                </TelerikButton>
+            }
+            <TelerikButton OnClick="Close"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Skip
+            </TelerikButton>
+        </WindowFooter>
+    </TelerikWindow>
+}
+
+@code {
+    [Parameter] public bool                Visible          { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged   { get; set; }
+
+    /// <summary>Whether to show the "Save to Server" action — mirrors the toolbar's own
+    /// gate on <c>VideoEditorOptions.DocumentPostUrl</c> being configured by the host.</summary>
+    [Parameter] public bool ShowServerOption { get; set; }
+
+    [Parameter] public EventCallback OnSaveLocally  { get; set; }
+    [Parameter] public EventCallback OnSaveToServer { get; set; }
+
+    private async Task SaveLocallyAsync()
+    {
+        await OnSaveLocally.InvokeAsync();
+        await Close();
+    }
+
+    private async Task SaveToServerAsync()
+    {
+        await OnSaveToServer.InvokeAsync();
+        await Close();
+    }
+
+    private async Task Close() => await VisibleChanged.InvokeAsync(false);
+}

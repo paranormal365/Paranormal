@@ -1608,6 +1608,43 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("InvestigationAttendees");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.InvestigationFinding", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("InvestigationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Narrative")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppUserId");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("InvestigationId", "AppUserId")
+                        .IsUnique();
+
+                    b.ToTable("InvestigationFindings");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.InvestigationScheduleProposal", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6294,6 +6331,33 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("Investigation");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.InvestigationFinding", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
+                        .WithMany()
+                        .HasForeignKey("AppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Investigation", "Investigation")
+                        .WithMany("Findings")
+                        .HasForeignKey("InvestigationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AppUser");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("Investigation");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.InvestigationScheduleProposal", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.Case", "Case")
@@ -8248,6 +8312,8 @@ namespace Ben.Data.Source.Migrations
             modelBuilder.Entity("Ben.Data.Source.Entities.Investigation", b =>
                 {
                     b.Navigation("Attendees");
+
+                    b.Navigation("Findings");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.InvestigationScheduleProposal", b =>

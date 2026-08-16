@@ -1,0 +1,38 @@
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div @ref="_el" class="bv-divider bv-divider--@Direction"></div>
+
+@code {
+    /// <summary>"horizontal" resizes the width of the preceding sibling; "vertical" resizes its height.</summary>
+    [Parameter, EditorRequired] public string Direction  { get; set; } = "horizontal";
+
+    /// <summary>Raised with the raw pixel size suggested by the drag. Parent clamps and applies it.</summary>
+    [Parameter] public EventCallback<int> OnResize { get; set; }
+
+    private ElementReference     _el;
+    private IJSObjectReference?  _module;
+    private DotNetObjectReference<ResizableDivider>? _selfRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _module  = await JS.InvokeAsync<IJSObjectReference>(
+            "import", "./_content/Ben.Video.Editor/Components/ResizableDivider.razor.js");
+        _selfRef = DotNetObjectReference.Create(this);
+        await _module.InvokeVoidAsync("initDivider", _el, _selfRef, Direction);
+    }
+
+    [JSInvokable]
+    public async Task OnDragAsync(int pixels) => await OnResize.InvokeAsync(pixels);
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            await _module.InvokeVoidAsync("dispose", _el);
+            await _module.DisposeAsync();
+        }
+        _selfRef?.Dispose();
+    }
+}

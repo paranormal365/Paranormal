@@ -1,0 +1,360 @@
+@using Ben.Video.Editor.Models.Assets
+@implements IAsyncDisposable
+@inject VideoAssetCatalogService AssetCatalog
+@inject ClipStore Clips
+@inject ErrorLogService ErrorLog
+@inject IJSRuntime JS
+
+<div class="bv-asset-browser">
+
+    <!-- Search + filter bar -->
+    <div class="bv-asset-browser__toolbar">
+        <TelerikTextBox @bind-Value="_search"
+                        Placeholder="Search assets…"
+                        Class="bv-asset-browser__search" />
+
+        <TelerikDropDownList Data="@_typeOptions"
+                             @bind-Value="_typeFilter"
+                             TextField="@nameof(TypeOption.Label)"
+                             ValueField="@nameof(TypeOption.Value)"
+                             Width="130px" />
+    </div>
+
+    <!-- Source tabs -->
+    <TelerikTabStrip @bind-ActiveTabId="_activeTabId" Class="bv-asset-browser__tabs">
+
+        <!-- Transitions gallery (item #57 T3) — not a server asset: a fixed, local
+             TransitionStyle enum, dragged onto a timeline junction rather than added to a
+             timeline position, so it lives outside the _providers/VideoAssetCatalogItem loop
+             below entirely. -->
+        <TabStripTab Title="Transitions" Id="transitions">
+            <div class="bv-transition-gallery">
+                @foreach (var style in _transitionStyles)
+                {
+                    var s = style;
+                    <div class="bv-transition-gallery-card bv-transition-thumb--@style.ToString().ToLowerInvariant() @(_draggingStyle == s ? "bv-transition-gallery-card--dragging" : "")"
+                         title="Drag onto a timeline junction to apply"
+                         @onpointerdown="e => OnTransitionPointerDown(e, s)">
+                        <div class="bv-transition-gallery-thumb">
+                            <div class="bv-transition-gallery-thumb__a"></div>
+                            <div class="bv-transition-gallery-thumb__b"></div>
+                        </div>
+                        <div class="bv-transition-gallery-card__name">@style</div>
+                    </div>
+                }
+            </div>
+        </TabStripTab>
+
+        @foreach (var (name, source) in _providers)
+        {
+            <TabStripTab Title="@name" Id="@source.ToString()">
+                @{ var items = _filtered.Where(a => a.Source == source).ToList(); }
+
+                @if (_loading)
+                {
+                    <div class="bv-asset-browser__state">
+                        <TelerikLoader Type="@LoaderType.InfiniteSpinner" Size="@ThemeConstants.Loader.Size.Medium" />
+                    </div>
+                }
+                else if (items.Count == 0)
+                {
+                    <div class="bv-asset-browser__state bv-asset-browser__state--empty">
+                        <span>No assets found.</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="bv-asset-browser__grid">
+                        @foreach (var item in items)
+                        {
+                            <div class="bv-asset-card @(item.IsServerRemoved ? "bv-asset-card--removed" : "")"
+                                 title="@item.Name">
+
+                                <!-- Thumbnail -->
+                                <div class="bv-asset-card__thumb">
+                                    @if (!string.IsNullOrEmpty(item.ThumbnailUrl))
+                                    {
+                                        <img src="@item.ThumbnailUrl" alt="@item.Name" loading="lazy" />
+                                    }
+                                    else
+                                    {
+                                        <div class="bv-asset-card__thumb-placeholder">
+                                            <TelerikSvgIcon Icon="@AssetIcon(item.Type)" Size="@ThemeConstants.SvgIcon.Size.Large" />
+                                        </div>
+                                    }
+
+                                    @if (!item.IsLocalAvailable)
+                                    {
+                                        <span class="bv-asset-card__badge bv-asset-card__badge--cloud"
+                                              title="Not yet downloaded">☁</span>
+                                    }
+                                    @if (item.IsServerRemoved)
+                                    {
+                                        <span class="bv-asset-card__badge bv-asset-card__badge--removed"
+                                              title="Removed from server — local copy retained">✕</span>
+                                    }
+                                </div>
+
+                                <!-- Name -->
+                                <div class="bv-asset-card__name">@item.Name</div>
+
+                                <!-- Add button -->
+                                <TelerikButton Icon="@SvgIcon.Plus"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                               Size="@ThemeConstants.Button.Size.Small"
+                                               Class="bv-asset-card__add"
+                                               OnClick="() => AddToTimelineAsync(item)">
+                                    Add
+                                </TelerikButton>
+
+                                <!-- Per-item download progress -->
+                                @if (_downloading.TryGetValue(item.Id, out var pct))
+                                {
+                                    <TelerikProgressBar Value="@(pct * 100)"
+                                                        Max="100"
+                                                        Class="bv-asset-card__progress" />
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </TabStripTab>
+        }
+
+    </TelerikTabStrip>
+
+    <!-- Sync button -->
+    <div class="bv-asset-browser__footer">
+        <TelerikButton Icon="@SvgIcon.ArrowRotateCw"
+                       Size="@ThemeConstants.Button.Size.Small"
+                       OnClick="SyncAsync"
+                       Title="Sync catalog with server">
+            Sync
+        </TelerikButton>
+        @if (_lastSync.HasValue)
+        {
+            <span class="bv-asset-browser__sync-time">
+                Last sync: @_lastSync.Value.ToLocalTime().ToString("HH:mm")
+            </span>
+        }
+        @if (!string.IsNullOrEmpty(_syncMessage))
+        {
+            <span class="bv-asset-browser__sync-msg">@_syncMessage</span>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading = true;
+    private string _activeTabId = string.Empty;
+    private string _search = string.Empty;
+    private VideoAssetType? _typeFilter;
+    private DateTimeOffset? _lastSync;
+    private string _syncMessage = string.Empty;
+
+    private IReadOnlyList<VideoAssetCatalogItem> _all     = [];
+    private IReadOnlyList<VideoAssetCatalogItem> _filtered = [];
+    private List<(string Name, AssetSource Source)> _providers = [];
+    private Dictionary<string, double> _downloading = [];
+
+    // ── Transitions gallery drag source (item #57 T3) ──────────────────────────
+    private static readonly List<TransitionStyle> _transitionStyles =
+        Enum.GetValues<TransitionStyle>().Where(s => s != TransitionStyle.Cut).ToList();
+    private TransitionStyle?           _draggingStyle;
+    private IJSObjectReference?        _dragBridgeModule;
+    private DotNetObjectReference<AssetBrowser>? _dragSourceRef;
+
+    private record TypeOption(string Label, VideoAssetType? Value);
+    private static readonly List<TypeOption> _typeOptions =
+    [
+        new("All types", null),
+        new("Clipart",   VideoAssetType.Clipart),
+        new("Callout",   VideoAssetType.Callout),
+        new("Shape",     VideoAssetType.Shape),
+        new("Frame",     VideoAssetType.Frame),
+        new("Sticker",   VideoAssetType.Sticker),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _providers = AssetCatalog.GetEnabledProviders().ToList();
+        // Default to first provider tab if available
+        if (_providers.Count > 0)
+            _activeTabId = _providers[0].Source.ToString();
+        _all = await AssetCatalog.GetAllAssetsAsync();
+        ApplyFilter();
+        _loading = false;
+    }
+
+    private void ApplyFilter()
+    {
+        var q = _search.Trim();
+        IEnumerable<VideoAssetCatalogItem> results = _all;
+
+        if (_typeFilter.HasValue)
+            results = results.Where(a => a.Type == _typeFilter.Value);
+
+        if (!string.IsNullOrWhiteSpace(q))
+            results = results.Where(a =>
+                a.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                (a.Category?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                a.Tags.Any(t => t.Contains(q, StringComparison.OrdinalIgnoreCase)));
+
+        _filtered = results.ToList();
+    }
+
+    private async Task AddToTimelineAsync(VideoAssetCatalogItem item)
+    {
+        // Download to OPFS if not already local
+        if (!item.IsLocalAvailable)
+        {
+            _downloading[item.Id] = 0;
+            StateHasChanged();
+            try
+            {
+                var progress = new Progress<double>(p =>
+                {
+                    _downloading[item.Id] = p;
+                    InvokeAsync(StateHasChanged);
+                });
+                await AssetCatalog.EnsureLocalAsync(item, progress);
+            }
+            catch (Exception ex)
+            {
+                ErrorLog.Log("AssetBrowser", $"Failed to download {item.Name} — {ex.Message}");
+                _downloading.Remove(item.Id);
+                StateHasChanged();
+                return;
+            }
+            _downloading.Remove(item.Id);
+        }
+
+        // Add to timeline based on asset type
+        if (item.Type == VideoAssetType.Callout && item.ShapeDefinition is not null)
+        {
+            // Server-defined built-in shape template → create a CalloutClip
+            var def = item.ShapeDefinition;
+            var callout = new CalloutClip
+            {
+                Name             = item.Name,
+                Duration         = 5.0,
+                TimelinePosition = Clips.TotalDuration,
+                Shape            = def.ShapeType,
+            };
+            // Pre-populate control points from server-defined defaults
+            if (def.AdjustableControlPoints is not null)
+            {
+                foreach (var cp in def.AdjustableControlPoints)
+                    callout.ControlPointValues[cp.Key] = cp.DefaultValue;
+            }
+            Clips.AddCallout(callout);
+        }
+        else
+        {
+            // SVG / raster asset → create a ClipArtClip
+            var clip = new ClipArtClip
+            {
+                Name             = item.Name,
+                AssetId          = item.Id,
+                AssetSource      = item.Source,
+                AssetFormat      = item.Format,
+                Settings         = item.Settings,
+                ControlPoints    = item.ControlPoints,
+                Duration         = 5.0,
+                TimelinePosition = Clips.TotalDuration,
+                OpfsExt          = "." + FormatExt(item.Format),
+            };
+            Clips.AddClipArtClip(clip);
+        }
+        StateHasChanged();
+    }
+
+    // ── Transitions gallery drag source (item #57 T3 — mirrors ClipBrowser's own drag-source
+    // wiring for clipDragBridge.js exactly, just registering the parallel Transition* functions
+    // instead of the clip ones) ─────────────────────────────────────────────────────────────
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            _dragBridgeModule = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Video.Editor/js/clipDragBridge.js");
+            _dragSourceRef = DotNetObjectReference.Create(this);
+            await _dragBridgeModule.InvokeVoidAsync("registerTransitionDragSource", _dragSourceRef);
+        }
+        catch { /* JS interop unavailable (e.g. prerendering) — pointer-based drag stays inert */ }
+    }
+
+    private async Task OnTransitionPointerDown(Microsoft.AspNetCore.Components.Web.PointerEventArgs e, TransitionStyle style)
+    {
+        _draggingStyle = style;
+        if (_dragBridgeModule is not null)
+        {
+            await _dragBridgeModule.InvokeVoidAsync("startTransitionDrag", style.ToString());
+        }
+    }
+
+    /// <summary>Called from JS (<c>clipDragBridge.js</c>) once the pointer-based transition drag
+    /// ends, whether or not it landed on a valid junction/chip — mirrors ClipBrowser's own
+    /// <c>OnClipDragEnded</c>.</summary>
+    [JSInvokable]
+    public void OnTransitionDragEnded()
+    {
+        _draggingStyle = null;
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_dragBridgeModule is not null)
+        {
+            try { await _dragBridgeModule.InvokeVoidAsync("unregisterTransitionDragSource"); } catch { }
+            await _dragBridgeModule.DisposeAsync();
+        }
+        _dragSourceRef?.Dispose();
+    }
+
+    private async Task SyncAsync()
+    {
+        _syncMessage = "Syncing…";
+        StateHasChanged();
+        try
+        {
+            var result = await AssetCatalog.SyncAsync();
+            _lastSync   = result.SyncedAt;
+            _all        = await AssetCatalog.GetAllAssetsAsync();
+            ApplyFilter();
+
+            _syncMessage = result.IsOffline
+                ? "Offline — showing cached catalog"
+                : result.HasChanges
+                    ? $"+{result.Added.Count} new, {result.Updated.Count} updated, {result.Removed.Count} removed"
+                    : "Up to date";
+        }
+        catch (Exception ex)
+        {
+            _syncMessage = $"Sync failed: {ex.Message}";
+        }
+    }
+
+    private static ISvgIcon AssetIcon(VideoAssetType type) => type switch
+    {
+        VideoAssetType.Callout  => SvgIcon.Comment,
+        VideoAssetType.Shape    => SvgIcon.Circle,
+        VideoAssetType.Frame    => SvgIcon.Columns,
+        VideoAssetType.Sticker  => SvgIcon.Star,
+        _                       => SvgIcon.Image,
+    };
+
+    private static string FormatExt(VideoAssetFormat f) => f switch
+    {
+        VideoAssetFormat.Svg    => "svg",
+        VideoAssetFormat.Avif   => "avif",
+        VideoAssetFormat.WebP   => "webp",
+        VideoAssetFormat.Gif    => "gif",
+        VideoAssetFormat.Lottie => "json",
+        _                       => "png",
+    };
+}

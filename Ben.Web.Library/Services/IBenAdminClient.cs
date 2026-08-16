@@ -639,6 +639,35 @@ public interface IBenAdminClient
     /// </remarks>
     Task<PublicPlaceResponse?> GetPublicPlaceAsync(Guid placeId, CancellationToken token = default);
 
+    /// <summary>
+    /// Hands one attendee the lead of this visit, or takes it back. Returns the whole roster.
+    /// </summary>
+    /// <remarks>
+    /// Exclusive — naming a lead clears the previous holder, so the response carries every row
+    /// rather than the one that was clicked. Leading is also an edit right, so the server requires
+    /// the caller to already hold one.
+    /// </remarks>
+    Task<IReadOnlyList<InvestigationRosterEntry>> SetInvestigationLeadAsync(
+        Guid orgId, Guid investigationId, Guid attendeeId, bool isLead, CancellationToken token = default);
+
+    /// <summary>Every account filed for an investigation. Any member of the group may read them.</summary>
+    Task<IReadOnlyList<InvestigationFindingRecord>> GetInvestigationFindingsAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default);
+
+    /// <summary>
+    /// Files or revises the signed-in person's own account of a visit.
+    /// </summary>
+    /// <remarks>
+    /// Attendees only, and only their own — there is no override. Whether somebody turned up is a
+    /// fact another person can attest to; what they experienced is not.
+    /// </remarks>
+    Task<InvestigationFindingRecord?> SaveMyInvestigationFindingAsync(
+        Guid orgId, Guid investigationId, string narrative, CancellationToken token = default);
+
+    /// <summary>Withdraws the signed-in person's own account.</summary>
+    Task<bool> DeleteMyInvestigationFindingAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default);
+
     /// <summary>Who is on an investigation's team and who has turned up. Any member may read it.</summary>
     Task<IReadOnlyList<InvestigationRosterEntry>> GetInvestigationRosterAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default);
@@ -1498,6 +1527,21 @@ public sealed record NewPlaceRequest(
     decimal? Latitude = null,
     decimal? Longitude = null,
     Ben.Data.Common.Enums.PlaceKind? Kind = null);
+
+/// <summary>
+/// One person's account of a visit. Mirror of the WebApi record.
+/// </summary>
+/// <remarks>
+/// <c>DateUpdated</c> is null until it is revised — the difference between what somebody said on
+/// the night and what they say now.
+/// </remarks>
+public sealed record InvestigationFindingRecord(
+    Guid Id,
+    Guid AppUserId,
+    string? DisplayName,
+    string Narrative,
+    DateTime DateCreated,
+    DateTime? DateUpdated);
 
 /// <summary>
 /// One person on an investigation's team, and whether they turned up. Mirror of the WebApi record.
