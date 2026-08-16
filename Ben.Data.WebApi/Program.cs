@@ -36,14 +36,35 @@ builder.Services.AddControllers();
 builder.Services.AddMemoryCache();
 builder.Services.AddBenRateLimiting(builder.Configuration);
 
+// Audit finding B4, pulled forward from phase 3 because Ben.Wasm.Video needs it: with a WASM host
+// the *browser* calls this API, so cross-origin is real whenever the two aren't behind one origin.
+// Origins come from configuration — hardcoded localhost values would silently break the first real
+// deployment. An EMPTY list is valid and meaningful: it's the same-origin / reverse-proxied case
+// (the preferred deployment), where CORS never applies. Wildcards are refused rather than honored:
+// this API serves authenticated personal data, and "*" here is always a misconfiguration.
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+corsOrigins = corsOrigins.Where(o => !string.IsNullOrWhiteSpace(o) && o != "*").ToArray();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("WebAppPolicy", policy =>
+    {
+        if (corsOrigins.Length == 0) return; // same-origin deployment — no cross-origin grants
+
         policy
-            .WithOrigins("http://localhost:5078", "https://localhost:7078")
+            .WithOrigins(corsOrigins)
             .AllowAnyMethod()
             .AllowAnyHeader()
-            .AllowCredentials());
+            // Bearer-token auth, not cookies: credentials (in the CORS sense) are never sent
+            // cross-origin, so don't invite them. The Authorization header is covered by
+            // AllowAnyHeader above.
+            // Range/media headers the editor's scrubbing needs to *read*, not just receive:
+            .WithExposedHeaders("Content-Range", "Accept-Ranges", "Content-Length")
+            // One preflight per endpoint per 10 minutes instead of one per request — media
+            // scrubbing makes many small authenticated GETs and each would otherwise pay a
+            // preflight round-trip.
+            .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+    });
 });
 
 builder.Services.AddSwaggerGen(options =>
@@ -229,6 +250,13 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+
+// Say what the CORS posture is at startup — a misconfigured deploy should fail loudly here, not
+// as a mystery in a browser console three layers away.
+if (corsOrigins.Length == 0)
+    Log.Information("CORS: no cross-origin browser origins allowed (same-origin deployment)");
+else
+    Log.Information("CORS: allowing browser origins {Origins}", (object)corsOrigins);
 
 // Initialise geocod.io — API key stored in Geocodio:ApiKey in appsettings
 Ben.Service.RepositoryService.Services.AddressGeocodingService.Configure(

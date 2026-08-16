@@ -131,3 +131,14 @@ code {
     width: 100vw;
     overflow: hidden;
 }
+
+/* Login page — deliberately unstyled beyond legibility; this is a utility screen. */
+.bwv-login { max-width: 22rem; margin: 15vh auto 0; font-size: 0.95rem; color: #e8e8e8; }
+.bwv-login h1 { color: #fff; }
+.bwv-login label { display: block; margin-top: 0.75rem; font-weight: 600; }
+.bwv-login input { width: 100%; padding: 0.4rem; margin-top: 0.2rem; box-sizing: border-box; }
+.bwv-login button { margin-top: 1rem; padding: 0.45rem 1.4rem; }
+.bwv-login__hint { color: #aaa; }
+.bwv-login__error { color: #ff6b7a; }
+.bwv-login__ok { color: #6fd58a; }
+.bwv-login__ok a { color: #8ab4ff; }

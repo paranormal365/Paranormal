@@ -42,10 +42,25 @@ builder.Services.AddBenVideoEditor(options =>
     options.NativeSidecar = true;
 });
 
-// TODO(auth): the media library and project save/load endpoints require a bearer token, and this
-// host does not yet have one to send — under Blazor Server the circuit's token store fills that
-// role (BenMediaLibraryProvider), which has no WASM counterpart yet. Until that lands, only the
-// anonymous surfaces (asset catalog, local editing) work against a real WebApi. This is the
-// known first work item for this project, not an oversight.
+// ── Auth ─────────────────────────────────────────────────────────────────────
+// The WASM counterpart of the server host's circuit-held tokens: the browser signs in against the
+// WebApi's own /login (the same endpoint the site uses — no new server surface), keeps the tokens
+// in TokenStore, and BearerTokenHandler attaches them to the editor's authenticated clients.
+builder.Services.AddScoped<Ben.Wasm.Video.Services.TokenStore>();
+builder.Services.AddScoped<Ben.Wasm.Video.Services.BearerTokenHandler>();
+builder.Services.AddScoped(sp => new Ben.Wasm.Video.Services.AuthService(
+    // Dedicated client pinned to the API origin, with NO bearer handler: /refresh must be
+    // callable with an expired access token.
+    new HttpClient { BaseAddress = new Uri(string.IsNullOrEmpty(apiBaseUrl)
+        ? builder.HostEnvironment.BaseAddress : apiBaseUrl) },
+    sp.GetRequiredService<Ben.Wasm.Video.Services.TokenStore>()));
+
+// IHttpClientFactory merges repeated AddHttpClient(name) registrations, so the handler attaches
+// to the editor's named clients without touching editor code. AssetCatalog is left alone on
+// purpose — its read endpoints are anonymous by design.
+builder.Services.AddHttpClient(Ben.Video.Editor.Extensions.ServiceCollectionExtensions.MediaLibraryHttpClientName)
+    .AddHttpMessageHandler<Ben.Wasm.Video.Services.BearerTokenHandler>();
+builder.Services.AddHttpClient(Ben.Video.Editor.Extensions.ServiceCollectionExtensions.ProjectPersistenceHttpClientName)
+    .AddHttpMessageHandler<Ben.Wasm.Video.Services.BearerTokenHandler>();
 
 await builder.Build().RunAsync();
