@@ -12,20 +12,22 @@ var builder = WebApplication.CreateBuilder(args);
 
 /* LOGGING */
 
+// Everything about levels and sinks now comes from configuration — nothing is pinned here.
+//
+// What was here before: a rolling file sink writing into the working tree (`.vscode/webapi-.log`,
+// a repo-relative path that follows the code to wherever it is deployed) and three
+// MinimumLevel.Override calls forcing the auth namespaces to Debug. Because those were code, no
+// environment could turn them down: a measured 394 KB log was 654 lines of EF Core dumping every
+// SQL statement with its parameters, plus ~400 lines of token-handler internals, on a machine
+// nobody was even using. Auth debug output also carries token and claims detail, which is not
+// something to write to disk by default.
+//
+// The Development config still turns those namespaces up — that is where the setting belongs, and
+// where it is switched off by simply running in another environment.
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
-    // Console + rolling file in addition to whatever the JSON config specifies.
-    // Auth/JWT debug messages always go here so failures are always visible.
     .WriteTo.Console(
         outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}{NewLine}  {Message:lj}{NewLine}{Exception}")
-    .WriteTo.File(
-        path: ".vscode/webapi-.log",
-        rollingInterval: RollingInterval.Day,
-        retainedFileCountLimit: 3,
-        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
-    .MinimumLevel.Override("Microsoft.AspNetCore.Authentication", Serilog.Events.LogEventLevel.Debug)
-    .MinimumLevel.Override("Microsoft.AspNetCore.Authorization",  Serilog.Events.LogEventLevel.Debug)
-    .MinimumLevel.Override("Microsoft.IdentityModel",             Serilog.Events.LogEventLevel.Debug)
     .CreateLogger();
 
 builder.Host.UseSerilog();
@@ -180,9 +182,11 @@ builder.Services.AddIdentityApiEndpoints<AppUser>(options =>
 // ── Microsoft Entra JWT bearer (optional — active only when ClientId is configured) ──
 const string EntraScheme = "Entra";
 var entraConfig = builder.Configuration.GetSection("AzureAd");
-bool entraEnabled = !string.IsNullOrWhiteSpace(entraConfig["ClientId"])
-                    && entraConfig["ClientId"] != "YOUR_WEBAPI_CLIENT_ID"
-                    && entraConfig["ClientId"] != "YOUR_WEBAPP_CLIENT_ID";
+// Entra is on only when ClientId is a real registration id. Tested by SHAPE (a GUID) rather than
+// against a list of known placeholder strings: that list silently failed open the moment anyone
+// wrote a placeholder it didn't know about, standing the JWT handler up against an authority that
+// cannot exist.
+bool entraEnabled = Guid.TryParse(entraConfig["ClientId"], out _);
 
 if (entraEnabled)
 {
