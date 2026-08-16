@@ -112,6 +112,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<EquipmentModel> EquipmentModels { get; set; }
         public virtual DbSet<EquipmentItem> EquipmentItems { get; set; }
         public virtual DbSet<EquipmentItemPhoto> EquipmentItemPhotos { get; set; }
+        public virtual DbSet<EquipmentItemShare> EquipmentItemShares { get; set; }
         public virtual DbSet<VideoProject> VideoProjects { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -1954,6 +1955,28 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<EquipmentItemPhoto>().Property(e => e.Caption).HasMaxLength(200);
             modelBuilder.Entity<EquipmentItemPhoto>().HasIndex(e => new { e.EquipmentItemId, e.UploadFileId }).IsUnique();
+
+            modelBuilder.Entity<EquipmentItemShare>()
+                .HasOne(e => e.EquipmentItem).WithMany(e => e.Shares)
+                .HasForeignKey(e => e.EquipmentItemId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction on the organization: cascading here would give SQL Server two paths to this
+            // table (Organization -> EquipmentItem -> Share as well as Organization -> Share). A
+            // group being deleted leaves its share rows inert rather than deleting them, and the
+            // membership check every read performs already stops an orphaned row granting anything.
+            modelBuilder.Entity<EquipmentItemShare>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentItemShare>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentItemShare>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // One row per (item, group): sharing twice is the same fact, and the replace-set
+            // endpoint relies on this to stay honest under a double submit.
+            modelBuilder.Entity<EquipmentItemShare>()
+                .HasIndex(e => new { e.EquipmentItemId, e.OrganizationId }).IsUnique();
+            modelBuilder.Entity<EquipmentItemShare>().HasIndex(e => e.OrganizationId);
 
         }
     }

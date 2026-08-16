@@ -8128,3 +8128,69 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260816193617_AddEquipmentItemShare'
+)
+BEGIN
+    CREATE TABLE [EquipmentItemShares] (
+        [Id] uniqueidentifier NOT NULL,
+        [EquipmentItemId] uniqueidentifier NOT NULL,
+        [OrganizationId] uniqueidentifier NOT NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_EquipmentItemShares] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_EquipmentItemShares_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentItemShares_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentItemShares_EquipmentItems_EquipmentItemId] FOREIGN KEY ([EquipmentItemId]) REFERENCES [EquipmentItems] ([Id]) ON DELETE CASCADE,
+        CONSTRAINT [FK_EquipmentItemShares_Organizations_OrganizationId] FOREIGN KEY ([OrganizationId]) REFERENCES [Organizations] ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260816193617_AddEquipmentItemShare'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentItemShares_CreatedByAppUserId] ON [EquipmentItemShares] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260816193617_AddEquipmentItemShare'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_EquipmentItemShares_EquipmentItemId_OrganizationId] ON [EquipmentItemShares] ([EquipmentItemId], [OrganizationId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260816193617_AddEquipmentItemShare'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentItemShares_OrganizationId] ON [EquipmentItemShares] ([OrganizationId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260816193617_AddEquipmentItemShare'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentItemShares_UpdatedByAppUserId] ON [EquipmentItemShares] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260816193617_AddEquipmentItemShare'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260816193617_AddEquipmentItemShare', N'10.0.11');
+END;
+
+COMMIT;
+GO
+

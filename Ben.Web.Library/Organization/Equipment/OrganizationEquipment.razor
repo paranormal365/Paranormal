@@ -1,0 +1,108 @@
+@namespace Ben.Web.Library.Organization.Equipment
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@using Ben.Web.Library.Shared
+@inject IBenAdminClient AdminClient
+
+@* Equipment as this group sees it. Phase 2 is members' shared personal gear; phase 3 adds the
+   group's own equipment alongside it. EmbeddedMode so the same component works as an org tab and,
+   later, standalone — the convention OrgPendingRequests and friends already use. *@
+
+<div class="@(EmbeddedMode ? "" : "container-fluid py-3")">
+    @if (!EmbeddedMode)
+    {
+        <h3 class="mb-1">Equipment<HelpLink Slug="your-equipment" Anchor="sharing-with-your-groups" /></h3>
+    }
+
+    <p class="text-secondary small">
+        Gear members have chosen to share with this group. Serial numbers stay with their owners and
+        are never shown here.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading shared equipment…" />
+    }
+    else if (_items.Count == 0)
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <h6 class="mb-2">Nobody has shared equipment with this group yet</h6>
+                <p class="text-secondary small mb-0">
+                    Members share their own gear from <strong>My Equipment</strong>, piece by piece.
+                </p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <TelerikGrid Data="@_items" TItem="SharedEquipmentItemRecord"
+                     Sortable="true" Pageable="true" PageSize="20">
+            <GridColumns>
+                <GridColumn Field="@nameof(SharedEquipmentItemRecord.OwnerDisplayName)" Title="Owner" Width="180px" />
+                <GridColumn Field="@nameof(SharedEquipmentItemRecord.DisplayName)" Title="What they call it" />
+                <GridColumn Field="@nameof(SharedEquipmentItemRecord.BrandName)" Title="Make" Width="150px" />
+                <GridColumn Field="@nameof(SharedEquipmentItemRecord.ModelName)" Title="Model" Width="150px" />
+                <GridColumn Field="@nameof(SharedEquipmentItemRecord.CategoryName)" Title="Category" Width="170px" />
+                <GridColumn Title="Borrowing" Width="150px">
+                    <Template>
+                        @{ var row = (SharedEquipmentItemRecord)context; }
+                        @if (row.LoanAudience == EquipmentLoanAudience.NotLoanable)
+                        {
+                            <span class="text-secondary small">Not lent out</span>
+                        }
+                        else if ((row.LoanAudience & EquipmentLoanAudience.SharedGroups) != 0)
+                        {
+                            <span class="badge bg-success">Lends to this group</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Personal loans only</span>
+                        }
+                    </Template>
+                </GridColumn>
+            </GridColumns>
+        </TelerikGrid>
+
+        <p class="text-secondary small mt-2 mb-0">
+            @_items.Count shared @(_items.Count == 1 ? "piece" : "pieces").
+        </p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter] public bool EmbeddedMode { get; set; }
+
+    private List<SharedEquipmentItemRecord> _items = [];
+    private bool _loading = true;
+    private string? _error;
+    private Guid _loadedForOrg;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (OrgId == Guid.Empty || _loadedForOrg == OrgId) return;
+        _loadedForOrg = OrgId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _items = [.. await AdminClient.GetOrgSharedEquipmentAsync(OrgId)];
+        }
+        catch (Exception ex)
+        {
+            _error = $"Shared equipment could not be loaded: {ex.Message}";
+        }
+        _loading = false;
+    }
+}

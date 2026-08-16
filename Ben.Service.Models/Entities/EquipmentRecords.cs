@@ -117,6 +117,49 @@ public sealed record UpsertEquipmentItemRequest(
     bool IncludeInGlobalCatalog = false,
     EquipmentLoanAudience LoanAudience = EquipmentLoanAudience.NotLoanable);
 
+// ── Sharing (Phase 2) ───────────────────────────────────────────────────────
+
+/// <summary>
+/// One group the owner could share an item with, and whether it currently is. Returned as a whole
+/// list so the sharing editor needs a single call: the owner's groups and the item's shares are the
+/// same question asked from two sides.
+/// </summary>
+public sealed record EquipmentShareOptionRecord(
+    Guid OrganizationId,
+    string OrganizationName,
+    bool IsShared);
+
+/// <summary>Replaces an item's shares wholesale. Any group not listed is unshared.</summary>
+public sealed record SetEquipmentSharesRequest(IReadOnlyList<Guid> OrganizationIds);
+
+/// <summary>
+/// Shares or unshares every one of the caller's non-retired items with one group at once — the
+/// "share all my gear with this group" convenience. Still writes per-item rows, so a single piece
+/// can be excluded afterwards without unpicking anything.
+/// </summary>
+public sealed record BulkEquipmentShareRequest(Guid OrganizationId, bool Share);
+
+/// <summary>What a bulk share/unshare actually changed, so the UI can say so plainly.</summary>
+public sealed record BulkEquipmentShareResult(int ItemsAffected, int TotalItems);
+
+/// <summary>
+/// A member's gear as seen by another member of a group it is shared with. Owner name is present —
+/// that is the point of sharing — but there is no serial number property on the shape at all: the
+/// serial stays with the owner even here, and a projection that cannot carry it cannot leak it.
+/// </summary>
+public sealed record SharedEquipmentItemRecord(
+    Guid Id,
+    Guid OwnerAppUserId,
+    string? OwnerDisplayName,
+    string DisplayName,
+    string BrandName,
+    string ModelName,
+    string CategoryName,
+    string? Notes,
+    EquipmentLoanAudience LoanAudience,
+    bool IsRetired,
+    IReadOnlyList<EquipmentItemPhotoRecord> Photos);
+
 /// <summary>
 /// One publicly-listed item as an anonymous visitor sees it. Deliberately not
 /// <see cref="EquipmentItemRecord"/>: there is no owner id, no owner name, no serial and no

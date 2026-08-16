@@ -103,3 +103,19 @@ in the dropdown. Only owners and administrators can change the list.
 Clear **Active** to retire a type. It disappears from the dropdown for new events but stays on the
 events that already use it — which is almost always what you want. Deleting one removes it from
 those events too, leaving their date and title untouched.
+
+## The Equipment tab
+
+**Equipment** shows the gear members have chosen to share with this group — make, model, photos,
+and who owns each piece. Any member can read it; there is no permission to grant, because the
+sharing itself is the owner's decision.
+
+What you will not see is serial numbers. Those stay with the owner even inside a group they have
+shared the piece with.
+
+The **Borrowing** column says whether a piece can actually be borrowed, which is a separate choice
+from sharing it. A member can let the group know they own something without offering to lend it,
+and the column distinguishes gear offered to this group from gear its owner only lends personally.
+
+A piece disappears from this tab if its owner leaves the group. Their sharing choice is kept, so it
+comes back if they rejoin.

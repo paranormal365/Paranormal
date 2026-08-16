@@ -241,6 +241,13 @@
                 </TabStripTab>
             }
 
+            @* Equipment shared with the group is readable by any member — sharing is the owner's
+               consent, so it needs no permission gate. The group's own equipment arrives here in
+               phase 3, behind the new Equipment permission. *@
+            <TabStripTab Title="Equipment">
+                <Ben.Web.Library.Organization.Equipment.OrganizationEquipment OrgId="@OrgId" EmbeddedMode="true" />
+            </TabStripTab>
+
             @if (_canManageRoles)
             {
                 <TabStripTab Title="Roles">
