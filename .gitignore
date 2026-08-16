@@ -79,3 +79,6 @@ Ben.Video.Sidecar/installer/dist/
 # Log files — never committed. The WebApi's file sink was removed (audit B6); anything left is
 # local noise from a dev run.
 *.log
+
+# Rider/ReSharper per-user solution settings — machine-specific, not shared config.
+*.DotSettings.user

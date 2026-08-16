@@ -642,7 +642,13 @@
                         return;
                     }
                 }
-                catch { }
+                catch (JsonException)
+            {
+                // A section whose stored JSON won't parse renders as empty rather than taking the
+                // page down with it — this runs on the read path, where throwing would replace a
+                // mostly-good page with an error. The editor is where a broken section is reported
+                // (see CmsSectionEditor); here the job is to keep rendering.
+            }
             }
             builder.AddMarkupContent(0, $"<em class='text-secondary'>[{section.SectionType}]</em>");
         };
@@ -661,7 +667,13 @@
                     return System.Text.RegularExpressions.Regex.Replace(raw, "<[^>]+>", " ").Trim();
                 }
             }
-            catch { }
+            catch (JsonException)
+            {
+                // A section whose stored JSON won't parse renders as empty rather than taking the
+                // page down with it — this runs on the read path, where throwing would replace a
+                // mostly-good page with an error. The editor is where a broken section is reported
+                // (see CmsSectionEditor); here the job is to keep rendering.
+            }
         }
         return s.ContentJson.Length > 80 ? s.ContentJson[..80] + "…" : s.ContentJson;
     }

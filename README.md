@@ -58,8 +58,8 @@ dotnet run --project Ben.Web.WebApp/Ben.Web.WebApp.csproj --urls http://localhos
 ```
 
 > **No Docker.** Development runs against a dedicated SQL Server (see *Database Setup* below), and
-> the start scripts do not touch Docker. `scripts/ensure-docker-running.sh` is left over from the
-> container setup and is not part of the current path — `docker start bendb-sql` will not help.
+> the start scripts do not touch Docker. The leftover `ensure-docker-running.sh` script and its
+> VS Code task have been removed — `docker start bendb-sql` will not help.
 
 Add your secrets to `appsettings.Development.json` (see [WebApp-WebApi Integration Guide](./ProjectNotes/WebApp-WebApi-Integration-Guide.md) for configuration details).
 
