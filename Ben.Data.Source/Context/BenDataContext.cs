@@ -107,6 +107,11 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<AudioMarker> AudioMarkers { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
         public virtual DbSet<SidecarInstallLog> SidecarInstallLogs { get; set; }
+        public virtual DbSet<EquipmentCategory> EquipmentCategories { get; set; }
+        public virtual DbSet<EquipmentBrand> EquipmentBrands { get; set; }
+        public virtual DbSet<EquipmentModel> EquipmentModels { get; set; }
+        public virtual DbSet<EquipmentItem> EquipmentItems { get; set; }
+        public virtual DbSet<EquipmentItemPhoto> EquipmentItemPhotos { get; set; }
         public virtual DbSet<VideoProject> VideoProjects { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -1842,6 +1847,113 @@ namespace Ben.Data.Source.Context
                 .OnDelete(DeleteBehavior.SetNull);
             modelBuilder.Entity<SidecarInstallLog>().HasIndex(e => e.InstallId);
             modelBuilder.Entity<SidecarInstallLog>().HasIndex(e => e.DateCreated);
+
+            // ── Equipment ─────────────────────────────────────────────────────
+            modelBuilder.Entity<EquipmentCategory>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentCategory>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentCategory>().Property(e => e.Name).HasMaxLength(100);
+            modelBuilder.Entity<EquipmentCategory>().Property(e => e.Description).HasMaxLength(500);
+            modelBuilder.Entity<EquipmentCategory>().Property(e => e.IconClass).HasMaxLength(100);
+            modelBuilder.Entity<EquipmentCategory>().HasIndex(e => e.Name).IsUnique();
+
+            modelBuilder.Entity<EquipmentBrand>()
+                .HasOne(e => e.ProposedByOrganization).WithMany()
+                .HasForeignKey(e => e.ProposedByOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentBrand>()
+                .HasOne(e => e.ProposedByAppUser).WithMany()
+                .HasForeignKey(e => e.ProposedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentBrand>()
+                .HasOne(e => e.ApprovedByAppUser).WithMany()
+                .HasForeignKey(e => e.ApprovedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentBrand>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentBrand>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentBrand>().Property(e => e.Name).HasMaxLength(200);
+            modelBuilder.Entity<EquipmentBrand>().HasIndex(e => e.Name).IsUnique();
+
+            modelBuilder.Entity<EquipmentModel>()
+                .HasOne(e => e.EquipmentBrand).WithMany(e => e.EquipmentModels)
+                .HasForeignKey(e => e.EquipmentBrandId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction, not Cascade: a category with models in use can't be casually deleted —
+            // SuperAdmin re-categorizes the models first. Mirrors the CaseRelatedPerson/UploadFile
+            // reasoning: deleting the taxonomy node should never silently delete real gear records.
+            modelBuilder.Entity<EquipmentModel>()
+                .HasOne(e => e.EquipmentCategory).WithMany(e => e.EquipmentModels)
+                .HasForeignKey(e => e.EquipmentCategoryId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentModel>()
+                .HasOne(e => e.ProposedByOrganization).WithMany()
+                .HasForeignKey(e => e.ProposedByOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentModel>()
+                .HasOne(e => e.ProposedByAppUser).WithMany()
+                .HasForeignKey(e => e.ProposedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentModel>()
+                .HasOne(e => e.ApprovedByAppUser).WithMany()
+                .HasForeignKey(e => e.ApprovedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentModel>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentModel>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentModel>().Property(e => e.Name).HasMaxLength(200);
+            modelBuilder.Entity<EquipmentModel>().Property(e => e.ModelNumber).HasMaxLength(100);
+            modelBuilder.Entity<EquipmentModel>().Property(e => e.Description).HasMaxLength(1000);
+            modelBuilder.Entity<EquipmentModel>().HasIndex(e => new { e.EquipmentBrandId, e.Name }).IsUnique();
+            modelBuilder.Entity<EquipmentModel>().HasIndex(e => e.EquipmentCategoryId);
+
+            // NoAction on both ownership FKs: an item's identity/history must outlive its owner
+            // account or organization being deleted elsewhere — those flows retire/reassign
+            // instead. Exactly one of OwnerAppUserId/OwningOrganizationId is set; enforced in the
+            // controller (see EquipmentItem's remarks), not the database.
+            modelBuilder.Entity<EquipmentItem>()
+                .HasOne(e => e.OwnerAppUser).WithMany()
+                .HasForeignKey(e => e.OwnerAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentItem>()
+                .HasOne(e => e.OwningOrganization).WithMany()
+                .HasForeignKey(e => e.OwningOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentItem>()
+                .HasOne(e => e.EquipmentModel).WithMany(e => e.EquipmentItems)
+                .HasForeignKey(e => e.EquipmentModelId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentItem>()
+                .HasOne(e => e.CurrentHolderAppUser).WithMany()
+                .HasForeignKey(e => e.CurrentHolderAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentItem>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentItem>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentItem>().Property(e => e.DisplayName).HasMaxLength(200);
+            modelBuilder.Entity<EquipmentItem>().Property(e => e.SerialNumber).HasMaxLength(100);
+            modelBuilder.Entity<EquipmentItem>().Property(e => e.Notes).HasMaxLength(2000);
+            modelBuilder.Entity<EquipmentItem>().Property(e => e.DefectNotes).HasMaxLength(2000);
+            modelBuilder.Entity<EquipmentItem>().HasIndex(e => e.OwnerAppUserId);
+            modelBuilder.Entity<EquipmentItem>().HasIndex(e => e.OwningOrganizationId);
+            modelBuilder.Entity<EquipmentItem>().HasIndex(e => e.EquipmentModelId);
+
+            // NoAction, not Cascade: deleting a photo should never silently delete the item it
+            // documents — same reasoning as CaseRelatedPerson.UploadFile above.
+            modelBuilder.Entity<EquipmentItemPhoto>()
+                .HasOne(e => e.EquipmentItem).WithMany(e => e.Photos)
+                .HasForeignKey(e => e.EquipmentItemId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EquipmentItemPhoto>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentItemPhoto>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentItemPhoto>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentItemPhoto>().Property(e => e.Caption).HasMaxLength(200);
+            modelBuilder.Entity<EquipmentItemPhoto>().HasIndex(e => new { e.EquipmentItemId, e.UploadFileId }).IsUnique();
 
         }
     }
