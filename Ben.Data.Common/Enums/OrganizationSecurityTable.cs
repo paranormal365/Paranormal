@@ -9,12 +9,13 @@ namespace Ben.Data.Common.Enums;
 /// <c>OrganizationAccessGrant</c> row exists for a user/table/<see cref="OrganizationSecurityAction"/>
 /// combination, that operation is permitted for the user within that organization.
 /// <para>
-/// A parallel enum exists at <c>Ben.Service.Security.Enums.OrganizationSecurityTable</c>, and
-/// <c>OrganizationSecurityService</c> converts between the two with a plain numeric cast. The two
-/// therefore have to agree value for value — they did not, and twenty-six of thirty values
-/// resolved to the wrong table before this was aligned. <c>OrganizationSecurityTableParityTests</c>
-/// now fails the build if they drift apart again, so <b>adding a value here means adding it there
-/// too, with the same number</b>.
+/// This is now the only such enum. A parallel copy used to live in the <c>Ben.Service.Security</c>
+/// project, converted to this one by a plain numeric cast — which meant the <i>numbers</i>, not the
+/// names, decided which table a permission check actually read. They drifted: twenty-six of thirty
+/// values resolved to the wrong table (<c>OrganizationFiles</c> landed on <c>MembershipRequests</c>)
+/// and nothing said so, because the attribute driving that path was applied to nothing. Both the
+/// duplicate enum and its parity test were removed with that project, so the hazard is gone at the
+/// root rather than guarded against.
 /// </para>
 /// </remarks>
 public enum OrganizationSecurityTable

@@ -1,6 +1,5 @@
 using AutoMapper;
 using Ben.Service.Mappings;
-using Ben.Service.RepositoryService.Services;
 using Serilog;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Microsoft.OpenApi.Models;
@@ -62,7 +61,12 @@ builder.Services.AddSwaggerGen(options =>
 
             **SuperAdmin**
             All `/api/admin/*` routes require the `SuperAdmin` role.
-            Other routes enforce org-level membership via `OrganizationSecurityAuthorize`.
+
+            **Everything else**
+            Access is enforced per-route inside each action, not by a blanket filter: the
+            shared helpers (`FileAudienceAccess`, `CaseOrgAccess`, `InvestigationAccess`,
+            `InvestigationVisibilityFilter`) decide what the caller may see, and org-level
+            permission grants are checked through `IOrganizationSecurityService`.
 
             **File storage**
             Uploaded files are stored on the local filesystem under the configured
@@ -112,8 +116,6 @@ builder.Services.AddDbContextFactory<Ben.Data.Source.Context.BenDataContext>(opt
 {
     options.UseSqlServer(builder.Configuration.GetConnectionString("BenDbConnectionString"));
 });
-builder.Services.AddScoped<IRepositoryManager, RepositoryManager>();
-builder.Services.AddScoped<Ben.Service.Security.Services.IOrganizationSecurityService, Ben.Service.Security.Services.OrganizationSecurityService>();
 builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService, Ben.Service.RepositoryService.Services.OrganizationSecurityService>();
 builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService, Ben.Service.RepositoryService.Services.AuditLogService>();
 builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IFileStorageService, Ben.Data.WebApi.Services.LocalFileStorageService>();

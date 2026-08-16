@@ -15,7 +15,6 @@
  </ItemGroup>
  <ItemGroup>
  <ProjectReference Include="..\Ben.Service.RepositoryService\Ben.Service.RepositoryService.csproj" />
- <ProjectReference Include="..\Ben.Service.Security\Ben.Service.Security.csproj" />
  <ProjectReference Include="..\Ben.Data.Source\Ben.Data.Source.csproj" />
  <ProjectReference Include="..\Ben.Data.Common\Ben.Data.Common.csproj" />
  </ItemGroup>

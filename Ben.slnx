@@ -10,7 +10,6 @@
     <Project Path="Ben.Service.Mappings/Ben.Service.Mappings.csproj" />
     <Project Path="Ben.Service.Models/Ben.Service.Models.csproj" Id="c3afddbd-5ff0-4e8c-b017-9ef0a0c96f7e" />
     <Project Path="Ben.Service.RepositoryService/Ben.Service.RepositoryService.csproj" Id="474ad301-93ce-4b4b-9d18-8fa044b8b20e" />
-    <Project Path="Ben.Service.Security/Ben.Service.Security.csproj" />
   </Folder>
   <Folder Name="/Testing Projects/">
     <Project Path="Ben.Service.RepositoryService.Tests/Ben.Service.RepositoryService.Tests.csproj" />

@@ -14,12 +14,9 @@ namespace Ben.Data.Common.Enums;
 /// <c>Ben.Service.RepositoryService.Services.OrganizationSecurityService</c>.
 /// </para>
 /// <para>
-/// This enum is defined in <c>Ben.Data.Common</c> rather than
-/// <c>Ben.Service.Security</c> because the <c>OrganizationUserMembership</c>
-/// entity in the data layer must reference it, and that layer cannot take a
-/// dependency on the security project (which already depends on the data layer).
-/// The security project imports it with a using alias:
-/// <c>using OrganizationMemberRole = Ben.Data.Common.Enums.OrganizationMemberRole;</c>
+/// It lives in <c>Ben.Data.Common</c> because the <c>OrganizationUserMembership</c> entity in the
+/// data layer references it, and everything above the data layer can depend on Common without
+/// creating a cycle.
 /// </para>
 /// </remarks>
 public enum OrganizationMemberRole

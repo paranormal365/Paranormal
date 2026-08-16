@@ -3,7 +3,7 @@
 ## `BenDataContext`
 
 **Namespace:** `Ben.Data.Source.Context`  
-**Files:** [`BenDataContext.cs`](../../../Ben.Data.Source/Context/BenDataContext.cs) (user stub) · [`BenDataContext.Generated.cs`](../../../Ben.Data.Source/Context/BenDataContext.Generated.cs) (generated)  
+**File:** [`BenDataContext.cs`](../../../Ben.Data.Source/Context/BenDataContext.cs)  
 **Inherits:** `IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>`  
 
 ### Summary
