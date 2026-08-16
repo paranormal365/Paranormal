@@ -4,7 +4,7 @@ namespace Ben.Data.WebApi.Services.Audio;
 
 /// <summary>
 /// Destructive audio edit operations (cut, silence, normalize, gain, fade, reverse).
-/// Mirrors <see cref="AudioClipper"/>'s conventions: supports WAV and MP3 sources,
+/// Mirrors <see cref="Ben.Data.WebApi.Services.Audio.AudioSourceReader"/>'s conventions: supports WAV and MP3 sources,
 /// always outputs 16-bit PCM WAV.
 /// </summary>
 internal static class AudioEditor

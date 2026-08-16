@@ -6,8 +6,8 @@ namespace Ben.Data.WebApi.Services.Access;
 
 /// <summary>
 /// Which of the four comment/share audiences a user matches for a specific UploadFile, and
-/// whether they can see the file at all. Shared between <see cref="UploadFileCommentController"/>
-/// (posting/read-gating) and <see cref="CaseFileController"/>'s <c>Link</c> action (source-file
+/// whether they can see the file at all. Shared between <see cref="Ben.Data.WebApi.Controllers.Entities.UploadFileCommentController"/>
+/// (posting/read-gating) and <see cref="Ben.Data.WebApi.Controllers.Entities.CaseFileController"/>'s <c>Link</c> action (source-file
 /// visibility check before copy-on-attach) — the only two places in the app that need this
 /// combined logic, so it lives as a plain static helper rather than a new injectable service,
 /// matching this codebase's existing convention of per-need static/inline access checks (e.g.
@@ -95,7 +95,7 @@ public static class FileAudienceAccess
 
     /// <summary>
     /// True if <paramref name="userId"/> can see <paramref name="uploadFileId"/> at all — the same
-    /// visibility union <see cref="MediaLibraryController.GetFiles"/> computes across the whole
+    /// visibility union <see cref="Ben.Data.WebApi.Controllers.Entities.MediaLibraryController.GetFiles"/> computes across the whole
     /// library, scoped down to one file. Broader than <see cref="GetMembershipAsync"/>: also covers
     /// direct person-to-person shares and "any case in an org I belong to," which aren't part of
     /// the four comment audiences but do grant plain visibility.
