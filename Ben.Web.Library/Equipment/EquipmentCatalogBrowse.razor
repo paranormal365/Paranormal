@@ -1,0 +1,125 @@
+@page "/equipment-catalog"
+@namespace Ben.Web.Library.Equipment
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@using Ben.Web.Library.Shared
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+<PageTitle>Equipment Catalog</PageTitle>
+
+@* Deliberately anonymous: the catalog is make/model reference data only. It never carries who
+   owns what, or any serial number — those live on EquipmentItem and resolve server-side. *@
+
+<div class="container-fluid py-3" style="max-width:900px;">
+    <h3 class="mb-1">Equipment Catalog<HelpLink Slug="your-equipment" Anchor="the-public-catalog" /></h3>
+    <p class="text-secondary small mb-4">
+        Gear people use for paranormal investigation, by make and model. This list grows as members
+        add their own equipment. It never shows who owns anything.
+    </p>
+
+    <div class="row g-2 mb-3">
+        <div class="col-md-5">
+            <input class="form-control" placeholder="Search make or model…"
+                   value="@_search"
+                   @oninput="@(e => _search = e.Value?.ToString() ?? string.Empty)"
+                   @onkeyup="@(async e => { if (e.Key == "Enter") await LoadAsync(); })" />
+        </div>
+        <div class="col-md-4">
+            <TelerikDropDownList Data="@_categories" TItem="EquipmentCategoryRecord" TValue="Guid?"
+                                 Value="@_categoryId" ValueChanged="@((Guid? v) => OnCategoryChangedAsync(v))"
+                                 TextField="@nameof(EquipmentCategoryRecord.Name)"
+                                 ValueField="@nameof(EquipmentCategoryRecord.Id)"
+                                 DefaultText="All categories" Width="100%" />
+        </div>
+        <div class="col-md-3">
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Enabled="@(!_loading)" OnClick="LoadAsync">Search</TelerikButton>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading the catalog…" />
+    }
+    else if (_models.Count == 0)
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <h6 class="mb-2">Nothing matches that yet</h6>
+                <p class="text-secondary small mb-0">
+                    @if (_isAuthenticated)
+                    {
+                        <span>Add the gear you own and it will show up here once approved.</span>
+                    }
+                    else
+                    {
+                        <span>Sign in to add the gear you own.</span>
+                    }
+                </p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <TelerikGrid Data="@_models" TItem="EquipmentModelRecord"
+                     Sortable="true" Pageable="true" PageSize="25">
+            <GridColumns>
+                <GridColumn Field="@nameof(EquipmentModelRecord.BrandName)" Title="Make" Width="200px" />
+                <GridColumn Field="@nameof(EquipmentModelRecord.Name)" Title="Model" />
+                <GridColumn Field="@nameof(EquipmentModelRecord.ModelNumber)" Title="Model #" Width="140px" />
+                <GridColumn Field="@nameof(EquipmentModelRecord.CategoryName)" Title="Category" Width="200px" />
+            </GridColumns>
+        </TelerikGrid>
+
+        <p class="text-secondary small mt-2 mb-0">
+            Showing @_models.Count approved @(_models.Count == 1 ? "entry" : "entries").
+        </p>
+    }
+
+    @if (_isAuthenticated)
+    {
+        <div class="mt-4">
+            <a class="btn btn-outline-primary btn-sm" href="/my-equipment">Go to my equipment</a>
+        </div>
+    }
+</div>
+
+@code {
+    private List<EquipmentCategoryRecord> _categories = [];
+    private List<EquipmentModelRecord> _models = [];
+    private Guid? _categoryId;
+    private string _search = string.Empty;
+    private bool _loading = true;
+    private bool _isAuthenticated;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // The page itself is anonymous, but knowing whether someone is signed in decides which
+        // call-to-action to show — so still wait for auth to settle rather than guessing.
+        await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive);
+        _isAuthenticated = UserState.IsAuthenticated;
+
+        _categories = [.. await AdminClient.GetEquipmentCategoriesAsync()];
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task OnCategoryChangedAsync(Guid? categoryId)
+    {
+        _categoryId = categoryId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        _models = [.. await AdminClient.SearchEquipmentModelsAsync(
+            string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(), _categoryId)];
+        _loading = false;
+        StateHasChanged();
+    }
+}
