@@ -46,6 +46,30 @@ export function clearStoredToken() {
 }
 
 /**
+ * Pairing v2 — exchanges a 6-digit code (from the sidecar's /pair page) for the long pairing
+ * token. Returns the token string, or null when the code is wrong/expired/used. Must run here in
+ * the browser, not through a C# HttpClient: under Blazor Server that client executes on the
+ * SERVER, whose loopback is a different machine than the user's (the phase-173 lesson).
+ * @param {string} url  the sidecar's /v1/pair endpoint
+ * @param {string} code the 6-digit code the user typed
+ * @returns {Promise<string|null>}
+ */
+export async function exchangePairCode(url, code) {
+    try {
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+        });
+        if (!resp.ok) return null;
+        const body = await resp.json();
+        return body?.token ?? null;
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Item #38 phase 123 (F) — checks whether a source clip is already cached on the sidecar, without
  * downloading or uploading anything.
  */

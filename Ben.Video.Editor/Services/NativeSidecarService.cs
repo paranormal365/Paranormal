@@ -141,20 +141,41 @@ public sealed class NativeSidecarService(SidecarTransport transport, IJSRuntime 
         code = code.Trim();
         if (string.IsNullOrEmpty(code))
         {
-            LastError = "Enter the pairing code shown by the sidecar.";
+            LastError = "Enter the 6-digit code from the sidecar's pairing page.";
             return false;
         }
 
-        if (!await CheckTokenAsync(port, code, ct))
+        // Pairing v2: a 6-digit code from the /pair page is exchanged for the long token at
+        // POST /v1/pair. Pasting the long token itself still works (older installs, power users) —
+        // the shapes can't collide, since the token is 43 url-safe-base64 characters.
+        string token;
+        if (code.Length == 6 && code.All(char.IsAsciiDigit))
         {
-            LastError = "That code was rejected. Double-check it against the sidecar's console output.";
-            SetState(NativeSidecarState.FoundUnpaired);
-            return false;
+            var exchanged = _module is null ? null : await _module.InvokeAsync<string?>(
+                "exchangePairCode", ct, $"http://127.0.0.1:{port}/v1/pair", code);
+            if (exchanged is null)
+            {
+                LastError = "That code was rejected — it may have expired or already been used. " +
+                            "Reload the sidecar's pairing page for a fresh one.";
+                SetState(NativeSidecarState.FoundUnpaired);
+                return false;
+            }
+            token = exchanged;
+        }
+        else
+        {
+            if (!await CheckTokenAsync(port, code, ct))
+            {
+                LastError = "That pairing token was rejected.";
+                SetState(NativeSidecarState.FoundUnpaired);
+                return false;
+            }
+            token = code;
         }
 
-        await SetStoredTokenAsync(code);
+        await SetStoredTokenAsync(token);
         LastError = null;
-        Capabilities = await FetchCapabilitiesAsync(port, code, ct);
+        Capabilities = await FetchCapabilitiesAsync(port, token, ct);
         SetState(NativeSidecarState.Paired);
         return true;
     }

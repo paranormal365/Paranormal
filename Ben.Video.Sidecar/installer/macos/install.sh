@@ -65,13 +65,14 @@ PLIST
 # service rejects with a 401 — which presents as "the pairing code doesn't work" rather than as a
 # staleness problem. (Measured: this script did exactly that on its first run.) Anything that
 # rotates the code afterwards must restart the service; that is what pair.sh is for.
+# 6-digit flow (pairing v2): the terminal no longer displays anything. Once the service is up,
+# this script opens its /pair page in the default browser — the page mints a short-lived 6-digit
+# code that the editor exchanges for the long token. The token file is only pre-created here on
+# first install (by --pair, output suppressed) so the service has a stable token to hand out;
+# nothing the user must read scrolls by in a terminal.
 TOKEN_FILE="$HOME/Library/Application Support/BenVideo/sidecar/pairing-token"
-NEW_PAIRING=false
 if [[ ! -f "$TOKEN_FILE" ]]; then
-  NEW_PAIRING=true
-  echo
-  echo "==> Pairing code (first install)"
-  "$EXE" --pair
+  "$EXE" --pair > /dev/null
 fi
 
 echo "==> Loading the service"
@@ -112,11 +113,10 @@ case "$HEALTH" in
      echo "         503. The bundled binaries failed their manifest hash check." >&2 ;;
 esac
 
-if ! $NEW_PAIRING; then
-  echo
-  echo "==> Existing pairing kept — already-paired browsers keep working."
-  echo "    Need a new code? installer/macos/pair.sh (it also restarts the service)."
-fi
+echo
+echo "==> Opening the pairing page — type the 6-digit code into the editor"
+echo "    (Settings -> Native acceleration). Already-paired browsers keep working."
+open "http://127.0.0.1:$PORT/pair"
 
 cat <<EOF
 

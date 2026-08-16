@@ -32,13 +32,13 @@
                         </span>
                         @if (NativeSidecar.State == NativeSidecarState.TokenRejected)
                         {
-                            <p>Your saved pairing code no longer works — the sidecar may have been reset. Enter the current code shown in its console window.</p>
+                            <p>Your saved pairing no longer works — the sidecar may have been reset. Get a fresh 6-digit code from its pairing page.</p>
                         }
                         else
                         {
-                            <p>Enter the pairing code shown in the sidecar's console window. You only need to do this once.</p>
+                            <p>Type the 6-digit code from the sidecar's pairing page (it opens when the sidecar is installed; <code>pair.sh</code> reopens it). Each browser pairs once.</p>
                         }
-                        <TelerikTextBox @bind-Value="_code" PlaceHolder="Pairing code" Width="100%" />
+                        <TelerikTextBox @bind-Value="_code" PlaceHolder="6-digit code" Width="100%" />
                         @if (NativeSidecar.LastError is not null)
                         {
                             <p class="bv-sidecar-panel__error">⚠ @NativeSidecar.LastError</p>

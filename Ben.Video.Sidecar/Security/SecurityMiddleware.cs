@@ -50,9 +50,17 @@ public sealed class SecurityMiddleware(
             return;
         }
 
+        // GET /pair is the human-facing pairing page: opened as a top-level navigation (installer,
+        // pair.sh, or the user typing the URL), so it carries no Origin header at all — same
+        // posture as a bare health check. Anything local enough to load it could read the token
+        // file directly, so it grants nothing an attacker doesn't already have.
+        var isPairingPage = HttpMethods.IsGet(context.Request.Method)
+                         && context.Request.Path.Equals("/pair", StringComparison.OrdinalIgnoreCase)
+                         && origin is null;
+
         var isBareHealthCheck = context.Request.Path.StartsWithSegments("/v1/health") && origin is null;
 
-        if (!isBareHealthCheck)
+        if (!isBareHealthCheck && !isPairingPage)
         {
             if (origin is null || !_options.AllowedOrigins.Contains(origin))
             {
@@ -65,8 +73,14 @@ public sealed class SecurityMiddleware(
             context.Response.Headers.Append("Vary", "Origin");
         }
 
+        // POST /v1/pair exists to OBTAIN the token, so it cannot require one — but it stays behind
+        // the throttle gate: wrong codes recorded by the endpoint make this gate answer 429,
+        // which is what makes a 6-digit code space survivable.
+        var isPairExchange = HttpMethods.IsPost(context.Request.Method)
+                          && context.Request.Path.Equals("/v1/pair", StringComparison.OrdinalIgnoreCase);
+
         var isHealthEndpoint = context.Request.Path.StartsWithSegments("/v1/health");
-        if (!isHealthEndpoint)
+        if (!isHealthEndpoint && !isPairingPage)
         {
             if (throttle.IsThrottled())
             {
@@ -75,12 +89,15 @@ public sealed class SecurityMiddleware(
                 return;
             }
 
-            var presented = context.Request.Headers[SidecarProtocol.TokenHeaderName].FirstOrDefault();
-            if (!tokenStore.Matches(presented))
+            if (!isPairExchange)
             {
-                throttle.RecordFailure();
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                return;
+                var presented = context.Request.Headers[SidecarProtocol.TokenHeaderName].FirstOrDefault();
+                if (!tokenStore.Matches(presented))
+                {
+                    throttle.RecordFailure();
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    return;
+                }
             }
         }
 
