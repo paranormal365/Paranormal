@@ -24,7 +24,10 @@ public enum NativeSidecarState
 /// render/export work (that's <c>NativeSidecarBackend</c>, phase F) — this phase only proves the
 /// sidecar can be found and paired with, safely.
 /// </summary>
-public sealed class NativeSidecarService(SidecarTransport transport, IJSRuntime js) : IAsyncDisposable
+public sealed class NativeSidecarService(
+    SidecarTransport transport,
+    IJSRuntime js,
+    ISidecarPairingReporter? pairingReporter = null) : IAsyncDisposable
 {
     private const string ModulePath = "/_content/Ben.Video.Editor/js/sidecarInterop.js";
     private IJSObjectReference? _module;
@@ -177,6 +180,23 @@ public sealed class NativeSidecarService(SidecarTransport transport, IJSRuntime 
         LastError = null;
         Capabilities = await FetchCapabilitiesAsync(port, token, ct);
         SetState(NativeSidecarState.Paired);
+
+        // Tell the host, if it wants to know. Deliberately after the state is already Paired and
+        // deliberately not awaited into the result: the pairing has succeeded either way, and a
+        // reporting failure must not turn a working pairing into an error the user sees.
+        if (pairingReporter is not null && Info?.InstallId is { } installId)
+        {
+            try
+            {
+                await pairingReporter.ReportPairedAsync(installId, Info.AppVersion, Info.Platform, ct);
+            }
+            catch
+            {
+                // Contractually the reporter shouldn't throw; if one does, it is still not the
+                // user's problem.
+            }
+        }
+
         return true;
     }
 

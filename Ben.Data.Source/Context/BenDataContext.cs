@@ -106,6 +106,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
         public virtual DbSet<AudioMarker> AudioMarkers { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
+        public virtual DbSet<SidecarInstallLog> SidecarInstallLogs { get; set; }
         public virtual DbSet<VideoProject> VideoProjects { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -1826,6 +1827,21 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<UploadFile>().Property(e => e.StoredFileName).HasMaxLength(300);
             modelBuilder.Entity<UploadFile>().Property(e => e.ContentType).HasMaxLength(200);
             modelBuilder.Entity<UploadFile>().Property(e => e.Description).HasMaxLength(2000);
+
+            // ── SidecarInstallLog ─────────────────────────────────────────────
+            modelBuilder.Entity<SidecarInstallLog>().Property(e => e.EventType).HasMaxLength(20).IsRequired();
+            modelBuilder.Entity<SidecarInstallLog>().Property(e => e.Version).HasMaxLength(50);
+            modelBuilder.Entity<SidecarInstallLog>().Property(e => e.Platform).HasMaxLength(50);
+            // 45 covers an IPv6 address in full text form.
+            modelBuilder.Entity<SidecarInstallLog>().Property(e => e.IpAddress).HasMaxLength(45);
+            modelBuilder.Entity<SidecarInstallLog>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId)
+                // The log outlives the account: deleting a user must not erase the record that a
+                // sidecar was installed, so the row stays and simply stops naming anyone.
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<SidecarInstallLog>().HasIndex(e => e.InstallId);
+            modelBuilder.Entity<SidecarInstallLog>().HasIndex(e => e.DateCreated);
 
         }
     }

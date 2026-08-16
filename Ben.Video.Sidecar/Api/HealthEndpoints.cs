@@ -1,3 +1,4 @@
+using Ben.Video.Sidecar.Security;
 using Ben.Video.Core.SidecarContracts;
 using Ben.Video.Sidecar.Jobs;
 using Microsoft.Extensions.Options;
@@ -19,7 +20,8 @@ public static class HealthEndpoints
     public static void MapHealthEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/v1/health", async (
-            FfmpegRunner runner, FfmpegLocator locator, JobRegistry jobs, CancellationToken ct) =>
+            FfmpegRunner runner, FfmpegLocator locator, JobRegistry jobs,
+            InstallIdentity install, CancellationToken ct) =>
         {
             var integrityOk = locator.VerifyIntegrity();
             var version = integrityOk ? await runner.TryGetVersionAsync(ct) : null;
@@ -30,7 +32,9 @@ public static class HealthEndpoints
                 AppVersion: AppVersion,
                 FfmpegVersion: version,
                 FfmpegIntegrityOk: integrityOk,
-                RequiresPairing: true));
+                RequiresPairing: true,
+                InstallId: install.Value,
+                Platform: InstallIdentity.Platform));
         });
 
         app.MapGet("/v1/status", (JobRegistry jobs, IOptions<SidecarOptions> options) =>

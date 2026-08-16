@@ -113,6 +113,24 @@ case "$HEALTH" in
      echo "         503. The bundled binaries failed their manifest hash check." >&2 ;;
 esac
 
+# Optional install ping. Only fires when a site URL is configured — the installer has no business
+# guessing one, and a sidecar installed for local use should not be phoning anywhere by default.
+# Anonymous by nature: nobody has signed in yet. The pairing event (sent by the editor, with a
+# token) is what attaches a person to this installation.
+if [[ -n "${BEN_API_URL:-}" ]]; then
+  INSTALL_ID_FILE="$HOME/Library/Application Support/BenVideo/sidecar/install-id"
+  if [[ -f "$INSTALL_ID_FILE" ]]; then
+    INSTALL_ID="$(cat "$INSTALL_ID_FILE")"
+    VERSION="$(defaults read "$DEST_APP/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null || echo "")"
+    RID="$(uname -m | sed 's/arm64/osx-arm64/; s/x86_64/osx-x64/')"
+    curl -sS --max-time 5 -X POST "${BEN_API_URL%/}/api/sidecar-telemetry/installs" \
+      -H "Content-Type: application/json" \
+      -d "{\"installId\":\"$INSTALL_ID\",\"version\":\"$VERSION\",\"platform\":\"$RID\"}" \
+      >/dev/null 2>&1 && echo "==> Reported this install to ${BEN_API_URL%/}" \
+      || echo "note: could not reach ${BEN_API_URL%/} to report the install (harmless)"
+  fi
+fi
+
 echo
 echo "==> Opening the pairing page — type the 6-digit code into the editor"
 echo "    (Settings -> Native acceleration). Already-paired browsers keep working."
