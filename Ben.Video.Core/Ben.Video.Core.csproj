@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Item #38 phase 121: pure, Blazor-free ffmpeg argument-building code, extracted from
+    Ben.Video.Editor so a future native sidecar (a plain console/ASP.NET process, not a Blazor
+    app) can reference it directly without dragging in the Razor SDK or the licensed
+    Telerik.UI.for.Blazor package Ben.Video.Editor depends on.
+
+    Deliberately keeps the ORIGINAL Ben.Video.Editor.* namespaces on every moved type — namespace
+    is independent of assembly in C#, and every `using` across the (large) Editor project and its
+    tests stays untouched. The only externally-visible change is where these types are compiled.
+
+    Zero PackageReferences by design — this project's entire point is to be embeddable in a
+    process that is NOT a Blazor app. If a future change needs a package reference here, treat
+    that as a signal the code doesn't belong in Core.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

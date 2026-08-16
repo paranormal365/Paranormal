@@ -1,0 +1,2480 @@
+@inject FfmpegService Ffmpeg
+@inject ExportService Exporter
+@inject ClipStore Clips
+@inject PlaybackService Playback
+@inject KeyboardShortcutService Keyboard
+@inject ProjectService Project
+@inject ProjectStore Projects
+@inject ErrorLogService ErrorLog
+@inject ExportQueueService ExportQueue
+@inject MotionKeyframeService Motion
+@inject LayoutService Layout
+@inject ExportResolutionService ExportRes
+@inject PreviewQualityService PreviewQuality
+@inject PreviewFreshnessService PreviewFreshness
+@inject RenderStatusService RenderStatus
+@inject PreviewSegmentCache SegmentCache
+@inject SourceMounter Mounter
+@inject Ben.Video.RenderService.BackgroundRenderService BackgroundRender
+@inject RenderWorkerService RenderWorker
+@inject ClipEffectRegistry EffectRegistry
+@inject BlobUrlLifecycle BlobLifecycle
+@using Ben.Video.Core.SidecarContracts
+@inject MemFsLedger MemFs
+@* Item #70 phase 161 — native preview assembly (sidecar concat) with wasm fallback. *@
+@inject NativeSidecarService NativeSidecar
+@inject RemoteSegmentIndex RemoteSegments
+@inject SidecarPreviewAssembler PreviewAssembler
+@inject PreviewUrlRevoker PreviewRevoker
+@inject IOptions<VideoEditorOptions> EditorOptionsAccessor
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+@implements IKeyboardCommandTarget
+
+<div class="bv-editor" @ref="_editorRoot" style="--bv-preview-h: @(Layout.PreviewHeight)px">
+
+    <!-- ── Toolbar ──────────────────────────────────────────────────────── -->
+    @* Preview/Export need video OR image content (matches ExportService.RunPipelineAsync's
+       own "no clips" check) — checking only Clips.Clips (video-only) left both buttons
+       permanently disabled for an image-only timeline, even though both Preview and
+       Export otherwise fully support image clips. *@
+    <Toolbar HasClips="@(Clips.AllVideoClips.Any() || Clips.AllImageClips.Any())"
+             ShowMultiTrack="@EffectiveOptions.MultiTrack"
+             ShowAudioTracks="@EffectiveOptions.AudioTracks"
+             ShowTransitions="@EffectiveOptions.Transitions"
+             ShowTextOverlays="@EffectiveOptions.TextOverlays"
+             CanUndo="@Clips.CanUndo"
+             CanRedo="@Clips.CanRedo"
+             UndoDescription="@Clips.UndoDescription"
+             RedoDescription="@Clips.RedoDescription"
+             ShowProjectPersistence="@EffectiveOptions.ProjectPersistence"
+             ShowSaveToServer="@(!string.IsNullOrEmpty(EffectiveOptions.DocumentPostUrl))"
+             ProjectName="@(Projects.CurrentProjectName + (Projects.IsDirty ? " *" : ""))"
+             IsDirty="@Projects.IsDirty"
+             ShowErrorLog="@EffectiveOptions.ErrorLog"
+             ShowNativeSidecar="@EffectiveOptions.NativeSidecar"
+             OnInitialize="LoadCoreAsync"
+             OnOpen="OpenFilesAsync"
+             OnPreview="RenderFullQualityPreviewAsync"
+             OnExport="OpenExportDialog"
+             OnUndo="() => Clips.Undo()"
+             OnRedo="() => Clips.Redo()"
+             OnSave="SaveProjectAsync"
+             OnSaveToDevice="SaveToDeviceAsync"
+             OnSaveToServer="SaveToServerHandlerAsync"
+             OnSaveProject="SaveToDeviceAsync"
+             OnOpenProject="OpenProjectAsync"
+             OnNewProject="NewProjectAsync"
+             OnOpenProjectList="OpenProjectListAsync"
+             OnExportJson="ExportProjectJsonAsync"
+             OnImportJson="ImportProjectJsonAsync"
+             OnHelp="ToggleHelp"
+             OnExportErrorLog="ExportErrorLogAsync"
+             OnProjectNameChanged="OnProjectNameChangedAsync"
+             QueueCount="@ExportQueue.ActiveCount"
+             OnToggleQueue="() => _showQueuePanel = !_showQueuePanel"
+             ShowAssetBrowser="@_showAssetBrowser"
+             OnToggleAssetBrowser="() => _showAssetBrowser = !_showAssetBrowser"
+             ShowPanel="@(!_panelVisible)"
+             OnTogglePanel="() => { _panelVisible = true; _panelState = WindowState.Default; }"
+             IsFullscreen="@_isFullscreen"
+             OnToggleFullscreen="ToggleFullscreenAsync"
+             HasSubtitles="@Clips.AllTextOverlays.Any()"
+             OnExportSrt="ExportSrtAsync"
+             OnExportVtt="ExportVttAsync" />
+
+    <!-- ── Project list dialog ──────────────────────────────────────────── -->
+    <ProjectListDialog @bind-Visible="_showProjectList"
+                       OnOpen="OnProjectListOpenAsync" />
+
+    <!-- ── Floating Media & Properties panel ───────────────────────────── -->
+    <TelerikWindow @bind-Visible="_panelVisible"
+                   @bind-State="_panelState"
+                   Draggable="true"
+                   Resizable="true"
+                   PersistContent="true"
+                   ContainmentSelector=".bv-editor"
+                   @bind-Width="_panelWidth"
+                   @bind-Height="_panelHeight"
+                   MinWidth="240px"
+                   MinHeight="200px"
+                   @bind-Top="_panelTop"
+                   @bind-Left="_panelLeft"
+                   Class="bv-media-panel-window">
+        <WindowTitle>
+            <span class="bv-media-panel-title">Media &amp; Properties</span>
+        </WindowTitle>
+        <WindowActions>
+            <WindowAction Name="Minimize" />
+            <WindowAction Name="Close" />
+        </WindowActions>
+        <WindowContent>
+            <TelerikTabStrip @bind-ActiveTabId="_panelTab"
+                             Size="@ThemeConstants.TabStrip.Size.Small"
+                             PersistTabContent="true"
+                             Class="bv-media-panel-tabs">
+
+                <TabStripTab Title="📁 Media" Id="media">
+                    <ClipBrowser @ref="_browser"
+                                 EditorOptions="EffectiveOptions"
+                                 OnClipSelected="OnClipSelectedAsync"
+                                 OnAddToTimeline="AddClipToTimeline"
+                                 OnAudioClipAdded="OnAudioClipAdded" />
+                </TabStripTab>
+
+                @if (_showAssetBrowser)
+                {
+                    <TabStripTab Title="🖼 Assets" Id="assets">
+                        <AssetBrowser />
+                    </TabStripTab>
+                }
+
+                <TabStripTab Title="⚙ Properties" Id="props">
+                    <div class="bv-props-tab">
+                        @if (_selectedClip is not null)
+                        {
+                            <ClipEditor Clip="@_selectedClip"
+                                        EditorOptions="EffectiveOptions"
+                                        OnClose="ClearSelectedClip"
+                                        OnTrimApplied="OnTrimApplied"
+                                        OnClipSplit="OnClipSplit"
+                                        OnClipDeleted="OnClipDeleted" />
+                        }
+                        else if (_selectedAudioClip is not null)
+                        {
+                            <AudioClipEditor Clip="@_selectedAudioClip"
+                                             OnClose="ClearSelectedAudioClip"
+                                             OnClipDeleted="OnAudioClipDeleted"
+                                             OnClipSplit="OnAudioClipSplit" />
+                        }
+                        else if (_selectedImageClip is not null)
+                        {
+                            <ImageClipEditor Clip="@_selectedImageClip"
+                                             OnClose="ClearSelectedImageClip"
+                                             OnRemove="OnImageClipRemoved"
+                                             OnClipSplit="OnImageClipSplit" />
+                        }
+                        else if (_selectedCallout is not null)
+                        {
+                            <CalloutEditor Clip="@_selectedCallout"
+                                           OnClose="@(() => _selectedCallout = null)"
+                                           OnRemove="@(() => { Clips.RemoveCallout(_selectedCallout!.Id); _selectedCallout = null; })"
+                                           OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
+                        }
+                        else if (_selectedClipArt is not null)
+                        {
+                            <ClipArtEditor Clip="@_selectedClipArt"
+                                           OnClose="@(() => _selectedClipArt = null)"
+                                           OnRemove="@(() => { Clips.RemoveClipArtClip(_selectedClipArt!.Id); _selectedClipArt = null; })"
+                                           OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
+                        }
+                        else if (_motionLayerId.HasValue)
+                        {
+                            <MotionKeyframeEditor LayerId="@_motionLayerId"
+                                                  LayerType="@_motionLayerType"
+                                                  KeyframeIndex="@_motionKeyframeIndex"
+                                                  OnClose="@(() => { _motionLayerId = null; _motionLayerType = null; })" />
+                        }
+                        else if (_selectedTransition is not null)
+                        {
+                            <TransitionEditor Transition="@_selectedTransition"
+                                              OnClose="ClearSelectedTransition"
+                                              OnRemoved="ClearSelectedTransition" />
+                        }
+                        else if (_selectedTextOverlay is not null)
+                        {
+                            <TextOverlayEditor Overlay="@_selectedTextOverlay"
+                                               OnClose="ClearSelectedTextOverlay"
+                                               OnRemoved="ClearSelectedTextOverlay"
+                                               OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
+                        }
+                        else
+                        {
+                            <div class="bv-props-empty">Select a clip on the timeline to edit its properties.</div>
+                        }
+                    </div>
+                </TabStripTab>
+
+            </TelerikTabStrip>
+        </WindowContent>
+    </TelerikWindow>
+
+    <!-- ── Preview (above timeline) ─────────────────────────────────────── -->
+    <div class="bv-preview-row" style="@(_isPoppedOut ? "display:none" : null)">
+        @if (!_isPoppedOut)
+        {
+            <VideoPreview @ref="_preview"
+                          OwnerLabel="WorkingWindow"
+                          OnTimeUpdate="OnPreviewTimeUpdate"
+                          MotionLayerId="@_motionLayerId"
+                          OnMotionKeyframeSelected="OnMotionKeyframeSelected"
+                          OnAddKeyframeAt="AddKeyframeAt"
+                          ActiveCallout="@_selectedCallout"
+                          ActiveClipArt="@_selectedClipArt"
+                          ActiveTextOverlay="@_selectedTextOverlay"
+                          OnCanvasItemSelected="OnCanvasItemSelected"
+                          OnPopoutRequested="OpenPopoutAsync"
+                          SnappingEnabled="@EffectiveOptions.Snapping"
+                          SelectedCanvasItem="@SelectedCanvasItem"
+                          OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
+        }
+    </div>
+
+    @if (!_isPoppedOut && Playback.State.Mode == PlaybackMode.Clip && _previewedLibraryClip is not null)
+    {
+        <!-- ── Three-point editing marks (item #51) ─────────────────────────── -->
+        <div class="bv-mark-inout">
+            <TelerikButton OnClick="MarkIn" Size="@ThemeConstants.Button.Size.Small" Title="Mark in-point at the current preview position">
+                Mark In
+            </TelerikButton>
+            <TelerikButton OnClick="MarkOut" Size="@ThemeConstants.Button.Size.Small" Title="Mark out-point at the current preview position">
+                Mark Out
+            </TelerikButton>
+            @if (_markedIn.HasValue || _markedOut.HasValue)
+            {
+                <span class="bv-mark-inout__summary">
+                    @(_markedIn.HasValue ? PlaybackService.FormatTime(_markedIn.Value) : "—") → @(_markedOut.HasValue ? PlaybackService.FormatTime(_markedOut.Value) : "—")
+                    (next "Add to Timeline" uses this range)
+                </span>
+                <TelerikButton OnClick="ClearMarks" Size="@ThemeConstants.Button.Size.Small" FillMode="@ThemeConstants.Button.FillMode.Flat" Title="Clear marks">
+                    Clear
+                </TelerikButton>
+            }
+        </div>
+    }
+    <ResizableDivider Direction="vertical" OnResize="@(px => Layout.SetPreviewHeight(px))" />
+
+    @if (_isPoppedOut)
+    {
+        <TelerikWindow Visible="true"
+                       VisibleChanged="@(v => { if (!v) { _preview?.DetachWithoutRevoking(); _isPoppedOut = false; _pendingWorkingWindowRehydrate = true; } })"
+                       Draggable="true"
+                       Resizable="true"
+                       Width="@_popoutWidth"
+                       WidthChanged="OnPopoutWidthChanged"
+                       Height="@_popoutHeight"
+                       HeightChanged="OnPopoutHeightChanged"
+                       MaxWidth="@_popoutMaxWidth"
+                       MaxHeight="@_popoutMaxHeight"
+                       MinWidth="240px"
+                       MinHeight="180px"
+                       Class="bv-preview-popout-window">
+            <WindowTitle>Working Window</WindowTitle>
+            <WindowActions>
+                <WindowAction Name="Close" />
+            </WindowActions>
+            <WindowContent>
+                <VideoPreview @ref="_preview"
+                              OwnerLabel="WorkingWindow"
+                              OnTimeUpdate="OnPreviewTimeUpdate"
+                              MotionLayerId="@_motionLayerId"
+                              OnMotionKeyframeSelected="OnMotionKeyframeSelected"
+                              ActiveCallout="@_selectedCallout"
+                              ActiveClipArt="@_selectedClipArt"
+                              ActiveTextOverlay="@_selectedTextOverlay"
+                              OnCanvasItemSelected="OnCanvasItemSelected"
+                              OnPopoutRequested="OpenPopoutAsync"
+                              SnappingEnabled="@EffectiveOptions.Snapping"
+                              SelectedCanvasItem="@SelectedCanvasItem"
+                              OnAnimate="@(args => ActivateMotionPath(args.Id, args.Type))" />
+            </WindowContent>
+        </TelerikWindow>
+    }
+
+    <!-- ── Full-quality Preview output (item #36 phase 84) — a genuinely separate window from
+         the Working Window above; only ever visible while _showFullQualityPreview is true. ──── -->
+    @if (_showFullQualityPreview)
+    {
+        <TelerikWindow Visible="true"
+                       VisibleChanged="@(v => { if (!v) OnCloseFullQualityPreview(); })"
+                       Draggable="true"
+                       Resizable="true"
+                       Width="@_fullQualityWidth"
+                       WidthChanged="OnFullQualityWidthChanged"
+                       Height="@_fullQualityHeight"
+                       HeightChanged="OnFullQualityHeightChanged"
+                       MaxWidth="@_fullQualityMaxWidth"
+                       MaxHeight="@_fullQualityMaxHeight"
+                       MinWidth="240px"
+                       MinHeight="180px"
+                       Class="bv-preview-popout-window">
+            <WindowTitle>Preview @(ExportRes.Width)&times;@(ExportRes.Height)</WindowTitle>
+            <WindowActions>
+                <WindowAction Name="Close" />
+            </WindowActions>
+            <WindowContent>
+                @if (_fullQualityRendering)
+                {
+                    <div class="bv-fullquality-preview__status">
+                        Rendering full-quality preview&hellip; @_fullQualityPercent%
+                    </div>
+                }
+                else
+                {
+                    <VideoPreview @ref="_fullQualityPreview" OwnerLabel="FullQualityPreview" ShowWorkingWindowControls="false" />
+                }
+            </WindowContent>
+        </TelerikWindow>
+    }
+
+    <!-- ── Timeline ─────────────────────────────────────────────────────── -->
+    <VideoTimeline @ref="_timeline"
+                   MultiTrack="@EffectiveOptions.MultiTrack"
+                   AudioTracks="@EffectiveOptions.AudioTracks"
+                   EditorOptions="EffectiveOptions"
+                   OnItemSelected="OnTimelineItemSelected"
+                   OnItemRemoved="OnTimelineItemRemoved"
+                   OnRelinkRequested="OnRelinkRequestedAsync"
+                   OnBulkDelete="OnBulkDeleteAsync"
+                   OnBulkMove="OnBulkMoveAsync"
+                   OnTimelineKeyframeSelected="OnTimelineKeyframeSelected" />
+
+    <!-- ── Export Dialog ───────────────────────────────────────────────────────── -->
+    <ExportDialog @ref="_exportDialog"
+                  DeferDelivery="@OnPublishExport.HasDelegate"
+                  OnExportComplete="OnExportComplete" />
+
+    <!-- ── Export Queue Panel ──────────────────────────────────────────────────── -->
+    <ExportQueuePanel @bind-Visible="_showQueuePanel" />
+
+    <!-- ── Where the rendered video goes (phase 176 — host-supplied publish only) ──── -->
+    @* FileName below is the SAME name the host receives on ExportedVideo — not the raw
+       OutputFilename setting, which has no extension, so the prompt used to say "output"
+       for a file everything else calls "output.mp4". *@
+    <ExportDestinationPrompt @bind-Visible="_showExportDestinationPrompt"
+                             FileName="@(_retainedExport is { } retained ? ExportService.RetainedFileName(retained) : string.Empty)"
+                             SizeBytes="@(_retainedExport?.OutputSizeBytes ?? 0)"
+                             OnUpload="PublishExportAsync"
+                             OnSaveToDevice="SaveExportToDeviceAsync"
+                             OnDiscard="DiscardExportAsync" />
+
+    <!-- ── Post-export save prompt (immediate exports only — see OnExportComplete) ─── -->
+    <ExportSavePrompt @bind-Visible="_showExportSavePrompt"
+                      ShowServerOption="@(!string.IsNullOrEmpty(EffectiveOptions.DocumentPostUrl))"
+                      OnSaveLocally="SaveProjectAsync"
+                      OnSaveToServer="SaveToServerHandlerAsync" />
+
+    <!-- ── "Not enough room" insert/overwrite confirmation (items #25, #49) ───────── -->
+    <RippleInsertPrompt Visible="_rippleInsertPromptVisible"
+                        ClipName="@(_pendingRippleClip?.Name ?? "this clip")"
+                        OnConfirm="ConfirmRippleInsert"
+                        OnOverwrite="ConfirmOverwriteInsert"
+                        OnCancel="CancelRippleInsert" />
+
+    <!-- ── Keyboard shortcut help overlay ──────────────────────────────────────── -->
+    @if (_showHelp)
+    {
+        <div class="bv-kbd-help" @onclick="() => _showHelp = false">
+            <div class="bv-kbd-help__panel" @onclick:stopPropagation>
+                <div class="bv-kbd-help__header">
+                    <span>Keyboard Shortcuts</span>
+                    <TelerikButton OnClick="() => _showHelp = false"
+                                   Icon="@SvgIcon.X"
+                                   Size="@ThemeConstants.Button.Size.Small"
+                                   FillMode="@ThemeConstants.Button.FillMode.Flat" />
+                </div>
+                <table class="bv-kbd-help__table">
+                    <tbody>
+                        <tr><td><kbd>Space</kbd></td><td>Play / Pause preview</td></tr>
+                        <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>Delete selected clip(s)</td></tr>
+                        <tr><td><kbd>S</kbd></td><td>Split selected video clip at playhead</td></tr>
+                        <tr><td><kbd>Ctrl</kbd>+<kbd>Click</kbd></td><td>Multi-select clips on timeline</td></tr>
+                        <tr><td><kbd>[</kbd> / <kbd>]</kbd></td><td>Nudge selected clips ±1 s</td></tr>
+                        <tr><td><kbd>Escape</kbd></td><td>Close editor panel / clear selection</td></tr>
+                        <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>Undo</td></tr>
+                        <tr><td><kbd>Ctrl</kbd>+<kbd>Y</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td><td>Redo</td></tr>
+                        <tr><td><kbd>M</kbd></td><td>Add marker at playhead</td></tr>
+                        <tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>Step back / forward one frame in preview</td></tr>
+                        <tr><td><kbd>Fit</kbd> button</td><td>Zoom timeline to fit all clips in view</td></tr>
+                        <tr><td><kbd>?</kbd></td><td>Toggle this help</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <!-- ── Notifications (toast feedback) ────────────────────────────── -->
+    <TelerikNotification @ref="_notifications"
+                         HorizontalPosition="@NotificationHorizontalPosition.Right"
+                         VerticalPosition="@NotificationVerticalPosition.Top" />
+
+</div>
+
+@code {
+    // ── Feature flag [Parameter] overrides ───────────────────────────────────
+
+    /// <summary>Override MultiTrack feature flag. Null = use IOptions value.</summary>
+    [Parameter] public bool? MultiTrack   { get; set; }
+
+    /// <summary>Override AudioTracks feature flag. Null = use IOptions value.</summary>
+    [Parameter] public bool? AudioTracks  { get; set; }
+
+    /// <summary>Override Transitions feature flag. Null = use IOptions value.</summary>
+    [Parameter] public bool? Transitions  { get; set; }
+
+    /// <summary>Override TextOverlays feature flag. Null = use IOptions value.</summary>
+    [Parameter] public bool? TextOverlays { get; set; }
+
+    /// <summary>
+    /// Supply a complete <see cref="VideoEditorOptions"/> object to override ALL flags at once.
+    /// Individual bool? parameters (MultiTrack, AudioTracks, Transitions, TextOverlays) are
+    /// still applied on top of this object. Null = use the IOptions value from DI.
+    /// </summary>
+    [Parameter] public VideoEditorOptions? EditorOptions { get; set; }
+
+    /// <summary>
+    /// Phase 176 — supply a handler to give the user a second place to send a finished render:
+    /// the host application, rather than their own machine. When set, "Export Now" ends with a
+    /// destination prompt ("Upload to server" / "Save to my machine") instead of downloading
+    /// unconditionally. Leave unset and export behaves exactly as it always has.
+    ///
+    /// <para>The <see cref="ExportedVideo"/> is valid only until the handler's task completes —
+    /// the editor deletes its OPFS copy immediately afterwards. Read the bytes inside the handler,
+    /// don't stash the object.</para>
+    ///
+    /// <para><b>Throw to report failure.</b> The prompt catches it, stays open, and shows the
+    /// message, leaving "Save to my machine" available — returning normally is taken as "the video
+    /// is safely on the server" and the only remaining copy is discarded.</para>
+    /// </summary>
+    [Parameter] public EventCallback<ExportedVideo> OnPublishExport { get; set; }
+
+    // ── Child component references ────────────────────────────────────────────
+
+    private ClipBrowser?           _browser;
+    private VideoPreview?          _preview;
+    private VideoTimeline?         _timeline;
+    private ExportDialog?          _exportDialog;
+    private bool                   _showQueuePanel;
+    private bool                   _showExportSavePrompt;
+    private bool                   _rippleInsertPromptVisible;
+    private VideoClip?             _pendingRippleClip;
+    private double                 _pendingRipplePosition;
+    private VideoClip?             _previewedLibraryClip;
+    private double?                _markedIn;
+    private double?                _markedOut;
+    private bool                   _showAssetBrowser;
+    // Item #65 — defaults shared between the field initializers below and both
+    // OnAfterRenderAsync self-heal blocks (item #53/phase 114's TelerikWindow
+    // ContainmentSelector-clamp fix) so all three stay in lock-step by construction instead of
+    // needing the same literals kept in sync by hand across three spots.
+    private const string DefaultPanelTop    = "68px";  // clears the toolbar row (.bv-toolbar, ~61px tall)
+    private const string DefaultPanelLeft   = "calc(100% - 328px)"; // docked right: width + 8px margin
+    private const string DefaultPanelWidth  = "320px";
+    private const string DefaultPanelHeight = "420px";
+
+    private bool                   _panelVisible  = true;
+    // Item #65, revised by the user 2026-08-13 after living with it: starts OPEN, positioned at
+    // the right edge (DefaultPanelLeft below) rather than minimized. The original ask was "not on
+    // the left" — minimizing was one way to satisfy that, but having the panel simply sit on the
+    // right is the behaviour actually wanted. Note this panel is a floating TelerikWindow with no
+    // true dock-into-layout mode, so "pinned right" here means positioned at the right edge, not
+    // reflowing the editor around it.
+    private WindowState            _panelState    = WindowState.Default;
+    private string                 _panelTab      = "media";
+    private string                 _panelTop      = DefaultPanelTop;
+    private string                 _panelLeft     = DefaultPanelLeft;
+    private string                 _panelWidth    = DefaultPanelWidth;
+    private string                 _panelHeight   = DefaultPanelHeight;
+    private TelerikNotification?   _notifications;
+
+    // Audit #4 — typed DOM helpers instead of eval'd source strings; every lookup is null-guarded
+    // (see audit #7, where a missing element crashed the whole circuit).
+    private IJSObjectReference? _dom;
+
+    private async Task<IJSObjectReference> DomAsync() =>
+        _dom ??= await JS.InvokeAsync<IJSObjectReference>(
+            "import", "/_content/Ben.Video.Editor/js/domInterop.js");
+    private TransferProgressState? _transfer;
+    private string?       _timelinePreviewUrl;
+    private double        _timelinePreviewDuration;
+    private VideoClip?    _selectedClip;
+    private AudioClip?    _selectedAudioClip;
+    private ImageClip?    _selectedImageClip;
+    private CalloutClip?  _selectedCallout;
+    private ClipArtClip?  _selectedClipArt;
+    private Guid?         _motionLayerId;
+    private string?       _motionLayerType;
+    private int           _motionKeyframeIndex = -1;
+    private Transition?   _selectedTransition;
+
+    /// <summary>Item #57 P5 — feeds the canvas mini-HUD. Prefers the three Properties-panel
+    /// selections; falls back to resolving <see cref="_motionLayerId"/> back to its TrackItem so
+    /// the HUD keeps tracking a layer through <see cref="ActivateMotionPath"/>, which clears all
+    /// three (see that method's own comment for why) — without this fallback, clicking the HUD's
+    /// own "⏱ Animate" button would make the HUD itself vanish.</summary>
+    private TrackItem? SelectedCanvasItem =>
+        (TrackItem?)_selectedCallout ?? _selectedClipArt ?? _selectedTextOverlay
+        ?? (_motionLayerId.HasValue
+            ? Clips.Tracks.SelectMany(t => t.Items).FirstOrDefault(i => i.Id == _motionLayerId.Value)
+            : null);
+    private TextOverlay?  _selectedTextOverlay;
+    private bool          _showHelp;
+    // _projectName kept only for legacy SaveToServer path — use Projects.CurrentProjectName for UI
+    private Guid?         _relinkItemId;
+
+    // ── Effective options ─────────────────────────────────────────────────────
+
+    private VideoEditorOptions EffectiveOptions
+    {
+        get
+        {
+            // Base: use the explicit Options parameter when provided, otherwise fall back to DI.
+            var base_ = EditorOptions ?? EditorOptionsAccessor.Value;
+            return new()
+            {
+                MultiTrack            = MultiTrack   ?? base_.MultiTrack,
+                AudioTracks           = AudioTracks  ?? base_.AudioTracks,
+                Transitions           = Transitions  ?? base_.Transitions,
+                TextOverlays          = TextOverlays ?? base_.TextOverlays,
+                ImageClips            = base_.ImageClips,
+                MaxVideoTracks        = base_.MaxVideoTracks,
+                MaxAudioTracks        = base_.MaxAudioTracks,
+                InlineTrimming        = base_.InlineTrimming,
+                Markers               = base_.Markers,
+                VideoEffects          = base_.VideoEffects,
+                MediaLibrary          = base_.MediaLibrary,
+                MediaLibraryBaseUrl   = base_.MediaLibraryBaseUrl,
+                DocumentPostUrl       = base_.DocumentPostUrl,
+                DocumentSaveUrl       = base_.DocumentSaveUrl,
+                ProjectPersistence    = base_.ProjectPersistence,
+                Snapping              = base_.Snapping,
+                SnapThresholdSeconds  = base_.SnapThresholdSeconds,
+                DefaultTimelineZoom   = base_.DefaultTimelineZoom,
+                TimelineDisplayMode   = base_.TimelineDisplayMode,
+                AlphaCompositing      = base_.AlphaCompositing,
+                ErrorLog              = base_.ErrorLog,
+                RippleEdit            = base_.RippleEdit,
+                AssetCatalogUrl       = base_.AssetCatalogUrl,
+                AssetCatalogHttpClientName = base_.AssetCatalogHttpClientName,
+                BackgroundRendering   = base_.BackgroundRendering,
+                PauseBackgroundRenderDuringExport = base_.PauseBackgroundRenderDuringExport,
+                EnableRoughPass       = base_.EnableRoughPass,
+                BackgroundRenderMemoryCapMb = base_.BackgroundRenderMemoryCapMb,
+                NativeSidecar         = base_.NativeSidecar,
+            };
+        }
+    }
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override void OnInitialized()
+    {
+        Ffmpeg.OnStateChanged   += OnFfmpegStateChanged;
+        Clips.OnChange          += OnClipsChanged;
+        Playback.OnStateChanged += OnPlaybackStateChanged;
+        Layout.OnChanged        += OnLayoutChanged;
+        Projects.OnChanged      += OnProjectStoreChanged;
+        ExportQueue.OnChanged   += OnQueueChanged;
+
+        // Item #36 phase C — opt-in background render worker. Pause/resume piggybacks on the
+        // MAIN ffmpeg instance's own state rather than a dedicated "export in progress" signal:
+        // Processing also covers the synchronous Preview encode (same instance), which is a
+        // reasonable interpretation too — background rendering shouldn't compete with *any*
+        // foreground work the user is actively waiting on, not just Export specifically.
+        if (EffectiveOptions.BackgroundRendering)
+        {
+            BackgroundRender.EnableRoughPass = EffectiveOptions.EnableRoughPass;
+            BackgroundRender.SegmentCapBytes = EffectiveOptions.BackgroundRenderMemoryCapMb * 1024L * 1024L;
+            Ffmpeg.OnStateChanged += OnFfmpegStateChangedForBackgroundRender;
+            RenderStatus.OnChanged += OnRenderStatusChangedForSharpen; // phase D: rough→fine auto-refresh
+            BackgroundRender.OnLoopError += OnBackgroundRenderLoopError; // item #9 — see that event's own doc comment
+            BackgroundRender.Start();
+        }
+    }
+
+    private void OnFfmpegStateChangedForBackgroundRender()
+    {
+        if (!EffectiveOptions.PauseBackgroundRenderDuringExport) return;
+        if (Ffmpeg.State == FfmpegState.Processing) BackgroundRender.Pause();
+        else BackgroundRender.Resume();
+    }
+
+    /// <summary>Item #9 — surfaces a background-render loop iteration fault that would otherwise
+    /// be completely invisible (BackgroundRenderService is deliberately dependency-free and has
+    /// no logging of its own). The loop itself already recovered on its own by the time this
+    /// fires; this is purely visibility, not a user-facing failure to react to.</summary>
+    private void OnBackgroundRenderLoopError(Exception ex) => ErrorLog.Log("BackgroundRenderService.LoopAsync", ex);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Keyboard.RegisterAsync(this);
+            await Projects.InitAsync();  // load project index from localStorage
+
+            // Item #69 fix — restore whichever project was last active, if this host opts into
+            // ProjectPersistence. Previously nothing ever called this: File > Save could report
+            // "Project saved." and a reload would still silently discard everything.
+            if (EffectiveOptions.ProjectPersistence)
+                await Projects.RestoreLastActiveAsync();
+
+            _fullscreenModule = await JS.InvokeAsync<IJSObjectReference>("import", FullscreenModulePath);
+            _fullscreenSelfRef = DotNetObjectReference.Create(this);
+            await _fullscreenModule.InvokeVoidAsync("addChangeListener", _fullscreenSelfRef);
+
+            // Backlog #53: TelerikWindow's ContainmentSelector-driven clamp runs its own
+            // mount-time measurement of .bv-editor, and on first paint that container can still
+            // be mid-layout (worst case, momentarily 0×0) — the bad clamp result then flows back
+            // through @bind-Top/@bind-Left/@bind-Width/@bind-Height and overwrites our own
+            // known-good defaults before the user ever sees or touches the panel. There is by
+            // definition no legitimate prior drag/resize to preserve at this exact point, so it's
+            // always safe to unconditionally reassert the intended defaults here — a no-op when
+            // Telerik behaved, a fix when it didn't.
+            _panelTop    = DefaultPanelTop;
+            _panelLeft   = DefaultPanelLeft;
+            _panelWidth  = DefaultPanelWidth;
+            _panelHeight = DefaultPanelHeight;
+            StateHasChanged();
+        }
+
+        // Same root cause as above, but for the rarer case reported after first paint: some
+        // later re-clamp (e.g. a ResizeObserver tick during a minimize/restore or tab-switch
+        // animation) corrupts the panel again after the user already positioned it. "0px" is
+        // never a legitimate resting width/height (MinWidth/MinHeight are 240px/200px, well
+        // above anything a real drag/resize could produce), so it's an unambiguous signal to
+        // self-heal without needing to guess at timing or risk fighting a deliberate user drag.
+        if (_panelWidth == "0px" || _panelHeight == "0px")
+        {
+            _panelTop    = DefaultPanelTop;
+            _panelLeft   = DefaultPanelLeft;
+            _panelWidth  = DefaultPanelWidth;
+            _panelHeight = DefaultPanelHeight;
+            StateHasChanged();
+        }
+
+        if (_pendingWorkingWindowRehydrate)
+        {
+            _pendingWorkingWindowRehydrate = false;
+            if (_preview is not null && _timelinePreviewUrl is not null)
+                await _preview.LoadUrlAsync(_timelinePreviewUrl, _timelinePreviewDuration, PlaybackMode.Timeline);
+        }
+
+        if (_pendingFullQualityLoad)
+        {
+            _pendingFullQualityLoad = false;
+            if (_fullQualityPreview is not null && _fullQualityPreviewUrl is not null)
+                await _fullQualityPreview.LoadUrlAsync(_fullQualityPreviewUrl, _fullQualityPreviewDuration, PlaybackMode.Clip);
+        }
+    }
+
+    // ── Fullscreen toggle ────────────────────────────────────────────────────────
+
+    private const string FullscreenModulePath = "/_content/Ben.Video.Editor/js/fullscreenInterop.js";
+    private IJSObjectReference?              _fullscreenModule;
+    private DotNetObjectReference<VideoEditor>? _fullscreenSelfRef;
+    private ElementReference                 _editorRoot;
+    private bool                              _isFullscreen;
+
+    // ── Preview popout ───────────────────────────────────────────────────────────
+
+    private const string ViewportModulePath = "/_content/Ben.Video.Editor/js/viewportInterop.js";
+    private IJSObjectReference? _viewportModule;
+
+    private bool   _isPoppedOut;
+
+    /// <summary>Set whenever <see cref="_isPoppedOut"/> flips, in either direction. Toggling it
+    /// tears down and remounts a fresh <see cref="VideoPreview"/> instance (mutually-exclusive
+    /// @if blocks — only one is ever alive), which previously just silently blanked the Working
+    /// Window: the new instance has no loaded blob URL and nothing ever re-issued one. Consumed in
+    /// <see cref="OnAfterRenderAsync"/>, the first point the new instance's <c>_preview</c>
+    /// reference is actually valid.</summary>
+    private bool   _pendingWorkingWindowRehydrate;
+    private string _popoutWidth     = "480px";
+    private string _popoutHeight    = "270px";
+    private string _popoutMaxWidth  = "960px";
+    private string _popoutMaxHeight = "540px";
+
+    private sealed record ViewportSize(int Width, int Height);
+
+    private async Task OpenPopoutAsync()
+    {
+        _viewportModule ??= await JS.InvokeAsync<IJSObjectReference>("import", ViewportModulePath);
+        var viewport = await _viewportModule.InvokeAsync<ViewportSize>("getViewportSize");
+
+        var aspect = ExportRes.Height > 0 ? (double)ExportRes.Width / ExportRes.Height : 16.0 / 9.0;
+
+        _popoutMaxWidth  = $"{(int)(viewport.Width  * 0.9)}px";
+        _popoutMaxHeight = $"{(int)(viewport.Height * 0.9)}px";
+
+        var initialWidth  = Math.Min(ExportRes.Width, (int)(viewport.Width * 0.5));
+        _popoutWidth  = $"{initialWidth}px";
+        _popoutHeight = $"{(int)(initialWidth / aspect)}px";
+
+        // Detach the current (about-to-be-disposed) instance from its URL before the swap, so its
+        // DisposeAsync doesn't revoke the blob the new instance is about to reload — see
+        // VideoPreview.DetachWithoutRevoking. Must happen before _isPoppedOut flips, while
+        // _preview still references the outgoing instance.
+        _preview?.DetachWithoutRevoking();
+        _isPoppedOut = true;
+        _pendingWorkingWindowRehydrate = true;
+    }
+
+    private double PopoutAspectRatio =>
+        ExportRes.Height > 0 ? (double)ExportRes.Width / ExportRes.Height : 16.0 / 9.0;
+
+    /// <summary>TelerikWindow has no aspect-ratio-lock parameter, so dragging any edge/corner
+    /// handle is corrected here by recomputing the other dimension from the export's aspect
+    /// ratio. Only reacts to pixel values (TelerikWindow always reports resize as "Npx").</summary>
+    private void OnPopoutWidthChanged(string value)
+    {
+        _popoutWidth = value;
+        if (value.EndsWith("px") && double.TryParse(value.AsSpan(0, value.Length - 2), out var w))
+            _popoutHeight = $"{(int)(w / PopoutAspectRatio)}px";
+    }
+
+    private void OnPopoutHeightChanged(string value)
+    {
+        _popoutHeight = value;
+        if (value.EndsWith("px") && double.TryParse(value.AsSpan(0, value.Length - 2), out var h))
+            _popoutWidth = $"{(int)(h * PopoutAspectRatio)}px";
+    }
+
+    // ── Full-quality Preview output (item #36 phase 84) ─────────────────────────
+    // The toolbar's "Preview" button. Genuinely separate from the Working Window above: renders
+    // at full export resolution/quality (reusing ExportService's own pipeline — every phase,
+    // transitions/overlays/audio mix/watermark included — so this can never drift from what
+    // Export actually produces) and plays the result as an in-memory blob in its own popout
+    // window, never touching disk. The Working Window keeps auto-refreshing at preview
+    // quality/resolution independently — this button doesn't affect it at all.
+
+    private bool    _showFullQualityPreview;
+    private bool    _fullQualityRendering;
+    private int     _fullQualityPercent;
+    private VideoPreview? _fullQualityPreview;
+    private string? _fullQualityPreviewUrl;
+    private double  _fullQualityPreviewDuration;
+    private bool    _pendingFullQualityLoad;
+    private string  _fullQualityWidth     = "480px";
+    private string  _fullQualityHeight    = "270px";
+    private string  _fullQualityMaxWidth  = "960px";
+    private string  _fullQualityMaxHeight = "540px";
+
+    private async Task RenderFullQualityPreviewAsync()
+    {
+        if (Ffmpeg.State != FfmpegState.Ready) return;
+        if (Exporter.CurrentJob?.State == ExportJobState.Running) return; // don't compete with a real Export
+
+        await OpenFullQualityWindowAsync();
+        // Phase 144 — the @if(_fullQualityRendering){...}else{<VideoPreview .../>} block below is
+        // mutually exclusive, so the StateHasChanged() on the next line disposes whatever
+        // _fullQualityPreview instance was showing the PREVIOUS full-quality preview (if the
+        // window was already open) right now — and VideoPreview.DisposeAsync already revokes its
+        // own _previewUrl as part of that. Null this immediately so it doesn't linger as a
+        // reference to an already-revoked string until the manual revoke check further down
+        // (which exists for the OPFS/direct-MEMFS cleanup path, not this one) double-revokes it.
+        _fullQualityPreviewUrl = null;
+        _fullQualityRendering = true;
+        _fullQualityPercent   = 0;
+        StateHasChanged();
+
+        // Same resolution the user has actually configured for Export (ExportResolutionService is
+        // kept in sync by ExportDialog); quality settings (CRF/preset/codec) use ExportSettings'
+        // own defaults, matching how the existing preview-quality pipeline already scopes itself
+        // (see RefreshWorkingWindowAsync's previewSettings) rather than requiring the export
+        // dialog to have been opened first just to render a check.
+        var settings = new ExportSettings
+        {
+            Resolution = $"{ExportRes.Width}x{ExportRes.Height}",
+        };
+
+        // Same pattern ExportDialog.StartExportAsync uses: ExportAsync sets CurrentJob
+        // synchronously before its first internal await, so capturing it right after the
+        // (not-yet-awaited) call — rather than from the eventually-returned job — is what makes
+        // subscribing to OnProgress actually see ticks during the render instead of only after.
+        var exportTask = Exporter.ExportAsync(settings, downloadToDisk: false);
+        var job = Exporter.CurrentJob!;
+        job.OnProgress += OnFullQualityProgress;
+
+        try
+        {
+            await exportTask;
+        }
+        finally
+        {
+            job.OnProgress -= OnFullQualityProgress;
+            _fullQualityRendering = false;
+        }
+
+        if (job.State != ExportJobState.Completed || job.PreviewBlobUrl is null)
+        {
+            ErrorLog.Log("RenderFullQualityPreviewAsync", new InvalidOperationException(job.ErrorMessage ?? "Full-quality preview render failed."));
+            StateHasChanged();
+            return;
+        }
+
+        // No revoke-the-old-one check needed here — _fullQualityPreviewUrl was already nulled
+        // above, at the exact point its previous owner (the disposed VideoPreview instance)
+        // already revoked it.
+        _fullQualityPreviewUrl      = job.PreviewBlobUrl;
+        BlobLifecycle.Created(_fullQualityPreviewUrl, "VideoEditor.fullQualityPreview");
+        _fullQualityPreviewDuration = job.Duration;
+
+        // _fullQualityRendering just flipped false, which swaps the window's content from the
+        // "Rendering…" status div to the actual <VideoPreview> — that swap (and therefore
+        // _fullQualityPreview's @ref becoming non-null) hasn't happened yet at this point in the
+        // same synchronous continuation, so the load itself is deferred to OnAfterRenderAsync,
+        // same pattern as the Working Window's popout-rehydrate.
+        _pendingFullQualityLoad = true;
+        StateHasChanged();
+    }
+
+    private void OnFullQualityProgress() => InvokeAsync(() =>
+    {
+        _fullQualityPercent = Exporter.CurrentJob?.OverallPercent ?? _fullQualityPercent;
+        StateHasChanged();
+    });
+
+    private async Task OpenFullQualityWindowAsync()
+    {
+        _viewportModule ??= await JS.InvokeAsync<IJSObjectReference>("import", ViewportModulePath);
+        var viewport = await _viewportModule.InvokeAsync<ViewportSize>("getViewportSize");
+        var aspect = ExportRes.Height > 0 ? (double)ExportRes.Width / ExportRes.Height : 16.0 / 9.0;
+
+        _fullQualityMaxWidth  = $"{(int)(viewport.Width  * 0.9)}px";
+        _fullQualityMaxHeight = $"{(int)(viewport.Height * 0.9)}px";
+        var initialWidth = Math.Min(ExportRes.Width, (int)(viewport.Width * 0.5));
+        _fullQualityWidth  = $"{initialWidth}px";
+        _fullQualityHeight = $"{(int)(initialWidth / aspect)}px";
+
+        _showFullQualityPreview = true;
+    }
+
+    private void OnCloseFullQualityPreview()
+    {
+        _showFullQualityPreview = false;
+        // Item #59-#65 flakiness investigation, phase 144 — closing this window unmounts the
+        // whole @if (_showFullQualityPreview) block, so Blazor disposes _fullQualityPreview right
+        // now, which already revokes ITS OWN _previewUrl (the same string as _fullQualityPreviewUrl
+        // here) via VideoPreview.DisposeAsync. This field must follow — otherwise it's left holding
+        // a reference to an already-revoked URL, and the next completed render's own revoke-the-
+        // previous-one step (above) redundantly re-revokes the same dead string.
+        _fullQualityPreviewUrl = null;
+    }
+
+    private double FullQualityAspectRatio =>
+        ExportRes.Height > 0 ? (double)ExportRes.Width / ExportRes.Height : 16.0 / 9.0;
+
+    private void OnFullQualityWidthChanged(string value)
+    {
+        _fullQualityWidth = value;
+        if (value.EndsWith("px") && double.TryParse(value.AsSpan(0, value.Length - 2), out var w))
+            _fullQualityHeight = $"{(int)(w / FullQualityAspectRatio)}px";
+    }
+
+    private void OnFullQualityHeightChanged(string value)
+    {
+        _fullQualityHeight = value;
+        if (value.EndsWith("px") && double.TryParse(value.AsSpan(0, value.Length - 2), out var h))
+            _fullQualityWidth = $"{(int)(h * FullQualityAspectRatio)}px";
+    }
+
+    private async Task ToggleFullscreenAsync()
+    {
+        if (_fullscreenModule is not null)
+            await _fullscreenModule.InvokeVoidAsync("toggle", _editorRoot);
+    }
+
+    [JSInvokable]
+    public void OnFullscreenChanged(bool isFullscreen)
+    {
+        _isFullscreen = isFullscreen;
+        StateHasChanged();
+    }
+
+    // ── Keyboard shortcut dispatch ──────────────────────────────────────────────
+
+    public async Task OnEditorKeyDown(string key, bool ctrl, bool shift, bool alt)
+    {
+        switch (key)
+        {
+            case " " or "Spacebar":
+                if (_preview is not null)
+                    await _preview.TogglePlayPauseAsync();
+                break;
+
+            case "Delete" or "Backspace":
+                // Bulk delete if timeline has a multi-selection
+                var multiIds = _timeline?.GetMultiSelectedIds();
+                if (multiIds is { Count: >= 2 })
+                {
+                    await OnBulkDeleteAsync(multiIds);
+                    _timeline?.ClearMultiSelection();
+                }
+                else if (_selectedClip is not null)
+                {
+                    Clips.RemoveClip(_selectedClip.Id);
+                    _selectedClip = null;
+                }
+                else if (_selectedAudioClip is not null)
+                {
+                    Clips.RemoveClip(_selectedAudioClip.Id);
+                    _selectedAudioClip = null;
+                }
+                else if (_selectedImageClip is not null)
+                {
+                    Clips.RemoveClip(_selectedImageClip.Id);
+                    _selectedImageClip = null;
+                }
+                else if (_selectedCallout is not null)
+                {
+                    Clips.RemoveCallout(_selectedCallout.Id);
+                    _selectedCallout = null;
+                }
+                else if (_selectedClipArt is not null)
+                {
+                    Clips.RemoveClipArtClip(_selectedClipArt.Id);
+                    _selectedClipArt = null;
+                }
+                break;
+
+            // Item #57 P5 — arrow-key nudge for the selected canvas layer (Callout/ClipArt/
+            // TextOverlay only; clip/audio/image selections have no canvas X/Y to nudge). Only
+            // fires when one of those three is actually selected — an unmatched arrow key here
+            // falls through with no effect, same as today.
+            case "ArrowLeft" or "ArrowRight" or "ArrowUp" or "ArrowDown":
+                NudgeSelectedCanvasItem(key, shift);
+                break;
+
+            case "[" when !ctrl:
+                {
+                    var nudgeIds = _timeline?.GetMultiSelectedIds();
+                    if (nudgeIds is { Count: >= 2 })
+                        await OnBulkMoveAsync((nudgeIds, -1.0));
+                }
+                break;
+
+            case "]" when !ctrl:
+                {
+                    var nudgeIds = _timeline?.GetMultiSelectedIds();
+                    if (nudgeIds is { Count: >= 2 })
+                        await OnBulkMoveAsync((nudgeIds, 1.0));
+                }
+                break;
+
+            case "s" or "S" when !ctrl:
+                if (_selectedClip is not null)
+                {
+                    var splitAt = Playback.State.CurrentTime;
+                    if (splitAt > 0 && splitAt < _selectedClip.TrimmedDuration)
+                    {
+                        try { Clips.SplitClip(_selectedClip.Id, splitAt); }
+                        catch { /* split point out of range */ }
+                        _selectedClip = null;
+                    }
+                }
+                else if (_selectedAudioClip is not null)
+                {
+                    var splitAt = Playback.State.CurrentTime;
+                    var trimmedDuration = _selectedAudioClip.EndTrim > _selectedAudioClip.StartTrim
+                        ? _selectedAudioClip.EndTrim - _selectedAudioClip.StartTrim
+                        : _selectedAudioClip.Duration;
+                    if (splitAt > 0 && splitAt < trimmedDuration)
+                    {
+                        try { Clips.SplitClip(_selectedAudioClip.Id, splitAt); }
+                        catch { /* split point out of range */ }
+                        _selectedAudioClip = null;
+                    }
+                }
+                else if (_selectedImageClip is not null)
+                {
+                    var splitAt = Playback.State.CurrentTime;
+                    if (splitAt > 0 && splitAt < _selectedImageClip.Duration)
+                    {
+                        try { Clips.SplitClip(_selectedImageClip.Id, splitAt); }
+                        catch { /* split point out of range */ }
+                        _selectedImageClip = null;
+                    }
+                }
+                break;
+
+            case "Escape":
+                _selectedClip        = null;
+                _selectedAudioClip   = null;
+                _selectedTransition  = null;
+                _selectedTextOverlay = null;
+                _showHelp            = false;
+                _timeline?.ClearMultiSelection();
+                break;
+
+            case "z" or "Z" when ctrl && !shift:
+                Clips.Undo();
+                break;
+
+            case "z" or "Z" when ctrl && shift:
+            case "y" or "Y" when ctrl:
+                Clips.Redo();
+                break;
+
+            case "m" or "M" when !ctrl && !shift && !alt:
+                if (EffectiveOptions.Markers)
+                {
+                    var t = Clips.TotalDuration > 0
+                        ? Playback.State.Progress * Clips.TotalDuration
+                        : 0;
+                    Clips.AddMarker(t);
+                }
+                break;
+
+            case "?":
+                _showHelp = !_showHelp;
+                break;
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ── Toolbar handlers ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Backs both the toolbar's Initialize button (enabled when Idle/Error) and the diagnostics
+    /// panel's Reset button (enabled when the watchdog flags a wedge, which can happen from ANY
+    /// state including Processing — a hung command's promise never resolves on its own).
+    ///
+    /// Phase 143 fix — the "fake recovery" bug: this used to call <c>Ffmpeg.LoadAsync()</c>
+    /// directly. On a State:Error retry, <c>ffmpegInterop.js</c>'s own JS-side ffmpeg instance was
+    /// STILL the wedged one (nothing had ever nulled it) — its idempotence guard
+    /// (<c>if (_ffmpeg &amp;&amp; _ffmpeg.loaded) return;</c>) saw <c>loaded === true</c> on that
+    /// same broken instance and silently no-op'd, so <c>State</c> flipped back to Ready without
+    /// the worker actually changing at all. <c>TerminateAsync()</c> first — unconditionally, since
+    /// both callers are only reachable from Idle/Error/wedged-Processing, never a healthy Ready —
+    /// nulls the JS-side instance so the guard can no longer fake-pass, and is a harmless no-op on
+    /// a session's very first Initialize (nothing loaded yet to terminate).
+    ///
+    /// Ordering below also fixes a second bug: <c>SegmentCache.Clear()</c> used to run BEFORE
+    /// <c>RemountAllAsync()</c>, and a remount attempted against the still-wedged (not yet
+    /// terminated) worker hit stale WORKERFS directories (EEXIST) that silently dropped clips
+    /// from remount tracking (see <see cref="SourceMounter.RemountAllAsync"/>'s own fix) — clips
+    /// could lose their live segments AND their remountability in the same broken cycle. Now:
+    /// terminate → fresh load → remount (against a guaranteed-empty, real VFS) → only THEN clear
+    /// the segment cache, so a genuinely fresh render can rebuild it from mounts that are known-good.
+    /// </summary>
+    private async Task LoadCoreAsync()
+    {
+        try
+        {
+            await Ffmpeg.TerminateAsync();
+            await Ffmpeg.LoadAsync();
+
+            var remounted = await Mounter.RemountAllAsync();
+            foreach (var (clipId, path) in remounted)
+            {
+                var vc = Clips.AllVideoClips.FirstOrDefault(c => c.Id == clipId);
+                if (vc is not null) { vc.MemFsName = path; continue; }
+                var ac = Clips.AllAudioClips.FirstOrDefault(c => c.Id == clipId);
+                if (ac is not null) { ac.MemFsName = path; continue; }
+                var ic = Clips.AllImageClips.FirstOrDefault(c => c.Id == clipId);
+                if (ic is not null) ic.MemFsName = path;
+            }
+
+            SegmentCache.Clear();
+        }
+        catch { /* error stored in Ffmpeg.LastError */ }
+    }
+
+    /// <summary>
+    /// Audit #7 — the toolbar's Open (file picker) crashed the whole circuit when the Media &amp;
+    /// Properties panel was closed: <c>ClipBrowser</c> (and with it the hidden
+    /// <c>#bv-file-input</c>) unmounts with that panel, so the picker's
+    /// <c>getElementById(...).click()</c> null-dereferenced. Guarding the JS alone would only
+    /// downgrade the crash to "button silently does nothing", so the panel is restored first —
+    /// which is what the user wanted anyway by asking to add media. Item #65 made minimized the
+    /// default, so this is now the *common* path, not an edge case.
+    /// </summary>
+    private async Task OpenFilesAsync()
+    {
+        _panelVisible = true;
+        if (_panelState == WindowState.Minimized) _panelState = WindowState.Default;
+        _panelTab = "media";
+        StateHasChanged();
+
+        // Let the panel (and therefore ClipBrowser's file input) actually render before the picker
+        // reaches for it — without this yield the element still wouldn't exist on the first click.
+        await Task.Yield();
+
+        if (_browser is not null)
+            await _browser.PickFilesAsync();
+    }
+
+    private void OpenExportDialog() => _exportDialog?.Open();
+
+    // ── ClipBrowser handlers ──────────────────────────────────────────────────
+
+    private async Task OnClipSelectedAsync(VideoClip clip)
+    {
+        if (Ffmpeg.State != FfmpegState.Ready || clip.MemFsName is null) return;
+        var url = await Ffmpeg.CreatePreviewUrlAsync(clip.MemFsName);
+        BlobLifecycle.Created(url, "VideoEditor.clipPreview");
+        if (_preview is not null)
+        {
+            // Item #59-#65 flakiness investigation, phase 144 (finding B.3) — VideoPreview.LoadUrlAsync
+            // revokes whatever URL it was PREVIOUSLY showing before assigning this new one. When
+            // _preview was last showing the timeline assembly (_timelinePreviewUrl holds that exact
+            // same string), that revoke silently invalidates _timelinePreviewUrl too, with nothing here
+            // to tell VideoEditor. Without this, a later popout/reattach (_pendingWorkingWindowRehydrate
+            // in OnAfterRenderAsync) would reload that now-dead string — blank preview + a blob 404 —
+            // instead of correctly finding nothing to rehydrate.
+            if (_timelinePreviewUrl == _preview.CurrentUrl) _timelinePreviewUrl = null;
+            await _preview.LoadUrlAsync(url, clip.TrimmedDuration, PlaybackMode.Clip);
+        }
+
+        // Item #51 — three-point editing: switching which clip is previewed clears any pending
+        // in/out marks from a previous clip, so they never leak onto an unrelated one.
+        _previewedLibraryClip = clip;
+        _markedIn  = null;
+        _markedOut = null;
+    }
+
+    /// <summary>Item #51: records the current preview playhead as the in-point for the next
+    /// "Add to Timeline" on <see cref="_previewedLibraryClip"/>.</summary>
+    private void MarkIn()
+    {
+        if (_previewedLibraryClip is null) return;
+        _markedIn = Playback.State.CurrentTime;
+    }
+
+    /// <summary>Item #51: records the current preview playhead as the out-point for the next
+    /// "Add to Timeline" on <see cref="_previewedLibraryClip"/>.</summary>
+    private void MarkOut()
+    {
+        if (_previewedLibraryClip is null) return;
+        _markedOut = Playback.State.CurrentTime;
+    }
+
+    private void ClearMarks()
+    {
+        _markedIn  = null;
+        _markedOut = null;
+    }
+
+    /// <summary>
+    /// Places a newly-added clip on the primary video track. Anchors to the playhead — snapping
+    /// to touch an adjacent clip's edge if the playhead sits right at one, matching how a user
+    /// dragging by hand would expect an insert-at-playhead to land — rather than always dumping
+    /// it at the end of the track (item #25). If the resolved position would overlap an existing
+    /// clip, asks whether to ripple-shift the clips after it to make room instead of placing it.
+    /// </summary>
+    private void AddClipToTimeline(VideoClip clip)
+    {
+        var wasAlreadyPlaced = Clips.AllVideoClips.Any(c => c.Id == clip.Id);
+
+        // Item #51 — three-point editing: if this is the clip currently marked in the preview,
+        // capture that before the item #48 clone below replaces clip's identity.
+        var applyMarks = wasAlreadyPlaced && clip.Id == _previewedLibraryClip?.Id
+            && (_markedIn.HasValue || _markedOut.HasValue);
+
+        // Item #48: "Add to Timeline" on a library-view card (ClipBrowser's Video tab lists
+        // clips already on the timeline — there's no separate unplaced-library concept in this
+        // app; a fresh import calls straight into this same method with a brand-new clip) must
+        // clone rather than reuse the clip's Id, or the same Id ends up on two timeline entries —
+        // selection, removal, undo, and snap-exclusion all key off Id. List-typed properties are
+        // copied too so editing one placement's effects/automation doesn't mutate the other's.
+        if (wasAlreadyPlaced)
+        {
+            clip = clip with
+            {
+                Id               = Guid.NewGuid(),
+                ThumbnailUrls    = [.. clip.ThumbnailUrls],
+                VolumeAutomation = [.. clip.VolumeAutomation],
+                AppliedEffects   = [.. clip.AppliedEffects],
+            };
+        }
+
+        if (applyMarks)
+        {
+            var inPoint  = Math.Clamp(_markedIn  ?? clip.StartTrim, 0, clip.Duration);
+            var outPoint = Math.Clamp(_markedOut ?? (clip.EndTrim > clip.StartTrim ? clip.EndTrim : clip.Duration), 0, clip.Duration);
+            if (inPoint < outPoint)
+                clip = clip with { StartTrim = inPoint, EndTrim = outPoint };
+            _markedIn  = null;
+            _markedOut = null;
+        }
+
+        var track    = Clips.PrimaryVideoTrack;
+        var existing = track.VideoClips.Select(c => (c.TimelinePosition, c.TrimmedDuration)).ToList();
+        var playhead = Clips.TotalDuration > 0 ? Playback.State.Progress * Clips.TotalDuration : 0;
+        var position = TimelineDropCalculator.ResolvePlayheadAnchoredPosition(
+            playhead, clip.TrimmedDuration, existing);
+
+        if (TimelineDropCalculator.Overlaps(position, clip.TrimmedDuration, existing))
+        {
+            _pendingRippleClip         = clip;
+            _pendingRipplePosition     = position;
+            _rippleInsertPromptVisible = true;
+            return;
+        }
+
+        clip.TimelinePosition = position;
+        Clips.AddClipToTrack(track.Id, clip);
+    }
+
+    private void ConfirmRippleInsert()
+    {
+        if (_pendingRippleClip is not null)
+            Clips.InsertClipWithRipple(Clips.PrimaryVideoTrack.Id, _pendingRippleClip, _pendingRipplePosition);
+        _pendingRippleClip         = null;
+        _rippleInsertPromptVisible = false;
+    }
+
+    /// <summary>Standard NLE "Overwrite" edit (item #49): trims/splits/removes whatever the
+    /// pending clip would land on top of instead of shifting subsequent clips later.</summary>
+    private void ConfirmOverwriteInsert()
+    {
+        if (_pendingRippleClip is not null)
+            Clips.OverwriteInsert(Clips.PrimaryVideoTrack.Id, _pendingRippleClip, _pendingRipplePosition);
+        _pendingRippleClip         = null;
+        _rippleInsertPromptVisible = false;
+    }
+
+    private void CancelRippleInsert()
+    {
+        // Declining leaves the clip unplaced — it stays in the library for the user to add again
+        // (e.g. by dragging it to a spot they pick themselves) rather than silently placing it
+        // somewhere they didn't ask for.
+        _pendingRippleClip         = null;
+        _rippleInsertPromptVisible = false;
+    }
+
+    // ── Timeline handlers ─────────────────────────────────────────────────────
+
+    private async Task OnTimelineItemSelected(TrackItem item)
+    {
+        // Auto-switch to Properties tab and ensure window is visible
+        _panelTab     = "props";
+        _panelVisible = true;
+        if (_panelState == WindowState.Minimized) _panelState = WindowState.Default;
+
+        // Selecting any other layer exits an active motion-path edit — mirrors the fix already
+        // applied in the other direction by ActivateMotionPath (which clears the selections below).
+        _motionLayerId   = null;
+        _motionLayerType = null;
+
+        if (item is VideoClip clip)
+        {
+            _selectedAudioClip  = null;
+            _selectedTransition = null;
+            _selectedClip = clip;
+            await OnClipSelectedAsync(clip);
+        }
+        else if (item is AudioClip audio)
+        {
+            _selectedClip       = null;
+            _selectedTransition = null;
+            _selectedAudioClip  = audio;
+            StateHasChanged();
+        }
+        else if (item is Transition transition)
+        {
+            _selectedClip        = null;
+            _selectedAudioClip   = null;
+            _selectedTextOverlay = null;
+            _selectedTransition  = transition;
+            StateHasChanged();
+        }
+        else if (item is TextOverlay textOverlay)
+        {
+            _selectedClip        = null;
+            _selectedAudioClip   = null;
+            _selectedImageClip   = null;
+            _selectedTransition  = null;
+            _selectedTextOverlay = textOverlay;
+            StateHasChanged();
+        }
+        else if (item is ImageClip imageClip)
+        {
+            _selectedClip        = null;
+            _selectedAudioClip   = null;
+            _selectedTransition  = null;
+            _selectedTextOverlay = null;
+            _selectedImageClip   = imageClip;
+            _selectedCallout     = null;
+            StateHasChanged();
+        }
+        else if (item is CalloutClip callout)
+        {
+            _selectedClip        = null;
+            _selectedAudioClip   = null;
+            _selectedTransition  = null;
+            _selectedTextOverlay = null;
+            _selectedImageClip   = null;
+            _selectedClipArt     = null;
+            _selectedCallout     = callout;
+            StateHasChanged();
+        }
+        else if (item is ClipArtClip clipArt)
+        {
+            _selectedClip        = null;
+            _selectedAudioClip   = null;
+            _selectedTransition  = null;
+            _selectedTextOverlay = null;
+            _selectedImageClip   = null;
+            _selectedCallout     = null;
+            _selectedClipArt     = clipArt;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Click-to-select on the preview canvas (item #57, phase P1) — routes a hit through the same
+    /// selection logic the timeline already uses (auto-switch to Properties tab, exit any active
+    /// motion-path edit, clear sibling selections), or clears the three canvas-selectable
+    /// selections on an empty-canvas click (null = no hit).
+    /// </summary>
+    private async Task OnCanvasItemSelected(TrackItem? item)
+    {
+        if (item is null)
+        {
+            _selectedCallout     = null;
+            _selectedClipArt     = null;
+            _selectedTextOverlay = null;
+            StateHasChanged();
+            return;
+        }
+        await OnTimelineItemSelected(item);
+    }
+
+    /// <summary>Clears the Properties tab if it's showing the item that was just removed via the
+    /// timeline's right-click "Remove"/"Ripple Delete" or its per-chip trash button (item #26) —
+    /// those paths delete straight from ClipStore and previously never told VideoEditor to drop its
+    /// stale selection, unlike removal from inside an editor's own "Remove" button.</summary>
+    private void OnTimelineItemRemoved(Guid id)
+    {
+        if (_selectedClip?.Id        == id) _selectedClip        = null;
+        if (_selectedAudioClip?.Id   == id) _selectedAudioClip   = null;
+        if (_selectedImageClip?.Id   == id) _selectedImageClip   = null;
+        if (_selectedCallout?.Id     == id) _selectedCallout     = null;
+        if (_selectedClipArt?.Id     == id) _selectedClipArt     = null;
+        if (_selectedTransition?.Id  == id) _selectedTransition  = null;
+        if (_selectedTextOverlay?.Id == id) _selectedTextOverlay = null;
+        StateHasChanged();
+    }
+
+    private void ClearSelectedImageClip()
+    {
+        _selectedImageClip = null;
+        StateHasChanged();
+    }
+
+    private void OnImageClipRemoved(ImageClip _)
+    {
+        _selectedImageClip = null;
+        StateHasChanged();
+    }
+
+    private void OnAudioClipAdded(AudioClip clip)
+    {
+        _selectedAudioClip = clip;
+        StateHasChanged();
+    }
+
+    private void ClearSelectedAudioClip()
+    {
+        _selectedAudioClip = null;
+        StateHasChanged();
+    }
+
+    private void OnAudioClipDeleted(AudioClip clip)
+    {
+        if (_selectedAudioClip?.Id == clip.Id)
+            _selectedAudioClip = null;
+        StateHasChanged();
+    }
+
+    private void OnAudioClipSplit(AudioClip original)
+    {
+        // The original is now removed; deselect the panel
+        _selectedAudioClip = null;
+        StateHasChanged();
+    }
+
+    private void OnImageClipSplit(ImageClip original)
+    {
+        // The original is now removed; deselect the panel
+        _selectedImageClip = null;
+        StateHasChanged();
+    }
+
+    private void ClearSelectedTransition()
+    {
+        _selectedTransition = null;
+        StateHasChanged();
+    }
+
+    private void ClearSelectedTextOverlay()
+    {
+        _selectedTextOverlay = null;
+        StateHasChanged();
+    }
+
+    // ── ClipEditor handlers ───────────────────────────────────────────────────
+
+    private void ClearSelectedClip()
+    {
+        _selectedClip = null;
+        StateHasChanged();
+    }
+
+    private void OnTrimApplied(VideoClip clip)
+    {
+        _selectedClip = clip;
+        StateHasChanged();
+    }
+
+    private void OnClipSplit(VideoClip original)
+    {
+        // The original is now removed; deselect the panel
+        _selectedClip = null;
+        StateHasChanged();
+    }
+
+    private void OnClipDeleted(VideoClip deleted)
+    {
+        _selectedClip = null;
+        StateHasChanged();
+    }
+
+    // ── Preview handlers ──────────────────────────────────────────────────────
+
+    private void OnPreviewTimeUpdate(double currentTime) { }
+
+    /// <summary>
+    /// At the default 100% this returns null — <see cref="FfmpegService.ConcatClipsAsync"/> then
+    /// behaves exactly as before this feature existed. Below 100%, scales the export resolution down
+    /// by <see cref="PreviewQualityService.ScalePercent"/>, rounded to even numbers (libx264 requires
+    /// even width/height).
+    /// </summary>
+    private (int Width, int Height)? PreviewScaleTarget()
+    {
+        var pct = PreviewQuality.ScalePercent;
+        if (pct >= 100) return null;
+
+        var w = ExportRes.Width  * pct / 100;
+        var h = ExportRes.Height * pct / 100;
+        w -= w % 2;
+        h -= h % 2;
+        return (w, h);
+    }
+
+    /// <summary>
+    /// Assembles all primary-track clips into a single concat output at PREVIEW quality/resolution
+    /// and loads it into the Working Window (<see cref="_preview"/>) — the live-editing pane, kept
+    /// current automatically (see the auto-refresh region below), never a manual step. Distinct
+    /// from <see cref="RenderFullQualityPreviewAsync"/> (item #36 phase 84), which is the toolbar's
+    /// "Preview" button — a deliberate, occasional, full-resolution/quality check of the real
+    /// result, played in its own separate window.
+    /// </summary>
+    private async Task RefreshWorkingWindowAsync()
+    {
+        if (Ffmpeg.State != FfmpegState.Ready || _preview is null) return;
+        _sharpenRefreshScheduled = false; // a run is happening — sharpen events may re-arm after this
+
+        var videoClips = Clips.PrimaryVideoTrack.VideoClips
+                              .Where(c => c.MemFsName is not null)
+                              .ToList();
+        var imageClips = Clips.PrimaryVideoTrack.ImageClips
+                              .Where(c => c.MemFsName is not null)
+                              .ToList();
+
+        if (videoClips.Count == 0 && imageClips.Count == 0) return;
+
+        // Item #59-#65 flakiness investigation, phase 144 (symptom S4) — this used to revoke the
+        // OLD url right here, before the re-encode below even starts. That re-encode (trim
+        // encodes + concat/xfade) can run for many seconds, and the <video> element kept pointing
+        // at the just-revoked URL that whole time — any seek/scrub/buffer top-up during it fetched
+        // a dead blob (live-captured as a burst of blob: ERR_FILE_NOT_FOUND errors). Swap-then-
+        // revoke instead: keep the old URL live+attached until the NEW one is created and handed
+        // to the preview element (below), and revoke it only then. If the re-encode throws before
+        // that point, the old URL is never touched — Working Window keeps showing the last-good
+        // preview instead of going blank.
+        var previousTimelinePreviewUrl = _timelinePreviewUrl;
+
+        var outName = $"preview_timeline_{Guid.NewGuid():N}.mp4";
+        var videoSegmentNames = new List<string>();
+        var imageSegmentNames = new List<string>();
+        // Hold background-segment deletion for the whole assembly: a fine pass completing
+        // mid-assembly would otherwise delete the superseded rough segment this concat is about
+        // to read (live-found race — see BackgroundRenderService.BeginDeletionHold).
+        BackgroundRender.BeginDeletionHold();
+        try
+        {
+            var previewSettings = new ExportSettings();
+            var regionsById = RenderStatus.Regions.ToDictionary(r => r.ClipId);
+
+            // Trim + apply effects for each video clip, mirroring ExportService.TrimSegmentsAsync,
+            // so Preview actually reflects the same edits Export does. Item #36 phase B: skip the
+            // encode entirely when a cached segment already matches this clip's current region
+            // signature — only clips actually edited since the last Preview pay the encode cost.
+            foreach (var vid in videoClips)
+            {
+                var signature = regionsById.TryGetValue(vid.Id, out var region) ? region.Signature : null;
+                if (signature is not null && SegmentCache.TryGet(signature, out var cached))
+                {
+                    videoSegmentNames.Add(cached);
+                    continue;
+                }
+
+                var bgSegment = TryConsumeBackgroundSegment(region, signature);
+                if (bgSegment is not null)
+                {
+                    videoSegmentNames.Add(bgSegment);
+                    continue;
+                }
+
+                var segName = $"preview_vid_{Guid.NewGuid():N}.mp4";
+                var start   = vid.StartTrim;
+                var end     = vid.EndTrim > vid.StartTrim ? vid.EndTrim : vid.Duration;
+                var effectiveDuration = vid.EffectiveDuration > 0 ? vid.EffectiveDuration : vid.Duration;
+                var volumeFilter = ExportArgBuilders.BuildVolumeAutomationFilter(vid, effectiveDuration);
+                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(vid.AppliedEffects, EffectRegistry, effectiveDuration, vid.Speed);
+                var args = ExportArgBuilders.BuildTrimArgs(
+                    vid.MemFsName!, segName, start, end, vid.Speed, previewSettings,
+                    volumeFilter, vid.Effects, vid.MuteAudio,
+                    extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf);
+                await Ffmpeg.ExecAsync(args);
+                // Item #59-#65 flakiness investigation, phase 146 — size unknown (produced by an
+                // ffmpeg exec, not a C#-side byte array), so this is a 0-byte lower-bound entry
+                // like FfmpegService.WriteFileAsync's own "source-fallback" category — still gives
+                // real diagnostic value as an ENTRY COUNT even without a byte total.
+                MemFs.Track(segName, 0, "preview-segment");
+                videoSegmentNames.Add(segName);
+                if (signature is not null) SegmentCache.Set(signature, segName);
+                RequestBackgroundPriorityIfEnabled(vid.Id);
+            }
+
+            // Loop each image clip into its own short video segment — now with the same
+            // Effects/AppliedEffects support the real export pipeline already gives images.
+            // Same cache-first check as video clips above.
+            foreach (var img in imageClips)
+            {
+                var signature = regionsById.TryGetValue(img.Id, out var region) ? region.Signature : null;
+                if (signature is not null && SegmentCache.TryGet(signature, out var cached))
+                {
+                    imageSegmentNames.Add(cached);
+                    continue;
+                }
+
+                var bgSegment = TryConsumeBackgroundSegment(region, signature);
+                if (bgSegment is not null)
+                {
+                    imageSegmentNames.Add(bgSegment);
+                    continue;
+                }
+
+                var segName = $"preview_img_{Guid.NewGuid():N}.mp4";
+                var duration = img.Duration > 0 ? img.Duration : 5.0;
+                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(img.AppliedEffects, EffectRegistry, duration);
+                var args = ExportArgBuilders.BuildImageSegmentArgs(
+                    img.MemFsName!, segName, duration, previewSettings,
+                    outputWidth: img.Width, outputHeight: img.Height,
+                    effects: img.Effects,
+                    extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf);
+                await Ffmpeg.ExecAsync(args);
+                MemFs.Track(segName, 0, "preview-segment"); // see the video-clip branch's own note above
+                imageSegmentNames.Add(segName);
+                if (signature is not null) SegmentCache.Set(signature, segName);
+                RequestBackgroundPriorityIfEnabled(img.Id);
+            }
+
+            // Merge video and image segments in timeline order. Durations travel alongside —
+            // item #57 T2 needs each segment's real length for xfade junction offset math
+            // (mirrors ExportService.RunPipelineAsync's orderedSegments), not just concat order.
+            var orderedSegments = videoClips
+                .Select((c, i) => (pos: c.TimelinePosition, name: videoSegmentNames[i],
+                                    dur: c.EffectiveDuration > 0 ? c.EffectiveDuration : c.Duration))
+                .Concat(imageClips.Select((c, i) => (pos: c.TimelinePosition, name: imageSegmentNames[i],
+                                                      dur: c.Duration > 0 ? c.Duration : 5.0)))
+                .OrderBy(x => x.pos)
+                .ToList();
+            var orderedNames     = orderedSegments.Select(x => x.name).ToArray();
+            var orderedDurations = orderedSegments.Select(x => x.dur).ToList();
+
+            // Item #57 T2 — WYSIWYG preview: same-track transitions get a real xfade blend at
+            // the junction instead of a hard cut, exactly like Export (reuses the same, T0-fixed,
+            // BuildXfadeFilterComplex offset math). Cross-track transitions are out of scope here
+            // — this preview only ever assembles PrimaryVideoTrack, same as before this phase.
+            var transitions   = Clips.AllTransitions.Where(t => !IsCrossTrackTransition(t)).OrderBy(t => t.Order).ToList();
+            var hasTransitions = EffectiveOptions.Transitions && transitions.Count > 0 && orderedNames.Length > 1;
+            var scaleTo = PreviewScaleTarget();
+
+            // Item #36's core promise: only re-render where changes occurred — never re-encode at
+            // put-together time. Background segments ("bgseg_" prefix, incl. cache entries that
+            // were consumed earlier) carry pinned codec/dimensions/fps/always-audio params, so an
+            // all-background set can be stream-copy concatenated (-c copy, near-instant, zero
+            // re-encoding). Any synchronously-encoded segment in the mix (BuildTrimArgs — no
+            // pinned audio, no per-segment scaling) forces the re-encoding concat, which also
+            // applies the preview scale those segments still need. A timeline with transitions
+            // always takes the (slower, user-approved) xfade path below instead — stream-copy
+            // concat can't blend a junction.
+            var allPinned = orderedNames.Length > 0 && orderedNames.All(n => n.StartsWith("bgseg_", StringComparison.Ordinal));
+
+            // Item #70 phase 161 — when every input is a background segment the sidecar still
+            // holds (dual residency) and there are no transitions to blend, the whole assembly can
+            // run natively: one stream-copy concat over files already next to the ffmpeg binary,
+            // with the result arriving as a JS-side blob URL. No MEMFS, no worker mutex, no bytes
+            // through the WASM heap. Any failure falls through to the unchanged in-browser path
+            // below IN THIS SAME PASS, so the user never sees a blank preview.
+            RemoteSegments.SyncInstance(NativeSidecar.InstanceId);
+            var concatDecision = PreviewConcatGate.Decide(
+                orderedNames,
+                hasTransitions,
+                NativeSidecar.HasCapability(SidecarCapabilities.Concat),
+                RemoteSegments.TryGetRemoteId);
+
+            string? nativePreviewUrl = null;
+            if (concatDecision == PreviewConcatDecision.UseSidecar
+                && RemoteSegments.TryGetAll(orderedNames) is { } remoteIds)
+            {
+                nativePreviewUrl = await PreviewAssembler.TryAssembleAsync(remoteIds, orderedNames, CancellationToken.None);
+            }
+
+            if (nativePreviewUrl is not null)
+            {
+                _timelinePreviewUrl = nativePreviewUrl;
+            }
+            else
+            {
+                if (hasTransitions)
+                    await ApplyPreviewXfadeTransitionsAsync(orderedNames, orderedDurations, transitions, previewSettings, scaleTo, outName);
+                else if (allPinned)
+                    await Ffmpeg.ConcatCopyAsync(orderedNames, outName);
+                else
+                    await Ffmpeg.ConcatClipsAsync(orderedNames, outName, scaleTo);
+
+                _timelinePreviewUrl = await Ffmpeg.CreatePreviewUrlAsync(outName);
+            }
+            BlobLifecycle.Created(_timelinePreviewUrl, "VideoEditor.timelinePreview");
+            var totalDuration   = videoClips.Sum(c => c.TrimmedDuration)
+                                 + imageClips.Sum(c => c.Duration > 0 ? c.Duration : 5.0);
+
+            // Item #57 T2 — the xfade pass above physically shortens the assembled output by each
+            // blended junction's overlap (mirrors BuildXfadeFilterComplex's own offset recurrence:
+            // every junction gets an xfade once hasTransitions is true, using transitions[i] or a
+            // default Fade/1.0s for any junction without an explicit one). Without this, the
+            // Working Window's scrubber range would run ~1s past the real loaded video's end.
+            if (hasTransitions)
+                for (var i = 0; i < orderedNames.Length - 1; i++)
+                    totalDuration -= i < transitions.Count ? transitions[i].Duration : 1.0;
+
+            _timelinePreviewDuration = totalDuration;
+            // VideoPreview.LoadUrlAsync does its own swap-then-revoke of whatever _preview is
+            // CURRENTLY showing — which is previousTimelinePreviewUrl in the common case (no clip
+            // selection happened in between). Capture that before the call so the check below
+            // doesn't double-revoke the same string a second time.
+            var previewWasShowing = _preview.CurrentUrl;
+            await _preview.LoadUrlAsync(_timelinePreviewUrl, totalDuration, PlaybackMode.Timeline);
+            PreviewFreshness.MarkFresh();
+            RenderStatus.MarkAllCurrentRendered();
+
+            // The one case VideoPreview's own internal revoke (above) can't cover: the user
+            // selected a different clip in between refreshes, so _preview was showing THAT clip's
+            // url, not the old timeline one — previousTimelinePreviewUrl is orphaned and nothing
+            // else will ever revoke it unless this does.
+            if (previousTimelinePreviewUrl is not null
+                && previousTimelinePreviewUrl != _timelinePreviewUrl
+                && previousTimelinePreviewUrl != previewWasShowing)
+            {
+                BlobLifecycle.Revoking(previousTimelinePreviewUrl, "VideoEditor.timelinePreview");
+                // Item #70 phase 161 — the previous url may be sidecar-origin now, which must NOT
+                // go through the worker-locked revoke. PreviewUrlRevoker routes by origin and
+                // defaults to the worker path, so pre-existing behavior is unchanged.
+                try { await PreviewRevoker.RevokeAsync(previousTimelinePreviewUrl); } catch { }
+            }
+
+            // Drop cached segments for signatures no longer present on any current region — e.g.
+            // a clip's pre-edit trim/effects state once it's been retrimmed. Only reachable here,
+            // after MarkAllCurrentRendered(), so a segment mid-use this call is never evicted.
+            var liveSignatures = RenderStatus.Regions.Select(r => r.Signature).ToList();
+            foreach (var orphan in SegmentCache.EvictOrphans(liveSignatures))
+            {
+                try { await Ffmpeg.DeleteFileAsync(orphan); } catch { }
+            }
+        }
+        finally
+        {
+            // Only the final assembled output is scratch — per-clip segments are now cached in
+            // MEMFS for reuse by the next Preview click (see SegmentCache above) instead of being
+            // deleted here every time. Consumed background segments (rough or fine) are owned by
+            // their RenderRegion/SegmentCache and cleaned up by supersede/orphan deletion.
+            try { await Ffmpeg.DeleteFileAsync(outName); } catch { }
+            await BackgroundRender.EndDeletionHoldAsync();
+        }
+    }
+
+    /// <summary>
+    /// Item #57 T2 — mirrors <c>ExportService.ApplyTransitionsAsync</c>'s filter_complex shape
+    /// exactly (same xfade offset math, same audio/quality arg helpers) so the Working Window
+    /// shows the same blend Export will actually produce, just at preview scale/quality. Scaling
+    /// is deliberately a SEPARATE second pass (<see cref="FfmpegService.ConcatClipsAsync"/> on the
+    /// single blended file, reusing the exact scale+pad shape the plain-concat preview path
+    /// already relies on) rather than chaining a scale+pad filter directly off xfade's "[vout]"
+    /// inside one filter_complex — live-verification found that combined graph reliably hangs
+    /// ffmpeg.wasm (no error, no progress, indefinitely) in this app's single-threaded build, while
+    /// xfade alone and scale+pad alone both complete normally. Two known-good passes instead of one
+    /// fragile combined one.
+    /// </summary>
+    private async Task ApplyPreviewXfadeTransitionsAsync(
+        string[] orderedNames, List<double> orderedDurations, List<Transition> transitions,
+        ExportSettings previewSettings, (int Width, int Height)? scaleTo, string outName)
+    {
+        var filterArgs = ExportArgBuilders.BuildXfadeFilterComplex(orderedNames.ToList(), orderedDurations, transitions);
+        var blendedName = scaleTo is null ? outName : $"xfade_blend_{Guid.NewGuid():N}.mp4";
+
+        var args = new List<string>();
+        foreach (var n in orderedNames) { args.Add("-i"); args.Add(n); }
+        args.AddRange(["-filter_complex", filterArgs, "-map", "[vout]"]);
+        args.AddRange(ExportArgBuilders.AudioOutputArgs(previewSettings));
+        args.AddRange(ExportArgBuilders.QualityArgs(previewSettings));
+        args.AddRange(["-pix_fmt", previewSettings.PixelFormat, blendedName]);
+        await Ffmpeg.ExecAsync([.. args]);
+
+        if (scaleTo is { } scale)
+        {
+            try
+            {
+                await Ffmpeg.ConcatClipsAsync([blendedName], outName, scale);
+            }
+            finally
+            {
+                try { await Ffmpeg.DeleteFileAsync(blendedName); } catch { }
+            }
+        }
+    }
+
+    /// <summary>Same-track check for a transition — cross-track ones are handled (pre-baked into
+    /// the "from" clip's own segment) only by Export's ApplyCrossTrackTransitionsAsync; this
+    /// preview path never touches secondary tracks at all, so any cross-track transition must be
+    /// excluded rather than misapplied via BuildXfadeFilterComplex's same-track positional
+    /// pairing.</summary>
+    private bool IsCrossTrackTransition(Transition t) =>
+        Clips.FindTrackOf(t.FromClipId)?.Id != Clips.FindTrackOf(t.ToClipId)?.Id;
+
+    /// <summary>
+    /// Reuses a segment the background render worker (item #36 phase C) already rendered for this
+    /// exact clip content, instead of re-encoding it here. Since phase 83, completed segments are
+    /// transferred into the MAIN instance's MEMFS at render completion (see
+    /// <see cref="RenderWorkerBackend"/>'s TransferToMainAsync for why touching the render worker
+    /// at Preview time is a trap), so consumption is just handing the concat the region's
+    /// already-local segment name — no bytes move here. Returns null (falls through to the normal
+    /// encode path below) whenever there's nothing ready: background rendering disabled, the
+    /// worker hasn't produced anything for this clip yet, or the content changed. Never waits.
+    /// Phase D: ROUGH segments are consumed too — a fast, ugly-but-correct preview now beats a
+    /// slow perfect one — including during RenderingFine, when the region's SegmentName still
+    /// points at the completed rough segment while the fine pass runs (the longest window). Rough
+    /// names are deliberately NOT registered in <see cref="SegmentCache"/>: a cache hit
+    /// short-circuits this method on the next pass, which would freeze the clip at rough quality
+    /// until its next edit. Instead the clip id is recorded so
+    /// <see cref="OnRenderStatusChangedForSharpen"/> can refresh the Working Window once the fine
+    /// pass lands.
+    /// </summary>
+    private string? TryConsumeBackgroundSegment(RenderRegion? region, string? signature)
+    {
+        if (region is null || signature is null) return null;
+        if (region.State is not (RenderRegionState.Fine or RenderRegionState.Rough or RenderRegionState.RenderingFine)) return null;
+        if (region.SegmentName is null) return null;
+        if (region.Signature != signature) return null;
+
+        // Item #38 phase C — this consumption doesn't re-render anything, but it IS active use;
+        // without this, LRU eviction would see only render time, not the far more frequent
+        // Preview-time reads, and could evict a segment the user is actively watching.
+        BackgroundRender.TouchSegment(region.SegmentName);
+
+        if (region.State == RenderRegionState.Fine)
+        {
+            SegmentCache.Set(signature, region.SegmentName);
+            _roughConsumedClipIds.Remove(region.ClipId);
+        }
+        else
+        {
+            _roughConsumedClipIds.Add(region.ClipId);
+        }
+        return region.SegmentName;
+    }
+
+    /// <summary>Clips whose ROUGH background segment is what the Working Window currently shows —
+    /// when any of them reaches <see cref="RenderRegionState.Fine"/>, the preview auto-refreshes
+    /// (via the normal debounced path) so it sharpens without user action. Only meaningful while
+    /// background rendering is enabled.</summary>
+    private readonly HashSet<Guid> _roughConsumedClipIds = [];
+
+    /// <summary>Guards against the sharpen refresh re-arming the auto-preview debounce on every
+    /// subsequent tracker event (progress ticks fire constantly while other clips render) — each
+    /// re-arm resets the debounce timer, which would starve the refresh until the whole queue went
+    /// quiet. Schedule once; cleared when <see cref="RefreshWorkingWindowAsync"/> actually runs.</summary>
+    private bool _sharpenRefreshScheduled;
+
+    private void OnRenderStatusChangedForSharpen()
+    {
+        if (_sharpenRefreshScheduled || _roughConsumedClipIds.Count == 0) return;
+
+        var anySharpened = _roughConsumedClipIds
+            .Any(id => RenderStatus.Regions.Any(r => r.ClipId == id && r.State == RenderRegionState.Fine));
+        if (!anySharpened) return;
+
+        // Don't remove from the set here — the refreshed RefreshWorkingWindowAsync run consumes the
+        // fine segment and removes it there. Removing it now would break the case where the
+        // debounced refresh gets cancelled by an unrelated edit before it runs.
+        _sharpenRefreshScheduled = true;
+        _ = InvokeAsync(ScheduleAutoPreview);
+    }
+
+    /// <summary>After Preview has to synchronously encode a clip itself (no background segment was
+    /// ready), nudge the background worker to prioritize that exact clip — so if the user hits
+    /// Preview again, or an edit re-triggers auto-preview, it's more likely to already be waiting.
+    /// A no-op if background rendering isn't enabled, so <see cref="BackgroundRenderService"/>'s
+    /// priority queue never grows when nothing is ever started to drain it.</summary>
+    private void RequestBackgroundPriorityIfEnabled(Guid clipId)
+    {
+        if (EffectiveOptions.BackgroundRendering)
+            BackgroundRender.RequestPriority(clipId);
+    }
+
+    // ── Export handlers ───────────────────────────────────────────────────────
+
+    private void OnExportComplete()
+    {
+        // ExportDialog invokes this both when a job is queued (AddToQueueAsync, fired at enqueue
+        // time — not when the queued render actually finishes) and when an immediate export
+        // genuinely completes (StartExportAsync, after the render). ActiveCount > 0 only ever
+        // holds right after the former, so it's how we tell the two apart here without needing
+        // a dedicated parameter on the callback.
+        if (ExportQueue.ActiveCount > 0)
+        {
+            _showQueuePanel = true; // job queued — open the queue so progress is visible
+            StateHasChanged();
+            return;
+        }
+
+        // Phase 176 — an immediate export ran with delivery deferred (DeferDelivery mirrors this
+        // same HasDelegate check), so its output is sitting in OPFS waiting to be placed. Ask
+        // where it goes BEFORE the project-save prompt: the render is the thing the user was
+        // actually waiting for, and it's the only one of the two holding storage open.
+        var job = Exporter.CurrentJob;
+        if (OnPublishExport.HasDelegate && job is { State: ExportJobState.Completed, PreviewBlobUrl: not null })
+        {
+            _retainedExport = job;
+            _showExportDestinationPrompt = true;
+            StateHasChanged();
+            return;
+        }
+
+        _showExportSavePrompt = true; // immediate export just finished rendering
+        StateHasChanged();
+    }
+
+    // ── Rendered-video destination (phase 176) ────────────────────────────────
+    //
+    // Exactly one of these three runs per retained export, and each ends with the OPFS copy gone
+    // (ExportService's Save/Take/Discard are all terminal). The project-save prompt follows once
+    // the video has a home — chained here rather than shown alongside, so the user is never
+    // looking at two modals asking different questions about the same export.
+
+    private ExportJob? _retainedExport;
+    private bool       _showExportDestinationPrompt;
+
+    private async Task PublishExportAsync()
+    {
+        if (_retainedExport is not { } job) return;
+
+        // Deliberately NOT wrapped in try/catch: ExportDestinationPrompt needs the exception to
+        // decide whether to close. Swallowing it here would close the prompt on a failed upload
+        // and discard the user's only copy — see OnPublishExport's remarks.
+        await Exporter.TakeRetainedExportAsync(job, exported => OnPublishExport.InvokeAsync(exported));
+        FinishExportDestination();
+    }
+
+    private async Task SaveExportToDeviceAsync()
+    {
+        if (_retainedExport is not { } job) return;
+        await Exporter.SaveRetainedExportToDeviceAsync(job);
+        FinishExportDestination();
+    }
+
+    private async Task DiscardExportAsync()
+    {
+        if (_retainedExport is not { } job) return;
+        await Exporter.DiscardRetainedExportAsync(job);
+        FinishExportDestination();
+    }
+
+    private void FinishExportDestination()
+    {
+        _retainedExport = null;
+        _showExportSavePrompt = true;
+        StateHasChanged();
+    }
+
+    // ── Project save / load ───────────────────────────────────────────────────
+
+    private async Task SaveToDeviceAsync()
+        => await Project.SaveAsync(Projects.CurrentProjectName);
+
+    /// <summary>
+    /// File menu's "Save" — persists into the in-app named-project list (ProjectStore,
+    /// browser storage) so it appears in "Open…", as distinct from <see cref="SaveToDeviceAsync"/>
+    /// which downloads a project file instead.
+    /// </summary>
+    private async Task SaveProjectAsync()
+    {
+        try
+        {
+            await Projects.SaveAsync(Projects.CurrentProjectName);
+            _notifications?.Show("Project saved.", ThemeConstants.Notification.ThemeColor.Success);
+        }
+        catch (Exception ex)
+        {
+            _notifications?.Show($"Save failed: {ex.Message}", ThemeConstants.Notification.ThemeColor.Error);
+        }
+    }
+
+    private async Task SaveToServerHandlerAsync()
+    {
+        _transfer = new TransferProgressState("Uploading Project", "Uploading project to server…");
+        StateHasChanged();
+
+        try
+        {
+            var progress = new Progress<TransferProgress>(tp =>
+            {
+                _transfer.Update(tp);
+                InvokeAsync(StateHasChanged);
+            });
+
+            var response = await Project.SaveToServerAsync(Projects.CurrentProjectName, progress: progress);
+
+            _transfer = null;
+
+            if (response.IsSuccessStatusCode)
+                _notifications?.Show("Project saved to server.", ThemeConstants.Notification.ThemeColor.Success);
+            else
+                _notifications?.Show(
+                    $"Save to server failed: {(int)response.StatusCode} {response.ReasonPhrase}",
+                    ThemeConstants.Notification.ThemeColor.Error);
+        }
+        catch (Exception ex)
+        {
+            _transfer = null;
+            _notifications?.Show(
+                $"Save to server error: {ex.Message}",
+                ThemeConstants.Notification.ThemeColor.Error);
+        }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenProjectAsync(ElementReference fileInput)
+    {
+        var file = await Project.LoadAsync(fileInput);
+        if (file is null) return;
+
+        Projects.CurrentProjectName = file.ProjectName ?? Projects.CurrentProjectName;
+        _selectedClip        = null;
+        _selectedAudioClip   = null;
+        _selectedTransition  = null;
+        _selectedTextOverlay = null;
+
+        Project.RestoreAsync(file);   // rebuilds ClipStore; fires OnChange → StateHasChanged
+    }
+
+    // ── Phase 39: File menu handlers ─────────────────────────────────────────
+
+    private bool _showProjectList;
+
+    private async Task NewProjectAsync()
+    {
+        if (Projects.IsDirty)
+        {
+            // Simple JS confirm — a proper TelerikDialog would be Phase 39+ polish
+            var ok = await JS.InvokeAsync<bool>("confirm",
+                "Unsaved changes will be lost. Continue?");
+            if (!ok) return;
+        }
+        Clips.Reset();
+        await Projects.NewProjectAsync();
+        _selectedClip        = null;
+        _selectedAudioClip   = null;
+        _selectedTransition  = null;
+        _selectedTextOverlay = null;
+        _selectedImageClip   = null;
+        StateHasChanged();
+    }
+
+    private void OpenProjectListAsync() => _showProjectList = true;
+
+    private async Task OnProjectListOpenAsync(ProjectSummary summary)
+    {
+        _selectedClip        = null;
+        _selectedAudioClip   = null;
+        _selectedTransition  = null;
+        _selectedTextOverlay = null;
+        _selectedImageClip   = null;
+        await Projects.OpenAsync(summary.Id);
+        StateHasChanged();
+    }
+
+    private async Task ExportProjectJsonAsync()
+        => await Project.SaveAsync(Projects.CurrentProjectName);
+
+    private async Task ImportProjectJsonAsync(ElementReference fileInput)
+    {
+        var file = await Project.LoadAsync(fileInput);
+        if (file is null) return;
+        Projects.CurrentProjectName = file.ProjectName ?? Projects.CurrentProjectName;
+        _selectedClip        = null;
+        _selectedAudioClip   = null;
+        _selectedTransition  = null;
+        _selectedTextOverlay = null;
+        _selectedImageClip   = null;
+        Project.RestoreAsync(file);
+    }
+
+    private void ToggleHelp() => _showHelp = !_showHelp;
+
+    private async Task ExportErrorLogAsync()
+    {
+        var text = ErrorLog.ExportText();
+        // Phase 144's deferred revoke now lives inside domInterop.downloadText — see that
+        // function's own note for why the 30s delay is load-bearing rather than tidy-able.
+        await (await DomAsync()).InvokeVoidAsync("downloadText", text, "error-log.txt", "text/plain");
+    }
+
+    private async Task ExportSrtAsync()
+        => await Exporter.DownloadSrtAsync(Projects.CurrentProjectName);
+
+    private async Task ExportVttAsync()
+        => await Exporter.DownloadWebVttAsync(Projects.CurrentProjectName);
+
+    private async Task OnProjectNameChangedAsync(string name)
+    {
+        Projects.CurrentProjectName = name;
+        await Task.CompletedTask;
+    }
+
+    private async Task LoadFromServerHandlerAsync()
+    {
+        _transfer = new TransferProgressState("Downloading Project", "Downloading project from server…");
+        StateHasChanged();
+
+        ProjectFile? file = null;
+        try
+        {
+            var progress = new Progress<TransferProgress>(tp =>
+            {
+                _transfer.Update(tp);
+                InvokeAsync(StateHasChanged);
+            });
+
+            file = await Project.LoadFromServerAsync(progress: progress);
+        }
+        catch (Exception ex)
+        {
+            _transfer = null;
+            _notifications?.Show(
+                $"Load from server error: {ex.Message}",
+                ThemeConstants.Notification.ThemeColor.Error);
+            StateHasChanged();
+            return;
+        }
+        finally
+        {
+            _transfer = null;
+        }
+
+        if (file is null)
+        {
+            _notifications?.Show("Failed to load project from server.",
+                ThemeConstants.Notification.ThemeColor.Error);
+            StateHasChanged();
+            return;
+        }
+
+        Projects.CurrentProjectName = file.ProjectName ?? Projects.CurrentProjectName;
+        _selectedClip        = null;
+        _selectedAudioClip   = null;
+        _selectedTransition  = null;
+        _selectedTextOverlay = null;
+
+        Project.RestoreAsync(file);
+        _notifications?.Show("Project loaded from server.", ThemeConstants.Notification.ThemeColor.Success);
+        StateHasChanged();
+    }
+
+    // ── Re-link ──────────────────────────────────────────────────────────────
+
+    private async Task OnRelinkRequestedAsync(Guid itemId)
+    {
+        _relinkItemId = itemId;
+        // Trigger the hidden file input via JS
+        await (await DomAsync()).InvokeVoidAsync("click", "#bv-relink-input", false);
+    }
+
+    private async Task OnRelinkFileChangedAsync(ChangeEventArgs _)
+    {
+        if (_relinkItemId is null) return;
+        var itemId = _relinkItemId.Value;
+
+        try
+        {
+            var fileRef = await (await DomAsync()).InvokeAsync<IJSObjectReference>(
+                "fileAt", "bv-relink-input", 0);
+
+            var fileName = await (await DomAsync()).InvokeAsync<string>("fileName", "bv-relink-input", 0);
+
+            var memFsName = $"relink_{Guid.NewGuid():N}_{fileName}";
+            await Ffmpeg.WriteFileAsync(memFsName, fileRef);
+            await fileRef.DisposeAsync();
+
+            Clips.RelinkClip(itemId, memFsName);
+        }
+        catch { /* silently ignore — user may have cancelled the dialog */ }
+        finally
+        {
+            _relinkItemId = null;
+            // Reset input so the same file can be picked again
+            await (await DomAsync()).InvokeVoidAsync("clearFileInput", "bv-relink-input");
+        }
+    }
+
+    // ── Service change handlers ───────────────────────────────────────────────
+
+    private void OnFfmpegStateChanged()    => InvokeAsync(StateHasChanged);
+
+    private void OnClipsChanged()
+    {
+        InvokeAsync(StateHasChanged);
+        PreviewFreshness.MarkStale();
+        ScheduleAutoPreview();
+    }
+
+    private void OnProjectStoreChanged()   => InvokeAsync(StateHasChanged);
+    private void OnQueueChanged()          => InvokeAsync(StateHasChanged);
+
+    // ── Working Window auto-refresh (item #11, fulfilled unconditionally as of
+    // item #36 phase 84) ────────────────────────────────────────────────────────
+    // Always on — no opt-in toggle. ClipStore.OnChange fires synchronously/unthrottled
+    // on every mutation — including every pointermove during a drag — with no debounce
+    // of its own, so this collapses a whole burst of edits into a single
+    // RefreshWorkingWindowAsync() call fired once edits settle, instead of re-encoding
+    // the timeline dozens of times per second while the user is still mid-edit. This
+    // used to be opt-in (phase 65) because every refresh was a full re-encode; phases
+    // C/D's background-rendered segments (usually already cached by the time the
+    // debounce fires) made "no explicit render step" — item #11's original ask —
+    // cheap enough to just always be true, so the toggle is gone.
+
+    private const int AutoPreviewDebounceMs = 1000;
+
+    private CancellationTokenSource?  _autoPreviewCts;
+
+    private void ScheduleAutoPreview()
+    {
+        _autoPreviewCts?.Cancel();
+        _autoPreviewCts = new CancellationTokenSource();
+        _ = DebouncedAutoPreviewAsync(_autoPreviewCts.Token);
+    }
+
+    private async Task DebouncedAutoPreviewAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(AutoPreviewDebounceMs, token);
+
+            // Wait out a busy main instance instead of letting RefreshWorkingWindowAsync's Ready guard
+            // silently drop this refresh — an auto-preview (or a rough→fine sharpen refresh) that
+            // fires while the previous assembly is still running used to just vanish, leaving the
+            // Working Window stale (or stuck at rough quality) until the next unrelated edit.
+            //
+            // Phase 143: this used to be a genuinely unbounded loop — if the worker ended up in
+            // Error (or wedged) with no further edit to supersede/cancel this token, it polled
+            // every 250ms forever for nothing. Now it gives up after a bounded wait, and reacts to
+            // Error immediately rather than waiting the whole budget only to still fail.
+            var waitedMs = 0;
+            const int maxWaitMs = 60_000;
+            while (Ffmpeg.State != FfmpegState.Ready)
+            {
+                if (Ffmpeg.State == FfmpegState.Error || waitedMs >= maxWaitMs) return;
+                await Task.Delay(250, token);
+                waitedMs += 250;
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        if (token.IsCancellationRequested) return;
+        await RefreshWorkingWindowAsync();
+    }
+
+    // ── Motion keyframe handlers ──────────────────────────────────────────────
+
+    /// <summary>Activate motion path editing for a layer by ID.</summary>
+    public void ActivateMotionPath(Guid layerId, string layerType)
+    {
+        // Clear other Properties-panel selections so the MotionKeyframeEditor branch is actually reached —
+        // it's checked after _selectedCallout/_selectedClipArt in the panel's if/else-if chain, so leaving
+        // either set meant clicking "Animate" on a callout or clip-art layer silently did nothing visible.
+        _selectedCallout     = null;
+        _selectedClipArt     = null;
+        _selectedTextOverlay = null;
+
+        _motionLayerId   = layerId;
+        _motionLayerType = layerType;
+        _motionKeyframeIndex = -1;
+        StateHasChanged();
+    }
+
+    // ── Canvas nudge (item #57 P5) ──────────────────────────────────────────────
+
+    private const double NudgeStep      = 0.01; // 1% of canvas
+    private const double NudgeStepShift = 0.05; // 5% of canvas with Shift held
+
+    /// <summary>Arrow-key nudge for whichever of Callout/ClipArt/TextOverlay is currently
+    /// selected — mirrors CanvasSelectionOverlay's own drag/HUD writes exactly (the Camtasia-rule
+    /// <c>Motion.EditLayer</c>, one undo commit per discrete action) but lives here since keyboard
+    /// dispatch is already centralized in this component for every other shortcut, Delete
+    /// included right above.</summary>
+    private void NudgeSelectedCanvasItem(string key, bool shift)
+    {
+        TrackItem? item = _selectedCallout is not null ? _selectedCallout
+                        : _selectedClipArt is not null ? _selectedClipArt
+                        : _selectedTextOverlay;
+        if (item is null) return;
+
+        var step = shift ? NudgeStepShift : NudgeStep;
+        var (dx, dy) = key switch
+        {
+            "ArrowLeft"  => (-step, 0.0),
+            "ArrowRight" => (step, 0.0),
+            "ArrowUp"    => (0.0, -step),
+            _            => (0.0, step), // ArrowDown
+        };
+
+        var time = Playback.State.CurrentTime;
+        var (curX, curY) = MotionEffectiveGeometry.EffectivePosition(Motion, item, time, ExportRes.Width, ExportRes.Height);
+        var nx = Math.Clamp(curX + dx, -1.0, 2.0);
+        var ny = Math.Clamp(curY + dy, -1.0, 2.0);
+        var oldKf = Motion.GetPath(item.Id)?.Keyframes.FirstOrDefault(k => Math.Abs(k.Time - time) < 0.001);
+
+        switch (item)
+        {
+            case CalloutClip c:
+                Motion.EditLayer(c.Id, "CalloutClip", time,
+                    () => MotionEffectiveGeometry.StaticSeed(c, time),
+                    kf => { kf.X = nx; kf.Y = ny; },
+                    () => Clips.CommitCalloutUpdate(c.Id, "position",
+                        cl => { cl.X = nx; cl.Y = ny; },
+                        cl => { cl.X = curX; cl.Y = curY; }));
+                CommitKeyframeNudgeIfAnimated(item, "CalloutClip", time, oldKf);
+                break;
+            case ClipArtClip a:
+                Motion.EditLayer(a.Id, "ClipArtClip", time,
+                    () => MotionEffectiveGeometry.StaticSeed(a, time),
+                    kf => { kf.X = nx; kf.Y = ny; },
+                    () => Clips.CommitClipArtUpdate(a.Id, "position",
+                        cl => { cl.X = nx; cl.Y = ny; },
+                        cl => { cl.X = curX; cl.Y = curY; }));
+                CommitKeyframeNudgeIfAnimated(item, "ClipArtClip", time, oldKf);
+                break;
+            case TextOverlay t:
+                // No undo tier for TextOverlay's static position anywhere today (matching drag
+                // and the HUD's own SetPosition) — deliberately not extending item #63's fix to
+                // its keyframe branch either, so as not to introduce a new
+                // have-undo-only-when-animated asymmetry.
+                Motion.EditLayer(t.Id, "TextOverlay", time,
+                    () => MotionEffectiveGeometry.StaticSeed(t, time, ExportRes.Width, ExportRes.Height),
+                    kf => { kf.X = nx; kf.Y = ny; },
+                    () => Clips.UpdateTextOverlay(t with { OverrideX = nx, OverrideY = ny }));
+                break;
+        }
+    }
+
+    /// <summary>Item #63 — mirrors <c>CanvasSelectionOverlay.CommitKeyframeEditIfAnimated</c>
+    /// exactly (arrow-key nudge is this component's own gesture, not routed through that overlay).
+    /// Wraps the keyframe-branch edit <see cref="Motion.EditLayer"/> just performed in one undo
+    /// entry; no-op when the layer has no path (the static branch already self-committed via its
+    /// own <c>writeStatic</c> closure above).</summary>
+    private void CommitKeyframeNudgeIfAnimated(TrackItem item, string layerType, double time, MotionKeyframe? oldKf)
+    {
+        if (!Motion.HasPath(item.Id)) return;
+        var newKf = Motion.GetPath(item.Id)?.Keyframes.FirstOrDefault(k => Math.Abs(k.Time - time) < 0.001);
+        if (newKf is null) return;
+
+        Clips.CommitMotionKeyframeEdit($"Nudge {layerType}",
+            apply:  () => Motion.UpsertKeyframe(item.Id, layerType, newKf),
+            revert: () =>
+            {
+                if (oldKf is null) Motion.RemoveKeyframe(item.Id, time);
+                else Motion.UpsertKeyframe(item.Id, layerType, oldKf);
+            });
+    }
+
+    private void OnMotionKeyframeSelected(int index)
+    {
+        _motionKeyframeIndex = index;
+        StateHasChanged();
+    }
+
+    /// <summary>A keyframe diamond was clicked on the timeline (item #57 P6). Opens/focuses the
+    /// MotionKeyframeEditor panel on that exact layer+keyframe, mirroring what clicking the same
+    /// keyframe's dot on the canvas overlay already does via <see cref="OnMotionKeyframeSelected"/>
+    /// — the playhead seek itself already happened in VideoTimeline before this fires.</summary>
+    private void OnTimelineKeyframeSelected((Guid LayerId, string LayerType, int KeyframeIndex, double Time) args)
+    {
+        ActivateMotionPath(args.LayerId, args.LayerType);
+        _motionKeyframeIndex = args.KeyframeIndex;
+        StateHasChanged();
+    }
+
+    /// <summary>Adds a new keyframe at the playhead, seeded at the given canvas position — from
+    /// double-clicking the preview at that spot.</summary>
+    private void AddKeyframeAt((double X, double Y) pos)
+    {
+        if (!_motionLayerId.HasValue || _motionLayerType is null) return;
+
+        // Evaluate first (so a second-or-later keyframe interpolates from the existing path instead of
+        // resetting), falling back to the layer's actual current static values — not hardcoded defaults —
+        // so non-position properties don't visibly snap when the first keyframe is added.
+        var frame   = Motion.Evaluate(_motionLayerId.Value, Playback.State.CurrentTime);
+        var callout = _motionLayerType == "CalloutClip"
+            ? Clips.AllCalloutClips.FirstOrDefault(c => c.Id == _motionLayerId.Value)
+            : null;
+
+        var kf = new MotionKeyframe
+        {
+            Time  = Playback.State.CurrentTime,
+            X     = pos.X,
+            Y     = pos.Y,
+            Scale = frame?.Scale ?? 1.0,
+            Alpha = frame?.Alpha ?? 1.0,
+        };
+        if (frame is not null)
+        {
+            kf.FillColor          = frame.FillColor;
+            kf.StrokeColor        = frame.StrokeColor;
+            kf.ControlPointValues = new Dictionary<string, double>(frame.ControlPointValues);
+        }
+        else if (callout is not null)
+        {
+            kf.FillColor          = callout.FillColor;
+            kf.StrokeColor        = callout.StrokeColor;
+            kf.ControlPointValues = new Dictionary<string, double>(callout.ControlPointValues);
+        }
+
+        Motion.UpsertKeyframe(_motionLayerId.Value, _motionLayerType, kf);
+        StateHasChanged();
+    }
+    private void OnPlaybackStateChanged()   => InvokeAsync(StateHasChanged);
+    private void OnLayoutChanged()          => InvokeAsync(StateHasChanged);
+
+    // ── Layout resize callbacks ────────────────────────────────────────────────────────────────────────
+
+    private void OnBrowserResized(int px)  => Layout.SetBrowserWidth(px);
+    private void OnTimelineResized(int px) => Layout.SetTimelineHeight(px);
+
+    // ── Multi-select bulk handlers ─────────────────────────────────────────────────────────────────────────────────────
+
+    private Task OnBulkDeleteAsync(IReadOnlyList<Guid> ids)
+    {
+        foreach (var id in ids)
+            Clips.RemoveClip(id);
+        // Same stale-selection gap as item #26's single-remove fix — clear every selection field
+        // a deleted id could match, not just the two most commonly multi-selected types.
+        foreach (var id in ids)
+            OnTimelineItemRemoved(id);
+        return Task.CompletedTask;
+    }
+
+    private Task OnBulkMoveAsync((IReadOnlyList<Guid> Ids, double DeltaSeconds) args)
+    {
+        foreach (var id in args.Ids)
+            Clips.MoveClip(id, args.DeltaSeconds);
+        return Task.CompletedTask;
+    }
+
+    // ── Transfer progress state ───────────────────────────────────────────────────
+
+    private sealed class TransferProgressState(string title, string label)
+    {
+        public string Title          { get; }      = title;
+        public string Label          { get; }      = label;
+        public int    Percent        { get; private set; } = -1;
+        public string FormattedBytes { get; private set; } = "0 B";
+        public string FormattedTotal { get; private set; } = "?";
+
+        public void Update(TransferProgress tp)
+        {
+            Percent        = tp.Percent;
+            FormattedBytes = tp.FormattedBytes;
+            FormattedTotal = tp.FormattedTotal;
+        }
+    }
+
+    // ── Dispose ───────────────────────────────────────────────────────────────
+
+    public async ValueTask DisposeAsync()
+    {
+        // Audit #4 — release the cached interop module handles. Guarded because teardown races
+        // circuit shutdown: once the circuit is gone the module is already unreachable and
+        // disposing it throws, which must not surface as an error during a normal navigation.
+        if (_dom is not null)
+        {
+            try { await _dom.DisposeAsync(); } catch (JSDisconnectedException) { } catch (ObjectDisposedException) { }
+            _dom = null;
+        }
+
+        Ffmpeg.OnStateChanged   -= OnFfmpegStateChanged;
+        Ffmpeg.OnStateChanged   -= OnFfmpegStateChangedForBackgroundRender;
+        RenderStatus.OnChanged  -= OnRenderStatusChangedForSharpen;
+        BackgroundRender.OnLoopError -= OnBackgroundRenderLoopError;
+        Clips.OnChange          -= OnClipsChanged;
+        Playback.OnStateChanged -= OnPlaybackStateChanged;
+        Layout.OnChanged        -= OnLayoutChanged;
+        Projects.OnChanged      -= OnProjectStoreChanged;
+        ExportQueue.OnChanged   -= OnQueueChanged;
+        await BackgroundRender.DisposeAsync();
+
+        _autoPreviewCts?.Cancel();
+        _autoPreviewCts?.Dispose();
+
+        await Keyboard.DisposeAsync();
+
+        // Phase 144 — the child VideoPreview instances (_preview/_fullQualityPreview) may
+        // independently revoke these same strings via their own DisposeAsync as the render tree
+        // tears down; BlobLifecycle.Revoking logs (doesn't throw) if that race already happened,
+        // same as everywhere else in this file. On full component teardown the actual user impact
+        // is zero either way — this is diagnostic parity, not a functional fix.
+        if (_timelinePreviewUrl is not null)
+        {
+            BlobLifecycle.Revoking(_timelinePreviewUrl, "VideoEditor.timelinePreview");
+            // Item #70 phase 161 made this url possibly sidecar-origin (assembled by a native
+            // concat, minted in JS with no MEMFS backing) — that phase routed the orphan-revoke
+            // path and both VideoPreview paths through PreviewUrlRevoker but MISSED this disposal
+            // one, so a sidecar-origin url was still being revoked through the ffmpeg worker.
+            // PreviewUrlRevoker defaults unknown urls to the worker route, so this is a no-op for
+            // every worker-origin url and a fix for the sidecar-origin case.
+            try { await PreviewRevoker.RevokeAsync(_timelinePreviewUrl); } catch { }
+        }
+
+        if (_fullQualityPreviewUrl is not null)
+        {
+            BlobLifecycle.Revoking(_fullQualityPreviewUrl, "VideoEditor.fullQualityPreview");
+            // Always worker-origin today (the full-quality preview is never sidecar-assembled),
+            // but routed through the same revoker so it can't become wrong if that changes.
+            try { await PreviewRevoker.RevokeAsync(_fullQualityPreviewUrl); } catch { }
+        }
+
+        if (Ffmpeg.State is FfmpegState.Ready or FfmpegState.Processing)
+            await Ffmpeg.TerminateAsync();
+
+        _fullscreenSelfRef?.Dispose();
+        if (_fullscreenModule is not null)
+        {
+            try { await _fullscreenModule.DisposeAsync(); } catch (JSDisconnectedException) { }
+        }
+
+        if (_viewportModule is not null)
+        {
+            try { await _viewportModule.DisposeAsync(); } catch (JSDisconnectedException) { }
+        }
+    }
+}

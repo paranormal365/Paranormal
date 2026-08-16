@@ -1,0 +1,335 @@
+@inject ClipStore Clips
+
+@if (Clip is not null)
+{
+    <div class="bv-audio-editor">
+
+        <!-- ── Header ──────────────────────────────────────────────────── -->
+        <div class="bv-audio-editor__header">
+            <span class="bv-audio-editor__title">🎵 @Clip.Name</span>
+            <TelerikButton OnClick="Close"
+                           Icon="@SvgIcon.X"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Title="Close audio editor" />
+        </div>
+
+        <!-- ── Info row ─────────────────────────────────────────────────── -->
+        <div class="bv-audio-editor__info">
+            <span>Source: @FormatTime(Clip.Duration)</span>
+            <span>Trimmed: @FormatTime(TrimmedDuration)</span>
+        </div>
+
+        <!-- ── Waveform ─────────────────────────────────────────────────── -->
+        @if (Clip.BlobUrl is not null)
+        {
+            <div class="bv-audio-editor__waveform">
+                <AudioWaveform BlobUrl="@Clip.BlobUrl"
+                               Peaks="@Clip.WaveformPeaks"
+                               Height="72"
+                               ShowControls="true"
+                               OnPeaksDecoded="@((float[] p) => Clip.WaveformPeaks = p)" />
+            </div>
+        }
+
+        <!-- ── Trim In ──────────────────────────────────────────────────── -->
+        <div class="bv-audio-editor__field">
+            <label class="bv-audio-editor__label">In point</label>
+            <TelerikSlider @bind-Value="_trimStart"
+                           Min="0"
+                           Max="@_trimEnd"
+                           SmallStep="0.1"
+                           LargeStep="1"
+                           Orientation="@SliderOrientation.Horizontal"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0, _trimEnd, 1)"
+                           Class="bv-audio-editor__slider" />
+            <span class="bv-audio-editor__time">@FormatTime(_trimStart)</span>
+        </div>
+
+        <!-- ── Trim Out ─────────────────────────────────────────────────── -->
+        <div class="bv-audio-editor__field">
+            <label class="bv-audio-editor__label">Out point</label>
+            <TelerikSlider @bind-Value="_trimEnd"
+                           Min="@_trimStart"
+                           Max="@Clip.Duration"
+                           SmallStep="0.1"
+                           LargeStep="1"
+                           Orientation="@SliderOrientation.Horizontal"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(_trimStart, Clip.Duration, 1)"
+                           Class="bv-audio-editor__slider" />
+            <span class="bv-audio-editor__time">@FormatTime(_trimEnd)</span>
+        </div>
+
+        <div class="bv-audio-editor__field">
+            <TelerikButton OnClick="ApplyTrim"
+                           Icon="@SvgIcon.Crop"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Title="Apply trim in/out points">
+                Apply Trim
+            </TelerikButton>
+        </div>
+
+        <!-- ── Split at playhead ────────────────────────────────────────── -->
+        <div class="bv-audio-editor__field">
+            <label class="bv-audio-editor__label">Split at</label>
+            <TelerikSlider @bind-Value="_splitAt"
+                           Min="0"
+                           Max="@TrimmedDuration"
+                           SmallStep="0.1"
+                           LargeStep="1"
+                           Orientation="@SliderOrientation.Horizontal"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0, TrimmedDuration, 1)"
+                           Class="bv-audio-editor__slider" />
+            <span class="bv-audio-editor__time">@FormatTime(_splitAt)</span>
+        </div>
+
+        <div class="bv-audio-editor__field">
+            <TelerikButton OnClick="SplitAsync"
+                           Icon="@SvgIcon.Crop"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           Title="Split clip at selected point">
+                Split
+            </TelerikButton>
+        </div>
+
+        <!-- ── Volume ──────────────────────────────────────────────────── -->
+        <div class="bv-audio-editor__field">
+            <label class="bv-audio-editor__label">
+                Volume (@VolumeToDb(_volume) dB)
+                @if (Clip.VolumeAutomation.Count >= 2)
+                {
+                    <span class="bv-audio-editor__badge">Automation active (@Clip.VolumeAutomation.Count pts)</span>
+                }
+            </label>
+            <TelerikSlider @bind-Value="_volume"
+                           Min="0.0"
+                           Max="2.0"
+                           SmallStep="0.05"
+                           LargeStep="0.25"
+                           Orientation="@SliderOrientation.Horizontal"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 2.0, 0.25)"
+                           Class="bv-audio-editor__slider" />
+        </div>
+
+        <div class="bv-audio-editor__field">
+            <TelerikButton OnClick="ApplyVolume"
+                           Icon="@SvgIcon.VolumeUp"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
+                           Title="Apply scalar volume">
+                Apply Volume
+            </TelerikButton>
+            @if (Clip.VolumeAutomation.Count >= 2)
+            {
+                <TelerikButton OnClick="ClearAutomation"
+                               Icon="@SvgIcon.X"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
+                               Title="Clear all automation keyframes">
+                    Clear Automation
+                </TelerikButton>
+            }
+        </div>
+
+        <!-- ── Channel Volume (backlog #10) ────────────────────────────────── -->
+        <div class="bv-audio-editor__row">
+            <div class="bv-audio-editor__field">
+                <label class="bv-audio-editor__label">Left (@VolumeToDb(_leftVolume) dB)</label>
+                <TelerikSlider @bind-Value="_leftVolume"
+                               Min="0.0"
+                               Max="2.0"
+                               SmallStep="0.05"
+                               LargeStep="0.25"
+                               Orientation="@SliderOrientation.Horizontal"
+                               LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 2.0, 0.25)"
+                               Class="bv-audio-editor__slider" />
+            </div>
+            <div class="bv-audio-editor__field">
+                <label class="bv-audio-editor__label">Right (@VolumeToDb(_rightVolume) dB)</label>
+                <TelerikSlider @bind-Value="_rightVolume"
+                               Min="0.0"
+                               Max="2.0"
+                               SmallStep="0.05"
+                               LargeStep="0.25"
+                               Orientation="@SliderOrientation.Horizontal"
+                               LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 2.0, 0.25)"
+                               Class="bv-audio-editor__slider" />
+            </div>
+        </div>
+
+        <div class="bv-audio-editor__field">
+            <TelerikButton OnClick="ApplyChannelVolume"
+                           Icon="@SvgIcon.VolumeUp"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
+                           Title="Apply left/right channel balance">
+                Apply Channel Volume
+            </TelerikButton>
+        </div>
+
+        <!-- ── Fade In ──────────────────────────────────────────────────── -->
+        <div class="bv-audio-editor__field">
+            <label class="bv-audio-editor__label">Fade In (@FormatTime(_fadeIn))</label>
+            <TelerikSlider @bind-Value="_fadeIn"
+                           Min="0.0"
+                           Max="@MaxFade"
+                           SmallStep="0.1"
+                           LargeStep="0.5"
+                           Orientation="@SliderOrientation.Horizontal"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, MaxFade, 0.5)"
+                           Class="bv-audio-editor__slider" />
+        </div>
+
+        <!-- ── Fade Out ─────────────────────────────────────────────────── -->
+        <div class="bv-audio-editor__field">
+            <label class="bv-audio-editor__label">Fade Out (@FormatTime(_fadeOut))</label>
+            <TelerikSlider @bind-Value="_fadeOut"
+                           Min="0.0"
+                           Max="@MaxFade"
+                           SmallStep="0.1"
+                           LargeStep="0.5"
+                           Orientation="@SliderOrientation.Horizontal"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, MaxFade, 0.5)"
+                           Class="bv-audio-editor__slider" />
+        </div>
+
+        <div class="bv-audio-editor__field">
+            <TelerikButton OnClick="ApplyFades"
+                           Icon="@SvgIcon.VolumeUp"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
+                           Title="Apply fade in/out">
+                Apply Fades
+            </TelerikButton>
+        </div>
+
+        <!-- ── Delete ──────────────────────────────────────────────────── -->
+        <div class="bv-audio-editor__field bv-audio-editor__field--actions">
+            <TelerikButton OnClick="DeleteAsync"
+                           Icon="@SvgIcon.Trash"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           Title="Remove clip from timeline">
+                Delete
+            </TelerikButton>
+        </div>
+
+    </div>
+}
+
+@code {
+    // ── Parameters ──────────────────────────────────────────────────────────
+
+    /// <summary>The audio clip currently being edited. Null = panel is hidden.</summary>
+    [Parameter] public AudioClip? Clip { get; set; }
+
+    /// <summary>Raised when the user closes the panel (X button).</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Raised after the clip is deleted from the timeline.</summary>
+    [Parameter] public EventCallback<AudioClip> OnClipDeleted { get; set; }
+
+    /// <summary>Raised after the clip is split into two clips.</summary>
+    [Parameter] public EventCallback<AudioClip> OnClipSplit { get; set; }
+
+    // ── Local state ─────────────────────────────────────────────────────────
+
+    private double _trimStart;
+    private double _trimEnd;
+    private double _volume;
+    private double _leftVolume;
+    private double _rightVolume;
+    private double _fadeIn;
+    private double _fadeOut;
+    private double _splitAt;
+
+    // ── Derived ─────────────────────────────────────────────────────────────
+
+    private double TrimmedDuration => _trimEnd - _trimStart;
+    private double MaxFade         => Clip is not null ? Math.Max(0.1, Clip.Duration / 2.0) : 30.0;
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────
+
+    protected override void OnParametersSet()
+    {
+        if (Clip is null) return;
+
+        _trimStart    = Clip.StartTrim;
+        _trimEnd      = Clip.EndTrim > Clip.StartTrim ? Clip.EndTrim : Clip.Duration;
+        _volume       = Clip.Volume;
+        _leftVolume   = Clip.LeftVolume;
+        _rightVolume  = Clip.RightVolume;
+        _fadeIn       = Clip.FadeInSeconds;
+        _fadeOut      = Clip.FadeOutSeconds;
+        _splitAt      = 0;
+    }
+
+    // ── Handlers ─────────────────────────────────────────────────────────────
+
+    private void ApplyTrim()
+    {
+        if (Clip is null || _trimStart >= _trimEnd) return;
+        Clips.UpdateAudioTrim(Clip.Id, _trimStart, _trimEnd);
+    }
+
+    private void ApplyVolume()
+    {
+        if (Clip is null) return;
+        Clips.SetClipVolume(Clip.Id, _volume);
+    }
+
+    private void ClearAutomation()
+    {
+        if (Clip is null) return;
+        Clips.ClearVolumeAutomation(Clip.Id);
+    }
+
+    private void ApplyChannelVolume()
+    {
+        if (Clip is null) return;
+        Clips.SetClipChannelVolume(Clip.Id, _leftVolume, _rightVolume);
+    }
+
+    private void ApplyFades()
+    {
+        if (Clip is null) return;
+        Clips.UpdateAudioFade(Clip.Id, _fadeIn, _fadeOut);
+    }
+
+    private async Task SplitAsync()
+    {
+        if (Clip is null) return;
+        var original = Clip;
+        try { Clips.SplitClip(Clip.Id, _splitAt); }
+        catch { return; /* split point out of range */ }
+        await OnClipSplit.InvokeAsync(original);
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (Clip is null) return;
+        var deleted = Clip;
+        Clips.RemoveClip(deleted.Id);
+        await OnClipDeleted.InvokeAsync(deleted);
+    }
+
+    private async Task Close() => await OnClose.InvokeAsync();
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private static string FormatTime(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.TotalHours >= 1
+            ? ts.ToString(@"h\:mm\:ss\.f")
+            : ts.ToString(@"m\:ss\.f");
+    }
+
+    private static string VolumeToDb(double linear)
+    {
+        if (linear <= 0) return "-∞";
+        var db = 20.0 * Math.Log10(linear);
+        return db.ToString("+0.0;-0.0;0.0", System.Globalization.CultureInfo.InvariantCulture);
+    }
+}

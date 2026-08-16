@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Item #38 phase 122 (E): the local native-ffmpeg companion process. Bound to 127.0.0.1 only —
+    never reachable from the network — and paired with the browser editor via a one-time pasted
+    token (see Security/PairingTokenStore.cs). See DESIGN-item38-long-form-memory.md §5.4 for the
+    full threat model this project is built against.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <RootNamespace>Ben.Video.Sidecar</RootNamespace>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      Item #70 phase 174 — which ffmpeg/<rid>/ directory gets copied next to the app.
+      FfmpegLocator resolves its RID at RUNTIME from RuntimeInformation, so the build has to bundle
+      the RID the app will actually ask for. A RID-less `dotnet build`/`dotnet run` (the normal
+      local-testing case, and how the sidecar is launched during development) leaves
+      $(RuntimeIdentifier) empty, which made the old glob read `ffmpeg/**` and sweep in EVERY RID's
+      binaries — ~130MB each. Falling back to the SDK's own host RID copies exactly the one set the
+      runtime will look for. Override with -p:BundledFfmpegRid=<rid> to stage a different one.
+    -->
+    <BundledFfmpegRid Condition="'$(BundledFfmpegRid)' == ''">$(RuntimeIdentifier)</BundledFfmpegRid>
+    <BundledFfmpegRid Condition="'$(BundledFfmpegRid)' == ''">$(NETCoreSdkPortableRuntimeIdentifier)</BundledFfmpegRid>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ben.Video.Core\Ben.Video.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ffmpeg-manifest.json is already auto-included as Content by the SDK's default item globs
+         (EnableDefaultContentItems) — Update (not Include) just adds the copy-to-output
+         instruction without re-declaring the item and tripping NETSDK1022. -->
+    <Content Update="ffmpeg-manifest.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- The actual ffmpeg binaries, populated by scripts/fetch-ffmpeg.{sh,ps1} — not committed
+         (see .gitignore) and absent from a fresh clone, so this glob is empty and harmless until
+         someone runs the fetch script. FfmpegLocator/health degrade gracefully
+         (FfmpegIntegrityOk: false) when it's absent. -->
+    <Content Include="ffmpeg/$(BundledFfmpegRid)/**" Condition="Exists('ffmpeg/$(BundledFfmpegRid)')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

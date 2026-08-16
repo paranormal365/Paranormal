@@ -1,0 +1,207 @@
+/* ── Toolbar shell ──────────────────────────────────────────────────────── */
+:host,
+.bv-toolbar {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .375rem .75rem;
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    border-bottom: 1px solid var(--kendo-color-border, var(--bv-border));
+    height: 48px;
+    flex-shrink: 0;
+    overflow: hidden;
+    /* Drop the (purely informational) feature badges before the row gets tight —
+       they'd otherwise permanently reserve space the ToolBar's own overflow
+       popup can't reclaim, since ToolBarTemplateItem can't collapse into it. */
+    container-type: inline-size;
+    container-name: bv-toolbar-row;
+}
+
+.bv-toolbar__badges {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    flex-shrink: 0;
+}
+
+@container bv-toolbar-row (max-width: 1100px) {
+    .bv-toolbar__badges {
+        display: none;
+    }
+}
+
+/* The inner TelerikToolBar owns overflow itself (OverflowMode="Menu" collapses
+   whatever doesn't fit into a "..." popup instead of silently clipping or
+   requiring a blind horizontal scroll) — it just needs to actually get to
+   shrink within the flex row. */
+.bv-toolbar__telerik-bar {
+    flex: 1;
+    min-width: 0;
+}
+
+.bv-toolbar__title {
+    flex-shrink: 0;
+    font-size: .9375rem;
+    font-weight: 600;
+    letter-spacing: .02em;
+    color: var(--kendo-color-primary, var(--bv-accent));
+    white-space: nowrap;
+    margin-right: .25rem;
+}
+
+/* pushes feature badges + status to the right */
+.bv-toolbar__spacer {
+    flex: 1;
+}
+
+/* ── Project name input ──────────────────────────────────────────────────── */
+.bv-toolbar__proj-name {
+    font-size: .78rem;
+    background: transparent;
+    color: var(--kendo-color-on-surface, var(--bv-text));
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 1px 6px;
+    max-width: 160px;
+    outline: none;
+    transition: border-color .15s, background .15s;
+}
+
+.bv-toolbar__proj-name:hover,
+.bv-toolbar__proj-name:focus {
+    background: var(--kendo-color-surface-alt, var(--bv-surface-1));
+    border-color: var(--kendo-color-border, var(--bv-border));
+}
+
+.bv-toolbar__proj-name--dirty::after {
+    /* Dirty indicator shown as a title-bar asterisk — actual * added in VideoEditor */
+    content: '';
+}
+
+/* Input shows subtle accent border when dirty */
+.bv-toolbar__proj-name--dirty {
+    border-color: var(--kendo-color-primary, var(--bv-accent)) !important;
+}
+
+/* ── Status label ───────────────────────────────────────────────────────── */
+.bv-toolbar__status {
+    font-size: .75rem;
+    padding: .2rem .55rem;
+    border-radius: 999px;
+    white-space: nowrap;
+    font-weight: 500;
+    background: transparent;
+    border: 1px solid transparent;
+}
+
+.bv-status--idle        { color: #888; border-color: #444; }
+.bv-status--loadingcore {
+    color: #f5c542;
+    border-color: #f5c542;
+    animation: bv-status-pulse 1.4s ease-in-out infinite;
+}
+.bv-status--ready       { color: #4caf89; border-color: #4caf89; }
+.bv-status--error       { color: #e06c75; border-color: #e06c75; }
+
+/* Item #71 — both busy shapes (a real Processing exec, and a lighter worker call caught by
+   FfmpegStatusPresentation.IsBusyButNotProcessing) collapse to this single "busy" modifier so they
+   read as one visual concept. User-requested "info" color (Telerik's own --kendo-color-info token,
+   not a hand-picked hex — matches this app's own "prefer Telerik native" convention), plus a
+   filled chip and the same pulse LoadingCore already uses just above: idle/ready/error are all a
+   thin outline + text on a transparent background with equal visual weight, which was the actual
+   complaint — a slightly different hue in that same thin-outline treatment doesn't read as
+   "unavailable" at a glance the way a filled, moving chip does. */
+.bv-status--busy {
+    color: var(--kendo-color-info, #38bdf8);
+    border-color: var(--kendo-color-info, #38bdf8);
+    background: color-mix(in srgb, var(--kendo-color-info, #38bdf8) 18%, transparent);
+    animation: bv-status-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes bv-status-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.45; }
+}
+
+/* ── Progress bar ───────────────────────────────────────────────────────── */
+.bv-toolbar__progress {
+    width: 120px;
+    height: 6px;
+}
+
+/* ── Native sidecar chip (item #38 phase E) ───────────────────────────────── */
+.bv-sidecar-chip {
+    font-size: .75rem;
+    padding: .2rem .55rem;
+    border-radius: 999px;
+    white-space: nowrap;
+    font-weight: 500;
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.bv-sidecar-chip--disconnected  { color: #888; border: 1px solid #444; }
+.bv-sidecar-chip--foundunpaired { color: #f5c542; border: 1px solid #f5c542; }
+.bv-sidecar-chip--tokenrejected { color: #e06c75; border: 1px solid #e06c75; }
+.bv-sidecar-chip--paired        { color: #4caf89; border: 1px solid #4caf89; }
+.bv-sidecar-chip--disabled      { color: #666; border: 1px solid #333; }
+
+/* ── ffmpeg diagnostics chip (phase 141, flakiness investigation) ─────────── */
+.bv-diagnostics-chip {
+    font-size: .75rem;
+    padding: .2rem .55rem;
+    border-radius: 999px;
+    white-space: nowrap;
+    font-weight: 500;
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.bv-diagnostics-chip--idle        { color: #888; border: 1px solid #444; }
+.bv-diagnostics-chip--loadingcore { color: #f5c542; border: 1px solid #f5c542; }
+.bv-diagnostics-chip--ready       { color: #4caf89; border: 1px solid #4caf89; }
+.bv-diagnostics-chip--processing  { color: #7c9ef8; border: 1px solid #7c9ef8; }
+.bv-diagnostics-chip--error       { color: #e06c75; border: 1px solid #e06c75; }
+.bv-diagnostics-chip--wedged {
+    color: #e06c75;
+    border: 1px solid #e06c75;
+    font-weight: 700;
+    animation: bv-status-pulse 1.4s ease-in-out infinite;
+}
+
+/* ── Feature badges ─────────────────────────────────────────────────────── */
+/* ── Feature badges ─────────────────────────────────────────────────────────── */
+.bv-feature-badge {
+    font-size: .65rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: .15rem .45rem;
+    border-radius: 4px;
+    background: var(--bv-accent-muted);
+    color: var(--kendo-color-primary, var(--bv-accent));
+    border: 1px solid var(--kendo-color-primary, var(--bv-accent));
+    white-space: nowrap;
+}
+
+/* ── Panel toggle button group ──────────────────────────────────────────────── */
+.bv-toolbar__toggles {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-right: .25rem;
+    padding: 2px;
+    background: var(--kendo-color-surface-alt, var(--bv-surface-1));
+    border: 1px solid var(--kendo-color-border, var(--bv-border));
+    border-radius: 5px;
+}
+
+/* active (visible) state — subtle highlight */
+.bv-toolbar__toggles .bv-toggle--active {
+    background: var(--bv-accent-muted) !important;
+    color: var(--kendo-color-primary, var(--bv-accent)) !important;
+    border-color: var(--kendo-color-primary, var(--bv-accent)) !important;
+}
+

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ben Video Editor</title>
+    <base href="/" />
+    <link rel="preload" id="webassembly" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <!-- RCL scoped CSS — must be linked here so it resolves from / not from the current route -->
+    <link href="_content/Ben.Video.Editor/Ben.Video.Editor.bundle.scp.css" rel="stylesheet" />
+    <!-- Intercept Blazor-injected <link> tags that use relative _content/ paths.
+         On sub-routes like /editor the relative path resolves to /editor/_content/...
+         instead of /_content/... — this observer fixes it before the browser requests it.
+         (Carried over from Ben.Video.App, where this bit on every sub-route.) -->
+    <script>
+      (function () {
+        const fix = node => {
+          if (node.nodeType !== 1 || node.tagName !== 'LINK') return;
+          const href = node.getAttribute('href') || '';
+          if (href && !href.startsWith('/') && !href.startsWith('http') && href.includes('_content/')) {
+            node.setAttribute('href', '/' + href);
+          }
+        };
+        const observer = new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(fix)));
+        observer.observe(document.head, { childList: true });
+      })();
+    </script>
+    <script type="importmap"></script>
+    <!-- Telerik theme, served from the NuGet package — no vendored theme tree in this host.
+         The site's own ben-light/ben-dark styling applies when the editor is reached through the
+         site; this standalone host just needs the components to render correctly. -->
+    <link href="_content/Telerik.UI.for.Blazor/css/kendo-theme-meridian/all.css" rel="stylesheet" />
+    <!-- Ben.Video CSS variable fallbacks — must load after theme, before RCL component CSS -->
+    <link href="_content/Ben.Video.Editor/css/ben-video-variables.css" rel="stylesheet" />
+    <!-- Telerik Blazor JS — served from local NuGet package (avoids CDN latency/availability) -->
+    <script src="_content/Telerik.UI.for.Blazor/js/telerik-blazor.js"></script>
+    <!-- ffmpeg.wasm — served locally so the worker chunk (814.ffmpeg.js) is same-origin -->
+    <script src="_content/Ben.Video.Editor/js/ffmpeg.umd.js"></script>
+    <!-- WaveSurfer.js v7 UMD — waveform rendering for audio clips. Same CDN tag as the other two
+         hosts; audit finding D4 replaces all three with a pinned self-hosted build together. -->
+    <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
+</head>
+
+<body>
+    <div id="app">
+        <svg class="loading-progress">
+            <circle r="40%" cx="50%" cy="50%" />
+            <circle r="40%" cx="50%" cy="50%" />
+        </svg>
+        <div class="loading-progress-text"></div>
+    </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="." class="reload">Reload</a>
+        <span class="dismiss">🗙</span>
+    </div>
+    <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+</body>
+
+</html>

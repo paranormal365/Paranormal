@@ -1,0 +1,489 @@
+@implements IDisposable
+@implements IAsyncDisposable
+@inject FfmpegService Ffmpeg
+@inject MemFsLedger MemFs
+@inject NativeSidecarService NativeSidecar
+@inject IJSRuntime JS
+
+<header class="bv-toolbar">
+
+    <span class="bv-toolbar__title">Ben.Video</span>
+
+    <TelerikToolBar OverflowMode="@ToolBarOverflowMode.Menu"
+                     Size="@ThemeConstants.Button.Size.Small"
+                     Class="bv-toolbar__telerik-bar">
+
+        <!-- Initialize ffmpeg.wasm core -->
+        <ToolBarButton OnClick="OnInitializeClicked"
+                       Enabled="@(Ffmpeg.State is FfmpegState.Idle or FfmpegState.Error)"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Icon="@SvgIcon.Play">
+            Initialize
+        </ToolBarButton>
+
+        <!-- Open files — only active when ready -->
+        <ToolBarButton OnClick="OnOpenClicked"
+                       Enabled="@(Ffmpeg.State == FfmpegState.Ready)"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                       Icon="@SvgIcon.FolderOpen">
+            Open
+        </ToolBarButton>
+
+        <!-- Full-resolution/quality Preview — renders the real result (item #36 phase 84) in the
+             popout window, in-memory only, never saved. The Working Window itself always stays
+             live/current on its own (auto-refreshing preview-quality background rendering) — this
+             button is for checking the actual finished output before committing to Export. -->
+        <ToolBarButton OnClick="OnPreviewClicked"
+                       Enabled="@(Ffmpeg.State == FfmpegState.Ready && HasClips)"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
+                       Icon="@SvgIcon.Eye"
+                       Title="Preview the final result at full resolution/quality (opens in a separate window)">
+            Preview
+        </ToolBarButton>
+
+        <!-- Export — only active when ready and there are clips -->
+        <ToolBarButton OnClick="OnExportClicked"
+                       Enabled="@(Ffmpeg.State == FfmpegState.Ready && HasClips)"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
+                       Icon="@SvgIcon.Download"
+                       Title="Render the final video locally in the browser (ffmpeg.wasm), then save or upload">
+            Export
+        </ToolBarButton>
+
+        <!-- Undo -->
+        <ToolBarButton OnClick="OnUndoClicked"
+                       Enabled="@CanUndo"
+                       Icon="@SvgIcon.Undo"
+                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Title="@(UndoDescription is not null ? $"Undo: {UndoDescription}" : "Nothing to undo")" />
+
+        <!-- Redo -->
+        <ToolBarButton OnClick="OnRedoClicked"
+                       Enabled="@CanRedo"
+                       Icon="@SvgIcon.Redo"
+                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Title="@(RedoDescription is not null ? $"Redo: {RedoDescription}" : "Nothing to redo")" />
+
+        <!-- File menu — replaces the old Save / Open / Project buttons -->
+        <ToolBarTemplateItem>
+                <TelerikDropDownButton Icon="@SvgIcon.File"
+                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Title="File menu">
+                    <DropDownButtonContent>File</DropDownButtonContent>
+                    <DropDownButtonItems>
+                        <DropDownButtonItem Icon="@SvgIcon.Plus"
+                                            OnClick="OnNewProjectClicked">New</DropDownButtonItem>
+                        <DropDownButtonItem Icon="@SvgIcon.Save"
+                                            OnClick="OnSaveClicked"
+                                            Enabled="@HasClips">Save</DropDownButtonItem>
+                        <DropDownButtonItem Icon="@SvgIcon.Download"
+                                            OnClick="OnSaveToDeviceClicked"
+                                            Enabled="@HasClips">Save to Device…</DropDownButtonItem>
+                        <DropDownButtonItem Icon="@SvgIcon.FolderOpen"
+                                            OnClick="OnOpenProjectListClicked">Open…</DropDownButtonItem>
+                        <DropDownButtonItem Icon="@SvgIcon.Upload"
+                                            OnClick="OnImportJsonClicked">Import JSON…</DropDownButtonItem>
+                        <DropDownButtonItem Icon="@SvgIcon.Download"
+                                            OnClick="OnExportJsonClicked"
+                                            Enabled="@HasClips">Export JSON</DropDownButtonItem>
+                        @if (HasSubtitles)
+                        {
+                            <DropDownButtonItem Icon="@SvgIcon.FileTxt"
+                                                OnClick="OnExportSrtClicked">Export Subtitles (.srt)</DropDownButtonItem>
+                            <DropDownButtonItem Icon="@SvgIcon.FileTxt"
+                                                OnClick="OnExportVttClicked">Export Captions (.vtt)</DropDownButtonItem>
+                        }
+                        <DropDownButtonItem Icon="@SvgIcon.QuestionCircle"
+                                            OnClick="OnHelpClicked">Help</DropDownButtonItem>
+                        @if (ShowErrorLog)
+                        {
+                            <DropDownButtonItem Icon="@SvgIcon.FileError"
+                                                OnClick="OnExportErrorLogClicked">Export Error Log</DropDownButtonItem>
+                        }
+                    </DropDownButtonItems>
+                </TelerikDropDownButton>
+        </ToolBarTemplateItem>
+
+        <!-- Project name + dirty indicator -->
+        <ToolBarTemplateItem>
+                <input class="bv-toolbar__proj-name @(IsDirty ? "bv-toolbar__proj-name--dirty" : "")"
+                       type="text"
+                       value="@ProjectName"
+                       @onchange="e => OnProjectNameChanged.InvokeAsync(e.Value?.ToString() ?? ProjectName)"
+                       title="Project name — click to rename" />
+        </ToolBarTemplateItem>
+
+        @if (ShowProjectPersistence && ShowSaveToServer)
+        {
+            <!-- Save to server (legacy, kept for host apps that wire DocumentPostUrl) -->
+            <ToolBarButton OnClick="OnSaveToServerClicked"
+                           Enabled="@(HasClips)"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                           Icon="@SvgIcon.Cloud"
+                           Title="Save to server" />
+        }
+
+        <ToolBarSpacer />
+
+        <!-- Panel visibility toggles — never overflow into the "..." menu, these are
+             always-relevant layout controls, not one-off actions. -->
+        <ToolBarButton OnClick="OnToggleClipBrowserClicked"
+                       Icon="@SvgIcon.LayoutSideBySide"
+                       FillMode="@(ShowClipBrowser ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                       Overflow="@ToolBarItemOverflow.Never"
+                       Class="@(ShowClipBrowser ? "bv-toggle--active" : "")"
+                       Title="Toggle clip browser" />
+        <ToolBarButton OnClick="OnTogglePreviewClicked"
+                       Icon="@SvgIcon.Eye"
+                       FillMode="@(ShowPreview ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                       Overflow="@ToolBarItemOverflow.Never"
+                       Class="@(ShowPreview ? "bv-toggle--active" : "")"
+                       Title="Toggle preview" />
+        <ToolBarButton OnClick="OnToggleTimelineClicked"
+                       Icon="@SvgIcon.Film"
+                       FillMode="@(ShowTimeline ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                       Overflow="@ToolBarItemOverflow.Never"
+                       Class="@(ShowTimeline ? "bv-toggle--active" : "")"
+                       Title="Toggle timeline" />
+        <ToolBarButton OnClick="OnToggleAssetBrowserClicked"
+                       Icon="@SvgIcon.Image"
+                       FillMode="@(ShowAssetBrowser ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                       Overflow="@ToolBarItemOverflow.Never"
+                       Class="@(ShowAssetBrowser ? "bv-toggle--active" : "")"
+                       Title="Toggle asset browser (clipart, callouts, catalog)" />
+        @if (ShowPanel)
+        {
+            <ToolBarButton OnClick="OnTogglePanelClicked"
+                           Icon="@SvgIcon.LayoutSideBySide"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
+                           FillMode="@ThemeConstants.Button.FillMode.Solid"
+                           Overflow="@ToolBarItemOverflow.Never"
+                           Title="Reopen Media &amp; Properties panel" />
+        }
+        @if (QueueCount > 0)
+        {
+            <ToolBarButton OnClick="OnToggleQueueClicked"
+                           Icon="@SvgIcon.GridLayout"
+                           FillMode="@ThemeConstants.Button.FillMode.Solid"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
+                           Overflow="@ToolBarItemOverflow.Never"
+                           Title="@($"Export queue ({QueueCount} active)")">
+                @QueueCount.ToString()
+            </ToolBarButton>
+        }
+        <ToolBarButton OnClick="OnToggleFullscreenClicked"
+                       Icon="@(IsFullscreen ? SvgIcon.FullscreenExit : SvgIcon.Fullscreen)"
+                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Overflow="@ToolBarItemOverflow.Never"
+                       Title="@(IsFullscreen ? "Exit fullscreen" : "Enter fullscreen")" />
+
+        <!-- State / progress -->
+        <ToolBarTemplateItem>
+                <span class="@StatusCssClass" title="@StatusTooltip">
+                    @StatusLabel
+                </span>
+                @if (Ffmpeg.State == FfmpegState.Processing)
+                {
+                    <TelerikProgressBar Value="@((double)Ffmpeg.ProgressPercent)"
+                                        Max="100"
+                                        Class="bv-toolbar__progress" />
+                }
+                else if (FfmpegStatusPresentation.IsBusyButNotProcessing(Ffmpeg.State, Ffmpeg.IsWorkerBusy))
+                {
+                    @* Item #71 — a lighter worker call (GetMetadataAsync/WriteFileAsync/etc, used
+                       heavily by import) holds the phase-142 worker lock same as a full exec, but
+                       never sets State to Processing and so never had a progress percent to show —
+                       IsWorkerBusy is accurate for these too, just indeterminate rather than
+                       determinate. Same bar/class treatment as a real Processing exec so both read
+                       as one visual "busy" concept, not two different ones. *@
+                    <TelerikProgressBar Indeterminate="true"
+                                        Class="bv-toolbar__progress" />
+                }
+                else if (Ffmpeg.State == FfmpegState.LoadingCore && Ffmpeg.DownloadLabel is not null)
+                {
+                    @* Show determinate bar while downloading, indeterminate while initializing *@
+                    <TelerikProgressBar Value="@GetDownloadPercent()"
+                                        Max="100"
+                                        Indeterminate="@(GetDownloadPercent() < 0)"
+                                        Class="bv-toolbar__progress" />
+                }
+        </ToolBarTemplateItem>
+
+        @* Phase 141 (flakiness investigation) — ffmpeg diagnostics chip. Always shown: makes
+           MEMFS residency, the operation trace, and the raw log tail one click away instead of
+           only reachable by exporting the error log after the fact. *@
+        <ToolBarTemplateItem>
+            <button type="button"
+                    class="bv-diagnostics-chip @(Ffmpeg.IsWorkerWedged ? "bv-diagnostics-chip--wedged" : $"bv-diagnostics-chip--{Ffmpeg.State.ToString().ToLowerInvariant()}")"
+                    title="@(Ffmpeg.IsWorkerWedged ? "ffmpeg appears stuck — click to reset" : "ffmpeg diagnostics — click for details")"
+                    @onclick="() => _showDiagnosticsPanel = true">
+                @(Ffmpeg.IsWorkerWedged ? "⚠ Stuck — Reset?" : $"🩺 {DiagnosticsChipLabel()}")
+            </button>
+        </ToolBarTemplateItem>
+
+        @* Item #38 phase E — native sidecar status chip. Only shown when the host opted in
+           (VideoEditorOptions.NativeSidecar); clicking it opens the pairing panel regardless of
+           current state, so "how do I fix this" is always one click away. *@
+        @if (ShowNativeSidecar)
+        {
+            <ToolBarTemplateItem>
+                <button type="button"
+                        class="bv-sidecar-chip bv-sidecar-chip--@NativeSidecar.State.ToString().ToLowerInvariant()"
+                        title="Native acceleration status — click to manage"
+                        @onclick="() => _showSidecarPanel = true">
+                    @SidecarChipLabel()
+                </button>
+            </ToolBarTemplateItem>
+        }
+
+    </TelerikToolBar>
+
+    @if (ShowNativeSidecar)
+    {
+        <NativeSidecarPanel @bind-Visible="_showSidecarPanel" />
+    }
+
+    <DiagnosticsPanel @bind-Visible="_showDiagnosticsPanel" OnResetWorker="OnInitializeClicked" />
+
+    <!-- Feature badges — purely informational, so kept outside the ToolBar (whose
+         ToolBarTemplateItem always behaves as Overflow=Never and can't collapse
+         into the "..." popup) and hidden by CSS instead when space is tight. -->
+    @if (ActiveFeatures.Any())
+    {
+        <div class="bv-toolbar__badges">
+            @foreach (var badge in ActiveFeatures)
+            {
+                <span class="bv-feature-badge">@badge</span>
+            }
+        </div>
+    }
+
+    <!-- Hidden file input for JSON import -->
+    <input @ref="_importFileInput"
+           type="file"
+           accept=".benvideo,.json"
+           class="bv-import-json-input"
+           style="display:none"
+           @onchange="OnImportFileSelectedAsync" />
+
+</header>
+
+@code {
+    // Audit #4 — typed DOM helpers instead of eval'd source strings; every lookup is null-guarded
+    // (see audit #7, where a missing element crashed the whole circuit).
+    private IJSObjectReference? _dom;
+
+    private async Task<IJSObjectReference> DomAsync() =>
+        _dom ??= await JS.InvokeAsync<IJSObjectReference>(
+            "import", "/_content/Ben.Video.Editor/js/domInterop.js");
+
+    [Parameter] public bool HasClips            { get; set; }
+    [Parameter] public bool ShowMultiTrack      { get; set; }
+    [Parameter] public bool ShowAudioTracks     { get; set; }
+    [Parameter] public bool ShowTransitions     { get; set; }
+    [Parameter] public bool ShowTextOverlays    { get; set; }
+    [Parameter] public bool   CanUndo           { get; set; }
+    [Parameter] public bool   CanRedo           { get; set; }
+    [Parameter] public string? UndoDescription  { get; set; }
+    [Parameter] public string? RedoDescription  { get; set; }
+    [Parameter] public bool ShowProjectPersistence { get; set; }
+    /// <summary>When true, the Save button becomes a dropdown with "Save to Device" / "Save to Server".</summary>
+    [Parameter] public bool ShowSaveToServer    { get; set; }
+    [Parameter] public string ProjectName       { get; set; } = "project";
+
+    // Panel visibility state (read by toggle button fill modes)
+    [Parameter] public bool ShowClipBrowser     { get; set; } = true;
+    [Parameter] public bool ShowPreview         { get; set; } = true;
+    [Parameter] public bool ShowTimeline        { get; set; } = true;
+
+    [Parameter] public EventCallback OnInitialize { get; set; }
+    [Parameter] public EventCallback OnOpen       { get; set; }
+    [Parameter] public EventCallback OnPreview    { get; set; }
+    [Parameter] public EventCallback OnExport     { get; set; }
+    [Parameter] public EventCallback OnUndo       { get; set; }
+    [Parameter] public EventCallback OnRedo       { get; set; }
+    /// <summary>Fires when the user chooses "Save to Device" (or clicks Save when server save is not shown).</summary>
+    [Parameter] public EventCallback OnSaveToDevice  { get; set; }
+    /// <summary>Fires when the user chooses "Save to Server".</summary>
+    [Parameter] public EventCallback OnSaveToServer  { get; set; }
+    /// <summary>Backward-compat alias for OnSaveToDevice.</summary>
+    [Parameter] public EventCallback OnSaveProject   { get; set; }
+    /// <summary>
+    /// Fires when the user chooses the File menu's "Save" item — persists into the in-app
+    /// named-project list (ProjectStore, browser storage) so it shows up in "Open…", as
+    /// distinct from <see cref="OnSaveToDevice"/>/<see cref="OnSaveProject"/> which download
+    /// a project file to disk instead.
+    /// </summary>
+    [Parameter] public EventCallback OnSave          { get; set; }
+    [Parameter] public EventCallback<ElementReference> OnOpenProject { get; set; }
+    [Parameter] public EventCallback OnToggleClipBrowser { get; set; }
+    [Parameter] public EventCallback OnTogglePreview     { get; set; }
+    [Parameter] public EventCallback OnToggleTimeline    { get; set; }
+    [Parameter] public int            QueueCount          { get; set; }
+    [Parameter] public bool           HasSubtitles        { get; set; }
+    [Parameter] public bool           ShowAssetBrowser    { get; set; }
+    [Parameter] public bool           ShowPanel           { get; set; }
+    [Parameter] public EventCallback OnToggleQueue        { get; set; }
+    [Parameter] public EventCallback OnToggleAssetBrowser { get; set; }
+    [Parameter] public EventCallback OnTogglePanel        { get; set; }
+    [Parameter] public bool           IsFullscreen         { get; set; }
+    [Parameter] public EventCallback OnToggleFullscreen    { get; set; }
+    [Parameter] public EventCallback OnExportSrt          { get; set; }
+    [Parameter] public EventCallback OnExportVtt          { get; set; }
+
+    // ── Phase 39: File menu ───────────────────────────────────────────────────
+    [Parameter] public bool     IsDirty              { get; set; }
+    [Parameter] public bool     ShowErrorLog         { get; set; }
+    [Parameter] public EventCallback                     OnNewProject       { get; set; }
+    [Parameter] public EventCallback                     OnOpenProjectList  { get; set; }
+    [Parameter] public EventCallback<ElementReference>   OnImportJson       { get; set; }
+    [Parameter] public EventCallback                     OnExportJson       { get; set; }
+    [Parameter] public EventCallback                     OnHelp             { get; set; }
+    [Parameter] public EventCallback                     OnExportErrorLog   { get; set; }
+    [Parameter] public EventCallback<string>             OnProjectNameChanged { get; set; }
+
+    private ElementReference _importFileInput;
+
+    private IEnumerable<string> ActiveFeatures
+    {
+        get
+        {
+            if (ShowMultiTrack)   yield return "Multi-Track";
+            if (ShowAudioTracks)  yield return "Audio";
+            if (ShowTransitions)  yield return "Transitions";
+            if (ShowTextOverlays) yield return "Text";
+        }
+    }
+
+    // Item #71 — decision logic lives in FfmpegStatusPresentation (pure, unit-tested) rather than
+    // inline here; see that class's doc comment for the actual bug this phase fixes.
+    private string StatusLabel => FfmpegStatusPresentation.Label(
+        Ffmpeg.State, Ffmpeg.IsWorkerBusy, Ffmpeg.ProgressPercent, Ffmpeg.DownloadLabel, Ffmpeg.LastError);
+
+    private string StatusCssClass =>
+        $"bv-toolbar__status bv-status--{FfmpegStatusPresentation.CssModifier(Ffmpeg.State, Ffmpeg.IsWorkerBusy)}";
+
+    private string StatusTooltip => FfmpegStatusPresentation.Tooltip(
+        Ffmpeg.State, Ffmpeg.IsWorkerBusy, Ffmpeg.ProgressPercent, Ffmpeg.DownloadLabel, Ffmpeg.LastError);
+
+    private async Task OnInitializeClicked() => await OnInitialize.InvokeAsync();
+    private async Task OnOpenClicked()       => await OnOpen.InvokeAsync();
+    private async Task OnPreviewClicked()    => await OnPreview.InvokeAsync();
+    private async Task OnExportClicked()     => await OnExport.InvokeAsync();
+    private async Task OnUndoClicked()       => await OnUndo.InvokeAsync();
+    private async Task OnRedoClicked()       => await OnRedo.InvokeAsync();
+
+    /// <summary>
+    /// Parses the trailing percentage out of DownloadLabel (e.g. "Downloading core WASM (single-thread) 45%")
+    /// Returns -1 when indeterminate (e.g. "Initializing…").
+    /// </summary>
+    private double GetDownloadPercent()
+    {
+        var label = Ffmpeg.DownloadLabel;
+        if (label is null) return 0;
+        var pctIdx = label.LastIndexOf('%');
+        if (pctIdx > 0)
+        {
+            var spaceIdx = label.LastIndexOf(' ', pctIdx);
+            if (spaceIdx >= 0 && double.TryParse(label.Substring(spaceIdx + 1, pctIdx - spaceIdx - 1), out var pct))
+                return pct;
+        }
+        return -1; // indeterminate
+    }
+
+    private async Task OnSaveToDeviceClicked()
+    {
+        await OnSaveToDevice.InvokeAsync();
+        if (!OnSaveToDevice.HasDelegate) await OnSaveProject.InvokeAsync(); // backward compat
+    }
+    private async Task OnSaveToServerClicked() => await OnSaveToServer.InvokeAsync();
+    private async Task OnSaveClicked() => await OnSave.InvokeAsync();
+
+    private async Task OnToggleClipBrowserClicked()    => await OnToggleClipBrowser.InvokeAsync();
+    private async Task OnTogglePreviewClicked()         => await OnTogglePreview.InvokeAsync();
+    private async Task OnToggleTimelineClicked()        => await OnToggleTimeline.InvokeAsync();
+    private async Task OnToggleAssetBrowserClicked()    => await OnToggleAssetBrowser.InvokeAsync();
+    private async Task OnTogglePanelClicked()           => await OnTogglePanel.InvokeAsync();
+    private async Task OnToggleQueueClicked()           => await OnToggleQueue.InvokeAsync();
+    private async Task OnToggleFullscreenClicked()      => await OnToggleFullscreen.InvokeAsync();
+    private async Task OnExportSrtClicked()             => await OnExportSrt.InvokeAsync();
+    private async Task OnExportVttClicked()             => await OnExportVtt.InvokeAsync();
+
+    // ── Phase 39: File menu handlers ──────────────────────────────────────────
+
+    private async Task OnNewProjectClicked()         => await OnNewProject.InvokeAsync();
+    private async Task OnOpenProjectListClicked()    => await OnOpenProjectList.InvokeAsync();
+    private async Task OnExportJsonClicked()         => await OnExportJson.InvokeAsync();
+    private async Task OnHelpClicked()               => await OnHelp.InvokeAsync();
+    private async Task OnExportErrorLogClicked()     => await OnExportErrorLog.InvokeAsync();
+
+    // ── Phase 141: ffmpeg diagnostics chip ───────────────────────────────────
+
+    private bool _showDiagnosticsPanel;
+
+    private string DiagnosticsChipLabel() => Ffmpeg.State switch
+    {
+        FfmpegState.Error => "Error",
+        _ => FormatBytesShort(MemFs.TotalBytes),
+    };
+
+    private static string FormatBytesShort(long bytes) => bytes switch
+    {
+        < 1024 * 1024 => $"{bytes / 1024.0:0.#}KB",
+        _ => $"{bytes / (1024.0 * 1024.0):0.#}MB",
+    };
+
+    private async Task OnImportJsonClicked()
+    {
+        await (await DomAsync()).InvokeVoidAsync("click", ".bv-import-json-input", true);
+    }
+
+    private async Task OnImportFileSelectedAsync()
+        => await OnImportJson.InvokeAsync(_importFileInput);
+
+    private async Task OnOpenProjectClicked()
+        => await (await DomAsync()).InvokeVoidAsync("click", "input[type=file][accept*=benvideo]", false);
+
+    private async Task OnProjectFileSelectedAsync()
+        => await OnOpenProject.InvokeAsync(_importFileInput); // legacy — fires import JSON path
+
+    // ── Item #38 phase E: native sidecar status chip ────────────────────────
+
+    [Parameter] public bool ShowNativeSidecar { get; set; }
+
+    private bool _showSidecarPanel;
+
+    protected override void OnInitialized()
+    {
+        NativeSidecar.OnChanged += OnNativeSidecarChanged;
+        if (ShowNativeSidecar) _ = NativeSidecar.ProbeAsync();
+    }
+
+    private void OnNativeSidecarChanged() => InvokeAsync(StateHasChanged);
+
+    private string SidecarChipLabel() => NativeSidecar.State switch
+    {
+        NativeSidecarState.Paired => "⚡ Native",
+        NativeSidecarState.FoundUnpaired => "⚡ Pair sidecar",
+        NativeSidecarState.TokenRejected => "⚡ Re-pair sidecar",
+        NativeSidecarState.Disconnected => "⚡ No sidecar",
+        _ => "",
+    };
+
+    void IDisposable.Dispose() => NativeSidecar.OnChanged -= OnNativeSidecarChanged;
+
+    /// <summary>Audit #4 — releases the cached domInterop handle. Separate from the sync
+    /// <see cref="Dispose"/> above (which only unsubscribes events) because a JS module handle can
+    /// only be released asynchronously; Blazor honours both interfaces on the same component.</summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (_dom is null) return;
+        try { await _dom.DisposeAsync(); } catch (JSDisconnectedException) { } catch (ObjectDisposedException) { }
+        _dom = null;
+    }
+}

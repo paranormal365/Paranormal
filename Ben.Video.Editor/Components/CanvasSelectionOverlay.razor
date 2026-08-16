@@ -1,0 +1,551 @@
+@implements IDisposable
+@inject ClipStore Clips
+@inject MotionKeyframeService Motion
+@inject PreviewGeometryService Geometry
+
+@* Editor-only overlay — never exported. Click-to-select + unified body-drag for
+   Callout/ClipArt/TextOverlay layers on the preview canvas (item #57, phases P1+P2). Renders one
+   invisible full-body hit-rect per active layer, topmost (highest LayerIndex) first, below the
+   real per-type control-point overlays in z-order so their resize/bezier/keyframe handles keep
+   winning clicks at the edges — this layer only ever catches body/interior clicks and empty-canvas
+   clicks. Body-drag routes through MotionKeyframeService.EditLayer (the Camtasia rule, P2): a
+   layer with no motion path writes its static X/Y directly, unchanged from P1; a layer that
+   already has a path upserts a keyframe at the playhead instead — both branches get one undo
+   entry per drag gesture (item #63), committed in OnPointerUp once the whole drag finishes rather
+   than per intermediate frame. Selection hit-testing always uses the true motion-evaluated
+   position regardless. *@
+<svg class="bv-canvas-selection-overlay"
+     viewBox="0 0 @CanvasWidth @CanvasHeight"
+     xmlns="http://www.w3.org/2000/svg"
+     @onpointerdown="OnBackgroundPointerDown"
+     @onpointermove="OnPointerMove"
+     @onpointerup="OnPointerUp"
+     @onpointercancel="OnPointerUp">
+
+    @foreach (var active in _active)
+    {
+        var item = active.Item;
+        <rect x="@F(active.Rect.X * CanvasWidth)" y="@F(active.Rect.Y * CanvasHeight)"
+              width="@F(active.Rect.Width * CanvasWidth)" height="@F(active.Rect.Height * CanvasHeight)"
+              fill="transparent" style="cursor:move"
+              @onpointerdown="e => OnItemPointerDown(e, item)"
+              @onpointermove="OnPointerMove"
+              @onpointerup="OnPointerUp"
+              @onpointercancel="OnPointerUp"
+              @onpointerdown:stopPropagation="true">
+            <title>@item.Name (click to select, drag to move)</title>
+        </rect>
+    }
+
+    @* Mid-interpolation warning (phase 78's panel hint, surfaced on-canvas too) — shown while
+       dragging an animated layer at a playhead time strictly between two existing keyframes,
+       where the upsert-in-progress is capturing the live-blended value rather than a fresh one. *@
+    @if (_draggingItem is not null && Motion.IsMidInterpolation(_draggingItem.Id, CurrentTime))
+    {
+        <g class="bv-canvas-selection-overlay__hint" style="pointer-events:none">
+            <rect x="@F(CanvasWidth * 0.02)" y="@F(CanvasHeight * 0.02)"
+                  width="@F(CanvasWidth * 0.55)" height="@F(CanvasHeight * 0.07)"
+                  rx="4" fill="rgba(0,0,0,0.72)" />
+            <text x="@F(CanvasWidth * 0.03)" y="@F(CanvasHeight * 0.065)"
+                  font-size="@F(CanvasHeight * 0.03)" fill="#f9e2af">
+                ⚠ Adding here captures the blended value — holds flat until edited
+            </text>
+        </g>
+    }
+
+    @* Alignment-guide lines (item #57 P5) — canvas center/edges/thirds, shown only while the
+       dragged item's leading edge, center, or trailing edge is actually snapped to one. *@
+    @if (_activeGuideX.HasValue)
+    {
+        <line x1="@F(_activeGuideX.Value * CanvasWidth)" y1="0"
+              x2="@F(_activeGuideX.Value * CanvasWidth)" y2="@F(CanvasHeight)"
+              class="bv-canvas-snap-guide" style="pointer-events:none" />
+    }
+    @if (_activeGuideY.HasValue)
+    {
+        <line x1="0" y1="@F(_activeGuideY.Value * CanvasHeight)"
+              x2="@F(CanvasWidth)" y2="@F(_activeGuideY.Value * CanvasHeight)"
+              class="bv-canvas-snap-guide" style="pointer-events:none" />
+    }
+</svg>
+
+@* Floating mini-HUD (item #57 P5) — numeric X/Y/W/H type-in, add-keyframe, and the P2 Animate
+   toggle, for whichever layer the parent currently has selected. A plain HTML div positioned in
+   canvas-percentage coordinates (not inside the SVG — its 0..CanvasWidth viewBox makes percentage
+   positioning of an HTML overlay more awkward than just using the same container's own box). *@
+@if (SelectedItem is not null && _active.FirstOrDefault(a => a.Item.Id == SelectedItem.Id) is { } hud)
+{
+    var (left, top) = HudPosition(hud);
+    <div class="bv-canvas-hud" style="left: @(F(left))%; top: @(F(top))%">
+        <div class="bv-canvas-hud__row">
+            <label>X</label>
+            <input type="number" step="0.1" value="@F(hud.Rect.X * 100)"
+                   @onchange="e => SetPosition(SelectedItem, ParsePercent(e.Value, hud.Rect.X), null)" />
+            <label>Y</label>
+            <input type="number" step="0.1" value="@F(hud.Rect.Y * 100)"
+                   @onchange="e => SetPosition(SelectedItem, null, ParsePercent(e.Value, hud.Rect.Y))" />
+        </div>
+        @if (SelectedItem is CalloutClip or ClipArtClip)
+        {
+            <div class="bv-canvas-hud__row">
+                <label>W</label>
+                <input type="number" step="0.1" value="@F(hud.Rect.Width * 100)"
+                       @onchange="e => SetSize(SelectedItem, ParsePercent(e.Value, hud.Rect.Width), null)" />
+                <label>H</label>
+                <input type="number" step="0.1" value="@F(hud.Rect.Height * 100)"
+                       @onchange="e => SetSize(SelectedItem, null, ParsePercent(e.Value, hud.Rect.Height))" />
+            </div>
+        }
+        <div class="bv-canvas-hud__row">
+            <button type="button" @onclick="() => AddKeyframeAtPlayhead(SelectedItem)" title="Add keyframe at playhead">◆ Keyframe</button>
+            @if (!Motion.HasPath(SelectedItem.Id))
+            {
+                <button type="button" @onclick="() => OnAnimate.InvokeAsync((SelectedItem.Id, LayerTypeOf(SelectedItem)))" title="Animate position / scale">⏱ Animate</button>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public ElementReference ScreenElement { get; set; }
+    [Parameter]                 public int              CanvasWidth   { get; set; } = 1920;
+    [Parameter]                 public int              CanvasHeight  { get; set; } = 1080;
+    [Parameter, EditorRequired] public double            CurrentTime   { get; set; }
+
+    /// <summary>Fired on selecting a layer (click on its body), or null when the user clicks
+    /// empty canvas to deselect.</summary>
+    [Parameter] public EventCallback<TrackItem?> OnItemSelected { get; set; }
+
+    // ── Item #57 P5 additions ────────────────────────────────────────────────
+
+    /// <summary>Obeys the same Snapping toggle the timeline's own drag-to-place already does —
+    /// passed down as a plain bool rather than this component taking its own VideoEditorOptions
+    /// override story, since it has none of its own to merge (unlike VideoTimeline's per-flag
+    /// override parameters).</summary>
+    [Parameter] public bool SnappingEnabled { get; set; } = true;
+
+    /// <summary>The layer the parent currently has selected (drives the mini-HUD below) — this
+    /// component only ever *fires* selection via <see cref="OnItemSelected"/>; the parent owns
+    /// which one "selected" actually means.</summary>
+    [Parameter] public TrackItem? SelectedItem { get; set; }
+
+    /// <summary>Surfaces the existing per-type "⏱ Animate" panel toggle on-canvas (item #57 P2's
+    /// deferred gap) — same callback shape as ClipArtEditor/CalloutEditor/TextOverlayEditor's own
+    /// OnAnimate, routing to VideoEditor.ActivateMotionPath.</summary>
+    [Parameter] public EventCallback<(Guid Id, string Type)> OnAnimate { get; set; }
+
+    private sealed record ActiveItem(TrackItem Item, CanvasHitRect Rect);
+
+    private List<ActiveItem> _active = [];
+
+    private TrackItem? _draggingItem;
+    private double     _dragStartPxX, _dragStartPxY;
+    private double     _dragX, _dragY;             // running canvas-fraction position
+    private double     _dragOrigX, _dragOrigY;      // for the undo commit on release
+
+    /// <summary>Item #63 — the keyframe (if any) that existed at <see cref="CurrentTime"/> before
+    /// this drag started, captured once at pointer-down. <c>OnPointerMove</c> repeatedly upserts
+    /// into the keyframe branch as the pointer moves (never committed individually — one undo
+    /// entry per gesture, matching the static-field drag-commit pattern); this is what lets
+    /// <c>OnPointerUp</c> build that single entry after the fact. Null means no keyframe existed
+    /// there yet, so undoing the drag should remove the keyframe entirely rather than restore one.</summary>
+    private MotionKeyframe? _dragOrigKeyframe;
+
+    // Item #57 P5 — alignment-guide snapping. 8px is a comfortable, fixed hit radius (matching
+    // the timeline's own SnapThresholdSeconds being a single configured constant rather than
+    // scaling with zoom) — converted to a canvas fraction via Geometry since the on-screen preview
+    // is very rarely rendered at its native canvas resolution.
+    private const double SnapThresholdPx = 8.0;
+    private double? _activeGuideX;
+    private double? _activeGuideY;
+
+    protected override void OnInitialized()
+    {
+        Clips.OnChange   += Refresh;
+        Motion.OnChanged += Refresh;
+        Refresh();
+    }
+
+    protected override void OnParametersSet() => Rebuild();
+
+    private void Refresh()
+    {
+        Rebuild();
+        StateHasChanged();
+    }
+
+    private void Rebuild()
+    {
+        _active = Clips.PrimaryVideoTrack.Items
+            .Where(i => i is CalloutClip or ClipArtClip or TextOverlay)
+            .Where(i => CurrentTime >= i.TimelinePosition && CurrentTime < i.TimelinePosition + i.Duration)
+            .OrderByDescending(i => i.LayerIndex)
+            .Select(BuildActiveItem)
+            .ToList();
+    }
+
+    private ActiveItem BuildActiveItem(TrackItem item) => item switch
+    {
+        CalloutClip c => Build(c),
+        ClipArtClip a => Build(a),
+        TextOverlay t => Build(t),
+        _             => throw new InvalidOperationException($"Unexpected item type {item.GetType().Name}."),
+    };
+
+    private ActiveItem Build(CalloutClip clip)
+    {
+        var e = MotionEffectiveGeometry.Effective(Motion, clip, CurrentTime);
+        return new ActiveItem(clip, new CanvasHitRect(e.X, e.Y, e.Width, e.Height));
+    }
+
+    private ActiveItem Build(ClipArtClip clip)
+    {
+        var e = MotionEffectiveGeometry.Effective(Motion, clip, CurrentTime);
+        return new ActiveItem(clip, new CanvasHitRect(e.X, e.Y, e.Width, MotionEffectiveGeometry.EffectiveClipArtHeight(e)));
+    }
+
+    /// <summary>Text has no width/height model — a fixed-size hit box centred on its anchor
+    /// point, matching the click-target generosity of the existing position handle circle.</summary>
+    private const double TextHitHalfWidthPx = 24;
+
+    private ActiveItem Build(TextOverlay overlay)
+    {
+        var e  = MotionEffectiveGeometry.Effective(Motion, overlay, CurrentTime);
+        var ax = MotionEffectiveGeometry.TextAnchorX(e, CanvasWidth);
+        var ay = MotionEffectiveGeometry.TextAnchorY(e, CanvasHeight);
+        var hw = CanvasWidth  <= 0 ? 0.02 : TextHitHalfWidthPx / CanvasWidth;
+        var hh = CanvasHeight <= 0 ? 0.02 : TextHitHalfWidthPx / CanvasHeight;
+        return new ActiveItem(overlay, new CanvasHitRect(ax - hw, ay - hh, hw * 2, hh * 2));
+    }
+
+    /// <summary>The layer's on-screen position right now — the interpolated frame if it has a
+    /// motion path (so a drag starts from wherever it's actually rendered, not a possibly-stale
+    /// static field), else its static position.</summary>
+    private (double X, double Y) StartPos(TrackItem item) =>
+        MotionEffectiveGeometry.EffectivePosition(Motion, item, CurrentTime, CanvasWidth, CanvasHeight);
+
+    private async Task OnItemPointerDown(PointerEventArgs e, TrackItem item)
+    {
+        await Geometry.RefreshAsync(ScreenElement, CanvasWidth, CanvasHeight);
+        _draggingItem = item;
+        _dragStartPxX = e.ClientX;
+        _dragStartPxY = e.ClientY;
+        (_dragX, _dragY)     = StartPos(item);
+        (_dragOrigX, _dragOrigY) = (_dragX, _dragY);
+        _dragOrigKeyframe = Motion.GetPath(item.Id)?.Keyframes
+            .FirstOrDefault(k => Math.Abs(k.Time - CurrentTime) < 0.001);
+        await OnItemSelected.InvokeAsync(item);
+    }
+
+    private async Task OnBackgroundPointerDown(PointerEventArgs e)
+    {
+        if (_draggingItem is not null) return;
+        await OnItemSelected.InvokeAsync(null);
+    }
+
+    private void OnPointerMove(PointerEventArgs e)
+    {
+        if (_draggingItem is null) return;
+
+        var dxPx = e.ClientX - _dragStartPxX;
+        var dyPx = e.ClientY - _dragStartPxY;
+        _dragStartPxX = e.ClientX;
+        _dragStartPxY = e.ClientY;
+        var (fdx, fdy) = Geometry.DeltaToFraction(dxPx, dyPx);
+
+        // Loose sanity bound only (not a UX constraint) — a layer may be legitimately dragged
+        // partially off-canvas, same as any other compositing app.
+        _dragX = Math.Clamp(_dragX + fdx, -1.0, 2.0);
+        _dragY = Math.Clamp(_dragY + fdy, -1.0, 2.0);
+
+        // Item #57 P5 — alignment-guide snapping, applied after the raw drag delta and before the
+        // Camtasia-rule write below, so a snapped position is what actually gets committed (live,
+        // during the drag) rather than just a visual nudge undone next frame.
+        _activeGuideX = null;
+        _activeGuideY = null;
+        if (SnappingEnabled)
+        {
+            var (w, h) = DragItemSize(_draggingItem);
+            var (thresholdX, thresholdY) = Geometry.DeltaToFraction(SnapThresholdPx, SnapThresholdPx);
+
+            var snapX = CanvasSnapCalculator.FindSnap(_dragX, w, CanvasSnapCalculator.DefaultGuides, thresholdX);
+            if (snapX.Guide is { } gx) { _dragX = gx - snapX.Offset; _activeGuideX = gx; }
+
+            var snapY = CanvasSnapCalculator.FindSnap(_dragY, h, CanvasSnapCalculator.DefaultGuides, thresholdY);
+            if (snapY.Guide is { } gy) { _dragY = gy - snapY.Offset; _activeGuideY = gy; }
+        }
+
+        switch (_draggingItem)
+        {
+            case CalloutClip c:
+                Motion.EditLayer(c.Id, "CalloutClip", CurrentTime,
+                    () => MotionEffectiveGeometry.StaticSeed(c, CurrentTime),
+                    kf => { kf.X = _dragX; kf.Y = _dragY; },
+                    () => Clips.UpdateCallout(c.Id, cl => { cl.X = _dragX; cl.Y = _dragY; }));
+                break;
+            case ClipArtClip a:
+                Motion.EditLayer(a.Id, "ClipArtClip", CurrentTime,
+                    () => MotionEffectiveGeometry.StaticSeed(a, CurrentTime),
+                    kf => { kf.X = _dragX; kf.Y = _dragY; },
+                    () => Clips.UpdateClipArtClip(a.Id, cl => { cl.X = _dragX; cl.Y = _dragY; }));
+                break;
+            case TextOverlay t:
+                // No undo tier for TextOverlay's static-field drag anywhere today
+                // (TextPositionOverlay's own handle drag has none either) — matching, not new scope.
+                Motion.EditLayer(t.Id, "TextOverlay", CurrentTime,
+                    () => MotionEffectiveGeometry.StaticSeed(t, CurrentTime, CanvasWidth, CanvasHeight),
+                    kf => { kf.X = _dragX; kf.Y = _dragY; },
+                    () => Clips.UpdateTextOverlay(t with { OverrideX = _dragX, OverrideY = _dragY }));
+                break;
+        }
+
+        Rebuild();
+    }
+
+    /// <summary>The dragged item's own extent along each axis, in canvas fractions — 0 for
+    /// TextOverlay (a point-only anchor, matching its zero-size hit box built above), matching
+    /// <see cref="Build(ClipArtClip)"/>/<see cref="Build(CalloutClip)"/>'s own effective-geometry
+    /// computation so snapping and the rendered hit-rect never disagree about the item's size.</summary>
+    private (double Width, double Height) DragItemSize(TrackItem item)
+    {
+        switch (item)
+        {
+            case CalloutClip c:
+                var ec = MotionEffectiveGeometry.Effective(Motion, c, CurrentTime);
+                return (ec.Width, ec.Height);
+            case ClipArtClip a:
+                var ea = MotionEffectiveGeometry.Effective(Motion, a, CurrentTime);
+                return (ea.Width, MotionEffectiveGeometry.EffectiveClipArtHeight(ea));
+            default:
+                return (0.0, 0.0);
+        }
+    }
+
+    private void OnPointerUp(PointerEventArgs e)
+    {
+        _activeGuideX = null;
+        _activeGuideY = null;
+        if (_draggingItem is null) return;
+        var item = _draggingItem;
+        _draggingItem = null;
+
+        var moved = Math.Abs(_dragX - _dragOrigX) > 1e-9 || Math.Abs(_dragY - _dragOrigY) > 1e-9;
+        if (moved && !Motion.HasPath(item.Id))
+        {
+            var (fx, fy) = (_dragX, _dragY);
+            var (ox, oy) = (_dragOrigX, _dragOrigY);
+            switch (item)
+            {
+                case CalloutClip c:
+                    Clips.CommitCalloutUpdate(c.Id, "position",
+                        cl => { cl.X = fx; cl.Y = fy; },
+                        cl => { cl.X = ox; cl.Y = oy; });
+                    break;
+                case ClipArtClip a:
+                    Clips.CommitClipArtUpdate(a.Id, "position",
+                        cl => { cl.X = fx; cl.Y = fy; },
+                        cl => { cl.X = ox; cl.Y = oy; });
+                    break;
+            }
+        }
+        // Item #63 — an animated drag already upserted its keyframe live during OnPointerMove via
+        // Motion.EditLayer (one keyframe per frame moved, never individually committed); this is
+        // where that whole gesture becomes ONE undo entry, matching the static branch above.
+        // TextOverlay excluded — its static branch has never had an undo tier either (a separate,
+        // pre-existing gap), so giving only its keyframe branch one would be a new asymmetry, not
+        // a fix.
+        else if (moved && item is CalloutClip or ClipArtClip)
+        {
+            CommitKeyframeEditIfAnimated(item, LayerTypeOf(item), CurrentTime, _dragOrigKeyframe, $"Move {LayerTypeOf(item)}");
+        }
+        _dragOrigKeyframe = null;
+
+        Rebuild();
+        StateHasChanged();
+    }
+
+    // ── Mini-HUD (item #57 P5) ──────────────────────────────────────────────
+
+    /// <summary>Positions the HUD just above the item's top edge; flips to just below when that
+    /// would run off the top of the canvas, so it never renders (partially) off-screen and never
+    /// sits directly on top of the item it's editing.</summary>
+    private static (double Left, double Top) HudPosition(ActiveItem hud)
+    {
+        const double offsetPct = 5.0;
+        var topPct = hud.Rect.Y * 100.0;
+        var top = topPct - offsetPct >= 0 ? topPct - offsetPct : (hud.Rect.Y + hud.Rect.Height) * 100.0 + 1.0;
+        return (hud.Rect.X * 100.0, Math.Clamp(top, 0.0, 96.0));
+    }
+
+    private static double ParsePercent(object? value, double fallbackFraction)
+    {
+        if (value is not null && double.TryParse(value.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var pct))
+            return Math.Clamp(pct / 100.0, -1.0, 2.0);
+        return fallbackFraction;
+    }
+
+    /// <summary>Type-in X/Y — a single discrete edit, so (unlike the live-drag path above) this
+    /// commits straight through the undoable path, matching <see cref="OnPointerUp"/>'s own
+    /// static-field commit exactly, just without a preceding live-drag phase.</summary>
+    private void SetPosition(TrackItem item, double? xFrac, double? yFrac)
+    {
+        var (curX, curY) = StartPos(item);
+        var nx = xFrac ?? curX;
+        var ny = yFrac ?? curY;
+        if (Math.Abs(nx - curX) < 1e-9 && Math.Abs(ny - curY) < 1e-9) return;
+
+        var oldKf = Motion.GetPath(item.Id)?.Keyframes.FirstOrDefault(k => Math.Abs(k.Time - CurrentTime) < 0.001);
+
+        switch (item)
+        {
+            case CalloutClip c:
+                Motion.EditLayer(c.Id, "CalloutClip", CurrentTime,
+                    () => MotionEffectiveGeometry.StaticSeed(c, CurrentTime),
+                    kf => { kf.X = nx; kf.Y = ny; },
+                    () => Clips.CommitCalloutUpdate(c.Id, "position",
+                        cl => { cl.X = nx; cl.Y = ny; },
+                        cl => { cl.X = curX; cl.Y = curY; }));
+                CommitKeyframeEditIfAnimated(item, "CalloutClip", CurrentTime, oldKf, "Move CalloutClip");
+                break;
+            case ClipArtClip a:
+                Motion.EditLayer(a.Id, "ClipArtClip", CurrentTime,
+                    () => MotionEffectiveGeometry.StaticSeed(a, CurrentTime),
+                    kf => { kf.X = nx; kf.Y = ny; },
+                    () => Clips.CommitClipArtUpdate(a.Id, "position",
+                        cl => { cl.X = nx; cl.Y = ny; },
+                        cl => { cl.X = curX; cl.Y = curY; }));
+                CommitKeyframeEditIfAnimated(item, "ClipArtClip", CurrentTime, oldKf, "Move ClipArtClip");
+                break;
+            case TextOverlay t:
+                // No undo tier for TextOverlay's static position anywhere today (matching drag) —
+                // deliberately not extending item #63's fix to its keyframe branch either, so as
+                // not to introduce a new have-undo-only-when-animated asymmetry.
+                Motion.EditLayer(t.Id, "TextOverlay", CurrentTime,
+                    () => MotionEffectiveGeometry.StaticSeed(t, CurrentTime, CanvasWidth, CanvasHeight),
+                    kf => { kf.X = nx; kf.Y = ny; },
+                    () => Clips.UpdateTextOverlay(t with { OverrideX = nx, OverrideY = ny }));
+                break;
+        }
+
+        Rebuild();
+        StateHasChanged();
+    }
+
+    /// <summary>Type-in W/H — Callout/ClipArt only (TextOverlay has no size model, excluded from
+    /// the markup above). While animated, writes the current keyframe's ScaleX/ScaleY relative to
+    /// the clip's own base Width/Height (unaffected by animation) rather than the base size
+    /// itself — the same "edit the effective, keyframe-aware value" rule <see cref="SetPosition"/>
+    /// already applies to X/Y, now extended to size (item #57 P2/P3 both deliberately deferred
+    /// resize-handle keyframe-awareness pending P3's real ScaleX/Y — this is where it lands).</summary>
+    private void SetSize(TrackItem item, double? widthFrac, double? heightFrac)
+    {
+        switch (item)
+        {
+            case CalloutClip c:
+            {
+                var current = MotionEffectiveGeometry.Effective(Motion, c, CurrentTime);
+                var nw = widthFrac ?? current.Width;
+                var nh = heightFrac ?? current.Height;
+                if (Math.Abs(nw - current.Width) < 1e-9 && Math.Abs(nh - current.Height) < 1e-9) return;
+                var baseW = c.Width;
+                var baseH = c.Height;
+                var oldKf = Motion.GetPath(c.Id)?.Keyframes.FirstOrDefault(k => Math.Abs(k.Time - CurrentTime) < 0.001);
+                Motion.EditLayer(c.Id, "CalloutClip", CurrentTime,
+                    () => MotionEffectiveGeometry.StaticSeed(c, CurrentTime),
+                    kf =>
+                    {
+                        kf.ScaleX = baseW > 0 ? nw / baseW : kf.ScaleX;
+                        kf.ScaleY = baseH > 0 ? nh / baseH : kf.ScaleY;
+                    },
+                    () => Clips.CommitCalloutUpdate(c.Id, "size",
+                        cl => { cl.Width = nw; cl.Height = nh; },
+                        cl => { cl.Width = baseW; cl.Height = baseH; }));
+                CommitKeyframeEditIfAnimated(item, "CalloutClip", CurrentTime, oldKf, "Resize CalloutClip");
+                break;
+            }
+            case ClipArtClip a:
+            {
+                var current = MotionEffectiveGeometry.Effective(Motion, a, CurrentTime);
+                var effH    = MotionEffectiveGeometry.EffectiveClipArtHeight(current);
+                var nw = widthFrac ?? current.Width;
+                var nh = heightFrac ?? effH;
+                if (Math.Abs(nw - current.Width) < 1e-9 && Math.Abs(nh - effH) < 1e-9) return;
+                var baseW = a.Width;
+                var baseH = MotionEffectiveGeometry.EffectiveClipArtHeight(a);
+                var oldKf = Motion.GetPath(a.Id)?.Keyframes.FirstOrDefault(k => Math.Abs(k.Time - CurrentTime) < 0.001);
+                Motion.EditLayer(a.Id, "ClipArtClip", CurrentTime,
+                    () => MotionEffectiveGeometry.StaticSeed(a, CurrentTime),
+                    kf =>
+                    {
+                        kf.ScaleX = baseW > 0 ? nw / baseW : kf.ScaleX;
+                        kf.ScaleY = baseH > 0 ? nh / baseH : kf.ScaleY;
+                    },
+                    () => Clips.CommitClipArtUpdate(a.Id, "size",
+                        cl => { cl.Width = nw; cl.Height = nh; },
+                        cl => { cl.Width = baseW; cl.Height = a.Height; }));
+                CommitKeyframeEditIfAnimated(item, "ClipArtClip", CurrentTime, oldKf, "Resize ClipArtClip");
+                break;
+            }
+        }
+
+        Rebuild();
+        StateHasChanged();
+    }
+
+    private void AddKeyframeAtPlayhead(TrackItem item)
+    {
+        var time = CurrentTime;
+        switch (item)
+        {
+            case CalloutClip c:
+                Motion.UpsertKeyframeFromCurrent(c.Id, "CalloutClip", time, () => MotionEffectiveGeometry.StaticSeed(c, time), _ => { });
+                break;
+            case ClipArtClip a:
+                Motion.UpsertKeyframeFromCurrent(a.Id, "ClipArtClip", time, () => MotionEffectiveGeometry.StaticSeed(a, time), _ => { });
+                break;
+            case TextOverlay t:
+                Motion.UpsertKeyframeFromCurrent(t.Id, "TextOverlay", time, () => MotionEffectiveGeometry.StaticSeed(t, time, CanvasWidth, CanvasHeight), _ => { });
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Item #63 — wraps a keyframe-branch edit that <see cref="Motion.EditLayer"/> just performed
+    /// in a single undo entry. Call after <c>Motion.EditLayer</c> for a single discrete edit (HUD
+    /// type-in, arrow-key nudge); for a live-drag gesture that upserts every frame, call once at
+    /// gesture-end instead (see <see cref="OnPointerUp"/>) with <paramref name="oldKf"/> captured
+    /// at gesture-start, not before this one call. No-op when the layer has no path — the static
+    /// branch already self-committed via its own <c>writeStatic</c> closure, nothing to do here.
+    /// </summary>
+    private void CommitKeyframeEditIfAnimated(
+        TrackItem item, string layerType, double time, MotionKeyframe? oldKf, string description)
+    {
+        if (!Motion.HasPath(item.Id)) return;
+        var newKf = Motion.GetPath(item.Id)?.Keyframes.FirstOrDefault(k => Math.Abs(k.Time - time) < 0.001);
+        if (newKf is null) return;
+
+        Clips.CommitMotionKeyframeEdit(description,
+            apply:  () => Motion.UpsertKeyframe(item.Id, layerType, newKf),
+            revert: () =>
+            {
+                if (oldKf is null) Motion.RemoveKeyframe(item.Id, time);
+                else Motion.UpsertKeyframe(item.Id, layerType, oldKf);
+            });
+    }
+
+    private static string LayerTypeOf(TrackItem item) => item switch
+    {
+        CalloutClip => "CalloutClip",
+        ClipArtClip => "ClipArtClip",
+        TextOverlay => "TextOverlay",
+        _           => string.Empty,
+    };
+
+    private static string F(double v) => v.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+
+    public void Dispose()
+    {
+        Clips.OnChange   -= Refresh;
+        Motion.OnChanged -= Refresh;
+    }
+}

@@ -1,0 +1,398 @@
+/* ── Collapsed (pinned to floating window) ──────────────────────────────── */
+.bv-browser--collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    overflow: hidden;
+    border: none;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+/* ── Floating window title bar ───────────────────────────────────────────── */
+.bv-browser-window__title-bar {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    width: 100%;
+}
+
+.bv-browser-window__title {
+    flex: 1;
+    font-size: .8125rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+/* Window content needs a fill-height flex column so tabs + grid scroll properly */
+.bv-browser-window .k-window-content {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+}
+
+/* ── Header action group (Add + Pin) ─────────────────────────────────────── */
+.bv-browser__header-actions {
+    display: flex;
+    align-items: center;
+    gap: .125rem;
+}
+
+/* ── Browser panel ──────────────────────────────────────────────────────── */
+:host,
+.bv-browser {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--kendo-color-surface-alt, var(--bv-surface-1));
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.bv-browser__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--kendo-color-border, var(--bv-border));
+    flex-shrink: 0;
+}
+
+.bv-browser__title {
+    font-size: .8125rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+}
+
+/* ── Loading ─────────────────────────────────────────────────────────────── */
+.bv-browser__loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .75rem;
+    flex: 1;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    font-size: .8125rem;
+    padding: 1rem;
+}
+
+/* ── Empty state ────────────────────────────────────────────────────────── */
+.bv-browser__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    flex: 1;
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    font-size: .8125rem;
+}
+
+.bv-browser__empty-icon {
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.bv-browser__empty p {
+    margin: 0;
+}
+
+/* ── Clip card grid ─────────────────────────────────────────────────────── */
+.bv-browser__grid {
+    flex: 1;
+    overflow-y: auto;
+    padding: .5rem;
+    display: flex;
+    flex-direction: column;
+    gap: .375rem;
+}
+
+/* ── Individual clip card ───────────────────────────────────────────────── */
+.bv-clip-card {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .375rem .5rem;
+    border-radius: 6px;
+    border: 1px solid var(--kendo-color-border, var(--bv-border));
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    cursor: grab;
+    transition: border-color 120ms, background 120ms;
+    min-height: 52px;
+}
+
+.bv-clip-card:hover {
+    border-color: var(--kendo-color-primary, var(--bv-accent));
+    background: var(--bv-surface-3);
+}
+
+.bv-clip-card--selected {
+    border-color: var(--kendo-color-primary, var(--bv-accent));
+    background: var(--bv-accent-muted);
+}
+
+.bv-clip-card--dragging {
+    opacity: .5;
+    outline: 2px dashed var(--kendo-color-primary, var(--bv-accent));
+    cursor: grabbing;
+}
+
+/* thumbnail */
+.bv-clip-card__thumb {
+    width: 64px;
+    height: 40px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bv-clip-card__thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.bv-clip-card__thumb-placeholder {
+    position: relative;
+    font-size: 1.25rem;
+    color: #444;
+}
+
+/* On-demand preview trigger for Server-tab video rows — hidden until hover, matches the
+   hover-reveal pattern already used for .bv-clip-card__actions. */
+.bv-clip-card__preview-btn {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, .55);
+    border: none;
+    color: #fff;
+    font-size: 1rem;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .15s;
+}
+
+.bv-clip-card:hover .bv-clip-card__preview-btn {
+    opacity: 1;
+}
+
+/* Icon-only thumb (audio clips, image fallback) */
+.bv-clip-card__thumb--icon {
+    width: 64px;
+    height: 40px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: .65;
+}
+
+/* info */
+.bv-clip-card__info {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: .125rem;
+}
+
+.bv-clip-card__name {
+    font-size: .8rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bv-clip-card__meta {
+    font-size: .7rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+}
+
+/* action buttons */
+.bv-clip-card__actions {
+    display: flex;
+    gap: .25rem;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 120ms;
+}
+
+.bv-clip-card:hover .bv-clip-card__actions,
+.bv-clip-card--selected .bv-clip-card__actions,
+.bv-clip-card--busy .bv-clip-card__actions {
+    opacity: 1;
+}
+
+/* Phase 150 — Server-tab download progress + "downloaded locally" badge */
+.bv-clip-card__download-progress {
+    width: 4.5rem;
+}
+
+.bv-clip-card__download-bar {
+    width: 100%;
+}
+
+.bv-clip-card__cached-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--kendo-color-success, #4caf50);
+    /* Unlike the download button/progress bar (actions, hidden until hover), "already downloaded"
+       is glance-able status, not an action — stays visible regardless of .bv-clip-card__actions'
+       own opacity:0 default so the user can tell at a glance what they already have locally. */
+    opacity: 1 !important;
+}
+
+/* ── Error banner ───────────────────────────────────────────────────────── */
+.bv-browser__error {
+    padding: .5rem .75rem;
+    background: #3b1a1a;
+    color: #e06c75;
+    font-size: .75rem;
+    border-top: 1px solid #5c2a2a;
+    flex-shrink: 0;
+}
+
+/* ── Import progress window ────────────────────────────────────────────────── */
+
+.bv-import-list {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    padding: .25rem 0;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.bv-import-row {
+    display: flex;
+    align-items: flex-start;
+    gap: .75rem;
+    padding: .5rem;
+    border-radius: .375rem;
+    background: var(--kendo-color-surface-alt, var(--bv-surface-1));
+    border: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+.bv-import-row__thumb {
+    flex-shrink: 0;
+    width: 64px;
+    height: 48px;
+    border-radius: .25rem;
+    overflow: hidden;
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bv-import-row__thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.bv-import-row__thumb-icon {
+    font-size: 1.5rem;
+    opacity: .55;
+}
+
+.bv-import-row__body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+}
+
+.bv-import-row__name {
+    font-size: .8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bv-import-row__meta {
+    font-size: .7rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+}
+
+.bv-import-row__wasm {
+    color: var(--kendo-color-primary, var(--bv-accent));
+}
+
+.bv-import-row__bar {
+    height: 6px;
+    margin-top: .25rem;
+}
+
+.bv-import-row__error {
+    font-size: .7rem;
+    color: var(--kendo-color-error, #e06c75);
+    margin-top: .25rem;
+}
+
+/* Stage badge */
+.bv-import-badge {
+    flex-shrink: 0;
+    font-size: .65rem;
+    font-weight: 700;
+    padding: .15rem .45rem;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+    align-self: flex-start;
+    margin-top: .15rem;
+}
+
+.bv-import-badge--queued     { color: #888; border-color: #888; }
+.bv-import-badge--preview    { color: #888; border-color: #888; }
+.bv-import-badge--writing    { color: var(--kendo-color-primary, var(--bv-accent)); }
+.bv-import-badge--metadata   { color: var(--kendo-color-primary, var(--bv-accent)); }
+.bv-import-badge--thumbnails { color: var(--kendo-color-primary, var(--bv-accent)); }
+.bv-import-badge--audio      { color: var(--kendo-color-primary, var(--bv-accent)); }
+.bv-import-badge--done       { color: #4caf89; border-color: #4caf89; }
+.bv-import-badge--error      { color: var(--kendo-color-error, #e06c75); border-color: var(--kendo-color-error, #e06c75); }
+
+/* Item #59-#65 flakiness investigation, phase 145 */
+.bv-import-row__cancel {
+    flex-shrink: 0;
+    align-self: flex-start;
+    margin-top: .15rem;
+}
+
+/* ── Library tab ────────────────────────────────────────────────────────────── */
+.bv-browser__tabs {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.bv-browser__local,
+.bv-browser__library {
+    flex: 1;
+    overflow-y: auto;
+}
+

@@ -1,0 +1,451 @@
+@using Ben.Video.Editor.Effects
+
+@inject ClipStore Clips
+@inject MotionKeyframeService Motion
+@inject PreviewGeometryService Geometry
+
+@* Editor-only overlay — never exported. Renders the callout shape outline and
+   draggable control-point handles as an SVG positioned over the preview screen.
+
+   Item #73 — resize-handle drag AND shape control-point drag (Arrow/Line curve, Star outer
+   radius, Rectangle corner radius) both route through MotionKeyframeService.EditLayer now,
+   exactly like CanvasSelectionOverlay's body-drag/SetSize. Before this, neither ever checked
+   Motion.HasPath: dragging a handle on a layer that already had a motion path silently had no
+   visible effect at any keyframed time (Evaluate() overrides X/Y/Width/Height/control-points from
+   the keyframe whenever a path exists, so the static write these handles used to make was
+   invisible during playback) — a missing-feature bug, not merely a missing-undo one.
+
+   DisplayClip unifies reading: every handle position AND the shape outline now come from the
+   layer's motion-EVALUATED state (falling back to the live drag snapshot while a drag is in
+   flight), not the raw static fields — otherwise, even after fixing the WRITE side, the handles
+   would still appear drawn in the wrong place on an animated shape at a keyframed time, since the
+   shape actually rendered underneath (LiveOverlayPreview) already reflects the keyframe. *@
+<svg class="bv-callout-overlay"
+     viewBox="0 0 @CanvasWidth @CanvasHeight"
+     xmlns="http://www.w3.org/2000/svg"
+     @onpointermove="OnPointerMove"
+     @onpointerup="OnPointerUp"
+     @onpointercancel="OnPointerUp">
+
+    @* Shape outline — drawn as thin coloured path without fill for clarity *@
+    @if (DisplayClip is not null)
+    {
+        @((MarkupString)ShapeOutlineSvg())
+    }
+
+    @* Control-point handles *@
+    @foreach (var handle in _handles)
+    {
+        <g>
+            @* Larger invisible hit zone — also carries move/up so implicit pointer
+               capture on pointerdown keeps firing even outside the SVG bounds *@
+            <circle cx="@F(handle.PxX)" cy="@F(handle.PxY)" r="16"
+                    fill="transparent" style="cursor:grab"
+                    @onpointerdown="e => OnHandlePointerDown(e, handle)"
+                    @onpointermove="OnPointerMove"
+                    @onpointerup="OnPointerUp"
+                    @onpointercancel="OnPointerUp"
+                    @onpointerdown:stopPropagation="true" />
+            @* Visible handle *@
+            <circle cx="@F(handle.PxX)" cy="@F(handle.PxY)"
+                    r="@(_draggingKey == handle.Key ? "8" : "6")"
+                    fill="@(_draggingKey == handle.Key ? "#cba6f7" : "#89b4fa")"
+                    stroke="#1e1e2e" stroke-width="1.5"
+                    style="pointer-events:none" />
+            @* Label on hover — shown via title tooltip *@
+            <title>@handle.Label (drag to adjust)</title>
+        </g>
+    }
+
+    @* Bounding-box resize handles — corners + edge midpoints, independent of shape *@
+    @foreach (var handle in _resizeHandles)
+    {
+        <g>
+            <rect x="@F(handle.PxX - 6)" y="@F(handle.PxY - 6)" width="12" height="12"
+                  fill="transparent" style="cursor:@ResizeCursor(handle.Key)"
+                  @onpointerdown="e => OnResizeHandlePointerDown(e, handle)"
+                  @onpointermove="OnPointerMove"
+                  @onpointerup="OnPointerUp"
+                  @onpointercancel="OnPointerUp"
+                  @onpointerdown:stopPropagation="true" />
+            <rect x="@F(handle.PxX - 4)" y="@F(handle.PxY - 4)"
+                  width="@(_draggingKey == handle.Key ? "10" : "8")"
+                  height="@(_draggingKey == handle.Key ? "10" : "8")"
+                  fill="@(_draggingKey == handle.Key ? "#f9e2af" : "#a6e3a1")"
+                  stroke="#1e1e2e" stroke-width="1.5"
+                  style="pointer-events:none" />
+            <title>Resize (drag)</title>
+        </g>
+    }
+</svg>
+
+@code {
+    [Parameter, EditorRequired] public CalloutClip?     Clip         { get; set; }
+    [Parameter, EditorRequired] public ElementReference ScreenElement { get; set; }
+    [Parameter]                  public int             CanvasWidth  { get; set; } = 1920;
+    [Parameter]                  public int             CanvasHeight { get; set; } = 1080;
+    /// <summary>Item #73 — needed to evaluate/write the right keyframe. Threaded through from
+    /// VideoPreview.razor exactly like CanvasSelectionOverlay's own CurrentTime.</summary>
+    [Parameter, EditorRequired] public double            CurrentTime  { get; set; }
+    /// <summary>Fired when a control point is committed via drag-release.</summary>
+    [Parameter] public EventCallback<(string Key, double Value)> OnPointChanged { get; set; }
+
+    // ── Handle list ───────────────────────────────────────────────────────────
+
+    private sealed record Handle(string Key, string Label, double PxX, double PxY);
+
+    private List<Handle> _handles = [];
+    private List<Handle> _resizeHandles = [];
+    private string?          _draggingKey;
+    private double           _dragStartPxX;
+    private double           _dragStartPxY;
+
+    // Item #73 — the running, motion-evaluated snapshot a drag reads/writes every frame. Starts
+    // as a copy of the layer's EFFECTIVE state at drag-start (StaticSeed-equivalent: the
+    // interpolated frame if animated, else the static fields themselves) and is mutated locally
+    // each OnPointerMove — this can't be re-derived from Clip's own fields each frame the way the
+    // old static-only code did, because while animated the static fields never change (only the
+    // keyframe does), so re-reading them would never accumulate the drag delta.
+    private CalloutClip? _liveClip;
+    // Static base size at drag-start — the fixed denominator ScaleX/ScaleY are computed against
+    // for resize (matches CanvasSelectionOverlay.SetSize's baseW/baseH). Not the same thing as
+    // the live (already-scaled) size in _liveClip.
+    private double _baseW, _baseH;
+    private MotionKeyframe? _dragOrigKeyframe;
+    // Static-branch (unanimated) undo revert snapshots — only used when Motion.HasPath is false.
+    private (double X, double Y, double Width, double Height) _resizeOrigBounds;
+    private Dictionary<string, double> _dragOrigValues = [];
+
+    private const string ResizeKeyPrefix = "resize:";
+
+    /// <summary>What every handle position and the shape outline are drawn from: the live drag
+    /// snapshot while a drag is in flight, else the layer's current motion-evaluated state
+    /// (identical to its static state when it has no path).</summary>
+    private CalloutClip? DisplayClip =>
+        _liveClip ?? (Clip is null ? null : MotionEffectiveGeometry.Effective(Motion, Clip, CurrentTime));
+
+    protected override void OnParametersSet() => RebuildHandles();
+
+    private void RebuildHandles()
+    {
+        _handles = [];
+        RebuildResizeHandles();
+        var clip = DisplayClip;
+        if (clip is null) return;
+
+        var cpv = clip.ControlPointValues;
+        double GetV(string k, double def) => cpv.TryGetValue(k, out var v) ? v : def;
+
+        switch (clip.Shape)
+        {
+            case ShapeType.Arrow:
+            case ShapeType.Line:
+                _handles =
+                [
+                    new(CalloutControlPoints.StartX + "|" + CalloutControlPoints.StartY, "Start",
+                        GetV(CalloutControlPoints.StartX, clip.X) * CanvasWidth,
+                        GetV(CalloutControlPoints.StartY, clip.Y + clip.Height / 2) * CanvasHeight),
+                    new(CalloutControlPoints.MidX   + "|" + CalloutControlPoints.MidY,   "Curve",
+                        GetV(CalloutControlPoints.MidX,   clip.X + clip.Width / 2)  * CanvasWidth,
+                        GetV(CalloutControlPoints.MidY,   clip.Y + clip.Height / 2) * CanvasHeight),
+                    new(CalloutControlPoints.EndX   + "|" + CalloutControlPoints.EndY,   "End",
+                        GetV(CalloutControlPoints.EndX,   clip.X + clip.Width)     * CanvasWidth,
+                        GetV(CalloutControlPoints.EndY,   clip.Y + clip.Height / 2) * CanvasHeight),
+                ];
+                break;
+
+            case ShapeType.Star:
+                // One handle on the outer radius edge (top of the star bounding box)
+                var scx   = (clip.X + clip.Width / 2) * CanvasWidth;
+                var scy   = (clip.Y + clip.Height / 2) * CanvasHeight;
+                var outer = GetV(CalloutControlPoints.OuterRadius, 0.9);
+                var r1    = Math.Min(clip.Width * CanvasWidth, clip.Height * CanvasHeight) / 2 * outer;
+                _handles  =
+                [
+                    new(CalloutControlPoints.OuterRadius, "Outer radius", scx, scy - r1),
+                ];
+                break;
+
+            case ShapeType.Rectangle:
+                // Corner-radius handle at the top-left corner, offset inward by CornerRadius
+                var cr   = GetV(CalloutControlPoints.CornerRadius, 4.0);
+                var rx   = clip.X * CanvasWidth + cr;
+                var ry   = clip.Y * CanvasHeight;
+                _handles = [ new(CalloutControlPoints.CornerRadius, "Corner radius", rx, ry) ];
+                break;
+        }
+    }
+
+    // ── Bounding-box resize handles ───────────────────────────────────────────
+
+    private void RebuildResizeHandles()
+    {
+        _resizeHandles = [];
+        var clip = DisplayClip;
+        if (clip is null) return;
+
+        var left   = clip.X * CanvasWidth;
+        var top    = clip.Y * CanvasHeight;
+        var right  = (clip.X + clip.Width)  * CanvasWidth;
+        var bottom = (clip.Y + clip.Height) * CanvasHeight;
+        var midX   = (left + right) / 2;
+        var midY   = (top + bottom) / 2;
+
+        _resizeHandles =
+        [
+            new(ResizeKeyPrefix + "tl", "Resize", left,  top),
+            new(ResizeKeyPrefix + "t",  "Resize", midX,  top),
+            new(ResizeKeyPrefix + "tr", "Resize", right, top),
+            new(ResizeKeyPrefix + "r",  "Resize", right, midY),
+            new(ResizeKeyPrefix + "br", "Resize", right, bottom),
+            new(ResizeKeyPrefix + "b",  "Resize", midX,  bottom),
+            new(ResizeKeyPrefix + "bl", "Resize", left,  bottom),
+            new(ResizeKeyPrefix + "l",  "Resize", left,  midY),
+        ];
+    }
+
+    private static string ResizeCursor(string key) => key[ResizeKeyPrefix.Length..] switch
+    {
+        "tl" or "br" => "nwse-resize",
+        "tr" or "bl" => "nesw-resize",
+        "t"  or "b"  => "ns-resize",
+        _            => "ew-resize",
+    };
+
+    private async Task OnResizeHandlePointerDown(PointerEventArgs e, Handle handle)
+    {
+        await Geometry.RefreshAsync(ScreenElement, CanvasWidth, CanvasHeight);
+        _draggingKey  = handle.Key;
+        _dragStartPxX = e.ClientX;
+        _dragStartPxY = e.ClientY;
+        BeginDrag();
+        RebuildHandles();
+    }
+
+    // ── SVG shape outline (lightweight, no fill) ──────────────────────────────
+
+    private string ShapeOutlineSvg()
+    {
+        var clip = DisplayClip;
+        if (clip is null) return string.Empty;
+        var stroke = "#89b4fa";
+        var cpv    = clip.ControlPointValues;
+        double GetV(string k, double def) => cpv.TryGetValue(k, out var v) ? v : def;
+        double ToX(string k, double def) => GetV(k, def) * CanvasWidth;
+        double ToY(string k, double def) => GetV(k, def) * CanvasHeight;
+
+        return clip.Shape switch
+        {
+            ShapeType.Arrow or ShapeType.Line =>
+                $"""<path d="M {F(ToX(CalloutControlPoints.StartX, clip.X))} {F(ToY(CalloutControlPoints.StartY, clip.Y + clip.Height / 2))} """ +
+                $"""Q {F(ToX(CalloutControlPoints.MidX, clip.X + clip.Width / 2))} {F(ToY(CalloutControlPoints.MidY, clip.Y + clip.Height / 2))} """ +
+                $"""{F(ToX(CalloutControlPoints.EndX, clip.X + clip.Width))} {F(ToY(CalloutControlPoints.EndY, clip.Y + clip.Height / 2))}" """ +
+                $"""fill="none" stroke="{stroke}" stroke-width="2" stroke-dasharray="6 3" opacity="0.8" />""",
+
+            ShapeType.Rectangle =>
+                $"""<rect x="{F(clip.X * CanvasWidth)}" y="{F(clip.Y * CanvasHeight)}" """ +
+                $"""width="{F(clip.Width * CanvasWidth)}" height="{F(clip.Height * CanvasHeight)}" """ +
+                $"""rx="{F(GetV(CalloutControlPoints.CornerRadius, 4))}" fill="none" stroke="{stroke}" stroke-width="2" stroke-dasharray="6 3" opacity="0.8" />""",
+
+            ShapeType.Ellipse =>
+                $"""<ellipse cx="{F((clip.X + clip.Width / 2) * CanvasWidth)}" cy="{F((clip.Y + clip.Height / 2) * CanvasHeight)}" """ +
+                $"""rx="{F(clip.Width / 2 * CanvasWidth)}" ry="{F(clip.Height / 2 * CanvasHeight)}" """ +
+                $"""fill="none" stroke="{stroke}" stroke-width="2" stroke-dasharray="6 3" opacity="0.8" />""",
+
+            _ => string.Empty,
+        };
+    }
+
+    // ── Pointer drag ──────────────────────────────────────────────────────────
+
+    private async Task OnHandlePointerDown(PointerEventArgs e, Handle handle)
+    {
+        await Geometry.RefreshAsync(ScreenElement, CanvasWidth, CanvasHeight);
+        _draggingKey  = handle.Key;
+        _dragStartPxX = e.ClientX;
+        _dragStartPxY = e.ClientY;
+        BeginDrag();
+        // Snapshot the EFFECTIVE control point values before any dragging changes them — the
+        // static-branch undo revert target. Equals the static Clip.ControlPointValues when the
+        // layer isn't animated (DisplayClip falls back to Clip in that case).
+        _dragOrigValues = _liveClip is null ? [] : new Dictionary<string, double>(_liveClip.ControlPointValues);
+        RebuildHandles();
+    }
+
+    /// <summary>Item #73 — common drag-start setup shared by both handle kinds: snapshots
+    /// _liveClip (the running per-frame state), the static base size resize needs for its
+    /// ScaleX/ScaleY conversion, the pre-drag keyframe (if any, for the animated-branch undo), and
+    /// the pre-drag bounds (for the static-branch undo).</summary>
+    private void BeginDrag()
+    {
+        if (Clip is null) { _liveClip = null; return; }
+        _liveClip = MotionEffectiveGeometry.Effective(Motion, Clip, CurrentTime) with { };
+        _baseW = Clip.Width;
+        _baseH = Clip.Height;
+        _resizeOrigBounds = (_liveClip.X, _liveClip.Y, _liveClip.Width, _liveClip.Height);
+        _dragOrigKeyframe = Motion.GetPath(Clip.Id)?.Keyframes.FirstOrDefault(k => Math.Abs(k.Time - CurrentTime) < 0.001);
+    }
+
+    private void OnPointerMove(PointerEventArgs e)
+    {
+        if (_draggingKey is null || Clip is null || _liveClip is null) return;
+
+        var dx = e.ClientX - _dragStartPxX;
+        var dy = e.ClientY - _dragStartPxY;
+        _dragStartPxX = e.ClientX;
+        _dragStartPxY = e.ClientY;
+
+        // Convert the on-screen pixel delta to a canvas-fraction delta using the preview's actual
+        // rendered (possibly letterboxed) content box — not CanvasWidth/Height directly, which are the
+        // native canvas resolution and very rarely equal the on-screen rendered pixel size.
+        var (fdx, fdy) = Geometry.DeltaToFraction(dx, dy);
+
+        if (_draggingKey.StartsWith(ResizeKeyPrefix, StringComparison.Ordinal))
+        {
+            var handleKey = _draggingKey[ResizeKeyPrefix.Length..];
+            var (nx, ny, nw, nh) = CalloutResizeMath.ApplyResize(
+                _liveClip.X, _liveClip.Y, _liveClip.Width, _liveClip.Height,
+                handleKey, fdx, fdy);
+            _liveClip.X = nx; _liveClip.Y = ny; _liveClip.Width = nw; _liveClip.Height = nh;
+
+            var (baseW, baseH) = (_baseW, _baseH);
+            Motion.EditLayer(Clip.Id, "CalloutClip", CurrentTime,
+                () => MotionEffectiveGeometry.StaticSeed(Clip, CurrentTime),
+                kf =>
+                {
+                    kf.X = nx;
+                    kf.Y = ny;
+                    kf.ScaleX = baseW > 0 ? nw / baseW : kf.ScaleX;
+                    kf.ScaleY = baseH > 0 ? nh / baseH : kf.ScaleY;
+                },
+                () => Clips.UpdateCallout(Clip.Id, c => { c.X = nx; c.Y = ny; c.Width = nw; c.Height = nh; }));
+
+            RebuildHandles();
+            return;
+        }
+
+        var keys = _draggingKey.Split('|');
+
+        // For XY pairs (startX|startY, midX|midY, endX|endY) update both at once
+        if (keys.Length == 2)
+        {
+            var kx = keys[0]; var ky = keys[1];
+            var nx = Math.Clamp(_liveClip.ControlPointValues.GetValueOrDefault(kx, 0.5) + fdx, 0.0, 1.0);
+            var ny = Math.Clamp(_liveClip.ControlPointValues.GetValueOrDefault(ky, 0.5) + fdy, 0.0, 1.0);
+            _liveClip.ControlPointValues[kx] = nx;
+            _liveClip.ControlPointValues[ky] = ny;
+
+            Motion.EditLayer(Clip.Id, "CalloutClip", CurrentTime,
+                () => MotionEffectiveGeometry.StaticSeed(Clip, CurrentTime),
+                kf => { kf.ControlPointValues[kx] = nx; kf.ControlPointValues[ky] = ny; },
+                () => Clips.UpdateCallout(Clip.Id, c =>
+                {
+                    c.ControlPointValues[kx] = nx;
+                    c.ControlPointValues[ky] = ny;
+                }));
+        }
+        else
+        {
+            // Single-key handle (OuterRadius, CornerRadius)
+            var key     = keys[0];
+            var current = _liveClip.ControlPointValues.GetValueOrDefault(key, 0.5);
+            var delta   = (key == CalloutControlPoints.CornerRadius)
+                ? fdx * CanvasWidth   // fraction delta back to pixel radius
+                : -fdy * 2.0;         // radius fraction: drag up = larger
+            var nv = key == CalloutControlPoints.CornerRadius
+                ? Math.Clamp(current + delta, 0, 40)
+                : Math.Clamp(current + delta, 0.1, 1.0);
+            _liveClip.ControlPointValues[key] = nv;
+
+            Motion.EditLayer(Clip.Id, "CalloutClip", CurrentTime,
+                () => MotionEffectiveGeometry.StaticSeed(Clip, CurrentTime),
+                kf => kf.ControlPointValues[key] = nv,
+                () => Clips.UpdateCallout(Clip.Id, c => c.ControlPointValues[key] = nv));
+        }
+
+        RebuildHandles();
+    }
+
+    private void OnPointerUp(PointerEventArgs e)
+    {
+        if (_draggingKey is null || Clip is null || _liveClip is null) { _draggingKey = null; _liveClip = null; return; }
+        var item = Clip;
+        var draggingKey = _draggingKey;
+        _draggingKey = null;
+
+        if (draggingKey.StartsWith(ResizeKeyPrefix, StringComparison.Ordinal))
+        {
+            if (!Motion.HasPath(item.Id))
+            {
+                var (ox, oy, ow, oh) = _resizeOrigBounds;
+                var (fx, fy, fw, fh) = (_liveClip.X, _liveClip.Y, _liveClip.Width, _liveClip.Height);
+                Clips.CommitCalloutUpdate(item.Id, "bounds",
+                    c => { c.X = fx; c.Y = fy; c.Width = fw; c.Height = fh; },
+                    c => { c.X = ox; c.Y = oy; c.Width = ow; c.Height = oh; });
+            }
+            else
+            {
+                CommitKeyframeEditIfAnimated(item, _dragOrigKeyframe, "Resize CalloutClip");
+            }
+        }
+        else if (!Motion.HasPath(item.Id))
+        {
+            var keys    = draggingKey.Split('|');
+            var origVals = new Dictionary<string, double>(_dragOrigValues);
+
+            // Commit a single undoable entry: apply = current final values, revert = snapshot before drag
+            if (keys.Length == 2)
+            {
+                var kx = keys[0]; var ky = keys[1];
+                var vx = _liveClip.ControlPointValues.GetValueOrDefault(kx, 0.5);
+                var vy = _liveClip.ControlPointValues.GetValueOrDefault(ky, 0.5);
+                var ox = origVals.GetValueOrDefault(kx, vx);
+                var oy = origVals.GetValueOrDefault(ky, vy);
+                Clips.CommitCalloutUpdate(item.Id, $"{kx},{ky}",
+                    c => { c.ControlPointValues[kx] = vx; c.ControlPointValues[ky] = vy; },
+                    c => { c.ControlPointValues[kx] = ox; c.ControlPointValues[ky] = oy; });
+            }
+            else
+            {
+                var key = keys[0];
+                var nv  = _liveClip.ControlPointValues.GetValueOrDefault(key, 0.5);
+                var ov  = origVals.GetValueOrDefault(key, nv);
+                Clips.CommitCalloutUpdate(item.Id, key,
+                    c => c.ControlPointValues[key] = nv,
+                    c => c.ControlPointValues[key] = ov);
+            }
+        }
+        else
+        {
+            var description = draggingKey.Contains('|')
+                ? $"Adjust {draggingKey.Replace("|", ",")}"
+                : $"Adjust {draggingKey}";
+            CommitKeyframeEditIfAnimated(item, _dragOrigKeyframe, description);
+        }
+
+        _dragOrigKeyframe = null;
+        _liveClip = null;
+        RebuildHandles();
+        StateHasChanged();
+    }
+
+    /// <summary>Item #63/#73 — mirrors CanvasSelectionOverlay.CommitKeyframeEditIfAnimated exactly
+    /// (see that method's doc comment for the full contract). Wraps the keyframe-branch edit
+    /// Motion.EditLayer already performed live, frame by frame, into one undo entry at
+    /// gesture-end.</summary>
+    private void CommitKeyframeEditIfAnimated(CalloutClip item, MotionKeyframe? oldKf, string description)
+    {
+        var newKf = Motion.GetPath(item.Id)?.Keyframes.FirstOrDefault(k => Math.Abs(k.Time - CurrentTime) < 0.001);
+        if (newKf is null) return;
+
+        Clips.CommitMotionKeyframeEdit(description,
+            apply:  () => Motion.UpsertKeyframe(item.Id, "CalloutClip", newKf),
+            revert: () =>
+            {
+                if (oldKf is null) Motion.RemoveKeyframe(item.Id, CurrentTime);
+                else Motion.UpsertKeyframe(item.Id, "CalloutClip", oldKf);
+            });
+    }
+
+    private static string F(double v) => v.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+}

@@ -1,0 +1,68 @@
+/*
+ * ben-video-variables.css
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Central fallback definitions for all --bv-* CSS custom properties.
+ *
+ * PURPOSE
+ * Components in Ben.Video.Editor use Telerik / Kendo variables as the primary
+ * source of truth (var(--kendo-color-primary, var(--bv-accent))) so they
+ * automatically track the active Telerik theme (ben-dark / ben-light).
+ * The --bv-* properties defined here act as hardcoded dark-mode fallbacks for
+ * any context where the Telerik theme stylesheet is not loaded (e.g. unit
+ * tests, isolated embeds, custom host apps that haven't loaded Kendo CSS yet).
+ *
+ * LOADING ORDER (host project requirement)
+ * 1. Telerik theme CSS   (kendo/ben-dark.css or kendo/ben-light.css)
+ * 2. This file           (_content/Ben.Video.Editor/css/ben-video-variables.css)
+ * 3. RCL component CSS   (_content/Ben.Video.Editor/...)
+ *
+ * KENDO → BV EQUIVALENCE TABLE
+ * ──────────────────────────────────────────────────────────────────────────────
+ * --kendo-color-primary          ≈  --bv-accent          #89b4fa
+ * --kendo-color-border           ≈  --bv-border          #2e2e3e
+ * --kendo-color-surface          ≈  --bv-surface-2       #1e1e2e
+ * --kendo-color-surface-alt      ≈  --bv-surface-1       #181825
+ * --kendo-color-on-surface       ≈  --bv-text            #cdd6f4
+ * --kendo-color-subtle-text      ≈  --bv-text-muted      #6c7086
+ * ──────────────────────────────────────────────────────────────────────────────
+ * Variables with no Kendo equivalent — always resolved from --bv-* directly:
+ *   --bv-surface-3               #252538   (tertiary panel background)
+ *   --bv-accent-muted            #2a3150   (soft accent backgrounds)
+ *   --bv-marker-color            #f59e0b   (timeline cue markers)
+ *   --bv-waveform-height         64px      (audio waveform render height)
+ * ──────────────────────────────────────────────────────────────────────────────
+ * Dynamic vars (set by LayoutService via inline style on .bv-editor):
+ *   --bv-browser-w               (clip browser panel width)
+ *   --bv-timeline-h              (timeline panel height)
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+:root {
+    /* ── Kendo-mapped fallbacks ─────────────────────────────────────────── */
+    --bv-accent:        #89b4fa;   /* --kendo-color-primary      */
+    --bv-border:        #2e2e3e;   /* --kendo-color-border       */
+    --bv-surface-2:     #1e1e2e;   /* --kendo-color-surface      */
+    --bv-surface-1:     #181825;   /* --kendo-color-surface-alt  */
+    --bv-text:          #cdd6f4;   /* --kendo-color-on-surface   */
+    --bv-text-muted:    #6c7086;   /* --kendo-color-subtle-text  */
+
+    /* ── No Kendo equivalent — bv-only ─────────────────────────────────── */
+    --bv-surface-3:     #252538;
+    --bv-accent-muted:  #2a3150;
+    --bv-marker-color:  #f59e0b;
+    --bv-waveform-height: 64px;
+
+    /* ── Title accent colors (editor-panel headers) ─────────────────────── */
+    /* These have no Kendo equivalent and intentionally differ per panel.    */
+    --bv-title-video:   #89b4fa;   /* VideoClip / ClipEditor header        */
+    --bv-title-audio:   #a6e3a1;   /* AudioClip / AudioClipEditor header   */
+    --bv-title-text:    #f5c2e7;   /* TextOverlay editor header            */
+    --bv-title-trans:   #c09af8;   /* Transition editor header             */
+    --bv-title-image:   #fab387;   /* ImageClip editor header              */
+}
+
+/* ── Zoom slider: force-hide tick labels (Blazor ::deep may not reach Telerik inner DOM) */
+.bv-timeline__zoom-slider .k-slider-items,
+.bv-timeline__zoom-slider .k-label {
+    display: none !important;
+}

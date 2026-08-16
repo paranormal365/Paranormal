@@ -1,0 +1,29 @@
+/* ── ResizableDivider ──────────────────────────────────────────────────────── */
+.bv-divider {
+    flex-shrink: 0;
+    background: transparent;
+    transition: background 120ms ease;
+    position: relative;
+    z-index: 10;
+}
+
+.bv-divider:hover,
+.bv-divider:active {
+    background: var(--kendo-color-primary, var(--bv-accent));
+}
+
+/* Horizontal divider — sits between left/right panels, resizes width */
+.bv-divider--horizontal {
+    width: 5px;
+    cursor: col-resize;
+    border-left:  1px solid var(--kendo-color-border, var(--bv-border));
+    border-right: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+/* Vertical divider — sits between workspace and timeline, resizes height */
+.bv-divider--vertical {
+    height: 5px;
+    cursor: row-resize;
+    border-top:    1px solid var(--kendo-color-border, var(--bv-border));
+    border-bottom: 1px solid var(--kendo-color-border, var(--bv-border));
+}

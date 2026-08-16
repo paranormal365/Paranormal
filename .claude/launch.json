@@ -8,10 +8,10 @@
       "port": 5078
     },
     {
-      "name": "video-editor-playground",
+      "name": "wasm-video-editor",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "/Users/ben/Source/Github-BenVideo/Ben.Video.Playground", "--configuration", "Debug"],
-      "port": 64368
+      "runtimeArgs": ["run", "--project", "/Users/ben/Source/Ben/Ben.Wasm.Video", "--configuration", "Debug"],
+      "port": 5180
     }
   ]
 }

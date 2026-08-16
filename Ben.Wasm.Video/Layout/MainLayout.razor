@@ -1,0 +1,9 @@
+@inherits LayoutComponentBase
+
+@* The editor is the whole app: no nav, no chrome — the layout exists only because RouteView
+   requires one. TelerikRootComponent is the mandatory Telerik popup/dialog anchor. *@
+<TelerikRootComponent>
+    <main class="bwv-main">
+        @Body
+    </main>
+</TelerikRootComponent>

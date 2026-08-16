@@ -1,0 +1,46 @@
+/* ── Live overlay preview ────────────────────────────────────────────────────
+   One real <svg> per active Callout/TextOverlay, each independently sized to
+   cover the whole preview screen (its own viewBox handles internal scaling) —
+   mirrors TextPositionOverlay's own absolute-fill approach. Sits above the
+   video/still-image layer but below the interactive control-point handles so
+   drag handles for the selected item stay clickable on top of the real visual. */
+
+.bv-live-overlay-preview {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.bv-live-overlay-preview > svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+
+/* ClipArt (item #47) isn't a self-contained full-canvas SVG like Callout/TextOverlay — it's a
+   real asset (raster or SVG) positioned as a fraction of the canvas, same X/Y/Width/Height
+   convention as ClipArtControlPointOverlay's own resize handles use. */
+.bv-live-overlay-preview__clipart {
+    position: absolute;
+    pointer-events: none;
+    overflow: visible;
+}
+
+.bv-live-overlay-preview__clipart img,
+.bv-live-overlay-preview__clipart svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* Recolor tint (item #56) — masked to the asset's own alpha shape, see LiveOverlayPreview.razor's
+   TintStyle() for how the mask-image URL is built. */
+.bv-live-overlay-preview__clipart-tint {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}

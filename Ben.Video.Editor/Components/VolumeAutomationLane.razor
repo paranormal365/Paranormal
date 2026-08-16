@@ -1,0 +1,163 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@inject ErrorLogService ErrorLog
+@implements IAsyncDisposable
+
+@if (Clip is not null)
+{
+    <div class="bv-vol-lane" @ref="_container">
+        <svg @ref="_svg"
+             class="bv-vol-lane__svg"
+             xmlns="http://www.w3.org/2000/svg"
+             aria-label="Volume automation lane">
+
+            <!-- dB scale ruler (left 32 px) — static labels rendered by JS -->
+            <g class="bv-vol-lane__ruler" />
+
+            <!-- Automation polyline — updated by JS on every drag tick -->
+            <polyline class="bv-vol-lane__line" points="" />
+
+            <!-- Keyframe handles — one <circle> per keyframe, managed by JS -->
+            <g class="bv-vol-lane__handles" />
+
+            <!-- Active-handle tooltip -->
+            <text class="bv-vol-lane__tooltip" visibility="hidden" />
+        </svg>
+    </div>
+}
+
+@code {
+
+    // ── Parameters ──────────────────────────────────────────────────────────
+
+    [Parameter, EditorRequired] public IHasVolumeAutomation? Clip     { get; set; }
+    [Parameter, EditorRequired] public Guid                  ClipId   { get; set; }
+    [Parameter]                 public double                 LaneHeight { get; set; } = 48;
+
+    // ── DI / refs ────────────────────────────────────────────────────────────
+
+    [Inject] private ClipStore Clips { get; set; } = default!;
+
+    private ElementReference _container;
+    private ElementReference _svg;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<VolumeAutomationLane>? _dotnetRef;
+    private Guid _lastClipId;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override void OnInitialized()
+        => Clips.OnChange += OnClipStoreChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Clip is null) return;
+
+        if (firstRender)
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Video.Editor/js/volumeAutomationLane.js");
+
+            // Clip may have gone null (the <svg> removed from the @if above) while the import
+            // just awaited was in flight — calling init() with the now-stale/removed _svg
+            // reference is the root cause of item #34's null-ref crash. The JS side also guards
+            // against a null element defensively, but skipping the call here avoids it entirely
+            // for this specific, most-likely race.
+            if (Clip is null) return;
+
+            _dotnetRef  = DotNetObjectReference.Create(this);
+            _lastClipId = ClipId;
+
+            await _module.InvokeVoidAsync("init", _svg, _dotnetRef,
+                SerialiseKeyframes(), LaneHeight);
+            return;
+        }
+
+        // Clip changed — re-init with new keyframes
+        if (ClipId != _lastClipId && _module is not null)
+        {
+            _lastClipId = ClipId;
+            await _module.InvokeVoidAsync("updateKeyframes", _svg, SerialiseKeyframes(), LaneHeight);
+        }
+    }
+
+    // ── ClipStore → JS sync ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Audit #3 — this was <c>async void</c>, the only one in the codebase. That matters here
+    /// specifically because the body is JS interop on a component that can be torn down at any
+    /// moment: a disposed circuit or an already-disposed module throws, and from an
+    /// <c>async void</c> that becomes an <b>unobservable</b> exception no caller can catch, rather
+    /// than a handled one. The signature has to stay <c>void</c> (it's an <see cref="Action"/>
+    /// subscriber on <c>ClipStore.OnChange</c>), so the async work moves into a Task-returning
+    /// method whose failures are actually caught.
+    /// </summary>
+    private void OnClipStoreChanged() => _ = RefreshFromStoreAsync();
+
+    private async Task RefreshFromStoreAsync()
+    {
+        if (_module is null || Clip is null) return;
+        try
+        {
+            await _module.InvokeVoidAsync("updateKeyframes", _svg, SerialiseKeyframes(), LaneHeight);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit already gone (page closing / navigation) — nothing to update and nothing
+            // worth logging; matches how every other JS-interop teardown path here behaves.
+        }
+        catch (ObjectDisposedException)
+        {
+            // Raced our own DisposeAsync, which disposes _module. Same reasoning as above.
+        }
+        catch (Exception ex)
+        {
+            ErrorLog.Log("VolumeAutomationLane.OnClipStoreChanged", ex);
+        }
+    }
+
+    // ── JS → Blazor callbacks ────────────────────────────────────────────────
+
+    [JSInvokable]
+    public void OnKeyframeAdded(double position, double volume)
+        => Clips.AddVolumeKeyframe(ClipId, position, volume);
+
+    [JSInvokable]
+    public void OnKeyframeUpdated(string id, double position, double volume)
+    {
+        if (Guid.TryParse(id, out var gid))
+            Clips.UpdateVolumeKeyframe(ClipId, gid, position, volume);
+    }
+
+    [JSInvokable]
+    public void OnKeyframeRemoved(string id)
+    {
+        if (Guid.TryParse(id, out var gid))
+            Clips.RemoveVolumeKeyframe(ClipId, gid);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private object[] SerialiseKeyframes()
+    {
+        if (Clip is null) return [];
+        return Clip.VolumeAutomation
+            .Select(k => (object)new { id = k.Id.ToString(), k.Position, k.Volume })
+            .ToArray();
+    }
+
+    // ── Dispose ───────────────────────────────────────────────────────────────
+
+    public async ValueTask DisposeAsync()
+    {
+        Clips.OnChange -= OnClipStoreChanged;
+        _dotnetRef?.Dispose();
+
+        if (_module is not null)
+        {
+            try { await _module.InvokeVoidAsync("destroy", _svg); } catch { /* ignore if context gone */ }
+            await _module.DisposeAsync();
+        }
+    }
+}

@@ -1,0 +1,62 @@
+@using Ben.Video.Editor.Effects
+
+@* ── Colour preview swatch ──────────────────────────────────────────────────── *@
+<div class="bv-color-field">
+    @if (Label is not null)
+    {
+        <label class="bv-color-field__label">@Label</label>
+    }
+
+    <div class="bv-color-field__swatch-row">
+        @* Checkerboard wrapper + coloured overlay *@
+        <div class="bv-color-field__swatch-wrap" @onclick="ToggleOpen" title="@ColorHelper.ToHex(Value)">
+            <div class="bv-color-field__swatch-color"
+                 style="background: @ColorHelper.ToRgbaCss(Value)" />
+        </div>
+        <span class="bv-color-field__hex"
+              @onclick="ToggleOpen">@ColorHelper.ToHex(Value)</span>
+        <TelerikButton OnClick="ToggleOpen"
+                       Icon="@SvgIcon.Pencil"
+                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Size="@ThemeConstants.Button.Size.Small"
+                       Title="Edit colour" />
+    </div>
+
+    @* Inline gradient picker — shown when expanded *@
+    @if (_open)
+    {
+        <div class="bv-color-field__picker">
+            <TelerikColorGradient Value="@ColorHelper.ToHex(Value)"
+                                  ValueChanged="@OnColorChanged"
+                                  ShowOpacityEditor="@ShowAlpha"
+                                  ValueFormat="@ColorFormat.Hex" />
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Packed ARGB colour stored as double (see <see cref="ColorHelper"/>).</summary>
+    [Parameter] public double Value { get; set; } = ColorHelper.OpaqueBlack;
+
+    /// <summary>Fires when the user commits a new colour.</summary>
+    [Parameter] public EventCallback<double> ValueChanged { get; set; }
+
+    /// <summary>Optional field label displayed above the swatch.</summary>
+    [Parameter] public string? Label { get; set; }
+
+    /// <summary>
+    /// When <c>true</c> (default) the gradient picker shows the alpha/opacity slider.
+    /// Set to <c>false</c> for opaque-only colours (e.g. ffmpeg fade colours).
+    /// </summary>
+    [Parameter] public bool ShowAlpha { get; set; } = true;
+
+    private bool _open;
+
+    private void ToggleOpen() => _open = !_open;
+
+    private async Task OnColorChanged(string hex)
+    {
+        var packed = ColorHelper.FromHex(hex);
+        await ValueChanged.InvokeAsync(packed);
+    }
+}

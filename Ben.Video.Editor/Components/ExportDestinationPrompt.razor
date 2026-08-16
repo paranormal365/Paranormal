@@ -1,0 +1,139 @@
+@* Phase 176 — where does the finished video go?
+
+   Shown once an immediate ("Export Now") render finishes, and ONLY when the host has supplied an
+   OnPublishExport handler; without one there is no second destination to offer, so the export
+   downloads directly as it always did and this never appears.
+
+   Distinct from ExportSavePrompt, which is about the .benvideo PROJECT (JSON, so you can keep
+   editing later). This one is about the rendered video. The two answer different questions and
+   deliberately stay separate components. *@
+@if (Visible)
+{
+    <TelerikWindow Visible="true"
+                   VisibleChanged="@(async v => { if (!v) await DismissAsync(); })"
+                   Width="420px"
+                   Modal="true"
+                   Draggable="true"
+                   Resizable="false"
+                   Class="bv-export-destination-prompt">
+        <WindowTitle>Export Complete</WindowTitle>
+        <WindowContent>
+            <p class="bv-export-destination-prompt__text">
+                <strong>@FileName</strong> is ready@(SizeLabel is null ? "" : $" ({SizeLabel})").
+                Where should it go?
+            </p>
+            @if (_error is not null)
+            {
+                <p class="bv-export-destination-prompt__error" role="alert">@_error</p>
+            }
+        </WindowContent>
+        <WindowFooter>
+            @* Busy state is on the whole footer, not just the clicked button: publishing a large
+               render is slow enough that a second click on the OTHER button would otherwise start
+               a download of a file publish is midway through consuming. *@
+            <TelerikButton OnClick="UploadAsync"
+                           Enabled="@(!_busy)"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Size="@ThemeConstants.Button.Size.Small">
+                @(_busy ? "Uploading…" : "Upload to server")
+            </TelerikButton>
+            <TelerikButton OnClick="SaveToDeviceAsync"
+                           Enabled="@(!_busy)"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Save to my machine
+            </TelerikButton>
+            <TelerikButton OnClick="DismissAsync"
+                           Enabled="@(!_busy)"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Discard
+            </TelerikButton>
+        </WindowFooter>
+    </TelerikWindow>
+}
+
+@code {
+    [Parameter] public bool                Visible        { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    /// <summary>Output filename, shown so the user knows which render they're placing.</summary>
+    [Parameter] public string FileName { get; set; } = string.Empty;
+
+    /// <summary>Rendered size in bytes; 0 hides the size hint rather than showing "0 B".</summary>
+    [Parameter] public long SizeBytes { get; set; }
+
+    /// <summary>Runs the host's publish. Must throw on failure — the prompt stays open and shows
+    /// the message, because a silently-dismissed failure would leave the user believing a video
+    /// reached the server when it did not, with the only copy already deleted.</summary>
+    [Parameter] public EventCallback OnUpload { get; set; }
+
+    [Parameter] public EventCallback OnSaveToDevice { get; set; }
+    [Parameter] public EventCallback OnDiscard      { get; set; }
+
+    private bool    _busy;
+    private string? _error;
+
+    private string? SizeLabel => SizeBytes <= 0 ? null : FormatSize(SizeBytes);
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        >= 1024L * 1024 * 1024 => $"{bytes / 1024d / 1024 / 1024:0.#} GB",
+        >= 1024L * 1024        => $"{bytes / 1024d / 1024:0.#} MB",
+        >= 1024                => $"{bytes / 1024d:0.#} KB",
+        _                      => $"{bytes} B",
+    };
+
+    private async Task UploadAsync()
+    {
+        _busy  = true;
+        _error = null;
+        StateHasChanged();
+        try
+        {
+            await OnUpload.InvokeAsync();
+            await CloseAsync();
+        }
+        catch (Exception ex)
+        {
+            // Stay open. The editor has NOT discarded the render at this point (see
+            // VideoEditor.PublishExportAsync), so "Save to my machine" is still a live escape
+            // hatch rather than a dead button next to a lost file.
+            _error = $"Upload failed: {ex.Message}. You can still save it to your machine.";
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveToDeviceAsync()
+    {
+        _busy = true;
+        StateHasChanged();
+        try
+        {
+            await OnSaveToDevice.InvokeAsync();
+            await CloseAsync();
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DismissAsync()
+    {
+        await OnDiscard.InvokeAsync();
+        await CloseAsync();
+    }
+
+    private async Task CloseAsync()
+    {
+        _error = null;
+        Visible = false;
+        await VisibleChanged.InvokeAsync(false);
+    }
+}

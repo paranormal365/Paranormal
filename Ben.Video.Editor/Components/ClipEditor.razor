@@ -1,0 +1,468 @@
+﻿@inject ClipStore Clips
+@inject PlaybackService Playback
+@inject Microsoft.Extensions.Options.IOptions<VideoEditorOptions> EditorOptionsAccessor
+@inject Ben.Video.Editor.Services.ClipEffectRegistry EffectRegistry
+@using Ben.Video.Editor.Effects
+
+@if (Clip is not null)
+{
+    <div class="bv-clip-editor">
+
+        <!-- ── Header ──────────────────────────────────────────────────── -->
+        <div class="bv-clip-editor__header">
+            <span class="bv-clip-editor__title">@Clip.Name</span>
+            <TelerikButton OnClick="Close"
+                           Icon="@SvgIcon.X"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Title="Close clip editor" />
+        </div>
+
+        <!-- ── Info row ─────────────────────────────────────────────────── -->
+        <div class="bv-clip-editor__info">
+            <span>Source: @FormatTime(Clip.Duration)</span>
+            <span>Trimmed: @FormatTime(Clip.TrimmedDuration)</span>
+            @if (Math.Abs(Clip.Speed - 1.0) > 0.001)
+            {
+                <span>Effective: @FormatTime(Clip.EffectiveDuration) (@Clip.Speed.ToString("F2")x)</span>
+            }
+            @if (LinkedAudioOffsetSeconds is { } offset)
+            {
+                <span class="bv-clip-editor__link-offset">
+                    Linked · audio starts @FormatTime(Math.Abs(offset)) @(offset > 0 ? "after" : offset < 0 ? "before" : "with") video
+                </span>
+            }
+        </div>
+
+        <!-- ── Trim In ──────────────────────────────────────────────────── -->
+        <div class="bv-clip-editor__field">
+            <label class="bv-clip-editor__label">In point</label>
+            <TelerikSlider @bind-Value="_trimStart"
+                           Min="0"
+                           Max="@_trimEnd"
+                           SmallStep="0.1"
+                           LargeStep="1"
+                           Orientation="@SliderOrientation.Horizontal"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0, _trimEnd, 1)"
+                           Class="bv-clip-editor__slider" />
+            <span class="bv-clip-editor__time">@FormatTime(_trimStart)</span>
+        </div>
+
+        <!-- ── Trim Out ─────────────────────────────────────────────────── -->
+        <div class="bv-clip-editor__field">
+            <label class="bv-clip-editor__label">Out point</label>
+            <TelerikSlider @bind-Value="_trimEnd"
+                           Min="@_trimStart"
+                           Max="@Clip.Duration"
+                           SmallStep="0.1"
+                           LargeStep="1"
+                           Orientation="@SliderOrientation.Horizontal"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(_trimStart, Clip.Duration, 1)"
+                           Class="bv-clip-editor__slider" />
+            <span class="bv-clip-editor__time">@FormatTime(_trimEnd)</span>
+        </div>
+
+        <!-- ── Split at playhead ─────────────────────────────────────────── -->
+        <div class="bv-clip-editor__field">
+            <label class="bv-clip-editor__label">Split at</label>
+            <TelerikSlider @bind-Value="_splitAt"
+                           Min="0"
+                           Max="@Clip.TrimmedDuration"
+                           SmallStep="0.1"
+                           LargeStep="1"
+                           Orientation="@SliderOrientation.Horizontal"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0, Clip.TrimmedDuration, 1)"
+                           Class="bv-clip-editor__slider" />
+            <span class="bv-clip-editor__time">@FormatTime(_splitAt)</span>
+        </div>
+
+        <!-- ── Slip / Roll / Slide (item #50) ────────────────────────────── -->
+        <div class="bv-clip-editor__field bv-clip-editor__trim-nudges">
+            <label class="bv-clip-editor__label" title="Change what part of the source media this clip shows, without moving it or changing its length.">Slip</label>
+            <TelerikButton OnClick="@(() => SlipClip(-0.5))" Size="@ThemeConstants.Button.Size.Small" Icon="@SvgIcon.ChevronLeft" Title="Slip back 0.5s" />
+            <TelerikButton OnClick="@(() => SlipClip(0.5))" Size="@ThemeConstants.Button.Size.Small" Icon="@SvgIcon.ChevronRight" Title="Slip forward 0.5s" />
+
+            <label class="bv-clip-editor__label" title="Move the edit point shared with the next clip, without changing their combined length.">Roll</label>
+            <TelerikButton OnClick="@(() => RollEdit(-0.5))" Size="@ThemeConstants.Button.Size.Small" Icon="@SvgIcon.ChevronLeft" Title="Roll edit point back 0.5s" />
+            <TelerikButton OnClick="@(() => RollEdit(0.5))" Size="@ThemeConstants.Button.Size.Small" Icon="@SvgIcon.ChevronRight" Title="Roll edit point forward 0.5s" />
+
+            <label class="bv-clip-editor__label" title="Move this clip without changing its own trim — its neighbors absorb the move.">Slide</label>
+            <TelerikButton OnClick="@(() => SlideClip(-0.5))" Size="@ThemeConstants.Button.Size.Small" Icon="@SvgIcon.ChevronLeft" Title="Slide back 0.5s" />
+            <TelerikButton OnClick="@(() => SlideClip(0.5))" Size="@ThemeConstants.Button.Size.Small" Icon="@SvgIcon.ChevronRight" Title="Slide forward 0.5s" />
+        </div>
+
+        <!-- ── Speed ──────────────────────────────────────────────────── -->
+        <div class="bv-clip-editor__field">
+            <label class="bv-clip-editor__label">Speed (@_speed.ToString("F2")x)</label>
+            <TelerikSlider @bind-Value="_speed"
+                           Min="0.25"
+                           Max="4.0"
+                           SmallStep="0.05"
+                           LargeStep="0.25"
+                           Orientation="@SliderOrientation.Horizontal"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0.25, 4.0, 0.25)"
+                           Class="bv-clip-editor__slider" />
+        </div>
+
+        <!-- ── Volume ──────────────────────────────────────────────────────────────────────── -->
+        <div class="bv-clip-editor__field">
+            <label class="bv-clip-editor__label">
+                Volume (@VolumeToDb(_volume) dB)
+                @if (Clip.VolumeAutomation.Count >= 2)
+                {
+                    <span class="bv-clip-editor__badge">Automation active (@Clip.VolumeAutomation.Count pts)</span>
+                }
+            </label>
+            <TelerikSlider @bind-Value="_volume"
+                           Min="0.0"
+                           Max="2.0"
+                           SmallStep="0.05"
+                           LargeStep="0.25"
+                           Orientation="@SliderOrientation.Horizontal"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 2.0, 0.25)"
+                           Class="bv-clip-editor__slider" />
+        </div>
+
+
+        @if (Options.VideoEffects)
+        {
+        <div class="bv-clip-editor__section-heading">Visual Effects</div>
+
+        @foreach (var fx in Clip.AppliedEffects)
+        {
+            var effect = EffectRegistry.GetById(fx.EffectId);
+            if (effect is null) { continue; }
+            <div class="bv-clip-editor__effect-card">
+                <div class="bv-clip-editor__effect-header">
+                    <span class="bv-clip-editor__effect-name">@effect.DisplayName</span>
+                    <TelerikButton OnClick="@(() => RemoveEffect(fx))"
+                                   Icon="@SvgIcon.X"
+                                   Size="@ThemeConstants.Button.Size.Small"
+                                   FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                   Title="Remove effect" />
+                </div>
+                @foreach (var param in effect.ParameterSchema)
+                {
+                    var localFx    = fx;
+                    var localParam = param;
+                    var paramVal   = localFx.Parameters.TryGetValue(localParam.Key, out var pv) ? pv : localParam.DefaultValue;
+                    <div class="bv-clip-editor__field">
+                        @if (localParam.Type == ParameterType.Select && localParam.Options.Count > 0)
+                        {
+                            var idx = (int)Math.Round(paramVal);
+                            var label = localParam.Options.ElementAtOrDefault(idx) ?? localParam.Options[0];
+                            <label class="bv-clip-editor__label">@localParam.Label: @label</label>
+                            <TelerikDropDownList Data="@localParam.Options"
+                                                 Value="@label"
+                                                 ValueChanged="@((string s) => UpdateEffectParameter(localFx, localParam.Key, (double)localParam.Options.ToList().IndexOf(s)))"
+                                                 Class="bv-clip-editor__effect-dropdown" />
+                        }
+                        else if (localParam.Type == ParameterType.Color)
+                        {
+                            <ColorPickerField Label="@localParam.Label"
+                                              Value="@paramVal"
+                                              ValueChanged="@((double v) => UpdateEffectParameter(localFx, localParam.Key, v))"
+                                              ShowAlpha="true" />
+                        }
+                        else if (localParam.Type == ParameterType.Toggle)
+                        {
+                            <label class="bv-clip-editor__label">@localParam.Label</label>
+                            <TelerikCheckBox Value="@(paramVal >= 0.5)"
+                                             ValueChanged="@((bool b) => UpdateEffectParameter(localFx, localParam.Key, b ? 1.0 : 0.0))" />
+                        }
+                        else
+                        {
+                            <label class="bv-clip-editor__label">@localParam.Label (@paramVal.ToString("F2"))</label>
+                            <TelerikSlider Value="@paramVal"
+                                           ValueChanged="@((double v) => UpdateEffectParameter(localFx, localParam.Key, v))"
+                                           Min="@localParam.Min"
+                                           Max="@localParam.Max"
+                                           SmallStep="@localParam.Step"
+                                           LargeStep="@localParam.LargeStep"
+                                           Orientation="@SliderOrientation.Horizontal"
+                                           LabelTemplate="@SliderLabelTemplates.Endpoints(localParam.Min, localParam.Max, localParam.LargeStep)"
+                                           Class="bv-clip-editor__slider" />
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="bv-clip-editor__field">
+            <TelerikDropDownList Data="@EffectRegistry.All"
+                                 @bind-Value="@_selectedEffectId"
+                                 TextField="@nameof(IClipEffect.DisplayName)"
+                                 ValueField="@nameof(IClipEffect.EffectId)"
+                                 DefaultText="Add effect..."
+                                 Class="bv-clip-editor__effect-dropdown" />
+            <TelerikButton OnClick="AddSelectedEffect"
+                           Icon="@SvgIcon.Plus"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
+                           Title="Add selected effect"
+                           Enabled="@(_selectedEffectId is not null)">
+                Add
+            </TelerikButton>
+        </div>
+        }
+
+        <!-- ── Action buttons ──────────────────────────────────────────────────────────────── -->
+        <div class="bv-clip-editor__actions">
+        <div class="bv-clip-editor__field">
+            <TelerikButton OnClick="OnTrimChanged"
+                           Icon="@SvgIcon.Check"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Title="Apply trim points">
+                Apply Trim
+            </TelerikButton>
+        </div>
+
+        <div class="bv-clip-editor__field">
+            <TelerikButton OnClick="ApplySpeed"
+                           Icon="@SvgIcon.Play"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
+                           Title="Apply playback speed">
+                Apply Speed
+            </TelerikButton>
+        </div>
+
+        <div class="bv-clip-editor__field">
+            <TelerikButton OnClick="ApplyVolume"
+                           Icon="@SvgIcon.VolumeUp"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
+                           Title="Apply scalar volume">
+                Apply Volume
+            </TelerikButton>
+            @if (Clip.VolumeAutomation.Count >= 2)
+            {
+                <TelerikButton OnClick="ClearAutomation"
+                               Icon="@SvgIcon.X"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
+                               Title="Clear all automation keyframes">
+                    Clear Automation
+                </TelerikButton>
+            }
+        </div>
+
+            <TelerikButton OnClick="SplitAsync"
+                           Icon="@SvgIcon.Crop"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           Title="Split clip at selected point">
+                Split
+            </TelerikButton>
+
+            @if (Clip.LinkedClipId is null)
+            {
+                <TelerikButton OnClick="LinkNearbyAudio"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               Title="Link the nearest unlinked audio clip — lets you see and independently trim their relative offset for a J-cut or L-cut (item #52)">
+                    Link Nearby Audio
+                </TelerikButton>
+            }
+            else
+            {
+                <TelerikButton OnClick="Unlink"
+                               Size="@ThemeConstants.Button.Size.Small"
+                               FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               Title="Remove the link to its paired audio clip">
+                    Unlink Audio
+                </TelerikButton>
+            }
+
+            <TelerikButton OnClick="DeleteAsync"
+                           Icon="@SvgIcon.Trash"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           Title="Remove clip from timeline">
+                Delete
+            </TelerikButton>
+        </div>
+
+    </div>
+}
+
+@code {
+    // ── Parameters ──────────────────────────────────────────────────────────
+
+    /// <summary>The clip currently being edited. Null = panel is hidden.</summary>
+    [Parameter] public VideoClip? Clip { get; set; }
+
+    /// <summary>Raised when the user closes the panel (X button).</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Raised after trim points are committed to <see cref="ClipStore"/>.</summary>
+    [Parameter] public EventCallback<VideoClip> OnTrimApplied { get; set; }
+
+    /// <summary>Raised after the clip is split.</summary>
+    [Parameter] public EventCallback<VideoClip> OnClipSplit { get; set; }
+
+    /// <summary>Raised after the clip is deleted from the timeline.</summary>
+    [Parameter] public EventCallback<VideoClip> OnClipDeleted { get; set; }
+
+    /// <summary>Effective options from the parent VideoEditor. Null = use the IOptions value from DI.</summary>
+    [Parameter] public VideoEditorOptions? EditorOptions { get; set; }
+
+    private VideoEditorOptions Options => EditorOptions ?? EditorOptionsAccessor.Value;
+
+    // ── Local state ─────────────────────────────────────────────────────────
+
+    private double _trimStart;
+    private double _trimEnd;
+    private double _splitAt;
+    private double _speed;
+    private double _volume;
+    private string? _selectedEffectId;
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────
+
+    protected override void OnParametersSet()
+    {
+        if (Clip is null) return;
+
+        _trimStart = Clip.StartTrim;
+        _trimEnd   = Clip.EndTrim > Clip.StartTrim ? Clip.EndTrim : Clip.Duration;
+        _speed     = Clip.Speed;
+        _volume    = Clip.Volume;
+        _selectedEffectId = null;
+
+        // Default split to current playhead position (clamped to trimmed region)
+        var playheadOffset = Playback.State.CurrentTime;
+        _splitAt = Math.Clamp(playheadOffset, 0, Clip.TrimmedDuration);
+        if (_splitAt <= 0 || _splitAt >= Clip.TrimmedDuration)
+            _splitAt = Clip.TrimmedDuration / 2.0;
+    }
+
+    // ── Handlers ─────────────────────────────────────────────────────────────
+
+    private void OnTrimChanged()
+    {
+        if (Clip is null) return;
+        if (_trimStart >= _trimEnd) return;
+        Clips.UpdateTrim(Clip.Id, _trimStart, _trimEnd);
+        OnTrimApplied.InvokeAsync(Clip);
+    }
+
+    private void ApplySpeed()
+    {
+        if (Clip is null) return;
+        Clips.UpdateClipSpeed(Clip.Id, _speed);
+    }
+
+    private void ApplyVolume()
+    {
+        if (Clip is null) return;
+        Clips.SetClipVolume(Clip.Id, _volume);
+    }
+
+    private void ClearAutomation()
+    {
+        if (Clip is null) return;
+        Clips.ClearVolumeAutomation(Clip.Id);
+    }
+
+    private async Task SplitAsync()
+    {
+        if (Clip is null) return;
+        Clips.SplitClip(Clip.Id, _splitAt);
+        await OnClipSplit.InvokeAsync(Clip);
+    }
+
+    private void SlipClip(double delta)
+    {
+        if (Clip is null) return;
+        Clips.SlipClip(Clip.Id, delta);
+    }
+
+    private void RollEdit(double delta)
+    {
+        if (Clip is null) return;
+        Clips.RollEdit(Clip.Id, delta);
+    }
+
+    private void SlideClip(double delta)
+    {
+        if (Clip is null) return;
+        Clips.SlideClip(Clip.Id, delta);
+    }
+
+    /// <summary>Item #52: links the nearest unlinked audio clip within a small threshold of this
+    /// clip's edges, so their relative offset can be shown and independently trimmed for a J/L-cut.</summary>
+    private void LinkNearbyAudio()
+    {
+        if (Clip is null) return;
+        var candidate = Clips.FindNearbyLinkCandidate(Clip);
+        if (candidate is not null)
+            Clips.LinkClips(Clip.Id, candidate.Id);
+    }
+
+    private void Unlink()
+    {
+        if (Clip is null) return;
+        Clips.UnlinkClip(Clip.Id);
+    }
+
+    /// <summary>Seconds the linked audio clip's start sits after (positive) or before (negative)
+    /// this clip's start — an L-cut/J-cut readout. Null when unlinked or the partner is gone.</summary>
+    private double? LinkedAudioOffsetSeconds
+    {
+        get
+        {
+            if (Clip?.LinkedClipId is not { } partnerId) return null;
+            var partner = Clips.AllAudioClips.FirstOrDefault(a => a.Id == partnerId);
+            return partner is null ? null : partner.TimelinePosition - Clip.TimelinePosition;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (Clip is null) return;
+        var deleted = Clip;
+        Clips.RemoveClip(deleted.Id);
+        await OnClipDeleted.InvokeAsync(deleted);
+    }
+
+    private void AddSelectedEffect()
+    {
+        if (Clip is null || _selectedEffectId is null) return;
+        var effect = EffectRegistry.GetById(_selectedEffectId);
+        if (effect is null) return;
+        Clips.AddEffect(Clip.Id, effect.CreateDefault());
+        _selectedEffectId = null;
+    }
+
+    private void RemoveEffect(AppliedEffect fx)
+    {
+        if (Clip is null) return;
+        Clips.RemoveEffect(Clip.Id, fx);
+    }
+
+    private void UpdateEffectParameter(AppliedEffect fx, string key, double value)
+    {
+        if (Clip is null) return;
+        Clips.UpdateEffectParameter(fx, key, value);
+    }
+
+    private async Task Close() => await OnClose.InvokeAsync();
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private static string FormatTime(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.TotalHours >= 1
+            ? ts.ToString(@"h\:mm\:ss\.f")
+            : ts.ToString(@"m\:ss\.f");
+    }
+
+    private static string VolumeToDb(double linear)
+    {
+        if (linear <= 0) return "-\u221e";
+        var db = 20.0 * Math.Log10(linear);
+        return db.ToString("+0.0;-0.0;0.0", System.Globalization.CultureInfo.InvariantCulture);
+    }
+}

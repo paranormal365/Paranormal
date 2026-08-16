@@ -1,0 +1,322 @@
+.bv-asset-browser {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--kendo-color-surface, var(--bv-panel-bg));
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
+
+.bv-asset-browser__toolbar {
+    display: flex;
+    gap: 6px;
+    padding: 8px;
+    border-bottom: 1px solid var(--kendo-color-border, var(--bv-border));
+    flex-shrink: 0;
+}
+
+.bv-asset-browser__search {
+    flex: 1;
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+
+.bv-asset-browser__tabs {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── State messages ──────────────────────────────────────────────────────── */
+
+.bv-asset-browser__state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 120px;
+    color: var(--kendo-color-subtle, var(--bv-text-muted));
+    font-size: 0.85rem;
+}
+
+/* ── Asset grid ──────────────────────────────────────────────────────────── */
+
+.bv-asset-browser__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 8px;
+    padding: 8px;
+    overflow-y: auto;
+}
+
+/* ── Asset card ──────────────────────────────────────────────────────────── */
+
+.bv-asset-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: var(--kendo-color-base-subtle, var(--bv-clip-bg));
+    border: 1px solid var(--kendo-color-border, var(--bv-border));
+    border-radius: 4px;
+    padding: 6px;
+    cursor: default;
+    position: relative;
+    transition: border-color 0.15s;
+}
+
+.bv-asset-card:hover {
+    border-color: var(--kendo-color-primary, var(--bv-accent));
+}
+
+.bv-asset-card--removed {
+    opacity: 0.55;
+}
+
+.bv-asset-card__thumb {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    background: var(--kendo-color-base, var(--bv-bg));
+    border-radius: 3px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bv-asset-card__thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.bv-asset-card__thumb-placeholder {
+    opacity: 0.4;
+}
+
+.bv-asset-card__badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 0.65rem;
+    border-radius: 3px;
+    padding: 1px 3px;
+    line-height: 1;
+}
+
+.bv-asset-card__badge--cloud {
+    background: var(--kendo-color-info, #0ea5e9);
+    color: #fff;
+}
+
+.bv-asset-card__badge--removed {
+    background: var(--kendo-color-error, #ef4444);
+    color: #fff;
+}
+
+.bv-asset-card__name {
+    font-size: 0.72rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--kendo-color-on-base, var(--bv-text));
+}
+
+.bv-asset-card__add {
+    width: 100%;
+}
+
+.bv-asset-card__progress {
+    margin-top: 2px;
+    height: 4px;
+}
+
+/* ── Transitions gallery (item #57 T3) ──────────────────────────────────────
+   Not asset cards — a fixed, local TransitionStyle enum, previewed with a pure-CSS animated
+   thumbnail (two colored rects) rather than a downloaded image, and dragged onto a timeline
+   junction rather than added at a timeline position (see OnTransitionPointerDown). */
+
+.bv-transition-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 8px;
+    padding: 8px;
+    overflow-y: auto;
+}
+
+.bv-transition-gallery-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: var(--kendo-color-base-subtle, var(--bv-clip-bg));
+    border: 1px solid var(--kendo-color-border, var(--bv-border));
+    border-radius: 4px;
+    padding: 6px;
+    cursor: grab;
+    transition: border-color 0.15s;
+    touch-action: none;
+    user-select: none;
+}
+
+.bv-transition-gallery-card:hover {
+    border-color: var(--kendo-color-primary, var(--bv-accent));
+}
+
+.bv-transition-gallery-card--dragging {
+    opacity: 0.5;
+}
+
+.bv-transition-gallery-card__name {
+    font-size: 0.72rem;
+    text-align: center;
+    color: var(--kendo-color-on-base, var(--bv-text));
+}
+
+.bv-transition-gallery-thumb {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: var(--kendo-color-base, var(--bv-bg));
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.bv-transition-gallery-thumb__a,
+.bv-transition-gallery-thumb__b {
+    position: absolute;
+    inset: 0;
+}
+
+.bv-transition-gallery-thumb__a {
+    background: #585b70;
+}
+
+.bv-transition-gallery-thumb__b {
+    background: #89b4fa;
+    transition: opacity 700ms ease, clip-path 700ms ease, transform 700ms ease;
+}
+
+/* Fade — B opacity 0 → 1 */
+.bv-transition-thumb--fade .bv-transition-gallery-thumb__b { opacity: 0; }
+.bv-transition-thumb--fade:hover .bv-transition-gallery-thumb__b { opacity: 1; }
+
+/* Dissolve — same direction as Fade but A visibly dims too, so the two read as distinct effects
+   even though ffmpeg's own dissolve/fade are close cousins of each other. */
+.bv-transition-thumb--dissolve .bv-transition-gallery-thumb__a { transition: opacity 700ms ease; }
+.bv-transition-thumb--dissolve .bv-transition-gallery-thumb__b { opacity: 0; }
+.bv-transition-thumb--dissolve:hover .bv-transition-gallery-thumb__a { opacity: 0.25; }
+.bv-transition-thumb--dissolve:hover .bv-transition-gallery-thumb__b { opacity: 1; }
+
+/* WipeLeft — revealed region grows leftward starting from the right edge */
+.bv-transition-thumb--wipeleft .bv-transition-gallery-thumb__b { clip-path: inset(0 0 0 100%); }
+.bv-transition-thumb--wipeleft:hover .bv-transition-gallery-thumb__b { clip-path: inset(0 0 0 0); }
+
+/* WipeRight — revealed region grows rightward starting from the left edge */
+.bv-transition-thumb--wiperight .bv-transition-gallery-thumb__b { clip-path: inset(0 100% 0 0); }
+.bv-transition-thumb--wiperight:hover .bv-transition-gallery-thumb__b { clip-path: inset(0 0 0 0); }
+
+/* SlideLeft — a solid block slides fully in from the right edge */
+.bv-transition-thumb--slideleft .bv-transition-gallery-thumb__b { transform: translateX(100%); }
+.bv-transition-thumb--slideleft:hover .bv-transition-gallery-thumb__b { transform: translateX(0); }
+
+/* Zoom — scales up from nothing, centered */
+.bv-transition-thumb--zoom .bv-transition-gallery-thumb__b { opacity: 0; transform: scale(0); }
+.bv-transition-thumb--zoom:hover .bv-transition-gallery-thumb__b { opacity: 1; transform: scale(1); }
+
+/* ── Curated extras (item #57 T5) ────────────────────────────────────────── */
+
+/* CircleOpen — a circular mask grows outward from the center */
+.bv-transition-thumb--circleopen .bv-transition-gallery-thumb__b {
+    clip-path: circle(0% at 50% 50%);
+    transition: clip-path 700ms ease;
+}
+.bv-transition-thumb--circleopen:hover .bv-transition-gallery-thumb__b { clip-path: circle(75% at 50% 50%); }
+
+/* CircleClose — the inverse: B starts fully visible, shrinks to a point (A "closes in") */
+.bv-transition-thumb--circleclose .bv-transition-gallery-thumb__b {
+    clip-path: circle(75% at 50% 50%);
+    transition: clip-path 700ms ease;
+}
+.bv-transition-thumb--circleclose:hover .bv-transition-gallery-thumb__b { clip-path: circle(0% at 50% 50%); }
+
+/* Radial — same circular growth as CircleOpen but paired with a fade, to read as the softer-
+   edged effect ffmpeg's radial actually produces vs. CircleOpen's hard edge */
+.bv-transition-thumb--radial .bv-transition-gallery-thumb__b {
+    clip-path: circle(0% at 50% 50%);
+    opacity: 0.6;
+    transition: clip-path 700ms ease, opacity 700ms ease;
+}
+.bv-transition-thumb--radial:hover .bv-transition-gallery-thumb__b { clip-path: circle(75% at 50% 50%); opacity: 1; }
+
+/* SmoothLeft/Right/Up/Down — like WipeLeft/Right but with a blurred edge (an eased,
+   longer-duration wipe reads as "soft" next to the hard-edged Wipe pair above) */
+.bv-transition-thumb--smoothleft .bv-transition-gallery-thumb__b {
+    clip-path: inset(0 0 0 100%);
+    transition: clip-path 900ms ease-in-out, filter 900ms ease-in-out;
+    filter: blur(4px);
+}
+.bv-transition-thumb--smoothleft:hover .bv-transition-gallery-thumb__b { clip-path: inset(0 0 0 0); filter: blur(0); }
+
+.bv-transition-thumb--smoothright .bv-transition-gallery-thumb__b {
+    clip-path: inset(0 100% 0 0);
+    transition: clip-path 900ms ease-in-out, filter 900ms ease-in-out;
+    filter: blur(4px);
+}
+.bv-transition-thumb--smoothright:hover .bv-transition-gallery-thumb__b { clip-path: inset(0 0 0 0); filter: blur(0); }
+
+.bv-transition-thumb--smoothup .bv-transition-gallery-thumb__b {
+    clip-path: inset(100% 0 0 0);
+    transition: clip-path 900ms ease-in-out, filter 900ms ease-in-out;
+    filter: blur(4px);
+}
+.bv-transition-thumb--smoothup:hover .bv-transition-gallery-thumb__b { clip-path: inset(0 0 0 0); filter: blur(0); }
+
+.bv-transition-thumb--smoothdown .bv-transition-gallery-thumb__b {
+    clip-path: inset(0 0 100% 0);
+    transition: clip-path 900ms ease-in-out, filter 900ms ease-in-out;
+    filter: blur(4px);
+}
+.bv-transition-thumb--smoothdown:hover .bv-transition-gallery-thumb__b { clip-path: inset(0 0 0 0); filter: blur(0); }
+
+/* Pixelize — a blocky mosaic fade-in (approximated with a heavy blur + fade, since CSS has no
+   native pixelation filter without an SVG filter primitive) */
+.bv-transition-thumb--pixelize .bv-transition-gallery-thumb__b {
+    opacity: 0;
+    filter: blur(6px);
+    transition: opacity 700ms ease, filter 700ms ease;
+}
+.bv-transition-thumb--pixelize:hover .bv-transition-gallery-thumb__b { opacity: 1; filter: blur(0); }
+
+/* FadeBlack — dips through black rather than crossfading directly (an inserted solid frame) */
+.bv-transition-thumb--fadeblack .bv-transition-gallery-thumb__a { transition: background 350ms ease 350ms; }
+.bv-transition-thumb--fadeblack .bv-transition-gallery-thumb__b { opacity: 0; transition: opacity 350ms ease 350ms; }
+.bv-transition-thumb--fadeblack:hover .bv-transition-gallery-thumb__a { background: #000; }
+.bv-transition-thumb--fadeblack:hover .bv-transition-gallery-thumb__b { opacity: 1; }
+
+/* FadeWhite — same shape as FadeBlack, dipping through white instead */
+.bv-transition-thumb--fadewhite .bv-transition-gallery-thumb__a { transition: background 350ms ease 350ms; }
+.bv-transition-thumb--fadewhite .bv-transition-gallery-thumb__b { opacity: 0; transition: opacity 350ms ease 350ms; }
+.bv-transition-thumb--fadewhite:hover .bv-transition-gallery-thumb__a { background: #fff; }
+.bv-transition-thumb--fadewhite:hover .bv-transition-gallery-thumb__b { opacity: 1; }
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+
+.bv-asset-browser__footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-top: 1px solid var(--kendo-color-border, var(--bv-border));
+    flex-shrink: 0;
+}
+
+.bv-asset-browser__sync-time,
+.bv-asset-browser__sync-msg {
+    font-size: 0.75rem;
+    color: var(--kendo-color-subtle, var(--bv-text-muted));
+}
+
+.bv-asset-browser__sync-msg {
+    margin-left: auto;
+}

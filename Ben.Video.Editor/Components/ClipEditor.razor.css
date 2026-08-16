@@ -1,0 +1,96 @@
+/* ── Clip editor panel ──────────────────────────────────────────────────────── */
+:host,
+.bv-clip-editor {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    padding: .75rem;
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    border-left: 1px solid var(--kendo-color-border, var(--bv-border));
+    overflow-y: auto;
+}
+
+/* ── Header ────────────────────────────────────────────────────────────────── */
+.bv-clip-editor__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+}
+
+.bv-clip-editor__title {
+    font-size: .8125rem;
+    font-weight: 600;
+    color: var(--kendo-color-on-surface, var(--bv-text));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Info row ───────────────────────────────────────────────────────────────── */
+.bv-clip-editor__info {
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+    font-size: .72rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+}
+
+.bv-clip-editor__link-offset {
+    color: var(--kendo-color-primary, var(--bv-accent));
+}
+
+/* ── Fields ────────────────────────────────────────────────────────────────────── */
+.bv-clip-editor__field {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+}
+
+.bv-clip-editor__label {
+    font-size: .72rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+/* ::deep required — TelerikSlider's root div is rendered by a child component and never
+   receives this component's Blazor CSS-isolation scope attribute (see item #68/#30). */
+::deep .bv-clip-editor__slider {
+    width: 100%;
+}
+
+.bv-clip-editor__time {
+    font-size: .75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--kendo-color-on-surface, var(--bv-text));
+    text-align: right;
+}
+
+/* ── Slip / Roll / Slide nudge row (item #50) ─────────────────────────────────── */
+.bv-clip-editor__trim-nudges {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .35rem;
+}
+
+.bv-clip-editor__trim-nudges .bv-clip-editor__label {
+    margin-left: .5rem;
+}
+
+.bv-clip-editor__trim-nudges .bv-clip-editor__label:first-child {
+    margin-left: 0;
+}
+
+/* ── Action buttons ─────────────────────────────────────────────────────────── */
+.bv-clip-editor__actions {
+    display: flex;
+    gap: .5rem;
+    padding-top: .25rem;
+    border-top: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+.bv-clip-editor__actions .k-button {
+    flex: 1;
+}

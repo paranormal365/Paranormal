@@ -1,0 +1,150 @@
+@inject ClipStore Clips
+
+@if (Transition is not null)
+{
+    <div class="bv-transition-editor">
+
+        <div class="bv-transition-editor__header">
+            <span class="bv-transition-editor__title">&#x2b26; Transition</span>
+            <TelerikButton OnClick="Close"
+                           Icon="@SvgIcon.X"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Title="Close" />
+        </div>
+
+        <!-- Style picker — CSS animated thumbnails (item #57 T4), matching AssetBrowser's
+             Transitions gallery cards so the same style reads consistently in both places. -->
+        <div class="bv-transition-editor__field">
+            <label class="bv-transition-editor__label">Style</label>
+            <div class="bv-transition-editor__style-grid">
+                @foreach (var style in _styles)
+                {
+                    var s = style;
+                    <button type="button"
+                            class="bv-transition-editor__style-card bv-transition-editor__style-thumb--@style.ToString().ToLowerInvariant() @(_style == s ? "bv-transition-editor__style-card--selected" : "")"
+                            title="@style"
+                            @onclick="() => _style = s">
+                        <span class="bv-transition-editor__style-thumb">
+                            <span class="bv-transition-editor__style-thumb-a"></span>
+                            <span class="bv-transition-editor__style-thumb-b"></span>
+                        </span>
+                        <span class="bv-transition-editor__style-name">@style</span>
+                    </button>
+                }
+            </div>
+        </div>
+
+        <!-- Duration slider + numeric input (item #57 T4) -->
+        <div class="bv-transition-editor__field">
+            <label class="bv-transition-editor__label">Duration</label>
+            <div class="bv-transition-editor__duration-row">
+                <TelerikSlider @bind-Value="_duration"
+                               Min="@TransitionDurationClamp.MinDurationSeconds"
+                               Max="@_maxDuration"
+                               SmallStep="0.1"
+                               LargeStep="0.5"
+                               LabelTemplate="@SliderLabelTemplates.Endpoints(TransitionDurationClamp.MinDurationSeconds, _maxDuration, 0.5)"
+                               Width="100%" />
+                <TelerikNumericTextBox @bind-Value="_duration"
+                                       Min="@TransitionDurationClamp.MinDurationSeconds"
+                                       Max="@_maxDuration"
+                                       Step="0.1"
+                                       Format="0.0's'"
+                                       Width="72px"
+                                       Class="bv-transition-editor__duration-input" />
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="bv-transition-editor__actions">
+            <TelerikButton OnClick="Apply"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Apply
+            </TelerikButton>
+            <TelerikButton OnClick="ApplyStyleToAll"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           Title="Apply this style to every transition on the timeline">
+                Apply to All
+            </TelerikButton>
+            <TelerikButton OnClick="Remove"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Remove
+            </TelerikButton>
+        </div>
+
+    </div>
+}
+
+@code {
+    [Parameter] public Transition?            Transition  { get; set; }
+    [Parameter] public EventCallback          OnClose     { get; set; }
+    [Parameter] public EventCallback          OnRemoved   { get; set; }
+
+    private static readonly List<TransitionStyle> _styles =
+        Enum.GetValues<TransitionStyle>().Where(s => s != TransitionStyle.Cut).ToList();
+
+    private TransitionStyle _style       = TransitionStyle.Fade;
+    private double          _duration    = 1.0;
+    private double          _maxDuration = 4.0;
+
+    // Item #57 T4 — real bug found (and fixed here) while live-verifying "Apply to All": this
+    // method runs on every render pass where the parent passes parameters down, not only when a
+    // DIFFERENT transition gets selected — the parent (VideoEditor) re-renders for reasons
+    // unrelated to this panel (e.g. background-render/OnChange activity elsewhere), and every one
+    // of those re-renders used to silently stomp _style/_duration back to Transition's own
+    // current values, discarding whatever the user had just picked/dragged but not yet applied.
+    // Only reset the user-editable fields when the selection itself actually changed.
+    private Guid? _lastTransitionId;
+
+    protected override void OnParametersSet()
+    {
+        if (Transition is null) { _lastTransitionId = null; return; }
+
+        var selectionChanged = Transition.Id != _lastTransitionId;
+        _lastTransitionId = Transition.Id;
+
+        if (selectionChanged)
+        {
+            _style    = Transition.Style;
+            _duration = Transition.Duration;
+        }
+
+        // Cap max duration to the shorter of the two adjacent clips (if resolvable) — recomputed
+        // every pass regardless of selectionChanged, since a clip elsewhere could have been
+        // retrimmed while this transition stays selected.
+        var fromClip = FindClip(Transition.FromClipId);
+        var toClip   = FindClip(Transition.ToClipId);
+
+        var fromDur = fromClip is VideoClip fvc ? fvc.TrimmedDuration : (fromClip?.Duration ?? 4.0);
+        var toDur   = toClip   is VideoClip tvc ? tvc.TrimmedDuration : (toClip?.Duration   ?? 4.0);
+        _maxDuration = TransitionDurationClamp.MaxDurationSeconds(fromDur, toDur);
+
+        if (_duration > _maxDuration) _duration = _maxDuration;
+    }
+
+    private TrackItem? FindClip(Guid id) =>
+        Clips.Tracks.SelectMany(t => t.Items).FirstOrDefault(i => i.Id == id);
+
+    private void Apply()
+    {
+        if (Transition is null) return;
+        Clips.UpdateTransition(Transition.Id, _style, _duration);
+    }
+
+    /// <summary>Item #57 T4 — applies the currently-picked style to every transition on the
+    /// timeline (each transition keeps its own duration), as a single undo entry.</summary>
+    private void ApplyStyleToAll() => Clips.ApplyStyleToAllTransitions(_style);
+
+    private async Task Remove()
+    {
+        if (Transition is null) return;
+        Clips.RemoveTransition(Transition.Id);
+        await OnRemoved.InvokeAsync();
+    }
+
+    private async Task Close() => await OnClose.InvokeAsync();
+}

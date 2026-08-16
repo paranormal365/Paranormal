@@ -1,0 +1,37 @@
+{
+  "_comment": "Item #38 phase E supply-chain manifest (threat T7). Each entry pins the exact ffmpeg AND ffprobe binaries this app trusts for that RID by SHA-256 — scripts/fetch-ffmpeg.{sh,ps1} downloads and verifies against this file at build time, and FfmpegLocator.VerifyIntegrity re-checks them at every startup. An ffmpeg mismatch fails closed (no job endpoints served); an ffprobe mismatch or a missing ffprobeSha256 fails SOFT (item #70 phase 158) — the sidecar simply doesn't advertise the probe/thumbnails capabilities and the browser keeps doing that work in wasm.",
+  "_schema": "url/sha256 are REQUIRED; everything else is optional. 'sha256' and 'ffprobeSha256' are the hashes of the EXTRACTED BINARIES — that is what FfmpegLocator.VerifyIntegrity hashes at startup, so the fetch scripts verify the same thing. 'archiveSha256'/'ffprobeArchiveSha256' are the hashes of the DOWNLOADED ARCHIVES, checked before anything is extracted so a tampered download is rejected without ever being unpacked (item #70 phase 174 — before this the scripts compared the archive against 'sha256' and would have contradicted the runtime check the first time a real pin was used). 'ffprobeUrl' is only needed when the source publishes ffprobe as a separate archive; when it is absent the scripts look for ffprobe inside the ffmpeg archive.",
+  "win-x64": {
+    "url": "https://TODO-pin-a-specific-BtbN-ffmpeg-builds-release/ffmpeg-win64.zip",
+    "archiveSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "ffprobeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "version": "TODO"
+  },
+  "osx-x64": {
+    "url": "https://TODO-pin-a-specific-evermeet.cx-build/ffmpeg-osx64.zip",
+    "archiveSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "ffprobeUrl": "https://TODO-pin-a-specific-evermeet.cx-build/ffprobe-osx64.zip",
+    "ffprobeArchiveSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "ffprobeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "version": "TODO"
+  },
+  "osx-arm64": {
+    "_comment": "Item #70 phase 174 — the first REAL pin in this file, added so the sidecar could be tested against genuine ffmpeg instead of Ben.Video.Sidecar.FakeFfmpeg. Source: ffmpeg.martin-riedl.de, chosen for macOS/arm64 because it publishes native arm64 static builds at immutable per-build paths with their own .sha256 files alongside (evermeet.cx, the placeholder this replaced, ships x86_64 only). ffmpeg and ffprobe are separate archives here, which is why 'ffprobeUrl' exists. Verified locally: Mach-O arm64, ffmpeg 9.0, encoders libx264/libx265/aac/libmp3lame/libopus, muxers mp4/webm/matroska.",
+    "url": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1785863997_9.0/ffmpeg.zip",
+    "archiveSha256": "5267ef149ee0d208057a1b316aac079b661b0476574dee5da7d225769773c603",
+    "sha256": "f54ec33409c78f54564c80afa16213b0970065100a87f4129516be0c8660c493",
+    "ffprobeUrl": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1785863997_9.0/ffprobe.zip",
+    "ffprobeArchiveSha256": "7778fbb533fb60d3336cbd9a9e51eced71658f020b570c7203590c1c41d42f50",
+    "ffprobeSha256": "f7142685d6e692ac22fde47facf8c078ce5333512e3ccfa4b83225d0561ad428",
+    "version": "9.0"
+  },
+  "linux-x64": {
+    "url": "https://TODO-pin-a-specific-BtbN-ffmpeg-builds-release/ffmpeg-linux64.tar.xz",
+    "archiveSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "ffprobeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "version": "TODO"
+  }
+}

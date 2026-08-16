@@ -1,0 +1,280 @@
+@implements IDisposable
+@using Ben.Video.Editor.Models.Assets
+@using Ben.Video.Editor.Services
+@inject ClipStore Clips
+@inject MotionKeyframeService Motion
+@inject PlaybackService Playback
+
+<div class="bv-clipart-editor">
+
+    <!-- Header -->
+    <div class="bv-editor-header">
+        <span class="bv-editor-header__title" title="@Clip.Name">🖼 @Clip.Name</span>
+        <TelerikButton Icon="@SvgIcon.X"
+                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Size="@ThemeConstants.Button.Size.Small"
+                       OnClick="OnClose" />
+    </div>
+
+    <!-- Duration -->
+    <div class="bv-editor-section">
+        <label class="bv-editor-label">Duration (s)</label>
+        <TelerikNumericTextBox @bind-Value="@_duration"
+                               Min="0.1" Step="0.5"
+                               Width="100%"
+                               OnChange="ApplyDuration" />
+    </div>
+
+    <!-- Position -->
+    <div class="bv-editor-section">
+        <label class="bv-editor-label">
+            Position
+            @if (_showingLiveValues)
+            {
+                <span class="bv-clipart-editor__live-badge" title="This layer has a motion path — position/size/opacity below track the interpolated value at the current playhead time, not a fixed value.">● Live</span>
+            }
+        </label>
+        <div class="bv-editor-row">
+            <label class="bv-editor-sublabel">X</label>
+            <TelerikSlider @bind-Value="@_x" Min="0.0" Max="1.0"
+                           SmallStep="0.01" LargeStep="0.1"
+                           Width="100%"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)"
+                           OnChange="ApplyGeometry" />
+        </div>
+        <div class="bv-editor-row">
+            <label class="bv-editor-sublabel">Y</label>
+            <TelerikSlider @bind-Value="@_y" Min="0.0" Max="1.0"
+                           SmallStep="0.01" LargeStep="0.1"
+                           Width="100%"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)"
+                           OnChange="ApplyGeometry" />
+        </div>
+    </div>
+
+    <!-- Size (only if AllowResize) -->
+    @if (Clip.Settings.AllowResize)
+    {
+        <div class="bv-editor-section">
+            <label class="bv-editor-label">
+                Size
+                @if (_showingLiveValues)
+                {
+                    <span class="bv-clipart-editor__live-badge">● Live</span>
+                }
+            </label>
+            <div class="bv-editor-row">
+                <label class="bv-editor-sublabel">Width</label>
+                <TelerikSlider @bind-Value="@_width"
+                               Min="@(Clip.Settings.MinScale ?? 0.02)"
+                               Max="@(Clip.Settings.MaxScale ?? 1.0)"
+                               SmallStep="0.01" LargeStep="0.1"
+                               Width="100%"
+                               LabelTemplate="@SliderLabelTemplates.Endpoints(Clip.Settings.MinScale ?? 0.02, Clip.Settings.MaxScale ?? 1.0, 0.1)"
+                               OnChange="ApplyGeometry" />
+            </div>
+        </div>
+    }
+
+    <!-- Rotation (only if AllowRotation) -->
+    @if (Clip.Settings.AllowRotation)
+    {
+        <div class="bv-editor-section">
+            <label class="bv-editor-label">Rotation</label>
+            <TelerikSlider @bind-Value="@_rotation" Min="-180.0" Max="180.0"
+                           SmallStep="1.0" LargeStep="15.0"
+                           Width="100%"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(-180.0, 180.0, 15.0)"
+                           OnChange="ApplyGeometry" />
+        </div>
+    }
+
+    <!-- Opacity (only if AllowOpacity) -->
+    @if (Clip.Settings.AllowOpacity)
+    {
+        <div class="bv-editor-section">
+            <label class="bv-editor-label">
+                Opacity
+                @if (_showingLiveValues)
+                {
+                    <span class="bv-clipart-editor__live-badge">● Live</span>
+                }
+            </label>
+            <TelerikSlider @bind-Value="@_opacity" Min="0.0" Max="1.0"
+                           SmallStep="0.01" LargeStep="0.1"
+                           Width="100%"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)"
+                           OnChange="ApplyAppearance" />
+        </div>
+    }
+
+    <!-- Recolor tint (only if AllowRecolor) -->
+    @if (Clip.Settings.AllowRecolor)
+    {
+        <div class="bv-editor-section">
+            <label class="bv-editor-label">Tint color</label>
+            <ColorPickerField Value="@_tintPacked"
+                              ValueChanged="OnTintColorChanged"
+                              ShowAlpha="true" />
+        </div>
+    }
+
+    <!-- SVG Control Points (only if AllowControlPoints and points exist) -->
+    @if (Clip.Settings.AllowControlPoints && Clip.ControlPoints is { Count: > 0 })
+    {
+        <div class="bv-editor-section">
+            <label class="bv-editor-label">Control points</label>
+            @foreach (var pt in Clip.ControlPoints)
+            {
+                <div class="bv-editor-control-point" title="@pt.Label">
+                    <span class="bv-editor-sublabel">@pt.Label</span>
+                    @if (pt.Type is SvgControlPointType.StrokeColor or SvgControlPointType.FillColor)
+                    {
+                        <ColorPickerField Value="@GetPointColorPacked(pt)"
+                                          ValueChanged="v => SetPointColor(pt, v)"
+                                          ShowAlpha="@pt.AllowColorAlpha" />
+                    }
+                    else
+                    {
+                        var min = pt.MinValue ?? 0.0;
+                        var max = pt.MaxValue ?? 1.0;
+                        <TelerikSlider Value="@GetPointValue(pt)"
+                                       ValueChanged="(double v) => SetPointValue(pt, v)"
+                                       Min="@min" Max="@max"
+                                       SmallStep="@((max - min) / 100.0)"
+                                       LargeStep="@((max - min) / 10.0)"
+                                       LabelTemplate="@SliderLabelTemplates.Endpoints(min, max, (max - min) / 10.0)"
+                                       Width="100%" />
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Motion keyframes (only if AllowMotion) -->
+    @if (Clip.Settings.AllowMotion)
+    {
+        <div class="bv-editor-section">
+            <TelerikButton Icon="@SvgIcon.Clock"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
+                           FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           Class="bv-clipart-editor__animate-btn"
+                           OnClick="ActivateMotion">
+                ⏱ Animate position / scale
+            </TelerikButton>
+        </div>
+    }
+
+    <!-- Footer actions -->
+    <div class="bv-editor-footer">
+        <TelerikButton Icon="@SvgIcon.Trash"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                       Size="@ThemeConstants.Button.Size.Small"
+                       OnClick="OnRemove">
+            Remove
+        </TelerikButton>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ClipArtClip Clip { get; set; } = null!;
+    [Parameter] public EventCallback OnClose  { get; set; }
+    [Parameter] public EventCallback OnRemove { get; set; }
+    [Parameter] public EventCallback<(Guid Id, string Type)> OnAnimate { get; set; }
+
+    private double _duration;
+    private double _x, _y, _width, _rotation, _opacity;
+    private double _tintPacked;
+    private bool   _showingLiveValues;
+
+    protected override void OnInitialized()
+    {
+        Clips.OnChange          += RefreshAndRender;
+        Motion.OnChanged        += RefreshAndRender;
+        Playback.OnStateChanged += RefreshAndRender;
+    }
+
+    protected override void OnParametersSet() => RefreshFromSource();
+
+    private void RefreshAndRender()
+    {
+        RefreshFromSource();
+        StateHasChanged();
+    }
+
+    private void RefreshFromSource()
+    {
+        _duration = Clip.Duration;
+        _x        = Clip.X;
+        _y        = Clip.Y;
+        _width    = Clip.Width;
+        _rotation = Clip.Rotation;
+        _opacity  = Clip.Opacity;
+        _tintPacked = Clip.TintColor ?? 0;
+
+        _showingLiveValues = Motion.HasPath(Clip.Id);
+        if (_showingLiveValues)
+        {
+            var frame = Motion.Evaluate(Clip.Id, Playback.State.CurrentTime)
+                ?? new MotionFrame(Clip.X, Clip.Y, 1.0, 1.0);
+            var effective = ExportArgBuilders.ApplyMotionFrame(Clip, frame);
+            _x       = effective.X;
+            _y       = effective.Y;
+            _width   = effective.Width;
+            _opacity = effective.Opacity;
+        }
+    }
+
+    public void Dispose()
+    {
+        Clips.OnChange          -= RefreshAndRender;
+        Motion.OnChanged        -= RefreshAndRender;
+        Playback.OnStateChanged -= RefreshAndRender;
+    }
+
+    private void ApplyDuration()
+        => Clips.UpdateClipArtClip(Clip.Id, c => c.Duration = _duration);
+
+    private void ApplyGeometry()
+        => Clips.UpdateClipArtClip(Clip.Id, c =>
+        {
+            c.X        = _x;
+            c.Y        = _y;
+            c.Width    = _width;
+            c.Rotation = _rotation;
+        });
+
+    private void ApplyAppearance()
+        => Clips.UpdateClipArtClip(Clip.Id, c =>
+        {
+            c.Opacity   = _opacity;
+            c.TintColor = _tintPacked == 0 ? null : _tintPacked;
+        });
+
+    private void OnTintColorChanged(double packed)
+    {
+        _tintPacked = packed;
+        ApplyAppearance();
+    }
+
+    private double GetPointValue(SvgControlPoint pt)
+        => Clip.ControlPointValues.TryGetValue(pt.PointId, out var v) ? v : pt.DefaultValue;
+
+    private void SetPointValue(SvgControlPoint pt, double value)
+        => Clips.UpdateClipArtClip(Clip.Id, c => c.ControlPointValues[pt.PointId] = value);
+
+    private double GetPointColorPacked(SvgControlPoint pt)
+    {
+        if (Clip.ControlPointColors.TryGetValue(pt.PointId, out var hex))
+            return Effects.ColorHelper.FromHex(hex);
+        return pt.DefaultColor is not null ? Effects.ColorHelper.FromHex(pt.DefaultColor) : Effects.ColorHelper.OpaqueWhite;
+    }
+
+    private void SetPointColor(SvgControlPoint pt, double packed)
+        => Clips.UpdateClipArtClip(Clip.Id, c => c.ControlPointColors[pt.PointId] = Effects.ColorHelper.ToHex(packed));
+
+    private async Task ActivateMotion()
+        => await OnAnimate.InvokeAsync((Clip.Id, "ClipArtClip"));
+}

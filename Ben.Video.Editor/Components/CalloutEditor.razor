@@ -1,0 +1,537 @@
+@implements IDisposable
+@inject ClipStore Clips
+@inject MotionKeyframeService Motion
+@inject PlaybackService Playback
+@inject RichTextRunParserService RunParser
+@inject GoogleFontService GoogleFontService
+@using Ben.Video.Editor.Effects
+@using Ben.Video.Editor.Services
+@using EditorTools = Telerik.Blazor.Components.Editor
+
+@if (Clip is not null)
+{
+    <div class="bv-callout-editor">
+
+        <div class="bv-callout-editor__header">
+            <span class="bv-callout-editor__title">📌 Callout</span>
+            <TelerikButton OnClick="Close"
+                           Icon="@SvgIcon.X"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat" />
+        </div>
+
+        <!-- Shape -->
+        <div class="bv-callout-editor__field">
+            <label class="bv-callout-editor__label">Shape</label>
+            <TelerikDropDownList Data="@_shapeOptionsList"
+                                 @bind-Value="_shape"
+                                 TextField="Label"
+                                 ValueField="Value"
+                                 Width="100%"
+                                 OnChange="Apply" />
+        </div>
+
+        <!-- Duration -->
+        <div class="bv-callout-editor__field">
+            <label class="bv-callout-editor__label">Duration (s) — @_duration.ToString("F1")</label>
+            <TelerikSlider @bind-Value="_duration"
+                           Min="0.1" Max="60.0"
+                           SmallStep="0.1" LargeStep="5.0"
+                           Width="100%"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0.1, 60.0, 5.0)"
+                           OnChange="Apply" />
+        </div>
+
+        <!-- Position -->
+        <div class="bv-callout-editor__section">
+            Position (canvas %)
+            @if (_showingLiveValues)
+            {
+                <span class="bv-callout-editor__live-badge" title="This layer has a motion path — X/Y/Opacity below track the interpolated value at the current playhead time, not a fixed value.">
+                    ● Live
+                </span>
+            }
+        </div>
+        <div class="bv-callout-editor__row">
+            <div class="bv-callout-editor__field">
+                <label class="bv-callout-editor__label">X @((_x * 100).ToString("F0"))%</label>
+                <TelerikSlider @bind-Value="_x" Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)" OnChange="Apply" />
+            </div>
+            <div class="bv-callout-editor__field">
+                <label class="bv-callout-editor__label">Y @((_y * 100).ToString("F0"))%</label>
+                <TelerikSlider @bind-Value="_y" Min="0.0" Max="1.0" SmallStep="0.01" LargeStep="0.1" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)" OnChange="Apply" />
+            </div>
+        </div>
+
+        <!-- Size -->
+        <div class="bv-callout-editor__section">Size (canvas %)</div>
+        <div class="bv-callout-editor__row">
+            <div class="bv-callout-editor__field">
+                <label class="bv-callout-editor__label">W @((_width * 100).ToString("F0"))%</label>
+                <TelerikSlider @bind-Value="_width" Min="0.01" Max="1.0" SmallStep="0.01" LargeStep="0.1" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.01, 1.0, 0.1)" OnChange="Apply" />
+            </div>
+            <div class="bv-callout-editor__field">
+                <label class="bv-callout-editor__label">H @((_height * 100).ToString("F0"))%</label>
+                <TelerikSlider @bind-Value="_height" Min="0.01" Max="1.0" SmallStep="0.01" LargeStep="0.1" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.01, 1.0, 0.1)" OnChange="Apply" />
+            </div>
+        </div>
+
+        <!-- Rotation -->
+        <div class="bv-callout-editor__field">
+            <label class="bv-callout-editor__label">Rotation @_rotation°</label>
+            <TelerikSlider @bind-Value="_rotation" Min="-180" Max="180" SmallStep="1" LargeStep="45" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(-180.0, 180.0, 45.0)" OnChange="Apply" />
+        </div>
+
+        <!-- Opacity -->
+        <div class="bv-callout-editor__field">
+            <label class="bv-callout-editor__label">
+                Opacity @(_opacity.ToString("P0"))
+                @if (_showingLiveValues)
+                {
+                    <span class="bv-callout-editor__live-badge">● Live</span>
+                }
+            </label>
+            <TelerikSlider @bind-Value="_opacity" Min="0.0" Max="1.0" SmallStep="0.05" LargeStep="0.25" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)" OnChange="Apply" />
+        </div>
+
+        <!-- Fade -->
+        <div class="bv-callout-editor__row">
+            <div class="bv-callout-editor__field">
+                <label class="bv-callout-editor__label">Fade in @_fadeIn.ToString("F1")s</label>
+                <TelerikSlider @bind-Value="_fadeIn" Min="0.0" Max="2.0" SmallStep="0.1" LargeStep="0.5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 2.0, 0.5)" OnChange="Apply" />
+            </div>
+            <div class="bv-callout-editor__field">
+                <label class="bv-callout-editor__label">Fade out @_fadeOut.ToString("F1")s</label>
+                <TelerikSlider @bind-Value="_fadeOut" Min="0.0" Max="2.0" SmallStep="0.1" LargeStep="0.5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 2.0, 0.5)" OnChange="Apply" />
+            </div>
+        </div>
+
+        <!-- Colours -->
+        <div class="bv-callout-editor__section">Colours</div>
+        <ColorPickerField Label="Fill" Value="_fillColor"
+                          ValueChanged="@(async v => { _fillColor = v; await Apply(); })"
+                          ShowAlpha="true" />
+        <ColorPickerField Label="Stroke" Value="_strokeColor"
+                          ValueChanged="@(async v => { _strokeColor = v; await Apply(); })"
+                          ShowAlpha="true" />
+        <div class="bv-callout-editor__field">
+            <label class="bv-callout-editor__label">Stroke width @_strokeWidth px</label>
+            <TelerikSlider @bind-Value="_strokeWidth" Min="0" Max="20" SmallStep="1" LargeStep="5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 20.0, 5.0)" OnChange="Apply" />
+        </div>
+
+        <!-- Shadow -->
+        <div class="bv-callout-editor__section">Shadow</div>
+        <ColorPickerField Label="Shadow colour" Value="_shadowColor"
+                          ValueChanged="@(async v => { _shadowColor = v; await Apply(); })"
+                          ShowAlpha="true" />
+        <div class="bv-callout-editor__row">
+            <div class="bv-callout-editor__field">
+                <label class="bv-callout-editor__label">Offset X @_shadowOffsetX</label>
+                <TelerikSlider @bind-Value="_shadowOffsetX" Min="-30" Max="30" SmallStep="1" LargeStep="5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(-30.0, 30.0, 5.0)" OnChange="Apply" />
+            </div>
+            <div class="bv-callout-editor__field">
+                <label class="bv-callout-editor__label">Offset Y @_shadowOffsetY</label>
+                <TelerikSlider @bind-Value="_shadowOffsetY" Min="-30" Max="30" SmallStep="1" LargeStep="5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(-30.0, 30.0, 5.0)" OnChange="Apply" />
+            </div>
+        </div>
+        <div class="bv-callout-editor__field">
+            <label class="bv-callout-editor__label">Blur @_shadowBlur px</label>
+            <TelerikSlider @bind-Value="_shadowBlur" Min="0" Max="30" SmallStep="1" LargeStep="5" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 30.0, 5.0)" OnChange="Apply" />
+        </div>
+
+        <!-- Text (item #16 — inline runs: Bold/Underline/Sub/Superscript/Color per selection) -->
+        <div class="bv-callout-editor__section">Text</div>
+        <div class="bv-callout-editor__field">
+            <TelerikEditor @bind-Value="_richTextHtml"
+                           @bind-Value:after="Apply"
+                           Tools="@_editorTools"
+                           Height="90px" />
+        </div>
+        @if (!string.IsNullOrEmpty(_text))
+        {
+            <div class="bv-callout-editor__field">
+                <label class="bv-callout-editor__label">Font</label>
+                <TelerikDropDownList Data="@_fontFamilies"
+                                     @bind-Value="_fontFamily"
+                                     Width="100%"
+                                     OnChange="@(async () => { await GoogleFontService.EnsureLoadedAsync(_fontFamily); await Apply(); })" />
+            </div>
+            <div class="bv-callout-editor__field">
+                <label class="bv-callout-editor__label">Size @_fontSize px</label>
+                <TelerikSlider @bind-Value="_fontSize" Min="10" Max="120" SmallStep="2" LargeStep="10" Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(10, 120, 10)" OnChange="Apply" />
+            </div>
+            <ColorPickerField Label="Text colour" Value="_fontColor"
+                              ValueChanged="@(async v => { _fontColor = v; await Apply(); })"
+                              ShowAlpha="false" />
+
+            <!-- Item #31 — text layout inside the shape. Before this, text was hard-anchored dead
+                 centre with no way to change it; these reach parity with TextOverlay's own model. -->
+            <div class="bv-callout-editor__field">
+                <label class="bv-callout-editor__label">Horizontal</label>
+                <TelerikDropDownList Data="@_horizontalAligns" @bind-Value="_textAlign"
+                                     Width="100%" OnChange="Apply" />
+            </div>
+            <div class="bv-callout-editor__field">
+                <label class="bv-callout-editor__label">Vertical</label>
+                <TelerikDropDownList Data="@_verticalAligns" @bind-Value="_textVerticalAlign"
+                                     Width="100%" OnChange="Apply" />
+            </div>
+            <div class="bv-callout-editor__field">
+                <label class="bv-callout-editor__label">Inset @_textPadding px</label>
+                <TelerikSlider @bind-Value="_textPadding" Min="0" Max="60" SmallStep="2" LargeStep="10"
+                               Width="100%" LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 60.0, 10.0)" OnChange="Apply" />
+            </div>
+            <div class="bv-callout-editor__field">
+                <label class="bv-callout-editor__label">
+                    <TelerikCheckBox @bind-Value="_textWrap" @bind-Value:after="Apply" />
+                    Wrap text to shape width
+                </label>
+            </div>
+            <div class="bv-callout-editor__field">
+                <label class="bv-callout-editor__label">
+                    <TelerikCheckBox @bind-Value="_textShadow" @bind-Value:after="Apply" />
+                    Drop shadow on text
+                </label>
+            </div>
+        }
+
+        <!-- ── Control points (Arrow/Line curve, Star radii, Rectangle radius) ─ -->
+        @if (_shape is ShapeType.Arrow or ShapeType.Line)
+        {
+            <div class="bv-callout-editor__section">
+                <span class="bv-callout-editor__section-label">Shape points</span>
+                @foreach (var key in CalloutControlPoints.ArrowKeys)
+                {
+                    var label = key switch
+                    {
+                        CalloutControlPoints.StartX => "Start X",
+                        CalloutControlPoints.StartY => "Start Y",
+                        CalloutControlPoints.EndX   => "End X",
+                        CalloutControlPoints.EndY   => "End Y",
+                        CalloutControlPoints.MidX   => "Curve X",
+                        CalloutControlPoints.MidY   => "Curve Y",
+                        _                           => key,
+                    };
+                    <div class="bv-callout-editor__field">
+                        <label class="bv-callout-editor__label">@label</label>
+                        <TelerikSlider Value="@GetCp(key)"
+                                       ValueChanged="(double v) => SetCp(key, v)"
+                                       Min="0.0" Max="1.0"
+                                       SmallStep="0.01" LargeStep="0.1"
+                                       LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.1)"
+                                       Width="100%" />
+                    </div>
+                }
+            </div>
+        }
+        else if (_shape == ShapeType.Star)
+        {
+            <div class="bv-callout-editor__section">
+                <span class="bv-callout-editor__section-label">Star shape</span>
+                <div class="bv-callout-editor__field">
+                    <label class="bv-callout-editor__label">Outer radius</label>
+                    <TelerikSlider Value="@GetCp(CalloutControlPoints.OuterRadius)"
+                                   ValueChanged="(double v) => SetCp(CalloutControlPoints.OuterRadius, v)"
+                                   Min="0.3" Max="1.0" SmallStep="0.05" LargeStep="0.1" Width="100%"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.3, 1.0, 0.1)" />
+                </div>
+                <div class="bv-callout-editor__field">
+                    <label class="bv-callout-editor__label">Inner radius</label>
+                    <TelerikSlider Value="@GetCp(CalloutControlPoints.InnerRadius)"
+                                   ValueChanged="(double v) => SetCp(CalloutControlPoints.InnerRadius, v)"
+                                   Min="0.1" Max="0.9" SmallStep="0.05" LargeStep="0.1" Width="100%"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.1, 0.9, 0.1)" />
+                </div>
+                <div class="bv-callout-editor__field">
+                    <label class="bv-callout-editor__label">Points (@((int)GetCp(CalloutControlPoints.Points)))</label>
+                    <TelerikSlider Value="@GetCp(CalloutControlPoints.Points)"
+                                   ValueChanged="(double v) => SetCp(CalloutControlPoints.Points, Math.Round(v))"
+                                   Min="3" Max="12" SmallStep="1" LargeStep="3" Width="100%"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(3.0, 12.0, 3.0)" />
+                </div>
+            </div>
+        }
+        else if (_shape == ShapeType.Rectangle)
+        {
+            <div class="bv-callout-editor__section">
+                <span class="bv-callout-editor__section-label">Corners</span>
+                <div class="bv-callout-editor__field">
+                    <label class="bv-callout-editor__label">Corner radius (px)</label>
+                    <TelerikSlider Value="@GetCp(CalloutControlPoints.CornerRadius)"
+                                   ValueChanged="(double v) => SetCp(CalloutControlPoints.CornerRadius, v)"
+                                   Min="0" Max="40" SmallStep="1" LargeStep="5" Width="100%"
+                                   LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 40.0, 5.0)" />
+                </div>
+            </div>
+        }
+
+        <!-- Actions -->
+        <div class="bv-callout-editor__actions">
+            <TelerikButton OnClick="OnAnimateClicked"
+                           Icon="@SvgIcon.MapMarker"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           Title="Animate this callout — add motion keyframes">
+                ⏱ Animate
+            </TelerikButton>
+            <TelerikButton OnClick="Remove"
+                           Icon="@SvgIcon.Trash"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           Title="Remove callout" />
+        </div>
+
+    </div>
+}
+
+@code {
+    [Parameter] public CalloutClip?        Clip    { get; set; }
+    [Parameter] public EventCallback       OnClose  { get; set; }
+    [Parameter] public EventCallback       OnRemove { get; set; }
+    [Parameter] public EventCallback<(Guid Id, string Type)> OnAnimate { get; set; }
+
+    private async Task OnAnimateClicked()
+    {
+        if (Clip is not null)
+            await OnAnimate.InvokeAsync((Clip.Id, "CalloutClip"));
+    }
+
+    // ── local state ───────────────────────────────────────────────────────────
+
+    private ShapeType _shape        = ShapeType.Rectangle;
+    private double    _duration     = 3.0;
+    private double    _x            = 0.1;
+    private double    _y            = 0.1;
+    private double    _width        = 0.2;
+    private double    _height       = 0.15;
+    private double    _rotation;
+    private double    _opacity      = 1.0;
+    private double    _fillColor    = ColorHelper.Pack(255, 255, 0, 180);
+    private double    _strokeColor  = ColorHelper.OpaqueBlack;
+    private double    _strokeWidth  = 2.0;
+    private double    _shadowColor  = ColorHelper.Pack(0, 0, 0, 120);
+    private double    _shadowOffsetX = 3.0;
+    private double    _shadowOffsetY = 3.0;
+    private double    _shadowBlur   = 4.0;
+    private string?   _text;
+    private string    _richTextHtml = string.Empty;
+    private string    _fontFamily   = "Arial";
+    private int       _fontSize     = 28;
+    private double    _fontColor    = ColorHelper.OpaqueBlack;
+
+    // Item #31 — text layout inside the shape.
+    private TextHorizontalAlign _textAlign         = TextHorizontalAlign.Center;
+    private TextVerticalAlign   _textVerticalAlign = TextVerticalAlign.Middle;
+    private double              _textPadding       = 8.0;
+    private bool                _textWrap;
+    private bool                _textShadow;
+
+    private static readonly IReadOnlyList<TextHorizontalAlign> _horizontalAligns =
+        [TextHorizontalAlign.Left, TextHorizontalAlign.Center, TextHorizontalAlign.Right];
+    private static readonly IReadOnlyList<TextVerticalAlign> _verticalAligns =
+        [TextVerticalAlign.Top, TextVerticalAlign.Middle, TextVerticalAlign.Bottom];
+    private double    _fadeIn;
+    private double    _fadeOut;
+
+    // Item #16, phase 116 — system fonts first, then the curated Google Fonts list.
+    private static readonly IReadOnlyList<string> _fontFamilies =
+        [.. StandardFonts.Names, .. GoogleFonts.Names];
+
+    // Item #16 — inline formatting toolbar. Font family/size stay whole-block, governed by the
+    // dropdown/slider above; this restricted tool set covers only what a TextRun can express.
+    private static readonly List<IEditorTool> _editorTools =
+    [
+        new EditorTools.Bold(), new EditorTools.Underline(),
+        new EditorTools.SubScript(), new EditorTools.SuperScript(),
+        new EditorTools.ForeColor(),
+    ];
+
+    private sealed record ShapeOption(string Label, ShapeType Value);
+    private static readonly List<ShapeOption> _shapeOptionsList =
+    [
+        new("Rectangle",  ShapeType.Rectangle),
+        new("Ellipse",    ShapeType.Ellipse),
+        new("Arrow",      ShapeType.Arrow),
+        new("Line",       ShapeType.Line),
+        new("Star",       ShapeType.Star),
+    ];
+
+    /// <summary>True when the fields currently on screen are the motion-interpolated values at
+    /// the playhead, not the clip's static base values — drives a small "Live" indicator so the
+    /// user knows why X/Y/Opacity are moving on their own as the playhead scrubs (item #35/#41).</summary>
+    private bool _showingLiveValues;
+
+    protected override void OnInitialized()
+    {
+        // Refresh on any of the three things that can change what this panel should be showing:
+        // the clip's own static values changing (including from an on-canvas drag — item #35 step 2),
+        // a motion keyframe being added/moved/removed, or the playhead moving to a different
+        // interpolated position along an existing motion path (item #41). OnParametersSet alone only
+        // fires when the PARENT re-passes Clip (e.g. on selection change), matching the exact bug
+        // class already fixed in phases 88 and 95 for other panels this session.
+        Clips.OnChange        += RefreshAndRender;
+        Motion.OnChanged      += RefreshAndRender;
+        Playback.OnStateChanged += RefreshAndRender;
+    }
+
+    protected override void OnParametersSet() => RefreshFromSource();
+
+    private void RefreshAndRender()
+    {
+        RefreshFromSource();
+        StateHasChanged();
+    }
+
+    private void RefreshFromSource()
+    {
+        if (Clip is null) return;
+        _shape         = Clip.Shape;
+        _duration      = Clip.Duration;
+        _x             = Clip.X;
+        _y             = Clip.Y;
+        _width         = Clip.Width;
+        _height        = Clip.Height;
+        _rotation      = Clip.Rotation;
+        _opacity       = Clip.Opacity;
+        _fillColor     = Clip.FillColor;
+        _strokeColor   = Clip.StrokeColor;
+        _strokeWidth   = Clip.StrokeWidth;
+        _shadowColor   = Clip.ShadowColor;
+        _shadowOffsetX = Clip.ShadowOffsetX;
+        _shadowOffsetY = Clip.ShadowOffsetY;
+        _shadowBlur    = Clip.ShadowBlur;
+        _text          = Clip.Text;
+        _richTextHtml  = TextRun.ToHtml(EffectiveRuns(Clip));
+        _fontFamily    = Clip.FontFamily;
+        _fontSize      = Clip.FontSize;
+        _fontColor     = Clip.FontColor;
+        _textAlign         = Clip.TextAlign;
+        _textVerticalAlign = Clip.TextVerticalAlign;
+        _textPadding       = Clip.TextPadding;
+        _textWrap          = Clip.TextWrap;
+        _textShadow        = Clip.TextShadow;
+        // See TextOverlayEditor's identical comment — no-op for a system font.
+        _ = GoogleFontService.EnsureLoadedAsync(_fontFamily);
+        _fadeIn        = Clip.FadeInSeconds;
+        _fadeOut       = Clip.FadeOutSeconds;
+
+        // Motion paths only ever animate X/Y/Scale/Alpha (+ Fill/StrokeColor) — see MotionFrame —
+        // so only those fields get overridden with the live-interpolated value; Width/Height/
+        // Rotation/Shadow/Text etc. stay at the clip's static base value, which is all they have.
+        _showingLiveValues = Motion.HasPath(Clip.Id);
+        if (_showingLiveValues)
+        {
+            var frame = Motion.Evaluate(Clip.Id, Playback.State.CurrentTime)
+                ?? new MotionFrame(Clip.X, Clip.Y, 1.0, 1.0);
+            var effective = ExportArgBuilders.ApplyMotionFrame(Clip, frame);
+            _x           = effective.X;
+            _y           = effective.Y;
+            _opacity     = effective.Opacity;
+            _fillColor   = effective.FillColor;
+            _strokeColor = effective.StrokeColor;
+        }
+    }
+
+    public void Dispose()
+    {
+        Clips.OnChange          -= RefreshAndRender;
+        Motion.OnChanged        -= RefreshAndRender;
+        Playback.OnStateChanged -= RefreshAndRender;
+    }
+
+    /// <summary>Item #16 — same synthetic-legacy-fallback contract as
+    /// <c>TextOverlayEditor.EffectiveRuns</c>.</summary>
+    private static List<TextRun> EffectiveRuns(CalloutClip clip) =>
+        clip.Runs is { Count: > 0 } runs
+            ? runs
+            : [new TextRun { Text = clip.Text ?? string.Empty, Bold = clip.FontBold, Underline = clip.FontUnderline }];
+
+    private async Task Apply()
+    {
+        if (Clip is null) return;
+        var before = Clip with { }; // shallow snapshot of current values, for undo
+
+        var runs = await RunParser.HtmlToRunsAsync(_richTextHtml);
+        _text = string.Concat(runs.Select(r => r.Text));
+
+        Clips.CommitCalloutUpdate(Clip.Id, "properties",
+            c =>
+            {
+                c.Shape         = _shape;
+                c.Duration      = _duration;
+                c.X             = _x;
+                c.Y             = _y;
+                c.Width         = _width;
+                c.Height        = _height;
+                c.Rotation      = _rotation;
+                c.Opacity       = _opacity;
+                c.FillColor     = _fillColor;
+                c.StrokeColor   = _strokeColor;
+                c.StrokeWidth   = _strokeWidth;
+                c.ShadowColor   = _shadowColor;
+                c.ShadowOffsetX = _shadowOffsetX;
+                c.ShadowOffsetY = _shadowOffsetY;
+                c.ShadowBlur    = _shadowBlur;
+                c.Text          = _text;
+                c.Runs          = runs;
+                c.FontFamily    = _fontFamily;
+                c.FontSize      = _fontSize;
+                c.FontColor     = _fontColor;
+                c.TextAlign         = _textAlign;
+                c.TextVerticalAlign = _textVerticalAlign;
+                c.TextPadding       = _textPadding;
+                c.TextWrap          = _textWrap;
+                c.TextShadow        = _textShadow;
+                c.FadeInSeconds  = _fadeIn;
+                c.FadeOutSeconds = _fadeOut;
+            },
+            c =>
+            {
+                c.Shape         = before.Shape;
+                c.Duration      = before.Duration;
+                c.X             = before.X;
+                c.Y             = before.Y;
+                c.Width         = before.Width;
+                c.Height        = before.Height;
+                c.Rotation      = before.Rotation;
+                c.Opacity       = before.Opacity;
+                c.FillColor     = before.FillColor;
+                c.StrokeColor   = before.StrokeColor;
+                c.StrokeWidth   = before.StrokeWidth;
+                c.ShadowColor   = before.ShadowColor;
+                c.ShadowOffsetX = before.ShadowOffsetX;
+                c.ShadowOffsetY = before.ShadowOffsetY;
+                c.ShadowBlur    = before.ShadowBlur;
+                c.Text          = before.Text;
+                c.Runs          = before.Runs;
+                c.FontFamily    = before.FontFamily;
+                c.FontSize      = before.FontSize;
+                c.FontColor     = before.FontColor;
+                c.TextAlign         = before.TextAlign;
+                c.TextVerticalAlign = before.TextVerticalAlign;
+                c.TextPadding       = before.TextPadding;
+                c.TextWrap          = before.TextWrap;
+                c.TextShadow        = before.TextShadow;
+                c.FadeInSeconds  = before.FadeInSeconds;
+                c.FadeOutSeconds = before.FadeOutSeconds;
+            });
+    }
+
+    private async Task Close()  => await OnClose.InvokeAsync();
+    private async Task Remove() => await OnRemove.InvokeAsync();
+
+    // ── Control point helpers ─────────────────────────────────────────────────
+
+    private double GetCp(string key)
+        => Clip?.ControlPointValues.TryGetValue(key, out var v) == true ? v : 0.0;
+
+    private void SetCp(string key, double value)
+    {
+        if (Clip is null) return;
+        var oldValue = GetCp(key);
+        Clips.CommitCalloutUpdate(Clip.Id, key,
+            c => c.ControlPointValues[key] = value,
+            c => c.ControlPointValues[key] = oldValue);
+    }
+}

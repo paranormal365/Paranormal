@@ -1,0 +1,17 @@
+/* ── Clip art control-point overlay ─────────────────────────────────────────
+   SVG positioned absolute over the VideoPreview screen.
+   Pointer events handled by SVG children; the SVG root is transparent.      */
+
+.bv-clipart-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;   /* root is transparent; individual elements opt in */
+    z-index: 4;             /* above the image overlay (z-index 2) */
+}
+
+.bv-clipart-overlay rect {
+    pointer-events: visiblePainted;
+}

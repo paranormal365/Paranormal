@@ -1,0 +1,739 @@
+@inject FfmpegService Ffmpeg
+@inject PreviewUrlRevoker PreviewRevoker
+@inject PlaybackService Playback
+@inject ClipStore Clips
+@inject ExportResolutionService ResolutionService
+@inject PreviewQualityService PreviewQuality
+@inject PreviewGeometryService Geometry
+@inject IJSRuntime JS
+@inject BlobUrlLifecycle BlobLifecycle
+@inject ErrorLogService ErrorLog
+@implements IAsyncDisposable
+
+<section class="bv-preview">
+
+    <div class="bv-preview__screen-row">
+    <div class="bv-preview__screen"
+         @ref="_screenEl"
+         style="max-width: @(ResolutionService.Width)px; max-height: @(ResolutionService.Height)px"
+         @oncontextmenu="OpenVideoMenu"
+         @oncontextmenu:preventDefault
+         @ondblclick="OnScreenDoubleClick">
+        <video id="@_videoElementId"
+               class="bv-preview__video"
+               preload="metadata"
+               playsinline>
+        </video>
+
+        @if (_previewUrl is null)
+        {
+            @* Black canvas showing the working composition size *@
+            <div class="bv-preview__canvas"
+                 style="aspect-ratio: @(ResolutionService.Width) / @(ResolutionService.Height)">
+                <span class="bv-preview__canvas-dims">@(ResolutionService.Width)×@(ResolutionService.Height)</span>
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(Playback.State.ModeLabel))
+        {
+            <span class="bv-preview__mode-badge">@Playback.State.ModeLabel</span>
+        }
+
+        @* Still-image overlay — shown when timeline is over an image clip *@
+        @if (_displayImageUrl is not null)
+        {
+            <img class="bv-preview__image-overlay"
+                 src="@_displayImageUrl"
+                 alt=""
+                 draggable="false" />
+        }
+
+        @* Live overlay preview (item #43) — the real Callout/TextOverlay visual, not just an
+           editing handle. Only for the Working Window: ShowWorkingWindowControls=false marks the
+           full-quality output player, whose video already has overlays baked in — showing this
+           there would double them up. *@
+        @if (ShowWorkingWindowControls)
+        {
+            <LiveOverlayPreview CurrentTime="@_currentTime"
+                                 CanvasWidth="@(ResolutionService.Width)"
+                                 CanvasHeight="@(ResolutionService.Height)" />
+
+            @* Click-to-select + unified body-drag (item #57, phase P1) *@
+            <CanvasSelectionOverlay ScreenElement="@_screenEl"
+                                    CanvasWidth="@(ResolutionService.Width)"
+                                    CanvasHeight="@(ResolutionService.Height)"
+                                    CurrentTime="@_currentTime"
+                                    OnItemSelected="OnCanvasItemSelected"
+                                    SnappingEnabled="@SnappingEnabled"
+                                    SelectedItem="@SelectedCanvasItem"
+                                    OnAnimate="OnAnimate" />
+        }
+
+        @* Motion path overlay — editor-only, never exported *@
+        @if (MotionLayerId.HasValue && _showMotionOverlay)
+        {
+            <MotionPathOverlay LayerId="@MotionLayerId"
+                               ScreenElement="@_screenEl"
+                               CanvasWidth="@(ResolutionService.Width)"
+                               CanvasHeight="@(ResolutionService.Height)"
+                               OnKeyframeSelected="OnOverlayKeyframeSelected" />
+        }
+
+        @* Callout control-point overlay — drag handles for Arrow/Line/Star/Rectangle *@
+        @if (ActiveCallout is not null)
+        {
+            <CalloutControlPointOverlay Clip="@ActiveCallout"
+                                        ScreenElement="@_screenEl"
+                                        CanvasWidth="@(ResolutionService.Width)"
+                                        CanvasHeight="@(ResolutionService.Height)"
+                                        CurrentTime="@_currentTime"
+                                        OnPointChanged="OnCalloutPointChanged" />
+        }
+
+        @* Clip art control-point overlay — bounding-box move/resize only *@
+        @if (ActiveClipArt is not null)
+        {
+            <ClipArtControlPointOverlay Clip="@ActiveClipArt"
+                                        ScreenElement="@_screenEl"
+                                        CanvasWidth="@(ResolutionService.Width)"
+                                        CanvasHeight="@(ResolutionService.Height)"
+                                        CurrentTime="@_currentTime" />
+        }
+
+        @* Text overlay position handle — drag to move, no resize (FontSize slider controls size) *@
+        @if (ActiveTextOverlay is not null)
+        {
+            <TextPositionOverlay Overlay="@ActiveTextOverlay"
+                                 ScreenElement="@_screenEl"
+                                 CanvasWidth="@(ResolutionService.Width)"
+                                 CanvasHeight="@(ResolutionService.Height)" />
+        }
+    </div>
+    <DbMeter @ref="_dbMeter" VideoElementId="@_videoElementId" CanvasWidth="28" CanvasHeight="140" />
+    </div>
+
+    <!-- Transport controls -->
+    <div class="bv-preview__controls">
+        <TelerikButton OnClick="RewindAsync"
+                       Enabled="@HasContent"
+                       Icon="@SvgIcon.Rewind"
+                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Size="@ThemeConstants.Button.Size.Small"
+                       Title="Rewind to start" />
+
+        <TelerikButton OnClick="StepBackAsync"
+                       Enabled="@(HasContent && !_playing)"
+                       Icon="@SvgIcon.ArrowLeft"
+                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Size="@ThemeConstants.Button.Size.Small"
+                       Title="Step back one frame (←)" />
+
+        <TelerikButton OnClick="TogglePlayAsync"
+                       Enabled="@HasContent"
+                       Icon="@(_playing ? SvgIcon.Pause : SvgIcon.Play)"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Size="@ThemeConstants.Button.Size.Medium"
+                       Title="@(_playing ? "Pause" : "Play")" />
+
+        <TelerikButton OnClick="StepForwardAsync"
+                       Enabled="@(HasContent && !_playing)"
+                       Icon="@SvgIcon.ArrowRight"
+                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Size="@ThemeConstants.Button.Size.Small"
+                       Title="Step forward one frame (→)" />
+
+        <span class="bv-preview__timecode">
+            @FormatTime(_currentTime) / @FormatTime(_duration)
+        </span>
+
+        <span class="bv-preview__frame-count" title="Frame @(_currentFrame + 1) of @_totalFrames">
+            F@((_currentFrame + 1).ToString("D4")) / @_totalFrames.ToString("D4")
+        </span>
+
+        <span class="bv-preview__spacer"></span>
+
+        @* Preview render quality / working frame rate — control how the WORKING WINDOW's own
+           re-render pipeline runs (RefreshWorkingWindowAsync's scale, frame-stepping rate).
+           Meaningless on a read-only, already-rendered result (item #36 phase 84's full-quality
+           Preview output) — that instance never re-renders itself, so these are replaced there by
+           the scrub bar inline (see remarks on the below scrubber block) instead of sitting
+           unused on their own row underneath. *@
+        @if (ShowWorkingWindowControls)
+        {
+            <TelerikDropDownList Data="@_previewQualityOptions"
+                                 Value="@PreviewQuality.ScalePercent"
+                                 ValueChanged="@((int v) => PreviewQuality.SetScalePercent(v))"
+                                 TextField="Label"
+                                 ValueField="Percent"
+                                 Width="130px"
+                                 Class="bv-preview__canvas-picker"
+                                 Title="Preview render quality" />
+
+            <TelerikDropDownList Data="@_fpsOptions"
+                                 Value="@Playback.SessionFps"
+                                 ValueChanged="@((int v) => Playback.SetSessionFps(v))"
+                                 Width="80px"
+                                 Class="bv-preview__fps-picker"
+                                 Title="Working frame rate" />
+        }
+        else if (_hasPreview && _duration > 0)
+        {
+            <div class="bv-preview__inline-scrubber">
+                <TelerikSlider @bind-Value="ScrubValue"
+                               Min="0.0"
+                               Max="@_duration"
+                               SmallStep="0.1"
+                               LargeStep="5.0"
+                               TickPosition="@SliderTickPosition.None"
+                               Class="bv-preview__slider bv-preview__slider--compact" />
+            </div>
+        }
+
+        @* Motion path overlay toggle — shown when a layer is selected for animation *@
+        @if (MotionLayerId.HasValue)
+        {
+            <TelerikButton OnClick="() => _showMotionOverlay = !_showMotionOverlay"
+                           Icon="@SvgIcon.MapMarker"
+                           FillMode="@(_showMotionOverlay ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
+                           ThemeColor="@(_showMotionOverlay ? ThemeConstants.Button.ThemeColor.Primary : ThemeConstants.Button.ThemeColor.Base)"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           Title="@(_showMotionOverlay ? "Hide motion path overlay" : "Show motion path overlay — double-click preview to add keyframe")" />
+        }
+
+        <TelerikButton OnClick="ToggleMuteAsync"
+                       Enabled="@_hasPreview"
+                       Icon="@(_muted ? SvgIcon.VolumeMute : SvgIcon.VolumeUp)"
+                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                       Size="@ThemeConstants.Button.Size.Small"
+                       Title="@(_muted ? "Unmute" : "Mute")" />
+    </div>
+
+    <!-- Scrub bar — full-width row under the controls. Only for Working Window instances; the
+         read-only output player (ShowWorkingWindowControls=false) gets a compact inline scrubber
+         in the controls row instead (see above), replacing the quality/fps dropdowns it doesn't
+         need rather than adding a whole extra row for it. -->
+    @if (ShowWorkingWindowControls && _hasPreview && _duration > 0)
+    {
+        <div class="bv-preview__scrubber">
+            <TelerikSlider @bind-Value="ScrubValue"
+                           Min="0.0"
+                           Max="@_duration"
+                           SmallStep="0.1"
+                           LargeStep="5.0"
+                           Class="bv-preview__slider" />
+        </div>
+    }
+
+    <TelerikContextMenu @ref="_videoMenu"
+                        Data="@_videoMenuItems"
+                        TextField="Text"
+                        IconField="Icon"
+                        SeparatorField="IsSeparator"
+                        DisabledField="IsDisabled"
+                        OnClick="@(async (BvMenuItem i) => { if (i.Action is not null) await i.Action(); })">
+    </TelerikContextMenu>
+
+</section>
+
+@code {
+    /// <summary>Load a clip directly into the preview panel.</summary>
+    [Parameter] public EventCallback<double> OnTimeUpdate { get; set; }
+
+    // ── Motion path overlay parameters ───────────────────────────────────────
+
+    /// <summary>When set, shows the MotionPathOverlay for this layer.</summary>
+    [Parameter] public Guid?        MotionLayerId     { get; set; }
+    /// <summary>When set, shows the CalloutControlPointOverlay for this callout clip.</summary>
+    [Parameter] public CalloutClip? ActiveCallout     { get; set; }
+    /// <summary>When set, shows the ClipArtControlPointOverlay for this clip-art clip.</summary>
+    [Parameter] public ClipArtClip? ActiveClipArt     { get; set; }
+    /// <summary>When set, shows the TextPositionOverlay for this text overlay.</summary>
+    [Parameter] public TextOverlay? ActiveTextOverlay { get; set; }
+
+    /// <summary>Raised when the user selects a keyframe in the overlay.</summary>
+    [Parameter] public EventCallback<int> OnMotionKeyframeSelected { get; set; }
+
+    /// <summary>Raised when the user clicks a layer's body on the canvas to select it, or clicks
+    /// empty canvas (null) to deselect — see <see cref="CanvasSelectionOverlay"/>.</summary>
+    [Parameter] public EventCallback<TrackItem?> OnCanvasItemSelected { get; set; }
+
+    /// <summary>Raised when the user double-clicks the preview to add a keyframe at the clicked
+    /// canvas position (0..1 fractions).</summary>
+    [Parameter] public EventCallback<(double X, double Y)> OnAddKeyframeAt { get; set; }
+
+    // ── Item #57 P5 ───────────────────────────────────────────────────────────
+
+    /// <summary>Threaded straight through to CanvasSelectionOverlay's own SnappingEnabled.</summary>
+    [Parameter] public bool SnappingEnabled { get; set; } = true;
+
+    /// <summary>Threaded straight through to CanvasSelectionOverlay's own OnAnimate — surfaces the
+    /// existing per-type "⏱ Animate" panel toggle on the canvas mini-HUD.</summary>
+    [Parameter] public EventCallback<(Guid Id, string Type)> OnAnimate { get; set; }
+
+    /// <summary>The currently-selected canvas layer, for the mini-HUD — a real parameter rather
+    /// than computed from the three Active* ones, since VideoEditor (the only caller) needs the
+    /// HUD to keep tracking a layer through <c>ActivateMotionPath</c>, which deliberately clears
+    /// all three Active* selections so the MotionKeyframeEditor panel branch is reached (a layer
+    /// in motion-editing mode isn't also "selected" in the Active* sense anymore, but the HUD
+    /// should not disappear the instant the user clicks its own "⏱ Animate" button).</summary>
+    [Parameter] public TrackItem? SelectedCanvasItem { get; set; }
+
+    /// <summary>Raised when the user picks "Popout" from the preview's right-click menu.</summary>
+    [Parameter] public EventCallback OnPopoutRequested { get; set; }
+
+    private bool _showMotionOverlay;
+
+    private async Task OnOverlayKeyframeSelected(int idx)
+        => await OnMotionKeyframeSelected.InvokeAsync(idx);
+
+    /// <summary>Called by CalloutControlPointOverlay — the overlay handles state internally.</summary>
+    private Task OnCalloutPointChanged((string Key, double Value) _) => Task.CompletedTask;
+
+    /// <summary>Double-clicking the preview screen adds a keyframe at the clicked position.</summary>
+    private async Task OnScreenDoubleClick(MouseEventArgs e)
+    {
+        if (!MotionLayerId.HasValue) return;
+        await Geometry.RefreshAsync(_screenEl, ResolutionService.Width, ResolutionService.Height);
+        var (fx, fy) = Geometry.ClientToFraction(e.ClientX, e.ClientY);
+        await OnAddKeyframeAt.InvokeAsync((fx, fy));
+    }
+
+    /// <summary>Item #59-#65 flakiness investigation, phase 144 — label this instance uses when
+    /// reporting to <see cref="BlobUrlLifecycle"/> (VideoEditor sets one per @ref'd instance, e.g.
+    /// "WorkingWindow" vs "FullQualityPreview" — see that component's own markup). Purely
+    /// diagnostic; defaults to the type name so a caller that doesn't set it still gets useful
+    /// (if less specific) log output instead of a silent no-op.</summary>
+    [Parameter] public string OwnerLabel { get; set; } = nameof(VideoPreview);
+
+    private readonly string _videoElementId = $"bv-video-{Guid.NewGuid():N}";
+    private ElementReference _screenEl;
+
+    private IJSObjectReference? _module;
+    private string? _pendingLoadUrl;
+    private string? _previewUrl;
+    private DbMeter? _dbMeter;
+
+    private bool   _playing;
+    private bool   _muted;
+
+    // ── Image timeline support ────────────────────────────────────────────────
+
+    /// <summary>URL of the image currently shown in the preview overlay (null = hidden).</summary>
+    private string? _displayImageUrl;
+
+    /// <summary>CancellationTokenSource for the image-mode play loop.</summary>
+    private CancellationTokenSource? _imagePlayCts;
+
+    /// <summary>True when there is something to play — a loaded video OR image clips on the timeline.</summary>
+    private bool HasContent => _hasPreview || Clips.TotalDuration > 0;
+    private bool   _hasPreview;
+    private double _currentTime;
+    private double _duration;
+    private double _scrubValue;
+
+    // ── Frame-accurate display ────────────────────────────────────────────────
+
+    private int _currentFrame => (int)(_currentTime * Playback.SessionFps);
+    private int _totalFrames  => _duration > 0 ? (int)Math.Ceiling(_duration * Playback.SessionFps) : 0;
+
+    private static readonly List<int> _fpsOptions = [60, 30, 25, 24, 23, 15];
+
+    // ── Preview render quality ──────────────────────────────────────────────
+
+    private sealed record PreviewQualityOption(string Label, int Percent);
+
+    private static readonly List<PreviewQualityOption> _previewQualityOptions =
+    [
+        new("Full quality", 100),
+        new("75%",           75),
+        new("50%",           50),
+        new("25%",           25),
+    ];
+
+    private TelerikContextMenu<BvMenuItem>? _videoMenu;
+    private List<BvMenuItem> _videoMenuItems = [];
+
+    private async Task OpenVideoMenu(MouseEventArgs e)
+    {
+        _videoMenuItems =
+        [
+            new() { Text = _playing ? "Pause"     : "Play",
+                    Icon = _playing ? SvgIcon.Pause : SvgIcon.Play,
+                    Action = async () => await TogglePlayAsync(),
+                    IsDisabled = !_hasPreview },
+            new() { Text = "Seek to Start", Icon = SvgIcon.Rewind,
+                    Action = async () => await RewindAsync(),
+                    IsDisabled = !_hasPreview },
+            new() { Text = _muted ? "Unmute" : "Mute",
+                    Icon = _muted ? SvgIcon.VolumeUp : SvgIcon.VolumeMute,
+                    Action = async () => await ToggleMuteAsync(),
+                    IsDisabled = !_hasPreview },
+            new() { IsSeparator = true },
+            new() { Text = "Popout", Icon = SvgIcon.VideoExternal,
+                    Action = async () => await OnPopoutRequested.InvokeAsync() },
+            new() { IsSeparator = true },
+            new() { Text = "Add Marker Here", Icon = SvgIcon.MapMarker,
+                    Action = () => { Clips.AddMarker(_currentTime); return Task.CompletedTask; },
+                    IsDisabled = !_hasPreview || _currentTime <= 0 },
+            new() { Text = $"Copy Timecode  ({FormatTime(_currentTime)})",
+                    Icon = SvgIcon.Copy,
+                    Action = async () => await JS.InvokeVoidAsync(
+                        "navigator.clipboard.writeText", FormatTime(_currentTime)),
+                    IsDisabled = !_hasPreview },
+        ];
+        if (_videoMenu is not null)
+            await _videoMenu.ShowAsync(e.ClientX, e.ClientY);
+    }
+
+    // Backing for the scrub slider — seeking fires when the user changes the value
+    private double ScrubValue
+    {
+        get => _scrubValue;
+        set
+        {
+            if (Math.Abs(_scrubValue - value) < 0.01) return;
+            _scrubValue = value;
+            _ = SeekAsync(value);
+        }
+    }
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await InitModuleAsync();
+        Playback.OnSeekRequested += OnSeekRequested;
+        Clips.OnChange           += OnClipsChanged;
+        // Show first image immediately if clips already exist
+        UpdateDisplayImage();
+    }
+
+    private async Task InitModuleAsync()
+    {
+        _module = await JS.InvokeAsync<IJSObjectReference>(
+            "import", "/_content/Ben.Video.Editor/js/videoPreviewInterop.js");
+        await _module.InvokeVoidAsync("init", _videoElementId, DotNetObjectReference.Create(this));
+
+        // Apply a load requested before the module finished initializing — see LoadUrlAsync's
+        // remarks. Cross-component OnAfterRenderAsync ordering between this instance and
+        // whichever parent code called LoadUrlAsync right after mounting it isn't something to
+        // rely on, so this instance owns applying its own deferred load once it's actually ready,
+        // rather than the caller trying to wait for readiness itself.
+        if (_pendingLoadUrl is not null)
+        {
+            var url = _pendingLoadUrl;
+            _pendingLoadUrl = null;
+            await _module.InvokeVoidAsync("loadSrc", _videoElementId, url);
+        }
+    }
+
+    private void OnClipsChanged()
+    {
+        UpdateDisplayImage();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnSeekRequested(double seconds)
+    {
+        // SeekAsync no-ops when there's no loaded <video> (_hasPreview false) — a project with
+        // only overlay items (Callout/TextOverlay/ClipArt) and no video/image clip never has one.
+        // _currentTime must still track the requested seek unconditionally in that case (found
+        // live during item #57 P2 verification: a timeline-ruler seek left _currentTime frozen,
+        // so LiveOverlayPreview kept rendering the old time and canvas body-drags upserted the
+        // wrong keyframe — matches the existing StepBackAsync/StepForwardAsync convention, which
+        // already set _currentTime directly rather than relying solely on the video element's own
+        // timeupdate event round-tripping back through OnVideoTimeUpdate).
+        _currentTime = seconds;
+        _ = SeekAsync(seconds);
+        UpdateDisplayImage();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    // ── Public API (called by parent VideoEditor) ─────────────────────────────
+
+    /// <summary>Load a blob URL into the preview video element.</summary>
+    [Parameter] public PlaybackMode Mode { get; set; } = PlaybackMode.None;
+
+    /// <summary>Shows the preview-quality/working-fps dropdowns that drive the Working Window's
+    /// OWN re-render pipeline. Default true (the Working Window's normal instances); set false
+    /// for a read-only output player that never re-renders itself (item #36 phase 84's
+    /// full-quality Preview) — those controls would have no effect there.</summary>
+    [Parameter] public bool ShowWorkingWindowControls { get; set; } = true;
+
+    /// <summary>
+    /// Clears this instance's own URL tracking WITHOUT revoking the blob URL — for the moment
+    /// right before the parent tears this instance down to hand its content off to a sibling
+    /// instance about to take over display (e.g. toggling the popout — VideoEditor's own
+    /// mutually-exclusive @if blocks mean only one VideoPreview is ever mounted, so switching
+    /// means dispose-then-mount, not a true "move"). Without this, <see cref="DisposeAsync"/>'s
+    /// normal revoke-on-teardown would invalidate the URL before the new instance can reuse it,
+    /// silently blanking whatever was playing. The caller becomes responsible for eventually
+    /// revoking it — VideoEditor already does, via its own <c>_timelinePreviewUrl</c> tracking.
+    /// </summary>
+    public void DetachWithoutRevoking() => _previewUrl = null;
+
+    /// <summary>The blob: URL currently loaded, if any — item #59-#65 flakiness investigation,
+    /// phase 144. Lets an owner that hands this instance a URL (VideoEditor's
+    /// <c>_timelinePreviewUrl</c>) detect when <see cref="LoadUrlAsync"/>'s own revoke-the-previous-
+    /// URL step is about to invalidate that exact string, so it can stop treating it as live
+    /// instead of later handing a dead URL back in (e.g. on popout reattach).</summary>
+    public string? CurrentUrl => _previewUrl;
+
+    /// <summary>
+    /// Load a blob URL into the preview video element. If this instance's own JS module hasn't
+    /// finished its (async) first-render init yet, the actual <c>loadSrc</c> call is queued and
+    /// applied automatically once it is (see <see cref="InitModuleAsync"/>) — a caller driving
+    /// this from ITS OWN <c>OnAfterRenderAsync</c> right after this instance first mounts (e.g.
+    /// reloading content into a freshly-swapped popout instance) can otherwise easily call this
+    /// before this component's own init has even started, not just before it's finished; relying
+    /// on cross-component <c>OnAfterRenderAsync</c> ordering isn't safe, so this instance owns
+    /// applying its own deferred load once it's actually ready instead.
+    /// </summary>
+    public async Task LoadUrlAsync(string blobUrl, double duration, PlaybackMode mode = PlaybackMode.Clip)
+    {
+        // Item #59-#65 flakiness investigation, phase 144 (symptom S4) — this used to revoke the
+        // OLD url right here, before the new one was actually attached to the <video> element via
+        // the loadSrc call below. Same race as VideoEditor.RefreshWorkingWindowAsync had (see its
+        // own note): the element kept pointing at a just-revoked src for the whole window between
+        // the revoke and loadSrc actually running. Swap-then-revoke instead — keep the old url
+        // live until the new one is loaded (or queued via _pendingLoadUrl, if this instance's own
+        // module isn't ready yet — in which case there's nothing to revoke yet either, since
+        // _previewUrl would only be non-null here from a PRIOR load that already went through
+        // loadSrc successfully).
+        var previousUrl = _previewUrl;
+
+        BlobLifecycle.Transfer(blobUrl, OwnerLabel); // caller (VideoEditor) created it under its own label
+        _previewUrl  = blobUrl;
+        _duration    = duration;
+        _currentTime = 0;
+        _scrubValue  = 0;
+        _playing     = false;
+        _hasPreview  = true;
+        Playback.NotifyLoaded(mode, duration);
+        StateHasChanged();
+
+        if (_module is not null)
+        {
+            await _module.InvokeVoidAsync("loadSrc", _videoElementId, blobUrl);
+
+            if (previousUrl is not null && previousUrl != blobUrl)
+            {
+                BlobLifecycle.Revoking(previousUrl, OwnerLabel);
+                // Item #70 phase 161 — a timeline preview url can now be sidecar-origin (assembled
+                // by a native concat, minted in JS with no MEMFS backing). Routing that through
+                // the ffmpeg worker's revoke would take the phase-142 worker mutex for a one-line
+                // URL.revokeObjectURL. PreviewUrlRevoker defaults unknown urls to the worker path,
+                // so every pre-existing caller behaves exactly as before. The swap-then-revoke
+                // ORDER here is untouched — only the route changes.
+                await PreviewRevoker.RevokeAsync(previousUrl);
+            }
+        }
+        else
+        {
+            _pendingLoadUrl = blobUrl;
+        }
+    }
+
+    /// <summary>
+    /// Seek to a specific time in seconds.
+    /// </summary>
+    public async Task SeekAsync(double seconds)
+    {
+        if (_module is null || !_hasPreview) return;
+        await _module.InvokeVoidAsync("seek", _videoElementId, seconds);
+    }
+
+    // ── JS callbacks ─────────────────────────────────────────────────────────
+
+    [JSInvokable]
+    public async Task OnVideoTimeUpdate(double currentTime)
+    {
+        _currentTime = currentTime;
+        _scrubValue  = currentTime;
+        Playback.NotifyTimeUpdate(currentTime);
+        await OnTimeUpdate.InvokeAsync(currentTime);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public Task OnVideoEnded()
+    {
+        _playing = false;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>Item #59-#65 flakiness investigation, phase 144 — the &lt;video&gt; element's own
+    /// <c>error</c> event was previously unobserved entirely, so a dead/revoked blob: URL (or any
+    /// other media load failure) failed completely silently: a blank preview, nothing in any log.
+    /// Deliberately NO retry — surfacing the failure is this phase's whole point, not routing
+    /// around it again.</summary>
+    [JSInvokable]
+    public Task OnVideoError(string detail, string src)
+    {
+        ErrorLog.Log($"VideoPreview.OnVideoError[{OwnerLabel}]", $"{detail} (src: {src})");
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public async Task OnVideoPlay()
+    {
+        _playing = true;
+        Playback.NotifyPlaying();
+        if (_dbMeter is not null) await _dbMeter.ResumeAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task OnVideoPause()
+    {
+        _playing = false;
+        Playback.NotifyPaused();
+        if (_dbMeter is not null) await _dbMeter.SuspendAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ── Controls ─────────────────────────────────────────────────────────────
+
+    /// <summary>Toggle play/pause from outside the component (e.g. keyboard shortcut).</summary>
+    public Task TogglePlayPauseAsync() => TogglePlayAsync();
+
+    private async Task TogglePlayAsync()
+    {
+        if (_hasPreview && _module is not null)
+        {
+            // Normal video playback
+            if (_playing)
+                await _module.InvokeVoidAsync("pause", _videoElementId);
+            else
+                await _module.InvokeVoidAsync("play", _videoElementId);
+        }
+        else if (Clips.TotalDuration > 0)
+        {
+            // Image-only timeline: drive playback with a timer loop
+            if (_playing)
+            {
+                _imagePlayCts?.Cancel();
+            }
+            else
+            {
+                _imagePlayCts?.Cancel();
+                _imagePlayCts = new CancellationTokenSource();
+                _ = PlayImageLoopAsync(_imagePlayCts.Token);
+            }
+        }
+    }
+
+    private async Task PlayImageLoopAsync(CancellationToken ct)
+    {
+        _playing = true;
+        Playback.NotifyPlaying();
+        await InvokeAsync(StateHasChanged);
+
+        var fps      = Math.Max(1, Playback.SessionFps);
+        var dt       = 1.0 / fps;
+        var totalDur = Clips.TotalDuration;
+
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                var next = Playback.State.CurrentTime + dt;
+                if (next >= totalDur) next = totalDur;
+
+                Playback.NotifyTimeUpdate(next);
+                UpdateDisplayImage();
+                await InvokeAsync(StateHasChanged);
+
+                if (next >= totalDur) break;
+                await Task.Delay((int)(dt * 1000), ct);
+            }
+        }
+        catch (OperationCanceledException) { }
+
+        _playing = false;
+        Playback.NotifyPaused();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void UpdateDisplayImage()
+    {
+        if (!Clips.AllImageClips.Any()) { _displayImageUrl = null; return; }
+        var t      = Playback.State.CurrentTime;
+        var active = Clips.AllImageClips
+            .FirstOrDefault(ic => ic.TimelinePosition <= t && t < ic.TimelinePosition + ic.Duration)
+            ?? Clips.AllImageClips.OrderBy(ic => ic.TimelinePosition).Last();
+        _displayImageUrl = active.ThumbnailUrl;
+    }
+
+    private async Task RewindAsync()
+    {
+        _imagePlayCts?.Cancel();
+        if (_hasPreview && _module is not null)
+            await _module.InvokeVoidAsync("seek", _videoElementId, 0);
+        else
+        {
+            Playback.NotifyTimeUpdate(0);
+            UpdateDisplayImage();
+        }
+    }
+
+    private async Task ToggleMuteAsync()
+    {
+        if (_module is null || !_hasPreview) return;
+        _muted = !_muted;
+        await _module.InvokeVoidAsync("setMuted", _videoElementId, _muted);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private static string FormatTime(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.TotalHours >= 1
+            ? ts.ToString(@"h\:mm\:ss")
+            : ts.ToString(@"m\:ss");
+    }
+
+    // ── Frame stepping ───────────────────────────────────────────────────────
+
+    private void StepBackAsync()
+    {
+        if (!HasContent || Playback.SessionFps <= 0) return;
+        var frameDuration = 1.0 / Playback.SessionFps;
+        var target        = Math.Max(0, _currentTime - frameDuration);
+        _currentTime = target;
+        Playback.RequestSeek(target);
+        if (!_hasPreview) UpdateDisplayImage();
+    }
+
+    private void StepForwardAsync()
+    {
+        if (!HasContent || Playback.SessionFps <= 0) return;
+        var frameDuration = 1.0 / Playback.SessionFps;
+        var target        = Math.Min(_duration > 0 ? _duration : Clips.TotalDuration, _currentTime + frameDuration);
+        _currentTime = target;
+        Playback.RequestSeek(target);
+        if (!_hasPreview) UpdateDisplayImage();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _imagePlayCts?.Cancel();
+        _imagePlayCts?.Dispose();
+        Playback.OnSeekRequested -= OnSeekRequested;
+        Clips.OnChange           -= OnClipsChanged;
+
+        if (_previewUrl is not null)
+        {
+            BlobLifecycle.Revoking(_previewUrl, OwnerLabel);
+            try { await PreviewRevoker.RevokeAsync(_previewUrl); } catch { }
+        }
+
+        if (_module is not null)
+        {
+            try { await _module.InvokeVoidAsync("dispose", _videoElementId); } catch { }
+            await _module.DisposeAsync();
+        }
+    }
+}

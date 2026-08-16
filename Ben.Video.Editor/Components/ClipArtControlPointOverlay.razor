@@ -1,0 +1,234 @@
+@inject ClipStore Clips
+@inject MotionKeyframeService Motion
+@inject PreviewGeometryService Geometry
+
+@* Editor-only overlay — never exported. Bounding-box move/resize for a ClipArtClip, reusing
+   CalloutResizeMath as-is (it's shape-agnostic, operating purely on X/Y/Width/Height fractions).
+   No shape-specific handles here — ClipArtClip's own per-asset SvgControlPoint system (recolor,
+   admin-defined control points, etc.) is a separate, much larger feature and stays Properties-panel
+   only via ClipArtEditor.razor.
+
+   Item #73 — resize-handle drag routes through MotionKeyframeService.EditLayer exactly like
+   CanvasSelectionOverlay's body-drag/SetSize (item #63's own scope note: this overlay never
+   checked Motion.HasPath at all, so dragging a handle on an animated layer silently had no
+   visible effect at any keyframed time — MotionKeyframeService.Evaluate() overrides Width/Height
+   from the keyframe data whenever a path exists, so the static write this overlay used to make
+   was invisible during playback). *@
+<svg class="bv-clipart-overlay"
+     viewBox="0 0 @CanvasWidth @CanvasHeight"
+     xmlns="http://www.w3.org/2000/svg"
+     @onpointermove="OnPointerMove"
+     @onpointerup="OnPointerUp"
+     @onpointercancel="OnPointerUp">
+
+    @if (Clip is not null)
+    {
+        <rect x="@F(BoxX * CanvasWidth)" y="@F(BoxY * CanvasHeight)"
+              width="@F(BoxWidth * CanvasWidth)" height="@F(BoxHeight * CanvasHeight)"
+              fill="none" stroke="#89b4fa" stroke-width="2" stroke-dasharray="6 3" opacity="0.8" />
+    }
+
+    @foreach (var handle in _resizeHandles)
+    {
+        <g>
+            <rect x="@F(handle.PxX - 6)" y="@F(handle.PxY - 6)" width="12" height="12"
+                  fill="transparent" style="cursor:@ResizeCursor(handle.Key)"
+                  @onpointerdown="e => OnResizeHandlePointerDown(e, handle)"
+                  @onpointermove="OnPointerMove"
+                  @onpointerup="OnPointerUp"
+                  @onpointercancel="OnPointerUp"
+                  @onpointerdown:stopPropagation="true" />
+            <rect x="@F(handle.PxX - 4)" y="@F(handle.PxY - 4)"
+                  width="@(_dragging ? "10" : "8")"
+                  height="@(_dragging ? "10" : "8")"
+                  fill="@(_dragging ? "#f9e2af" : "#a6e3a1")"
+                  stroke="#1e1e2e" stroke-width="1.5"
+                  style="pointer-events:none" />
+            <title>Resize (drag)</title>
+        </g>
+    }
+</svg>
+
+@code {
+    [Parameter, EditorRequired] public ClipArtClip?     Clip          { get; set; }
+    [Parameter, EditorRequired] public ElementReference ScreenElement { get; set; }
+    [Parameter]                  public int             CanvasWidth   { get; set; } = 1920;
+    [Parameter]                  public int             CanvasHeight  { get; set; } = 1080;
+    /// <summary>Item #73 — needed to evaluate/write the right keyframe. Threaded through from
+    /// VideoPreview.razor exactly like CanvasSelectionOverlay's own CurrentTime.</summary>
+    [Parameter, EditorRequired] public double            CurrentTime   { get; set; }
+
+    private sealed record Handle(string Key, double PxX, double PxY);
+
+    private List<Handle> _resizeHandles = [];
+    private bool          _dragging;
+    private string?       _draggingKey;
+    private double        _dragStartPxX;
+    private double        _dragStartPxY;
+
+    // Item #73 — running effective-space bounds, updated every OnPointerMove frame regardless of
+    // whether the layer is animated (mirrors CanvasSelectionOverlay's _dragX/_dragY). This can't
+    // be re-derived from Clip.X/Width each frame the way the old static-only code did: while
+    // animated, the static fields never change (only the keyframe does), so re-reading them would
+    // never accumulate the drag delta.
+    private double _dragX, _dragY, _dragW, _dragH;
+    // Static base size at drag-start — the fixed denominator ScaleX/ScaleY are computed against
+    // (matches CanvasSelectionOverlay.SetSize's baseW/baseH exactly). NOT the same thing as
+    // _dragW/_dragH above, which track the effective (already-scaled) size.
+    private double _baseW, _baseH;
+    private (double X, double Y, double Width, double Height) _origBounds;
+    private MotionKeyframe? _dragOrigKeyframe;
+
+    /// <summary>ClipArtClip.Height of ‑1 means "preserve aspect ratio from Width" — there's no asset
+    /// pixel-aspect data available here to derive a real value, so the overlay falls back to a square
+    /// box for display/first-touch purposes. The moment any resize handle is dragged, ApplyResize
+    /// computes a real height and it's written back, replacing the sentinel from then on.</summary>
+    private double EffectiveHeight => Clip is { Height: > 0 } ? Clip.Height : Clip?.Width ?? 0;
+
+    // Item #73 — while a drag is in flight the box must track the running drag state (which is
+    // ahead of Clip's own fields whenever the layer is animated, per the note on _dragX above);
+    // otherwise it reflects the layer's real current position, motion-evaluated so an animated
+    // layer's box is drawn where it's actually rendered, not its stale static field.
+    private double BoxX => _dragging ? _dragX : EffectiveBox.X;
+    private double BoxY => _dragging ? _dragY : EffectiveBox.Y;
+    private double BoxWidth => _dragging ? _dragW : EffectiveBox.Width;
+    private double BoxHeight => _dragging ? _dragH : EffectiveBox.Height;
+
+    private (double X, double Y, double Width, double Height) EffectiveBox
+    {
+        get
+        {
+            if (Clip is null) return default;
+            var eff = MotionEffectiveGeometry.Effective(Motion, Clip, CurrentTime);
+            return (eff.X, eff.Y, eff.Width, MotionEffectiveGeometry.EffectiveClipArtHeight(eff));
+        }
+    }
+
+    protected override void OnParametersSet() => RebuildResizeHandles();
+
+    private void RebuildResizeHandles()
+    {
+        _resizeHandles = [];
+        if (Clip is null) return;
+
+        var left   = BoxX * CanvasWidth;
+        var top    = BoxY * CanvasHeight;
+        var right  = (BoxX + BoxWidth)  * CanvasWidth;
+        var bottom = (BoxY + BoxHeight) * CanvasHeight;
+        var midX   = (left + right) / 2;
+        var midY   = (top + bottom) / 2;
+
+        _resizeHandles =
+        [
+            new("tl", left,  top),
+            new("t",  midX,  top),
+            new("tr", right, top),
+            new("r",  right, midY),
+            new("br", right, bottom),
+            new("b",  midX,  bottom),
+            new("bl", left,  bottom),
+            new("l",  left,  midY),
+        ];
+    }
+
+    private static string ResizeCursor(string key) => key switch
+    {
+        "tl" or "br" => "nwse-resize",
+        "tr" or "bl" => "nesw-resize",
+        "t"  or "b"  => "ns-resize",
+        _            => "ew-resize",
+    };
+
+    private async Task OnResizeHandlePointerDown(PointerEventArgs e, Handle handle)
+    {
+        await Geometry.RefreshAsync(ScreenElement, CanvasWidth, CanvasHeight);
+        _dragging      = true;
+        _draggingKey   = handle.Key;
+        _dragStartPxX  = e.ClientX;
+        _dragStartPxY  = e.ClientY;
+
+        var eff = EffectiveBox;
+        (_dragX, _dragY, _dragW, _dragH) = eff;
+        _origBounds = eff;
+        _baseW = Clip?.Width ?? 0;
+        _baseH = Clip is null ? 0 : MotionEffectiveGeometry.EffectiveClipArtHeight(Clip);
+        _dragOrigKeyframe = Clip is null ? null
+            : Motion.GetPath(Clip.Id)?.Keyframes.FirstOrDefault(k => Math.Abs(k.Time - CurrentTime) < 0.001);
+
+        RebuildResizeHandles();
+    }
+
+    private void OnPointerMove(PointerEventArgs e)
+    {
+        if (!_dragging || _draggingKey is null || Clip is null) return;
+
+        var dxPx = e.ClientX - _dragStartPxX;
+        var dyPx = e.ClientY - _dragStartPxY;
+        _dragStartPxX = e.ClientX;
+        _dragStartPxY = e.ClientY;
+
+        var (fdx, fdy) = Geometry.DeltaToFraction(dxPx, dyPx);
+        (_dragX, _dragY, _dragW, _dragH) = CalloutResizeMath.ApplyResize(
+            _dragX, _dragY, _dragW, _dragH, _draggingKey, fdx, fdy);
+
+        var (nx, ny, nw, nh) = (_dragX, _dragY, _dragW, _dragH);
+        var (baseW, baseH)   = (_baseW, _baseH);
+        Motion.EditLayer(Clip.Id, "ClipArtClip", CurrentTime,
+            () => MotionEffectiveGeometry.StaticSeed(Clip, CurrentTime),
+            kf =>
+            {
+                kf.X = nx;
+                kf.Y = ny;
+                kf.ScaleX = baseW > 0 ? nw / baseW : kf.ScaleX;
+                kf.ScaleY = baseH > 0 ? nh / baseH : kf.ScaleY;
+            },
+            () => Clips.UpdateClipArtClip(Clip.Id, c => { c.X = nx; c.Y = ny; c.Width = nw; c.Height = nh; }));
+
+        RebuildResizeHandles();
+    }
+
+    private void OnPointerUp(PointerEventArgs e)
+    {
+        if (!_dragging || Clip is null) { _dragging = false; _draggingKey = null; return; }
+        var item = Clip;
+        _dragging    = false;
+        _draggingKey = null;
+
+        if (!Motion.HasPath(item.Id))
+        {
+            var (ox, oy, ow, oh) = _origBounds;
+            var (fx, fy, fw, fh) = (_dragX, _dragY, _dragW, _dragH);
+            Clips.CommitClipArtUpdate(item.Id, "bounds",
+                c => { c.X = fx; c.Y = fy; c.Width = fw; c.Height = fh; },
+                c => { c.X = ox; c.Y = oy; c.Width = ow; c.Height = oh; });
+        }
+        else
+        {
+            CommitKeyframeEditIfAnimated(item, _dragOrigKeyframe, "Resize ClipArtClip");
+        }
+        _dragOrigKeyframe = null;
+
+        RebuildResizeHandles();
+        StateHasChanged();
+    }
+
+    /// <summary>Item #63/#73 — mirrors CanvasSelectionOverlay.CommitKeyframeEditIfAnimated exactly
+    /// (see that method's doc comment for the full contract). Wraps the keyframe-branch edit
+    /// Motion.EditLayer already performed live, frame by frame, into one undo entry at
+    /// gesture-end.</summary>
+    private void CommitKeyframeEditIfAnimated(ClipArtClip item, MotionKeyframe? oldKf, string description)
+    {
+        var newKf = Motion.GetPath(item.Id)?.Keyframes.FirstOrDefault(k => Math.Abs(k.Time - CurrentTime) < 0.001);
+        if (newKf is null) return;
+
+        Clips.CommitMotionKeyframeEdit(description,
+            apply:  () => Motion.UpsertKeyframe(item.Id, "ClipArtClip", newKf),
+            revert: () =>
+            {
+                if (oldKf is null) Motion.RemoveKeyframe(item.Id, CurrentTime);
+                else Motion.UpsertKeyframe(item.Id, "ClipArtClip", oldKf);
+            });
+    }
+
+    private static string F(double v) => v.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+}

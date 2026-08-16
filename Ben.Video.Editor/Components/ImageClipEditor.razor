@@ -1,0 +1,223 @@
+@inject ClipStore Clips
+@inject Ben.Video.Editor.Services.ClipEffectRegistry EffectRegistry
+@using Ben.Video.Editor.Effects
+
+@if (Clip is not null)
+{
+    <div class="bv-image-editor">
+
+        <!-- ── Header ──────────────────────────────────────────────────────────── -->
+        <div class="bv-image-editor__header">
+            <span class="bv-image-editor__title">🖼 @Clip.Name</span>
+            <TelerikButton OnClick="Close"
+                           Icon="@SvgIcon.X"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Title="Close image editor" />
+        </div>
+
+        <!-- ── Thumbnail preview ───────────────────────────────────────────────── -->
+        @if (Clip.ThumbnailUrl is not null)
+        {
+            <div class="bv-image-editor__preview">
+                <img src="@Clip.ThumbnailUrl" alt="@Clip.Name"
+                     class="bv-image-editor__thumb" />
+            </div>
+        }
+
+        <!-- ── Info row ────────────────────────────────────────────────────────── -->
+        <div class="bv-image-editor__info">
+            @if (Clip.Width > 0 && Clip.Height > 0)
+            {
+                <span>@Clip.Width × @Clip.Height px</span>
+            }
+            <span>Display duration: @FormatTime(_duration)</span>
+        </div>
+
+        <!-- ── Display duration ────────────────────────────────────────────────── -->
+        <div class="bv-image-editor__field">
+            <label class="bv-image-editor__label">Duration (seconds)</label>
+            <TelerikNumericTextBox @bind-Value="_duration"
+                                   Min="0.5"
+                                   Max="3600"
+                                   Step="0.5"
+                                   Format="F1"
+                                   Class="bv-image-editor__input" />
+        </div>
+
+        <!-- ── Split at playhead ───────────────────────────────────────────────── -->
+        <div class="bv-image-editor__field">
+            <label class="bv-image-editor__label">Split at</label>
+            <TelerikSlider @bind-Value="_splitAt"
+                           Min="0"
+                           Max="@Clip.Duration"
+                           SmallStep="0.1"
+                           LargeStep="1"
+                           Orientation="@SliderOrientation.Horizontal"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0, Clip.Duration, 1)"
+                           Class="bv-image-editor__slider" />
+            <span class="bv-image-editor__time">@FormatTime(_splitAt)</span>
+        </div>
+
+        <div class="bv-image-editor__field">
+            <TelerikButton OnClick="SplitAsync"
+                           Icon="@SvgIcon.Crop"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           Title="Split clip at selected point">
+                Split
+            </TelerikButton>
+        </div>
+
+        <!-- ── Visual Effects ─────────────────────────────────────────────────── -->
+        <div class="bv-image-editor__section-heading">Visual Effects</div>
+
+        @foreach (var fx in Clip.AppliedEffects)
+        {
+            var effect = EffectRegistry.GetById(fx.EffectId);
+            if (effect is null) { continue; }
+            <div class="bv-image-editor__effect-card">
+                <div class="bv-image-editor__effect-header">
+                    <span class="bv-image-editor__effect-name">@effect.DisplayName</span>
+                    <TelerikButton OnClick="@(() => RemoveEffect(fx))"
+                                   Icon="@SvgIcon.X"
+                                   Size="@ThemeConstants.Button.Size.Small"
+                                   FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                   Title="Remove effect" />
+                </div>
+                @foreach (var param in effect.ParameterSchema)
+                {
+                    var localFx    = fx;
+                    var localParam = param;
+                    var paramVal   = localFx.Parameters.TryGetValue(localParam.Key, out var pv) ? pv : localParam.DefaultValue;
+                    <div class="bv-image-editor__field">
+                        <label class="bv-image-editor__label">@localParam.Label (@paramVal.ToString("F2"))</label>
+                        <TelerikSlider Value="@paramVal"
+                                       ValueChanged="@((double v) => UpdateEffectParameter(localFx, localParam.Key, v))"
+                                       Min="@localParam.Min"
+                                       Max="@localParam.Max"
+                                       SmallStep="@localParam.Step"
+                                       LargeStep="@localParam.LargeStep"
+                                       Orientation="@SliderOrientation.Horizontal"
+                                       LabelTemplate="@SliderLabelTemplates.Endpoints(localParam.Min, localParam.Max, localParam.LargeStep)"
+                                       Class="bv-image-editor__slider" />
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="bv-image-editor__field">
+            <TelerikDropDownList Data="@EffectRegistry.All"
+                                 @bind-Value="@_selectedEffectId"
+                                 TextField="@nameof(IClipEffect.DisplayName)"
+                                 ValueField="@nameof(IClipEffect.EffectId)"
+                                 DefaultText="Add effect..."
+                                 Class="bv-image-editor__effect-dropdown" />
+            <TelerikButton OnClick="AddSelectedEffect"
+                           Icon="@SvgIcon.Plus"
+                           Size="@ThemeConstants.Button.Size.Small"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
+                           Title="Add selected effect"
+                           Enabled="@(_selectedEffectId is not null)">
+                Add
+            </TelerikButton>
+        </div>
+
+        <!-- ── Apply / Remove ────────────────────────────────────────────────────────────────────────────────── -->
+        <div class="bv-image-editor__actions">
+            <TelerikButton OnClick="ApplyAsync"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Icon="@SvgIcon.Check"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Apply
+            </TelerikButton>
+            <TelerikButton OnClick="RemoveAsync"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                           Icon="@SvgIcon.Trash"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Remove
+            </TelerikButton>
+        </div>
+
+    </div>
+}
+
+@code {
+    [Parameter] public ImageClip?       Clip    { get; set; }
+    [Parameter] public EventCallback            OnClose  { get; set; }
+    [Parameter] public EventCallback<ImageClip> OnRemove { get; set; }
+
+    /// <summary>Raised after the clip is split into two clips.</summary>
+    [Parameter] public EventCallback<ImageClip> OnClipSplit { get; set; }
+
+    private double  _duration;
+    private double  _splitAt;
+    private string? _selectedEffectId;
+
+    protected override void OnParametersSet()
+    {
+        if (Clip is not null)
+        {
+            _duration         = Clip.Duration > 0 ? Clip.Duration : 5.0;
+            _splitAt          = 0;
+            _selectedEffectId = null;
+        }
+    }
+
+    private void AddSelectedEffect()
+    {
+        if (Clip is null || _selectedEffectId is null) return;
+        var effect = EffectRegistry.GetById(_selectedEffectId);
+        if (effect is null) return;
+        Clips.AddEffect(Clip.Id, effect.CreateDefault());
+        _selectedEffectId = null;
+    }
+
+    private void RemoveEffect(AppliedEffect fx)
+    {
+        if (Clip is null) return;
+        Clips.RemoveEffect(Clip.Id, fx);
+    }
+
+    private void UpdateEffectParameter(AppliedEffect fx, string key, double value)
+    {
+        if (Clip is null) return;
+        Clips.UpdateEffectParameter(fx, key, value);
+    }
+
+    private async Task ApplyAsync()
+    {
+        if (Clip is null) return;
+        Clips.CommitImageDuration(Clip.Id, _duration);
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task SplitAsync()
+    {
+        if (Clip is null) return;
+        var original = Clip;
+        try { Clips.SplitClip(Clip.Id, _splitAt); }
+        catch { return; /* split point out of range */ }
+        await OnClipSplit.InvokeAsync(original);
+    }
+
+    private async Task RemoveAsync()
+    {
+        if (Clip is null) return;
+        var clip = Clip;
+        await OnClose.InvokeAsync();
+        Clips.RemoveImageClip(clip.Id);
+        await OnRemove.InvokeAsync(clip);
+    }
+
+    private async Task Close() => await OnClose.InvokeAsync();
+
+    private static string FormatTime(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.TotalHours >= 1
+            ? $"{(int)ts.TotalHours}:{ts.Minutes:D2}:{ts.Seconds:D2}.{ts.Milliseconds / 100:D1}"
+            : $"{ts.Minutes}:{ts.Seconds:D2}.{ts.Milliseconds / 100:D1}";
+    }
+}

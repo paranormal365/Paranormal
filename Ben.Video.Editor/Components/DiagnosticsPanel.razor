@@ -1,0 +1,128 @@
+@inject FfmpegService Ffmpeg
+@inject MemFsLedger MemFs
+
+<TelerikWindow Visible="@Visible"
+               VisibleChanged="@OnVisibleChanged"
+               Width="520px"
+               Height="520px"
+               Modal="true">
+    <WindowTitle>ffmpeg diagnostics</WindowTitle>
+    <WindowContent>
+        <div class="bv-diagnostics-panel">
+
+            @if (Ffmpeg.IsWorkerWedged)
+            {
+                <div class="bv-diagnostics-panel__wedge-banner">
+                    <p>
+                        ffmpeg hasn't responded in a while and may be stuck. Your project isn't
+                        lost — Reset reloads the ffmpeg engine and reconnects your clips.
+                    </p>
+                    <TelerikButton OnClick="ResetAsync"
+                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
+                                   Enabled="@(!_resetting)">
+                        @(_resetting ? "Resetting…" : "Reset")
+                    </TelerikButton>
+                </div>
+            }
+
+            <div class="bv-diagnostics-panel__row">
+                <span class="bv-diagnostics-panel__label">State</span>
+                <span class="bv-diagnostics-panel__value">@Ffmpeg.State</span>
+            </div>
+            @if (Ffmpeg.LastError is not null)
+            {
+                <div class="bv-diagnostics-panel__row">
+                    <span class="bv-diagnostics-panel__label">Last error</span>
+                    <span class="bv-diagnostics-panel__value bv-diagnostics-panel__value--error">@Ffmpeg.LastError</span>
+                </div>
+            }
+            <div class="bv-diagnostics-panel__row">
+                <span class="bv-diagnostics-panel__label">MEMFS (lower bound)</span>
+                <span class="bv-diagnostics-panel__value">@FormatBytes(MemFs.TotalBytes) across @MemFs.Count file@(MemFs.Count == 1 ? "" : "s")</span>
+            </div>
+
+            <h4 class="bv-diagnostics-panel__heading">Largest MEMFS entries</h4>
+            @if (MemFs.Count == 0)
+            {
+                <p class="bv-diagnostics-panel__empty">Nothing tracked.</p>
+            }
+            else
+            {
+                <ul class="bv-diagnostics-panel__list">
+                    @foreach (var entry in MemFs.Entries.OrderByDescending(e => e.Bytes).Take(10))
+                    {
+                        <li><span class="bv-diagnostics-panel__name">@entry.Name</span> <span class="bv-diagnostics-panel__muted">(@entry.Category)</span> — @FormatBytes(entry.Bytes)</li>
+                    }
+                </ul>
+            }
+
+            <h4 class="bv-diagnostics-panel__heading">Recent operations</h4>
+            @if (Ffmpeg.OperationTrace.Count == 0)
+            {
+                <p class="bv-diagnostics-panel__empty">No operations recorded yet this session.</p>
+            }
+            else
+            {
+                <ul class="bv-diagnostics-panel__list">
+                    @foreach (var op in Ffmpeg.OperationTrace.Reverse().Take(25))
+                    {
+                        <li class="@(op.Success ? "" : "bv-diagnostics-panel__value--error")">
+                            @(op.Success ? "✓" : "✗") @op.Operation — @op.Duration.TotalMilliseconds.ToString("0")ms
+                            <span class="bv-diagnostics-panel__muted">(@op.StartedAtUtc.ToLocalTime().ToString("HH:mm:ss"))</span>
+                        </li>
+                    }
+                </ul>
+            }
+
+            <h4 class="bv-diagnostics-panel__heading">ffmpeg log tail</h4>
+            @if (Ffmpeg.LogTail.Count == 0)
+            {
+                <p class="bv-diagnostics-panel__empty">Nothing logged yet this session.</p>
+            }
+            else
+            {
+                <pre class="bv-diagnostics-panel__log">@string.Join('\n', Ffmpeg.LogTail)</pre>
+            }
+
+        </div>
+    </WindowContent>
+    <WindowActions>
+        <WindowAction Name="Close" />
+    </WindowActions>
+</TelerikWindow>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    /// <summary>Phase 143 — the user-initiated Reset action (per the user's explicit decision:
+    /// offer a Reset button, never auto-terminate or auto-reset). Wired by the host to the same
+    /// handler as the toolbar's Initialize button (<see cref="Toolbar.OnInitialize"/>) — both
+    /// ultimately run <c>VideoEditor.LoadCoreAsync</c>'s terminate → reload → remount → clear-cache
+    /// sequence; this is just a second, always-reachable entry point for when the worker is
+    /// wedged and the normal Initialize button is disabled (State is stuck at Processing, not
+    /// Idle/Error).</summary>
+    [Parameter] public EventCallback OnResetWorker { get; set; }
+
+    private bool _resetting;
+
+    private async Task ResetAsync()
+    {
+        _resetting = true;
+        try { await OnResetWorker.InvokeAsync(); }
+        finally { _resetting = false; }
+    }
+
+    private async Task OnVisibleChanged(bool visible)
+    {
+        Visible = visible;
+        await VisibleChanged.InvokeAsync(visible);
+    }
+
+    private static string FormatBytes(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
+        _ => $"{bytes / (1024.0 * 1024.0):0.#} MB",
+    };
+}

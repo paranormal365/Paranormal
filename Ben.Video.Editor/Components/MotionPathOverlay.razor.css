@@ -1,0 +1,120 @@
+/* ── Motion path overlay — editor-only SVG over VideoPreview ─────────────── */
+.bv-motion-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* let click-through to video; dots override per-element */
+    z-index: 20;
+    overflow: visible;
+}
+
+/* Path lines */
+.bv-motion-path__line {
+    stroke: var(--kendo-color-primary, #89b4fa);
+    stroke-width: 0.004;
+    stroke-dasharray: 0.01 0.008;
+    opacity: 0.8;
+}
+
+.bv-motion-path__line--hover {
+    stroke-width: 0.006;
+    opacity: 1;
+}
+
+/* Item #57 P4 — wide invisible hit-path behind the thin visible line above: the real target for
+   hover-highlight and the right-click easing menu, since a 0.004-wide stroke is far too thin a
+   hit region on its own. */
+.bv-motion-path__hit {
+    stroke: transparent;
+    stroke-width: 0.02;
+    pointer-events: stroke;
+    cursor: context-menu;
+}
+
+/* Keyframe dots */
+.bv-motion-kf {
+    fill: var(--kendo-color-surface-alt, #181825);
+    stroke: var(--kendo-color-primary, #89b4fa);
+    stroke-width: 0.004;
+    pointer-events: all;
+    transition: r .1s;
+}
+
+.bv-motion-kf--selected {
+    fill: var(--kendo-color-primary, #89b4fa);
+    stroke: #fff;
+}
+
+.bv-motion-kf--current {
+    stroke: var(--kendo-color-success, #a6e3a1);
+}
+
+/* Bezier handle arms */
+.bv-motion-handle__arm {
+    stroke: var(--kendo-color-subtle-text, #7f849c);
+    stroke-width: 0.002;
+    stroke-dasharray: 0.006 0.004;
+}
+
+/* Item #57 P4 — real pre-existing bug found live-verifying: this transparent hit-circle (drag +
+   double-click-to-remove target) had no pointer-events override of its own, so it inherited
+   pointer-events:none from .bv-motion-overlay above and was NEVER actually clickable by a real
+   mouse/touch — dragging an existing bezier handle can only ever have worked via some other path
+   until now. */
+.bv-motion-handle__hit {
+    pointer-events: all;
+}
+
+/* Bezier handle dots */
+.bv-motion-handle__dot {
+    fill: var(--kendo-color-surface-alt, #181825);
+    stroke: var(--kendo-color-subtle-text, #7f849c);
+    stroke-width: 0.003;
+    pointer-events: all;
+}
+
+/* Current interpolated position */
+.bv-motion-playhead {
+    fill: var(--kendo-color-primary, #89b4fa);
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* ── Easing quick-menu (item #57 P4) — a plain HTML popover, screen-pixel positioned at the
+   right-click point, matching VideoTimeline's own transition style-picker popover. Lives outside
+   the SVG's 0..1 viewBox, so ordinary px units apply here, not the SVG's fraction-based sizing
+   used everywhere else in this file. */
+.bv-motion-easing-menu__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+}
+
+.bv-motion-easing-menu {
+    position: fixed;
+    z-index: 41;
+    display: flex;
+    flex-direction: column;
+    min-width: 110px;
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    border: 1px solid var(--kendo-color-border, var(--bv-border));
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .4);
+    overflow: hidden;
+}
+
+.bv-motion-easing-menu__item {
+    padding: 6px 10px;
+    background: transparent;
+    border: none;
+    color: #cdd6f4;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.bv-motion-easing-menu__item:hover {
+    background: var(--bv-accent-muted);
+    color: #fff;
+}
