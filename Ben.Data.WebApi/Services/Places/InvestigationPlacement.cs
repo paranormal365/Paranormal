@@ -10,8 +10,8 @@ namespace Ben.Data.WebApi.Services.Places;
 /// Works out where an investigation happened and writes that onto it.
 /// </summary>
 /// <remarks>
-/// <para>Shared by the case-bound <see cref="InvestigationController"/> and the case-less
-/// <see cref="OrgInvestigationsController"/>, because "where did this visit happen" has to have one
+/// <para>Shared by the case-bound <see cref="Ben.Data.WebApi.Controllers.Entities.InvestigationController"/> and the case-less
+/// <see cref="Ben.Data.WebApi.Controllers.Entities.OrgInvestigationsController"/>, because "where did this visit happen" has to have one
 /// answer. Two copies would drift, and the first symptom would be a dot appearing on one map and
 /// not another.</para>
 ///
