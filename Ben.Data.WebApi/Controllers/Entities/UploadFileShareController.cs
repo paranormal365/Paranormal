@@ -128,7 +128,7 @@ public sealed class UploadFileShareController : BenControllerBase
             existing.DateUpdated = DateTime.UtcNow;
             existing.UpdatedByAppUserId = userId;
             await db.SaveChangesAsync(cancellationToken);
-            _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileOrganizationShare), existing.Id, shareBefore!, existing, userId, AppSources.WebApi, cancellationToken));
+            _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileOrganizationShare), existing.Id, shareBefore!, existing, userId, AppSources.WebApi));
             return Ok(_mapper.Map<UploadFileOrganizationShareRecord>(existing));
         }
 
@@ -163,10 +163,10 @@ public sealed class UploadFileShareController : BenControllerBase
             winner.DateUpdated        = DateTime.UtcNow;
             winner.UpdatedByAppUserId = userId;
             await db.SaveChangesAsync(cancellationToken);
-            _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileOrganizationShare), winner.Id, winner, winner, userId, AppSources.WebApi, cancellationToken));
+            _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileOrganizationShare), winner.Id, winner, winner, userId, AppSources.WebApi));
             return Ok(_mapper.Map<UploadFileOrganizationShareRecord>(winner));
         }
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileOrganizationShare), share.Id, share, userId, AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileOrganizationShare), share.Id, share, userId, AppSources.WebApi));
         return CreatedAtAction(nameof(GetSharesForFile), new { fileId }, _mapper.Map<UploadFileOrganizationShareRecord>(share));
     }
 
@@ -192,7 +192,7 @@ public sealed class UploadFileShareController : BenControllerBase
         share.DateUpdated = DateTime.UtcNow;
         share.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(cancellationToken);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileOrganizationShare), shareId, shareBefore!, share, userId, AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileOrganizationShare), shareId, shareBefore!, share, userId, AppSources.WebApi));
         return Ok(_mapper.Map<UploadFileOrganizationShareRecord>(share));
     }
 
@@ -219,7 +219,7 @@ public sealed class UploadFileShareController : BenControllerBase
         share.DateUpdated = DateTime.UtcNow;
         share.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(cancellationToken);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileOrganizationShare), shareId, shareBefore!, share, userId, AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileOrganizationShare), shareId, shareBefore!, share, userId, AppSources.WebApi));
         return NoContent();
     }
 

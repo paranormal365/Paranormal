@@ -81,7 +81,7 @@ public sealed class OrganizationLogoController : OrgCmsControllerBase
 
         db.OrganizationLogos.Add(logo);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationLogo), logo.Id, logo, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationLogo), logo.Id, logo, userId.Value, AppSources.WebApi));
         return CreatedAtAction(nameof(GetAll), new { orgId }, Mapper.Map<OrganizationLogoRecord>(logo));
     }
 
@@ -116,7 +116,7 @@ public sealed class OrganizationLogoController : OrgCmsControllerBase
         logo.UpdatedByAppUserId = userId.Value;
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationLogo), logoId, before, logo, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationLogo), logoId, before, logo, userId.Value, AppSources.WebApi));
         return Ok(Mapper.Map<OrganizationLogoRecord>(logo));
     }
 
@@ -135,7 +135,7 @@ public sealed class OrganizationLogoController : OrgCmsControllerBase
 
         db.OrganizationLogos.Remove(logo);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationLogo), logoId, logo, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationLogo), logoId, logo, userId.Value, AppSources.WebApi));
         return NoContent();
     }
 }

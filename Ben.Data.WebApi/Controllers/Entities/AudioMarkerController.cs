@@ -115,7 +115,7 @@ public sealed class AudioMarkerController : BenControllerBase
         };
         db.AudioMarkers.Add(entity);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(AudioMarker), entity.Id, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(AudioMarker), entity.Id, entity, userId, AppSources.WebApi));
         return CreatedAtAction(nameof(GetById), new { fileId, markerId = entity.Id },
             _mapper.Map<AudioMarkerRecord>(entity));
     }
@@ -147,7 +147,7 @@ public sealed class AudioMarkerController : BenControllerBase
         entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(AudioMarker), markerId, before, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(AudioMarker), markerId, before, entity, userId, AppSources.WebApi));
         return Ok(_mapper.Map<AudioMarkerRecord>(entity));
     }
 
@@ -165,7 +165,7 @@ public sealed class AudioMarkerController : BenControllerBase
 
         db.AudioMarkers.Remove(entity);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(AudioMarker), markerId, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(AudioMarker), markerId, entity, userId, AppSources.WebApi));
         return NoContent();
     }
 
@@ -246,7 +246,7 @@ public sealed class AudioMarkerController : BenControllerBase
         _ = TryAuditAsync(_auditLog.LogCreateAsync(
             nameof(AudioMarker), fileId,
             new { Replaced = stale.Count, Created = fresh.Count },
-            userId, AppSources.WebApi, ct));
+            userId, AppSources.WebApi));
 
         return Ok(_mapper.Map<IEnumerable<AudioMarkerRecord>>(fresh));
     }
@@ -400,7 +400,7 @@ public sealed class AudioMarkerController : BenControllerBase
         entity.UpdatedByAppUserId = userId;
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(AudioMarker), markerId, before, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(AudioMarker), markerId, before, entity, userId, AppSources.WebApi));
         return Ok(_mapper.Map<AudioMarkerRecord>(entity));
     }
 

@@ -234,7 +234,7 @@ public sealed class MyCaseController : BenControllerBase
         if (!await ApplyExperienceTagsAsync(db, entry.Id, request.ExperienceTypeIds, ct))
             return BadRequest("One or more experience types do not exist.");
 
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CaseTimelineEntry), entry.Id, entry, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CaseTimelineEntry), entry.Id, entry, userId, AppSources.WebApi));
 
         var loaded = await db.CaseTimelineEntries.AsNoTracking()
             .Include(e => e.AuthorAppUser)
@@ -277,7 +277,7 @@ public sealed class MyCaseController : BenControllerBase
             && !await ApplyExperienceTagsAsync(db, entry.Id, request.ExperienceTypeIds, ct))
             return BadRequest("One or more experience types do not exist.");
 
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(CaseTimelineEntry), entry.Id, before, entry, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(CaseTimelineEntry), entry.Id, before, entry, userId, AppSources.WebApi));
 
         var loaded = await db.CaseTimelineEntries.AsNoTracking()
             .Include(e => e.AuthorAppUser)
@@ -345,7 +345,7 @@ public sealed class MyCaseController : BenControllerBase
 
         db.CaseTimelineEntries.Remove(entry);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(CaseTimelineEntry), entry.Id, entry, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(CaseTimelineEntry), entry.Id, entry, userId, AppSources.WebApi));
         return NoContent();
     }
 
@@ -554,7 +554,7 @@ public sealed class MyCaseController : BenControllerBase
         };
         db.CaseTimelineEntryFiles.Add(entryFile);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CaseTimelineEntryFile), entryFile.Id, entryFile, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CaseTimelineEntryFile), entryFile.Id, entryFile, userId, AppSources.WebApi));
 
         // Metadata extraction fire-and-forget. Reads the stored file rather than capturing the
         // upload's bytes, which would keep the whole thing resident until extraction finished.
@@ -605,7 +605,7 @@ public sealed class MyCaseController : BenControllerBase
         db.CaseTimelineEntryFiles.Remove(link);
         db.UploadFiles.Remove(link.UploadFile);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(CaseTimelineEntryFile), link.Id, link, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(CaseTimelineEntryFile), link.Id, link, userId, AppSources.WebApi));
 
         if (storagePath is not null)
             await _fileStorage.DeleteAsync(storagePath, ct);
@@ -733,7 +733,7 @@ public sealed class MyCaseController : BenControllerBase
         };
         db.CaseClientAccesses.Add(access);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseClientAccess), access.Id, access, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseClientAccess), access.Id, access, userId, AppSources.WebApi));
         return Ok(new CoClientItem(access.Id, target.Id, target.DisplayName ?? target.Email!));
     }
 
@@ -753,7 +753,7 @@ public sealed class MyCaseController : BenControllerBase
         if (access is null) return NotFound();
         db.CaseClientAccesses.Remove(access);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(Ben.Data.Source.Entities.CaseClientAccess), access.Id, access, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(Ben.Data.Source.Entities.CaseClientAccess), access.Id, access, userId, AppSources.WebApi));
         return NoContent();
     }
 
@@ -815,7 +815,7 @@ public sealed class MyCaseController : BenControllerBase
             };
             db.CaseClientAccesses.Add(access);
             await db.SaveChangesAsync(ct);
-            _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseClientAccess), access.Id, access, userId, AppSources.WebApi, ct));
+            _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseClientAccess), access.Id, access, userId, AppSources.WebApi));
             return Ok(new InviteCoClientResult(
                 LinkedExistingAccount: true,
                 CoClient: new CoClientItem(access.Id, target.Id, target.DisplayName ?? target.Email!),
@@ -843,7 +843,7 @@ public sealed class MyCaseController : BenControllerBase
         };
         db.CaseClientInvites.Add(invite);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseClientInvite), invite.Id, invite, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseClientInvite), invite.Id, invite, userId, AppSources.WebApi));
 
         var emailSent = false;
         if (_emailService.IsConfigured)
@@ -891,7 +891,7 @@ public sealed class MyCaseController : BenControllerBase
         invite.UpdatedByAppUserId = userId;
         invite.DateUpdated = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Ben.Data.Source.Entities.CaseClientInvite), invite.Id, before, invite, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Ben.Data.Source.Entities.CaseClientInvite), invite.Id, before, invite, userId, AppSources.WebApi));
         return NoContent();
     }
 
@@ -936,7 +936,7 @@ public sealed class MyCaseController : BenControllerBase
         caseRow.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
 
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Ben.Data.Source.Entities.Case), caseRow.Id, before, caseRow, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Ben.Data.Source.Entities.Case), caseRow.Id, before, caseRow, userId, AppSources.WebApi));
 
         return Ok(new CaseDisplayAliasRecord(
             caseRow.ClientDisplayAlias,
@@ -1017,7 +1017,7 @@ public sealed class MyCaseController : BenControllerBase
             return Forbid();
         db.CaseRelatedPeople.Add(person);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseRelatedPerson), person.Id, person, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseRelatedPerson), person.Id, person, userId, AppSources.WebApi));
         return Ok(ToRecord(person));
     }
 
@@ -1064,7 +1064,7 @@ public sealed class MyCaseController : BenControllerBase
         person.UpdatedByAppUserId = userId;
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Ben.Data.Source.Entities.CaseRelatedPerson), person.Id, before, person, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Ben.Data.Source.Entities.CaseRelatedPerson), person.Id, before, person, userId, AppSources.WebApi));
         return Ok(ToRecord(person));
     }
 
@@ -1089,7 +1089,7 @@ public sealed class MyCaseController : BenControllerBase
         if (person is null) return NotFound();
         db.CaseRelatedPeople.Remove(person);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(Ben.Data.Source.Entities.CaseRelatedPerson), person.Id, person, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(Ben.Data.Source.Entities.CaseRelatedPerson), person.Id, person, userId, AppSources.WebApi));
         return NoContent();
     }
 

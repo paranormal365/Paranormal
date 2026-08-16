@@ -146,7 +146,7 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
             // filtered index on Pending requests caught what the AnyAsync check above couldn't.
             return Conflict("You already have a pending application for this organization.");
         }
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationMembershipRequest), membershipRequest.Id, membershipRequest, membershipRequest.AppUserId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationMembershipRequest), membershipRequest.Id, membershipRequest, membershipRequest.AppUserId, AppSources.WebApi));
 
         var created = await db.OrganizationMembershipRequests
             .Include(r => r.Organization)
@@ -265,7 +265,7 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         });
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationMembershipRequest), id, before!, membershipRequest, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationMembershipRequest), id, before!, membershipRequest, userId.Value, AppSources.WebApi));
 
         var updated = await db.OrganizationMembershipRequests
             .Include(r => r.Organization)
@@ -306,7 +306,7 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         request.UpdatedByAppUserId = userId.Value;
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationMembershipRequest), id, before!, request, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationMembershipRequest), id, before!, request, userId.Value, AppSources.WebApi));
         return NoContent();
     }
 

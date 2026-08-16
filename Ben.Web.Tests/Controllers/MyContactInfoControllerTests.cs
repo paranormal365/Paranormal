@@ -471,6 +471,6 @@ public class MyContactInfoControllerTests
 
         audit.Verify(a => a.LogCreateAsync(
             nameof(UserEmail), It.IsAny<Guid>(), It.IsAny<object>(), userId,
-            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<string>()), Times.Once);
     }
 }

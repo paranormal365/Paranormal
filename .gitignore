@@ -75,3 +75,7 @@ ProjectNotes/Agent007/
 # installer/macos/build.sh, never committed (100+ MB of binaries; also environment-specific).
 Ben.Video.Sidecar/ffmpeg/
 Ben.Video.Sidecar/installer/dist/
+
+# Log files — never committed. The WebApi's file sink was removed (audit B6); anything left is
+# local noise from a dev run.
+*.log

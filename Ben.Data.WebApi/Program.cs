@@ -12,20 +12,22 @@ var builder = WebApplication.CreateBuilder(args);
 
 /* LOGGING */
 
+// Everything about levels and sinks now comes from configuration — nothing is pinned here.
+//
+// What was here before: a rolling file sink writing into the working tree (`.vscode/webapi-.log`,
+// a repo-relative path that follows the code to wherever it is deployed) and three
+// MinimumLevel.Override calls forcing the auth namespaces to Debug. Because those were code, no
+// environment could turn them down: a measured 394 KB log was 654 lines of EF Core dumping every
+// SQL statement with its parameters, plus ~400 lines of token-handler internals, on a machine
+// nobody was even using. Auth debug output also carries token and claims detail, which is not
+// something to write to disk by default.
+//
+// The Development config still turns those namespaces up — that is where the setting belongs, and
+// where it is switched off by simply running in another environment.
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
-    // Console + rolling file in addition to whatever the JSON config specifies.
-    // Auth/JWT debug messages always go here so failures are always visible.
     .WriteTo.Console(
         outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}{NewLine}  {Message:lj}{NewLine}{Exception}")
-    .WriteTo.File(
-        path: ".vscode/webapi-.log",
-        rollingInterval: RollingInterval.Day,
-        retainedFileCountLimit: 3,
-        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
-    .MinimumLevel.Override("Microsoft.AspNetCore.Authentication", Serilog.Events.LogEventLevel.Debug)
-    .MinimumLevel.Override("Microsoft.AspNetCore.Authorization",  Serilog.Events.LogEventLevel.Debug)
-    .MinimumLevel.Override("Microsoft.IdentityModel",             Serilog.Events.LogEventLevel.Debug)
     .CreateLogger();
 
 builder.Host.UseSerilog();
@@ -99,6 +101,14 @@ builder.Services.AddSwaggerGen(options =>
     });
 
     options.SchemaFilter<CircularReferenceSchemaFilter>();
+
+    // Schema ids come from the full type name, not the short one. Swashbuckle's default is the
+    // short name, so two types that merely share a name in different namespaces collide and it
+    // throws while generating — which took the whole of /swagger/v1/swagger.json to a 500 and left
+    // the API docs page dead. There are exactly such a pair today: CaseReportSummary exists in
+    // both Controllers and Controllers.Entities. Keying on the full name makes that structurally
+    // impossible rather than something the next duplicated record name breaks again.
+    options.CustomSchemaIds(type => type.FullName?.Replace('+', '.'));
 
     // Include XML doc comments from the compiled documentation file
     var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
@@ -180,9 +190,11 @@ builder.Services.AddIdentityApiEndpoints<AppUser>(options =>
 // ── Microsoft Entra JWT bearer (optional — active only when ClientId is configured) ──
 const string EntraScheme = "Entra";
 var entraConfig = builder.Configuration.GetSection("AzureAd");
-bool entraEnabled = !string.IsNullOrWhiteSpace(entraConfig["ClientId"])
-                    && entraConfig["ClientId"] != "YOUR_WEBAPI_CLIENT_ID"
-                    && entraConfig["ClientId"] != "YOUR_WEBAPP_CLIENT_ID";
+// Entra is on only when ClientId is a real registration id. Tested by SHAPE (a GUID) rather than
+// against a list of known placeholder strings: that list silently failed open the moment anyone
+// wrote a placeholder it didn't know about, standing the JWT handler up against an authority that
+// cannot exist.
+bool entraEnabled = Guid.TryParse(entraConfig["ClientId"], out _);
 
 if (entraEnabled)
 {
@@ -308,14 +320,30 @@ app.MapControllers();
 // /login is an unauthenticated password oracle and /register creates accounts.
 app.MapIdentityApi<AppUser>().RequireRateLimiting(RateLimiting.AuthPolicy);
 
-await Ben.Data.WebApi.SeedData.SuperAdminSeeder.SeedAsync(app.Services, app.Configuration);
-await Ben.Data.WebApi.SeedData.OrganizationSeeder.SeedAsync(app.Services, app.Configuration);
-await Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.SeedAsync(app.Services, app.Configuration);
-await Ben.Data.WebApi.SeedData.ExperienceTaxonomySeeder.SeedAsync(app.Services, app.Configuration);
-await Ben.Data.WebApi.SeedData.ContactTypeSeeder.SeedAsync(app.Services, app.Configuration);
-// DevelopmentDataSeeder runs last — depends on all users/orgs above being present.
-// Enable via SeedData:DevData:Enabled = true in appsettings.Development.json.
-await Ben.Data.WebApi.SeedData.DevelopmentDataSeeder.SeedAsync(app.Services, app.Configuration);
+// Startup seeding talks to the database before the host begins listening, so an unreachable
+// database means the process dies rather than starting in a broken state — which is the right
+// behaviour for a real deployment and is left alone.
+//
+// It does make the app unbootable anywhere a database is deliberately absent. CI is the case in
+// hand: it verifies the app can *start* (a class of failure no unit test sees — a malformed
+// logging config once threw here while all 4,137 tests passed), and standing up SQL Server plus
+// 73 migrations to prove that would be a lot of moving parts for the question being asked. So
+// seeding can be switched off, following the flag the dev-data seeder already had.
+if (app.Configuration.GetValue("SeedData:Enabled", true))
+{
+    await Ben.Data.WebApi.SeedData.SuperAdminSeeder.SeedAsync(app.Services, app.Configuration);
+    await Ben.Data.WebApi.SeedData.OrganizationSeeder.SeedAsync(app.Services, app.Configuration);
+    await Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.SeedAsync(app.Services, app.Configuration);
+    await Ben.Data.WebApi.SeedData.ExperienceTaxonomySeeder.SeedAsync(app.Services, app.Configuration);
+    await Ben.Data.WebApi.SeedData.ContactTypeSeeder.SeedAsync(app.Services, app.Configuration);
+    // DevelopmentDataSeeder runs last — depends on all users/orgs above being present.
+    // Enable via SeedData:DevData:Enabled = true in appsettings.Development.json.
+    await Ben.Data.WebApi.SeedData.DevelopmentDataSeeder.SeedAsync(app.Services, app.Configuration);
+}
+else
+{
+    Log.Information("SeedData:Enabled is false — startup seeding skipped");
+}
 
 app.Run();
 

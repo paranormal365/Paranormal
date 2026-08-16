@@ -96,7 +96,7 @@ public sealed class UploadFileShareV2Controller : BenControllerBase
         };
         db.UploadFileShares.Add(share);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.UploadFileShare), share.Id, share, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.UploadFileShare), share.Id, share, userId, AppSources.WebApi));
 
         return CreatedAtAction(nameof(GetShares), new { fileId }, ToRecord(share));
     }
@@ -118,7 +118,7 @@ public sealed class UploadFileShareV2Controller : BenControllerBase
         share.DateUpdated = DateTime.UtcNow;
         share.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(Ben.Data.Source.Entities.UploadFileShare), share.Id, share, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(Ben.Data.Source.Entities.UploadFileShare), share.Id, share, userId, AppSources.WebApi));
         return NoContent();
     }
 

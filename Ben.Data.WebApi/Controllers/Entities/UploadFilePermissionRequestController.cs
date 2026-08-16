@@ -156,7 +156,7 @@ public sealed class UploadFilePermissionRequestController : BenControllerBase
 
         db.UploadFilePermissionRequests.Add(request);
         await db.SaveChangesAsync(cancellationToken);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFilePermissionRequest), request.Id, request, userId, AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFilePermissionRequest), request.Id, request, userId, AppSources.WebApi));
         return CreatedAtAction(nameof(GetForFile), new { fileId }, _mapper.Map<UploadFilePermissionRequestRecord>(request));
     }
 
@@ -190,7 +190,7 @@ public sealed class UploadFilePermissionRequestController : BenControllerBase
         request.DateUpdated = DateTime.UtcNow;
         request.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(cancellationToken);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFilePermissionRequest), requestId, before!, request, userId, AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFilePermissionRequest), requestId, before!, request, userId, AppSources.WebApi));
         return Ok(_mapper.Map<UploadFilePermissionRequestRecord>(request));
     }
 
@@ -210,7 +210,7 @@ public sealed class UploadFilePermissionRequestController : BenControllerBase
         request.DateUpdated = DateTime.UtcNow;
         request.UpdatedByAppUserId = cancelledByAppUserId;
         await db.SaveChangesAsync(cancellationToken);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFilePermissionRequest), requestId, before!, request, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFilePermissionRequest), requestId, before!, request, GetCurrentUserId(), AppSources.WebApi));
         return Ok(_mapper.Map<UploadFilePermissionRequestRecord>(request));
     }
 }

@@ -80,7 +80,7 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : BenControlle
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var id = GetEntityId(entity);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(typeof(TEntity).Name, id, entity, currentUserId, AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(typeof(TEntity).Name, id, entity, currentUserId, AppSources.WebApi));
 
         return CreatedAtAction(nameof(GetById), new { id }, _mapper.Map<TRecord>(entity));
     }
@@ -106,7 +106,7 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : BenControlle
         dbContext.Entry(entity).State = EntityState.Modified;
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(typeof(TEntity).Name, id, before, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(typeof(TEntity).Name, id, before, entity, GetCurrentUserId(), AppSources.WebApi));
 
         return Ok(_mapper.Map<TRecord>(entity));
     }
@@ -121,24 +121,25 @@ public abstract class AdminEntityControllerBase<TEntity, TRecord> : BenControlle
             return NotFound();
         }
 
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(typeof(TEntity).Name, id, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
-
         dbContext.Set<TEntity>().Remove(entity);
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        // Audited after the save, not before: a delete that throws (an FK still referencing the
+        // row, a concurrency failure) used to leave behind an audit row saying it had been
+        // deleted. The snapshot is still accurate here — SaveChanges detaches the entity but
+        // does not clear its scalar values.
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(typeof(TEntity).Name, id, entity, GetCurrentUserId(), AppSources.WebApi));
+
         return NoContent();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Awaits an audit task and silently swallows exceptions so that an audit
-    /// failure never rolls back or masks the main CRUD operation.
-    /// </summary>
-    private new static async Task TryAuditAsync(Task auditTask)
-    {
-        try { await auditTask; }
-        catch { /* audit failure must not surface to the caller */ }
-    }
+    // The silent `private new static TryAuditAsync` that used to live here has been removed. It
+    // shadowed BenControllerBase.TryAuditAsync, so every audit failure across all 27 admin CRUD
+    // controllers was discarded without a trace — and would have kept being discarded after the
+    // base class started logging them, since the shadow won overload resolution here. The base
+    // implementation is the only one now.
 
     private static Guid GetEntityId(TEntity entity)
     {

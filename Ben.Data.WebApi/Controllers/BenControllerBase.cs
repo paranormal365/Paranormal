@@ -48,12 +48,27 @@ public abstract class BenControllerBase : ControllerBase
     }
 
     /// <summary>
-    /// Fires an audit log task and silently swallows any exception so that an
-    /// audit failure never surfaces to the caller.
+    /// Fires an audit log task, absorbing any failure so it never surfaces to the caller — but
+    /// logging it, so a broken audit trail is visible to whoever runs this.
     /// </summary>
-    protected static async Task TryAuditAsync(Task auditTask)
+    /// <remarks>
+    /// The swallow is deliberate: a logging outage must not roll back a CRUD operation that
+    /// already succeeded. Swallowing <em>silently</em> was not deliberate — it meant a systemic
+    /// failure (a bad migration, a full disk, a broken connection string) would produce a
+    /// perfectly quiet application writing no audit rows at all, discoverable only by noticing
+    /// their absence. Same reasoning already applied to upload metadata extraction.
+    /// </remarks>
+    protected async Task TryAuditAsync(Task auditTask)
     {
-        try { await auditTask; }
-        catch { /* audit failure must not surface to the caller */ }
+        try
+        {
+            await auditTask;
+        }
+        catch (Exception ex)
+        {
+            HttpContext?.RequestServices
+                .GetService<ILogger<BenControllerBase>>()?
+                .LogError(ex, "Audit log write failed for {Path}", HttpContext?.Request?.Path.Value);
+        }
     }
 }

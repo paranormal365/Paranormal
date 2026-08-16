@@ -78,7 +78,7 @@ public sealed class CmsSectionController : OrgCmsControllerBase
 
         db.CmsSections.Add(section);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CmsSection), section.Id, section, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(CmsSection), section.Id, section, userId.Value, AppSources.WebApi));
 
         return CreatedAtAction(nameof(GetAll), new { orgId, pageId },
             Mapper.Map<CmsSectionRecord>(section));
@@ -110,7 +110,7 @@ public sealed class CmsSectionController : OrgCmsControllerBase
         section.UpdatedByAppUserId = userId.Value;
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(CmsSection), sectionId, before, section!, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(CmsSection), sectionId, before, section!, userId.Value, AppSources.WebApi));
         return Ok(Mapper.Map<CmsSectionRecord>(section));
     }
 
@@ -138,7 +138,7 @@ public sealed class CmsSectionController : OrgCmsControllerBase
         }
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync("CmsSectionReorder", pageId, new { }, request, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync("CmsSectionReorder", pageId, new { }, request, userId.Value, AppSources.WebApi));
         return NoContent();
     }
 
@@ -160,7 +160,7 @@ public sealed class CmsSectionController : OrgCmsControllerBase
 
         db.CmsSections.Remove(section);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(CmsSection), sectionId, section, userId.Value, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(CmsSection), sectionId, section, userId.Value, AppSources.WebApi));
         return NoContent();
     }
 }

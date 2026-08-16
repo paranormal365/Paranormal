@@ -116,7 +116,7 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         user.DateUpdated          = request.DateUpdated;
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(AppUser), id, before, user, GetCurrentUserId(), AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(AppUser), id, before, user, GetCurrentUserId(), AppSources.WebApi));
         return Ok(_mapper.Map<AppUserAdminRecord>(user));
     }
 }

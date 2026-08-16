@@ -71,9 +71,9 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper, 
         await db.SaveChangesAsync();
 
         if (existingBefore is null)
-            _ = TryAuditAsync(auditLog.LogCreateAsync(nameof(UploadFileAudioConfig), existing.Id, existing, userId, AppSources.WebApi, CancellationToken.None));
+            _ = TryAuditAsync(auditLog.LogCreateAsync(nameof(UploadFileAudioConfig), existing.Id, existing, userId, AppSources.WebApi));
         else
-            _ = TryAuditAsync(auditLog.LogUpdateAsync(nameof(UploadFileAudioConfig), existing.Id, existingBefore, existing, userId, AppSources.WebApi, CancellationToken.None));
+            _ = TryAuditAsync(auditLog.LogUpdateAsync(nameof(UploadFileAudioConfig), existing.Id, existingBefore, existing, userId, AppSources.WebApi));
 
         return Ok(mapper.Map<UploadFileAudioConfigRecord>(existing));
     }
@@ -95,7 +95,7 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper, 
 
         db.UploadFileAudioConfigs.Remove(entity);
         await db.SaveChangesAsync();
-        _ = TryAuditAsync(auditLog.LogDeleteAsync(nameof(UploadFileAudioConfig), entity.Id, entity, userId, AppSources.WebApi, CancellationToken.None));
+        _ = TryAuditAsync(auditLog.LogDeleteAsync(nameof(UploadFileAudioConfig), entity.Id, entity, userId, AppSources.WebApi));
 
         return NoContent();
     }

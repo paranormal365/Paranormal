@@ -119,7 +119,7 @@ public sealed class MyProfileController : BenControllerBase
         await db.SaveChangesAsync(ct);
 
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(
-            nameof(AppUser), user.Id, before, user, userId, AppSources.WebApi, ct));
+            nameof(AppUser), user.Id, before, user, userId, AppSources.WebApi));
 
         return await GetProfile(ct);
     }
@@ -229,7 +229,7 @@ public sealed class MyProfileController : BenControllerBase
         if (tx is not null) await tx.CommitAsync(ct);
 
         _ = TryAuditAsync(_auditLog.LogCreateAsync(
-            nameof(AppUserPhoto), photo.Id, photo, userId, AppSources.WebApi, ct));
+            nameof(AppUserPhoto), photo.Id, photo, userId, AppSources.WebApi));
 
         return Ok(_mapper.Map<AppUserPhotoRecord>(photo));
     }
@@ -253,7 +253,7 @@ public sealed class MyProfileController : BenControllerBase
         await db.SaveChangesAsync(ct);
 
         _ = TryAuditAsync(_auditLog.LogDeleteAsync(
-            nameof(AppUserPhoto), photoId, photo, userId, AppSources.WebApi, ct));
+            nameof(AppUserPhoto), photoId, photo, userId, AppSources.WebApi));
 
         return NoContent();
     }

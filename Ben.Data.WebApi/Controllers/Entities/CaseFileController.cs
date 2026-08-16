@@ -156,7 +156,7 @@ public sealed class CaseFileController : BenControllerBase
         db.CaseFiles.Add(caseFile);
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), copy.Id, copy, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), copy.Id, copy, userId, AppSources.WebApi));
         caseFile.UploadFile = copy;
         return Ok(ToRecord(caseFile));
     }

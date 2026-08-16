@@ -233,7 +233,7 @@ public sealed class UploadFileController : BenControllerBase
 
         db.UploadFiles.Add(entity);
         await db.SaveChangesAsync(cancellationToken);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), entity.Id, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), entity.Id, entity, GetCurrentUserId(), AppSources.WebApi));
 
         // Extract and persist metadata — fire-and-forget so upload latency is unaffected.
         // Reads the file back off storage rather than capturing its bytes: holding the upload in
@@ -289,7 +289,7 @@ public sealed class UploadFileController : BenControllerBase
         entity.UpdatedByAppUserId = userId;
 
         await db.SaveChangesAsync(cancellationToken);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFile), id, before, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFile), id, before, entity, GetCurrentUserId(), AppSources.WebApi));
         return Ok(_mapper.Map<UploadFileRecord>(entity));
     }
 
@@ -302,7 +302,7 @@ public sealed class UploadFileController : BenControllerBase
 
         db.UploadFiles.Remove(entity);
         await db.SaveChangesAsync(cancellationToken);
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFile), id, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFile), id, entity, GetCurrentUserId(), AppSources.WebApi));
 
         // Delete from disk after the DB record is gone
         if (!string.IsNullOrEmpty(entity.StoragePath))
@@ -494,7 +494,7 @@ public sealed class UploadFileController : BenControllerBase
         }
 
         await db.SaveChangesAsync(cancellationToken);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFile), id, before, entity, userId, AppSources.WebApi, cancellationToken));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFile), id, before, entity, userId, AppSources.WebApi));
 
         // Refresh extracted metadata for the source and every updated copy — UploadFileMetadata is
         // 1-to-1 with UploadFile and is normally only ever inserted once at upload time, so a

@@ -30,6 +30,24 @@ public sealed class FileMigrationService : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        // A hosted service that throws from StartAsync takes the whole host down with it, and this
+        // one reaches for the database before the app is listening. That made a migration which is
+        // explicitly best-effort — idempotent, per-file failures already tolerated, retried on the
+        // next startup — able to stop the API serving anything at all, including over a transient
+        // blip at boot. Logged and skipped instead; the work simply happens next time.
+        try
+        {
+            await MigrateAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "FileMigrationService: migration could not run this startup — it will be retried on the next one.");
+        }
+    }
+
+    private async Task MigrateAsync(CancellationToken cancellationToken)
+    {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<BenDataContext>>();
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);

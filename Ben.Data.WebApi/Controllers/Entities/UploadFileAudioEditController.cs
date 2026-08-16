@@ -134,7 +134,7 @@ public sealed class UploadFileAudioEditController : BenControllerBase
 
         db.UploadFiles.Add(entity);
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), entity.Id, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), entity.Id, entity, userId, AppSources.WebApi));
 
         return CreatedAtAction("GetById", "UploadFile", new { id = entity.Id },
             _mapper.Map<UploadFileRecord>(entity));

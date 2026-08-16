@@ -98,7 +98,7 @@ public sealed class MyContactInfoController : BenControllerBase
         db.UserEmails.Add(entity);
         await db.SaveChangesAsync(ct);
 
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UserEmail), entity.Id, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UserEmail), entity.Id, entity, userId, AppSources.WebApi));
 
         return Ok(ToRecord(entity));
     }
@@ -154,7 +154,7 @@ public sealed class MyContactInfoController : BenControllerBase
 
         await db.SaveChangesAsync(ct);
 
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UserEmail), entity.Id, before, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UserEmail), entity.Id, before, entity, userId, AppSources.WebApi));
 
         return Ok(ToRecord(entity));
     }
@@ -171,7 +171,7 @@ public sealed class MyContactInfoController : BenControllerBase
         db.UserEmails.Remove(entity);
         await db.SaveChangesAsync(ct);
 
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UserEmail), id, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UserEmail), id, entity, userId, AppSources.WebApi));
 
         return NoContent();
     }
@@ -226,7 +226,7 @@ public sealed class MyContactInfoController : BenControllerBase
             catch { /* best-effort — the link below still works */ }
         }
 
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UserEmail), entity.Id, before, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UserEmail), entity.Id, before, entity, userId, AppSources.WebApi));
 
         return Ok(new SendValidationResponse(link, emailSent));
     }
@@ -283,7 +283,7 @@ public sealed class MyContactInfoController : BenControllerBase
         db.UserPhones.Add(entity);
         await db.SaveChangesAsync(ct);
 
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UserPhone), entity.Id, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UserPhone), entity.Id, entity, userId, AppSources.WebApi));
 
         return Ok(ToRecord(entity));
     }
@@ -317,7 +317,7 @@ public sealed class MyContactInfoController : BenControllerBase
 
         await db.SaveChangesAsync(ct);
 
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UserPhone), entity.Id, before, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UserPhone), entity.Id, before, entity, userId, AppSources.WebApi));
 
         return Ok(ToRecord(entity));
     }
@@ -334,7 +334,7 @@ public sealed class MyContactInfoController : BenControllerBase
         db.UserPhones.Remove(entity);
         await db.SaveChangesAsync(ct);
 
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UserPhone), id, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UserPhone), id, entity, userId, AppSources.WebApi));
 
         return NoContent();
     }
@@ -391,7 +391,7 @@ public sealed class MyContactInfoController : BenControllerBase
         db.UserAddresses.Add(entity);
         await db.SaveChangesAsync(ct);
 
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UserAddress), entity.Id, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UserAddress), entity.Id, entity, userId, AppSources.WebApi));
 
         return Ok(ToRecord(entity));
     }
@@ -430,7 +430,7 @@ public sealed class MyContactInfoController : BenControllerBase
 
         await db.SaveChangesAsync(ct);
 
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UserAddress), entity.Id, before, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UserAddress), entity.Id, before, entity, userId, AppSources.WebApi));
 
         return Ok(ToRecord(entity));
     }
@@ -447,7 +447,7 @@ public sealed class MyContactInfoController : BenControllerBase
         db.UserAddresses.Remove(entity);
         await db.SaveChangesAsync(ct);
 
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UserAddress), id, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UserAddress), id, entity, userId, AppSources.WebApi));
 
         return NoContent();
     }
@@ -501,7 +501,7 @@ public sealed class MyContactInfoController : BenControllerBase
         db.UserLinks.Add(entity);
         await db.SaveChangesAsync(ct);
 
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UserLink), entity.Id, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UserLink), entity.Id, entity, userId, AppSources.WebApi));
 
         return Ok(ToRecord(entity));
     }
@@ -536,7 +536,7 @@ public sealed class MyContactInfoController : BenControllerBase
 
         await db.SaveChangesAsync(ct);
 
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UserLink), entity.Id, before, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UserLink), entity.Id, before, entity, userId, AppSources.WebApi));
 
         return Ok(ToRecord(entity));
     }
@@ -553,7 +553,7 @@ public sealed class MyContactInfoController : BenControllerBase
         db.UserLinks.Remove(entity);
         await db.SaveChangesAsync(ct);
 
-        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UserLink), id, entity, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UserLink), id, entity, userId, AppSources.WebApi));
 
         return NoContent();
     }

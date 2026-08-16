@@ -81,7 +81,7 @@ public sealed class PublicEmailValidationController : BenControllerBase
         await db.SaveChangesAsync(ct);
 
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(
-            nameof(UserEmail), row.Id, before, row, row.AppUserId, AppSources.WebApi, ct));
+            nameof(UserEmail), row.Id, before, row, row.AppUserId, AppSources.WebApi));
 
         return NoContent();
     }

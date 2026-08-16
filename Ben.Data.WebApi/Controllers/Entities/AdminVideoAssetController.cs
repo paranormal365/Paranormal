@@ -98,7 +98,7 @@ public sealed class AdminVideoAssetController : BenControllerBase
         await db.SaveChangesAsync(ct);
 
         _ = TryAuditAsync(_auditLog.LogCreateAsync(
-            nameof(VideoAsset), asset.Id, asset, userId, AppSources.WebApi, ct));
+            nameof(VideoAsset), asset.Id, asset, userId, AppSources.WebApi));
 
         return Ok(ToRecord(asset));
     }
@@ -133,7 +133,7 @@ public sealed class AdminVideoAssetController : BenControllerBase
 
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(
-            nameof(VideoAsset), asset.Id, before, ToRecord(asset), userId, AppSources.WebApi, ct));
+            nameof(VideoAsset), asset.Id, before, ToRecord(asset), userId, AppSources.WebApi));
 
         return Ok(ToRecord(asset));
     }
@@ -160,7 +160,7 @@ public sealed class AdminVideoAssetController : BenControllerBase
         await db.SaveChangesAsync(ct);
 
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(
-            nameof(VideoAsset), asset.Id, before, ToRecord(asset), userId, AppSources.WebApi, ct));
+            nameof(VideoAsset), asset.Id, before, ToRecord(asset), userId, AppSources.WebApi));
         return NoContent();
     }
 

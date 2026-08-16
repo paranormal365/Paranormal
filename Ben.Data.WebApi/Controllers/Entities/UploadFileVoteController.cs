@@ -79,7 +79,7 @@ public sealed class UploadFileVoteController : BenControllerBase
             existing.Score       = request.Score;
             existing.DateUpdated = DateTime.UtcNow;
             await db.SaveChangesAsync(ct);
-            _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileVote), existing.Id, voteBefore!, existing, userId, AppSources.WebApi, ct));
+            _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileVote), existing.Id, voteBefore!, existing, userId, AppSources.WebApi));
             return Ok(_mapper.Map<UploadFileVoteRecord>(existing));
         }
 
@@ -110,10 +110,10 @@ public sealed class UploadFileVoteController : BenControllerBase
             winner.Score       = request.Score;
             winner.DateUpdated = DateTime.UtcNow;
             await db.SaveChangesAsync(ct);
-            _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileVote), winner.Id, winner, winner, userId, AppSources.WebApi, ct));
+            _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFileVote), winner.Id, winner, winner, userId, AppSources.WebApi));
             return Ok(_mapper.Map<UploadFileVoteRecord>(winner));
         }
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileVote), vote.Id, vote, userId, AppSources.WebApi, ct));
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFileVote), vote.Id, vote, userId, AppSources.WebApi));
 
         return CreatedAtAction(nameof(GetSummary), new { fileId },
             _mapper.Map<UploadFileVoteRecord>(vote));
@@ -135,7 +135,7 @@ public sealed class UploadFileVoteController : BenControllerBase
         {
             db.UploadFileVotes.Remove(vote);
             await db.SaveChangesAsync(ct);
-            _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFileVote), vote.Id, vote, userId, AppSources.WebApi, ct));
+            _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(UploadFileVote), vote.Id, vote, userId, AppSources.WebApi));
         }
 
         return NoContent();
