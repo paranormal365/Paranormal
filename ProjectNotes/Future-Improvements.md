@@ -3445,14 +3445,6 @@ Left for later: findings do not feed the case timeline, and there is no way to a
 
 ### 82b. The roster is only on case-bound investigations ✅ fixed 2026-08-15
 
-`InvestigationRoster` — the team list, **I've arrived**, the attendance override, and now the Lead
-column — is mounted in exactly one place: `InvestigationPanel.razor`, on a case's Investigations
-tab. A case-less visit, which is the whole point of P2 and P4, **has no roster UI at all**. Nobody
-can check in to a landmark visit, and nobody can record who turned up.
-
-The endpoints are all case-agnostic already (`api/organizations/{orgId}/investigations/{id}/…`), so
-this was a mounting problem, not a backend one.
-
 **Fixed** by putting the roster where the visits already are: every row of the group's
 Investigations grid has a **Team** button that expands the roster inline, gated on the same
 `CanEditRecord` verdict the Edit button uses. One row open at a time, because each roster runs its
@@ -3460,3 +3452,26 @@ own poll timer. No new page and no detail view — the grid was already the plac
 lives.
 
 Live-verified on "Cave return visit", a visit with no case: the team panel opens under the row.
+
+---
+
+## 83. Explain and list available permissions to assign to roles individually in an organization (not started, requested 2026-08-16)
+
+Ben, raised mid-planning-session for item #55: *"Explain and list available permissions to assign
+to roles individually in an organization — each one has their own."*
+
+Today `OrgRoleEditor.razor`'s Permissions section renders one create/read/update/delete toggle row
+per `PermissionSection` (a hardcoded `DisplayName` + `OrganizationSecurityTable` pair), and the
+`DisplayName` is the only explanation a role-builder gets — "Files", "Membership Applications",
+"Investigations." What each toggle actually *grants* only exists as an XML doc comment on the
+corresponding `OrganizationSecurityTable` enum value, invisible from the UI.
+
+The ask: surface that explanation in the role editor itself, so assigning permissions to a role
+doesn't require reading the source to know what "Investigations: Update" actually lets someone do.
+
+> Not scoped. Likely shape: a short description string per `PermissionSection` (sourced from — or
+> kept in sync with — each enum value's existing XML doc comment) rendered as help text/tooltip next
+> to its row, possibly with the C/R/U/D columns themselves individually explained where a table's
+> actions aren't uniform CRUD. Touches the same `Sections` list in `OrgRoleEditor.razor` that item
+> #55 (equipment) is about to add two rows to — do this one either just before or just after #55
+> Phase 3, while that file is already open, rather than as a separate later pass.
