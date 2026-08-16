@@ -13,7 +13,22 @@ namespace Ben.Data.WebApi.Services;
 /// </summary>
 public sealed class FileMetadataExtractorService
 {
+    /// <summary>
+    /// Extracts metadata from bytes already held in memory. Prefer the
+    /// <see cref="Extract(Guid, string, Stream)"/> overload for uploaded files — it reads the
+    /// stored file instead of requiring the whole thing to be resident.
+    /// </summary>
     public UploadFileMetadata Extract(Guid uploadFileId, string contentType, byte[] fileBytes)
+    {
+        using var stream = new MemoryStream(fileBytes, writable: false);
+        return Extract(uploadFileId, contentType, stream);
+    }
+
+    /// <summary>
+    /// Extracts metadata by reading <paramref name="content"/>. The stream must be seekable —
+    /// the audio path may rewind and re-read when the first decoder does not recognise the format.
+    /// </summary>
+    public UploadFileMetadata Extract(Guid uploadFileId, string contentType, Stream content)
     {
         var meta = new UploadFileMetadata
         {
@@ -27,17 +42,17 @@ public sealed class FileMetadataExtractorService
             if (contentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
             {
                 meta.MediaKind = "Audio";
-                ExtractAudio(meta, contentType, fileBytes);
+                ExtractAudio(meta, contentType, content);
             }
             else if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
             {
                 meta.MediaKind = "Image";
-                ExtractExifBased(meta, fileBytes);
+                ExtractExifBased(meta, content);
             }
             else if (contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
             {
                 meta.MediaKind = "Video";
-                ExtractExifBased(meta, fileBytes); // MOV/MP4 from phones embed QuickTime atoms with GPS + duration
+                ExtractExifBased(meta, content); // MOV/MP4 from phones embed QuickTime atoms with GPS + duration
             }
         }
         catch
@@ -48,16 +63,27 @@ public sealed class FileMetadataExtractorService
         return meta;
     }
 
+    /// <summary>
+    /// Rewinds a seekable stream so the next reader starts at the beginning. Extraction attempts
+    /// are sequential fallbacks over the same content, so each one needs its own fresh start.
+    /// </summary>
+    private static void Rewind(Stream content)
+    {
+        if (content.CanSeek) content.Position = 0;
+    }
+
     // ── Audio: WAV / MP3 via NAudio; other formats via MetadataExtractor ──────
 
-    private static void ExtractAudio(UploadFileMetadata meta, string contentType, byte[] fileBytes)
+    private static void ExtractAudio(UploadFileMetadata meta, string contentType, Stream content)
     {
         var isMp3 = contentType.Contains("mpeg", StringComparison.OrdinalIgnoreCase)
                  || contentType.Contains("mp3",  StringComparison.OrdinalIgnoreCase);
         try
         {
-            using var ms = new MemoryStream(fileBytes);
-            WaveStream reader = isMp3 ? new Mp3FileReader(ms) : new WaveFileReader(ms);
+            Rewind(content);
+            // NAudio's stream constructors leave ownership with the caller, so disposing the reader
+            // below does not close `content` — which matters, because the fallback re-reads it.
+            WaveStream reader = isMp3 ? new Mp3FileReader(content) : new WaveFileReader(content);
             using (reader)
             {
                 meta.DurationSeconds = reader.TotalTime.TotalSeconds;
@@ -71,18 +97,18 @@ public sealed class FileMetadataExtractorService
         catch { /* fall through for OGG, FLAC, AAC, M4A, OPUS */ }
 
         // Try MetadataExtractor for other audio formats (tags only, no duration guarantee)
-        TryBuildRawJson(meta, fileBytes);
+        TryBuildRawJson(meta, content);
     }
 
     // ── Images + Phone/Security-camera Video (QuickTime / MP4 containers) ─────
 
-    private static void ExtractExifBased(UploadFileMetadata meta, byte[] fileBytes)
+    private static void ExtractExifBased(UploadFileMetadata meta, Stream content)
     {
         IReadOnlyList<MetadataExtractor.Directory> dirs;
         try
         {
-            using var ms = new MemoryStream(fileBytes);
-            dirs = ImageMetadataReader.ReadMetadata(ms);
+            Rewind(content);
+            dirs = ImageMetadataReader.ReadMetadata(content);
         }
         catch { return; }
 
@@ -193,12 +219,12 @@ public sealed class FileMetadataExtractorService
         catch { /* malformed — skip */ }
     }
 
-    private static void TryBuildRawJson(UploadFileMetadata meta, byte[] fileBytes)
+    private static void TryBuildRawJson(UploadFileMetadata meta, Stream content)
     {
         try
         {
-            using var ms = new MemoryStream(fileBytes);
-            BuildRawJson(meta, ImageMetadataReader.ReadMetadata(ms));
+            Rewind(content);
+            BuildRawJson(meta, ImageMetadataReader.ReadMetadata(content));
         }
         catch { }
     }

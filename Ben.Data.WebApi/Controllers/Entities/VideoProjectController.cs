@@ -2,6 +2,7 @@ using AutoMapper;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.SeedData;
+using Ben.Data.WebApi.Services;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -150,16 +151,12 @@ public sealed class VideoProjectController : BenControllerBase
             .FirstOrDefaultAsync(p => p.Id == id && p.CreatedByAppUserId == userId, ct);
         if (project is null) return NotFound();
 
-        using var ms = new MemoryStream();
-        await file.CopyToAsync(ms, ct);
-        var bytes        = ms.ToArray();
         var storedName   = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
         var storagePath  = project.CaseId.HasValue
             ? _fileStorage.CaseFilePath(project.CaseId.Value, storedName)
             : _fileStorage.UserFilePath(userId, storedName);
 
-        using (var writeStream = new MemoryStream(bytes))
-            await _fileStorage.WriteAsync(storagePath, writeStream, ct);
+        await _fileStorage.WriteFormFileAsync(storagePath, file, ct);
 
         var upload = new UploadFile
         {
@@ -170,7 +167,7 @@ public sealed class VideoProjectController : BenControllerBase
             StoredFileName     = storedName,
             StoragePath        = storagePath,
             ContentType        = file.ContentType,
-            FileSize           = bytes.Length,
+            FileSize           = file.Length,
             IsPublic           = false,
             SortOrder          = 0,
             DateCreated        = DateTime.UtcNow,

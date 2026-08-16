@@ -2,6 +2,7 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
+using Ben.Data.WebApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -72,21 +73,16 @@ public sealed class CaseResearchController : BenControllerBase
         if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
-        using var ms = new MemoryStream();
-        await file.CopyToAsync(ms, ct);
-        var fileBytes = ms.ToArray();
-
         var storedName  = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
         var storagePath = _fileStorage.CaseFilePath(caseId, $"research/{storedName}");
-        using (var ws = new MemoryStream(fileBytes))
-            await _fileStorage.WriteAsync(storagePath, ws, ct);
+        await _fileStorage.WriteFormFileAsync(storagePath, file, ct);
 
         var evidenceTypeId = new Guid("20000000-0000-0000-0000-000000000001"); // Case Evidence upload type
         var uploadFile = new UploadFile
         {
             Id = Guid.NewGuid(), UploadFileTypeId = evidenceTypeId, AppUserId = userId,
             FileName = file.FileName, StoredFileName = storedName,
-            ContentType = file.ContentType, FileSize = fileBytes.Length,
+            ContentType = file.ContentType, FileSize = file.Length,
             StoragePath = storagePath, IsPublic = false,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         };

@@ -176,21 +176,24 @@ public sealed class UploadFileController : BenControllerBase
                 return BadRequest($"File extension '{ext}' is not permitted for file type '{fileType.Name}'.");
         }
 
-        using var ms = new MemoryStream();
-        await file.CopyToAsync(ms, cancellationToken);
-        var fileBytes    = ms.ToArray();
         var contentType  = file.ContentType;
         var isSvg        = contentType.Contains("svg", StringComparison.OrdinalIgnoreCase)
                         || Path.GetExtension(file.FileName).Equals(".svg", StringComparison.OrdinalIgnoreCase);
 
+        // Only SVGs are read into memory: sanitising one means parsing and rewriting the whole
+        // document, so there is nothing to stream. They are text and small. Everything else goes
+        // straight from the request to storage — see FormFileStorageExtensions for why.
+        byte[]? sanitizedSvg = null;
         if (isSvg)
         {
             // Normalise content type — some browsers omit or mis-report SVG MIME
             contentType = "image/svg+xml";
 
+            using var svgBuffer = new MemoryStream();
+            await file.CopyToAsync(svgBuffer, cancellationToken);
             try
             {
-                fileBytes = SvgSanitizer.Sanitize(fileBytes);
+                sanitizedSvg = SvgSanitizer.Sanitize(svgBuffer.ToArray());
             }
             catch (InvalidOperationException ex)
             {
@@ -206,7 +209,9 @@ public sealed class UploadFileController : BenControllerBase
             FileName = file.FileName,
             StoredFileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}",
             ContentType = contentType,
-            FileSize = fileBytes.Length,
+            // Sanitising rewrites the document, so the stored size is the sanitised length rather
+            // than what the client sent.
+            FileSize = sanitizedSvg?.Length ?? file.Length,
             FileData = null,   // not stored in DB — written to disk below
             Description = description,
             IsPublic = isPublic,
@@ -220,20 +225,27 @@ public sealed class UploadFileController : BenControllerBase
 
         // Write to disk first; if this throws the DB record is never committed
         var relativePath = _fileStorage.UserFilePath(ownerId, entity.StoredFileName);
-        using (var writeStream = new MemoryStream(fileBytes))
-            await _fileStorage.WriteAsync(relativePath, writeStream, cancellationToken);
+        if (sanitizedSvg is not null)
+            await _fileStorage.WriteBytesAsync(relativePath, sanitizedSvg, cancellationToken);
+        else
+            await _fileStorage.WriteFormFileAsync(relativePath, file, cancellationToken);
         entity.StoragePath = relativePath;
 
         db.UploadFiles.Add(entity);
         await db.SaveChangesAsync(cancellationToken);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), entity.Id, entity, GetCurrentUserId(), AppSources.WebApi, cancellationToken));
 
-        // Extract and persist metadata — fire-and-forget so upload latency is unaffected
+        // Extract and persist metadata — fire-and-forget so upload latency is unaffected.
+        // Reads the file back off storage rather than capturing its bytes: holding the upload in
+        // memory until this finishes would reintroduce exactly the cost streaming just removed.
+        var metadataFileId = entity.Id;
+        var metadataPath   = relativePath;
         _ = Task.Run(async () =>
         {
             try
             {
-                var meta = _metadataExtractor.Extract(entity.Id, contentType, fileBytes);
+                await using var stored = await _fileStorage.OpenReadAsync(metadataPath, CancellationToken.None);
+                var meta = _metadataExtractor.Extract(metadataFileId, contentType, stored);
                 await using var dbMeta = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
                 dbMeta.UploadFileMetadata.Add(meta);
                 await dbMeta.SaveChangesAsync(CancellationToken.None);
@@ -243,7 +255,7 @@ public sealed class UploadFileController : BenControllerBase
                 // Extraction is best-effort — never surface this to the caller — but a silent
                 // failure here previously meant a systemic breakage (e.g. a bad extractor
                 // dependency) was invisible until someone noticed missing metadata.
-                _logger.LogWarning(ex, "Metadata extraction failed for upload file {UploadFileId}", entity.Id);
+                _logger.LogWarning(ex, "Metadata extraction failed for upload file {UploadFileId}", metadataFileId);
             }
         });
 
@@ -343,14 +355,10 @@ public sealed class UploadFileController : BenControllerBase
             .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
         if (parent is null) return NotFound();
 
-        using var ms = new MemoryStream();
-        await file.CopyToAsync(ms, cancellationToken);
-        var bytes       = ms.ToArray();
         var storedName  = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
         var storagePath = _fileStorage.UserFilePath(userId, storedName);
 
-        using (var writeStream = new MemoryStream(bytes))
-            await _fileStorage.WriteAsync(storagePath, writeStream, cancellationToken);
+        await _fileStorage.WriteFormFileAsync(storagePath, file, cancellationToken);
 
         var entity = new UploadFile
         {
@@ -361,7 +369,7 @@ public sealed class UploadFileController : BenControllerBase
             StoredFileName     = storedName,
             StoragePath        = storagePath,
             ContentType        = file.ContentType,
-            FileSize           = bytes.Length,
+            FileSize           = file.Length,
             IsPublic           = false,
             IsEditedVersion    = true,
             ParentFileId       = id,
@@ -416,18 +424,21 @@ public sealed class UploadFileController : BenControllerBase
                 return BadRequest($"File extension '{newExt}' is not permitted for file type '{fileType.Name}'.");
         }
 
-        using var ms = new MemoryStream();
-        await file.CopyToAsync(ms, cancellationToken);
-        var fileBytes   = ms.ToArray();
         var contentType = file.ContentType;
         var isSvg = contentType.Contains("svg", StringComparison.OrdinalIgnoreCase)
                  || newExt.Equals(".svg", StringComparison.OrdinalIgnoreCase);
+
+        // As in Upload: only SVG has to be resident, because sanitising rewrites the document.
+        byte[]? sanitizedSvg = null;
         if (isSvg)
         {
             contentType = "image/svg+xml";
-            try { fileBytes = SvgSanitizer.Sanitize(fileBytes); }
+            using var svgBuffer = new MemoryStream();
+            await file.CopyToAsync(svgBuffer, cancellationToken);
+            try { sanitizedSvg = SvgSanitizer.Sanitize(svgBuffer.ToArray()); }
             catch (InvalidOperationException ex) { return BadRequest($"SVG rejected: {ex.Message}"); }
         }
+        var newFileSize = sanitizedSvg?.Length ?? file.Length;
 
         var entity = await db.UploadFiles.FirstAsync(f => f.Id == id, cancellationToken);
 
@@ -448,14 +459,16 @@ public sealed class UploadFileController : BenControllerBase
         // Rewrite the source in place at a fresh path — the old path now belongs to the archive row above.
         var newStoredName  = $"{Guid.NewGuid()}{newExt}";
         var newStoragePath = _fileStorage.UserFilePath(entity.AppUserId, newStoredName);
-        using (var writeStream = new MemoryStream(fileBytes))
-            await _fileStorage.WriteAsync(newStoragePath, writeStream, cancellationToken);
+        if (sanitizedSvg is not null)
+            await _fileStorage.WriteBytesAsync(newStoragePath, sanitizedSvg, cancellationToken);
+        else
+            await _fileStorage.WriteFormFileAsync(newStoragePath, file, cancellationToken);
 
         entity.StoredFileName = newStoredName;
         entity.StoragePath    = newStoragePath;
         entity.FileName       = file.FileName;
         entity.ContentType    = contentType;
-        entity.FileSize       = fileBytes.Length;
+        entity.FileSize       = newFileSize;
         entity.DateUpdated    = DateTime.UtcNow;
         entity.UpdatedByAppUserId = userId;
 
@@ -468,11 +481,14 @@ public sealed class UploadFileController : BenControllerBase
         foreach (var copy in copies)
         {
             if (string.IsNullOrEmpty(copy.StoragePath)) continue; // legacy FileData-blob row — nothing on disk to overwrite
-            using var copyStream = new MemoryStream(fileBytes);
-            await _fileStorage.WriteAsync(copy.StoragePath, copyStream, cancellationToken);
+            // Re-read the source we just wrote rather than the request: the request body has
+            // already been consumed by the write above, and keeping the bytes around to fan out
+            // here is the memory cost this whole change removes.
+            await using var source = await _fileStorage.OpenReadAsync(newStoragePath, cancellationToken);
+            await _fileStorage.WriteAsync(copy.StoragePath, source, cancellationToken);
             copy.FileName    = file.FileName;
             copy.ContentType = contentType;
-            copy.FileSize    = fileBytes.Length;
+            copy.FileSize    = newFileSize;
             copy.DateUpdated = DateTime.UtcNow;
             copy.UpdatedByAppUserId = userId;
         }
@@ -496,8 +512,11 @@ public sealed class UploadFileController : BenControllerBase
                     .Where(m => idsToRefresh.Contains(m.UploadFileId))
                     .ToListAsync(CancellationToken.None);
                 dbMeta.UploadFileMetadata.RemoveRange(stale);
+                // Every id describes the same bytes, so one handle on the stored file serves them
+                // all — Extract rewinds before each read.
+                await using var stored = await _fileStorage.OpenReadAsync(newStoragePath, CancellationToken.None);
                 foreach (var refreshId in idsToRefresh)
-                    dbMeta.UploadFileMetadata.Add(_metadataExtractor.Extract(refreshId, contentType, fileBytes));
+                    dbMeta.UploadFileMetadata.Add(_metadataExtractor.Extract(refreshId, contentType, stored));
                 await dbMeta.SaveChangesAsync(CancellationToken.None);
             }
             catch (Exception ex)

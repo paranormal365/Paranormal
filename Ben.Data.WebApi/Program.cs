@@ -1,4 +1,5 @@
 using AutoMapper;
+using Ben.Data.WebApi.Services;
 using Ben.Service.Mappings;
 using Serilog;
 using Swashbuckle.AspNetCore.SwaggerGen;
@@ -33,6 +34,7 @@ builder.Host.UseSerilog();
 
 builder.Services.AddControllers();
 builder.Services.AddMemoryCache();
+builder.Services.AddBenRateLimiting(builder.Configuration);
 
 builder.Services.AddCors(options =>
 {
@@ -130,6 +132,12 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);
 builder.Services.AddTransient<Microsoft.AspNetCore.Authentication.IClaimsTransformation, Ben.Data.WebApi.Services.EntraClaimsTransformation>();
 
+// Sends Identity's confirmation / password-reset mail. Registered before AddIdentityApiEndpoints
+// so it wins over the framework's silent no-op sender — which, with RequireConfirmedAccount below,
+// would otherwise mean every new account is created and then locked out with no error anywhere.
+builder.Services.AddTransient<Microsoft.AspNetCore.Identity.IEmailSender<AppUser>,
+    Ben.Data.WebApi.Services.IdentityEmailSender>();
+
 builder.Services.AddIdentityApiEndpoints<AppUser>(options =>
        {
            options.Password.RequireDigit           = true;
@@ -138,6 +146,11 @@ builder.Services.AddIdentityApiEndpoints<AppUser>(options =>
            options.Password.RequireUppercase       = true;
            options.Password.RequireLowercase       = true;
            options.User.RequireUniqueEmail         = true;
+           // /register is anonymous, so without this anyone can mint a working account at an
+           // address they do not own — including someone else's. Confirmation gates sign-in only;
+           // Entra sign-up and invite acceptance create their users through their own paths and
+           // are unaffected.
+           options.SignIn.RequireConfirmedAccount  = true;
        })
        .AddRoles<IdentityRole<Guid>>()
        .AddEntityFrameworkStores<BenDataContext>()
@@ -258,9 +271,14 @@ if (!app.Environment.IsDevelopment())
 app.UseCors("WebAppPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
+// After authentication, so the limiter can partition signed-in callers by user id rather than
+// lumping everyone behind a shared address together.
+app.UseRateLimiter();
 app.MapControllers();
 
-app.MapIdentityApi<AppUser>();
+// Identity's endpoints are mapped by the framework, so the throttle goes on the whole group:
+// /login is an unauthenticated password oracle and /register creates accounts.
+app.MapIdentityApi<AppUser>().RequireRateLimiting(RateLimiting.AuthPolicy);
 
 await Ben.Data.WebApi.SeedData.SuperAdminSeeder.SeedAsync(app.Services, app.Configuration);
 await Ben.Data.WebApi.SeedData.OrganizationSeeder.SeedAsync(app.Services, app.Configuration);
