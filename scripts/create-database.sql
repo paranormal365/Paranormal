@@ -8194,3 +8194,72 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260816215502_AddEquipmentServiceLog'
+)
+BEGIN
+    CREATE TABLE [EquipmentServiceLogs] (
+        [Id] uniqueidentifier NOT NULL,
+        [EquipmentItemId] uniqueidentifier NOT NULL,
+        [EntryType] int NOT NULL,
+        [EntryDate] datetime2 NOT NULL,
+        [Notes] nvarchar(2000) NOT NULL,
+        [PerformedByAppUserId] uniqueidentifier NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_EquipmentServiceLogs] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_EquipmentServiceLogs_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentServiceLogs_AppUsers_PerformedByAppUserId] FOREIGN KEY ([PerformedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentServiceLogs_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentServiceLogs_EquipmentItems_EquipmentItemId] FOREIGN KEY ([EquipmentItemId]) REFERENCES [EquipmentItems] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260816215502_AddEquipmentServiceLog'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentServiceLogs_CreatedByAppUserId] ON [EquipmentServiceLogs] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260816215502_AddEquipmentServiceLog'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentServiceLogs_EquipmentItemId_EntryDate] ON [EquipmentServiceLogs] ([EquipmentItemId], [EntryDate]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260816215502_AddEquipmentServiceLog'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentServiceLogs_PerformedByAppUserId] ON [EquipmentServiceLogs] ([PerformedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260816215502_AddEquipmentServiceLog'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentServiceLogs_UpdatedByAppUserId] ON [EquipmentServiceLogs] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260816215502_AddEquipmentServiceLog'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260816215502_AddEquipmentServiceLog', N'10.0.11');
+END;
+
+COMMIT;
+GO
+

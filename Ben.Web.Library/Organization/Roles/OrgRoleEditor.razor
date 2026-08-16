@@ -221,6 +221,8 @@ else if (_role is not null)
         new("Membership Applications", OrganizationSecurityTable.MembershipRequests,      null),
         new("Files",                   OrganizationSecurityTable.OrganizationFiles,       null),
         new("Investigations",          OrganizationSecurityTable.Investigation,           null),
+        new("Equipment",               OrganizationSecurityTable.Equipment,               null),
+        new("Equipment Checkouts",     OrganizationSecurityTable.EquipmentCheckout,       OrganizationSecurityTable.Equipment),
     ];
 
     private sealed record PermissionSection(

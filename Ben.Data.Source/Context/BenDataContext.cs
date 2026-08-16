@@ -113,6 +113,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<EquipmentItem> EquipmentItems { get; set; }
         public virtual DbSet<EquipmentItemPhoto> EquipmentItemPhotos { get; set; }
         public virtual DbSet<EquipmentItemShare> EquipmentItemShares { get; set; }
+        public virtual DbSet<EquipmentServiceLog> EquipmentServiceLogs { get; set; }
         public virtual DbSet<VideoProject> VideoProjects { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -1977,6 +1978,21 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EquipmentItemShare>()
                 .HasIndex(e => new { e.EquipmentItemId, e.OrganizationId }).IsUnique();
             modelBuilder.Entity<EquipmentItemShare>().HasIndex(e => e.OrganizationId);
+
+            modelBuilder.Entity<EquipmentServiceLog>()
+                .HasOne(e => e.EquipmentItem).WithMany(e => e.ServiceLog)
+                .HasForeignKey(e => e.EquipmentItemId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EquipmentServiceLog>()
+                .HasOne(e => e.PerformedByAppUser).WithMany()
+                .HasForeignKey(e => e.PerformedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentServiceLog>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentServiceLog>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentServiceLog>().Property(e => e.Notes).HasMaxLength(2000);
+            modelBuilder.Entity<EquipmentServiceLog>().HasIndex(e => new { e.EquipmentItemId, e.EntryDate });
 
         }
     }
