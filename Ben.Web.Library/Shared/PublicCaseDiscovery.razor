@@ -53,6 +53,13 @@ else
                     }
                 </MapLayers>
             </TelerikMap>
+
+            @* Said plainly, because a pin on a map reads as an address whether or not it is one.
+               These are cell centres several miles across; the property is somewhere nearby. *@
+            <p class="text-secondary small mt-2 mb-0">
+                Pins show an approximate area, not an address. Case locations are deliberately
+                published to within a few miles.
+            </p>
         </div>
     </div>
 
@@ -274,7 +281,9 @@ else
         _markers  = [];
         _clusters = [];
 
-        // Group by rounded coordinate (city-level) — items with null coords are map-excluded
+        // The coordinates arriving here are already a grid-cell centre, not a property — the server
+        // redacts them before they leave the WebApi, so this rounding is only about grouping
+        // markers, not about hiding anything. Items with no coordinates are map-excluded.
         var groups = all
             .Where(i => i.ApproxLatitude.HasValue && i.ApproxLongitude.HasValue)
             .GroupBy(i => (

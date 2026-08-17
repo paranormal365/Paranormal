@@ -3367,15 +3367,27 @@ one half of it.
 address is redacted. The redaction happens in the projection, so the exact coordinates are never in
 the response at all.
 
-> **Finding, worth knowing before this is built:** `PublicCaseDiscoveryController` already has fields
-> named `ApproxLatitude` / `ApproxLongitude` — and passes `c.Latitude` / `c.Longitude` straight
-> through. The name promises an approximation the code does not perform. Any published case's exact
-> coordinates are public today. That is a live exposure independent of this item, and it is the first
-> thing to fix when this is picked up (or sooner).
+> **✅ Fixed 2026-08-17, ahead of the rest of this item.** `PublicCaseDiscoveryController` had fields
+> named `ApproxLatitude` / `ApproxLongitude` and passed `c.Latitude` / `c.Longitude` straight
+> through — every published case's exact coordinates were public. A live exposure independent of this
+> item, so it was fixed on its own rather than waiting for the CMS work.
+>
+> `PublicCoordinates.Approximate` now snaps to a grid cell (~7 miles of latitude, widened by
+> 1/cos(latitude) so cells stay roughly square on the ground) and publishes the **cell centre**.
+> **Snapped, not jittered** — a random offset per request would let anyone average many responses
+> back to the true point; snapping is deterministic, so there is nothing to average, and every case
+> in a cell publishes identically.
+>
+> Two things found while building it. A test asserting that neighbours publish identically caught a
+> real flaw in the first version: the longitude step was derived from the caller's *true* latitude,
+> which made the published longitude a continuous function of it, so two houses on one street landed
+> metres apart and the snapping did nothing. It is now derived from the snapped latitude. And the
+> existing test was named `GetAll_ReturnsStoredCoordinates_WithoutGeocoding` — it asserted the leak
+> and pinned it in place.
 
-Note also that a circle drawn *centred on the true point* still leaks the point — the centre is the
-answer. Jitter the centre within the radius, or snap it to a grid cell, so the circle is honest about
-what it hides.
+Note that a circle drawn *centred on the true point* still leaks the point — the centre is the
+answer. The grid centre published above has nothing to do with the property, and any circle a client
+draws must be at least `PublicCoordinates.RadiusMiles` for it to honestly contain the true location.
 
 **4b. Client identity.** Replace real names with the alias the client configured, again before the
 response is built, leaving the stored case untouched. **This already exists for cases**:
