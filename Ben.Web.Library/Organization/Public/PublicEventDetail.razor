@@ -129,12 +129,64 @@ else
             else if (_event.Flags.RsvpBlockedReason is string reason)
             {
                 <span class="text-secondary">@reason</span>
-                @if (!_isAuthenticated)
-                {
-                    <a class="btn btn-primary btn-sm" href="/login">Sign in</a>
-                }
             }
         </div>
+
+        @* Somebody who has never been here can still come. They give an address, we send a link,
+           and clicking it is what actually confirms anything — an email typed into a box proves
+           nothing, and events that hide their address until you are coming would be protecting
+           nothing if it did. *@
+        @if (!_isAuthenticated && !_event.Flags.RsvpHasClosed && !_event.Flags.IsFull)
+        {
+            <div class="card mt-3">
+                <div class="card-body">
+                    @if (_emailSent)
+                    {
+                        <h6 class="mb-1">Check your email</h6>
+                        <p class="text-secondary small mb-0">
+                            If that address can come along, there's a link on its way. Click it to
+                            confirm — it works once, and it's good for two weeks.
+                        </p>
+                    }
+                    else
+                    {
+                        <h6 class="mb-1">Coming along?</h6>
+                        <p class="text-secondary small">
+                            You don't need an account. Give us an email address and we'll send you a
+                            link to confirm — no password to invent.
+                        </p>
+
+                        @if (_attendError is not null)
+                        {
+                            <div class="alert alert-danger py-2">@_attendError</div>
+                        }
+
+                        <div class="row g-2">
+                            <div class="col-md-5">
+                                <input class="form-control" type="email" maxlength="320"
+                                       placeholder="you@example.com" value="@_attendEmail"
+                                       @oninput="@(e => _attendEmail = e.Value?.ToString() ?? "")" />
+                            </div>
+                            <div class="col-md-4">
+                                <input class="form-control" maxlength="200"
+                                       placeholder="Your name (optional)" value="@_attendName"
+                                       @oninput="@(e => _attendName = e.Value?.ToString() ?? "")" />
+                            </div>
+                            <div class="col-md-3">
+                                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                               Enabled="@(!_busy && _attendEmail.Contains('@'))"
+                                               OnClick="RequestAttendanceAsync">Send me the link</TelerikButton>
+                            </div>
+                        </div>
+
+                        <p class="text-secondary mt-2 mb-0" style="font-size:.75rem;">
+                            Already have an account? <a href="/login">Sign in</a> and say you're
+                            coming in one click.
+                        </p>
+                    }
+                </div>
+            </div>
+        }
     </div>
 }
 
@@ -164,6 +216,27 @@ else
     private PublicEventRecord? _event;
     private bool _loading = true, _busy, _isAuthenticated;
     private string? _error;
+
+    private string _attendEmail = "", _attendName = "";
+    private bool _emailSent;
+    private string? _attendError;
+
+    private async Task RequestAttendanceAsync()
+    {
+        if (_event is null) return;
+        _busy = true; _attendError = null;
+
+        // The server answers the same way whether or not that address is known here, so there is
+        // nothing to report back beyond "we tried".
+        if (await AdminClient.RequestEventAttendanceAsync(
+                _event.Id, _attendEmail.Trim(),
+                string.IsNullOrWhiteSpace(_attendName) ? null : _attendName.Trim()))
+            _emailSent = true;
+        else
+            _attendError = "That couldn't be sent. The event may have filled up or closed.";
+
+        _busy = false;
+    }
 
     /// <summary>
     /// Loads during <b>prerender</b>, which is the whole reason it is here rather than in

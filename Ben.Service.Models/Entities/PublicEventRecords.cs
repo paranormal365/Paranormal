@@ -76,3 +76,34 @@ public sealed record PublicEventListItem(
     int AttendingCount,
     int? AttendeeCapacity,
     bool IsOnline);
+
+
+// ── Coming along without an account (item #87b) ──────────────────────────────
+
+/// <summary>
+/// Asks to attend a public event by giving an email address rather than signing in.
+/// </summary>
+/// <remarks>
+/// <paramref name="DisplayName"/> is optional. An email is enough to come along, and demanding a
+/// name at the door is the kind of friction that loses the person the event was advertised to.
+/// </remarks>
+public sealed record RequestEventAttendanceRequest(string Email, string? DisplayName);
+
+/// <summary>What a confirmation link points at, shown before it is used.</summary>
+public sealed record EventAttendanceInviteInfo(
+    Guid EventId,
+    string Title,
+    string OrganizationName,
+    string OrganizationUrlName,
+    string? EventUrlName,
+    DateTime StartDateTime,
+    string Email);
+
+/// <summary>The result of using a confirmation link.</summary>
+public sealed record EventAttendanceConfirmation(
+    Guid EventId,
+    string Title,
+    string OrganizationName,
+    string OrganizationUrlName,
+    string? EventUrlName,
+    DateTime StartDateTime);
