@@ -242,6 +242,44 @@ public sealed class CmsEmbedTests
     }
 
     /// <summary>
+    /// The same for an investigation, not only a case.
+    /// </summary>
+    /// <remarks>
+    /// Added after a discrimination run: breaking the location switch on the investigation branch
+    /// alone failed nothing, because every location test above happened to use a case. Two branches
+    /// resolve locations and both need covering — the copy that has no test is the one that drifts.
+    /// </remarks>
+    [Fact]
+    public async Task Hiding_the_area_on_an_investigation_publishes_no_location_either()
+    {
+        var w = await SeedAsync();
+
+        var rows = await ResolveAsync(w, CmsSectionType.EmbeddedInvestigations,
+            new CmsEmbed.Settings([w.PublicInvestigationId], ShowApproximateLocation: false));
+
+        var row = Assert.Single(rows);
+        Assert.Null(Text(row, "placeName"));
+        Assert.Null(Text(row, "city"));
+        Assert.Null(Text(row, "state"));
+        Assert.False(row.TryGetProperty("latitude", out var lat) && lat.ValueKind != JsonValueKind.Null);
+    }
+
+    /// <summary>
+    /// The place's own name is withheld with the rest. "The Old Mill" identifies a building as
+    /// surely as its coordinates do.
+    /// </summary>
+    [Fact]
+    public async Task Showing_the_area_publishes_the_place_name()
+    {
+        var w = await SeedAsync();
+
+        var rows = await ResolveAsync(w, CmsSectionType.EmbeddedInvestigations,
+            new CmsEmbed.Settings([w.PublicInvestigationId], ShowApproximateLocation: true));
+
+        Assert.Equal("The Old Mill", Text(Assert.Single(rows), "placeName"));
+    }
+
+    /// <summary>
     /// The street address is never in the payload under any combination of switches. This is the
     /// assertion that matters most in the file.
     /// </summary>

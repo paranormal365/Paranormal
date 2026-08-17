@@ -233,6 +233,28 @@ and wrong in reality.
 The preview also tells you if the page is not in the menu yet, which is the usual reason a
 freshly-published page seems to have vanished.
 
+## Putting your cases and investigations on a page
+
+Two section types — **Our investigations** and **Our cases** — let you show your own work on a
+public page. Pick which records to show, and answer two questions about each section.
+
+**Where it happened.** You can show the rough area, or nothing at all. There is no option to publish
+the exact address, whichever way you set it: the point shown on the map is the centre of an area
+several miles across and cannot be traced back to a building. That is deliberate — a case is
+somebody's home, and a link outlives the page it was on.
+
+**Who it was for.** Cases can show the client's chosen name. Only the alias the client picked, or
+the one your group set for them — a real name is never published here. If neither is set, the case
+appears with no name.
+
+**Work that is not public yet** is flagged in the picker, and adding it asks you to confirm. Until
+you do, those records are left off the page entirely. Publishing a private investigation makes it
+readable by anyone who visits, including the person it is about.
+
+You can only show your own group's work. Everything is looked up fresh each time somebody views the
+page, so if a client later asks to be unnamed, they disappear from pages you published months ago —
+you do not have to remember which ones.
+
 ## Public events
 
 An event on your calendar can be opened to anybody. Tick **Public** and it appears on your group's
