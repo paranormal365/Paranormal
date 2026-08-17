@@ -249,6 +249,47 @@ public sealed class OrganizationEquipmentController : BenControllerBase
         return Ok(ToOrgRecord(entity, canManage: true, holderNames));
     }
 
+    /// <summary>Takes a piece of group gear out of service, keeping its history.</summary>
+    /// <remarks>See the personal equivalent — this is the action the delete refusal points at.</remarks>
+    [HttpPost("{id:guid}/retire")]
+    public Task<IActionResult> Retire(Guid orgId, Guid id, CancellationToken ct)
+        => SetRetiredAsync(orgId, id, true, ct);
+
+    /// <summary>Puts a retired piece of group gear back into service.</summary>
+    [HttpPost("{id:guid}/unretire")]
+    public Task<IActionResult> Unretire(Guid orgId, Guid id, CancellationToken ct)
+        => SetRetiredAsync(orgId, id, false, ct);
+
+    private async Task<IActionResult> SetRetiredAsync(Guid orgId, Guid id, bool retired, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        if (!await CanManageAsync(userId, orgId, OrganizationSecurityAction.Update, ct)) return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var entity = await db.EquipmentItems
+            .FirstOrDefaultAsync(i => i.Id == id && i.OwningOrganizationId == orgId, ct);
+        if (entity is null) return NotFound();
+
+        if (entity.IsRetired == retired)
+            return Conflict(retired ? "That item is already retired." : "That item is not retired.");
+
+        if (retired && await db.EquipmentCheckouts.AnyAsync(c =>
+                c.EquipmentItemId == id
+                && (c.Status == EquipmentCheckoutStatus.Approved
+                    || c.Status == EquipmentCheckoutStatus.CheckedOut), ct))
+            return Conflict("This equipment is out on loan. It has to come back before it can be retired.");
+
+        var before = new { entity.IsRetired };
+        entity.IsRetired          = retired;
+        entity.DateUpdated        = DateTime.UtcNow;
+        entity.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(EquipmentItem), id, before, entity, userId, Ben.Data.Common.Constants.AppSources.WebApi));
+
+        return NoContent();
+    }
+
     /// <summary>
     /// Deletes a piece of group gear, or refuses when it has a history worth keeping.
     /// </summary>
@@ -270,8 +311,9 @@ public sealed class OrganizationEquipmentController : BenControllerBase
             .FirstOrDefaultAsync(i => i.Id == id && i.OwningOrganizationId == orgId, ct);
         if (entity is null) return NotFound();
 
-        if (await db.EquipmentServiceLogs.AnyAsync(l => l.EquipmentItemId == id, ct))
-            return Conflict("This item has service history. Retire it instead of deleting it.");
+        if (await db.EquipmentCheckouts.AnyAsync(c => c.EquipmentItemId == id, ct)
+            || await db.EquipmentServiceLogs.AnyAsync(l => l.EquipmentItemId == id, ct))
+            return Conflict("This item has loan or service history. Retire it instead of deleting it.");
 
         var storagePaths = await db.UploadFiles.AsNoTracking()
             .Where(f => entity.Photos.Select(p => p.UploadFileId).Contains(f.Id))
@@ -462,8 +504,10 @@ public sealed class OrganizationEquipmentController : BenControllerBase
             item.OwningOrganizationId,
             orgName,
             item.EquipmentModelId,
-            item.EquipmentModel.EquipmentBrand.Name,
+            // ModelName then BrandName — the record's order. These were transposed, so every org
+            // surface showed the make where the model belongs and vice versa.
             item.EquipmentModel.Name,
+            item.EquipmentModel.EquipmentBrand.Name,
             item.EquipmentModel.EquipmentCategory.Name,
             item.DisplayName,
             flags.CanSeeSerial ? item.SerialNumber : null,

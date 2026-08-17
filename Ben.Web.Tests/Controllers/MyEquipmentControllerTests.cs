@@ -253,6 +253,92 @@ public class MyEquipmentControllerTests
         storageMock.Verify(s => s.DeleteAsync("fake/path.jpg", It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // ── Retire, and the delete guard that points at it ───────────────────────
+
+    /// <summary>
+    /// Four places in the product told people to retire an item instead of deleting it, and there
+    /// was no retire action anywhere — an item with history was simply stuck. This covers both
+    /// halves: the refusal, and the thing it now points at.
+    /// </summary>
+    [Fact]
+    public async Task AnItemWithLoanHistoryCannotBeDeleted_ButCanBeRetired()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: false);
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            db.EquipmentCheckouts.Add(new EquipmentCheckout
+            {
+                Id = Guid.NewGuid(), EquipmentItemId = itemId, BorrowerAppUserId = StrangerId,
+                Status = EquipmentCheckoutStatus.Returned,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = StrangerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl = Build(w.Factory, OwnerId);
+        Assert.IsType<ConflictObjectResult>(await ctrl.Delete(itemId, default));
+        Assert.IsType<NoContentResult>(await ctrl.Retire(itemId, default));
+
+        await using var check = await w.Factory.CreateDbContextAsync();
+        var item = await check.EquipmentItems.SingleAsync(i => i.Id == itemId);
+        Assert.True(item.IsRetired);
+        // The history it was protecting is still there.
+        Assert.True(await check.EquipmentCheckouts.AnyAsync(c => c.EquipmentItemId == itemId));
+    }
+
+    [Fact]
+    public async Task AnItemWithNoHistoryCanStillBeDeleted()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: false);
+
+        Assert.IsType<NoContentResult>(await Build(w.Factory, OwnerId).Delete(itemId, default));
+    }
+
+    [Fact]
+    public async Task GearSomebodyCurrentlyHasCannotBeRetired()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: false);
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            db.EquipmentCheckouts.Add(new EquipmentCheckout
+            {
+                Id = Guid.NewGuid(), EquipmentItemId = itemId, BorrowerAppUserId = StrangerId,
+                Status = EquipmentCheckoutStatus.CheckedOut,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = StrangerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Retiring it would strand the loan — it has to come back first.
+        Assert.IsType<ConflictObjectResult>(await Build(w.Factory, OwnerId).Retire(itemId, default));
+    }
+
+    [Fact]
+    public async Task RetiringIsIdempotentlyRefused_AndReversible()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: false);
+        var ctrl = Build(w.Factory, OwnerId);
+
+        Assert.IsType<NoContentResult>(await ctrl.Retire(itemId, default));
+        Assert.IsType<ConflictObjectResult>(await ctrl.Retire(itemId, default));
+        Assert.IsType<NoContentResult>(await ctrl.Unretire(itemId, default));
+    }
+
+    [Fact]
+    public async Task RetiringSomebodyElsesGearIsNotFound()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: false);
+
+        Assert.IsType<NotFoundResult>(await Build(w.Factory, StrangerId).Retire(itemId, default));
+    }
+
     // ── Metadata separation (phase 6a) ───────────────────────────────────────
 
     /// <summary>

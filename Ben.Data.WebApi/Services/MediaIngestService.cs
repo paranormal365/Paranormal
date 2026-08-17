@@ -34,6 +34,12 @@ public interface IMediaIngestService
 
     /// <summary>Deletes an original and any derivatives sitting beside it. Best-effort.</summary>
     Task DeleteAllAsync(string storagePath, CancellationToken ct);
+
+    /// <summary>
+    /// Opens the thumbnail, generating and storing it first if it is missing. Null when the file
+    /// is not something we can shrink (video, audio, SVG) — the caller serves the real thing.
+    /// </summary>
+    Task<Stream?> OpenThumbnailAsync(string storagePath, CancellationToken ct);
 }
 
 /// <summary>What ingesting produced, for the caller to record.</summary>
@@ -107,6 +113,40 @@ public sealed class MediaIngestService(
     {
         var sanitized = sanitizer.SanitizedPathFor(storagePath);
         return fileStorage.Exists(sanitized) ? sanitized : storagePath;
+    }
+
+    public async Task<Stream?> OpenThumbnailAsync(string storagePath, CancellationToken ct)
+    {
+        var thumbnailPath = sanitizer.ThumbnailPathFor(storagePath);
+        if (fileStorage.Exists(thumbnailPath))
+            return await fileStorage.OpenReadAsync(thumbnailPath, ct);
+
+        // Missing — either this file predates the pipeline, or its thumbnail failed at upload.
+        // Generate from whatever we still have rather than making the caller care which.
+        if (!fileStorage.Exists(storagePath)) return null;
+
+        byte[] sourceBytes;
+        await using (var source = await fileStorage.OpenReadAsync(storagePath, ct))
+        await using (var buffer = new MemoryStream())
+        {
+            await source.CopyToAsync(buffer, ct);
+            sourceBytes = buffer.ToArray();
+        }
+
+        byte[] thumbnail;
+        try
+        {
+            thumbnail = sanitizer.Sanitize(sourceBytes, IMediaSanitizationService.ThumbnailLongEdge);
+        }
+        catch (UnreadableImageException)
+        {
+            return null;   // not an image — nothing to shrink
+        }
+
+        await using (var toStore = new MemoryStream(thumbnail, writable: false))
+            await fileStorage.WriteAsync(thumbnailPath, toStore, ct);
+
+        return new MemoryStream(thumbnail, writable: false);
     }
 
     public async Task DeleteAllAsync(string storagePath, CancellationToken ct)

@@ -15,7 +15,8 @@ namespace Ben.Data.WebApi.Services.Access;
 /// Personal items resolve to owner-or-SuperAdmin from the row itself, with no query. Group-owned
 /// items need the caller's authority in that group, which is a query — so the org-owned overload
 /// takes the answer as a parameter (<c>canManageOrgEquipment</c>) rather than resolving it per row.
-/// Phase 4 adds <c>CanRequestCheckout</c>'s real borrow-eligibility rule.
+/// Whether somebody may <i>borrow</i> a piece is a richer question with its own answer — see
+/// <see cref="ComputeBorrowEligibilityAsync"/>, which explains why rather than just saying no.
 /// </remarks>
 public static class EquipmentAccess
 {
@@ -50,8 +51,6 @@ public static class EquipmentAccess
             // Sharing is a personal-item idea: group gear already belongs to a group.
             CanManageSharing: isOwner && !isOrgItem,
             CanSeeSerial: canManage,
-            // No checkout workflow exists yet (Phase 4) — nobody can request a loan.
-            CanRequestCheckout: false,
             CanManageServiceLog: canManage);
     }
 
@@ -75,10 +74,9 @@ public static class EquipmentAccess
     }
 
     /// <summary>
-    /// Flags for a whole list of already-loaded items, computed without a per-row query — there is
-    /// nothing to batch-query yet in Phase 1 (ownership is a column on the row itself), but the
-    /// signature matches the batched shape every other access helper in this folder uses, so later
-    /// phases that DO need per-org lookups (org-owned items, sharing) can extend this in place.
+    /// Flags for a whole list of already-loaded items. Ownership is a column on the row, and the
+    /// org verdict is resolved once by the caller and passed in, so this needs no query of its own
+    /// — while keeping the batched shape every other access helper in this folder uses.
     /// </summary>
     public static IReadOnlyDictionary<Guid, EquipmentItemFlags> ComputeItemFlags(
         IEnumerable<EquipmentItem> items, Guid userId, bool isSuperAdmin, bool canManageOrgEquipment = false)

@@ -177,6 +177,24 @@ public class OrganizationEquipmentTests
         Assert.True(payload.CanManage);
     }
 
+    /// <summary>
+    /// The projection put the make where the model goes and vice versa, so every group surface
+    /// showed them swapped. Asserts against the seeded values by name, which is the only version
+    /// of this test that cannot itself be written the wrong way round.
+    /// </summary>
+    [Fact]
+    public async Task TheGroupsGearReportsItsMakeAndModelTheRightWayRound()
+    {
+        var w = await SeedAsync();
+
+        var result = await Build(w.Factory, ManagerId, canManageUserId: ManagerId).GetOrgEquipment(OrgId, default);
+        var payload = Assert.IsType<OrgEquipmentListRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        var item = Assert.Single(payload.Items);
+
+        Assert.Equal("FLIR", item.BrandName);      // the make
+        Assert.Equal("One Pro", item.ModelName);   // the model
+    }
+
     [Fact]
     public async Task Outsider_GetsNotFound_RatherThanAnEmptyList()
     {

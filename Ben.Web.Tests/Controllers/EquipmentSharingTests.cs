@@ -435,6 +435,49 @@ public class EquipmentSharingTests
         Assert.IsType<NotFoundResult>(await BuildPhotos(w.Factory, OutsiderId).GetContent(photoId, default));
     }
 
+    /// <summary>
+    /// Group gear has no OwnerAppUserId, so before phase 6a nothing matched IsOwner and an org
+    /// item's photos were reachable by nobody but SuperAdmin — including the members whose group
+    /// owns the thing.
+    /// </summary>
+    [Fact]
+    public async Task PhotoBytes_OfGroupOwnedGear_AreServedToTheOwningGroupsMembers()
+    {
+        var w = await SeedAsync();
+        var orgItemId = Guid.NewGuid();
+        var photoId = Guid.NewGuid();
+        var fileId = Guid.NewGuid();
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var modelId = await db.EquipmentModels.Select(m => m.Id).FirstAsync();
+            db.EquipmentItems.Add(new EquipmentItem
+            {
+                Id = orgItemId, OwningOrganizationId = OrgId, OwnerAppUserId = null,
+                EquipmentModelId = modelId, DisplayName = "Group thermal camera",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+            });
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = OwnerId,
+                FileName = "kit.jpg", StoredFileName = "kit.jpg", ContentType = "image/jpeg",
+                FileSize = 3, StoragePath = "fake/path.jpg",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+            });
+            db.EquipmentItemPhotos.Add(new EquipmentItemPhoto
+            {
+                Id = photoId, EquipmentItemId = orgItemId, UploadFileId = fileId, IsPrimary = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // A member of the owning group can see its kit.
+        Assert.IsType<FileStreamResult>(await BuildPhotos(w.Factory, FellowMemberId).GetContent(photoId, default));
+        // Somebody outside the group still cannot.
+        Assert.IsType<NotFoundResult>(await BuildPhotos(w.Factory, OutsiderId).GetContent(photoId, default));
+    }
+
     [Fact]
     public async Task SharedList_CarriesTheLoanAudience_SoMembersSeeWhatIsActuallyBorrowable()
     {

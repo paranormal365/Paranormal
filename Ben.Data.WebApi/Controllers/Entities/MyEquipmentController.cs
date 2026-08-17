@@ -1,6 +1,7 @@
 using Ben.Data.WebApi.Services;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Data.WebApi.SeedData;
+using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
@@ -167,10 +168,60 @@ public sealed class MyEquipmentController : BenControllerBase
     }
 
     /// <summary>
-    /// Deletes an item with no checkout history. Phase 4 adds the checkout-lifecycle table and
-    /// changes this to a 409-with-retire-instead once a row has any loan history — nothing to
-    /// guard yet in Phase 1.
+    /// Takes a piece out of service without destroying what happened to it.
     /// </summary>
+    /// <remarks>
+    /// The counterpart to the delete guard above, and until now the missing half of it: four places
+    /// in the product told people to retire an item instead of deleting it, and there was no way to
+    /// do so — an item with history was simply stuck. Retired gear drops out of the public catalog,
+    /// out of borrowing, and out of group listings, while its loans and service log stay readable.
+    /// </remarks>
+    [HttpPost("{id:guid}/retire")]
+    public Task<IActionResult> Retire(Guid id, CancellationToken ct) => SetRetiredAsync(id, true, ct);
+
+    /// <summary>Puts a retired piece back into service.</summary>
+    [HttpPost("{id:guid}/unretire")]
+    public Task<IActionResult> Unretire(Guid id, CancellationToken ct) => SetRetiredAsync(id, false, ct);
+
+    private async Task<IActionResult> SetRetiredAsync(Guid id, bool retired, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var entity = await db.EquipmentItems
+            .FirstOrDefaultAsync(i => i.Id == id && i.OwnerAppUserId == userId, ct);
+        if (entity is null) return NotFound();
+
+        if (entity.IsRetired == retired)
+            return Conflict(retired ? "That item is already retired." : "That item is not retired.");
+
+        // Retiring gear somebody currently has would strand the loan; it has to come back first.
+        if (retired && await db.EquipmentCheckouts.AnyAsync(c =>
+                c.EquipmentItemId == id
+                && (c.Status == EquipmentCheckoutStatus.Approved
+                    || c.Status == EquipmentCheckoutStatus.CheckedOut), ct))
+            return Conflict("This equipment is out on loan. It has to come back before it can be retired.");
+
+        var before = new { entity.IsRetired };
+        entity.IsRetired          = retired;
+        entity.DateUpdated        = DateTime.UtcNow;
+        entity.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(EquipmentItem), id, before, entity, userId, Ben.Data.Common.Constants.AppSources.WebApi));
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Deletes a piece of gear that has no history worth keeping, or refuses.
+    /// </summary>
+    /// <remarks>
+    /// Once an item has been lent or serviced, deleting it would take the account of what happened
+    /// to it along with it — including loans other people were party to. The answer then is to
+    /// retire it, which is what the group-owned side has always done and what this side told
+    /// nobody while quietly destroying the history.
+    /// </remarks>
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
@@ -181,6 +232,10 @@ public sealed class MyEquipmentController : BenControllerBase
         var entity = await db.EquipmentItems.Include(i => i.Photos)
             .FirstOrDefaultAsync(i => i.Id == id && i.OwnerAppUserId == userId, ct);
         if (entity is null) return NotFound();
+
+        if (await db.EquipmentCheckouts.AnyAsync(c => c.EquipmentItemId == id, ct)
+            || await db.EquipmentServiceLogs.AnyAsync(l => l.EquipmentItemId == id, ct))
+            return Conflict("This item has loan or service history. Retire it instead of deleting it.");
 
         var photoPaths = new List<string?>();
         if (entity.Photos.Count > 0)
@@ -196,7 +251,7 @@ public sealed class MyEquipmentController : BenControllerBase
         _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(EquipmentItem), entity.Id, entity, userId, Ben.Data.Common.Constants.AppSources.WebApi));
 
         foreach (var path in photoPaths)
-            if (path is not null) await _fileStorage.DeleteAsync(path, ct);
+            if (path is not null) await _mediaIngest.DeleteAllAsync(path, ct);
 
         return NoContent();
     }
@@ -552,36 +607,132 @@ public sealed class EquipmentPhotoContentController : BenControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> GetContent(Guid photoId, CancellationToken ct)
     {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var photo = await LoadVisiblePhotoAsync(db, photoId, ct);
+        if (photo is null) return NotFound();
+        if (photo.UploadFile.StoragePath is null) return NotFound();
+
+        // The sanitized copy is what leaves the server; the original stays for evidence only.
+        var servingPath = _mediaIngest.ServingPathFor(photo.UploadFile.StoragePath);
+        var stream = await _fileStorage.OpenReadAsync(servingPath, ct);
+        return File(stream, photo.UploadFile.ContentType);
+    }
+
+    /// <summary>
+    /// A small copy of the photo, for grids that would otherwise download full-resolution files to
+    /// draw them a hundred pixels wide.
+    /// </summary>
+    /// <remarks>
+    /// Same visibility rule as the full bytes — deliberately the same method, so the two routes
+    /// cannot drift apart and quietly leave the thumbnail more permissive than the thing it is a
+    /// thumbnail of. Generates and stores on first request when the sibling file is missing, which
+    /// covers anything uploaded before the pipeline existed without a backfill job.
+    /// </remarks>
+    [HttpGet("{photoId:guid}/thumbnail")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetThumbnail(Guid photoId, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var photo = await LoadVisiblePhotoAsync(db, photoId, ct);
+        if (photo is null) return NotFound();
+        if (photo.UploadFile.StoragePath is null) return NotFound();
+
+        var stream = await _mediaIngest.OpenThumbnailAsync(photo.UploadFile.StoragePath, ct);
+        return stream is null
+            ? await GetContent(photoId, ct)   // nothing to shrink (a non-image) — serve the real thing
+            : File(stream, "image/jpeg");
+    }
+
+    /// <summary>
+    /// What was stripped out of the picture: EXIF, GPS, camera, capture time.
+    /// </summary>
+    /// <remarks>
+    /// Ben's rule (2026-08-17): this is for org Administrators and SuperAdmin only — deliberately
+    /// NOT the item's owner, who can see the photo itself but not the coordinates that came with
+    /// it. Never carried on the bytes or thumbnail routes; a caller has to ask for it by name, and
+    /// gets a 404 rather than a 403 if they may not.
+    /// </remarks>
+    [HttpGet("{photoId:guid}/metadata")]
+    public async Task<ActionResult<UploadFileMetadataRecord>> GetPhotoMetadata(Guid photoId, CancellationToken ct)
+    {
         var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
         var isSuperAdmin = User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
 
         await using var db = await _db.CreateDbContextAsync(ct);
         var photo = await db.EquipmentItemPhotos.AsNoTracking()
             .Include(p => p.EquipmentItem)
-            .Include(p => p.UploadFile)
             .FirstOrDefaultAsync(p => p.Id == photoId, ct);
         if (photo is null) return NotFound();
 
+        var mayRead = isSuperAdmin;
+        if (!mayRead && photo.EquipmentItem.OwningOrganizationId is Guid orgId)
+        {
+            // Org Administrators and Owners of the group that owns the gear. The membership ROLE,
+            // not the Equipment permission: the audience Ben named is administrators, not whoever
+            // an org happened to hand an equipment role to.
+            mayRead = await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive
+                            && (m.Role == OrganizationMemberRole.Owner
+                                || m.Role == OrganizationMemberRole.Administrator), ct);
+        }
+        if (!mayRead) return NotFound();
+
+        var meta = await db.UploadFileMetadata.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.UploadFileId == photo.UploadFileId, ct);
+        if (meta is null) return NotFound();
+
+        return Ok(new UploadFileMetadataRecord(
+            meta.MediaKind, meta.WidthPixels, meta.HeightPixels, meta.CapturedAtUtc,
+            meta.GpsLatitude, meta.GpsLongitude, meta.GpsAltitudeMeters,
+            meta.CameraManufacturer, meta.CameraModel, meta.DurationSeconds, meta.ExtractedAtUtc));
+    }
+
+    /// <summary>
+    /// Loads a photo the caller is allowed to see, or null.
+    /// </summary>
+    /// <remarks>
+    /// The single place the visibility rule lives, because it has five branches and both serve
+    /// routes depend on it being exactly the same rule. Answers null rather than a reason: every
+    /// caller turns that into a 404, so the endpoints cannot be used to probe which photo ids
+    /// exist.
+    /// </remarks>
+    private async Task<EquipmentItemPhoto?> LoadVisiblePhotoAsync(
+        BenDataContext db, Guid photoId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        var isSuperAdmin = User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
+
+        var photo = await db.EquipmentItemPhotos.AsNoTracking()
+            .Include(p => p.EquipmentItem)
+            .Include(p => p.UploadFile)
+            .FirstOrDefaultAsync(p => p.Id == photoId, ct);
+        if (photo is null) return null;
+
+        var item = photo.EquipmentItem;
+
         // Publicly listed by its owner — anyone may see it, signed in or not.
-        var isPubliclyListed = photo.EquipmentItem.IncludeInGlobalCatalog && !photo.EquipmentItem.IsRetired;
+        if (item.IncludeInGlobalCatalog && !item.IsRetired) return photo;
 
-        var flags = EquipmentAccess.ComputeItemFlags(photo.EquipmentItem, userId, isSuperAdmin);
+        var flags = EquipmentAccess.ComputeItemFlags(item, userId, isSuperAdmin);
+        if (flags.IsOwner || isSuperAdmin) return photo;
+        if (userId == Guid.Empty || item.IsRetired) return null;
 
-        // Shared with a group the caller and the owner are both active members of. Checked live
-        // rather than trusted from the share row, so a share left behind after either of them left
-        // the group stops granting anything.
-        var isSharedWithMyGroup = !isPubliclyListed && !flags.IsOwner && !isSuperAdmin
-            && userId != Guid.Empty
-            && !photo.EquipmentItem.IsRetired
-            && await EquipmentAccess.IsSharedWithAGroupSharedWithAsync(
-                   db, photo.EquipmentItemId, photo.EquipmentItem.OwnerAppUserId, userId, ct);
+        // Group-owned gear: any active member of the owning group. Without this branch an org
+        // item's photos were reachable by nobody but SuperAdmin, because org items have no
+        // OwnerAppUserId for IsOwner to match.
+        if (item.OwningOrganizationId is Guid owningOrgId)
+        {
+            var isMember = await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == owningOrgId && m.AppUserId == userId && m.IsActive, ct);
+            return isMember ? photo : null;
+        }
 
-        if (!isPubliclyListed && !isSharedWithMyGroup && !flags.IsOwner && !isSuperAdmin) return NotFound();
-
-        if (photo.UploadFile.StoragePath is null) return NotFound();
-        // The sanitized copy is what leaves the server; the original stays for evidence only.
-        var servingPath = _mediaIngest.ServingPathFor(photo.UploadFile.StoragePath);
-        var stream = await _fileStorage.OpenReadAsync(servingPath, ct);
-        return File(stream, photo.UploadFile.ContentType);
+        // Personal gear shared into a group the caller and the owner are both still in. Checked
+        // live rather than trusted from the share row, so a share left behind after either of them
+        // left the group stops granting anything.
+        var isShared = await EquipmentAccess.IsSharedWithAGroupSharedWithAsync(
+            db, photo.EquipmentItemId, item.OwnerAppUserId, userId, ct);
+        return isShared ? photo : null;
     }
 }

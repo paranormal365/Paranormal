@@ -69,10 +69,9 @@ public sealed record EquipmentItemFlags(
     bool CanDelete,
     bool CanManageSharing,
     bool CanSeeSerial,
-    bool CanRequestCheckout,
     bool CanManageServiceLog)
 {
-    public static readonly EquipmentItemFlags None = new(false, false, false, false, false, false, false);
+    public static readonly EquipmentItemFlags None = new(false, false, false, false, false, false);
 }
 
 public sealed record EquipmentItemPhotoRecord(
@@ -176,6 +175,26 @@ public sealed record EquipmentHistoryEntryRecord(
     string? ActorDisplayName,
     Guid? CheckoutId,
     int PhotoCount);
+
+/// <summary>
+/// What was taken out of a picture and kept beside it. Org Administrators and SuperAdmin only.
+/// </summary>
+/// <remarks>
+/// Deliberately a separate shape from anything on a serve path: the bytes and thumbnail routes
+/// cannot carry this even by accident, because they do not return this type.
+/// </remarks>
+public sealed record UploadFileMetadataRecord(
+    string MediaKind,
+    int? WidthPixels,
+    int? HeightPixels,
+    DateTime? CapturedAtUtc,
+    double? GpsLatitude,
+    double? GpsLongitude,
+    double? GpsAltitudeMeters,
+    string? CameraManufacturer,
+    string? CameraModel,
+    double? DurationSeconds,
+    DateTime ExtractedAtUtc);
 
 // ── Checkouts (Phase 4) ─────────────────────────────────────────────────────
 
