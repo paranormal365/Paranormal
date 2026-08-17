@@ -119,6 +119,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<EquipmentCheckoutRenewal> EquipmentCheckoutRenewals { get; set; }
         public virtual DbSet<EquipmentItemFaq> EquipmentItemFaqs { get; set; }
         public virtual DbSet<EquipmentQuestion> EquipmentQuestions { get; set; }
+        public virtual DbSet<EquipmentLoanFeedback> EquipmentLoanFeedbacks { get; set; }
         public virtual DbSet<VideoProject> VideoProjects { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -2036,6 +2037,34 @@ namespace Ben.Data.Source.Context
             // the published FAQ must not reopen a question that was genuinely answered.
             modelBuilder.Entity<EquipmentQuestion>().HasIndex(e => new { e.EquipmentItemId, e.Status });
             modelBuilder.Entity<EquipmentQuestion>().HasIndex(e => e.AskedByAppUserId);
+
+            modelBuilder.Entity<EquipmentLoanFeedback>()
+                .HasOne(e => e.EquipmentCheckout).WithMany(e => e.Feedback)
+                .HasForeignKey(e => e.EquipmentCheckoutId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EquipmentLoanFeedback>()
+                .HasOne(e => e.AuthorAppUser).WithMany()
+                .HasForeignKey(e => e.AuthorAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentLoanFeedback>()
+                .HasOne(e => e.SubjectAppUser).WithMany()
+                .HasForeignKey(e => e.SubjectAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentLoanFeedback>()
+                .HasOne(e => e.SubjectOrganization).WithMany()
+                .HasForeignKey(e => e.SubjectOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentLoanFeedback>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentLoanFeedback>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentLoanFeedback>().Property(e => e.CounterpartyComment).HasMaxLength(2000);
+            modelBuilder.Entity<EquipmentLoanFeedback>().Property(e => e.ProductComment).HasMaxLength(2000);
+            // One row per side per loan. The endpoint checks first, but a double submit races it —
+            // and two contradictory verdicts from the same person on the same loan is nonsense.
+            modelBuilder.Entity<EquipmentLoanFeedback>()
+                .HasIndex(e => new { e.EquipmentCheckoutId, e.Role }).IsUnique();
+            // The reads are all "everything about this subject", never "this loan".
+            modelBuilder.Entity<EquipmentLoanFeedback>().HasIndex(e => new { e.SubjectAppUserId, e.Role });
+            modelBuilder.Entity<EquipmentLoanFeedback>().HasIndex(e => new { e.SubjectOrganizationId, e.Role });
 
             // NoAction from the item: a loan is the record of what happened to a piece of gear, and
             // an item with any loan history refuses deletion in favour of being retired, so there is

@@ -73,5 +73,6 @@ namespace Ben.Data.Source.Entities
         public virtual AppUser? UpdatedByAppUser { get; set; }
         public virtual ICollection<EquipmentCheckoutPhoto> Photos { get; set; } = new List<EquipmentCheckoutPhoto>();
         public virtual ICollection<EquipmentCheckoutRenewal> Renewals { get; set; } = new List<EquipmentCheckoutRenewal>();
+        public virtual ICollection<EquipmentLoanFeedback> Feedback { get; set; } = new List<EquipmentLoanFeedback>();
     }
 }

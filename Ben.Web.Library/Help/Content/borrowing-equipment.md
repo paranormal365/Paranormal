@@ -104,6 +104,32 @@ standing and needs a reason. Either way you get a notification, and the request 
 on the loan — so "asked for another week, was given three days" is still readable later, rather than
 just a due date that quietly changed.
 
+## Feedback after a loan
+
+Once a piece is back, both sides can leave feedback on the loan's page. It is optional, and you can
+leave a comment, a rating out of five, or both.
+
+**Neither side ever sees what was written about them.** There is no notification either, because
+telling someone that feedback about them exists is most of the way to showing it to them. What each
+half is for:
+
+- **What a lender writes about a borrower** is shown to *future lenders* weighing that person's next
+  request — so somebody deciding whether to hand over an expensive recorder can see that the last
+  few lenders got it back on time and in one piece. It carries the lender's name, because an
+  unattributed warning is hard to weigh.
+- **What a borrower writes about a lender** is shown to *other borrowers* thinking of asking them,
+  **without your name**. The protection goes where there is more to lose.
+
+Borrowers can also review **the equipment itself**, separately. That one is public: it appears on
+the make and model's catalog page, still without your name, and helps somebody deciding whether the
+thing is worth buying or borrowing at all.
+
+Averages are never shown from fewer than three ratings, and always appear with their count beside
+them — one sour rating is one voice, not a verdict.
+
+A group's Administrators and Owner can see everything left about their group's gear and loans, and
+remove anything that crosses a line.
+
 ## My Checkouts
 
 **My Checkouts** answers three questions in one place:

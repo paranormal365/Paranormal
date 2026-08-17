@@ -125,6 +125,12 @@
         @* ── What the owner has written down, and what anyone can ask ───────── *@
         <EquipmentFaqSection ItemId="@_item.Id" CanEdit="@_item.Flags.CanEdit" />
 
+        @* Absent for whoever lends this piece — they do not get to read their own file. *@
+        @if (_isAuthenticated)
+        {
+            <LenderHistoryPanel ItemId="@_item.Id" />
+        }
+
         @* ── Borrowing ──────────────────────────────────────────────────────── *@
         @if (!_item.IsRetired && _item.LoanAudience != EquipmentLoanAudience.NotLoanable && _isAuthenticated)
         {

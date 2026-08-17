@@ -182,6 +182,20 @@ Publishing an answer to the FAQ **copies** the text rather than exposing the con
 rewrite it first — what reads well as a reply to one person rarely reads well as a public answer —
 and the original thread is left as it was said. An answer can be published once.
 
+## Feedback and moderation
+
+After a loan comes back, both sides can leave feedback about the other. Neither ever sees what was
+written about them — not on any page, and there is no notification, because telling someone feedback
+about them exists is most of the way to showing it to them. What lenders write is shown to future
+lenders deciding that person's next request; what borrowers write is shown, unattributed, to other
+borrowers considering asking. The full rules are in
+[Borrowing Equipment](/help/borrowing-equipment#feedback-after-a-loan).
+
+A group's **Administrators and Owner** can open **Equipment feedback** from the group's page. It
+lists everything left about the group's gear and its members' loans, naming both sides, and anything
+that crosses a line can be removed. That page exists so a complaint can be acted on — it is the one
+place in the app where feedback is attributed on both ends.
+
 ## Who is looking
 
 Each piece counts how many times its page has been opened and how many times someone followed its

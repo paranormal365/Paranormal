@@ -122,6 +122,36 @@ public sealed partial class BenAdminClientAdapter
         => _api.PostAsync<PromoteQuestionToFaqRequest, EquipmentFaqRecord>(
                $"/api/me/equipment-questions/{questionId}/promote-to-faq", request, token);
 
+    // ── Mutual loan feedback (Phase 6d) ─────────────────────────────────────
+
+    public Task<bool> SubmitLoanFeedbackAsync(Guid checkoutId, SubmitLoanFeedbackRequest request, CancellationToken token = default)
+        => _api.PostVoidAsync($"/api/equipment/checkouts/{checkoutId}/feedback", request, token);
+
+    public Task<LoanFeedbackStateRecord?> GetLoanFeedbackStateAsync(Guid checkoutId, CancellationToken token = default)
+        => _api.GetAsync<LoanFeedbackStateRecord>($"/api/equipment/checkouts/{checkoutId}/feedback-state", token);
+
+    public Task<BorrowerFeedbackPanelRecord?> GetBorrowerFeedbackAsync(Guid checkoutId, CancellationToken token = default)
+        => _api.GetAsync<BorrowerFeedbackPanelRecord>($"/api/equipment/checkouts/{checkoutId}/borrower-feedback", token);
+
+    public Task<LenderFeedbackPanelRecord?> GetLenderFeedbackAsync(Guid itemId, CancellationToken token = default)
+        => _api.GetAsync<LenderFeedbackPanelRecord>($"/api/equipment/items/{itemId}/lender-feedback", token);
+
+    public async Task<IReadOnlyList<ProductReviewRecord>> GetProductReviewsAsync(Guid modelId, CancellationToken token = default)
+    {
+        var result = await _api.GetAnonymousAsync<IReadOnlyList<ProductReviewRecord>>(
+            $"/api/equipment-catalog/models/{modelId}/reviews", token);
+        return result ?? [];
+    }
+
+    // Not coalesced to an empty list: a 404 here means "not yours to moderate", and the page says
+    // something different in that case than it does for a group with no feedback yet.
+    public Task<IReadOnlyList<ModeratedFeedbackRecord>?> GetEquipmentFeedbackForModerationAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetAsync<IReadOnlyList<ModeratedFeedbackRecord>>(
+               $"/api/organizations/{orgId}/equipment-feedback", token);
+
+    public Task<bool> DeleteEquipmentFeedbackAsync(Guid orgId, Guid feedbackId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/equipment-feedback/{feedbackId}", token);
+
     public Task<EquipmentBrandRecord?> ProposeEquipmentBrandAsync(string name, CancellationToken token = default)
         => _api.PostAsync<UpsertEquipmentBrandRequest, EquipmentBrandRecord>(
                "/api/equipment-catalog/brands", new UpsertEquipmentBrandRequest(name), token);

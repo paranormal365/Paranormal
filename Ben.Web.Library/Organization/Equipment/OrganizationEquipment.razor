@@ -40,6 +40,15 @@
         }
 
     </TelerikTabStrip>
+
+    @* A link rather than a tab: moderation is a whole task somebody sits down to do, and its page
+       is the only surface that names both sides of a piece of feedback. The page itself is what
+       checks the caller's standing — this link is a signpost, not a gate. *@
+    <div class="mt-3">
+        <a href="@($"/organizations/{OrgId}/equipment-feedback")" class="small text-decoration-none">
+            Equipment feedback (Administrators)
+        </a>
+    </div>
 </div>
 
 <OrgEquipmentEditor Visible="@_editorVisible"

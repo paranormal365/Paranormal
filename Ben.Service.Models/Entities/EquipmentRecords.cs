@@ -598,3 +598,105 @@ public sealed record AnswerEquipmentQuestionRequest(string? AnswerText, bool Dec
 /// a reply to one person rarely reads well as a public answer.
 /// </summary>
 public sealed record PromoteQuestionToFaqRequest(string Question, string Answer);
+
+// ── Mutual loan feedback (Phase 6d) ─────────────────────────────────────────
+
+/// <summary>
+/// What one side of a finished loan is submitting about the other.
+/// </summary>
+/// <remarks>
+/// <paramref name="ProductComment"/> is borrower-only and rejected with 400 from a lender — a lender
+/// reviewing their own gear on its public model page would be an advertisement, not a review.
+/// </remarks>
+public sealed record SubmitLoanFeedbackRequest(
+    string? CounterpartyComment,
+    int? Rating,
+    string? ProductComment);
+
+/// <summary>
+/// One lender's comment about a borrower, shown to a future lender weighing their request.
+/// </summary>
+/// <remarks>
+/// <b>Attributed.</b> This is lender-to-lender context, and an unattributed warning is hard to
+/// weigh — you want to know whether it came from someone who lends constantly or someone who has
+/// lent once. Deliberately the opposite of <see cref="LenderFeedbackRecord"/>: the asymmetry is the
+/// point, and flipping it is one projection field if Ben ever changes his mind.
+/// </remarks>
+public sealed record BorrowerFeedbackRecord(
+    Guid Id,
+    string? Comment,
+    int? Rating,
+    string AuthorDisplayName,
+    string ItemDisplayName,
+    DateTime DateReturned,
+    DateTime DateCreated);
+
+/// <summary>
+/// What past borrowers said about a lender, shown to someone considering asking them for something.
+/// </summary>
+/// <remarks>
+/// <b>Unattributed</b>, unlike the lender-facing direction. A borrower saying a lender was
+/// unreasonable has more to lose by being named than a lender does, so the protection goes where it
+/// is needed. The shape has no author field to fill in.
+/// </remarks>
+public sealed record LenderFeedbackRecord(
+    Guid Id,
+    string? Comment,
+    int? Rating,
+    DateTime DateCreated);
+
+/// <summary>
+/// An aggregate over feedback about one person, always carried with its count.
+/// </summary>
+/// <remarks>
+/// <see cref="AverageRating"/> is null below <see cref="MinimumRatingsForAverage"/> ratings — a
+/// single sour opinion rendered as "2.0" reads as a verdict when it is one voice. The comments are
+/// shown instead, which is the more honest thing to read at that sample size anyway.
+/// </remarks>
+public sealed record LoanFeedbackSummaryRecord(
+    double? AverageRating,
+    int RatingCount,
+    int CommentCount)
+{
+    public const int MinimumRatingsForAverage = 3;
+}
+
+/// <summary>Feedback about a borrower, with its aggregate — what an approver sees on a request.</summary>
+public sealed record BorrowerFeedbackPanelRecord(
+    LoanFeedbackSummaryRecord Summary,
+    IReadOnlyList<BorrowerFeedbackRecord> Comments);
+
+/// <summary>Feedback about a lender, with its aggregate — what a would-be borrower sees.</summary>
+public sealed record LenderFeedbackPanelRecord(
+    LoanFeedbackSummaryRecord Summary,
+    IReadOnlyList<LenderFeedbackRecord> Comments);
+
+/// <summary>
+/// A borrower's remark about the gear itself, on the make/model page. Public, so the shape carries
+/// no author, no item and no loan.
+/// </summary>
+public sealed record ProductReviewRecord(
+    string Comment,
+    DateTime DateCreated);
+
+/// <summary>
+/// Feedback as a moderator sees it — the only shape that names both sides, because acting on a
+/// complaint means knowing who wrote what about whom.
+/// </summary>
+public sealed record ModeratedFeedbackRecord(
+    Guid Id,
+    Guid EquipmentCheckoutId,
+    string ItemDisplayName,
+    EquipmentFeedbackRole Role,
+    string AuthorDisplayName,
+    string? SubjectDisplayName,
+    string? CounterpartyComment,
+    int? Rating,
+    string? ProductComment,
+    DateTime DateCreated);
+
+/// <summary>What the loan page needs to know about leaving feedback on this loan.</summary>
+public sealed record LoanFeedbackStateRecord(
+    bool CanLeaveFeedback,
+    EquipmentFeedbackRole? AsRole,
+    bool AlreadyLeft);
