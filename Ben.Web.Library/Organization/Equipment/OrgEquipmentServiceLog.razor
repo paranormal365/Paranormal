@@ -1,14 +1,31 @@
+@page "/organizations/{OrgId:guid}/equipment/{ItemId:guid}"
 @namespace Ben.Web.Library.Organization.Equipment
 @using Ben.Service.Models.Entities
 @using Ben.Web.Library.Services
+@using Ben.Web.Library.Shared
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
 
-@* A piece of gear's service and defect history. Any member can read it; adding needs the
-   Equipment permission, which the server tells us via the item's own flags. *@
+@* Everything about one piece of the group's gear: what has happened to it, and its service and
+   defect log.
 
-<TelerikWindow Visible="@Visible" VisibleChanged="@OnVisibleChanged" Modal="true" Width="640px">
-    <WindowTitle>History — @(Item?.DisplayName ?? "equipment")</WindowTitle>
-    <WindowContent>
+   Its own page rather than a window — it holds a full history timeline, the service log, and the
+   add-entry form, which is more than a modal can show without losing its own footer. *@
+
+<PageTitle>@(Item?.DisplayName ?? "Equipment")</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:900px;">
+    <div class="mb-3">
+        <a href="@($"/organizations/{OrgId}")" class="text-decoration-none small">&larr; Back to the group</a>
+    </div>
+
+    <h3 class="mb-1">@(Item?.DisplayName ?? "Equipment")<HelpLink Slug="organization-administration" Anchor="the-equipment-tab" /></h3>
+    @if (Item is not null)
+    {
+        <p class="text-secondary small mb-3">@Item.BrandName · @Item.ModelName · @Item.CategoryName</p>
+    }
+
         @if (_error is not null)
         {
             <div class="alert alert-danger py-2">@_error</div>
@@ -67,7 +84,7 @@
         {
             <h6 class="mb-2">Everything that's happened</h6>
             <div class="mb-3">
-                <Ben.Web.Library.Equipment.EquipmentItemHistory ItemId="@Item.Id" />
+                <Ben.Web.Library.Equipment.EquipmentItemHistory ItemId="@ItemId" />
             </div>
             <h6 class="mb-2">Service log</h6>
         }
@@ -103,19 +120,13 @@
             </ul>
         }
 
-        <div class="dialog-footer-actions">
-            <span class="dialog-footer-spacer"></span>
-            <TelerikButton OnClick="@(() => OnVisibleChanged(false))">Close</TelerikButton>
-        </div>
-    </WindowContent>
-</TelerikWindow>
+</div>
 
 @code {
-    [Parameter] public bool Visible { get; set; }
-    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
-    [Parameter, EditorRequired] public Guid OrgId { get; set; }
-    [Parameter] public EquipmentItemRecord? Item { get; set; }
-    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid ItemId { get; set; }
+
+    private EquipmentItemRecord? Item { get; set; }
 
     private static readonly List<EquipmentServiceLogType> _entryTypes =
     [
@@ -131,7 +142,6 @@
     private bool _loading;
     private bool _busy;
     private string? _error;
-    private Guid? _loadedFor;
 
     private static string Describe(EquipmentServiceLogType type) => type switch
     {
@@ -141,30 +151,41 @@
         _                                      => type.ToString(),
     };
 
-    protected override async Task OnParametersSetAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!Visible || Item is null) { _loadedFor = null; return; }
-        if (_loadedFor == Item.Id) return;
-        _loadedFor = Item.Id;
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
+        await LoadItemAsync();
         await LoadAsync();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Re-reads the item, because a service entry changes its own defect/last-serviced fields and
+    /// the header above shows them.
+    /// </summary>
+    private async Task LoadItemAsync()
+    {
+        var owned = await AdminClient.GetOrgEquipmentAsync(OrgId);
+        Item = owned.Items.FirstOrDefault(i => i.Id == ItemId);
     }
 
     private async Task LoadAsync()
     {
-        if (Item is null) return;
         _loading = true;
         _error = null;
-        _entries = [.. await AdminClient.GetOrgEquipmentServiceLogAsync(OrgId, Item.Id)];
+        _entries = [.. await AdminClient.GetOrgEquipmentServiceLogAsync(OrgId, ItemId)];
         _loading = false;
     }
 
     private async Task AddEntryAsync()
     {
-        if (Item is null) return;
         _busy = true;
         _error = null;
 
-        var saved = await AdminClient.AddOrgEquipmentServiceLogAsync(OrgId, Item.Id,
+        var saved = await AdminClient.AddOrgEquipmentServiceLogAsync(OrgId, ItemId,
             new AddEquipmentServiceLogRequest(_entryType, _entryDate ?? DateTime.UtcNow, _notes.Trim(), null));
 
         _busy = false;
@@ -176,15 +197,8 @@
         }
 
         _notes = string.Empty;
+        // The entry changes the item's own defect/serviced fields, so re-read both.
+        await LoadItemAsync();
         await LoadAsync();
-        // The entry changes the item's own defect/serviced fields, so the grid behind us is stale.
-        await OnChanged.InvokeAsync();
-    }
-
-    private async Task OnVisibleChanged(bool visible)
-    {
-        Visible = visible;
-        if (!visible) _loadedFor = null;
-        await VisibleChanged.InvokeAsync(visible);
     }
 }

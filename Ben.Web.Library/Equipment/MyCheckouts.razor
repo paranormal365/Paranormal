@@ -52,7 +52,7 @@
                                 @RenderHeader(loan)
 
                                 <TelerikButton Size="@ThemeConstants.Button.Size.Small"
-                                               OnClick="@(() => OpenDetail(loan))">Details</TelerikButton>
+                                               OnClick="@(() => NavManager.NavigateTo($"/my-checkouts/{loan.Id}"))">Details</TelerikButton>
                                 @if (loan.Flags.CanCancel)
                                 {
                                     <TelerikButton Size="@ThemeConstants.Button.Size.Small"
@@ -93,7 +93,7 @@
                                 @RenderHeader(loan)
 
                                 <TelerikButton Size="@ThemeConstants.Button.Size.Small"
-                                               OnClick="@(() => OpenDetail(loan))">Details</TelerikButton>
+                                               OnClick="@(() => NavManager.NavigateTo($"/my-checkouts/{loan.Id}"))">Details</TelerikButton>
                                 @if (loan.Flags.CanApprove)
                                 {
                                     <div class="row g-2 align-items-end mb-2">
@@ -143,21 +143,7 @@
     }
 </div>
 
-<EquipmentCheckoutDetail Visible="@_detailVisible"
-                         VisibleChanged="@(v => _detailVisible = v)"
-                         Loan="@_detailLoan"
-                         OnChanged="LoadAsync" />
-
 @code {
-    private EquipmentCheckoutRecord? _detailLoan;
-    private bool _detailVisible;
-
-    private void OpenDetail(EquipmentCheckoutRecord loan)
-    {
-        _detailLoan = loan;
-        _detailVisible = true;
-    }
-
     private List<EquipmentCheckoutRecord> _borrowing = [];
     private List<EquipmentCheckoutRecord> _toApprove = [];
     private readonly Dictionary<Guid, DateTime?> _dueDates = [];

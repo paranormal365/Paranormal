@@ -248,7 +248,11 @@ public sealed record BorrowEligibilityRecord(
     Guid EquipmentItemId,
     bool CanRequest,
     string? Reason,
-    IReadOnlyList<BorrowOptionRecord> Options);
+    IReadOnlyList<BorrowOptionRecord> Options,
+    /// <summary>True when somebody already has this piece, or is about to collect it.</summary>
+    bool IsCurrentlyOut = false,
+    /// <summary>When it is expected back, if a due date was set.</summary>
+    DateTime? ExpectedBackOn = null);
 
 /// <summary>Asks to borrow a piece of equipment.</summary>
 public sealed record RequestEquipmentCheckoutRequest(

@@ -26,6 +26,24 @@
         }
         else
         {
+            @* Someone already has it. Asking is still allowed — it queues — but saying so up front
+               is the difference between a considered request and a surprised borrower. *@
+            @if (_eligibility.IsCurrentlyOut)
+            {
+                <div class="alert alert-warning py-2">
+                    <strong>Currently on loan.</strong>
+                    @if (_eligibility.ExpectedBackOn is not null)
+                    {
+                        <span> Expected back on @_eligibility.ExpectedBackOn.Value.ToString("d MMM yyyy").</span>
+                    }
+                    else
+                    {
+                        <span> No return date has been set.</span>
+                    }
+                    <span class="d-block small">You can still ask — your request waits until it's back.</span>
+                </div>
+            }
+
             @* One option means there is nothing to decide — don't make them pick from a list of one. *@
             @if (_eligibility.Options.Count > 1)
             {

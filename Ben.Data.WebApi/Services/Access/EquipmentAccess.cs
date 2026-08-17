@@ -156,11 +156,22 @@ public static class EquipmentAccess
     public static async Task<BorrowEligibilityRecord> ComputeBorrowEligibilityAsync(
         BenDataContext db, EquipmentItem item, Guid userId, CancellationToken ct)
     {
+        // Somebody already has it, or has been promised it. Asking is still allowed — that forms a
+        // queue — but the caller needs to know, or "Available to borrow" is a lie.
+        var activeLoan = await db.EquipmentCheckouts.AsNoTracking()
+            .Where(c => c.EquipmentItemId == item.Id
+                     && (c.Status == EquipmentCheckoutStatus.Approved
+                         || c.Status == EquipmentCheckoutStatus.CheckedOut))
+            .Select(c => new { c.DateDue })
+            .FirstOrDefaultAsync(ct);
+        var isOut = activeLoan is not null;
+        var backOn = activeLoan?.DateDue;
+
         if (userId == Guid.Empty)
-            return new BorrowEligibilityRecord(item.Id, false, "You need to be signed in to borrow equipment.", []);
+            return new BorrowEligibilityRecord(item.Id, false, "You need to be signed in to borrow equipment.", [], isOut, backOn);
 
         if (item.IsRetired)
-            return new BorrowEligibilityRecord(item.Id, false, "This equipment has been retired.", []);
+            return new BorrowEligibilityRecord(item.Id, false, "This equipment has been retired.", [], isOut, backOn);
 
         // Group-owned: any active member may ask, always on the group's behalf.
         if (item.OwningOrganizationId is Guid owningOrgId)
@@ -168,18 +179,18 @@ public static class EquipmentAccess
             var isMember = await db.OrganizationUserMemberships.AsNoTracking()
                 .AnyAsync(m => m.OrganizationId == owningOrgId && m.AppUserId == userId && m.IsActive, ct);
             if (!isMember)
-                return new BorrowEligibilityRecord(item.Id, false, "Only members of the group that owns this can borrow it.", []);
+                return new BorrowEligibilityRecord(item.Id, false, "Only members of the group that owns this can borrow it.", [], isOut, backOn);
 
             var orgName = await db.Organizations.AsNoTracking()
                 .Where(o => o.Id == owningOrgId).Select(o => o.Name).FirstOrDefaultAsync(ct);
-            return new BorrowEligibilityRecord(item.Id, true, null, [new BorrowOptionRecord(owningOrgId, orgName ?? "the group")]);
+            return new BorrowEligibilityRecord(item.Id, true, null, [new BorrowOptionRecord(owningOrgId, orgName ?? "the group")], isOut, backOn);
         }
 
         if (item.OwnerAppUserId == userId)
-            return new BorrowEligibilityRecord(item.Id, false, "This is your own equipment.", []);
+            return new BorrowEligibilityRecord(item.Id, false, "This is your own equipment.", [], isOut, backOn);
 
         if (item.LoanAudience == EquipmentLoanAudience.NotLoanable)
-            return new BorrowEligibilityRecord(item.Id, false, "The owner isn't lending this out.", []);
+            return new BorrowEligibilityRecord(item.Id, false, "The owner isn't lending this out.", [], isOut, backOn);
 
         var options = new List<BorrowOptionRecord>();
 
@@ -213,10 +224,10 @@ public static class EquipmentAccess
             var reason = (item.LoanAudience & EquipmentLoanAudience.SharedGroups) != 0
                 ? "You're not in a group this equipment is shared with."
                 : "The owner only lends this to people in their groups.";
-            return new BorrowEligibilityRecord(item.Id, false, reason, []);
+            return new BorrowEligibilityRecord(item.Id, false, reason, [], isOut, backOn);
         }
 
-        return new BorrowEligibilityRecord(item.Id, true, null, options);
+        return new BorrowEligibilityRecord(item.Id, true, null, options, isOut, backOn);
     }
 
     /// <summary>Whether two people are both active members of at least one group in common.</summary>

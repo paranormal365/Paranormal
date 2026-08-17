@@ -1,16 +1,34 @@
+@page "/my-checkouts/{CheckoutId:guid}"
 @namespace Ben.Web.Library.Equipment
 @using Ben.Service.Models.Entities
 @using Ben.Web.Library.Services
+@using Ben.Web.Library.Shared
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
 
-@* One loan in full: its condition photos at each end, and the record of any time asked for. *@
+@* One loan in full: its condition photos at each end, and the record of any time asked for.
 
-<TelerikWindow Visible="@Visible" VisibleChanged="@OnVisibleChanged" Modal="true" Width="720px">
-    <WindowTitle>@(Loan?.ItemDisplayName ?? "Loan")</WindowTitle>
-    <WindowContent>
-        @if (Loan is null)
+   Its own page rather than a window — this is the surface where either party manages everything
+   about a loan, and it carries two upload columns plus the whole renewal conversation. A modal
+   sized to that content stops scrolling before it stops growing. *@
+
+<PageTitle>@(Loan?.ItemDisplayName ?? "Loan")</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:900px;">
+    <div class="mb-3">
+        <a href="/my-checkouts" class="text-decoration-none small">&larr; Back to my checkouts</a>
+    </div>
+
+    <h3 class="mb-3">@(Loan?.ItemDisplayName ?? "Loan")<HelpLink Slug="borrowing-equipment" Anchor="photos-of-its-condition" /></h3>
+
+        @if (_loading)
         {
-            <p class="text-secondary mb-0">Nothing selected.</p>
+            <TelerikLoaderContainer Visible="true" Text="Loading this loan…" />
+        }
+        else if (Loan is null)
+        {
+            <p class="text-secondary mb-0">That loan could not be found, or it isn't yours to see.</p>
         }
         else
         {
@@ -34,7 +52,7 @@
             </div>
 
             <h6 class="mb-2">Condition</h6>
-            <CheckoutConditionPhotos Loan="@Loan" OnChanged="OnChanged" />
+            <CheckoutConditionPhotos Loan="@Loan" OnChanged="LoadAsync" />
 
             <hr />
 
@@ -115,26 +133,20 @@
             }
         }
 
-        <div class="dialog-footer-actions">
-            <span class="dialog-footer-spacer"></span>
-            <TelerikButton OnClick="@(() => OnVisibleChanged(false))">Close</TelerikButton>
-        </div>
-    </WindowContent>
-</TelerikWindow>
+</div>
 
 @code {
-    [Parameter] public bool Visible { get; set; }
-    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
-    [Parameter] public EquipmentCheckoutRecord? Loan { get; set; }
-    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public Guid CheckoutId { get; set; }
+
+    private EquipmentCheckoutRecord? Loan { get; set; }
 
     private List<EquipmentCheckoutRenewalRecord> _renewals = [];
     private readonly Dictionary<Guid, string> _reviewNotes = [];
     private DateTime? _requestedDate;
     private string _requestNotes = string.Empty;
     private bool _busy;
+    private bool _loading = true;
     private string? _error;
-    private Guid? _loadedFor;
 
     private string GetReviewNote(Guid id) => _reviewNotes.TryGetValue(id, out var n) ? n : string.Empty;
 
@@ -154,17 +166,45 @@
         _                                => "bg-secondary",
     };
 
-    protected override async Task OnParametersSetAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!Visible || Loan is null) { _loadedFor = null; return; }
-        if (_loadedFor == Loan.Id) return;
-        _loadedFor = Loan.Id;
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
 
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Finds this loan among the caller's own. Both queues are asked because the same page serves
+    /// borrower and lender, and the server only ever returns loans the caller is a party to — so a
+    /// miss here means "not yours", which is the same answer as "does not exist".
+    /// </summary>
+    private async Task LoadAsync()
+    {
+        _loading = true;
         _error = null;
-        _requestNotes = string.Empty;
-        // Seed with a week past whatever it is due now, since that is the usual ask.
-        _requestedDate = (Loan.DateDue ?? DateTime.Today).AddDays(7);
-        await LoadRenewalsAsync();
+        StateHasChanged();
+
+        var mine = await AdminClient.GetMyEquipmentCheckoutsAsync("borrower");
+        Loan = mine.FirstOrDefault(c => c.Id == CheckoutId);
+
+        if (Loan is null)
+        {
+            var toApprove = await AdminClient.GetMyEquipmentCheckoutsAsync("approver");
+            Loan = toApprove.FirstOrDefault(c => c.Id == CheckoutId);
+        }
+
+        if (Loan is not null)
+        {
+            _requestNotes = string.Empty;
+            // Seed with a week past whatever it is due now, since that is the usual ask.
+            _requestedDate = (Loan.DateDue ?? DateTime.Today).AddDays(7);
+            await LoadRenewalsAsync();
+        }
+
+        _loading = false;
+        StateHasChanged();
     }
 
     private async Task LoadRenewalsAsync()
@@ -191,8 +231,7 @@
         }
 
         _requestNotes = string.Empty;
-        await LoadRenewalsAsync();
-        await OnChanged.InvokeAsync();
+        await LoadAsync();
     }
 
     private async Task ReviewAsync(EquipmentCheckoutRenewalRecord renewal, bool approve)
@@ -211,15 +250,7 @@
             return;
         }
 
-        await LoadRenewalsAsync();
-        // Granting one moves the loan's due date, so whatever is behind this window is now stale.
-        await OnChanged.InvokeAsync();
-    }
-
-    private async Task OnVisibleChanged(bool visible)
-    {
-        Visible = visible;
-        if (!visible) _loadedFor = null;
-        await VisibleChanged.InvokeAsync(visible);
+        // Granting one moves the loan's own due date, so re-read the loan, not just its renewals.
+        await LoadAsync();
     }
 }

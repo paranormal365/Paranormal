@@ -4,12 +4,18 @@
 @inject IBenAdminClient AdminClient
 
 @* Create/edit one personal equipment item. Cascading category -> brand -> model pickers, each
-   able to propose a new catalog entry inline. TelerikWindow, never TelerikDialog: inputs inside
-   a Dialog silently never write back to the model. *@
+   able to propose a new catalog entry inline.
 
-<TelerikWindow Visible="@Visible" VisibleChanged="@OnVisibleChanged" Modal="true" Width="560px">
-    <WindowTitle>@(_isEdit ? "Edit equipment" : "Add equipment")</WindowTitle>
-    <WindowContent>
+   Rendered inline in the page body rather than in a TelerikWindow. The form outgrew a modal once
+   it carried the catalog pickers, the visibility choice and the three lending options: the window
+   sized itself past the viewport and its own body did not scroll, so the Save button became
+   unreachable. A form this long belongs in the page, where the browser scrolls it normally. *@
+
+@if (Visible)
+{
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="mb-3">@(_isEdit ? "Edit equipment" : "Add equipment")</h5>
         @if (_error is not null)
         {
             <div class="alert alert-danger py-2">@_error</div>
@@ -184,19 +190,15 @@
             }
         </div>
 
-        @* Buttons live in the content, not Telerik's WindowActions slot: that slot renders
-           detached from its own window and can land off-screen entirely, which is how the export
-           dialog's buttons became unreachable (item #68). Same in-content footer ConfirmDialog
-           uses for the same reason. *@
-        <div class="dialog-footer-actions">
-            <span class="dialog-footer-spacer"></span>
+        <div class="d-flex justify-content-end gap-2 border-top pt-3 mt-3">
             <TelerikButton OnClick="@(() => OnVisibleChanged(false))" Enabled="@(!_busy)">Cancel</TelerikButton>
             <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                            Enabled="@(!_busy && _modelId is not null && !string.IsNullOrWhiteSpace(_displayName))"
                            OnClick="SaveAsync">Save</TelerikButton>
         </div>
-    </WindowContent>
-</TelerikWindow>
+        </div>
+    </div>
+}
 
 @code {
     private const string GenericModelName = "Generic (model not specified)";

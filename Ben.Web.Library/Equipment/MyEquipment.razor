@@ -26,10 +26,18 @@
         <div class="alert alert-danger">@_error</div>
     }
 
+    @* The add/edit form renders here in the page body. While it is open the list below is
+       hidden: the form is long, and pairing it with a list only gives the reader two things to
+       scroll past each other. *@
+    <MyEquipmentItemEditor Visible="@_editorVisible"
+                           VisibleChanged="@(v => _editorVisible = v)"
+                           Item="@_editing"
+                           OnSaved="LoadAsync" />
+
     @* Bulk sharing writes the same per-item rows the per-item editor does, so a piece can still be
        excluded afterwards without unpicking the rest. Only shown when there is a group to share
        with — an action with nothing to act on is noise. *@
-    @if (!_loading && _items.Count > 0 && _myGroups.Count > 0)
+    @if (!_editorVisible && !_loading && _items.Count > 0 && _myGroups.Count > 0)
     {
         <div class="card mb-3">
             <div class="card-body py-2">
@@ -56,7 +64,11 @@
         </div>
     }
 
-    @if (_loading)
+    @if (_editorVisible)
+    {
+        @* list intentionally hidden while editing *@
+    }
+    else if (_loading)
     {
         <TelerikLoaderContainer Visible="true" Text="Loading your equipment…" />
     }
@@ -164,11 +176,6 @@
         }
     }
 </div>
-
-<MyEquipmentItemEditor Visible="@_editorVisible"
-                       VisibleChanged="@(v => _editorVisible = v)"
-                       Item="@_editing"
-                       OnSaved="LoadAsync" />
 
 <EquipmentShareEditor Visible="@_shareVisible"
                       VisibleChanged="@(v => _shareVisible = v)"
