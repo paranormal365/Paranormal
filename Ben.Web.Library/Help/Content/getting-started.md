@@ -28,6 +28,23 @@ replaced by whatever name they chose.
 | A group member | Work cases, record findings, attend investigations. |
 | A group owner or administrator | Configure the group, manage members, accept or decline requests. |
 
+## Voting on a published case
+
+Anyone with an account can vote on a published case, and on individual pieces of evidence within
+it. There are three answers: **confirms**, **inconclusive**, and **disputes**. You get one vote,
+and changing your mind replaces it rather than adding a second.
+
+Alongside the three counts you will see a single **score**. It is the votes added up, with confirms
+counting **+1**, disputes **−1**, and inconclusive **0** — so a green **+4** means the people who
+looked lean towards something being there, and a red **−3** means they lean the other way.
+
+An inconclusive vote is not a wasted one. It counts towards how many people looked while moving the
+score nowhere, which is exactly what "I've seen it and I genuinely can't say" should do.
+
+The score is always shown with the number of votes behind it, because **+4** from five people and
+**+4** from ninety are not the same claim. A score of **0** can mean the case is evenly split or
+that everyone was undecided — the counts beside it tell you which.
+
 ## Getting an account
 
 You need an account to request an investigation or join a group. Accounts are free, and the

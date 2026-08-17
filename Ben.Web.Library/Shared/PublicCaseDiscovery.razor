@@ -78,7 +78,7 @@ else
                                     @if (c.IsHaunted) { <span class="ms-1">👻</span> }
                                     <div class="fw-semibold">@c.Title</div>
                                 </div>
-                                <CaseVoteBar Confirms="@c.ConfirmsCount" Disputes="@c.DisputesCount" Inconclusive="@c.InconclusiveCount" Total="@c.TotalVotes" Compact="true" />
+                                <CaseVoteBar Confirms="@c.ConfirmsCount" Disputes="@c.DisputesCount" Inconclusive="@c.InconclusiveCount" Total="@c.TotalVotes" Score="@c.Score" Compact="true" />
                             </div>
                         </button>
                     }
@@ -152,7 +152,8 @@ else
                                 <CaseVoteBar Confirms="@item.ConfirmsCount"
                                          Disputes="@item.DisputesCount"
                                          Inconclusive="@item.InconclusiveCount"
-                                         Total="@item.TotalVotes" />
+                                         Total="@item.TotalVotes"
+                                         Score="@item.Score" />
                                 @if (UserState.IsAuthenticated)
                                 {
                                     <div class="mt-2">

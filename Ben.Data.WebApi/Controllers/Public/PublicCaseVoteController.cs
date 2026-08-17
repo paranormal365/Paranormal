@@ -53,7 +53,8 @@ public sealed class PublicCaseVoteController : BenControllerBase
             DisputesCount:     votes.Count(v => v.VoteType == EvidenceVoteType.Disputes),
             InconclusiveCount: votes.Count(v => v.VoteType == EvidenceVoteType.Inconclusive),
             TotalVotes:        votes.Count,
-            CurrentUserVote:   myVote));
+            CurrentUserVote:   myVote,
+            Score:             EvidenceVoteScore.Score(votes.Select(v => v.VoteType))));
     }
 
     /// <summary>
@@ -108,7 +109,8 @@ public sealed class PublicCaseVoteController : BenControllerBase
             DisputesCount:     votes.Count(v => v.VoteType == EvidenceVoteType.Disputes),
             InconclusiveCount: votes.Count(v => v.VoteType == EvidenceVoteType.Inconclusive),
             TotalVotes:        votes.Count,
-            CurrentUserVote:   request.VoteType));
+            CurrentUserVote:   request.VoteType,
+            Score:             EvidenceVoteScore.Score(votes.Select(v => v.VoteType))));
     }
 
     /// <summary>
