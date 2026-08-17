@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Service.Models.Entities;
 using Ben.Web.Library.Services;
 
@@ -199,6 +200,45 @@ public sealed partial class BenAdminClientAdapter
     public async Task<IReadOnlyList<EquipmentCheckoutRecord>> GetEquipmentItemCheckoutsAsync(Guid itemId, CancellationToken token = default)
     {
         var result = await _api.GetAsync<IReadOnlyList<EquipmentCheckoutRecord>>($"/api/equipment/{itemId}/checkouts", token);
+        return result ?? [];
+    }
+
+    // ── Condition photos, renewals, history ───────────────────────────────────
+
+    public async Task<IReadOnlyList<EquipmentCheckoutPhotoRecord>> GetCheckoutPhotosAsync(Guid checkoutId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<EquipmentCheckoutPhotoRecord>>($"{CheckoutBase}/{checkoutId}/photos", token);
+        return result ?? [];
+    }
+
+    public Task<bool> DeleteCheckoutPhotoAsync(Guid checkoutId, Guid photoId, CancellationToken token = default)
+        => _api.DeleteAsync($"{CheckoutBase}/{checkoutId}/photos/{photoId}", token);
+
+    public Task<EquipmentCheckoutPhotoRecord?> UploadCheckoutPhotoAsync(
+        Guid checkoutId, EquipmentPhotoStage stage, MultipartFormDataContent content, CancellationToken token = default)
+        => _api.PostMultipartAsync<EquipmentCheckoutPhotoRecord>(
+               $"{CheckoutBase}/{checkoutId}/photos?stage={stage}", content, token);
+
+    public Task<(byte[] Data, string ContentType, string FileName)?> GetCheckoutPhotoBytesAsync(Guid photoId, CancellationToken token = default)
+        => _api.GetBytesAsync($"{CheckoutBase}/photos/{photoId}/content", "photo", token);
+
+    public async Task<IReadOnlyList<EquipmentCheckoutRenewalRecord>> GetCheckoutRenewalsAsync(Guid checkoutId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<EquipmentCheckoutRenewalRecord>>($"{CheckoutBase}/{checkoutId}/renewals", token);
+        return result ?? [];
+    }
+
+    public Task<EquipmentCheckoutRenewalRecord?> RequestCheckoutRenewalAsync(Guid checkoutId, DateTime requestedDateDue, string? notes, CancellationToken token = default)
+        => _api.PostAsync<RequestEquipmentRenewalRequest, EquipmentCheckoutRenewalRecord>(
+               $"{CheckoutBase}/{checkoutId}/renewals", new RequestEquipmentRenewalRequest(requestedDateDue, notes), token);
+
+    public Task<EquipmentCheckoutRenewalRecord?> ReviewCheckoutRenewalAsync(Guid checkoutId, Guid renewalId, bool approve, string? reviewNotes, CancellationToken token = default)
+        => _api.PostAsync<ReviewEquipmentRenewalRequest, EquipmentCheckoutRenewalRecord>(
+               $"{CheckoutBase}/{checkoutId}/renewals/{renewalId}/review", new ReviewEquipmentRenewalRequest(approve, reviewNotes), token);
+
+    public async Task<IReadOnlyList<EquipmentHistoryEntryRecord>> GetEquipmentItemHistoryAsync(Guid itemId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<EquipmentHistoryEntryRecord>>($"/api/equipment/{itemId}/history", token);
         return result ?? [];
     }
 

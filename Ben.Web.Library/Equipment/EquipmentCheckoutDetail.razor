@@ -1,0 +1,225 @@
+@namespace Ben.Web.Library.Equipment
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@inject IBenAdminClient AdminClient
+
+@* One loan in full: its condition photos at each end, and the record of any time asked for. *@
+
+<TelerikWindow Visible="@Visible" VisibleChanged="@OnVisibleChanged" Modal="true" Width="720px">
+    <WindowTitle>@(Loan?.ItemDisplayName ?? "Loan")</WindowTitle>
+    <WindowContent>
+        @if (Loan is null)
+        {
+            <p class="text-secondary mb-0">Nothing selected.</p>
+        }
+        else
+        {
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger py-2">@_error</div>
+            }
+
+            <div class="text-secondary small mb-3">
+                @Loan.BrandName · @Loan.ModelName
+                @if (Loan.BorrowedForOrganizationName is not null)
+                {
+                    <span> · borrowed for @Loan.BorrowedForOrganizationName</span>
+                }
+                @if (Loan.DateDue is not null)
+                {
+                    <span class="@(Loan.IsOverdue ? "text-danger fw-semibold" : "")">
+                        · due @Loan.DateDue.Value.ToString("d MMM yyyy")@(Loan.IsOverdue ? " (overdue)" : "")
+                    </span>
+                }
+            </div>
+
+            <h6 class="mb-2">Condition</h6>
+            <CheckoutConditionPhotos Loan="@Loan" OnChanged="OnChanged" />
+
+            <hr />
+
+            <h6 class="mb-2">More time</h6>
+
+            @* Only the borrower can ask, and only while they actually have the gear. *@
+            @if (Loan.Flags.IsBorrower && Loan.Status == EquipmentCheckoutStatus.CheckedOut
+                 && !_renewals.Any(r => r.Status == EquipmentRenewalStatus.Requested))
+            {
+                <div class="row g-2 align-items-end mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold mb-1">Keep it until</label>
+                        <TelerikDatePicker @bind-Value="@_requestedDate" Width="100%" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold mb-1">Why (optional)</label>
+                        <input class="form-control form-control-sm" maxlength="1000" value="@_requestNotes"
+                               @oninput="@(e => _requestNotes = e.Value?.ToString() ?? string.Empty)" />
+                    </div>
+                    <div class="col-md-2">
+                        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Enabled="@(!_busy && _requestedDate is not null)"
+                                       OnClick="RequestRenewalAsync">Ask</TelerikButton>
+                    </div>
+                </div>
+            }
+
+            @if (_renewals.Count == 0)
+            {
+                <p class="text-secondary small">No requests for more time.</p>
+            }
+            else
+            {
+                <ul class="list-unstyled mb-0">
+                    @foreach (var renewal in _renewals)
+                    {
+                        <li class="border-bottom py-2">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <span class="small">
+                                    Asked to keep it until <strong>@renewal.RequestedDateDue.ToString("d MMM yyyy")</strong>
+                                    @if (!string.IsNullOrWhiteSpace(renewal.RequestNotes))
+                                    {
+                                        <span class="d-block text-secondary">“@renewal.RequestNotes”</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(renewal.ReviewNotes))
+                                    {
+                                        <span class="d-block text-secondary">
+                                            Reply from @(renewal.ReviewedByDisplayName ?? "the lender"): @renewal.ReviewNotes
+                                        </span>
+                                    }
+                                </span>
+                                <span class="badge @RenewalClass(renewal.Status)">@RenewalLabel(renewal.Status)</span>
+                            </div>
+
+                            @if (renewal.CanReview)
+                            {
+                                <div class="mt-2">
+                                    <input class="form-control form-control-sm mb-2" maxlength="1000"
+                                           placeholder="Reason (required to refuse)"
+                                           value="@GetReviewNote(renewal.Id)"
+                                           @oninput="@(e => _reviewNotes[renewal.Id] = e.Value?.ToString() ?? string.Empty)" />
+                                    <div class="d-flex gap-2">
+                                        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                                       Enabled="@(!_busy)"
+                                                       OnClick="@(() => ReviewAsync(renewal, true))">Grant</TelerikButton>
+                                        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                                       Enabled="@(!_busy && !string.IsNullOrWhiteSpace(GetReviewNote(renewal.Id)))"
+                                                       OnClick="@(() => ReviewAsync(renewal, false))">Refuse</TelerikButton>
+                                    </div>
+                                </div>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        }
+
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <TelerikButton OnClick="@(() => OnVisibleChanged(false))">Close</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    [Parameter] public EquipmentCheckoutRecord? Loan { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private List<EquipmentCheckoutRenewalRecord> _renewals = [];
+    private readonly Dictionary<Guid, string> _reviewNotes = [];
+    private DateTime? _requestedDate;
+    private string _requestNotes = string.Empty;
+    private bool _busy;
+    private string? _error;
+    private Guid? _loadedFor;
+
+    private string GetReviewNote(Guid id) => _reviewNotes.TryGetValue(id, out var n) ? n : string.Empty;
+
+    private static string RenewalLabel(EquipmentRenewalStatus s) => s switch
+    {
+        EquipmentRenewalStatus.Requested => "Waiting",
+        EquipmentRenewalStatus.Approved  => "Granted",
+        EquipmentRenewalStatus.Denied    => "Refused",
+        _                                => s.ToString(),
+    };
+
+    private static string RenewalClass(EquipmentRenewalStatus s) => s switch
+    {
+        EquipmentRenewalStatus.Requested => "bg-warning text-dark",
+        EquipmentRenewalStatus.Approved  => "bg-success",
+        EquipmentRenewalStatus.Denied    => "bg-secondary",
+        _                                => "bg-secondary",
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Visible || Loan is null) { _loadedFor = null; return; }
+        if (_loadedFor == Loan.Id) return;
+        _loadedFor = Loan.Id;
+
+        _error = null;
+        _requestNotes = string.Empty;
+        // Seed with a week past whatever it is due now, since that is the usual ask.
+        _requestedDate = (Loan.DateDue ?? DateTime.Today).AddDays(7);
+        await LoadRenewalsAsync();
+    }
+
+    private async Task LoadRenewalsAsync()
+    {
+        if (Loan is null) return;
+        _renewals = [.. await AdminClient.GetCheckoutRenewalsAsync(Loan.Id)];
+        StateHasChanged();
+    }
+
+    private async Task RequestRenewalAsync()
+    {
+        if (Loan is null || _requestedDate is null) return;
+        _busy = true;
+        _error = null;
+
+        var created = await AdminClient.RequestCheckoutRenewalAsync(Loan.Id, _requestedDate.Value,
+            string.IsNullOrWhiteSpace(_requestNotes) ? null : _requestNotes.Trim());
+
+        _busy = false;
+        if (created is null)
+        {
+            _error = "That request couldn't be sent — check the date is later than the one it's already due back.";
+            return;
+        }
+
+        _requestNotes = string.Empty;
+        await LoadRenewalsAsync();
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task ReviewAsync(EquipmentCheckoutRenewalRecord renewal, bool approve)
+    {
+        if (Loan is null) return;
+        _busy = true;
+        _error = null;
+
+        var reviewed = await AdminClient.ReviewCheckoutRenewalAsync(
+            Loan.Id, renewal.Id, approve, GetReviewNote(renewal.Id));
+
+        _busy = false;
+        if (reviewed is null)
+        {
+            _error = "That decision couldn't be saved — the request may have been withdrawn.";
+            return;
+        }
+
+        await LoadRenewalsAsync();
+        // Granting one moves the loan's due date, so whatever is behind this window is now stale.
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task OnVisibleChanged(bool visible)
+    {
+        Visible = visible;
+        if (!visible) _loadedFor = null;
+        await VisibleChanged.InvokeAsync(visible);
+    }
+}

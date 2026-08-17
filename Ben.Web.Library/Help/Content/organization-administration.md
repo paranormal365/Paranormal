@@ -116,7 +116,11 @@ Each piece tracks who is holding it, when it was last serviced, and whether it i
 **Held by** can be set by hand: kit gets passed over in a car park without anyone opening the app,
 and the record should still be able to tell the truth. A holder has to be an active member.
 
-**History** on a piece is its service and defect log. Anyone can read it; adding an entry needs the
+**History** on a piece opens two things: the full account of everything that has happened to it —
+loans, requests for more time, service and faults, newest first — and the service log itself, where
+new entries are added.
+
+The service log part is what you write to. Anyone can read it; adding an entry needs the
 Equipment permission. The entry type does real work rather than just labelling the note:
 
 | Entry | What it does to the item |

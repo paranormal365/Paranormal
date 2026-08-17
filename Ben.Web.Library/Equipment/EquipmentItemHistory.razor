@@ -1,0 +1,77 @@
+@namespace Ben.Web.Library.Equipment
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@inject IBenAdminClient AdminClient
+
+@* One piece of gear's whole story — loans, renewals, service and faults in one column. The server
+   writes each line, so this and any other surface describing the same event say the same thing. *@
+
+@if (_loading)
+{
+    <p class="text-secondary small mb-0">Loading history…</p>
+}
+else if (_entries.Count == 0)
+{
+    <p class="text-secondary small mb-0">Nothing has happened to this piece yet.</p>
+}
+else
+{
+    <ul class="list-unstyled mb-0">
+        @foreach (var entry in _entries)
+        {
+            <li class="d-flex gap-2 border-bottom py-2">
+                <span class="badge @KindClass(entry.Kind) align-self-start">@KindLabel(entry.Kind)</span>
+                <span class="flex-grow-1">
+                    <span class="d-block small">@entry.Summary</span>
+                    <span class="d-block text-secondary" style="font-size:.75rem;">
+                        @entry.DateUtc.ToString("d MMM yyyy")
+                        @if (entry.ActorDisplayName is not null)
+                        {
+                            <span> · @entry.ActorDisplayName</span>
+                        }
+                        @if (entry.PhotoCount > 0)
+                        {
+                            <span> · @entry.PhotoCount @(entry.PhotoCount == 1 ? "photo" : "photos")</span>
+                        }
+                    </span>
+                </span>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ItemId { get; set; }
+
+    private List<EquipmentHistoryEntryRecord> _entries = [];
+    private bool _loading = true;
+    private Guid _loadedFor;
+
+    private static string KindLabel(EquipmentHistoryKind kind) => kind switch
+    {
+        EquipmentHistoryKind.Loan    => "Loan",
+        EquipmentHistoryKind.Renewal => "Renewal",
+        EquipmentHistoryKind.Service => "Service",
+        EquipmentHistoryKind.Defect  => "Fault",
+        _                            => kind.ToString(),
+    };
+
+    private static string KindClass(EquipmentHistoryKind kind) => kind switch
+    {
+        EquipmentHistoryKind.Loan    => "bg-primary",
+        EquipmentHistoryKind.Renewal => "bg-info text-dark",
+        EquipmentHistoryKind.Service => "bg-success",
+        EquipmentHistoryKind.Defect  => "bg-warning text-dark",
+        _                            => "bg-secondary",
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ItemId == Guid.Empty || _loadedFor == ItemId) return;
+        _loadedFor = ItemId;
+
+        _loading = true;
+        _entries = [.. await AdminClient.GetEquipmentItemHistoryAsync(ItemId)];
+        _loading = false;
+    }
+}
