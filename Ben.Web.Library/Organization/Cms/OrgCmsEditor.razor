@@ -63,7 +63,22 @@
                              Sortable="true">
                     <GridColumns>
                         <GridColumn Field="@nameof(CmsPageListItem.PageTitle)" Title="Title" />
-                        <GridColumn Field="@nameof(CmsPageListItem.UrlName)" Title="URL Slug" Width="160px" />
+                        <GridColumn Field="@nameof(CmsPageListItem.UrlName)" Title="URL Slug" Width="220px">
+                            <Template>
+                                @{ var slugRow = (CmsPageListItem)context; }
+                                <code class="small">@slugRow.UrlName</code>
+                                @* Only possible on a page saved before the reserved-word check. It
+                                   looks perfectly fine here, and the only symptom is that its link
+                                   lands somewhere else — so the list has to say so. *@
+                                @if (slugRow.IsUnreachable)
+                                {
+                                    <span class="badge bg-danger ms-2"
+                                          title="The site routes this word, so this page can never open. Rename it.">
+                                        Unreachable
+                                    </span>
+                                }
+                            </Template>
+                        </GridColumn>
                         <GridColumn Title="Status" Width="110px">
                             <Template>
                                 @{ var p = (CmsPageListItem)context; }

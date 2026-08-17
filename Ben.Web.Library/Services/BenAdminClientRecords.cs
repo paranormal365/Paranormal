@@ -176,7 +176,11 @@ public sealed record CmsPageListItem(
     int SectionCount,
     bool CanEdit,
     bool CanDelete,
-    DateTime DateCreated);
+    DateTime DateCreated,
+    // True when the slug is one the site itself routes, so the page cannot be opened. Only possible
+    // for pages saved before the reserved-word check existed — the symptom is invisible in this
+    // list, which is why the server says so rather than leaving it to be discovered.
+    bool IsUnreachable = false);
 
 /// <summary>Full page with sections returned by GET /api/organizations/{orgId}/pages/{pageId}.</summary>
 public sealed record CmsPageDetail(
