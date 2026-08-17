@@ -2,6 +2,7 @@ using AutoMapper;
 using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.WebApi.Services;
 using Ben.Data.Source.Entities;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -370,8 +371,51 @@ public sealed class CaseController : BenControllerBase
             entity.DateCaseClosed = DateTime.UtcNow;
         entity.DateUpdated          = DateTime.UtcNow;
         entity.UpdatedByAppUserId   = userId == Guid.Empty ? null : userId;
+
+        if (await EnsurePublicSlugAsync(db, entity, ct) is string refusal)
+            return BadRequest(refusal);
+
         await db.SaveChangesAsync(ct);
         return Ok(_mapper.Map<CaseRecord>(entity));
+    }
+
+    /// <summary>
+    /// Gives a newly-public case its readable address, or explains why it cannot have one.
+    /// </summary>
+    /// <remarks>
+    /// <para>Built from the <b>title</b>, which is already shown on the public case page — so the
+    /// URL exposes nothing the page does not. That is why it is derived rather than typed: free
+    /// text in a public address is a much easier way to publish something nobody meant to.</para>
+    ///
+    /// <para><b>A case is somebody's home.</b> A title carrying a street address is refused rather
+    /// than quietly slugged, because a URL outlives the page — it sits in browser histories,
+    /// referrer headers and pasted links long after anybody thinks about it, and would hand back
+    /// exactly what redacting the coordinates was for.</para>
+    ///
+    /// <para>Assigned once. Renaming a case afterwards leaves the address alone, or every link
+    /// somebody has already shared would break.</para>
+    /// </remarks>
+    private static async Task<string?> EnsurePublicSlugAsync(
+        BenDataContext db, Case entity, CancellationToken ct)
+    {
+        var isPubliclyVisible = entity.IsPublic
+            && entity.Status is CaseStatus.Public or CaseStatus.Haunted;
+
+        if (!isPubliclyVisible || entity.UrlName is not null) return null;
+
+        if (UrlSlug.LooksLikeAStreetAddress(entity.Title))
+            return "This case's title looks like a street address, and the title becomes part of its "
+                 + "public web address. Give it a name that doesn't identify the property — "
+                 + "\"The Mill House Investigation\", for instance — before publishing it.";
+
+        var candidate = UrlSlug.From(entity.Title)
+                        ?? $"case-{entity.CaseYear}-{entity.OrgCaseNumber:D3}";
+
+        entity.UrlName = await UrlSlug.MakeUniqueAsync(candidate, async slug =>
+            await db.Cases.AnyAsync(c => c.OrganizationId == entity.OrganizationId
+                                      && c.UrlName == slug
+                                      && c.Id != entity.Id, ct));
+        return null;
     }
 
     // ── Timeline entries ──────────────────────────────────────────────────────

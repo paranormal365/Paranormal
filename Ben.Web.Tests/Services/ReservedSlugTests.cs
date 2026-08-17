@@ -111,3 +111,65 @@ public sealed class ReservedSlugTests
         Assert.False(CmsReservedSlugs.IsReserved("events-2026"));
     }
 }
+
+/// <summary>
+/// Building the readable part of a URL (backlog item #89).
+/// </summary>
+/// <remarks>
+/// The street-address check is the part with teeth. A slug is public text that ends up in browser
+/// histories, referrer headers and pasted links, and a case is somebody's home — so
+/// <c>/cases/42-elm-street-hauntings</c> would hand back everything redacting the coordinates was
+/// built to protect.
+/// </remarks>
+public sealed class UrlSlugTests
+{
+    private static string? Slug(string? text)
+        => (string?)typeof(Ben.Data.WebApi.Controllers.Public.PublicCaseController).Assembly
+            .GetType("Ben.Data.WebApi.Services.UrlSlug")!
+            .GetMethod("From")!.Invoke(null, [text]);
+
+    private static bool LooksLikeAddress(string? text)
+        => (bool)typeof(Ben.Data.WebApi.Controllers.Public.PublicCaseController).Assembly
+            .GetType("Ben.Data.WebApi.Services.UrlSlug")!
+            .GetMethod("LooksLikeAStreetAddress")!.Invoke(null, [text])!;
+
+    [Theory]
+    [InlineData("The Mill House Investigation", "the-mill-house-investigation")]
+    [InlineData("  Spaced   Out  ", "spaced-out")]
+    [InlineData("Café Noir", "cafe-noir")]
+    [InlineData("What's Happening?!", "what-s-happening")]
+    public void A_title_becomes_a_readable_slug(string title, string expected)
+        => Assert.Equal(expected, Slug(title));
+
+    /// <summary>
+    /// Accents fold to their base letters rather than being dropped — a URL that silently loses
+    /// letters reads as a typo.
+    /// </summary>
+    [Fact]
+    public void Nothing_usable_gives_nothing()
+    {
+        Assert.Null(Slug(null));
+        Assert.Null(Slug("   "));
+        Assert.Null(Slug("!!!"));
+    }
+
+    [Theory]
+    [InlineData("42 Elm Street Hauntings")]
+    [InlineData("Investigation at 1600 Pennsylvania Ave")]
+    [InlineData("14 Oak Road")]
+    [InlineData("7 St Mary's Lane")]
+    public void A_street_address_is_recognised(string title)
+        => Assert.True(LooksLikeAddress(title), $"'{title}' should have been caught.");
+
+    /// <summary>
+    /// Deliberately narrow. This refuses a title an organization typed, and a rule that fired on
+    /// ordinary names would teach people to work around it rather than to name things carefully.
+    /// </summary>
+    [Theory]
+    [InlineData("The Mill House")]
+    [InlineData("The 1892 Foundry")]
+    [InlineData("Case of the 13 Bells")]
+    [InlineData("Streetlight Manor")]
+    public void An_ordinary_title_is_not_mistaken_for_an_address(string title)
+        => Assert.False(LooksLikeAddress(title), $"'{title}' should not have been caught.");
+}

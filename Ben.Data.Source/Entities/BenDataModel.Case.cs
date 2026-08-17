@@ -7,6 +7,26 @@ namespace Ben.Data.Source.Entities
         public Guid Id { get; set; }
 
         /// <summary>
+        /// The readable part of this case's public address — <c>/o/{org}/cases/{UrlName}</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>Generated from the case's <b>title</b> the first time it is published, and then
+        /// left alone. The title is already public on the case page, so nothing new is exposed by
+        /// putting it in the URL — which is not true of free text, and is the reason this is not a
+        /// field somebody types.</para>
+        ///
+        /// <para><b>A case is somebody's home.</b> A slug is public text that will end up in browser
+        /// histories, referrer headers and pasted links, so it must never carry a street address.
+        /// <c>UrlSlug.LooksLikeAStreetAddress</c> refuses one that does — the same instinct behind
+        /// redacting the coordinates.</para>
+        ///
+        /// <para>Null while the case is not public, because a private case has no address to
+        /// promise. Once set it does not change: renaming a case must not break a link somebody has
+        /// already shared.</para>
+        /// </remarks>
+        public string? UrlName { get; set; }
+
+        /// <summary>
         /// The physical location this case concerns, once one has been resolved.
         /// </summary>
         /// <remarks>

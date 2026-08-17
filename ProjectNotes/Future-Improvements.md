@@ -4189,6 +4189,26 @@ from inside the app.**
 
   A few extra words are held back for routes the site will want. Reserving one costs an
   organization nothing today; taking it back after they have built a page there breaks their link.
-- Slugs for cases, investigations and equipment models, using `UrlSlug` (built for events).
+- **Cases — ✅ built 2026-08-17.** `/o/{org}/cases/{slug}`, generated from the case **title** the
+  first time it is published and then left alone. Derived rather than typed on purpose: the title is
+  already on the public case page, so the URL exposes nothing the page does not, which is not true
+  of free text.
+
+  **A case is somebody's home**, and a URL outlives the page — it sits in browser histories,
+  referrer headers and pasted links long after anyone thinks about it. So a title that reads like a
+  street address is **refused at publish** rather than quietly slugged, which would have handed back
+  what redacting the coordinates was built to protect. The check is deliberately narrow: it refuses
+  a title an organization typed, and a rule that fired on "The 1892 Foundry" would teach people to
+  work around it rather than to name things carefully.
+
+  The old `#2026-042` reference still resolves, because it is what an organization says out loud to
+  a client. The endpoint's old "expected format 2026-042" 400 became wrong the moment the same
+  segment could carry a slug, and is now a plain 404.
+
+  *Worth recording:* the street-address regex shipped broken in its first draft — `\b` was eaten
+  during editing and became a literal backspace, so it matched nothing at all. Only the test caught
+  it. A guard that silently never fires is the worst kind.
+
+- Slugs for investigations and equipment models, using `UrlSlug`.
 - **Alias-and-redirect for changed slugs**, before anything ships publicly. Cheap now, and
   retrofitting it after links have been shared means the links are already dead.
