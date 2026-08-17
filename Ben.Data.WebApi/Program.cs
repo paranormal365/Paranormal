@@ -153,6 +153,8 @@ builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IOrga
 builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService, Ben.Service.RepositoryService.Services.AuditLogService>();
 builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IFileStorageService, Ben.Data.WebApi.Services.LocalFileStorageService>();
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.FileMetadataExtractorService>();
+// Separates a media file's metadata from the bytes that get served — see IMediaSanitizationService.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.IMediaSanitizationService, Ben.Data.WebApi.Services.MediaSanitizationService>();
 // Scoped: it opens its own DbContext per call and holds no state between them.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.SiteSettingsService>();
 // Stateless apart from its keys, so one instance serves every request.
