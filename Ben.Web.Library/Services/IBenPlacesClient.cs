@@ -146,4 +146,14 @@ public interface IBenPlacesClient
 
     // ── Directions ────────────────────────────────────────────────────────────
     Task<DirectionsResult?> GetDirectionsAsync(double fromLat, double fromLon, double toLat, double toLon, CancellationToken token = default);
+
+    // ── Published investigations (item #89) ─────────────────────────────────
+
+    /// <summary>What an organization has published, most recent first. Anonymous.</summary>
+    Task<IReadOnlyList<PublicInvestigationListItem>> GetPublishedInvestigationsAsync(
+        string orgUrlName, CancellationToken token = default);
+
+    /// <summary>One published investigation, by the address people share.</summary>
+    Task<PublicInvestigationDetail?> GetPublishedInvestigationAsync(
+        string orgUrlName, string investigationSlug, CancellationToken token = default);
 }

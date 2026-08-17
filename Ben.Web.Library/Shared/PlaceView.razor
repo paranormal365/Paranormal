@@ -121,7 +121,16 @@
                             {
                                 <tr>
                                     <td class="text-nowrap">@row.ScheduledDateTime.ToLocalTime().ToString("d MMM yyyy")</td>
-                                    <td>@row.Title</td>
+                                    <td>
+                                        @if (row.UrlName is string invSlug)
+                                        {
+                                            <a href="@($"/o/{row.OrganizationUrlName}/investigations/{invSlug}")">@row.Title</a>
+                                        }
+                                        else
+                                        {
+                                            @row.Title
+                                        }
+                                    </td>
                                     <td><a href="/@row.OrganizationUrlName">@row.OrganizationName</a></td>
                                 </tr>
                             }

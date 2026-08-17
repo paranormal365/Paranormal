@@ -4209,6 +4209,24 @@ from inside the app.**
   during editing and became a literal backspace, so it matched nothing at all. Only the test caught
   it. A guard that silently never fires is the worst kind.
 
-- Slugs for investigations and equipment models, using `UrlSlug`.
+- **Investigations — ✅ built 2026-08-17.** `/o/{org}/investigations/{date}-{title}`, and a public
+  page to go with it: a published write-up could previously only be reached through the page of the
+  place it happened at, which is a fine way to browse and a poor way to share.
+
+  Date first, then the title. The date makes a list sort by name alone and says something useful
+  when a title does not; the title stops a date-only address being **walkable**, which would let
+  anybody step through the calendar and enumerate a group's visits.
+
+  **Flat under the organization**, as decided — `CaseId` is nullable, so a nested address has no
+  form for a landmark visit. Visibility runs through the **shared** `InvestigationVisibilityFilter`
+  rather than a second `Visibility == Public`, so a group-only investigation is unreachable here for
+  the same reason it is unreachable on a place page. The location is approximate: a write-up says a
+  group was somewhere, not which door they knocked on. The same street-address refusal as cases
+  applies to the title.
+
+  The place page's rows now link to it — they carried no slug, which is the third time in this
+  session a list has shipped unable to open its own contents.
+
+- Slugs for equipment models, using `UrlSlug`.
 - **Alias-and-redirect for changed slugs**, before anything ships publicly. Cheap now, and
   retrofitting it after links have been shared means the links are already dead.

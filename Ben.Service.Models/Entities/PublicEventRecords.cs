@@ -1,3 +1,5 @@
+using Ben.Data.Common.Enums;
+
 namespace Ben.Service.Models.Entities;
 
 // ── Public events (backlog item #87) ─────────────────────────────────────────
@@ -107,3 +109,44 @@ public sealed record EventAttendanceConfirmation(
     string OrganizationUrlName,
     string? EventUrlName,
     DateTime StartDateTime);
+
+
+// ── Published investigations (backlog item #89) ──────────────────────────────
+
+/// <summary>One published investigation in a list.</summary>
+public sealed record PublicInvestigationListItem(
+    Guid Id,
+    /// <summary>The readable address to link to; null for one published before slugs existed.</summary>
+    string? UrlName,
+    string Title,
+    DateTime ScheduledDateTime,
+    InvestigationStatus Status,
+    string OrganizationName,
+    string OrganizationUrlName,
+    string? PlaceName,
+    string? City,
+    string? State);
+
+/// <summary>
+/// One published investigation as a visitor sees it.
+/// </summary>
+/// <remarks>
+/// Carries the write-up (<c>Notes</c>) rather than the plan (<c>Description</c>), and only an
+/// approximate location: a published account says a group was somewhere, not precisely where.
+/// </remarks>
+public sealed record PublicInvestigationDetail(
+    Guid Id,
+    string? UrlName,
+    string Title,
+    string? Notes,
+    DateTime ScheduledDateTime,
+    DateTime? EndDateTime,
+    InvestigationStatus Status,
+    string OrganizationName,
+    string OrganizationUrlName,
+    Guid? PlaceId,
+    string? PlaceName,
+    string? City,
+    string? State,
+    decimal? ApproximateLatitude,
+    decimal? ApproximateLongitude);
