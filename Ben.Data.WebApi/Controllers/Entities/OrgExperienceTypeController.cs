@@ -5,6 +5,7 @@ using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.SeedData;
+using Ben.Data.WebApi.Services;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -77,6 +78,13 @@ public sealed class OrgExperienceTypeController : BenControllerBase
             t => t.ExperienceCategoryId == category.Id && t.Name.ToLower() == name.ToLower(), ct);
         if (existing is not null) return Ok(_mapper.Map<ExperienceTypeRecord>(existing));
 
+        // Nothing matches exactly, but something close might — and this is the only cheap moment to
+        // ask. Afterwards it takes an app administrator noticing, and a merge. Same treatment the
+        // equipment catalog gives "Sansung": the type is a shared word, and a near-miss splits it.
+        var nearMisses = await FindProbableTyposAsync(db, category.Id, name, ct);
+        if (nearMisses.Count > 0 && !request.ConfirmDistinct)
+            return Conflict(new ProbableDuplicateResponse(name, nearMisses));
+
         var entity = new ExperienceType
         {
             Id                       = Guid.NewGuid(),
@@ -103,6 +111,34 @@ public sealed class OrgExperienceTypeController : BenControllerBase
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Approved types in the same category whose names look like mistypings of this one.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Only approved types, and only within the category.</b> Suggesting somebody else's
+    /// unapproved typo would spread it rather than catch it. Confining it to the category matters
+    /// more here than it does for equipment brands: "Shadow" under <i>Visual</i> and "Shadow" under
+    /// <i>Tactile</i> would be a strange pair of words to conflate, and across a taxonomy this
+    /// broad the cross-category near-misses are mostly noise.</para>
+    /// </remarks>
+    private static async Task<List<string>> FindProbableTyposAsync(
+        BenDataContext db, Guid categoryId, string name, CancellationToken ct)
+    {
+        // Length-bounded in the query so this reads a handful of rows rather than the taxonomy:
+        // anything more than two characters different in length is not a typo of this.
+        var lower = name.Length - 2;
+        var upper = name.Length + 2;
+
+        var candidates = await db.ExperienceTypes.AsNoTracking()
+            .Where(t => t.ExperienceCategoryId == categoryId
+                     && t.IsApproved && t.ApprovedByAppUserId != null
+                     && t.Name.Length >= lower && t.Name.Length <= upper)
+            .Select(t => t.Name)
+            .ToListAsync(ct);
+
+        return [.. candidates.Where(c => NameSimilarity.IsProbableTypo(name, c)).OrderBy(c => c)];
+    }
 
     private static async Task<bool> CanAdministerAsync(
         BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
@@ -164,7 +200,15 @@ public sealed class OrgExperienceTypeController : BenControllerBase
 }
 
 /// <summary>A group adding a missing type to an existing category.</summary>
+/// <param name="ExperienceCategoryId">The approved category the new type belongs under.</param>
+/// <param name="Name">The type's name, unique within the category and case-insensitively so.</param>
+/// <param name="Description">Optional explanation of what the type covers.</param>
+/// <param name="ConfirmDistinct">
+/// Set once the person has been shown the close matches and said theirs is genuinely different.
+/// Without it a probable typo is refused with the suggestions rather than silently created.
+/// </param>
 public sealed record AddOrgExperienceTypeRequest(
     Guid ExperienceCategoryId,
     string? Name,
-    string? Description);
+    string? Description,
+    bool ConfirmDistinct = false);

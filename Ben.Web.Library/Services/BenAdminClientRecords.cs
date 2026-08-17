@@ -537,10 +537,15 @@ public sealed record UpsertExperienceTypeRequest(
     bool IsActive);
 
 /// <summary>A group adding a missing type to an existing category.</summary>
+/// <param name="ConfirmDistinct">
+/// Set once the person has been shown the close matches and said theirs is genuinely different.
+/// Without it a probable typo is refused with the suggestions rather than silently created.
+/// </param>
 public sealed record AddOrgExperienceTypeRequest(
     Guid ExperienceCategoryId,
     string? Name,
-    string? Description);
+    string? Description,
+    bool ConfirmDistinct = false);
 
 /// <summary>What a rejection removed — the type, and how many taggings went with it.</summary>
 public sealed record RejectExperienceTypeResponse(Guid ExperienceTypeId, int UsagesRemoved);

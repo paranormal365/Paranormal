@@ -315,6 +315,9 @@ public sealed class MyCaseController : BenControllerBase
             .Where(t => t.CaseTimelineEntryId == entryId)
             .ToListAsync(ct);
 
+        var untagged = existing.Where(t => !wanted.Contains(t.ExperienceTypeId))
+            .Select(t => t.ExperienceTypeId).ToList();
+
         db.CaseTimelineEntryExperienceTypes.RemoveRange(
             existing.Where(t => !wanted.Contains(t.ExperienceTypeId)));
 
@@ -328,6 +331,11 @@ public sealed class MyCaseController : BenControllerBase
         }
 
         await db.SaveChangesAsync(ct);
+
+        // Unticking the last use of a type somebody had to invent takes the type with it, when no
+        // human has endorsed it. Otherwise a typed-once mistake sits in everyone's picker for good,
+        // and the group that made it has no way to clear it up.
+        await TaxonomyCleanup.RemoveOrphanedExperienceTypesAsync(db, untagged, ct);
         return true;
     }
 
@@ -347,9 +355,20 @@ public sealed class MyCaseController : BenControllerBase
         if (entry is null) return NotFound();
         if (!await IsCaseClient(db, caseId, userId, ct)) return Forbid();
 
+        // Read before deleting: the join rows cascade away with the entry, so afterwards there is
+        // nothing left to say which types this occurrence was the last user of.
+        var taggedTypeIds = await db.CaseTimelineEntryExperienceTypes.AsNoTracking()
+            .Where(x => x.CaseTimelineEntryId == entryId)
+            .Select(x => x.ExperienceTypeId)
+            .ToListAsync(ct);
+
         db.CaseTimelineEntries.Remove(entry);
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(CaseTimelineEntry), entry.Id, entry, userId, AppSources.WebApi));
+
+        // Ben's original case, one taxonomy over: invent a word for tonight, mistype it, delete the
+        // occurrence — and without this the word outlives the thing it was invented for.
+        await TaxonomyCleanup.RemoveOrphanedExperienceTypesAsync(db, taggedTypeIds, ct);
         return NoContent();
     }
 

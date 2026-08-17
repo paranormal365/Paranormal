@@ -59,4 +59,44 @@ public static class TaxonomyCleanup
         db.EquipmentBrands.Remove(brand);
         await db.SaveChangesAsync(ct);
     }
+
+    /// <summary>
+    /// Removes any of these experience types that a group proposed, no human has reviewed, and
+    /// nothing is tagged with any more.
+    /// </summary>
+    /// <remarks>
+    /// <para>The same story as the equipment brand above, one taxonomy over: somebody tags tonight's
+    /// occurrence with a type they had to invent, mistypes it, then unticks it. Without this the
+    /// mistyping stays in the picker forever — and unlike equipment, a group has <i>no</i> way at
+    /// all to remove it, because the only delete lives behind an app-administrator screen.</para>
+    ///
+    /// <para><b>Unreviewed means approved with no approver.</b> An org-proposed type goes live
+    /// immediately with <c>ApprovedByAppUserId</c> left null, and that null is the whole marker.
+    /// Testing <c>IsApproved</c> alone would sweep away words an administrator had deliberately
+    /// endorsed, which is the opposite of the intent.</para>
+    ///
+    /// <para><b>Only types a group proposed.</b> A seeded type that nothing happens to be tagged
+    /// with today is still shared vocabulary — the taxonomy describes what people experience, not
+    /// what is in this database this week.</para>
+    ///
+    /// <para>Called after the tagging rows are removed and saved, so the counts are the truth
+    /// rather than a prediction.</para>
+    /// </remarks>
+    public static async Task RemoveOrphanedExperienceTypesAsync(
+        BenDataContext db, IReadOnlyCollection<Guid> experienceTypeIds, CancellationToken ct)
+    {
+        if (experienceTypeIds.Count == 0) return;
+
+        var orphans = await db.ExperienceTypes
+            .Where(t => experienceTypeIds.Contains(t.Id)
+                     && t.ProposedByOrganizationId != null
+                     && t.ApprovedByAppUserId == null
+                     && !db.CaseTimelineEntryExperienceTypes.Any(x => x.ExperienceTypeId == t.Id))
+            .ToListAsync(ct);
+
+        if (orphans.Count == 0) return;
+
+        db.ExperienceTypes.RemoveRange(orphans);
+        await db.SaveChangesAsync(ct);
+    }
 }
