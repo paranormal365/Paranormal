@@ -58,7 +58,7 @@ public class MyCaseControllerTests
         var ctrl = new MyCaseController(factory, CreateMapper(), storage.Object, new FileMetadataExtractorService(),
             auditLog ?? new Mock<IAuditLogService>().Object,
             emailService ?? CreateUnconfiguredEmailService(), new ConfigurationBuilder().Build(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance);
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance, Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -75,7 +75,7 @@ public class MyCaseControllerTests
         var ctrl = new MyCaseController(factory, CreateMapper(),
             new Mock<IFileStorageService>().Object, new FileMetadataExtractorService(), new Mock<IAuditLogService>().Object,
             CreateUnconfiguredEmailService(), new ConfigurationBuilder().Build(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance);
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance, Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }

@@ -159,6 +159,28 @@ public sealed partial class BenAdminClientAdapter
     public Task<OrgPublicPageResponse?> GetCmsPagePreviewAsync(Guid orgId, Guid pageId, CancellationToken token = default)
         => _api.GetAsync<OrgPublicPageResponse>($"/api/organizations/{orgId}/cms/pages/{pageId}/preview", token);
 
+    // ── Public events (item #87) ────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<PublicEventListItem>> GetPublicEventsAsync(
+        string? orgUrlName = null, int maxResults = 50, CancellationToken token = default)
+    {
+        var url = $"/api/public/events?maxResults={maxResults}"
+                + (string.IsNullOrWhiteSpace(orgUrlName) ? "" : $"&orgUrlName={Uri.EscapeDataString(orgUrlName)}");
+        var result = await _api.GetAnonymousAsync<IReadOnlyList<PublicEventListItem>>(url, token);
+        return result ?? [];
+    }
+
+    // Anonymous: a visitor who has never signed in is the whole audience for this.
+    public Task<PublicEventRecord?> GetPublicEventAsync(string orgUrlName, string eventSlug, CancellationToken token = default)
+        => _api.GetAnonymousAsync<PublicEventRecord>(
+               $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/events/{Uri.EscapeDataString(eventSlug)}", token);
+
+    public Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, CancellationToken token = default)
+        => _api.PostAsync<object, PublicEventRecord>($"/api/public/events/{eventId}/rsvp", new object(), token);
+
+    public Task<bool> CancelEventRsvpAsync(Guid eventId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/public/events/{eventId}/rsvp", token);
+
     public string GetFileDownloadUrl(Guid uploadFileId)
         => $"{_webApiBaseUrl}/api/upload-files/{uploadFileId}/download";
     public string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId)

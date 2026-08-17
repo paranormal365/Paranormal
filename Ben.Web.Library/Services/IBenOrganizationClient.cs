@@ -174,4 +174,18 @@ public interface IBenOrganizationClient
     // ── Org settings ──────────────────────────────────────────────────────────
     Task<OrgSettingsResponse?> GetOrgSettingsAsync(Guid orgId, CancellationToken token = default);
     Task<OrgSettingsResponse?> UpdateOrgSettingsAsync(Guid orgId, OrgSettingsRequest request, CancellationToken token = default);
+
+    // ── Public events (item #87) ────────────────────────────────────────────
+
+    /// <summary>Upcoming public events, across every organization or narrowed to one.</summary>
+    Task<IReadOnlyList<PublicEventListItem>> GetPublicEventsAsync(string? orgUrlName = null, int maxResults = 50, CancellationToken token = default);
+
+    /// <summary>One public event by its readable URL.</summary>
+    Task<PublicEventRecord?> GetPublicEventAsync(string orgUrlName, string eventSlug, CancellationToken token = default);
+
+    /// <summary>Says the signed-in caller is coming. Returns the refreshed event.</summary>
+    Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, CancellationToken token = default);
+
+    /// <summary>Says they are no longer coming.</summary>
+    Task<bool> CancelEventRsvpAsync(Guid eventId, CancellationToken token = default);
 }

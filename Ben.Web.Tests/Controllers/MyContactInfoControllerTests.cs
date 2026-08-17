@@ -33,7 +33,7 @@ public class MyContactInfoControllerTests
         [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer"));
 
     private static MyContactInfoController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
-        => new(factory, new Mock<IAuditLogService>().Object)
+        => new(factory, new Mock<IAuditLogService>().Object, Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()))
         {
             ControllerContext = new ControllerContext
             {
@@ -459,7 +459,7 @@ public class MyContactInfoControllerTests
         var userId = Guid.NewGuid();
         var audit = new Mock<IAuditLogService>();
 
-        var controller = new MyContactInfoController(factory, audit.Object)
+        var controller = new MyContactInfoController(factory, audit.Object, Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()))
         {
             ControllerContext = new ControllerContext
             {

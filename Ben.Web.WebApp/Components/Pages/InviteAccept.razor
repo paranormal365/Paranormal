@@ -4,6 +4,7 @@
 @inject IWebApiAuthService AuthService
 @inject IWebApiTokenStore TokenStore
 @inject NavigationManager NavManager
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 
 <PageTitle>Accept Invitation</PageTitle>
 
@@ -28,7 +29,7 @@
             <h2 class="mb-1">You're Invited</h2>
             <p class="text-secondary mb-4">
                 <strong>@_info.InviterDisplayName</strong> invited you to collaborate on the case
-                "<strong>@_info.CaseTitle</strong>" on IsHaunted.com.
+                "<strong>@_info.CaseTitle</strong>" on @SiteOptions.Value.Name.
             </p>
 
             @if (_error is not null)

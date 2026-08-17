@@ -36,11 +36,15 @@ public sealed class MyCaseController : BenControllerBase
 
     public MyCaseController(IDbContextFactory<BenDataContext> db, IMapper mapper,
         IFileStorageService fileStorage, FileMetadataExtractorService metadataExtractor, IAuditLogService auditLog,
-        IEmailService emailService, IConfiguration configuration, ILogger<MyCaseController> logger)
+        IEmailService emailService, IConfiguration configuration, ILogger<MyCaseController> logger,
+        Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site)
     {
         _db = db; _mapper = mapper; _fileStorage = fileStorage; _metadataExtractor = metadataExtractor; _auditLog = auditLog;
         _emailService = emailService; _configuration = configuration; _logger = logger;
+        _site = site.Value;
     }
+
+    private readonly Ben.Data.Common.SiteIdentity _site;
 
     /// <summary>
     /// Returns all active cases the current user can access as a client — either as the
@@ -855,9 +859,9 @@ public sealed class MyCaseController : BenControllerBase
                 var inviteLink = $"{appBaseUrl}/invite/{invite.Token}";
                 var inviterName = System.Net.WebUtility.HtmlEncode(inviter?.DisplayName ?? "Someone");
                 var caseTitle = System.Net.WebUtility.HtmlEncode(primaryClient.Title);
-                var subject = $"{inviter?.DisplayName ?? "Someone"} invited you to a case on IsHaunted.com";
+                var subject = $"{inviter?.DisplayName ?? "Someone"} invited you to a case on {_site.Name}";
                 var body = $"<p>{inviterName} has invited you to collaborate on the case " +
-                           $"\"<strong>{caseTitle}</strong>\" on IsHaunted.com.</p>" +
+                           $"\"<strong>{caseTitle}</strong>\" on {_site.Name}.</p>" +
                            $"<p><a href=\"{inviteLink}\">Accept invitation</a></p>" +
                            $"<p>This link expires {invite.DateExpires:MMMM d, yyyy}.</p>";
                 await _emailService.SendAsync(email, subject, body, ct);

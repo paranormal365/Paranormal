@@ -203,3 +203,44 @@ and wrong in reality.
 
 The preview also tells you if the page is not in the menu yet, which is the usual reason a
 freshly-published page seems to have vanished.
+
+## Public events
+
+An event on your calendar can be opened to anybody. Tick **Public** and it appears on your group's
+public site, on the site-wide **What's on** list, and anyone with an account can say they are
+coming.
+
+This is the one part of the site that brings you people who have never heard of you. Somebody
+looking for a ghost walk near them finds your event, turns up, and meets the group — so the listing
+names you prominently and reads as an invitation rather than a record.
+
+### What can be made public
+
+Events at **landmarks, businesses, and your own addresses**. Not events at a private residence, and
+not events attached to a case.
+
+That is deliberate and cannot be overridden. A public listing is a date and an address advertised to
+strangers, and a client did not agree to have people turn up at their home. If you want to publicise
+work you are doing on a case, create a separate event for a venue that is yours to publish.
+
+### Hiding the address until somebody is coming
+
+**Hide exact location** shows the town but not the street address. Whoever is coming sees the full
+address once they have said so; nobody else ever receives it, and the listing says as much up front
+so nobody feels tricked into signing up to find out where they are going.
+
+If somebody cancels, the address stops being shown to them.
+
+### Places and sign-ups
+
+- **Places** caps how many people can come. Leave it empty for no limit.
+- **Sign-ups close** sets a cut-off. Leave it empty and people can sign up right up to the start.
+- Somebody who cancels frees their place for somebody else.
+
+### The link you can share
+
+A public event gets a readable web address — `/o/your-group/events/2026-08-24-ghost-walk` — made
+from its date and title the first time you publish it. That is the link to put on social media.
+
+It does not change afterwards, even if you rename the event. A link somebody has already shared
+should keep working.

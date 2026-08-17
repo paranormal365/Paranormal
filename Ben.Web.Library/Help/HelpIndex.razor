@@ -2,6 +2,7 @@
 @using Ben.Web.Library.Help
 @inject HelpContentService Content
 @inject HelpViewerResolver Viewers
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 
 <PageTitle>Help</PageTitle>
 
@@ -9,7 +10,7 @@
     <div class="mb-4">
         <h3 class="mb-1">Help</h3>
         <p class="text-secondary mb-0">
-            Guides to using IsHaunted.com. You see the topics that apply to you — signing in, or
+            Guides to using @SiteOptions.Value.Name. You see the topics that apply to you — signing in, or
             joining a group, adds more.
         </p>
     </div>

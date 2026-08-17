@@ -1,0 +1,69 @@
+@namespace Ben.Web.Library.Shared
+@using Microsoft.Extensions.Options
+@inject IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+
+@* What a link to this page looks like when somebody pastes it into a message, a group chat, or a
+   social post.
+
+   Ben's ask: a shared link should show something relevant *and* carry the site's name. That is
+   exactly what og:site_name is for, and it is the cheapest advertising the platform has — every
+   organization sharing their own event is also showing the site to people who have never seen it.
+
+   These have to be in the server-rendered HTML. The crawlers that build these cards do not run
+   JavaScript, so a card assembled after the circuit connects is a card nobody ever sees. Blazor
+   prerenders <HeadContent>, which is why this works — and why it must not be moved into an
+   interactive-only branch. *@
+
+<HeadContent>
+    <meta property="og:type" content="@Type" />
+    <meta property="og:site_name" content="@Site.Name" />
+    <meta property="og:title" content="@Title" />
+    <meta property="og:description" content="@Summary" />
+    @if (!string.IsNullOrWhiteSpace(_absoluteUrl))
+    {
+        <meta property="og:url" content="@_absoluteUrl" />
+    }
+    @if (!string.IsNullOrWhiteSpace(ImageUrl))
+    {
+        <meta property="og:image" content="@ImageUrl" />
+    }
+
+    @* Twitter reads its own names and falls back to the og: ones inconsistently, so the two that
+       matter are stated outright rather than hoped for. *@
+    <meta name="twitter:card" content="@(string.IsNullOrWhiteSpace(ImageUrl) ? "summary" : "summary_large_image")" />
+    <meta name="twitter:title" content="@Title" />
+    <meta name="twitter:description" content="@Summary" />
+
+    @* Plain description too: search results and link previews that ignore Open Graph still read it. *@
+    <meta name="description" content="@Summary" />
+</HeadContent>
+
+@code {
+    /// <summary>The headline on the card. Usually the same as the page's own title.</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    /// <summary>
+    /// One or two sentences. Falls back to the site's tagline, because a card with an empty
+    /// description renders as a bare link and reads like something broken.
+    /// </summary>
+    [Parameter] public string? Description { get; set; }
+
+    /// <summary>Absolute URL of an image, or null for a text-only card.</summary>
+    [Parameter] public string? ImageUrl { get; set; }
+
+    /// <summary>Path of this page, used to build the canonical URL on the card.</summary>
+    [Parameter] public string? RelativeUrl { get; set; }
+
+    /// <summary>Open Graph type — "website" for most pages, "article" for a written piece.</summary>
+    [Parameter] public string Type { get; set; } = "website";
+
+    private Ben.Data.Common.SiteIdentity Site => SiteOptions.Value;
+
+    private string Summary => string.IsNullOrWhiteSpace(Description) ? Site.Tagline : Description!;
+
+    // Absolute, because the crawler rendering the card is not on our domain and cannot resolve a
+    // relative path. Omitted rather than guessed when no origin is configured yet.
+    private string? _absoluteUrl => string.IsNullOrWhiteSpace(RelativeUrl)
+        ? null
+        : Site.AbsoluteUrl(RelativeUrl!);
+}
