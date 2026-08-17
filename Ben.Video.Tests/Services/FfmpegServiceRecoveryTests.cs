@@ -190,6 +190,29 @@ public sealed class FfmpegServiceRecoveryTests
             => InvokeAsync<TValue>(identifier, args);
     }
 
+    /// <summary>
+    /// How long a wedge signal may take before we call it a genuine failure.
+    /// </summary>
+    /// <remarks>
+    /// Generous on purpose, and it costs nothing in the passing case: the test awaits the event, so
+    /// it finishes the moment the watchdog fires (tens of milliseconds) and this budget only comes
+    /// into play when the watchdog never fires at all. The earlier version polled a 2-second clock
+    /// instead, which made a busy machine indistinguishable from a broken watchdog — it failed in
+    /// two of six full-solution runs on 2026-08-16 while passing every time in isolation.
+    /// </remarks>
+    private static readonly TimeSpan WedgeSignalBudget = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Awaits <paramref name="signal"/>, failing with a readable message rather than a bare
+    /// timeout if it never arrives.
+    /// </summary>
+    private static async Task AwaitSignalAsync(Task signal, string whatWasExpected)
+    {
+        var winner = await Task.WhenAny(signal, Task.Delay(WedgeSignalBudget));
+        Assert.True(winner == signal, $"Timed out after {WedgeSignalBudget.TotalSeconds:0}s: {whatWasExpected}.");
+        await signal; // surface any exception the signal itself carried
+    }
+
     [Fact]
     public async Task Watchdog_GenuinelyStuckCommand_FlagsIsWorkerWedged()
     {
@@ -199,17 +222,16 @@ public sealed class FfmpegServiceRecoveryTests
             watchdogPollInterval: TimeSpan.FromMilliseconds(10));
         await svc.LoadAsync();
 
-        var fired = false;
-        svc.OnWorkerWedged += () => fired = true;
+        // Subscribed before the command starts, so the signal cannot be missed by arriving early.
+        var wedged = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        svc.OnWorkerWedged += () => wedged.TrySetResult();
 
         var stuckTask = svc.ExecAsync(["-i", "a.mp4"]); // never resolves until the gate releases
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-        while (!svc.IsWorkerWedged && !cts.IsCancellationRequested)
-            await Task.Delay(10);
+        await AwaitSignalAsync(wedged.Task, "the watchdog never reported the worker as wedged");
 
+        // The event fired; the flag it is supposed to accompany must agree.
         Assert.True(svc.IsWorkerWedged);
-        Assert.True(fired);
 
         js.Module.Release(); // the gate finally opens — proves the watchdog flag didn't kill anything
         var code = await stuckTask;
