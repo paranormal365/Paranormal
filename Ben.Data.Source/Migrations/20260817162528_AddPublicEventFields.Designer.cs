@@ -4,6 +4,7 @@ using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Ben.Data.Source.Migrations
 {
     [DbContext(typeof(BenDataContext))]
-    partial class BenDataContextModelSnapshot : ModelSnapshot
+    [Migration("20260817162528_AddPublicEventFields")]
+    partial class AddPublicEventFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2566,10 +2569,6 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid?>("UpdatedByAppUserId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("UrlName")
-                        .HasMaxLength(120)
-                        .HasColumnType("nvarchar(120)");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CaseId");
@@ -2583,10 +2582,6 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("PlaceId");
 
                     b.HasIndex("UpdatedByAppUserId");
-
-                    b.HasIndex("OrganizationId", "UrlName")
-                        .IsUnique()
-                        .HasFilter("[UrlName] IS NOT NULL");
 
                     b.HasIndex("OrganizationId", "IsPublic", "StartDateTime");
 

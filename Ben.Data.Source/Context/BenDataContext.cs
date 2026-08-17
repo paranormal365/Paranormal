@@ -418,6 +418,21 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrganizationPage>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // NoAction: deleting a place must not delete the record that somebody met there.
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .HasOne(e => e.Place).WithMany()
+                .HasForeignKey(e => e.PlaceId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // The public list is "this org's public events, soonest first".
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .HasIndex(e => new { e.OrganizationId, e.IsPublic, e.StartDateTime });
+            modelBuilder.Entity<OrgCalendarEvent>().Property(e => e.UrlName).HasMaxLength(120);
+            // One slug per organization. Filtered, because private events have none and a pile of
+            // nulls would collide.
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .HasIndex(e => new { e.OrganizationId, e.UrlName })
+                .IsUnique()
+                .HasFilter("[UrlName] IS NOT NULL");
+
             modelBuilder.Entity<OrganizationCmsTemplate>()
                 .HasOne(e => e.Organization).WithMany()
                 .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);

@@ -4036,3 +4036,82 @@ So plotting groups needs one of:
 - Reuses `PublicCaseDiscovery`'s existing map rather than adding a second one.
 - Empty states that do something: "no groups within 25 miles — try 50" beats a blank list, and is
   the difference between a visitor leaving and widening the search.
+
+---
+
+## 89. Readable URLs — the scheme, settled 2026-08-17
+
+Ben: *"we use the GUID for many of the IDs. That is not human readable... I was thinking we need
+'/c' for cases and '/i' for investigations."* Then, on single letters: *"how can we provide a
+concrete link to equipment... '/e' it is going to get crazy eventually."*
+
+**He is right, and it settles the question.** `/e` is events or equipment. `/c` is cases or catalog.
+Single letters do not survive the fourth entity type, and the app already has more than four.
+
+### Two decisions
+
+**1. Full words, not letters.** `/o/ghost-squad/events/2026-08-17-ghost-walk`, not `/o/ghost-squad/e/…`.
+
+- They scale without collisions, and without anybody memorising a lookup table.
+- They are self-documenting in a link, a log, or a support ticket.
+- **SEO**, which matters specifically because item #87's purpose is discovery by strangers. A search
+  engine reads `/events/` as a keyword; `/e/` is noise.
+- The cost is that an organization cannot have a CMS page called `events` — bounded, and arguably
+  correct, since a page about their events *is* that page.
+
+**2. Two roots, decided by ownership — not everything belongs under `/o/`.**
+
+Equipment is the case that proves it. The make/model catalog is deliberately **cross-organization**:
+a Zoom H1n is not owned by one group, and pooling every owner's photos and links onto one page is
+the entire point of what shipped in #55 phase 6b. Forcing it under `/o/{org}/` would be wrong.
+
+| Root | For | Examples |
+|---|---|---|
+| `/o/{org}/…` | belongs to one organization | pages, cases, investigations, events |
+| `/{type}/…` | platform-wide | equipment catalog and model pages, places, the public case map |
+
+**The app already does this correctly** — `/equipment-catalog`, `/equipment-models/{id}` and
+`/equipment/{id}` are top-level and org-agnostic. They do not need moving; they need slugs instead
+of GUIDs.
+
+### The shape
+
+```
+/o/{org}                              organization home
+/o/{org}/{page}                       CMS pages — reserved words enforced
+/o/{org}/cases/{case-slug}
+/o/{org}/investigations/{slug}        flat, NOT nested under a case — see below
+/o/{org}/events/{slug}                ✅ built 2026-08-17
+
+/equipment/{brand}/{model}            the pooled make/model page
+/places/{place-slug}
+/cases                                the public discovery map
+/events                               cross-organization "what's on" (item #88)
+```
+
+**Investigations are flat, and that is structural rather than aesthetic.** Ben asked whether an
+investigation needs `/o/{org}/cases/{case}/investigations/{inv}`. It must not: `Investigation.CaseId`
+is **nullable** — a group can investigate a landmark with no client case, and then a `PlaceId` is
+required instead. A URL that assumed the case would have no form for those at all. The general rule
+falls out of it: **URL depth follows what the model actually requires, not what is usually true.**
+The organization is required on everything (verified 2026-08-17), so one level under `/o/{org}` is
+always enough.
+
+### Not everything gets a slug
+
+A slug is a **public name**. An individual piece of equipment — somebody's specific recorder, called
+"My backup H1n" — has no business having one: it would publish the owner's private naming in a URL,
+and most items are not public at all. Keep the GUID there.
+
+The rule: **a readable URL for things meant to be found and shared; an opaque id for things reached
+from inside the app.**
+
+### Still to do
+
+- **The reserved-word bug is live** — a CMS page saved with the slug `cases` succeeds today and is
+  permanently unreachable, because `/o/{org}/cases` matches the case-list route first. Enforce a
+  reserved list server-side on create and update, and audit existing pages. This is the first phase
+  of any of the above.
+- Slugs for cases, investigations and equipment models, using `UrlSlug` (built for events).
+- **Alias-and-redirect for changed slugs**, before anything ships publicly. Cheap now, and
+  retrofitting it after links have been shared means the links are already dead.

@@ -8878,3 +8878,109 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817162528_AddPublicEventFields'
+)
+BEGIN
+    DROP INDEX [IX_OrgCalendarEvents_OrganizationId] ON [OrgCalendarEvents];
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817162528_AddPublicEventFields'
+)
+BEGIN
+    ALTER TABLE [OrgCalendarEvents] ADD [AttendeeCapacity] int NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817162528_AddPublicEventFields'
+)
+BEGIN
+    ALTER TABLE [OrgCalendarEvents] ADD [HideExactLocation] bit NOT NULL DEFAULT CAST(0 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817162528_AddPublicEventFields'
+)
+BEGIN
+    ALTER TABLE [OrgCalendarEvents] ADD [PlaceId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817162528_AddPublicEventFields'
+)
+BEGIN
+    ALTER TABLE [OrgCalendarEvents] ADD [RsvpClosesAt] datetime2 NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817162528_AddPublicEventFields'
+)
+BEGIN
+    CREATE INDEX [IX_OrgCalendarEvents_OrganizationId_IsPublic_StartDateTime] ON [OrgCalendarEvents] ([OrganizationId], [IsPublic], [StartDateTime]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817162528_AddPublicEventFields'
+)
+BEGIN
+    CREATE INDEX [IX_OrgCalendarEvents_PlaceId] ON [OrgCalendarEvents] ([PlaceId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817162528_AddPublicEventFields'
+)
+BEGIN
+    ALTER TABLE [OrgCalendarEvents] ADD CONSTRAINT [FK_OrgCalendarEvents_Places_PlaceId] FOREIGN KEY ([PlaceId]) REFERENCES [Places] ([Id]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817162528_AddPublicEventFields'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260817162528_AddPublicEventFields', N'10.0.11');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817162918_AddPublicEventSlug'
+)
+BEGIN
+    ALTER TABLE [OrgCalendarEvents] ADD [UrlName] nvarchar(120) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817162918_AddPublicEventSlug'
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX [IX_OrgCalendarEvents_OrganizationId_UrlName] ON [OrgCalendarEvents] ([OrganizationId], [UrlName]) WHERE [UrlName] IS NOT NULL');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817162918_AddPublicEventSlug'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260817162918_AddPublicEventSlug', N'10.0.11');
+END;
+
+COMMIT;
+GO
+
