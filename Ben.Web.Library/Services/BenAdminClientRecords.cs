@@ -682,6 +682,10 @@ public sealed record PublicCaseDiscoveryItem(
     int      DisputesCount,
     int      InconclusiveCount,
     int      TotalVotes,
+    // Signed total: +1 confirms, 0 inconclusive, -1 disputes, computed server-side by
+    // EvidenceVoteScore. Rendered as given — a client recomputing it from the three counts is
+    // exactly how four surfaces end up disagreeing.
+    int      Score,
     decimal? ApproxLatitude,
     decimal? ApproxLongitude,
     string?  ClientName);

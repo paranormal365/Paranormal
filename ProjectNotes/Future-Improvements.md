@@ -3409,7 +3409,7 @@ already set.
 
 ---
 
-## 81. Score the haunting vote instead of only counting it (not started, requested 2026-08-15)
+## 81. Score the haunting vote instead of only counting it (✅ Complete — shipped 2026-08-17)
 
 Ben: *"For voting on haunting, we use 3 values. I want the indecisive to equal zero, then +1 for
 haunted and -1 for not convinced."*
@@ -3437,7 +3437,34 @@ Worth settling when this is picked up:
 - One place computes it, reused by every surface — the same rule `PublicClientName` follows, and
   for the same reason: four endpoints each doing their own arithmetic is four answers.
 
-Deferred by Ben — *"we can work on that later."*
+Deferred by Ben — *"we can work on that later."* **Picked up and shipped 2026-08-17.**
+
+### What was built
+
+`EvidenceVoteScore` in `Ben.Data.Common`, beside the enum it weights — `Weight`, `Score` (from
+votes) and `FromCounts` (for the discovery list, which never holds individual votes). All four
+surfaces reuse it: `PublicCaseVoteController`, `PublicCaseDiscoveryController`,
+`InvestigationController` and the widgets.
+
+The three open questions, settled:
+
+- **Alongside the counts, not replacing them.** The counts are what make a score trustworthy, and
+  the entry's own leaning was right.
+- **A sum, not an average** — the literal reading of what Ben asked for. `TotalVotes` already
+  travels with it everywhere, which is what stops a sum being read without its weight. An average is
+  this sum over that count if it is ever wanted, and needs no new storage.
+- **One place computes it**, as planned.
+
+`VoteScoreBadge` renders it identically on every surface: **+n** green, **−n** red, **0** amber
+rather than grey (an even split is a real answer, not a missing one), with the vote count in the
+tooltip.
+
+### The trap, held
+
+The enum's stored values are untouched. Two tests guard it from opposite directions: one pins
+`Confirms = 0, Disputes = 1, Inconclusive = 2`, and one asserts every weight *differs* from its own
+stored value — so an implementation that quietly cast the stored number could not pass. The
+controller test was verified by removing the wiring and watching it fail.
 
 ---
 

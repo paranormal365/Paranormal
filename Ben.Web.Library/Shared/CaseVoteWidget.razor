@@ -38,6 +38,7 @@
             <span class="text-danger">✗ @_summary.DisputesCount</span>
             <span class="text-warning-emphasis">? @_summary.InconclusiveCount</span>
             <span class="text-muted ms-auto">@_summary.TotalVotes vote@(_summary.TotalVotes == 1 ? "" : "s")</span>
+            <VoteScoreBadge Score="@_summary.Score" Total="@_summary.TotalVotes" />
         </div>
 
         @* ── Vote buttons (authenticated users only) ──────────────────────── *@

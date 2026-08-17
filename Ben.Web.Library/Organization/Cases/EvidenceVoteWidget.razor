@@ -33,6 +33,7 @@
                 ? @_summary.InconclusiveCount
             </span>
             <span class="text-secondary small">(@_summary.TotalVotes total)</span>
+            <Ben.Web.Library.Shared.VoteScoreBadge Score="@_summary.Score" Total="@_summary.TotalVotes" />
         </div>
 
         @* ── Vote buttons (authenticated users) ───────────────────────────── *@

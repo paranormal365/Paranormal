@@ -412,7 +412,8 @@ public sealed class EvidenceVoteController : BenControllerBase
             DisputesCount:     votes.Count(v => v.VoteType == EvidenceVoteType.Disputes),
             InconclusiveCount: votes.Count(v => v.VoteType == EvidenceVoteType.Inconclusive),
             TotalVotes:        votes.Count,
-            CurrentUserVote:   myVote));
+            CurrentUserVote:   myVote,
+            Score:             EvidenceVoteScore.Score(votes.Select(v => v.VoteType))));
     }
 
     /// <summary>Returns all votes with voter identities. Requires org membership (any active

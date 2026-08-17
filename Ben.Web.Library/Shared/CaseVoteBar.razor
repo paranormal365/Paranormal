@@ -10,6 +10,7 @@ else if (Compact)
         <span title="Confirms"  class="text-success">✓@Confirms</span>
         <span title="Disputes"  class="text-danger">✗@Disputes</span>
         <span title="Inconclusive" class="text-warning-emphasis">?@Inconclusive</span>
+        <VoteScoreBadge Score="@Score" Total="@Total" Compact="true" />
     </span>
 }
 else
@@ -26,6 +27,7 @@ else
             <span class="text-danger">✗ @Disputes</span>
             <span class="text-warning-emphasis">? @Inconclusive</span>
             <span class="text-muted ms-auto">@Total vote@(Total == 1 ? "" : "s")</span>
+            <VoteScoreBadge Score="@Score" Total="@Total" />
         </div>
     </div>
 }
@@ -35,6 +37,12 @@ else
     [Parameter, EditorRequired] public int  Disputes     { get; set; }
     [Parameter, EditorRequired] public int  Inconclusive { get; set; }
     [Parameter, EditorRequired] public int  Total        { get; set; }
+
+    /// <summary>
+    /// The server's signed score. Passed in rather than worked out from the three counts: one place
+    /// computes it, and a renderer that did its own arithmetic would be a fifth answer.
+    /// </summary>
+    [Parameter] public int Score { get; set; }
     [Parameter]                 public bool Compact      { get; set; }
 
     private double ConfirmsPct     => Total > 0 ? Confirms     * 100.0 / Total : 0;
