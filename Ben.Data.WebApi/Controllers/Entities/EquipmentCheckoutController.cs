@@ -2,6 +2,7 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.SeedData;
+using Ben.Data.WebApi.Services;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Service.Models.Entities;
 using Ben.Service.RepositoryService.GenericInterfaces;
@@ -176,7 +177,7 @@ public sealed class EquipmentCheckoutController : BenControllerBase
                 checkout.DateReviewed        = DateTime.UtcNow;
                 NotifyBorrower(db, checkout, userId,
                     "Your equipment request was declined",
-                    $"Your request to borrow equipment was declined. Reason given: {checkout.ReviewNotes}");
+                    $"Your request to borrow equipment was declined. Reason given: {NotificationText.Safe(checkout.ReviewNotes)}");
             });
     }
 
@@ -342,8 +343,14 @@ public sealed class EquipmentCheckoutController : BenControllerBase
     }
 
     /// <summary>One group's loan queue. Needs the EquipmentCheckout permission.</summary>
+    /// <remarks>
+    /// Returns the verdict alongside the rows, like <c>OrgEquipmentListRecord</c> does, because the
+    /// two answers "you may not see this" and "there is nothing yet" are different and the UI has
+    /// to tell them apart. Rendering the tab on row count meant a permitted approver saw no loans
+    /// tab at all until somebody happened to ask for something.
+    /// </remarks>
     [HttpGet("/api/organizations/{orgId:guid}/equipment-checkouts")]
-    public async Task<ActionResult<IEnumerable<EquipmentCheckoutRecord>>> GetForOrg(
+    public async Task<ActionResult<OrgCheckoutListRecord>> GetForOrg(
         Guid orgId, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
@@ -360,7 +367,7 @@ public sealed class EquipmentCheckoutController : BenControllerBase
             .OrderBy(c => c.Status).ThenByDescending(c => c.DateCreated)
             .ToListAsync(ct);
 
-        return Ok(await ProjectManyAsync(db, checkouts, userId, ct));
+        return Ok(new OrgCheckoutListRecord(true, await ProjectManyAsync(db, checkouts, userId, ct)));
     }
 
     /// <summary>One item's loan history.</summary>
@@ -432,7 +439,7 @@ public sealed class EquipmentCheckoutController : BenControllerBase
 
         AddMessage(db, recipients, requesterId,
             "Equipment borrowing request",
-            $"{requesterName} has asked to borrow {item.DisplayName}. It's waiting for your decision.");
+            $"{NotificationText.Safe(requesterName)} has asked to borrow {NotificationText.Safe(item.DisplayName)}. It's waiting for your decision.");
     }
 
     private static void NotifyBorrower(

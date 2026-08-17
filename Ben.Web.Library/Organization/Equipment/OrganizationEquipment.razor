@@ -30,9 +30,9 @@
             @RenderShared
         </TabStripTab>
 
-        @* Only rendered when the server actually returned a queue — the endpoint 404s for anyone
-           without the Equipment Checkouts permission, so an empty tab would be a lie. *@
-        @if (_loans.Count > 0)
+        @* Rendered on the server's verdict, not on whether any loans exist yet — otherwise an
+           approver sees no tab until somebody happens to ask for something. *@
+        @if (_canReviewLoans)
         {
             <TabStripTab Title="Loans" Id="loans">
                 @RenderLoans
@@ -248,6 +248,12 @@
                     <span class="badge @StatusClass(row)">@StatusLabel(row)</span>
                 </Template>
             </GridColumn>
+            <GridColumn Title="Needed from" Width="130px">
+                <Template>
+                    @{ var row = (EquipmentCheckoutRecord)context; }
+                    @(row.DateNeededFrom?.ToString("d MMM yyyy") ?? "—")
+                </Template>
+            </GridColumn>
             <GridColumn Title="Due" Width="140px">
                 <Template>
                     @{ var row = (EquipmentCheckoutRecord)context; }
@@ -293,6 +299,7 @@
     private List<SharedEquipmentItemRecord> _items = [];
     private List<EquipmentItemRecord> _owned = [];
     private List<EquipmentCheckoutRecord> _loans = [];
+    private bool _canReviewLoans;
     private string _activeTab = "owned";
     private bool _loading = true;
     private bool _ownedLoading = true;
@@ -328,7 +335,18 @@
         await LoadAsync();
         // Empty for anyone without the checkout permission — the endpoint 404s and the client
         // turns that into an empty list, which is exactly the right default here.
-        _loans = [.. await AdminClient.GetOrgEquipmentCheckoutsAsync(OrgId)];
+        var loans = await AdminClient.GetOrgEquipmentCheckoutsAsync(OrgId);
+        _canReviewLoans = loans.CanReviewLoans;
+        _loans = [.. loans.Items];
+    }
+
+    /// <summary>Re-reads the loan queue — approving elsewhere should not leave this stale.</summary>
+    private async Task LoadLoansAsync()
+    {
+        var loans = await AdminClient.GetOrgEquipmentCheckoutsAsync(OrgId);
+        _canReviewLoans = loans.CanReviewLoans;
+        _loans = [.. loans.Items];
+        StateHasChanged();
     }
 
     private async Task LoadOwnedAsync()

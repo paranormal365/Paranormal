@@ -180,6 +180,13 @@
             }
         </div>
 
+        @* The borrower filled this in to say when they need it — the approver could not see it. *@
+        @if (loan.DateNeededFrom is not null)
+        {
+            <div class="small text-secondary mb-1">
+                Needed from @loan.DateNeededFrom.Value.ToString("d MMM yyyy")
+            </div>
+        }
         @if (loan.DateDue is not null)
         {
             <div class="small mb-2 @(loan.IsOverdue ? "text-danger fw-semibold" : "text-secondary")">

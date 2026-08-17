@@ -3,6 +3,7 @@ using MetadataExtractor;
 using MetadataExtractor.Formats.Exif;
 using MetadataExtractor.Formats.QuickTime;
 using NAudio.Wave;
+using System.Globalization;
 using System.Text.Json;
 
 namespace Ben.Data.WebApi.Services;
@@ -155,10 +156,26 @@ public sealed class FileMetadataExtractorService
                 meta.CapturedAtUtc = DateTime.SpecifyKind(ifd0.GetDateTime(ExifDirectoryBase.TagDateTime), DateTimeKind.Local).ToUniversalTime();
         }
 
-        // EXIF SubIFD — DateTimeOriginal is more reliable than IFD0 DateTime
+        // EXIF SubIFD — DateTimeOriginal is when the shutter fired, which is what we want; IFD0's
+        // DateTime can be a later modification.
+        //
+        // EXIF timestamps carry no timezone of their own. Where the camera recorded the offset
+        // (OffsetTimeOriginal, on most phones since ~2016) use it, because it is the truth. Where it
+        // did not, we are guessing, and the guess used is the SERVER's timezone — a photo taken
+        // abroad and uploaded here shifts by however far apart the two are. The unconverted value
+        // survives verbatim in RawMetadataJson either way, so nothing is lost to the guess.
         var subIfd = dirs.OfType<ExifSubIfdDirectory>().FirstOrDefault();
         if (subIfd is not null && subIfd.ContainsTag(ExifDirectoryBase.TagDateTimeOriginal))
-            meta.CapturedAtUtc = DateTime.SpecifyKind(subIfd.GetDateTime(ExifDirectoryBase.TagDateTimeOriginal), DateTimeKind.Local).ToUniversalTime();
+        {
+            var taken = subIfd.GetDateTime(ExifDirectoryBase.TagDateTimeOriginal);
+            var offsetText = subIfd.GetString(ExifDirectoryBase.TagTimeZoneOriginal);
+
+            meta.CapturedAtUtc =
+                !string.IsNullOrWhiteSpace(offsetText)
+                && TimeSpan.TryParseExact(offsetText.TrimStart('+'), @"hh\:mm", CultureInfo.InvariantCulture, out var offset)
+                    ? new DateTimeOffset(taken, offsetText.StartsWith('-') ? -offset : offset).UtcDateTime
+                    : DateTime.SpecifyKind(taken, DateTimeKind.Local).ToUniversalTime();
+        }
 
         // ── GPS (EXIF standard — JPEG / PNG / TIFF) ────────────────────────────
         var gpsDir = dirs.OfType<GpsDirectory>().FirstOrDefault();

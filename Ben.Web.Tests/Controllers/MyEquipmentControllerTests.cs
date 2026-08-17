@@ -1,6 +1,8 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
+using Microsoft.Extensions.Logging.Abstractions;
+using Ben.Data.WebApi.Services;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Entities;
 using Ben.Service.Models.Entities;
@@ -45,7 +47,7 @@ public class MyEquipmentControllerTests
                    .Returns(Task.CompletedTask);
         }
 
-        return new MyEquipmentController(f, storage.Object, new Mock<IAuditLogService>().Object)
+        return new MyEquipmentController(f, storage.Object, new Mock<IAuditLogService>().Object, BuildIngest(storage))
         {
             ControllerContext = new ControllerContext
             {
@@ -61,9 +63,9 @@ public class MyEquipmentControllerTests
     private static IFormFile MakeFile(string fileName = "gear.jpg", string contentType = "image/jpeg", long size = 64)
     {
         var fileMock = new Mock<IFormFile>();
-        var bytes    = new byte[size];
+        var bytes    = TestImages.Jpeg();
         fileMock.Setup(f => f.FileName).Returns(fileName);
-        fileMock.Setup(f => f.Length).Returns(size);
+        fileMock.Setup(f => f.Length).Returns(bytes.Length);
         fileMock.Setup(f => f.ContentType).Returns(contentType);
         fileMock.Setup(f => f.OpenReadStream()).Returns(() => new MemoryStream(bytes));
         return fileMock.Object;
@@ -93,6 +95,17 @@ public class MyEquipmentControllerTests
 
         return new World(factory, categoryId, brandId, modelId);
     }
+
+    /// <summary>
+    /// A real ingest service over the mocked storage — tests exercise the actual sanitize/extract
+    /// path rather than mocking past the thing phase 6a exists to guarantee.
+    /// </summary>
+    private static IMediaIngestService BuildIngest(Mock<IFileStorageService>? storage = null)
+        => new MediaIngestService(
+            (storage ?? new Mock<IFileStorageService>()).Object,
+            new FileMetadataExtractorService(),
+            new MediaSanitizationService(),
+            NullLogger<MediaIngestService>.Instance);
 
     [Fact]
     public async Task Create_Then_GetAll_ReturnsItemWithSerialVisibleToOwner()
@@ -240,6 +253,171 @@ public class MyEquipmentControllerTests
         storageMock.Verify(s => s.DeleteAsync("fake/path.jpg", It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // ── Retire, and the delete guard that points at it ───────────────────────
+
+    /// <summary>
+    /// Four places in the product told people to retire an item instead of deleting it, and there
+    /// was no retire action anywhere — an item with history was simply stuck. This covers both
+    /// halves: the refusal, and the thing it now points at.
+    /// </summary>
+    [Fact]
+    public async Task AnItemWithLoanHistoryCannotBeDeleted_ButCanBeRetired()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: false);
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            db.EquipmentCheckouts.Add(new EquipmentCheckout
+            {
+                Id = Guid.NewGuid(), EquipmentItemId = itemId, BorrowerAppUserId = StrangerId,
+                Status = EquipmentCheckoutStatus.Returned,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = StrangerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl = Build(w.Factory, OwnerId);
+        Assert.IsType<ConflictObjectResult>(await ctrl.Delete(itemId, default));
+        Assert.IsType<NoContentResult>(await ctrl.Retire(itemId, default));
+
+        await using var check = await w.Factory.CreateDbContextAsync();
+        var item = await check.EquipmentItems.SingleAsync(i => i.Id == itemId);
+        Assert.True(item.IsRetired);
+        // The history it was protecting is still there.
+        Assert.True(await check.EquipmentCheckouts.AnyAsync(c => c.EquipmentItemId == itemId));
+    }
+
+    [Fact]
+    public async Task AnItemWithNoHistoryCanStillBeDeleted()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: false);
+
+        Assert.IsType<NoContentResult>(await Build(w.Factory, OwnerId).Delete(itemId, default));
+    }
+
+    [Fact]
+    public async Task GearSomebodyCurrentlyHasCannotBeRetired()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: false);
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            db.EquipmentCheckouts.Add(new EquipmentCheckout
+            {
+                Id = Guid.NewGuid(), EquipmentItemId = itemId, BorrowerAppUserId = StrangerId,
+                Status = EquipmentCheckoutStatus.CheckedOut,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = StrangerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Retiring it would strand the loan — it has to come back first.
+        Assert.IsType<ConflictObjectResult>(await Build(w.Factory, OwnerId).Retire(itemId, default));
+    }
+
+    [Fact]
+    public async Task RetiringIsIdempotentlyRefused_AndReversible()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: false);
+        var ctrl = Build(w.Factory, OwnerId);
+
+        Assert.IsType<NoContentResult>(await ctrl.Retire(itemId, default));
+        Assert.IsType<ConflictObjectResult>(await ctrl.Retire(itemId, default));
+        Assert.IsType<NoContentResult>(await ctrl.Unretire(itemId, default));
+    }
+
+    [Fact]
+    public async Task RetiringSomebodyElsesGearIsNotFound()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: false);
+
+        Assert.IsType<NotFoundResult>(await Build(w.Factory, StrangerId).Retire(itemId, default));
+    }
+
+    // ── Metadata separation (phase 6a) ───────────────────────────────────────
+
+    /// <summary>
+    /// Ben's rule: metadata is linked to the record and removed from the media. This asserts both
+    /// halves of that in one pass on a real upload — the row exists, and the bytes that would be
+    /// served carry nothing.
+    /// </summary>
+    [Fact]
+    public async Task UploadingAPhotoRecordsItsMetadataAndServesStrippedBytes()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: false);
+
+        // Capture what actually got written, per path, so we can inspect the served copy.
+        var written = new Dictionary<string, byte[]>();
+        var storage = new Mock<IFileStorageService>();
+        storage.Setup(s => s.UserFilePath(It.IsAny<Guid>(), It.IsAny<string>())).Returns("fake/path.jpg");
+        storage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+               .Returns((string path, Stream data, CancellationToken _) =>
+               {
+                   using var buffer = new MemoryStream();
+                   data.CopyTo(buffer);
+                   written[path] = buffer.ToArray();
+                   return Task.CompletedTask;
+               });
+
+        var ctrl = Build(w.Factory, OwnerId, storage);
+        var result = await ctrl.AttachPhoto(itemId, GpsPhoto(), default);
+        Assert.IsType<OkObjectResult>(result.Result);
+
+        // The metadata row exists and carries the GPS that was in the file.
+        await using var db = await w.Factory.CreateDbContextAsync();
+        var metadata = await db.UploadFileMetadata.SingleAsync();
+        Assert.NotNull(metadata.GpsLatitude);
+
+        // And the copy that gets served has none of it.
+        Assert.True(written.ContainsKey("fake/path.jpg.clean.jpg"), "no sanitized copy was written");
+        Assert.False(HasGps(written["fake/path.jpg.clean.jpg"]));
+
+        // The original is kept, untouched, carrying its GPS — it is the evidence.
+        Assert.True(HasGps(written["fake/path.jpg"]));
+    }
+
+    [Fact]
+    public async Task UploadingSomethingThatIsNotAnImageIsRefused()
+    {
+        var w = await SeedAsync();
+        var itemId = await CreateItemAsync(w, publiclyListed: false);
+
+        var notAnImage = new Mock<IFormFile>();
+        var bytes = "definitely not a jpeg"u8.ToArray();
+        notAnImage.Setup(f => f.FileName).Returns("sneaky.jpg");
+        notAnImage.Setup(f => f.Length).Returns(bytes.Length);
+        notAnImage.Setup(f => f.ContentType).Returns("image/jpeg");
+        notAnImage.Setup(f => f.OpenReadStream()).Returns(() => new MemoryStream(bytes));
+
+        var result = await Build(w.Factory, OwnerId).AttachPhoto(itemId, notAnImage.Object, default);
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    /// <summary>A real JPEG carrying a GPS EXIF block — see MediaSanitizationServiceTests.</summary>
+    private static IFormFile GpsPhoto()
+    {
+        var bytes = TestImages.JpegWithGps();
+        var file = new Mock<IFormFile>();
+        file.Setup(f => f.FileName).Returns("gps.jpg");
+        file.Setup(f => f.Length).Returns(bytes.Length);
+        file.Setup(f => f.ContentType).Returns("image/jpeg");
+        file.Setup(f => f.OpenReadStream()).Returns(() => new MemoryStream(bytes));
+        return file.Object;
+    }
+
+    private static bool HasGps(byte[] jpeg)
+    {
+        using var stream = new MemoryStream(jpeg);
+        return MetadataExtractor.ImageMetadataReader.ReadMetadata(stream)
+            .Any(d => d is MetadataExtractor.Formats.Exif.GpsDirectory);
+    }
+
     // ── Photo byte access ────────────────────────────────────────────────────
     //
     // GetContent is deliberately not blanket [Authorize] — a publicly-listed item has to show its
@@ -256,7 +434,7 @@ public class MyEquipmentControllerTests
             ? new ClaimsIdentity()   // anonymous: no authentication type, no claims
             : new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, userId.Value.ToString())], "Bearer");
 
-        return new EquipmentPhotoContentController(f, storage.Object)
+        return new EquipmentPhotoContentController(f, storage.Object, BuildIngest(storage))
         {
             ControllerContext = new ControllerContext
             {

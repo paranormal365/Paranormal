@@ -123,7 +123,7 @@
                             @(string.IsNullOrWhiteSpace(msg.Subject) ? "(no subject)" : msg.Subject)
                         </span>
                         <span class="d-block text-secondary small">
-                            @msg.TypeName · @(msg.SentByDisplayName ?? "Unknown") ·
+                            @msg.TypeName · @SenderLabel(msg) ·
                             @msg.SentUtc.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
                         </span>
                     </span>
@@ -144,7 +144,7 @@
         @if (_openMessage is not null)
         {
             <div class="mb-2 text-secondary small">
-                <strong>From:</strong> @(_openMessage.SentByDisplayName ?? "Unknown")
+                <strong>From:</strong> @SenderLabel(_openMessage)
                 · @_openMessage.TypeName
                 · @_openMessage.SentUtc.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
             </div>
@@ -300,6 +300,14 @@
                 $"Sent to you through the platform · oldest {NotificationBadge.DescribeAge(s.SystemMessages.OldestUnreadUtc)}",
                 SvgIcon.Bell, "/notifications", s.SystemMessages);
     }
+
+    /// <summary>
+    /// How to name a message's author. "Anonymous" states that we are withholding it; "Unknown" is
+    /// what a missing name means. Conflating them would tell someone who asked a question
+    /// anonymously that their identity merely got lost.
+    /// </summary>
+    private static string SenderLabel(MyMessageRecord msg)
+        => msg.SenderHidden ? "Anonymous" : (msg.SentByDisplayName ?? "Unknown");
 
     private sealed record SummaryRow(
         string Title, string Detail, ISvgIcon Icon, string Destination, NotificationBucket Bucket);

@@ -1,6 +1,8 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
+using Microsoft.Extensions.Logging.Abstractions;
+using Ben.Data.WebApi.Services;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Entities;
 using Ben.Service.Models.Entities;
@@ -44,7 +46,7 @@ public class EquipmentSharingTests
         storage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
                .Returns(Task.CompletedTask);
 
-        return new MyEquipmentController(f, storage.Object, new Mock<IAuditLogService>().Object)
+        return new MyEquipmentController(f, storage.Object, new Mock<IAuditLogService>().Object, BuildIngest(storage))
         {
             ControllerContext = new ControllerContext
             {
@@ -58,7 +60,8 @@ public class EquipmentSharingTests
     }
 
     private static OrganizationEquipmentController BuildOrg(IDbContextFactory<BenDataContext> f, Guid userId)
-        => new(f, new Mock<IOrganizationSecurityService>().Object, new Mock<IFileStorageService>().Object, new Mock<IAuditLogService>().Object)
+        => new(f, new Mock<IOrganizationSecurityService>().Object, new Mock<IFileStorageService>().Object,
+               new Mock<IAuditLogService>().Object, BuildIngest())
         {
             ControllerContext = new ControllerContext
             {
@@ -138,6 +141,17 @@ public class EquipmentSharingTests
     }
 
     // ── Setting shares ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A real ingest service over the mocked storage — tests exercise the actual sanitize/extract
+    /// path rather than mocking past the thing phase 6a exists to guarantee.
+    /// </summary>
+    private static IMediaIngestService BuildIngest(Mock<IFileStorageService>? storage = null)
+        => new MediaIngestService(
+            (storage ?? new Mock<IFileStorageService>()).Object,
+            new FileMetadataExtractorService(),
+            new MediaSanitizationService(),
+            NullLogger<MediaIngestService>.Instance);
 
     [Fact]
     public async Task GetShares_ListsTheOwnersGroups_WithSharedFlags()
@@ -364,7 +378,7 @@ public class EquipmentSharingTests
         storage.Setup(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                .ReturnsAsync(() => new MemoryStream([1, 2, 3]));
 
-        return new EquipmentPhotoContentController(f, storage.Object)
+        return new EquipmentPhotoContentController(f, storage.Object, BuildIngest(storage))
         {
             ControllerContext = new ControllerContext
             {
@@ -419,6 +433,49 @@ public class EquipmentSharingTests
         var photoId = await AddPhotoAsync(w);
         await ShareWithAsync(w, OrgId);
 
+        Assert.IsType<NotFoundResult>(await BuildPhotos(w.Factory, OutsiderId).GetContent(photoId, default));
+    }
+
+    /// <summary>
+    /// Group gear has no OwnerAppUserId, so before phase 6a nothing matched IsOwner and an org
+    /// item's photos were reachable by nobody but SuperAdmin — including the members whose group
+    /// owns the thing.
+    /// </summary>
+    [Fact]
+    public async Task PhotoBytes_OfGroupOwnedGear_AreServedToTheOwningGroupsMembers()
+    {
+        var w = await SeedAsync();
+        var orgItemId = Guid.NewGuid();
+        var photoId = Guid.NewGuid();
+        var fileId = Guid.NewGuid();
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var modelId = await db.EquipmentModels.Select(m => m.Id).FirstAsync();
+            db.EquipmentItems.Add(new EquipmentItem
+            {
+                Id = orgItemId, OwningOrganizationId = OrgId, OwnerAppUserId = null,
+                EquipmentModelId = modelId, DisplayName = "Group thermal camera",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+            });
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = OwnerId,
+                FileName = "kit.jpg", StoredFileName = "kit.jpg", ContentType = "image/jpeg",
+                FileSize = 3, StoragePath = "fake/path.jpg",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+            });
+            db.EquipmentItemPhotos.Add(new EquipmentItemPhoto
+            {
+                Id = photoId, EquipmentItemId = orgItemId, UploadFileId = fileId, IsPrimary = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // A member of the owning group can see its kit.
+        Assert.IsType<FileStreamResult>(await BuildPhotos(w.Factory, FellowMemberId).GetContent(photoId, default));
+        // Somebody outside the group still cannot.
         Assert.IsType<NotFoundResult>(await BuildPhotos(w.Factory, OutsiderId).GetContent(photoId, default));
     }
 

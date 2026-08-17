@@ -69,10 +69,9 @@ public sealed record EquipmentItemFlags(
     bool CanDelete,
     bool CanManageSharing,
     bool CanSeeSerial,
-    bool CanRequestCheckout,
     bool CanManageServiceLog)
 {
-    public static readonly EquipmentItemFlags None = new(false, false, false, false, false, false, false);
+    public static readonly EquipmentItemFlags None = new(false, false, false, false, false, false);
 }
 
 public sealed record EquipmentItemPhotoRecord(
@@ -177,6 +176,26 @@ public sealed record EquipmentHistoryEntryRecord(
     Guid? CheckoutId,
     int PhotoCount);
 
+/// <summary>
+/// What was taken out of a picture and kept beside it. Org Administrators and SuperAdmin only.
+/// </summary>
+/// <remarks>
+/// Deliberately a separate shape from anything on a serve path: the bytes and thumbnail routes
+/// cannot carry this even by accident, because they do not return this type.
+/// </remarks>
+public sealed record UploadFileMetadataRecord(
+    string MediaKind,
+    int? WidthPixels,
+    int? HeightPixels,
+    DateTime? CapturedAtUtc,
+    double? GpsLatitude,
+    double? GpsLongitude,
+    double? GpsAltitudeMeters,
+    string? CameraManufacturer,
+    string? CameraModel,
+    double? DurationSeconds,
+    DateTime ExtractedAtUtc);
+
 // ── Checkouts (Phase 4) ─────────────────────────────────────────────────────
 
 /// <summary>
@@ -215,6 +234,17 @@ public sealed record EquipmentCheckoutRecord(
     string? ReturnConditionNotes,
     DateTime DateCreated,
     EquipmentCheckoutFlags Flags);
+
+/// <summary>
+/// A group's loan queue, plus whether this caller may review loans at all.
+/// </summary>
+/// <remarks>
+/// Same reason <c>OrgEquipmentListRecord</c> is wrapped: "you may not see this" and "there is
+/// nothing here yet" are different answers, and an empty list cannot tell them apart on its own.
+/// </remarks>
+public sealed record OrgCheckoutListRecord(
+    bool CanReviewLoans,
+    IReadOnlyList<EquipmentCheckoutRecord> Items);
 
 /// <summary>What the viewer may do with this loan right now. Rendered, never re-derived.</summary>
 public sealed record EquipmentCheckoutFlags(

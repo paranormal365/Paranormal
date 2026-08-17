@@ -153,6 +153,29 @@ public sealed partial class BenAdminClientAdapter
         return result ?? [];
     }
 
+    public Task<EquipmentItemPhotoRecord?> AttachOrgEquipmentPhotoAsync(Guid orgId, Guid itemId, MultipartFormDataContent content, CancellationToken token = default)
+        => _api.PostMultipartAsync<EquipmentItemPhotoRecord>($"{OrgEquipBase(orgId)}/{itemId}/photos", content, token);
+
+    public Task<bool> DetachOrgEquipmentPhotoAsync(Guid orgId, Guid itemId, Guid photoId, CancellationToken token = default)
+        => _api.DeleteAsync($"{OrgEquipBase(orgId)}/{itemId}/photos/{photoId}", token);
+
+    // PostVoid/PutVoid report the real outcome. Deserialising a 204 would return null and be
+    // indistinguishable from a 403, which would have reported every refusal as a success.
+    public Task<bool> SetOrgEquipmentPrimaryPhotoAsync(Guid orgId, Guid itemId, Guid photoId, CancellationToken token = default)
+        => _api.PutVoidAsync($"{OrgEquipBase(orgId)}/{itemId}/photos/{photoId}/primary", new object(), token);
+
+    public Task<bool> RetireMyEquipmentAsync(Guid itemId, bool retired, CancellationToken token = default)
+        => _api.PostVoidAsync($"{MyEquipmentBase}/{itemId}/{(retired ? "retire" : "unretire")}", new object(), token);
+
+    public Task<bool> RetireOrgEquipmentAsync(Guid orgId, Guid itemId, bool retired, CancellationToken token = default)
+        => _api.PostVoidAsync($"{OrgEquipBase(orgId)}/{itemId}/{(retired ? "retire" : "unretire")}", new object(), token);
+
+    public Task<(byte[] Data, string ContentType, string FileName)?> GetEquipmentPhotoThumbnailAsync(Guid photoId, CancellationToken token = default)
+        => _api.GetBytesAsync($"/api/equipment/photos/{photoId}/thumbnail", "photo", token);
+
+    public Task<UploadFileMetadataRecord?> GetEquipmentPhotoMetadataAsync(Guid photoId, CancellationToken token = default)
+        => _api.GetAsync<UploadFileMetadataRecord>($"/api/equipment/photos/{photoId}/metadata", token);
+
     public Task<EquipmentServiceLogRecord?> AddOrgEquipmentServiceLogAsync(Guid orgId, Guid itemId, AddEquipmentServiceLogRequest request, CancellationToken token = default)
         => _api.PostAsync<AddEquipmentServiceLogRequest, EquipmentServiceLogRecord>(
                $"{OrgEquipBase(orgId)}/{itemId}/service-log", request, token);
@@ -191,10 +214,11 @@ public sealed partial class BenAdminClientAdapter
         return result ?? [];
     }
 
-    public async Task<IReadOnlyList<EquipmentCheckoutRecord>> GetOrgEquipmentCheckoutsAsync(Guid orgId, CancellationToken token = default)
+    public async Task<OrgCheckoutListRecord> GetOrgEquipmentCheckoutsAsync(Guid orgId, CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<EquipmentCheckoutRecord>>($"/api/organizations/{orgId}/equipment-checkouts", token);
-        return result ?? [];
+        var result = await _api.GetAsync<OrgCheckoutListRecord>($"/api/organizations/{orgId}/equipment-checkouts", token);
+        // A swallowed 404 means no permission — default to the closed answer.
+        return result ?? new OrgCheckoutListRecord(false, []);
     }
 
     public async Task<IReadOnlyList<EquipmentCheckoutRecord>> GetEquipmentItemCheckoutsAsync(Guid itemId, CancellationToken token = default)

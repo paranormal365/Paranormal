@@ -73,6 +73,13 @@
 
 @code {
     [Parameter, EditorRequired] public Guid ItemId { get; set; }
+
+    /// <summary>
+    /// Set for a group's own gear, left null for somebody's personal item. The only difference is
+    /// which endpoints the three actions call — the strip itself is the same either way, so one
+    /// component serves both rather than two drifting apart.
+    /// </summary>
+    [Parameter] public Guid? OrgId { get; set; }
     [Parameter, EditorRequired] public IReadOnlyList<EquipmentItemPhotoRecord> Photos { get; set; } = [];
     [Parameter] public bool CanEdit { get; set; }
 
@@ -95,7 +102,7 @@
         {
             try
             {
-                var result = await AdminClient.GetEquipmentPhotoBytesAsync(photo.Id);
+                var result = await AdminClient.GetEquipmentPhotoThumbnailAsync(photo.Id);
                 _dataUrls[photo.Id] = result is null
                     ? null
                     : $"data:{result.Value.ContentType};base64,{Convert.ToBase64String(result.Value.Data)}";
@@ -124,7 +131,9 @@
                 string.IsNullOrWhiteSpace(e.File.ContentType) ? "application/octet-stream" : e.File.ContentType);
             content.Add(fileContent, "file", e.File.Name);
 
-            var result = await AdminClient.AttachMyEquipmentPhotoAsync(ItemId, content);
+            var result = OrgId is Guid orgId
+                ? await AdminClient.AttachOrgEquipmentPhotoAsync(orgId, ItemId, content)
+                : await AdminClient.AttachMyEquipmentPhotoAsync(ItemId, content);
             if (result is null) _error = "That photo could not be uploaded.";
             else await OnChanged.InvokeAsync();
         }
@@ -139,7 +148,10 @@
     {
         _busy = true;
         _error = null;
-        if (!await AdminClient.SetMyEquipmentPrimaryPhotoAsync(ItemId, photoId))
+        var madePrimary = OrgId is Guid primaryOrgId
+            ? await AdminClient.SetOrgEquipmentPrimaryPhotoAsync(primaryOrgId, ItemId, photoId)
+            : await AdminClient.SetMyEquipmentPrimaryPhotoAsync(ItemId, photoId);
+        if (!madePrimary)
             _error = "That photo could not be set as the main one.";
         else
             await OnChanged.InvokeAsync();
@@ -150,7 +162,10 @@
     {
         _busy = true;
         _error = null;
-        if (!await AdminClient.DetachMyEquipmentPhotoAsync(ItemId, photoId))
+        var detached = OrgId is Guid detachOrgId
+            ? await AdminClient.DetachOrgEquipmentPhotoAsync(detachOrgId, ItemId, photoId)
+            : await AdminClient.DetachMyEquipmentPhotoAsync(ItemId, photoId);
+        if (!detached)
         {
             _error = "That photo could not be removed.";
         }

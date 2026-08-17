@@ -191,6 +191,15 @@
         </div>
 
         <div class="d-flex justify-content-end gap-2 border-top pt-3 mt-3">
+            @* Retiring keeps everything that happened to a piece; deleting is refused once there
+               is any history to lose. *@
+            @if (_isEdit && Item is not null)
+            {
+                <TelerikButton OnClick="ToggleRetiredAsync" Enabled="@(!_busy)">
+                    @(Item.IsRetired ? "Put back in service" : "Retire")
+                </TelerikButton>
+                <span class="flex-grow-1"></span>
+            }
             <TelerikButton OnClick="@(() => OnVisibleChanged(false))" Enabled="@(!_busy)">Cancel</TelerikButton>
             <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                            Enabled="@(!_busy && _modelId is not null && !string.IsNullOrWhiteSpace(_displayName))"
@@ -366,6 +375,22 @@
             await OnVisibleChanged(false);
         }
         _busy = false;
+    }
+
+    private async Task ToggleRetiredAsync()
+    {
+        if (Item is null) return;
+        _busy = true;
+        _error = null;
+
+        if (!await AdminClient.RetireMyEquipmentAsync(Item.Id, !Item.IsRetired))
+            _error = Item.IsRetired
+                ? "That couldn't be put back in service."
+                : "That couldn't be retired — it may be out on loan right now.";
+
+        _busy = false;
+        await OnSaved.InvokeAsync();
+        if (_error is null) await OnVisibleChanged(false);
     }
 
     private async Task OnVisibleChanged(bool visible)

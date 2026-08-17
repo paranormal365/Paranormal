@@ -591,6 +591,51 @@ public class EquipmentCheckoutTests
         Assert.Contains("Away for repair", message.MessageBody);
     }
 
+    // ── Notification bodies are HTML ─────────────────────────────────────────
+
+    /// <summary>
+    /// Message bodies are rendered as markup, deliberately — the platform's notices use tags to
+    /// pick out names. That makes anything a person typed an injection vector, and a decline reason
+    /// is typed by the lender and read by the borrower.
+    /// </summary>
+    [Fact]
+    public async Task ADeclineReasonCannotSmuggleMarkupIntoTheBorrowersInbox()
+    {
+        var w = await SeedAsync(EquipmentLoanAudience.IndividualUsers);
+        var checkoutId = await RequestAsync(w, w.PersonalItemId, StrangerId, null);
+
+        await Build(w.Factory, OwnerId).Deny(checkoutId,
+            new DenyEquipmentCheckoutRequest("<script>alert('xss')</script>Away for repair"), default);
+
+        await using var db = await w.Factory.CreateDbContextAsync();
+        var body = (await db.UserMessageTos.Include(t => t.UserMessage)
+            .SingleAsync(t => t.ToAppUserId == StrangerId)).UserMessage.MessageBody;
+
+        Assert.DoesNotContain("<script>", body);
+        Assert.Contains("&lt;script&gt;", body);      // encoded, not stripped — the reason survives
+        Assert.Contains("Away for repair", body);
+    }
+
+    [Fact]
+    public async Task AnItemNamedWithMarkupCannotInjectIntoTheApproversNotice()
+    {
+        var w = await SeedAsync(EquipmentLoanAudience.IndividualUsers);
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var item = await db.EquipmentItems.SingleAsync(i => i.Id == w.PersonalItemId);
+            item.DisplayName = "<img src=x onerror=alert(1)>";
+            await db.SaveChangesAsync();
+        }
+
+        await RequestAsync(w, w.PersonalItemId, StrangerId, null);
+
+        await using var check = await w.Factory.CreateDbContextAsync();
+        var body = (await check.UserMessageTos.Include(t => t.UserMessage)
+            .SingleAsync(t => t.ToAppUserId == OwnerId)).UserMessage.MessageBody;
+
+        Assert.DoesNotContain("<img", body);
+    }
+
     // ── Queues ───────────────────────────────────────────────────────────────
 
     [Fact]
@@ -623,8 +668,25 @@ public class EquipmentCheckoutTests
 
         var byManager = await Build(w.Factory, OrgManagerId, checkoutApproverId: OrgManagerId)
             .GetForOrg(OrgId, default);
-        var rows = Assert.IsAssignableFrom<IEnumerable<EquipmentCheckoutRecord>>(
-            Assert.IsType<OkObjectResult>(byManager.Result).Value);
-        Assert.Single(rows);
+        var payload = Assert.IsType<OrgCheckoutListRecord>(Assert.IsType<OkObjectResult>(byManager.Result).Value);
+        Assert.True(payload.CanReviewLoans);
+        Assert.Single(payload.Items);
+    }
+
+    /// <summary>
+    /// The loans tab rendered on row count, so an approver at a group whose gear had never been
+    /// borrowed saw no tab at all and no way to discover the surface existed.
+    /// </summary>
+    [Fact]
+    public async Task AnApproverWithNoLoansYetIsStillToldTheyMayReviewThem()
+    {
+        var w = await SeedAsync();   // nobody has asked for anything
+
+        var result = await Build(w.Factory, OrgManagerId, checkoutApproverId: OrgManagerId)
+            .GetForOrg(OrgId, default);
+        var payload = Assert.IsType<OrgCheckoutListRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        Assert.Empty(payload.Items);
+        Assert.True(payload.CanReviewLoans);
     }
 }

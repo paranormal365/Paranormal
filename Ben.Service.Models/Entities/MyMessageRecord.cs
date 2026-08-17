@@ -14,8 +14,12 @@ namespace Ben.Service.Models.Entities;
 /// <param name="TypeColorClass">Colour class from the message type, when it defines one.</param>
 /// <param name="SentUtc">When the message was created.</param>
 /// <param name="ReadUtc">When this recipient last read it, or null while unread.</param>
-/// <param name="SentByAppUserId">Author's user id.</param>
-/// <param name="SentByDisplayName">Author's display name, falling back to their email.</param>
+/// <param name="SentByAppUserId">Author's user id, or null on an anonymous channel.</param>
+/// <param name="SentByDisplayName">Author's display name, or null on an anonymous channel.</param>
+/// <param name="SenderHidden">
+/// True when the author is deliberately withheld, so the reader is shown "Anonymous" rather than
+/// the "Unknown" that a missing name would otherwise imply.
+/// </param>
 public sealed record MyMessageRecord(
     Guid Id,
     Guid MessageId,
@@ -26,5 +30,6 @@ public sealed record MyMessageRecord(
     string? TypeColorClass,
     DateTime SentUtc,
     DateTime? ReadUtc,
-    Guid SentByAppUserId,
-    string? SentByDisplayName);
+    Guid? SentByAppUserId,
+    string? SentByDisplayName,
+    bool SenderHidden = false);
