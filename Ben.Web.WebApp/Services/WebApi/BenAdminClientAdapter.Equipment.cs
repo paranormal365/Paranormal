@@ -121,6 +121,41 @@ public sealed partial class BenAdminClientAdapter
         return result ?? [];
     }
 
+    // ── The group's own equipment ─────────────────────────────────────────────
+
+    private static string OrgEquipBase(Guid orgId) => $"/api/organizations/{orgId}/equipment";
+
+    public async Task<OrgEquipmentListRecord> GetOrgEquipmentAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<OrgEquipmentListRecord>(OrgEquipBase(orgId), token);
+        // A swallowed non-2xx lands here as null. Default to "no permission", so a failed call can
+        // never open an affordance — a permission gap should close, not open.
+        return result ?? new OrgEquipmentListRecord(false, []);
+    }
+
+    public Task<EquipmentItemRecord?> CreateOrgEquipmentAsync(Guid orgId, UpsertOrgEquipmentItemRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertOrgEquipmentItemRequest, EquipmentItemRecord>(OrgEquipBase(orgId), request, token);
+
+    public Task<EquipmentItemRecord?> UpdateOrgEquipmentAsync(Guid orgId, Guid itemId, UpsertOrgEquipmentItemRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertOrgEquipmentItemRequest, EquipmentItemRecord>($"{OrgEquipBase(orgId)}/{itemId}", request, token);
+
+    public Task<bool> DeleteOrgEquipmentAsync(Guid orgId, Guid itemId, CancellationToken token = default)
+        => _api.DeleteAsync($"{OrgEquipBase(orgId)}/{itemId}", token);
+
+    public Task<EquipmentItemRecord?> SetOrgEquipmentHolderAsync(Guid orgId, Guid itemId, Guid? appUserId, CancellationToken token = default)
+        => _api.PutAsync<SetEquipmentHolderRequest, EquipmentItemRecord>(
+               $"{OrgEquipBase(orgId)}/{itemId}/holder", new SetEquipmentHolderRequest(appUserId), token);
+
+    public async Task<IReadOnlyList<EquipmentServiceLogRecord>> GetOrgEquipmentServiceLogAsync(Guid orgId, Guid itemId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<EquipmentServiceLogRecord>>($"{OrgEquipBase(orgId)}/{itemId}/service-log", token);
+        return result ?? [];
+    }
+
+    public Task<EquipmentServiceLogRecord?> AddOrgEquipmentServiceLogAsync(Guid orgId, Guid itemId, AddEquipmentServiceLogRequest request, CancellationToken token = default)
+        => _api.PostAsync<AddEquipmentServiceLogRequest, EquipmentServiceLogRecord>(
+               $"{OrgEquipBase(orgId)}/{itemId}/service-log", request, token);
+
     // ── SuperAdmin taxonomy moderation ───────────────────────────────────────
 
     private const string AdminTaxonomyBase = "/api/admin/equipment-taxonomy";

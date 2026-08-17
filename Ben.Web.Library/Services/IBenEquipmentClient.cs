@@ -53,6 +53,25 @@ public interface IBenEquipmentClient
     /// <summary>Members' personal gear shared with this group. Never carries a serial number.</summary>
     Task<IReadOnlyList<SharedEquipmentItemRecord>> GetOrgSharedEquipmentAsync(Guid orgId, CancellationToken token = default);
 
+    // ── The group's own equipment (Phase 3) ──────────────────────────────────
+
+    /// <summary>
+    /// The group's own gear, plus whether the caller may add to it. Serials appear only for callers
+    /// who may manage equipment; the CanManage verdict comes from the server, never from whether
+    /// this call happened to succeed.
+    /// </summary>
+    Task<OrgEquipmentListRecord> GetOrgEquipmentAsync(Guid orgId, CancellationToken token = default);
+
+    Task<EquipmentItemRecord?> CreateOrgEquipmentAsync(Guid orgId, UpsertOrgEquipmentItemRequest request, CancellationToken token = default);
+    Task<EquipmentItemRecord?> UpdateOrgEquipmentAsync(Guid orgId, Guid itemId, UpsertOrgEquipmentItemRequest request, CancellationToken token = default);
+    Task<bool> DeleteOrgEquipmentAsync(Guid orgId, Guid itemId, CancellationToken token = default);
+
+    /// <summary>Records who currently holds a piece, or clears it with a null user id.</summary>
+    Task<EquipmentItemRecord?> SetOrgEquipmentHolderAsync(Guid orgId, Guid itemId, Guid? appUserId, CancellationToken token = default);
+
+    Task<IReadOnlyList<EquipmentServiceLogRecord>> GetOrgEquipmentServiceLogAsync(Guid orgId, Guid itemId, CancellationToken token = default);
+    Task<EquipmentServiceLogRecord?> AddOrgEquipmentServiceLogAsync(Guid orgId, Guid itemId, AddEquipmentServiceLogRequest request, CancellationToken token = default);
+
     // ── SuperAdmin taxonomy moderation (Phase 1) ─────────────────────────────
 
     Task<IReadOnlyList<EquipmentCategoryRecord>> GetAdminEquipmentCategoriesAsync(CancellationToken token = default);

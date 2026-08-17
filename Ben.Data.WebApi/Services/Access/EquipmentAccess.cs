@@ -1,6 +1,8 @@
+using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Service.Models.Entities;
+using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.WebApi.Services.Access;
@@ -10,20 +12,34 @@ namespace Ben.Data.WebApi.Services.Access;
 /// convention <see cref="InvestigationAccess"/>/<see cref="FileAudienceAccess"/> already set here.
 /// </summary>
 /// <remarks>
-/// Phase 1 only ever sees personal items (<c>OwnerAppUserId</c> set), so the resolution below is
-/// just owner-or-SuperAdmin. Later phases extend this in place rather than duplicating it:
-/// Phase 3 adds the org-owned branch (org <c>Equipment</c>/<c>EquipmentCheckout</c> permission,
-/// resolved the same way <see cref="InvestigationAccess.HasOrgAuthorityAsync"/> style helpers do
-/// elsewhere in this folder), and Phase 4 adds <c>CanRequestCheckout</c>'s real borrow-eligibility
-/// rule (shared-with-a-group-the-caller-belongs-to, or org membership for org-owned gear).
+/// Personal items resolve to owner-or-SuperAdmin from the row itself, with no query. Group-owned
+/// items need the caller's authority in that group, which is a query — so the org-owned overload
+/// takes the answer as a parameter (<c>canManageOrgEquipment</c>) rather than resolving it per row.
+/// Phase 4 adds <c>CanRequestCheckout</c>'s real borrow-eligibility rule.
 /// </remarks>
 public static class EquipmentAccess
 {
     /// <summary>Flags for a single item, already loaded.</summary>
     public static EquipmentItemFlags ComputeItemFlags(EquipmentItem item, Guid userId, bool isSuperAdmin)
+        => ComputeItemFlags(item, userId, isSuperAdmin, canManageOrgEquipment: false);
+
+    /// <summary>
+    /// Flags for a single item, given whether the caller may manage the owning group's equipment.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="canManageOrgEquipment"/> is passed in rather than resolved here because it
+    /// costs a query and is the same answer for every row in one group's list — resolving it per
+    /// item is the N+1 that <c>OrganizationController</c>'s own comments warn about. It is ignored
+    /// for personal items, whose only authority is ownership.
+    /// </remarks>
+    public static EquipmentItemFlags ComputeItemFlags(
+        EquipmentItem item, Guid userId, bool isSuperAdmin, bool canManageOrgEquipment)
     {
-        var isOwner = userId != Guid.Empty && item.OwnerAppUserId == userId;
-        var canManage = isOwner || isSuperAdmin;
+        var isOwner   = userId != Guid.Empty && item.OwnerAppUserId == userId;
+        var isOrgItem = item.OwningOrganizationId is not null;
+
+        // Group gear has no owner to fall back on: authority over it comes from the group.
+        var canManage = isSuperAdmin || (isOrgItem ? canManageOrgEquipment : isOwner);
 
         return new EquipmentItemFlags(
             IsOwner: isOwner,
@@ -31,11 +47,31 @@ public static class EquipmentAccess
             // Once checkout history exists (Phase 4), delete is replaced by retire for rows with
             // any history — that guard lives in the checkout-aware controller, not here.
             CanDelete: canManage,
-            CanManageSharing: isOwner,
+            // Sharing is a personal-item idea: group gear already belongs to a group.
+            CanManageSharing: isOwner && !isOrgItem,
             CanSeeSerial: canManage,
             // No checkout workflow exists yet (Phase 4) — nobody can request a loan.
             CanRequestCheckout: false,
-            CanManageServiceLog: false);
+            CanManageServiceLog: canManage);
+    }
+
+    /// <summary>
+    /// Whether the caller may manage one organization's own equipment, resolved once for a whole
+    /// request rather than per row.
+    /// </summary>
+    /// <remarks>
+    /// Delegates to <see cref="IOrganizationSecurityService.HasAccessAsync"/>, so an org-created
+    /// "Equipment Management" role, a direct access grant, and owner/administrator standing all
+    /// behave identically here to everywhere else — the resolution order lives in one place, and
+    /// this helper does not re-implement it.
+    /// </remarks>
+    public static async Task<bool> CanManageOrgEquipmentAsync(
+        IOrganizationSecurityService security, Guid userId, Guid orgId, bool isSuperAdmin,
+        OrganizationSecurityAction action, CancellationToken ct)
+    {
+        if (isSuperAdmin) return true;
+        if (userId == Guid.Empty) return false;
+        return await security.HasAccessAsync(userId, orgId, OrganizationSecurityTable.Equipment, action, ct);
     }
 
     /// <summary>
@@ -45,8 +81,8 @@ public static class EquipmentAccess
     /// phases that DO need per-org lookups (org-owned items, sharing) can extend this in place.
     /// </summary>
     public static IReadOnlyDictionary<Guid, EquipmentItemFlags> ComputeItemFlags(
-        IEnumerable<EquipmentItem> items, Guid userId, bool isSuperAdmin)
-        => items.ToDictionary(i => i.Id, i => ComputeItemFlags(i, userId, isSuperAdmin));
+        IEnumerable<EquipmentItem> items, Guid userId, bool isSuperAdmin, bool canManageOrgEquipment = false)
+        => items.ToDictionary(i => i.Id, i => ComputeItemFlags(i, userId, isSuperAdmin, canManageOrgEquipment));
 
     /// <summary>
     /// Whether <paramref name="viewerUserId"/> can see this item by way of a group it is shared

@@ -1,0 +1,179 @@
+@namespace Ben.Web.Library.Organization.Equipment
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@inject IBenAdminClient AdminClient
+
+@* A piece of gear's service and defect history. Any member can read it; adding needs the
+   Equipment permission, which the server tells us via the item's own flags. *@
+
+<TelerikWindow Visible="@Visible" VisibleChanged="@OnVisibleChanged" Modal="true" Width="640px">
+    <WindowTitle>History — @(Item?.DisplayName ?? "equipment")</WindowTitle>
+    <WindowContent>
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger py-2">@_error</div>
+        }
+
+        @if (Item?.DefectNotes is not null)
+        {
+            <div class="alert alert-warning py-2">
+                <strong>Currently faulty:</strong> @Item.DefectNotes
+            </div>
+        }
+
+        @if (Item?.LastServicedDate is not null)
+        {
+            <p class="text-secondary small mb-3">
+                Last serviced @Item.LastServicedDate.Value.ToString("d MMM yyyy").
+            </p>
+        }
+
+        @if (Item?.Flags.CanManageServiceLog == true)
+        {
+            <div class="card mb-3">
+                <div class="card-body py-2">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold mb-1">What happened</label>
+                            <TelerikDropDownList Data="@_entryTypes" TItem="EquipmentServiceLogType" TValue="EquipmentServiceLogType"
+                                                 @bind-Value="@_entryType" Width="100%">
+                                <ItemTemplate>@Describe((EquipmentServiceLogType)context)</ItemTemplate>
+                                <ValueTemplate>@Describe((EquipmentServiceLogType)context)</ValueTemplate>
+                            </TelerikDropDownList>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold mb-1">When</label>
+                            <TelerikDatePicker @bind-Value="@_entryDate" Width="100%" />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-semibold mb-1">Note</label>
+                            <input class="form-control" maxlength="2000" value="@_notes"
+                                   @oninput="@(e => _notes = e.Value?.ToString() ?? string.Empty)" />
+                        </div>
+                    </div>
+                    <div class="mt-2 text-end">
+                        <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Enabled="@(!_busy && !string.IsNullOrWhiteSpace(_notes))"
+                                       OnClick="AddEntryAsync">Add entry</TelerikButton>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (_loading)
+        {
+            <p class="text-secondary">Loading history…</p>
+        }
+        else if (_entries.Count == 0)
+        {
+            <p class="text-secondary mb-0">Nothing recorded for this piece yet.</p>
+        }
+        else
+        {
+            <ul class="list-unstyled mb-0">
+                @foreach (var entry in _entries)
+                {
+                    <li class="border-bottom py-2">
+                        <div class="d-flex justify-content-between">
+                            <span class="fw-semibold">@Describe(entry.EntryType)</span>
+                            <span class="text-secondary small">@entry.EntryDate.ToString("d MMM yyyy")</span>
+                        </div>
+                        <div class="small">@entry.Notes</div>
+                        <div class="text-secondary small">
+                            Logged by @(entry.CreatedByDisplayName ?? "someone")
+                            @if (entry.PerformedByDisplayName is not null)
+                            {
+                                <span>· work done by @entry.PerformedByDisplayName</span>
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <TelerikButton OnClick="@(() => OnVisibleChanged(false))">Close</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter] public EquipmentItemRecord? Item { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private static readonly List<EquipmentServiceLogType> _entryTypes =
+    [
+        EquipmentServiceLogType.Service,
+        EquipmentServiceLogType.DefectReported,
+        EquipmentServiceLogType.DefectResolved,
+    ];
+
+    private List<EquipmentServiceLogRecord> _entries = [];
+    private EquipmentServiceLogType _entryType = EquipmentServiceLogType.Service;
+    private DateTime? _entryDate = DateTime.Today;
+    private string _notes = string.Empty;
+    private bool _loading;
+    private bool _busy;
+    private string? _error;
+    private Guid? _loadedFor;
+
+    private static string Describe(EquipmentServiceLogType type) => type switch
+    {
+        EquipmentServiceLogType.Service        => "Serviced",
+        EquipmentServiceLogType.DefectReported => "Fault reported",
+        EquipmentServiceLogType.DefectResolved => "Fault fixed",
+        _                                      => type.ToString(),
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Visible || Item is null) { _loadedFor = null; return; }
+        if (_loadedFor == Item.Id) return;
+        _loadedFor = Item.Id;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Item is null) return;
+        _loading = true;
+        _error = null;
+        _entries = [.. await AdminClient.GetOrgEquipmentServiceLogAsync(OrgId, Item.Id)];
+        _loading = false;
+    }
+
+    private async Task AddEntryAsync()
+    {
+        if (Item is null) return;
+        _busy = true;
+        _error = null;
+
+        var saved = await AdminClient.AddOrgEquipmentServiceLogAsync(OrgId, Item.Id,
+            new AddEquipmentServiceLogRequest(_entryType, _entryDate ?? DateTime.UtcNow, _notes.Trim(), null));
+
+        _busy = false;
+
+        if (saved is null)
+        {
+            _error = "That entry couldn't be saved.";
+            return;
+        }
+
+        _notes = string.Empty;
+        await LoadAsync();
+        // The entry changes the item's own defect/serviced fields, so the grid behind us is stale.
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task OnVisibleChanged(bool visible)
+    {
+        Visible = visible;
+        if (!visible) _loadedFor = null;
+        await VisibleChanged.InvokeAsync(visible);
+    }
+}

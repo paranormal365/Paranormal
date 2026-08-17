@@ -117,6 +117,57 @@ public sealed record UpsertEquipmentItemRequest(
     bool IncludeInGlobalCatalog = false,
     EquipmentLoanAudience LoanAudience = EquipmentLoanAudience.NotLoanable);
 
+// ── Group-owned equipment and the service log (Phase 3) ─────────────────────
+
+/// <summary>
+/// The group's own equipment, plus whether this caller may add to it.
+/// </summary>
+/// <remarks>
+/// The list is wrapped rather than returned bare because <c>CanManage</c> cannot be inferred from
+/// the rows: a group with no equipment yet has no row to carry a flag, and deriving the verdict
+/// from "are there any editable items" would leave the first piece impossible to add. The server
+/// knows the answer whether or not anything exists, so it says so.
+/// </remarks>
+public sealed record OrgEquipmentListRecord(
+    bool CanManage,
+    IReadOnlyList<EquipmentItemRecord> Items);
+
+/// <summary>Creates or edits a piece of the group's own equipment.</summary>
+public sealed record UpsertOrgEquipmentItemRequest(
+    Guid EquipmentModelId,
+    string DisplayName,
+    string? SerialNumber,
+    DateTime? AcquisitionDate,
+    string? Notes,
+    bool IncludeInGlobalCatalog = false);
+
+/// <summary>Sets (or clears, with null) who is currently holding a piece of group gear.</summary>
+public sealed record SetEquipmentHolderRequest(Guid? AppUserId);
+
+/// <summary>One entry in a piece of equipment's service and defect history.</summary>
+public sealed record EquipmentServiceLogRecord(
+    Guid Id,
+    Guid EquipmentItemId,
+    EquipmentServiceLogType EntryType,
+    DateTime EntryDate,
+    string Notes,
+    Guid? PerformedByAppUserId,
+    string? PerformedByDisplayName,
+    DateTime DateCreated,
+    Guid CreatedByAppUserId,
+    string? CreatedByDisplayName);
+
+/// <summary>
+/// Adds a service-log entry. The entry type drives a side effect on the item itself, in the same
+/// save: a reported defect becomes the item's current defect note, a resolved one clears it, and a
+/// service entry moves its last-serviced date.
+/// </summary>
+public sealed record AddEquipmentServiceLogRequest(
+    EquipmentServiceLogType EntryType,
+    DateTime EntryDate,
+    string Notes,
+    Guid? PerformedByAppUserId);
+
 // ── Sharing (Phase 2) ───────────────────────────────────────────────────────
 
 /// <summary>

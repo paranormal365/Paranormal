@@ -106,16 +106,57 @@ those events too, leaving their date and title untouched.
 
 ## The Equipment tab
 
-**Equipment** shows the gear members have chosen to share with this group — make, model, photos,
-and who owns each piece. Any member can read it; there is no permission to grant, because the
-sharing itself is the owner's decision.
+Two lists, because a group deals with two kinds of gear.
 
-What you will not see is serial numbers. Those stay with the owner even inside a group they have
-shared the piece with.
+**The group's gear** is equipment the group itself owns. Every member can see the list — what the
+group has is not a secret from the people who use it — but adding, editing and deleting it needs
+the **Equipment** permission, and so does seeing serial numbers.
+
+Each piece tracks who is holding it, when it was last serviced, and whether it is currently faulty.
+**Held by** can be set by hand: kit gets passed over in a car park without anyone opening the app,
+and the record should still be able to tell the truth. A holder has to be an active member.
+
+**History** on a piece is its service and defect log. Anyone can read it; adding an entry needs the
+Equipment permission. The entry type does real work rather than just labelling the note:
+
+| Entry | What it does to the item |
+|---|---|
+| Serviced | Moves its last-serviced date |
+| Fault reported | Marks the piece faulty, and the note becomes the reason |
+| Fault fixed | Clears the fault |
+
+The entry and its consequence are saved together, so the log never disagrees with the piece it
+describes. Entries are kept — fixing a fault does not erase the report of it.
+
+Once a piece has any history, deleting it is refused and you are asked to **retire** it instead.
+Destroying a serial-numbered asset would take the account of what happened to it along too.
+
+**Members' shared gear** is the second list: equipment members own personally and have chosen to
+show this group. It is read-only here — it belongs to its owner — and it needs no permission to
+read, because the sharing itself is the owner's decision, not the group's to gate. Serial numbers
+stay with owners even here.
 
 The **Borrowing** column says whether a piece can actually be borrowed, which is a separate choice
 from sharing it. A member can let the group know they own something without offering to lend it,
 and the column distinguishes gear offered to this group from gear its owner only lends personally.
 
-A piece disappears from this tab if its owner leaves the group. Their sharing choice is kept, so it
-comes back if they rejoin.
+A shared piece disappears from this tab if its owner leaves the group. Their sharing choice is
+kept, so it comes back if they rejoin.
+
+## The two equipment permissions
+
+Under **Roles**, equipment has two entries, and the second sits underneath the first because it is
+narrower:
+
+- **Equipment** — manage what the group owns: add and edit gear, upload its photos, keep its
+  service log, set who is holding a piece, and see serial numbers. Read access to the list needs
+  nothing at all beyond membership.
+- **Equipment Checkouts** — run the loans desk: approve and deny borrowing requests, hand gear over
+  and receive it back. This is the "Equipment Management" job in item #55's own words.
+
+They are separate so a group can hand someone the loans desk without also handing them the catalog.
+Deciding what the group buys and owns, and lending out what it already has, are different jobs and
+often different people. Granting **Equipment** does not grant **Equipment Checkouts**.
+
+Neither permission has any say over a member's personal gear. A loan of somebody's own equipment is
+always approved by its owner.

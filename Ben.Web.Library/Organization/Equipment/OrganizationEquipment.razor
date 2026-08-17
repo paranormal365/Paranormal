@@ -14,15 +14,152 @@
         <h3 class="mb-1">Equipment<HelpLink Slug="your-equipment" Anchor="sharing-with-your-groups" /></h3>
     }
 
-    <p class="text-secondary small">
-        Gear members have chosen to share with this group. Serial numbers stay with their owners and
-        are never shown here.
-    </p>
-
     @if (_error is not null)
     {
         <div class="alert alert-danger">@_error</div>
     }
+
+    <TelerikTabStrip @bind-ActiveTabId="@_activeTab">
+
+        <TabStripTab Title="The group's gear" Id="owned">
+            @RenderOwned
+        </TabStripTab>
+
+        <TabStripTab Title="Members' shared gear" Id="shared">
+            @RenderShared
+        </TabStripTab>
+
+    </TelerikTabStrip>
+</div>
+
+<OrgEquipmentEditor Visible="@_editorVisible"
+                    VisibleChanged="@(v => _editorVisible = v)"
+                    OrgId="@OrgId"
+                    Item="@_editing"
+                    OnSaved="LoadOwnedAsync" />
+
+<OrgEquipmentServiceLog Visible="@_logVisible"
+                        VisibleChanged="@(v => _logVisible = v)"
+                        OrgId="@OrgId"
+                        Item="@_logFor"
+                        OnChanged="LoadOwnedAsync" />
+
+<ConfirmDialog Visible="@(_pendingDelete is not null)"
+               Title="Delete this equipment?"
+               Message="@($"\"{_pendingDelete?.DisplayName}\" will be removed. If it has service history you'll be asked to retire it instead.")"
+               ConfirmText="Delete"
+               OnConfirm="DeleteConfirmedAsync"
+               OnCancel="@(() => _pendingDelete = null)" />
+
+@code {
+    private RenderFragment RenderOwned => @<text>
+    <p class="text-secondary small mt-2">
+        Equipment the group itself owns. Any member can see the list; adding, editing and serial
+        numbers need the <strong>Equipment</strong> permission.
+    </p>
+
+    @if (_canManage)
+    {
+        <div class="mb-2">
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Icon="@SvgIcon.Plus" Size="@ThemeConstants.Button.Size.Small"
+                           OnClick="@(() => OpenEditor(null))">Add equipment</TelerikButton>
+        </div>
+    }
+
+    @if (_ownedLoading)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading the group's equipment…" />
+    }
+    else if (_owned.Count == 0)
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <h6 class="mb-2">This group doesn't own any equipment yet</h6>
+                <p class="text-secondary small mb-0">
+                    @(_canManage
+                        ? "Add the group's own gear to track who has it and when it was last serviced."
+                        : "Someone with the Equipment permission can add the group's gear here.")
+                </p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <TelerikGrid Data="@_owned" TItem="EquipmentItemRecord" Sortable="true" Pageable="true" PageSize="20">
+            <GridColumns>
+                <GridColumn Field="@nameof(EquipmentItemRecord.DisplayName)" Title="Name" />
+                <GridColumn Field="@nameof(EquipmentItemRecord.BrandName)" Title="Make" Width="140px" />
+                <GridColumn Field="@nameof(EquipmentItemRecord.ModelName)" Title="Model" Width="140px" />
+                <GridColumn Title="Serial" Width="150px">
+                    <Template>
+                        @{ var row = (EquipmentItemRecord)context; }
+                        @if (row.SerialNumber is not null)
+                        {
+                            <code class="small">@row.SerialNumber</code>
+                        }
+                        else
+                        {
+                            <span class="text-secondary small">—</span>
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Held by" Width="160px">
+                    <Template>
+                        @{ var row = (EquipmentItemRecord)context; }
+                        @(row.CurrentHolderDisplayName ?? "In storage")
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Condition" Width="150px">
+                    <Template>
+                        @{ var row = (EquipmentItemRecord)context; }
+                        @if (row.IsRetired)
+                        {
+                            <span class="badge bg-secondary">Retired</span>
+                        }
+                        else if (row.DefectNotes is not null)
+                        {
+                            <span class="badge bg-warning text-dark" title="@row.DefectNotes">Faulty</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-success">OK</span>
+                        }
+                    </Template>
+                </GridColumn>
+                <GridCommandColumn Width="230px">
+                    <Template>
+                        @{ var row = (EquipmentItemRecord)context; }
+                        <div class="d-flex gap-1">
+                            <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                           OnClick="@(() => OpenLog(row))">History</TelerikButton>
+                            @* Buttons render from the server's verdict, never from a guess. *@
+                            @if (row.Flags.CanEdit)
+                            {
+                                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                               Icon="@SvgIcon.Pencil"
+                                               OnClick="@(() => OpenEditor(row))">Edit</TelerikButton>
+                            }
+                            @if (row.Flags.CanDelete)
+                            {
+                                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                               Icon="@SvgIcon.Trash"
+                                               OnClick="@(() => _pendingDelete = row)">Delete</TelerikButton>
+                            }
+                        </div>
+                    </Template>
+                </GridCommandColumn>
+            </GridColumns>
+        </TelerikGrid>
+    }
+    </text>;
+
+    private RenderFragment RenderShared => @<text>
+    <p class="text-secondary small mt-2">
+        Gear members have chosen to share with this group. Serial numbers stay with their owners and
+        are never shown here.
+    </p>
 
     @if (_loading)
     {
@@ -73,28 +210,60 @@
             @_items.Count shared @(_items.Count == 1 ? "piece" : "pieces").
         </p>
     }
-</div>
+    </text>;
 
-@code {
     [Parameter, EditorRequired] public Guid OrgId { get; set; }
     [Parameter] public bool EmbeddedMode { get; set; }
 
     private List<SharedEquipmentItemRecord> _items = [];
+    private List<EquipmentItemRecord> _owned = [];
+    private string _activeTab = "owned";
     private bool _loading = true;
+    private bool _ownedLoading = true;
     private string? _error;
     private Guid _loadedForOrg;
+
+    private EquipmentItemRecord? _editing;
+    private EquipmentItemRecord? _logFor;
+    private EquipmentItemRecord? _pendingDelete;
+    private bool _editorVisible;
+    private bool _logVisible;
+
+    /// <summary>
+    /// The server's verdict on whether this caller may add equipment — rendered, never re-derived.
+    /// It arrives alongside the list rather than inside it, because an empty list still has to be
+    /// able to say "you may add the first piece."
+    /// </summary>
+    private bool _canManage;
 
     protected override async Task OnParametersSetAsync()
     {
         if (OrgId == Guid.Empty || _loadedForOrg == OrgId) return;
         _loadedForOrg = OrgId;
+        await LoadOwnedAsync();
         await LoadAsync();
+    }
+
+    private async Task LoadOwnedAsync()
+    {
+        _ownedLoading = true;
+        try
+        {
+            var result = await AdminClient.GetOrgEquipmentAsync(OrgId);
+            _owned = [.. result.Items];
+            _canManage = result.CanManage;
+        }
+        catch (Exception ex)
+        {
+            _error = $"The group's equipment could not be loaded: {ex.Message}";
+        }
+        _ownedLoading = false;
+        StateHasChanged();
     }
 
     private async Task LoadAsync()
     {
         _loading = true;
-        _error = null;
         try
         {
             _items = [.. await AdminClient.GetOrgSharedEquipmentAsync(OrgId)];
@@ -104,5 +273,31 @@
             _error = $"Shared equipment could not be loaded: {ex.Message}";
         }
         _loading = false;
+        StateHasChanged();
+    }
+
+    private void OpenEditor(EquipmentItemRecord? item)
+    {
+        _editing = item;
+        _editorVisible = true;
+    }
+
+    private void OpenLog(EquipmentItemRecord item)
+    {
+        _logFor = item;
+        _logVisible = true;
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        if (_pendingDelete is null) return;
+        var target = _pendingDelete;
+        _pendingDelete = null;
+
+        // A refusal here is the expected answer for gear with history, not a failure.
+        if (!await AdminClient.DeleteOrgEquipmentAsync(OrgId, target.Id))
+            _error = $"\"{target.DisplayName}\" has service history, so it can't be deleted. Retire it instead.";
+
+        await LoadOwnedAsync();
     }
 }
