@@ -4,6 +4,7 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Cms;
+using Ben.Data.WebApi.Services;
 using Ben.Service.Models.Entities;
 using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Http;
@@ -45,7 +46,7 @@ public class CmsSectionControllerTests
         Mock<IOrganizationSecurityService>? security = null)
     {
         security ??= GrantAll();
-        var ctrl = new CmsSectionController(factory, CreateMapperMock().Object, security.Object, new Mock<IAuditLogService>().Object);
+        var ctrl = new CmsSectionController(factory, CreateMapperMock().Object, security.Object, new Mock<IAuditLogService>().Object, new CmsMarkupSanitizer());
         ctrl.ControllerContext = new ControllerContext
             { HttpContext = new DefaultHttpContext { User = principal ?? Anonymous() } };
         return ctrl;

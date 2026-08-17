@@ -120,6 +120,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<EquipmentItemFaq> EquipmentItemFaqs { get; set; }
         public virtual DbSet<EquipmentQuestion> EquipmentQuestions { get; set; }
         public virtual DbSet<EquipmentLoanFeedback> EquipmentLoanFeedbacks { get; set; }
+        public virtual DbSet<OrganizationCmsTemplate> OrganizationCmsTemplates { get; set; }
         public virtual DbSet<VideoProject> VideoProjects { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -417,6 +418,22 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrganizationPage>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationCmsTemplate>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationCmsTemplate>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationCmsTemplate>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationCmsTemplate>().Property(e => e.Name).HasMaxLength(200);
+            modelBuilder.Entity<OrganizationCmsTemplate>().Property(e => e.Description).HasMaxLength(500);
+            // One name per group per kind: "Investigation Results" meaning two different things in
+            // one group's picker is a worse problem than being asked to rename it.
+            modelBuilder.Entity<OrganizationCmsTemplate>()
+                .HasIndex(e => new { e.OrganizationId, e.Scope, e.Name }).IsUnique();
+
             // A draft points at the page it will replace. NoAction rather than Cascade: SQL Server
             // refuses a self-referencing cascade, and deleting a live page with an outstanding draft
             // should be a decision somebody makes explicitly, not a side effect.

@@ -86,4 +86,22 @@ public sealed partial class BenAdminClientAdapter
 
     private static string DraftBase(Guid orgId, Guid pageId)
         => $"/api/organizations/{orgId}/pages/{pageId}/draft";
+
+    // ── The group's saved templates (item #80, part 2) ──────────────────────
+
+    public async Task<IReadOnlyList<CmsTemplateRecord>> GetCmsTemplatesAsync(Guid orgId, CmsTemplateScope? scope = null, CancellationToken token = default)
+    {
+        var url = $"/api/organizations/{orgId}/cms-templates" + (scope is null ? "" : $"?scope={scope}");
+        var result = await _api.GetAsync<IReadOnlyList<CmsTemplateRecord>>(url, token);
+        return result ?? [];
+    }
+
+    public Task<CmsTemplateRecord?> SaveCmsTemplateAsync(Guid orgId, SaveCmsTemplateRequest request, CancellationToken token = default)
+        => _api.PostAsync<SaveCmsTemplateRequest, CmsTemplateRecord>($"/api/organizations/{orgId}/cms-templates", request, token);
+
+    public Task<CmsTemplateRecord?> UpdateCmsTemplateAsync(Guid orgId, Guid templateId, SaveCmsTemplateRequest request, CancellationToken token = default)
+        => _api.PutAsync<SaveCmsTemplateRequest, CmsTemplateRecord>($"/api/organizations/{orgId}/cms-templates/{templateId}", request, token);
+
+    public Task<bool> DeleteCmsTemplateAsync(Guid orgId, Guid templateId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/cms-templates/{templateId}", token);
 }
