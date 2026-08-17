@@ -133,7 +133,7 @@ public class EquipmentCheckoutTests
 
     private static async Task<Guid> RequestAsync(World w, Guid itemId, Guid borrowerId, Guid? forOrgId, Guid? approverId = null)
     {
-        var result = await Build(w.Factory, borrowerId, approverId).Request(
+        var result = await Build(w.Factory, borrowerId, approverId).RequestCheckout(
             new RequestEquipmentCheckoutRequest(itemId, forOrgId, null, null, "Please"), default);
         var record = Assert.IsType<EquipmentCheckoutRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
         return record.Id;
@@ -268,7 +268,7 @@ public class EquipmentCheckoutTests
     {
         var w = await SeedAsync(EquipmentLoanAudience.GroupMembers);   // personal loans only
 
-        var result = await Build(w.Factory, FellowMemberId).Request(
+        var result = await Build(w.Factory, FellowMemberId).RequestCheckout(
             new RequestEquipmentCheckoutRequest(w.PersonalItemId, OrgId, null, null, null), default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
@@ -280,7 +280,7 @@ public class EquipmentCheckoutTests
         var w = await SeedAsync(EquipmentLoanAudience.IndividualUsers);
         await RequestAsync(w, w.PersonalItemId, StrangerId, null);
 
-        var second = await Build(w.Factory, StrangerId).Request(
+        var second = await Build(w.Factory, StrangerId).RequestCheckout(
             new RequestEquipmentCheckoutRequest(w.PersonalItemId, null, null, null, null), default);
 
         Assert.IsType<ConflictObjectResult>(second.Result);

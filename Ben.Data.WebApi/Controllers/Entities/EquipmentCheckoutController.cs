@@ -70,7 +70,7 @@ public sealed class EquipmentCheckoutController : BenControllerBase
     /// cannot invent a group to borrow on behalf of.
     /// </remarks>
     [HttpPost]
-    public async Task<ActionResult<EquipmentCheckoutRecord>> Request(
+    public async Task<ActionResult<EquipmentCheckoutRecord>> RequestCheckout(
         [FromBody] RequestEquipmentCheckoutRequest request, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
