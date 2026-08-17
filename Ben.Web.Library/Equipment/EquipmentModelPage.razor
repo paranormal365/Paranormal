@@ -69,6 +69,24 @@
             </ul>
         }
 
+        @* ── What owners have written about theirs ───────────────────────────── *@
+        @if (_page.Faqs.Count > 0)
+        {
+            <h5 class="mb-2">Things owners say about it</h5>
+            <p class="text-secondary small">
+                Written by people who own one, and shown without saying which of them wrote what.
+            </p>
+            <div class="mb-4">
+                @foreach (var faq in _page.Faqs)
+                {
+                    <div class="border-bottom py-2">
+                        <div class="fw-semibold">@faq.Question</div>
+                        <div class="small" style="white-space:pre-line;">@faq.Answer</div>
+                    </div>
+                }
+            </div>
+        }
+
         @* ── The pooled photos ──────────────────────────────────────────────── *@
         <h5 class="mb-2">Photos</h5>
         @if (_page.Photos.Count == 0)

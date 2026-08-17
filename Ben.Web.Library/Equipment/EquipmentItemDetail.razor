@@ -122,11 +122,21 @@
             </div>
         }
 
+        @* ── What the owner has written down, and what anyone can ask ───────── *@
+        <EquipmentFaqSection ItemId="@_item.Id" CanEdit="@_item.Flags.CanEdit" />
+
         @* ── Borrowing ──────────────────────────────────────────────────────── *@
         @if (!_item.IsRetired && _item.LoanAudience != EquipmentLoanAudience.NotLoanable && _isAuthenticated)
         {
             <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                            OnClick="@(() => _borrowVisible = true)">Ask to borrow</TelerikButton>
+        }
+
+        @* Asking is offered to anyone signed in who does not look after the piece — including
+           people who cannot borrow it, since "can I borrow this?" is itself a fair question. *@
+        @if (!_item.IsRetired && _isAuthenticated && !_item.Flags.CanEdit)
+        {
+            <TelerikButton class="ms-2" OnClick="@(() => _askVisible = true)">Ask a question</TelerikButton>
         }
 
         @if (_item.Flags.CanEdit && _item.Ownership?.OwningOrganizationId is Guid manageOrgId)
@@ -142,6 +152,11 @@
                                 ItemId="@ItemId"
                                 ItemDisplayName="@_item?.DisplayName" />
 
+<AskOwnerDialog Visible="@_askVisible"
+                VisibleChanged="@(v => _askVisible = v)"
+                ItemId="@ItemId"
+                ItemDisplayName="@_item?.DisplayName" />
+
 @code {
     [Parameter] public Guid ItemId { get; set; }
 
@@ -149,6 +164,7 @@
     private bool _loading = true;
     private bool _isAuthenticated;
     private bool _borrowVisible;
+    private bool _askVisible;
     private Guid _loadedFor;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

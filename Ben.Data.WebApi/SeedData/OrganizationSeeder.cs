@@ -108,6 +108,7 @@ internal static class OrganizationSeeder
         await EnsureTaxonomyReviewMessageType(db, owner.Id);
         await EnsureSupportTicketMessageType(db, owner.Id);
         await EnsureEquipmentCheckoutMessageType(db, owner.Id);
+        await EnsureEquipmentQuestionMessageType(db, owner.Id);
     }
 
     /// <summary>
@@ -180,6 +181,41 @@ internal static class OrganizationSeeder
         });
         await db.SaveChangesAsync();
         Console.WriteLine("[OrganizationSeeder] Seeded 'Equipment Checkout' UserMessageType.");
+    }
+
+    /// <summary>
+    /// Fixed ID for the "Equipment Question" UserMessageType — the notices carrying an anonymous
+    /// question to an owner and their answer back.
+    /// </summary>
+    /// <remarks>
+    /// Its own type rather than reusing Equipment Checkout, because these notices are the one place
+    /// in the app where the sender is deliberately hidden. Keeping them separately typed means the
+    /// inbox can say so, and a future change to loan notices cannot accidentally acquire — or lose
+    /// — that property.
+    /// </remarks>
+    internal static readonly Guid EquipmentQuestionMessageTypeId =
+        new("e5f60718-2930-1234-ef01-567890123456");
+
+    private static async Task EnsureEquipmentQuestionMessageType(BenDataContext db, Guid createdByUserId)
+    {
+        if (await db.UserMessageTypes.AnyAsync(t => t.Id == EquipmentQuestionMessageTypeId))
+            return;
+
+        db.UserMessageTypes.Add(new UserMessageType
+        {
+            Id                 = EquipmentQuestionMessageTypeId,
+            Name               = "Equipment Question",
+            Description        = "An anonymous question about a piece of equipment, or its answer.",
+            IconClass          = "fa-circle-question",
+            ColorClass         = "text-primary",
+            IsActive           = true,
+            IsPublic           = false,
+            SortOrder          = 135,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = createdByUserId,
+        });
+        await db.SaveChangesAsync();
+        Console.WriteLine("[OrganizationSeeder] Seeded 'Equipment Question' UserMessageType.");
     }
 
     private static async Task EnsureTaxonomyReviewMessageType(BenDataContext db, Guid createdByUserId)

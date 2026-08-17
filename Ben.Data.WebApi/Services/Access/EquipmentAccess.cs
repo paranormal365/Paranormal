@@ -107,6 +107,66 @@ public static class EquipmentAccess
                 ct);
     }
 
+    // ── Who is looking at one item (Phase 6b/6c) ─────────────────────────────
+
+    /// <summary>How a caller relates to one piece of equipment, most privileged first.</summary>
+    public enum ItemAudience
+    {
+        /// <summary>No route to it at all. Answer 404 — an id must not be probeable.</summary>
+        None,
+        /// <summary>Can see the piece but not who owns it — a passer-by on the public catalog.</summary>
+        Public,
+        /// <summary>A member of a group the piece is shared with, or of the group that owns it.</summary>
+        Member,
+        /// <summary>Holds the owning group's Equipment permission.</summary>
+        OrgManager,
+        Owner,
+        SuperAdmin,
+    }
+
+    /// <summary>
+    /// Resolves, in one pass, which of those a caller is for this item.
+    /// </summary>
+    /// <remarks>
+    /// The single visibility rule for a piece of equipment. The item page, its FAQ and its question
+    /// channel all ask this rather than each deciding for itself — three near-identical predicates
+    /// would eventually disagree, and the one that disagreed generously would be the leak.
+    /// </remarks>
+    public static async Task<ItemAudience> ResolveItemAudienceAsync(
+        BenDataContext db, IOrganizationSecurityService security, EquipmentItem item,
+        Guid userId, bool isSuperAdmin, CancellationToken ct)
+    {
+        if (isSuperAdmin) return ItemAudience.SuperAdmin;
+        if (userId != Guid.Empty && item.OwnerAppUserId == userId) return ItemAudience.Owner;
+
+        if (item.OwningOrganizationId is Guid orgId && userId != Guid.Empty)
+        {
+            if (await CanManageOrgEquipmentAsync(
+                    security, userId, orgId, false, OrganizationSecurityAction.Read, ct))
+                return ItemAudience.OrgManager;
+
+            var isMember = await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
+            if (isMember) return ItemAudience.Member;
+        }
+
+        if (userId != Guid.Empty && !item.IsRetired
+            && await IsSharedWithAGroupSharedWithAsync(db, item.Id, item.OwnerAppUserId, userId, ct))
+            return ItemAudience.Member;
+
+        // Retired gear leaves circulation — the public route closes with it.
+        if (item.IncludeInGlobalCatalog && !item.IsRetired) return ItemAudience.Public;
+
+        return ItemAudience.None;
+    }
+
+    /// <summary>
+    /// Whether this caller is responsible for the piece, as opposed to merely allowed to look at it.
+    /// The audience that may write its FAQ, answer its questions, and see its serial.
+    /// </summary>
+    public static bool IsCustodian(ItemAudience audience)
+        => audience is ItemAudience.Owner or ItemAudience.OrgManager or ItemAudience.SuperAdmin;
+
     // ── Checkouts (Phase 4) ──────────────────────────────────────────────────
 
     /// <summary>

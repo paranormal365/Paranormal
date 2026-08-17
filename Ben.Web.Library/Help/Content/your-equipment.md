@@ -152,6 +152,36 @@ is not — so the choice is per photo rather than all-or-nothing. Hiding a photo
 itself; it only stops it appearing in the pooled set. Captions you write are shown publicly with the
 photo, so write them as something a stranger will read.
 
+## Questions and FAQs
+
+Two related things, one public and one private.
+
+**Things worth knowing** is the FAQ you write about your own piece — anything a borrower would want
+to know before asking for it. It appears on the item's page, and entries from publicly-listed items
+are also gathered on that make and model's page alongside other owners'. FAQ entries never say who
+wrote them, anywhere, including on your own item's page.
+
+**Questions** are asked by someone thinking about borrowing. They arrive in **Gear Questions** in
+the main menu, where you can answer, or decline without answering, and afterwards publish a good
+answer into the FAQ.
+
+### The anonymity, exactly
+
+A question is anonymous in **both** directions. You will not see who asked. They will not see who
+answered. The notice announcing a question says only that one arrived.
+
+This is deliberate: a question is how someone finds out whether a thing has a quirk they need to
+know about, and people do not ask that of a person whose answer might decide whether they get lent
+the gear at all.
+
+The anonymity covers questions and FAQs only. **Borrowing is not anonymous** — if that same person
+goes on to ask for the piece, you will each see who the other is, because you should know who is
+holding your recorder. A group's shared-gear list still names owners too.
+
+Publishing an answer to the FAQ **copies** the text rather than exposing the conversation. You can
+rewrite it first — what reads well as a reply to one person rarely reads well as a public answer —
+and the original thread is left as it was said. An answer can be published once.
+
 ## Who is looking
 
 Each piece counts how many times its page has been opened and how many times someone followed its

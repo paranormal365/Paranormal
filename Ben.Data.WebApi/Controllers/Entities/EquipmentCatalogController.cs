@@ -263,6 +263,18 @@ public sealed class EquipmentCatalogController : BenControllerBase
             .OrderBy(u => u, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        // Publicly-listed items only, for every caller alike. Widening this for members would let a
+        // reader work out that somebody in one of their groups owns one — the aggregate would be
+        // saying, by its length, something no individual entry says.
+        var publicItemIds = items.Where(i => i.IncludeInGlobalCatalog).Select(i => i.Id).ToList();
+        var faqs = publicItemIds.Count == 0
+            ? []
+            : await db.EquipmentItemFaqs.AsNoTracking()
+                .Where(f => publicItemIds.Contains(f.EquipmentItemId))
+                .OrderBy(f => f.SortOrder).ThenBy(f => f.DateCreated)
+                .Select(f => new CatalogFaqRecord(f.Question, f.Answer))
+                .ToListAsync(ct);
+
         var record = new EquipmentModelRecord(
             model.Id, model.EquipmentBrandId, model.EquipmentBrand.Name,
             model.EquipmentCategoryId, model.EquipmentCategory.Name,
@@ -274,7 +286,8 @@ public sealed class EquipmentCatalogController : BenControllerBase
             items.Count,
             items.Count(i => i.OwningOrganizationId is not null || i.LoanAudience != EquipmentLoanAudience.NotLoanable),
             links,
-            photos));
+            photos,
+            faqs));
     }
 
     /// <summary>

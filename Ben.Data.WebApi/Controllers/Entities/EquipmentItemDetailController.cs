@@ -50,13 +50,13 @@ public sealed class EquipmentItemDetailController : BenControllerBase
             .FirstOrDefaultAsync(i => i.Id == id, ct);
         if (item is null) return NotFound();
 
-        var audience = await ResolveAudienceAsync(db, item, userId, isSuperAdmin, ct);
-        if (audience == Audience.None) return NotFound();
+        var audience = await EquipmentAccess.ResolveItemAudienceAsync(db, _security, item, userId, isSuperAdmin, ct);
+        if (audience == EquipmentAccess.ItemAudience.None) return NotFound();
 
         // Custodians — the people responsible for the thing, as opposed to people who may look at it.
-        var isCustodian = audience is Audience.Owner or Audience.OrgManager or Audience.SuperAdmin;
-        var knowsOwner  = audience is not Audience.Public;
-        var canSeeCounters = audience == Audience.SuperAdmin
+        var isCustodian = EquipmentAccess.IsCustodian(audience);
+        var knowsOwner  = audience is not EquipmentAccess.ItemAudience.Public;
+        var canSeeCounters = audience == EquipmentAccess.ItemAudience.SuperAdmin
             || (item.OwningOrganizationId is Guid cOrgId && await IsOrgAdministratorAsync(db, cOrgId, userId, ct));
 
         var names = await NamesAsync(db, [item.OwnerAppUserId, item.CurrentHolderAppUserId], ct);
@@ -96,52 +96,11 @@ public sealed class EquipmentItemDetailController : BenControllerBase
                 : null,
             canSeeCounters ? new EquipmentItemCountersRecord(item.ViewCount, item.LinkClickCount) : null,
             new EquipmentItemDetailFlags(
-                IsOwner: audience == Audience.Owner,
+                IsOwner: audience == EquipmentAccess.ItemAudience.Owner,
                 CanEdit: isCustodian,
                 CanRetire: isCustodian,
                 CanManagePhotos: isCustodian,
                 CanSeeCounters: canSeeCounters)));
-    }
-
-    /// <summary>How this caller relates to this item, most privileged first.</summary>
-    private enum Audience
-    {
-        None,
-        /// <summary>Can see the piece, but not who owns it — a passer-by on the public catalog.</summary>
-        Public,
-        /// <summary>A member of a group the piece is shared with, or of the group that owns it.</summary>
-        Member,
-        /// <summary>Holds the owning group's Equipment permission.</summary>
-        OrgManager,
-        Owner,
-        SuperAdmin,
-    }
-
-    private async Task<Audience> ResolveAudienceAsync(
-        BenDataContext db, EquipmentItem item, Guid userId, bool isSuperAdmin, CancellationToken ct)
-    {
-        if (isSuperAdmin) return Audience.SuperAdmin;
-        if (userId != Guid.Empty && item.OwnerAppUserId == userId) return Audience.Owner;
-
-        if (item.OwningOrganizationId is Guid orgId && userId != Guid.Empty)
-        {
-            if (await EquipmentAccess.CanManageOrgEquipmentAsync(
-                    _security, userId, orgId, false, OrganizationSecurityAction.Read, ct))
-                return Audience.OrgManager;
-
-            var isMember = await db.OrganizationUserMemberships.AsNoTracking()
-                .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
-            if (isMember) return Audience.Member;
-        }
-
-        if (userId != Guid.Empty && !item.IsRetired
-            && await EquipmentAccess.IsSharedWithAGroupSharedWithAsync(db, item.Id, item.OwnerAppUserId, userId, ct))
-            return Audience.Member;
-
-        // Retired gear leaves circulation — the public route closes with it.
-        if (item.IncludeInGlobalCatalog && !item.IsRetired) return Audience.Public;
-
-        return Audience.None;
     }
 
     /// <summary>

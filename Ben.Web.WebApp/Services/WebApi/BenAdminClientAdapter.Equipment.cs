@@ -76,6 +76,52 @@ public sealed partial class BenAdminClientAdapter
                    : $"{MyEquipmentBase}/{itemId}/photos/{photoId}/catalog-exclusion",
                new SetPhotoCatalogExclusionRequest(exclude), token);
 
+    // ── FAQs and anonymous questions (Phase 6c) ─────────────────────────────
+
+    public async Task<IReadOnlyList<EquipmentFaqRecord>> GetEquipmentFaqsAsync(Guid itemId, CancellationToken token = default)
+    {
+        // Anonymous: the FAQ of a publicly-listed piece is readable by a passer-by, and the server
+        // decides that from the item, not from whether a token arrived.
+        var result = await _api.GetAnonymousAsync<IReadOnlyList<EquipmentFaqRecord>>(
+            $"/api/equipment/items/{itemId}/faqs", token);
+        return result ?? [];
+    }
+
+    public Task<EquipmentFaqRecord?> AddEquipmentFaqAsync(Guid itemId, UpsertEquipmentFaqRequest request, CancellationToken token = default)
+        => _api.PostAsync<UpsertEquipmentFaqRequest, EquipmentFaqRecord>(
+               $"/api/equipment/items/{itemId}/faqs", request, token);
+
+    public Task<EquipmentFaqRecord?> UpdateEquipmentFaqAsync(Guid itemId, Guid faqId, UpsertEquipmentFaqRequest request, CancellationToken token = default)
+        => _api.PutAsync<UpsertEquipmentFaqRequest, EquipmentFaqRecord>(
+               $"/api/equipment/items/{itemId}/faqs/{faqId}", request, token);
+
+    public Task<bool> DeleteEquipmentFaqAsync(Guid itemId, Guid faqId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/equipment/items/{itemId}/faqs/{faqId}", token);
+
+    public Task<AskedQuestionRecord?> AskEquipmentQuestionAsync(Guid itemId, string questionText, CancellationToken token = default)
+        => _api.PostAsync<AskEquipmentQuestionRequest, AskedQuestionRecord>(
+               $"/api/equipment/items/{itemId}/questions", new AskEquipmentQuestionRequest(questionText), token);
+
+    public async Task<IReadOnlyList<AskedQuestionRecord>> GetMyAskedQuestionsAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<AskedQuestionRecord>>("/api/me/equipment-questions/asked", token);
+        return result ?? [];
+    }
+
+    public async Task<IReadOnlyList<ReceivedQuestionRecord>> GetMyReceivedQuestionsAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<ReceivedQuestionRecord>>("/api/me/equipment-questions/received", token);
+        return result ?? [];
+    }
+
+    public Task<ReceivedQuestionRecord?> AnswerEquipmentQuestionAsync(Guid questionId, AnswerEquipmentQuestionRequest request, CancellationToken token = default)
+        => _api.PutAsync<AnswerEquipmentQuestionRequest, ReceivedQuestionRecord>(
+               $"/api/me/equipment-questions/{questionId}/answer", request, token);
+
+    public Task<EquipmentFaqRecord?> PromoteQuestionToFaqAsync(Guid questionId, PromoteQuestionToFaqRequest request, CancellationToken token = default)
+        => _api.PostAsync<PromoteQuestionToFaqRequest, EquipmentFaqRecord>(
+               $"/api/me/equipment-questions/{questionId}/promote-to-faq", request, token);
+
     public Task<EquipmentBrandRecord?> ProposeEquipmentBrandAsync(string name, CancellationToken token = default)
         => _api.PostAsync<UpsertEquipmentBrandRequest, EquipmentBrandRecord>(
                "/api/equipment-catalog/brands", new UpsertEquipmentBrandRequest(name), token);

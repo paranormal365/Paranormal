@@ -35,6 +35,28 @@ public interface IBenEquipmentClient
     /// <summary>Hides or restores one photo on the make/model page.</summary>
     Task<bool> SetPhotoCatalogExclusionAsync(Guid itemId, Guid photoId, bool exclude, Guid? orgId = null, CancellationToken token = default);
 
+    // ── FAQs and anonymous questions (Phase 6c) ─────────────────────────────
+
+    /// <summary>An item's FAQ, for anyone who may see the item.</summary>
+    Task<IReadOnlyList<EquipmentFaqRecord>> GetEquipmentFaqsAsync(Guid itemId, CancellationToken token = default);
+
+    Task<EquipmentFaqRecord?> AddEquipmentFaqAsync(Guid itemId, UpsertEquipmentFaqRequest request, CancellationToken token = default);
+    Task<EquipmentFaqRecord?> UpdateEquipmentFaqAsync(Guid itemId, Guid faqId, UpsertEquipmentFaqRequest request, CancellationToken token = default);
+    Task<bool> DeleteEquipmentFaqAsync(Guid itemId, Guid faqId, CancellationToken token = default);
+
+    /// <summary>Asks the people who look after a piece a question. Anonymous in both directions.</summary>
+    Task<AskedQuestionRecord?> AskEquipmentQuestionAsync(Guid itemId, string questionText, CancellationToken token = default);
+
+    Task<IReadOnlyList<AskedQuestionRecord>> GetMyAskedQuestionsAsync(CancellationToken token = default);
+
+    /// <summary>Questions waiting on this caller. The shape has nowhere to carry who asked.</summary>
+    Task<IReadOnlyList<ReceivedQuestionRecord>> GetMyReceivedQuestionsAsync(CancellationToken token = default);
+
+    Task<ReceivedQuestionRecord?> AnswerEquipmentQuestionAsync(Guid questionId, AnswerEquipmentQuestionRequest request, CancellationToken token = default);
+
+    /// <summary>Publishes an answered question as an FAQ entry — a copy, not the thread.</summary>
+    Task<EquipmentFaqRecord?> PromoteQuestionToFaqAsync(Guid questionId, PromoteQuestionToFaqRequest request, CancellationToken token = default);
+
     /// <summary>Items their owners chose to list publicly. Carries no owner identity and no serial.</summary>
     Task<IReadOnlyList<PublicEquipmentItemRecord>> GetPublicEquipmentItemsAsync(string? search = null, Guid? categoryId = null, CancellationToken token = default);
 

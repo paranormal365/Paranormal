@@ -98,5 +98,7 @@ namespace Ben.Data.Source.Entities
         public virtual ICollection<EquipmentItemPhoto> Photos { get; set; } = new List<EquipmentItemPhoto>();
         public virtual ICollection<EquipmentItemShare> Shares { get; set; } = new List<EquipmentItemShare>();
         public virtual ICollection<EquipmentServiceLog> ServiceLog { get; set; } = new List<EquipmentServiceLog>();
+        public virtual ICollection<EquipmentItemFaq> Faqs { get; set; } = new List<EquipmentItemFaq>();
+        public virtual ICollection<EquipmentQuestion> Questions { get; set; } = new List<EquipmentQuestion>();
     }
 }

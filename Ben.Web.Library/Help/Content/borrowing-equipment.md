@@ -37,6 +37,22 @@ between a request somebody can say yes to and one they have to ask about first.
 
 You can only have one open request per piece at a time. Asking twice is a duplicate, not a nudge.
 
+## Asking a question first
+
+Every piece has its own page, reached by clicking its name. On it you will find **Things worth
+knowing** — an FAQ the owner has written — and an **Ask a question** button if there is something
+they have not covered.
+
+Questions are **anonymous in both directions**. Whoever looks after the piece sees your question but
+not your name, and their answer comes back without theirs. Ask whatever you actually need to know:
+this exists precisely so that finding out about a temperamental battery door does not cost you the
+loan.
+
+Anonymity stops at the question. If you go on to **ask to borrow**, that request carries your name,
+as it must — you are asking someone to hand you their equipment.
+
+Your questions and their answers are in **Gear Questions** in the main menu.
+
 ## Being turned down
 
 Whoever declines has to give a reason, and you will see it. A bare "no" tells you nothing about
