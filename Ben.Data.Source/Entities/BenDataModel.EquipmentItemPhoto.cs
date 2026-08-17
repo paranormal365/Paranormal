@@ -15,6 +15,18 @@ namespace Ben.Data.Source.Entities
 
         public bool IsPrimary { get; set; }
         public string? Caption { get; set; }
+
+        /// <summary>
+        /// Keeps this photo off the make/model page, where photos from every owner's copy are
+        /// pooled anonymously.
+        /// </summary>
+        /// <remarks>
+        /// Opt-out rather than opt-in, at Ben's direction: the pooled photos are what make a model
+        /// page worth visiting. Per <i>photo</i> rather than per item, because the reason to
+        /// withhold one is usually something visible in that particular picture — an address, a
+        /// face, a room — and losing the other four to protect one would be a poor trade.
+        /// </remarks>
+        public bool ExcludeFromCatalog { get; set; }
         public int SortOrder { get; set; }
 
         public DateTime DateCreated { get; set; }

@@ -458,26 +458,56 @@ public class MyEquipmentControllerTests
         return ((EquipmentItemRecord)((OkObjectResult)created.Result!).Value!).Id;
     }
 
+    /// <summary>
+    /// Phase 6b changed this rule deliberately. Photos are pooled onto the make/model page from
+    /// every copy of that model, so a photo of an unlisted item is readable by anyone <i>unless</i>
+    /// its owner excluded it. What stays private is the item — its name, serial, owner and page —
+    /// not the picture the owner left in the pool.
+    /// </summary>
     [Fact]
-    public async Task PhotoContent_OfAPrivateItem_IsNotFoundForAnAnonymousCaller()
+    public async Task PhotoContent_OfAPrivateItem_IsPooledUnlessTheOwnerExcludedIt()
     {
         var w = await SeedAsync();
         var itemId = await CreateItemAsync(w, publiclyListed: false);
         var photoId = await AttachPhotoAndGetIdAsync(w, itemId);
 
-        var result = await BuildPhotos(w.Factory, userId: null).GetContent(photoId, default);
-        Assert.IsType<NotFoundResult>(result);
+        // Left in the pool by default, so the model page can show it.
+        Assert.IsType<FileStreamResult>(await BuildPhotos(w.Factory, userId: null).GetContent(photoId, default));
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var photo = await db.EquipmentItemPhotos.SingleAsync(p => p.Id == photoId);
+            photo.ExcludeFromCatalog = true;
+            await db.SaveChangesAsync();
+        }
+
+        // Excluded — now nobody but the owner sees it.
+        Assert.IsType<NotFoundResult>(await BuildPhotos(w.Factory, userId: null).GetContent(photoId, default));
+        Assert.IsType<NotFoundResult>(await BuildPhotos(w.Factory, StrangerId).GetContent(photoId, default));
+        Assert.IsType<FileStreamResult>(await BuildPhotos(w.Factory, OwnerId).GetContent(photoId, default));
     }
 
+    /// <summary>
+    /// Retiring takes a piece out of circulation entirely, pool included — the one case where a
+    /// non-excluded photo stops being public.
+    /// </summary>
     [Fact]
-    public async Task PhotoContent_OfAPrivateItem_IsNotFoundForAnotherSignedInUser()
+    public async Task PhotoContent_OfARetiredItem_IsOwnerOnly()
     {
         var w = await SeedAsync();
-        var itemId = await CreateItemAsync(w, publiclyListed: false);
+        var itemId = await CreateItemAsync(w, publiclyListed: true);
         var photoId = await AttachPhotoAndGetIdAsync(w, itemId);
 
-        var result = await BuildPhotos(w.Factory, StrangerId).GetContent(photoId, default);
-        Assert.IsType<NotFoundResult>(result);
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var item = await db.EquipmentItems.SingleAsync(i => i.Id == itemId);
+            item.IsRetired = true;
+            await db.SaveChangesAsync();
+        }
+
+        Assert.IsType<NotFoundResult>(await BuildPhotos(w.Factory, userId: null).GetContent(photoId, default));
+        Assert.IsType<NotFoundResult>(await BuildPhotos(w.Factory, StrangerId).GetContent(photoId, default));
+        Assert.IsType<FileStreamResult>(await BuildPhotos(w.Factory, OwnerId).GetContent(photoId, default));
     }
 
     [Fact]

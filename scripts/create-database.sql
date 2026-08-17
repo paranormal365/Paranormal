@@ -8517,3 +8517,48 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817130554_AddEquipmentModelPageFields'
+)
+BEGIN
+    ALTER TABLE [EquipmentItems] ADD [LinkClickCount] int NOT NULL DEFAULT 0;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817130554_AddEquipmentModelPageFields'
+)
+BEGIN
+    ALTER TABLE [EquipmentItems] ADD [ViewCount] int NOT NULL DEFAULT 0;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817130554_AddEquipmentModelPageFields'
+)
+BEGIN
+    ALTER TABLE [EquipmentItems] ADD [WebsiteUrl] nvarchar(500) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817130554_AddEquipmentModelPageFields'
+)
+BEGIN
+    ALTER TABLE [EquipmentItemPhotos] ADD [ExcludeFromCatalog] bit NOT NULL DEFAULT CAST(0 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817130554_AddEquipmentModelPageFields'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260817130554_AddEquipmentModelPageFields', N'10.0.11');
+END;
+
+COMMIT;
+GO
+

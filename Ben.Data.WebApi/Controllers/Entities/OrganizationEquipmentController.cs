@@ -62,6 +62,21 @@ public sealed class OrganizationEquipmentController : BenControllerBase
         => EquipmentAccess.CanManageOrgEquipmentAsync(_security, userId, orgId, IsSuperAdmin(), action, ct);
 
     /// <summary>
+    /// Whether this caller may see how much interest a piece has attracted.
+    /// </summary>
+    /// <remarks>
+    /// The membership ROLE, deliberately — not the Equipment permission. Ben's audience is
+    /// administrators, not whoever a group happened to hand an equipment role to, and those are
+    /// different sets of people.
+    /// </remarks>
+    private async Task<bool> CanSeeCountersAsync(BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
+        => IsSuperAdmin()
+           || await db.OrganizationUserMemberships.AsNoTracking()
+               .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive
+                           && (m.Role == OrganizationMemberRole.Owner
+                               || m.Role == OrganizationMemberRole.Administrator), ct);
+
+    /// <summary>
     /// Personal gear members have shared with this group.
     /// </summary>
     /// <remarks>
@@ -107,7 +122,7 @@ public sealed class OrganizationEquipmentController : BenControllerBase
                 i.LoanAudience,
                 i.IsRetired,
                 i.Photos.OrderBy(p => p.SortOrder)
-                    .Select(p => new EquipmentItemPhotoRecord(p.Id, p.EquipmentItemId, p.UploadFileId, p.IsPrimary, p.Caption, p.SortOrder))
+                    .Select(p => new EquipmentItemPhotoRecord(p.Id, p.EquipmentItemId, p.UploadFileId, p.IsPrimary, p.Caption, p.SortOrder, p.ExcludeFromCatalog))
                     .ToList()))
             .ToListAsync(ct);
 
@@ -131,6 +146,7 @@ public sealed class OrganizationEquipmentController : BenControllerBase
 
         // One verdict for the whole list, not one per row.
         var canManage = await CanManageAsync(userId, orgId, OrganizationSecurityAction.Read, ct);
+        var canSeeCounters = await CanSeeCountersAsync(db, orgId, userId, ct);
 
         var items = await db.EquipmentItems.AsNoTracking()
             .Include(i => i.EquipmentModel).ThenInclude(m => m.EquipmentBrand)
@@ -146,7 +162,7 @@ public sealed class OrganizationEquipmentController : BenControllerBase
         // to say "you may add the first piece."
         return Ok(new OrgEquipmentListRecord(
             canManage,
-            [.. items.Select(i => ToOrgRecord(i, canManage, holderNames))]));
+            [.. items.Select(i => ToOrgRecord(i, canManage, holderNames, null, canSeeCounters))]));
     }
 
     [HttpGet("{id:guid}")]
@@ -199,6 +215,7 @@ public sealed class OrganizationEquipmentController : BenControllerBase
             Notes                  = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
             IsRetired              = false,
             IncludeInGlobalCatalog = request.IncludeInGlobalCatalog,
+            WebsiteUrl             = MyEquipmentController.NormalizeWebsiteUrl(request.WebsiteUrl),
             DateCreated            = DateTime.UtcNow,
             CreatedByAppUserId     = userId,
         };
@@ -245,6 +262,7 @@ public sealed class OrganizationEquipmentController : BenControllerBase
         entity.AcquisitionDate        = request.AcquisitionDate;
         entity.Notes                  = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
         entity.IncludeInGlobalCatalog = request.IncludeInGlobalCatalog;
+        entity.WebsiteUrl             = MyEquipmentController.NormalizeWebsiteUrl(request.WebsiteUrl);
         entity.DateUpdated            = DateTime.UtcNow;
         entity.UpdatedByAppUserId     = userId;
         await db.SaveChangesAsync(ct);
@@ -446,7 +464,7 @@ public sealed class OrganizationEquipmentController : BenControllerBase
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(EquipmentItemPhoto), photo.Id, photo, userId, Ben.Data.Common.Constants.AppSources.WebApi));
 
-        return Ok(new EquipmentItemPhotoRecord(photo.Id, photo.EquipmentItemId, photo.UploadFileId, photo.IsPrimary, photo.Caption, photo.SortOrder));
+        return Ok(new EquipmentItemPhotoRecord(photo.Id, photo.EquipmentItemId, photo.UploadFileId, photo.IsPrimary, photo.Caption, photo.SortOrder, photo.ExcludeFromCatalog));
     }
 
     [HttpDelete("{id:guid}/photos/{photoId:guid}")]
@@ -617,7 +635,8 @@ public sealed class OrganizationEquipmentController : BenControllerBase
     /// protection.
     /// </remarks>
     private static EquipmentItemRecord ToOrgRecord(
-        EquipmentItem item, bool canManage, Dictionary<Guid, string?> holderNames, string? orgName = null)
+        EquipmentItem item, bool canManage, Dictionary<Guid, string?> holderNames, string? orgName = null,
+        bool canSeeCounters = false)
     {
         var flags = EquipmentAccess.ComputeItemFlags(item, Guid.Empty, isSuperAdmin: false, canManageOrgEquipment: canManage);
 
@@ -640,12 +659,14 @@ public sealed class OrganizationEquipmentController : BenControllerBase
             item.IsRetired,
             item.IncludeInGlobalCatalog,
             item.LoanAudience,
+            item.WebsiteUrl,
+            canSeeCounters ? new EquipmentItemCountersRecord(item.ViewCount, item.LinkClickCount) : null,
             item.CurrentHolderAppUserId,
             item.CurrentHolderAppUserId is not null && holderNames.TryGetValue(item.CurrentHolderAppUserId.Value, out var name) ? name : null,
             item.LastServicedDate,
             item.DefectNotes,
             item.Photos.OrderBy(p => p.SortOrder)
-                .Select(p => new EquipmentItemPhotoRecord(p.Id, p.EquipmentItemId, p.UploadFileId, p.IsPrimary, p.Caption, p.SortOrder))
+                .Select(p => new EquipmentItemPhotoRecord(p.Id, p.EquipmentItemId, p.UploadFileId, p.IsPrimary, p.Caption, p.SortOrder, p.ExcludeFromCatalog))
                 .ToList(),
             flags);
     }

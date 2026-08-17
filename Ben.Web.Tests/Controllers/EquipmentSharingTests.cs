@@ -412,28 +412,42 @@ public class EquipmentSharingTests
         return photoId;
     }
 
+    /// <summary>
+    /// Sharing governs the ITEM — its name, serial, owner and detail page. Since phase 6b the
+    /// picture itself is pooled onto the make/model page unless its owner excluded it, so a photo
+    /// is readable more widely than the record it belongs to. These assert both halves.
+    /// </summary>
     [Fact]
-    public async Task PhotoBytes_AreServedToAFellowMemberOnceShared()
+    public async Task PhotoBytes_FollowThePoolRule_WhileTheItemItselfFollowsSharing()
     {
         var w = await SeedAsync();
         var photoId = await AddPhotoAsync(w);
 
-        // Before sharing, a fellow member is just another stranger to this item.
-        Assert.IsType<NotFoundResult>(await BuildPhotos(w.Factory, FellowMemberId).GetContent(photoId, default));
-
-        await ShareWithAsync(w, OrgId);
-
+        // Pooled by default — a fellow member, and anyone else, can see the picture.
         Assert.IsType<FileStreamResult>(await BuildPhotos(w.Factory, FellowMemberId).GetContent(photoId, default));
+        Assert.IsType<FileStreamResult>(await BuildPhotos(w.Factory, OutsiderId).GetContent(photoId, default));
+
+        // The item is still not theirs to see: sharing, not the photo pool, decides that.
+        await ShareWithAsync(w, OrgId);
+        var sharedList = await BuildOrg(w.Factory, OutsiderId).GetSharedWithOrg(OrgId, default);
+        Assert.IsType<NotFoundResult>(sharedList.Result);
     }
 
     [Fact]
-    public async Task PhotoBytes_AreNotServedToSomeoneOutsideEveryGroupItIsSharedWith()
+    public async Task AnExcludedPhotoIsNotServedToAnyoneButItsOwner()
     {
         var w = await SeedAsync();
         var photoId = await AddPhotoAsync(w);
-        await ShareWithAsync(w, OrgId);
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var photo = await db.EquipmentItemPhotos.SingleAsync(p => p.Id == photoId);
+            photo.ExcludeFromCatalog = true;
+            await db.SaveChangesAsync();
+        }
 
         Assert.IsType<NotFoundResult>(await BuildPhotos(w.Factory, OutsiderId).GetContent(photoId, default));
+        Assert.IsType<FileStreamResult>(await BuildPhotos(w.Factory, OwnerId).GetContent(photoId, default));
     }
 
     /// <summary>
@@ -473,9 +487,18 @@ public class EquipmentSharingTests
             await db.SaveChangesAsync();
         }
 
-        // A member of the owning group can see its kit.
+        // A member of the owning group can see its kit — the branch this test exists for.
         Assert.IsType<FileStreamResult>(await BuildPhotos(w.Factory, FellowMemberId).GetContent(photoId, default));
-        // Somebody outside the group still cannot.
+
+        // Excluding the photo from the pool leaves that branch as the only thing granting access,
+        // which is what proves it is doing the work rather than the pool rule masking it.
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var photo = await db.EquipmentItemPhotos.SingleAsync(p => p.Id == photoId);
+            photo.ExcludeFromCatalog = true;
+            await db.SaveChangesAsync();
+        }
+        Assert.IsType<FileStreamResult>(await BuildPhotos(w.Factory, FellowMemberId).GetContent(photoId, default));
         Assert.IsType<NotFoundResult>(await BuildPhotos(w.Factory, OutsiderId).GetContent(photoId, default));
     }
 
