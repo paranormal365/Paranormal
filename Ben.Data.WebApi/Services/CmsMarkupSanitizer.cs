@@ -67,10 +67,17 @@ public sealed class CmsMarkupSanitizer : ICmsMarkupSanitizer
                  })
             _sanitizer.AllowedTags.Add(tag);
 
-        // Removed from the library's defaults, which are broader than a content page needs. A form
-        // on an organization's public page is a credential-harvesting shape with no legitimate use
-        // here — anything that collects from a reader should be a real feature with a real endpoint,
-        // not markup somebody pasted. Found by a test, not by reading the default list.
+        // ── Ben's rule, 2026-08-17 ───────────────────────────────────────────
+        // "Forms and input is not allowed on any pages of ours unless they are created by our code.
+        // Any outside code has to run through us and prevent any malicious intent."
+        //
+        // A form on a page anybody can author is a credential-harvesting shape: it renders on our
+        // domain, under an organization's name, and a reader has no way to tell it apart from ours.
+        // Anything that collects from a reader must be a real feature with a real endpoint we
+        // wrote — never markup somebody pasted.
+        //
+        // These come out of the library's defaults, which are broader than a content page needs.
+        // A test asserts they never survive; it caught them being allowed in the first place.
         foreach (var tag in new[] { "form", "input", "select", "textarea", "label", "fieldset", "legend", "output" })
             _sanitizer.AllowedTags.Remove(tag);
 

@@ -3791,54 +3791,109 @@ Admin view is complete; only the stripping half waits.
 
 ---
 
-## 87. Open investigations — anyone in the group may attend (not started, requested 2026-08-17)
+## 87. Open events — public investigations and open meetings (not started, scoped 2026-08-17)
 
-Ben: *"Can an organization create an Open investigation where anyone could attend who is a member?
-If not, we need to create this with the caveat that all collected evidence and data is public and
-cannot be made private for an open investigation. The location can be scrubbed and hidden to the
-public not attending, but evidence is not."*
+Ben: *"An open investigation can be open to the public and if someone wants to attend and let them
+know they are coming they have to be a site user. The information to attend and information about
+the investigation will be public on the site. These will benefit the organizations because it is
+also an introduction to them by people attending. The organization can have open meetings as well...
+We have to let them advertise by giving them the opportunity for people to attend. So, giving them
+the ability to create open events might benefit us as well by increasing their numbers."*
 
-**It does not exist today.** Attendance is invitation-only: `InvestigationAttendee` rows are created
-by `AddAttendee`, which somebody with manage rights calls with a specific `AppUserId`, and
-`RsvpStatus` starts at `Invited`. There is no way for a member to put themselves on the list.
+**This is an acquisition channel, not a scheduling feature**, and that is the reason to build it.
+Today the platform is a records system for groups that already exist. A public event listing is the
+first thing on it that brings *strangers* in — someone finds a ghost walk at a local landmark,
+signs up to attend, and meets a group. That is how groups grow, and it is also how the platform
+grows, which puts it squarely alongside item #85's monetization thinking.
 
-`InvestigationVisibility` (`GroupOnly` / `SharedPlace` / `Public`) already exists but answers a
-different question — who may *read* the findings, not who may *attend*.
+### Most of it already exists, and one flag is doing nothing
 
-### The bargain, which is the good part of this idea
+`OrgCalendarEvent` already has **`IsPublic`**, `MeetingUrl`, an optional `CaseId`, an
+`OrganizationAddressId`, and an `OrgCalendarEventAttendee` table with `RsvpStatus`. `Investigation`
+already carries an optional `OrgCalendarEventId`.
 
-Open attendance and public evidence go together: if anyone may come, nobody may afterwards decide
-what the group saw is theirs to withhold. People who turned up have a claim on the record. Ben's
-split is right too — **the location may be hidden from non-attendees while the evidence is not**,
-and `PublicCoordinates` (built 2026-08-17 for the case-discovery leak) already does exactly that
-scrubbing, so attendees can see the exact point and everyone else a several-mile cell.
+**But `OrgCalendarEvent.IsPublic` is written and never read.** There is no public endpoint serving
+calendar events at all — the only `IsPublic` filter in `OrgCalendarController` is on `UserEmails`.
+An organization can tick "public" today and nothing whatsoever happens. That is the **fifth**
+write-only feature this backlog has recorded, and it means the substrate for this item is half
+built already.
 
-### The constraint that decides the shape
+### The shape
 
-**`InvestigationVisibility.Public` is currently refused on a private residence**, deliberately:
-publishing what happened inside somebody's home is theirs to agree to, and there is no mechanism for
-asking. An open investigation that *forces* evidence public would drive straight through that.
+**One concept, not two.** An open investigation and an open meeting are the same thing — *a public
+event an organization hosts that a site user can say they are coming to*. `OrgCalendarEvent` is
+already that, with an investigation optionally attached. Bolting "open" onto `Investigation` and
+then adding a second mechanism for meetings would be two half-features that drift.
 
-So one of these has to be true, and it should be chosen deliberately:
+- **Public read**: `GET /api/public/organizations/{urlName}/events` and a per-event page. Anonymous.
+  Title, description, when, where, and how to come — plus the organization, prominently, because
+  the introduction is the point.
+- **Self-RSVP** needs a **site account**, per Ben — that is the line between browsing and attending,
+  and it is what makes an attendee reachable. Its own endpoint, refusing anything not public, and
+  creating the `OrgCalendarEventAttendee` row the org currently has to create by hand.
+- **Discovery**: an events list across organizations is what actually makes this an acquisition
+  channel rather than a page nobody finds. Worth building with it, not after.
+- **Interest counters**, reusing the equipment pattern (#55 phase 6b): views and RSVP conversions
+  per event, visible to the organization. If this is being sold as advertising, they need to see it
+  working.
 
-- **Open investigations are restricted to non-residence places** — landmarks, public sites, and
-  case-less visits. Simple, safe, and probably what the feature is actually for.
-- Or the client-consent mechanism gets built first, and an open investigation at a residence needs
-  it. Much more work, and it is the same missing piece the `Public` visibility note already waits on.
+### The constraint that is not negotiable
 
-Recommend the first, with the second recorded as what would lift the restriction.
+**A public event must not be at a private residence.** `InvestigationVisibility.Public` is already
+refused there, deliberately: publishing what happens inside somebody's home is theirs to agree to,
+and there is no mechanism for asking. A *public event listing with an address and a date* is a far
+sharper version of the same problem — it is an invitation to strangers to come to a client's house.
 
-### Other things to settle when it is picked up
+So: open events are for landmarks, public sites, an organization's own address, and case-less
+visits. Enforce it server-side on create, not in the UI. The coordinate redaction built for the
+case-discovery leak (`PublicCoordinates`) is the right tool where an approximate location should
+still be shown before someone commits to attending.
 
-- **"Anyone who is a member"** — of the *organization*, or of the *site*? Ben's wording fits either.
-  Org-only is the conservative reading and matches how everything else here is scoped; site-wide
-  turns this into a public events feature, which is a bigger and different thing.
-- **Irreversibility has to be enforced, not defaulted.** "Cannot be made private" means the
-  visibility is locked once the investigation is open and people have joined — otherwise somebody
-  flips it afterwards and the attendees lose the deal they turned up under. Equally, openness itself
-  should not be revocable once anyone has joined.
-- **A cap and a cut-off.** A real site has a capacity and a point after which turning up is not
-  useful. Not essential to a first version, but a field that is easy to add now and awkward later.
-- **Self-join needs its own endpoint and its own permission** — it is the one place a member creates
-  an `InvestigationAttendee` for themselves, and it must refuse a closed investigation rather than
-  quietly succeeding.
+### The evidence bargain, from Ben's earlier message
+
+*"All collected evidence and data is public and cannot be made private for an open investigation.
+The location can be scrubbed and hidden to the public not attending, but evidence is not."*
+
+Right, and cleaner now the event is public anyway: if anyone may come, nobody may afterwards decide
+what the group saw is theirs to withhold. Two things follow that must be **enforced, not defaulted**:
+
+- Visibility locks once the event is public and anyone has RSVP'd. Otherwise somebody flips it later
+  and the people who turned up lose the deal they came under.
+- Openness itself is not revocable once anyone has joined.
+
+### 87a. "Near me" — filtering the public calendar by the visitor's location
+
+Ben, same day: *"people who allow us to read their GPS coordinates should filter the public calendar
+by their location."*
+
+This is the half that makes the acquisition channel actually work. A national list of events is a
+directory; a list of events **near you this weekend** is a reason to come back. Kept as its own
+sub-part because it is only meaningful once public events exist, and it should not delay them.
+
+**Consent, and what we do with the answer:**
+
+- Browser geolocation is permission-gated and must stay opt-in — a **"Near me" button**, not a prompt
+  on page load. Somebody who declines gets the list they already had, sorted by date.
+- **Do not store it.** A visitor's position is needed for the length of one query. Storing it turns a
+  convenience into a location history, which is a different product and a much heavier promise.
+- **Round it before it leaves the browser.** `PublicCoordinates` already snaps a *case* to a grid
+  cell; the same trick applied to the *visitor* means the server sees roughly where somebody is
+  rather than exactly, and a coarse "within N miles" filter is unaffected by the loss of precision.
+  Pleasing symmetry: the same function protects the people being listed and the people looking.
+- **Say the distance, not the direction.** "About 12 miles away" is what a reader needs. Rendering a
+  line from their house to the venue is not.
+
+**Also worth having regardless of geolocation:** a town or postcode box. It works for somebody
+planning a trip, for anyone who declines the permission, and on a desktop where the browser's guess
+is often wrong by a county.
+
+### Smaller things to settle when it is picked up
+
+- **Who sees the attendee list?** These are strangers. Default to the organization seeing names and
+  attendees seeing only a count; make anything wider a deliberate choice.
+- **Capacity and a cut-off.** A real site has a limit, and there is a point after which turning up
+  is not useful. Cheap now, awkward later.
+- **The organization needs to be able to remove somebody**, and an attendee to cancel.
+- **Real-world safety.** This arranges strangers meeting at a location, often at night. Not a
+  blocker, but the listing should carry what to bring and what to expect, and the organization
+  should be named — an anonymous invitation to a dark building is not something to ship.
