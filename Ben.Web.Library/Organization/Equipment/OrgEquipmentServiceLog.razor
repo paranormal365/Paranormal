@@ -61,6 +61,17 @@
             </div>
         }
 
+        @* The merged account — loans, renewals, service and faults together. The service-only list
+           below stays because adding an entry belongs next to what it changes. *@
+        @if (Item is not null)
+        {
+            <h6 class="mb-2">Everything that's happened</h6>
+            <div class="mb-3">
+                <Ben.Web.Library.Equipment.EquipmentItemHistory ItemId="@Item.Id" />
+            </div>
+            <h6 class="mb-2">Service log</h6>
+        }
+
         @if (_loading)
         {
             <p class="text-secondary">Loading history…</p>
