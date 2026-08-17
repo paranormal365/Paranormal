@@ -194,6 +194,19 @@ so with a link to open it, rather than being handed a second copy nobody knows a
 Publishing keeps the page's address and its permissions — the live page is updated in place, not
 replaced, so nothing linking to it breaks.
 
+### Page addresses
+
+A page's address is the last part of its web address — `/o/your-group/about`. Keep it short and
+lowercase; it is what people paste to each other.
+
+A few words are used by the site itself — **cases** and **events** today, plus some held back for
+things coming later. A page can't use one, because it could never be opened: the site would show its
+own page at that address instead. If you try, you'll be told which word and offered a way round it —
+"our-cases" rather than "cases".
+
+If you have an older page marked **Unreachable** in the list, that is one made before this check
+existed. Rename it and it will start working.
+
 ### Seeing a page before it goes live
 
 **View as visitor** on the editor opens the saved page exactly as the public renderer draws it,

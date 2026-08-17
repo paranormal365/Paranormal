@@ -4175,10 +4175,20 @@ from inside the app.**
 
 ### Still to do
 
-- **The reserved-word bug is live** — a CMS page saved with the slug `cases` succeeds today and is
-  permanently unreachable, because `/o/{org}/cases` matches the case-list route first. Enforce a
-  reserved list server-side on create and update, and audit existing pages. This is the first phase
-  of any of the above.
+- **The reserved-word bug — ✅ fixed 2026-08-17.** `CmsReservedSlugs` refuses a routed word on both
+  create and rename, with a message naming the word and suggesting a way round it. Existing pages
+  saved before the check are flagged **Unreachable** in the CMS list, because nothing else about
+  them looks wrong — they sit in the list like any other page and only fail when somebody follows
+  the link.
+
+  The part that makes it stay fixed is a **source scan**: a test reads every `@page "/o/{...}/x"`
+  route in the app and fails if `x` is not reserved. Refusing today's words was the easy half; the
+  failure mode is somebody adding `/o/{org}/team` in six months with nobody remembering the list
+  exists, and an organization losing a page silently. Verified by adding a route for an unreserved
+  word and watching the test name both the word and the file.
+
+  A few extra words are held back for routes the site will want. Reserving one costs an
+  organization nothing today; taking it back after they have built a page there breaks their link.
 - Slugs for cases, investigations and equipment models, using `UrlSlug` (built for events).
 - **Alias-and-redirect for changed slugs**, before anything ships publicly. Cheap now, and
   retrofitting it after links have been shared means the links are already dead.

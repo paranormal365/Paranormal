@@ -313,4 +313,85 @@ public class OrgCmsPageControllerTests
         var child = await db2.OrganizationPages.FirstAsync(p => p.UrlName == "child");
         Assert.Null(child.ParentPageId);
     }
+
+    // ── Reserved slugs (item #89) ────────────────────────────────────────────
+
+    /// <summary>
+    /// A page at a word the site routes cannot be created. Before this it saved happily and was
+    /// then unreachable for ever, with nothing to tell the person who made it.
+    /// </summary>
+    [Fact]
+    public async Task Creating_a_page_at_a_routed_word_is_refused_with_a_reason()
+    {
+        var factory = CreateFactory();
+        var orgId   = Guid.NewGuid();
+        var userId  = Guid.NewGuid();
+
+        foreach (var slug in new[] { "cases", "events", "CASES" })
+        {
+            var result = await BuildController(factory, SuperAdmin(userId)).Create(
+                orgId, new CreateCmsPageRequest("Our Cases", slug, null, true, null, 0), default);
+
+            var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+            var message = Assert.IsType<string>(bad.Value);
+
+            // Named and with a way out, or somebody just tries the same thing again.
+            Assert.Contains(slug.Trim().ToLowerInvariant(), message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("our-cases", message);
+        }
+    }
+
+    [Fact]
+    public async Task Renaming_a_page_onto_a_routed_word_is_refused()
+    {
+        var factory = CreateFactory();
+        var orgId   = Guid.NewGuid();
+        var userId  = Guid.NewGuid();
+        var page    = await SeedPageAsync(factory, orgId, "about");
+
+        var result = await BuildController(factory, SuperAdmin(userId)).Update(
+            orgId, page.Id, new UpdateCmsPageRequest("About", "events", null, true, true, null, 0), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task An_ordinary_page_name_is_still_accepted()
+    {
+        var factory = CreateFactory();
+        var orgId   = Guid.NewGuid();
+        var userId  = Guid.NewGuid();
+
+        var result = await BuildController(factory, SuperAdmin(userId)).Create(
+            orgId, new CreateCmsPageRequest("About Us", "about-us", null, true, null, 0), default);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+    }
+
+    /// <summary>
+    /// A page saved before the check existed is flagged, because nothing else about it looks wrong:
+    /// it sits in the list like any other and only fails when somebody follows its link.
+    /// </summary>
+    [Fact]
+    public async Task A_page_already_saved_at_a_routed_word_is_flagged_as_unreachable()
+    {
+        var factory = CreateFactory();
+        var orgId   = Guid.NewGuid();
+        var userId  = Guid.NewGuid();
+
+        // Straight into storage, the way it got there before the guard existed.
+        await SeedPageAsync(factory, orgId, "cases");
+        await SeedPageAsync(factory, orgId, "about");
+
+        var security = new Mock<IOrganizationSecurityService>();
+        security.Setup(x => x.GetOrganizationsForUserAsync(userId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync([]);
+
+        var result = await BuildController(factory, SuperAdmin(userId), security).GetAll(orgId, default);
+        var list = Assert.IsAssignableFrom<IEnumerable<CmsPageListItemResponse>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value).ToList();
+
+        Assert.True(list.Single(p => p.UrlName == "cases").IsUnreachable);
+        Assert.False(list.Single(p => p.UrlName == "about").IsUnreachable);
+    }
 }

@@ -68,7 +68,8 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
 
         var result = pages.Select(p => new CmsPageListItemResponse(
             p.Id, p.OrganizationId, p.ParentPageId, p.PageTitle, p.UrlName, p.IsHome, p.IsPublished, p.IsPublic,
-            p.SortOrder, sectionCounts.GetValueOrDefault(p.Id), canEdit, canDelete, p.DateCreated)).ToList();
+            p.SortOrder, sectionCounts.GetValueOrDefault(p.Id), canEdit, canDelete, p.DateCreated,
+            IsUnreachable: Ben.Data.Common.CmsReservedSlugs.IsReserved(p.UrlName))).ToList();
 
         return Ok(result);
     }
@@ -118,6 +119,12 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
         await using var db = await DbFactory.CreateDbContextAsync(ct);
 
         var urlName = request.UrlName.Trim().ToLowerInvariant();
+
+        // Refused before it can be saved. A page at a routed word saves happily and is then
+        // unreachable for ever, with nothing to tell the person who made it — see CmsReservedSlugs.
+        if (Ben.Data.Common.CmsReservedSlugs.RefusalFor(urlName) is string reserved)
+            return BadRequest(reserved);
+
         if (await db.OrganizationPages.AnyAsync(p => p.OrganizationId == orgId && p.UrlName == urlName, ct))
             return BadRequest($"UrlName '{urlName}' is already in use for this organization.");
 
@@ -170,6 +177,12 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
             .FirstOrDefaultAsync(p => p.Id == pageId && p.OrganizationId == orgId, ct);
 
         var urlName = request.UrlName.Trim().ToLowerInvariant();
+
+        // Checked on the way in as well as on create: a page renamed onto a routed word would
+        // vanish just as completely as one created there.
+        if (Ben.Data.Common.CmsReservedSlugs.RefusalFor(urlName) is string renamedOnto)
+            return BadRequest(renamedOnto);
+
         if (page!.UrlName != urlName && await db.OrganizationPages.AnyAsync(
                 p => p.OrganizationId == orgId && p.UrlName == urlName, ct))
             return BadRequest($"UrlName '{urlName}' is already in use for this organization.");
@@ -259,7 +272,13 @@ public sealed record CmsPageListItemResponse(
     int SectionCount,
     bool CanEdit,
     bool CanDelete,
-    DateTime DateCreated);
+    DateTime DateCreated,
+    // True when this page's address is one the site itself routes, so the page cannot be opened.
+    // Only possible for a page saved before the reserved-word check existed. Carried so the editor
+    // can say so: the page looks perfectly fine in the list, and the only symptom is that following
+    // its link lands somewhere else. Computed server-side and rendered as given, like every other
+    // verdict here.
+    bool IsUnreachable = false);
 
 public sealed record CmsPageDetailResponse(
     Guid Id,
