@@ -69,4 +69,21 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<bool> DeletePagePermissionAsync(Guid orgId, Guid pageId, Guid permId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/pages/{pageId}/permissions/{permId}", token);
+
+    // ── Drafts (item #80, part 3) ───────────────────────────────────────────
+
+    public Task<CmsDraftStateResponse?> GetCmsDraftStateAsync(Guid orgId, Guid pageId, CancellationToken token = default)
+        => _api.GetAsync<CmsDraftStateResponse>($"{DraftBase(orgId, pageId)}", token);
+
+    public Task<CmsDraftStateResponse?> StartCmsDraftAsync(Guid orgId, Guid pageId, CancellationToken token = default)
+        => _api.PostAsync<object, CmsDraftStateResponse>($"{DraftBase(orgId, pageId)}", new object(), token);
+
+    public Task<bool> PublishCmsDraftAsync(Guid orgId, Guid pageId, CancellationToken token = default)
+        => _api.PostVoidAsync($"{DraftBase(orgId, pageId)}/publish", new object(), token);
+
+    public Task<bool> DiscardCmsDraftAsync(Guid orgId, Guid pageId, CancellationToken token = default)
+        => _api.DeleteAsync($"{DraftBase(orgId, pageId)}", token);
+
+    private static string DraftBase(Guid orgId, Guid pageId)
+        => $"/api/organizations/{orgId}/pages/{pageId}/draft";
 }

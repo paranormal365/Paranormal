@@ -3342,32 +3342,61 @@ cost:
 
 ### 2. A template library
 
-Both granularities Ben asked for. A section template (one `CmsSection` with pre-filled
-`ContentJson`) and a whole-page template (an ordered set of sections). The six section types in
-`CmsSectionType` — RichText, ImageBanner, FileGallery, ContactInfo, MemberRoster, CustomHtml — are
-the vocabulary a template is assembled from, so this is mostly a seeding-and-cloning job rather than
-new rendering.
+> **Ben clarified 2026-08-17, and it changes the shape of this part.** *"The templates are things
+> like build a card with a header and body or build a collapsable set of items. It is functionality
+> and look helpers."*
+>
+> This is **not** page cloning. It is a library of **layout building blocks** — a card with a header
+> and a body, a collapsible list of items, and their relatives — that an author drops into a page and
+> fills in. The earlier reading (a template as a pre-filled `CmsSection` plus a whole-page template)
+> was mostly a seeding-and-cloning job; this is mostly **new rendering**, because the six existing
+> section types have no vocabulary for structure. `RichText` can hold a card only as hand-written
+> HTML, which is exactly what a non-technical author cannot do and `CustomHtml` already fails to
+> solve.
 
-Open question worth settling early: are templates **site-provided only**, or can a group save its
-own page as a template and reuse it? The second is a small extra step (a "save as template" that
-clones sections) but changes ownership and permissions.
+**Shape this implies, to settle when it is picked up:**
 
-### 3. Draft vs live
+- New structured section types (`Card`, `Accordion`, and whatever else earns its place) whose
+  `ContentJson` describes *parts* — a heading, a body, a list of items each with a label and content
+  — rather than a blob of markup. `OrgPublicSection` grows a renderer per type; `CmsSectionEditor`
+  grows a form per type instead of the raw-JSON box it falls back to today.
+- The **starter set is site-provided**, since these are shared vocabulary rather than one group's
+  content. Ben also asked for **save-your-own**, which lands naturally on top once the structured
+  types exist: saving a filled-in block as a reusable starting point is then a copy of well-formed
+  JSON rather than a copy of arbitrary markup.
+- Worth deciding then: does a saved block belong to the group or the person? Group, probably — the
+  same reasoning as group-owned equipment.
 
-`IsPublished` exists, the editor exposes it, and `OrgCmsEditor` already shows the state per page.
-What does *not* exist is a draft that differs from what is live — editing a published page edits the
-live page immediately, which is the actual gap behind Ben's "make them live when they are ready".
+Answering the earlier open question for the record: Ben chose **both** site-provided and
+save-your-own (2026-08-17).
 
-The honest options:
+### 3. Draft vs live — ✅ built 2026-08-17
 
-| Approach | Cost | Notes |
-|---|---|---|
-| Publish flag only (today) | done | Editing a live page is still live-editing |
-| Draft copy of the page + sections, promoted on publish | M | Real drafts; needs a clone + swap and a "discard draft" |
-| Version history with a published-version pointer | L | Gives rollback too; the most work |
+**Ben chose the draft copy** over version history, accepting no rollback for noticeably less work.
 
-Recommend the middle one unless rollback is wanted, in which case go straight to versions rather
-than building drafts twice.
+A draft is a whole `OrganizationPage` row with its own sections, pointing at the page it will
+replace via `DraftOfOrganizationPageId` (unique, filtered). That shape is the point: every public
+query already filters `IsPublished && IsPublic`, and a draft is created with both false, so **the
+public read path needed no changes at all** and future queries cannot forget to exclude drafts.
+
+- **Copy-on-write, published pages only.** Nobody can see an unpublished page, so editing one
+  directly is already safe and a draft would be ceremony. `POST .../draft` is idempotent — two
+  editors opening a page at once must not make two drafts, and the unique index would otherwise turn
+  the second into a 500.
+- **Publishing copies onto the live row and deletes the draft**, rather than swapping ids. The live
+  page keeps its id, so links, permission rows and attached cases all survive.
+- **`IsHome`, `IsPublished`, `IsPublic` and `CaseId` are deliberately not copied** — they are the
+  page's place in the site, not content. A test asserts publishing a draft cannot make an
+  unpublished page live, which would otherwise be a way to publish something by accident.
+- The editor routes to the draft's own id, so from there it edits an ordinary page row and nothing
+  else in that screen knows drafts exist.
+
+Guards verified by breaking them: making the draft published/public, and copying the visibility
+flags on publish, each fail their tests.
+
+**Still open:** the side-by-side editor panel still has its own hand-written section renderer.
+Collapsing it into `OrgPublicSection` is easier now drafts exist — the panel could preview the draft
+through the real renderer — and is worth doing alongside part 2's new section types.
 
 ### 4. Embedding cases and investigations — the part with teeth
 
