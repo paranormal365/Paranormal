@@ -3310,7 +3310,7 @@ one setting per line or a settings page that renders a textarea. Worth deciding 
 
 ---
 
-## 80. CMS: preview, templates, publish-when-ready, and embedding cases/investigations safely (not started, requested 2026-08-15)
+## 80. CMS: preview, templates, publish-when-ready, and embedding cases/investigations safely (parts 1, 2a, 3 and 4 built 2026-08-17 — part 2b remains)
 
 Ben's request, five parts. The first three are ordinary CMS maturity. The fourth is where the real
 design work is, because it is the point where a group could publish somebody's home address.
@@ -3827,7 +3827,7 @@ Admin view is complete; only the stripping half waits.
 
 ---
 
-## 87. Open events — public investigations and open meetings (not started, scoped 2026-08-17)
+## 87. Open events — public investigations and open meetings (mostly built 2026-08-17 — the pre-event reminder remains, and needs a scheduler)
 
 Ben: *"An open investigation can be open to the public and if someone wants to attend and let them
 know they are coming they have to be a site user. The information to attend and information about
