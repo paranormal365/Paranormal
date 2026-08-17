@@ -50,6 +50,31 @@ Not everything has a manufacturer and a product name, and you should never have 
   under that make, so everyone in the same position picks the same one instead of typing a dozen
   different guesses.
 
+## When we ask "did you mean…?"
+
+If you add a make spelled very like one already in the catalog — **Sansung** when **Samsung** is
+there — we stop and ask before creating it. The catalog is shared by everybody, and one mistyped
+manufacturer sitting beside the real one looks exactly as genuine as the real one to whoever comes
+next.
+
+You always have both answers:
+
+- **Pick the suggested make** if that is what you meant, and it is chosen for you.
+- **Say yours is different**, and we add it exactly as you typed it. Plenty of real makes are one
+  letter apart — Ring and Ping are two different companies — so this is a question, never a refusal.
+
+We only ask about makes an administrator has already confirmed, so you are never being pointed at
+somebody else's typo.
+
+## Tidying up after yourself
+
+A make or model you added is removed automatically when the last piece of equipment using it goes
+away, as long as no administrator has confirmed it yet. Type a make wrongly, delete the item, and
+the mistake leaves with it — you do not need to ask anyone to clear it up.
+
+Confirmed makes and models stay, whether or not anyone currently owns one. Those describe what
+exists in the world, not just what happens to be in the database this week.
+
 ## Who can see a piece, and who can borrow it
 
 These are two separate choices, set per piece of equipment, and both start switched off. Letting

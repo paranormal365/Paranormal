@@ -76,10 +76,23 @@ public static class PlaceMatcher
             && AgreesIfBothPresent(existing.ZipCode, zip);
     }
 
+    /// <summary>
+    /// The same name after normalising — or near enough that it is probably a mistyping.
+    /// </summary>
+    /// <remarks>
+    /// <para>Exact-after-normalising already handled case, punctuation and a leading "the". What it
+    /// could not handle was a slipped keystroke: "Bell Witch Cav" found nothing, and the second row
+    /// got created. Letting <see cref="NameSimilarity"/> have the near-misses closes that.</para>
+    ///
+    /// <para><b>Safe here in a way it would not be everywhere.</b> This only ever <i>offers</i> a
+    /// candidate for a human to accept or ignore, and it has already passed the proximity check — so
+    /// a wrong suggestion costs a glance, while a missed one costs a duplicate place that somebody
+    /// has to merge later.</para>
+    /// </remarks>
     private static bool NameMatches(Place existing, string? name)
         => NormaliseName(existing.Name) is { Length: > 0 } a
         && NormaliseName(name) is { Length: > 0 } b
-        && a == b;
+        && (a == b || NameSimilarity.IsProbableTypo(b, a));
 
     private static bool AgreesIfBothPresent(string? a, string? b)
         => string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b) || Normalise(a) == Normalise(b);

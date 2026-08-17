@@ -80,6 +80,33 @@ public sealed class WebApiClient : IWebApiClient
         return (default, looksLikeProse ? body.Trim('"', ' ', '\n') : null);
     }
 
+    /// <inheritdoc />
+    public async Task<(TResponse? Result, TConflict? Conflict)> PostExpectingConflictAsync<TRequest, TResponse, TConflict>(
+        string relativeUrl, TRequest payload, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Post, relativeUrl);
+        req.Content = JsonContent.Create(payload);
+        using var response = await _httpClient.SendAsync(req, token);
+
+        if (response.IsSuccessStatusCode)
+            return (await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token), default);
+
+        if (response.StatusCode != System.Net.HttpStatusCode.Conflict)
+            return (default, default);
+
+        // A 409 from one of these endpoints carries our own shape, but a proxy or a framework filter
+        // can produce one too — so a body that will not deserialize is an ordinary failure, not a
+        // crash.
+        try
+        {
+            return (default, await response.Content.ReadFromJsonAsync<TConflict>(cancellationToken: token));
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return (default, default);
+        }
+    }
+
     public async Task<TResponse?> PostAnonymousAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
         using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = JsonContent.Create(payload) };

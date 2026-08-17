@@ -152,9 +152,16 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeleteEquipmentFeedbackAsync(Guid orgId, Guid feedbackId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/equipment-feedback/{feedbackId}", token);
 
-    public Task<EquipmentBrandRecord?> ProposeEquipmentBrandAsync(string name, CancellationToken token = default)
-        => _api.PostAsync<UpsertEquipmentBrandRequest, EquipmentBrandRecord>(
-               "/api/equipment-catalog/brands", new UpsertEquipmentBrandRequest(name), token);
+    public async Task<TaxonomyProposal<EquipmentBrandRecord>> ProposeEquipmentBrandAsync(
+        string name, bool confirmDistinct = false, CancellationToken token = default)
+    {
+        var (created, conflict) = await _api
+            .PostExpectingConflictAsync<UpsertEquipmentBrandRequest, EquipmentBrandRecord, ProbableDuplicateResponse>(
+                "/api/equipment-catalog/brands",
+                new UpsertEquipmentBrandRequest(name, confirmDistinct), token);
+
+        return new TaxonomyProposal<EquipmentBrandRecord>(created, conflict);
+    }
 
     public Task<EquipmentModelRecord?> ProposeEquipmentModelAsync(UpsertEquipmentModelRequest request, CancellationToken token = default)
         => _api.PostAsync<UpsertEquipmentModelRequest, EquipmentModelRecord>(

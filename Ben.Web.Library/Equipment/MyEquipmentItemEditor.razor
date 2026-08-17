@@ -52,8 +52,35 @@
                            @oninput="@(e => _newBrandName = e.Value?.ToString() ?? string.Empty)" />
                     <TelerikButton Size="@ThemeConstants.Button.Size.Small"
                                    Enabled="@(!_busy && !string.IsNullOrWhiteSpace(_newBrandName))"
-                                   OnClick="AddBrandAsync">Add</TelerikButton>
+                                   OnClick="@(() => AddBrandAsync())">Add</TelerikButton>
                 </div>
+
+                @* The catalog already has something spelled almost this way. Offered as a choice —
+                   picking the existing make is one click, and insisting adds the new one. *@
+                @if (_brandDidYouMean is not null)
+                {
+                    <div class="alert alert-warning py-2 px-3 mt-2 mb-0 small">
+                        <div class="mb-2">
+                            <strong>@_brandDidYouMean.ProposedName</strong> is close to
+                            @(_brandDidYouMean.DidYouMean.Count == 1 ? "a make" : "makes")
+                            already in the catalog. Did you mean:
+                        </div>
+                        <div class="d-flex flex-wrap gap-1 mb-2">
+                            @foreach (var suggestion in _brandDidYouMean.DidYouMean)
+                            {
+                                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                               OnClick="@(() => UseSuggestedBrandAsync(suggestion))">@suggestion</TelerikButton>
+                            }
+                        </div>
+                        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                       Enabled="@(!_busy)"
+                                       OnClick="@(() => AddBrandAsync(confirmDistinct: true))">
+                            No, "@_brandDidYouMean.ProposedName" is a different make — add it
+                        </TelerikButton>
+                    </div>
+                }
             }
         </div>
 
@@ -243,6 +270,7 @@
     private string _notes = string.Empty;
     private string _websiteUrl = string.Empty;
     private string _newBrandName = string.Empty;
+    private ProbableDuplicateResponse? _brandDidYouMean;
     private string _newModelName = string.Empty;
     private bool _includeInGlobalCatalog;
     private EquipmentLoanAudience _loanAudience = EquipmentLoanAudience.NotLoanable;
@@ -323,12 +351,27 @@
             : [.. await AdminClient.GetEquipmentModelsForBrandAsync(brandId.Value, _categoryId)];
     }
 
-    private async Task AddBrandAsync()
+    /// <summary>
+    /// Proposes a make, handling the "did you mean" the catalog answers a near-miss with.
+    /// </summary>
+    /// <remarks>
+    /// The suggestions used to be discarded here — the server refused a probable typo, this showed
+    /// "That make could not be added", and the person had no way either to take the existing make or
+    /// to insist on their own. A check nobody can get past is worse than no check.
+    /// </remarks>
+    private async Task AddBrandAsync(bool confirmDistinct = false)
     {
         if (string.IsNullOrWhiteSpace(_newBrandName) || _categoryId is null) return;
-        _busy = true; _error = null;
-        var created = await AdminClient.ProposeEquipmentBrandAsync(_newBrandName.Trim());
-        if (created is null)
+        _busy = true; _error = null; _brandDidYouMean = null;
+
+        var proposal = await AdminClient.ProposeEquipmentBrandAsync(
+            _newBrandName.Trim(), confirmDistinct);
+
+        if (proposal.DidYouMean is not null)
+        {
+            _brandDidYouMean = proposal.DidYouMean;
+        }
+        else if (proposal.Created is null)
         {
             _error = "That make could not be added.";
         }
@@ -336,9 +379,23 @@
         {
             _brands = [.. await AdminClient.GetEquipmentBrandsAsync()];
             _newBrandName = string.Empty;
-            await OnBrandChangedAsync(created.Id);
+            await OnBrandChangedAsync(proposal.Created.Id);
         }
         _busy = false;
+    }
+
+    /// <summary>
+    /// Takes one of the suggested makes instead of the name that was typed.
+    /// </summary>
+    /// <remarks>
+    /// Re-posts the suggested name rather than matching it against the loaded list: the server
+    /// returns the existing row for a name already taken, so this selects the same make without a
+    /// second idea of what counts as the same name living in the browser.
+    /// </remarks>
+    private async Task UseSuggestedBrandAsync(string name)
+    {
+        _newBrandName = name;
+        await AddBrandAsync();
     }
 
     private async Task AddModelAsync(string name)

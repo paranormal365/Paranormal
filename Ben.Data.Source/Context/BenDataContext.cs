@@ -1192,6 +1192,16 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
             // ── ExperienceType ───────────────────────────────────────────────
+            // One name per category, enforced by the database. Both create paths check first, but a
+            // check-then-insert is a race, and the equipment catalog has had this backstop since it
+            // was built — the experience taxonomy grew the same way without one.
+            // 100 to match the length the proposal endpoint has always advertised. The column was
+            // nvarchar(max), so that limit was politeness rather than a rule, and an index cannot
+            // cover an unbounded column anyway.
+            modelBuilder.Entity<ExperienceType>()
+                .Property(e => e.Name).HasMaxLength(100);
+            modelBuilder.Entity<ExperienceType>()
+                .HasIndex(e => new { e.ExperienceCategoryId, e.Name }).IsUnique();
             modelBuilder.Entity<ExperienceType>()
                 .HasOne(e => e.ExperienceCategory).WithMany(e => e.ExperienceTypes)
                 .HasForeignKey(e => e.ExperienceCategoryId).OnDelete(DeleteBehavior.Cascade);

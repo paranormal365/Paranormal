@@ -255,6 +255,33 @@
                         }
                     }
                 </div>
+                @* A name that looks like a mistyping of one already here. Shown as a choice rather
+                   than a refusal: the existing words are one click each, and "mine is different"
+                   creates it anyway. Being unable to get past this would be worse than no check. *@
+                @if (_didYouMean is not null)
+                {
+                    <div class="alert alert-warning py-2 px-3 mt-2 mb-0 small">
+                        <div class="mb-2">
+                            <strong>@_didYouMean.ProposedName</strong> is close to
+                            @(_didYouMean.DidYouMean.Count == 1 ? "a type" : "types")
+                            already in this category. Did you mean:
+                        </div>
+                        <div class="d-flex flex-wrap gap-1 mb-2">
+                            @foreach (var suggestion in _didYouMean.DidYouMean)
+                            {
+                                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                               ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                               OnClick="@(() => UseSuggestedTypeAsync(suggestion))">@suggestion</TelerikButton>
+                            }
+                        </div>
+                        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                       Enabled="@(!_addingType)"
+                                       OnClick="ConfirmDistinctTypeAsync">
+                            No, "@_didYouMean.ProposedName" is different — add it
+                        </TelerikButton>
+                    </div>
+                }
                 @if (_addTypeError is not null)
                 {
                     <div class="text-danger small mt-1">@_addTypeError</div>
@@ -327,6 +354,7 @@
     private string _newTypeName = "";
     private bool _addingType;
     private string? _addTypeError;
+    private ProbableDuplicateResponse? _didYouMean;
 
     // Dialog state
     private bool _showDialog;
@@ -481,6 +509,7 @@
         _addingTypeForCategoryId = categoryId;
         _newTypeName = "";
         _addTypeError = null;
+        _didYouMean = null;
     }
 
     private void CancelAddType()
@@ -488,41 +517,50 @@
         _addingTypeForCategoryId = null;
         _newTypeName = "";
         _addTypeError = null;
+        _didYouMean = null;
     }
 
     /// <summary>
     /// Adds a type the taxonomy is missing, then selects it on the entry being written.
     /// </summary>
     /// <remarks>
-    /// Selecting it is the point — someone typed the name because they wanted to tag this entry
-    /// with it, so making them find and click it afterwards would be a pointless second step. The
-    /// server returns the existing type when the name is already taken, so a near-duplicate
-    /// selects what is already there instead of creating a twin.
+    /// <para>Selecting it is the point — someone typed the name because they wanted to tag this
+    /// entry with it, so making them find and click it afterwards would be a pointless second step.
+    /// The server returns the existing type when the name is already taken, so a near-duplicate
+    /// selects what is already there instead of creating a twin.</para>
+    ///
+    /// <para>A name that merely <i>looks like</i> an existing one comes back as suggestions rather
+    /// than as a type. That is a question, not a refusal, and the answer has to be reachable both
+    /// ways — see <see cref="UseSuggestedTypeAsync"/> and <see cref="ConfirmDistinctTypeAsync"/>.
+    /// </para>
     /// </remarks>
-    private async Task AddTypeAsync(Guid categoryId)
+    private async Task AddTypeAsync(Guid categoryId, bool confirmDistinct = false)
     {
         var name = _newTypeName.Trim();
         if (string.IsNullOrWhiteSpace(name)) return;
 
         _addingType = true;
         _addTypeError = null;
+        _didYouMean = null;
         try
         {
-            var created = await AdminClient.AddOrgExperienceTypeAsync(
-                OrgId, new AddOrgExperienceTypeRequest(categoryId, name, null));
+            var proposal = await AdminClient.AddOrgExperienceTypeAsync(
+                OrgId, new AddOrgExperienceTypeRequest(categoryId, name, null, confirmDistinct));
 
-            if (created is null)
+            if (proposal.DidYouMean is not null)
+            {
+                _didYouMean = proposal.DidYouMean;
+                return;
+            }
+
+            if (proposal.Created is null)
             {
                 _addTypeError = "Could not add that type. Only group owners and administrators can.";
                 return;
             }
 
-            _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).ToList();
-            _expTypeNames = _taxonomy
-                .SelectMany(c => c.Types)
-                .ToDictionary(t => t.Id, t => t.Name);
-
-            _form.ExperienceTypeIds.Add(created.Id);
+            await ReloadTaxonomyAsync();
+            _form.ExperienceTypeIds.Add(proposal.Created.Id);
             CancelAddType();
         }
         catch
@@ -533,6 +571,40 @@
         {
             _addingType = false;
         }
+    }
+
+    /// <summary>
+    /// Takes one of the suggested existing types instead of the name that was typed.
+    /// </summary>
+    /// <remarks>
+    /// Posting the suggested name rather than looking up its id: the server's exact-match path
+    /// returns the existing row for a name already taken, so this lands on the same type without a
+    /// second concept of "which one did they mean" living out here.
+    /// </remarks>
+    private async Task UseSuggestedTypeAsync(string name)
+    {
+        var categoryId = _addingTypeForCategoryId;
+        if (categoryId is null) return;
+
+        _newTypeName = name;
+        await AddTypeAsync(categoryId.Value);
+    }
+
+    /// <summary>Says the typed name really is a different thing, and creates it.</summary>
+    private async Task ConfirmDistinctTypeAsync()
+    {
+        var categoryId = _addingTypeForCategoryId;
+        if (categoryId is null) return;
+
+        await AddTypeAsync(categoryId.Value, confirmDistinct: true);
+    }
+
+    private async Task ReloadTaxonomyAsync()
+    {
+        _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).ToList();
+        _expTypeNames = _taxonomy
+            .SelectMany(c => c.Types)
+            .ToDictionary(t => t.Id, t => t.Name);
     }
 
     private void ToggleType(Guid typeId)

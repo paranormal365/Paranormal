@@ -242,8 +242,15 @@ public sealed partial class BenAdminClientAdapter
     public Task<RejectExperienceTypeResponse?> RejectExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default)
         => _api.PutAsync<object, RejectExperienceTypeResponse>($"/api/admin/experience-categories/{categoryId}/types/{id}/reject", new { }, token);
 
-    public Task<ExperienceTypeRecord?> AddOrgExperienceTypeAsync(Guid orgId, AddOrgExperienceTypeRequest request, CancellationToken token = default)
-        => _api.PostAsync<AddOrgExperienceTypeRequest, ExperienceTypeRecord>($"/api/organizations/{orgId}/experience-types", request, token);
+    public async Task<TaxonomyProposal<ExperienceTypeRecord>> AddOrgExperienceTypeAsync(
+        Guid orgId, AddOrgExperienceTypeRequest request, CancellationToken token = default)
+    {
+        var (created, conflict) = await _api
+            .PostExpectingConflictAsync<AddOrgExperienceTypeRequest, ExperienceTypeRecord, ProbableDuplicateResponse>(
+                $"/api/organizations/{orgId}/experience-types", request, token);
+
+        return new TaxonomyProposal<ExperienceTypeRecord>(created, conflict);
+    }
 
     // ── Votes ────────────────────────────────────────────────
 
