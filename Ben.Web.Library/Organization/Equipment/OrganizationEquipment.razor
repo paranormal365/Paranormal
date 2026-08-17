@@ -125,6 +125,24 @@
                         @(row.CurrentHolderDisplayName ?? "In storage")
                     </Template>
                 </GridColumn>
+
+                @* Only administrators are sent counters at all, so the columns appear when the
+                   payload has them rather than on a permission this page works out for itself. *@
+                @if (_owned.Any(i => i.Counters is not null))
+                {
+                    <GridColumn Title="Views" Width="90px">
+                        <Template>
+                            @{ var row = (EquipmentItemRecord)context; }
+                            @(row.Counters?.ViewCount.ToString() ?? "—")
+                        </Template>
+                    </GridColumn>
+                    <GridColumn Title="Link clicks" Width="110px">
+                        <Template>
+                            @{ var row = (EquipmentItemRecord)context; }
+                            @(row.Counters?.LinkClickCount.ToString() ?? "—")
+                        </Template>
+                    </GridColumn>
+                }
                 <GridColumn Title="Condition" Width="150px">
                     <Template>
                         @{ var row = (EquipmentItemRecord)context; }
