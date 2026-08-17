@@ -117,6 +117,66 @@ public sealed record UpsertEquipmentItemRequest(
     bool IncludeInGlobalCatalog = false,
     EquipmentLoanAudience LoanAudience = EquipmentLoanAudience.NotLoanable);
 
+// ── Condition photos, renewals, history (Phase 5) ───────────────────────────
+
+/// <summary>One condition photo attached to a loan, at one end of it.</summary>
+public sealed record EquipmentCheckoutPhotoRecord(
+    Guid Id,
+    Guid EquipmentCheckoutId,
+    Guid UploadFileId,
+    EquipmentPhotoStage Stage,
+    string? Caption,
+    DateTime DateCreated,
+    Guid CreatedByAppUserId,
+    string? CreatedByDisplayName);
+
+/// <summary>One request for more time on a loan, and what was said about it.</summary>
+public sealed record EquipmentCheckoutRenewalRecord(
+    Guid Id,
+    Guid EquipmentCheckoutId,
+    DateTime RequestedDateDue,
+    EquipmentRenewalStatus Status,
+    string? RequestNotes,
+    string? ReviewNotes,
+    Guid? ReviewedByAppUserId,
+    string? ReviewedByDisplayName,
+    DateTime? DateReviewed,
+    DateTime DateCreated,
+    bool CanReview,
+    bool CanCancel);
+
+/// <summary>Asks for more time on a loan that is already out.</summary>
+public sealed record RequestEquipmentRenewalRequest(DateTime RequestedDateDue, string? RequestNotes);
+
+/// <summary>Decides a renewal. A reason is required to refuse one.</summary>
+public sealed record ReviewEquipmentRenewalRequest(bool Approve, string? ReviewNotes);
+
+/// <summary>What kind of thing happened to a piece of equipment.</summary>
+public enum EquipmentHistoryKind
+{
+    Loan = 1,
+    Renewal = 2,
+    Service = 3,
+    Defect = 4,
+}
+
+/// <summary>
+/// One entry in a piece of equipment's combined history — loans, renewals, service and defects
+/// merged into a single chronological account.
+/// </summary>
+/// <remarks>
+/// Deliberately flat and pre-described: the server writes the sentence, so every surface showing a
+/// history says the same thing about the same event. Carries no serial number, because history is
+/// visible to people the serial is not.
+/// </remarks>
+public sealed record EquipmentHistoryEntryRecord(
+    DateTime DateUtc,
+    EquipmentHistoryKind Kind,
+    string Summary,
+    string? ActorDisplayName,
+    Guid? CheckoutId,
+    int PhotoCount);
+
 // ── Checkouts (Phase 4) ─────────────────────────────────────────────────────
 
 /// <summary>

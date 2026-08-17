@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Service.Models.Entities;
 
 namespace Ben.Web.Library.Services;
@@ -88,6 +89,24 @@ public interface IBenEquipmentClient
 
     Task<IReadOnlyList<EquipmentCheckoutRecord>> GetOrgEquipmentCheckoutsAsync(Guid orgId, CancellationToken token = default);
     Task<IReadOnlyList<EquipmentCheckoutRecord>> GetEquipmentItemCheckoutsAsync(Guid itemId, CancellationToken token = default);
+
+    // ── Condition photos, renewals, history (Phase 5) ────────────────────────
+
+    Task<IReadOnlyList<EquipmentCheckoutPhotoRecord>> GetCheckoutPhotosAsync(Guid checkoutId, CancellationToken token = default);
+    Task<bool> DeleteCheckoutPhotoAsync(Guid checkoutId, Guid photoId, CancellationToken token = default);
+
+    /// <summary>Attaches a condition photo to one end of a loan.</summary>
+    Task<EquipmentCheckoutPhotoRecord?> UploadCheckoutPhotoAsync(Guid checkoutId, EquipmentPhotoStage stage, MultipartFormDataContent content, CancellationToken token = default);
+
+    /// <summary>Photo bytes for data:-URI rendering — condition photos are never public.</summary>
+    Task<(byte[] Data, string ContentType, string FileName)?> GetCheckoutPhotoBytesAsync(Guid photoId, CancellationToken token = default);
+
+    Task<IReadOnlyList<EquipmentCheckoutRenewalRecord>> GetCheckoutRenewalsAsync(Guid checkoutId, CancellationToken token = default);
+    Task<EquipmentCheckoutRenewalRecord?> RequestCheckoutRenewalAsync(Guid checkoutId, DateTime requestedDateDue, string? notes, CancellationToken token = default);
+    Task<EquipmentCheckoutRenewalRecord?> ReviewCheckoutRenewalAsync(Guid checkoutId, Guid renewalId, bool approve, string? reviewNotes, CancellationToken token = default);
+
+    /// <summary>One item's whole story — loans, renewals, service and defects, in time order.</summary>
+    Task<IReadOnlyList<EquipmentHistoryEntryRecord>> GetEquipmentItemHistoryAsync(Guid itemId, CancellationToken token = default);
     Task<EquipmentServiceLogRecord?> AddOrgEquipmentServiceLogAsync(Guid orgId, Guid itemId, AddEquipmentServiceLogRequest request, CancellationToken token = default);
 
     // ── SuperAdmin taxonomy moderation (Phase 1) ─────────────────────────────

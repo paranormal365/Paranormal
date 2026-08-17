@@ -115,6 +115,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<EquipmentItemShare> EquipmentItemShares { get; set; }
         public virtual DbSet<EquipmentServiceLog> EquipmentServiceLogs { get; set; }
         public virtual DbSet<EquipmentCheckout> EquipmentCheckouts { get; set; }
+        public virtual DbSet<EquipmentCheckoutPhoto> EquipmentCheckoutPhotos { get; set; }
+        public virtual DbSet<EquipmentCheckoutRenewal> EquipmentCheckoutRenewals { get; set; }
         public virtual DbSet<VideoProject> VideoProjects { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -2027,6 +2029,38 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EquipmentCheckout>().HasIndex(e => e.BorrowerAppUserId);
             modelBuilder.Entity<EquipmentCheckout>().HasIndex(e => new { e.BorrowedForOrganizationId, e.Status });
             modelBuilder.Entity<EquipmentCheckout>().HasIndex(e => e.InvestigationId);
+
+            modelBuilder.Entity<EquipmentCheckoutPhoto>()
+                .HasOne(e => e.EquipmentCheckout).WithMany(e => e.Photos)
+                .HasForeignKey(e => e.EquipmentCheckoutId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction on the file: deleting a photo must never take the loan record with it.
+            modelBuilder.Entity<EquipmentCheckoutPhoto>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentCheckoutPhoto>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentCheckoutPhoto>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentCheckoutPhoto>().Property(e => e.Caption).HasMaxLength(200);
+            modelBuilder.Entity<EquipmentCheckoutPhoto>().HasIndex(e => new { e.EquipmentCheckoutId, e.Stage });
+
+            modelBuilder.Entity<EquipmentCheckoutRenewal>()
+                .HasOne(e => e.EquipmentCheckout).WithMany(e => e.Renewals)
+                .HasForeignKey(e => e.EquipmentCheckoutId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EquipmentCheckoutRenewal>()
+                .HasOne(e => e.ReviewedByAppUser).WithMany()
+                .HasForeignKey(e => e.ReviewedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentCheckoutRenewal>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentCheckoutRenewal>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentCheckoutRenewal>().Property(e => e.RequestNotes).HasMaxLength(1000);
+            modelBuilder.Entity<EquipmentCheckoutRenewal>().Property(e => e.ReviewNotes).HasMaxLength(1000);
+            modelBuilder.Entity<EquipmentCheckoutRenewal>().HasIndex(e => new { e.EquipmentCheckoutId, e.Status });
 
         }
     }

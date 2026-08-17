@@ -65,6 +65,28 @@ A loan is **overdue** once it is out and past that date. That is worked out fres
 looks, so it is never stale, and it shows as a red badge on **My Checkouts** and a count on your
 notification bell.
 
+## Photos of its condition
+
+Either side can attach photos to a loan — as the gear goes out, and as it comes back. They sit side
+by side on the loan's **Details** view, which is the whole point: "was that scratch already there?"
+is much easier to answer with the two pictures next to each other than from memory.
+
+A hand-off photo can only be added once the loan is approved and before it is over, and a return
+photo only once the gear is actually out or just back. Photographing a hand-off that never happened
+would be recording a fact about nothing.
+
+Condition photos are private to the two sides of that loan. They never appear in the public catalog.
+
+## Asking for more time
+
+If you need a piece for longer, open the loan's **Details** and ask to keep it until a later date.
+You can only ask while you actually have the gear, and only one request can be waiting at a time.
+
+Whoever lent it can grant or refuse. Granting moves the due date; refusing leaves the original date
+standing and needs a reason. Either way you get a notification, and the request and its answer stay
+on the loan — so "asked for another week, was given three days" is still readable later, rather than
+just a due date that quietly changed.
+
 ## My Checkouts
 
 **My Checkouts** answers three questions in one place:

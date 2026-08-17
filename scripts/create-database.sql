@@ -8370,3 +8370,129 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817114147_AddEquipmentCheckoutPhotosAndRenewals'
+)
+BEGIN
+    CREATE TABLE [EquipmentCheckoutPhotos] (
+        [Id] uniqueidentifier NOT NULL,
+        [EquipmentCheckoutId] uniqueidentifier NOT NULL,
+        [UploadFileId] uniqueidentifier NOT NULL,
+        [Stage] int NOT NULL,
+        [Caption] nvarchar(200) NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_EquipmentCheckoutPhotos] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_EquipmentCheckoutPhotos_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentCheckoutPhotos_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentCheckoutPhotos_EquipmentCheckouts_EquipmentCheckoutId] FOREIGN KEY ([EquipmentCheckoutId]) REFERENCES [EquipmentCheckouts] ([Id]) ON DELETE CASCADE,
+        CONSTRAINT [FK_EquipmentCheckoutPhotos_UploadFiles_UploadFileId] FOREIGN KEY ([UploadFileId]) REFERENCES [UploadFiles] ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817114147_AddEquipmentCheckoutPhotosAndRenewals'
+)
+BEGIN
+    CREATE TABLE [EquipmentCheckoutRenewals] (
+        [Id] uniqueidentifier NOT NULL,
+        [EquipmentCheckoutId] uniqueidentifier NOT NULL,
+        [RequestedDateDue] datetime2 NOT NULL,
+        [Status] int NOT NULL,
+        [RequestNotes] nvarchar(1000) NULL,
+        [ReviewNotes] nvarchar(1000) NULL,
+        [ReviewedByAppUserId] uniqueidentifier NULL,
+        [DateReviewed] datetime2 NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_EquipmentCheckoutRenewals] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_EquipmentCheckoutRenewals_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentCheckoutRenewals_AppUsers_ReviewedByAppUserId] FOREIGN KEY ([ReviewedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentCheckoutRenewals_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentCheckoutRenewals_EquipmentCheckouts_EquipmentCheckoutId] FOREIGN KEY ([EquipmentCheckoutId]) REFERENCES [EquipmentCheckouts] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817114147_AddEquipmentCheckoutPhotosAndRenewals'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentCheckoutPhotos_CreatedByAppUserId] ON [EquipmentCheckoutPhotos] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817114147_AddEquipmentCheckoutPhotosAndRenewals'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentCheckoutPhotos_EquipmentCheckoutId_Stage] ON [EquipmentCheckoutPhotos] ([EquipmentCheckoutId], [Stage]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817114147_AddEquipmentCheckoutPhotosAndRenewals'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentCheckoutPhotos_UpdatedByAppUserId] ON [EquipmentCheckoutPhotos] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817114147_AddEquipmentCheckoutPhotosAndRenewals'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentCheckoutPhotos_UploadFileId] ON [EquipmentCheckoutPhotos] ([UploadFileId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817114147_AddEquipmentCheckoutPhotosAndRenewals'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentCheckoutRenewals_CreatedByAppUserId] ON [EquipmentCheckoutRenewals] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817114147_AddEquipmentCheckoutPhotosAndRenewals'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentCheckoutRenewals_EquipmentCheckoutId_Status] ON [EquipmentCheckoutRenewals] ([EquipmentCheckoutId], [Status]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817114147_AddEquipmentCheckoutPhotosAndRenewals'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentCheckoutRenewals_ReviewedByAppUserId] ON [EquipmentCheckoutRenewals] ([ReviewedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817114147_AddEquipmentCheckoutPhotosAndRenewals'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentCheckoutRenewals_UpdatedByAppUserId] ON [EquipmentCheckoutRenewals] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817114147_AddEquipmentCheckoutPhotosAndRenewals'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260817114147_AddEquipmentCheckoutPhotosAndRenewals', N'10.0.11');
+END;
+
+COMMIT;
+GO
+
