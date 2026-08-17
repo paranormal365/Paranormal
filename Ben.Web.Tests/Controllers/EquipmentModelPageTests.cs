@@ -221,6 +221,56 @@ public class EquipmentModelPageTests
         Assert.Equal(3, linked.Count);
     }
 
+    // ── Interest counters ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ViewsAndLinkClicksAccumulate()
+    {
+        var w = await SeedAsync();
+        var ctrl = Build(w.Factory, userId: null);
+
+        await ctrl.RecordView(w.PublicItemId, default);
+        await ctrl.RecordView(w.PublicItemId, default);
+        await ctrl.RecordLinkClick(w.PublicItemId, default);
+
+        await using var db = await w.Factory.CreateDbContextAsync();
+        var item = await db.EquipmentItems.SingleAsync(i => i.Id == w.PublicItemId);
+        Assert.Equal(2, item.ViewCount);
+        Assert.Equal(1, item.LinkClickCount);
+    }
+
+    /// <summary>
+    /// An unknown id answers exactly as a known one does. Varying it would make this endpoint a
+    /// cheaper way to discover which item ids are real than any endpoint that actually returns
+    /// something.
+    /// </summary>
+    [Fact]
+    public async Task AnUnknownItemIsIndistinguishableFromAKnownOne()
+    {
+        var w = await SeedAsync();
+        var ctrl = Build(w.Factory, userId: null);
+
+        Assert.IsType<NoContentResult>(await ctrl.RecordView(Guid.NewGuid(), default));
+        Assert.IsType<NoContentResult>(await ctrl.RecordView(w.PublicItemId, default));
+    }
+
+    [Fact]
+    public async Task RetiredGearStopsCounting()
+    {
+        var w = await SeedAsync();
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var item = await db.EquipmentItems.SingleAsync(i => i.Id == w.PublicItemId);
+            item.IsRetired = true;
+            await db.SaveChangesAsync();
+        }
+
+        await Build(w.Factory, userId: null).RecordView(w.PublicItemId, default);
+
+        await using var check = await w.Factory.CreateDbContextAsync();
+        Assert.Equal(0, (await check.EquipmentItems.SingleAsync(i => i.Id == w.PublicItemId)).ViewCount);
+    }
+
     // ── Links and counts ─────────────────────────────────────────────────────
 
     [Fact]

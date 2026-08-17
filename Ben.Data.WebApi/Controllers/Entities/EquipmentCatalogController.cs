@@ -163,6 +163,49 @@ public sealed class EquipmentCatalogController : BenControllerBase
     }
 
     /// <summary>
+    /// Records that somebody looked at a piece of equipment.
+    /// </summary>
+    /// <remarks>
+    /// <para>Anonymous, because the pages that call it are. Always answers 204, including for an id
+    /// that does not exist — varying the response would make this a cheaper existence probe than
+    /// any real endpoint offers.</para>
+    ///
+    /// <para>Fire-and-forget and unauthenticated by design: these are interest numbers, not
+    /// billing. Protection is the app's rate limiting; a determined script can inflate a counter
+    /// and that is an accepted trade for not making every page view an authenticated write.</para>
+    /// </remarks>
+    [HttpPost("items/{id:guid}/viewed")]
+    [AllowAnonymous]
+    public Task<IActionResult> RecordView(Guid id, CancellationToken ct)
+        => BumpAsync(id, item => item.ViewCount++, ct);
+
+    /// <summary>Records that somebody followed a piece's website link.</summary>
+    /// <remarks>
+    /// The client opens the link first and calls this afterwards, so a failure here can never cost
+    /// the reader the thing they actually asked for.
+    /// </remarks>
+    [HttpPost("items/{id:guid}/link-clicked")]
+    [AllowAnonymous]
+    public Task<IActionResult> RecordLinkClick(Guid id, CancellationToken ct)
+        => BumpAsync(id, item => item.LinkClickCount++, ct);
+
+    private async Task<IActionResult> BumpAsync(Guid id, Action<EquipmentItem> bump, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var item = await db.EquipmentItems.FirstOrDefaultAsync(i => i.Id == id, ct);
+
+        // No such item, or it is retired and out of circulation — nothing to count, and still 204.
+        if (item is null || item.IsRetired) return NoContent();
+
+        bump(item);
+        // Through the change tracker rather than ExecuteUpdate: the InMemory provider the tests run
+        // against does not support the latter, and a lost increment under concurrency costs nothing
+        // that matters for a number like this.
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>
     /// One make and model, with everything its owners have contributed pooled together.
     /// </summary>
     /// <remarks>
