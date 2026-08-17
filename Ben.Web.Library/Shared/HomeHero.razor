@@ -2,12 +2,13 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState   UserState
 @inject NavigationManager NavManager
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 
 @* ── Hero ─────────────────────────────────────────────────────────────────── *@
 <div class="home-hero">
     <div class="home-hero__brand">
         <img src="/static/images/ghost glass 699x640.png" alt="IsHaunted logo" class="home-hero__logo" />
-        <h1 class="home-hero__title">IsHaunted.com</h1>
+        <h1 class="home-hero__title">@SiteOptions.Value.Name</h1>
         <p class="home-hero__tagline">Connect with paranormal investigation groups near you</p>
     </div>
 

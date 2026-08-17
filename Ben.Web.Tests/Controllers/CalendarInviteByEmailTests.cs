@@ -261,7 +261,7 @@ public class CalendarInviteByEmailTests
             await db.SaveChangesAsync();
         }
 
-        var contact = new MyContactInfoController(factory, new Mock<IAuditLogService>().Object)
+        var contact = new MyContactInfoController(factory, new Mock<IAuditLogService>().Object, Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()))
         {
             ControllerContext = new ControllerContext
             {

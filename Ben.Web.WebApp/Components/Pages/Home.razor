@@ -1,7 +1,8 @@
 ﻿@page "/"
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 @using Ben.Web.Library.Shared
 
-<PageTitle>IsHaunted — Find Paranormal Investigators Near You</PageTitle>
+<PageTitle>@SiteOptions.Value.Name — @SiteOptions.Value.Tagline</PageTitle>
 
 <HomeHero />
 

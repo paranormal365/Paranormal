@@ -44,6 +44,7 @@ else
         <nav class="mb-4 d-flex flex-wrap gap-2">
             <a href="/o/@_page.OrgUrlName" class="btn btn-sm btn-outline-secondary">Home</a>
             <a href="/o/@_page.OrgUrlName/cases" class="btn btn-sm btn-outline-secondary">Cases</a>
+            <a href="/o/@_page.OrgUrlName/events" class="btn btn-sm btn-outline-secondary">Events</a>
             @foreach (var navPage in _page.NavPages.Where(p => p.ParentPageId is null).OrderBy(p => p.SortOrder))
             {
                 var isActive = navPage.UrlName.Equals(PageSlug, StringComparison.OrdinalIgnoreCase);

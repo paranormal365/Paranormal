@@ -66,4 +66,36 @@ public sealed class ReachableComponentTests
             + "a parameter no caller sets makes the feature behind it unreachable, however green its "
             + "own tests are.");
     }
+
+    /// <summary>
+    /// The site's name never appears as a literal in something a person reads.
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-08-17: <i>"Right now, it is IsHaunted.com. I assume it will be that when we are
+    /// ready to buy the site, but it may not be available then."</i> It was hardcoded in the footer,
+    /// the home page title, the invite page and three email bodies — and the ones that survive a
+    /// rename are always the emails, because nobody rereads a template until a customer forwards it
+    /// back. <c>SiteIdentity</c> is the one place now, and this stops it drifting out again.
+    ///
+    /// <para>Scoped to user-facing files. The name legitimately appears in connection strings, the
+    /// architecture notes and a <c>Case.IsHaunted</c> property, none of which are a person reading
+    /// a page.</para>
+    /// </remarks>
+    [Fact]
+    public void The_site_name_is_never_a_literal_in_anything_a_person_reads()
+    {
+        var offenders = RazorSources()
+            .Where(f => !f.EndsWith("SocialCard.razor", StringComparison.Ordinal))
+            .Select(f => (File: Path.GetFileName(f), Text: File.ReadAllText(f)))
+            // "IsHaunted.com" specifically — the bare word is a real property name on a case.
+            .Where(x => x.Text.Contains("IsHaunted.com", StringComparison.OrdinalIgnoreCase))
+            .Select(x => x.File)
+            .ToList();
+
+        Assert.True(
+            offenders.Count == 0,
+            "The site's name is hardcoded in: " + string.Join(", ", offenders)
+            + ". Inject SiteIdentity and use its Name — the domain is not settled, and a literal is "
+            + "a rename waiting to be missed.");
+    }
 }

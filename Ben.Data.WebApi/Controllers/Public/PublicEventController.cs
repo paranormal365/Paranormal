@@ -65,7 +65,7 @@ public sealed class PublicEventController : BenControllerBase
             .Take(Math.Clamp(maxResults, 1, 200))
             .Select(e => new
             {
-                e.Id, e.OrganizationId, OrgName = e.Organization.Name, OrgUrl = e.Organization.UrlName,
+                e.Id, e.UrlName, e.OrganizationId, OrgName = e.Organization.Name, OrgUrl = e.Organization.UrlName,
                 e.Title, e.StartDateTime, e.EndDateTime, e.IsAllDay, e.MeetingUrl,
                 e.AttendeeCapacity,
                 PlaceCity = e.Place != null ? e.Place.City : null,
@@ -82,7 +82,7 @@ public sealed class PublicEventController : BenControllerBase
             // and a pin that sharpened for some readers would be a way to work out who is coming.
             var (lat, lon) = PublicCoordinates.Approximate(e.PlaceLat, e.PlaceLon);
             return new PublicEventListItem(
-                e.Id, e.OrganizationId, e.OrgName, e.OrgUrl, e.Title,
+                e.Id, e.UrlName, e.OrganizationId, e.OrgName, e.OrgUrl, e.Title,
                 e.StartDateTime, e.EndDateTime, e.IsAllDay,
                 e.PlaceCity, e.PlaceState, lat, lon,
                 e.Attending, e.AttendeeCapacity,

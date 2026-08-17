@@ -57,6 +57,11 @@ public sealed record PublicEventRecord(
 /// <summary>One public event as it appears in a list.</summary>
 public sealed record PublicEventListItem(
     Guid Id,
+    /// <summary>
+    /// The readable slug this event is reached by. Without it a card has nowhere to link, which is
+    /// how a list of events becomes a list nobody can open.
+    /// </summary>
+    string? UrlName,
     Guid OrganizationId,
     string OrganizationName,
     string OrganizationUrlName,

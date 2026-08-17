@@ -59,6 +59,7 @@ else
         <nav class="mb-4 d-flex flex-wrap gap-2">
             <a href="/o/@_org.OrgUrlName" class="btn btn-sm btn-outline-primary">Home</a>
             <a href="/o/@_org.OrgUrlName/cases" class="btn btn-sm btn-outline-secondary">Cases</a>
+            <a href="/o/@_org.OrgUrlName/events" class="btn btn-sm btn-outline-secondary">Events</a>
             @foreach (var navPage in _org.NavPages.Where(p => p.ParentPageId is null).OrderBy(p => p.SortOrder))
             {
                 <a href="/o/@_org.OrgUrlName/@navPage.UrlName" class="btn btn-sm btn-outline-secondary">

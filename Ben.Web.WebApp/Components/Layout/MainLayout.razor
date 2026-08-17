@@ -3,6 +3,7 @@
 @implements IDisposable
 
 @inject NavigationManager NavManager
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 @inject IWebApiClient WebApiClient
 @inject IWebApiTokenStore TokenStore
 @inject IWebApiAuthService AuthService
@@ -66,7 +67,7 @@
                    Class="appbar-bottom">
         <AppBarSpacer />
         <AppBarSection>
-            <div id="copyright">IsHaunted.com &copy; @DateTime.Today.Year</div>
+            <div id="copyright">@SiteOptions.Value.Name &copy; @DateTime.Today.Year</div>
         </AppBarSection>
         <AppBarSection>
             @* Both reachable signed out: the guides explaining how to request an investigation are

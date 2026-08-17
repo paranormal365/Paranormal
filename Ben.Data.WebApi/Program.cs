@@ -165,6 +165,8 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.SiteSettingsService>();
 // Stateless apart from its keys, so one instance serves every request.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.SupportFormGuard>();
 builder.Services.Configure<Ben.Data.WebApi.Services.SmtpOptions>(builder.Configuration.GetSection("Smtp"));
+// What the site is called, in one place — see SiteIdentity for why it is not a literal.
+builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));
 builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IEmailService, Ben.Data.WebApi.Services.SmtpEmailService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>();
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);

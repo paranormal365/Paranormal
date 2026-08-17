@@ -70,6 +70,9 @@ builder.Services.AddScoped<VideoExportPublisher>();
 builder.Services.AddScoped<Ben.Video.Editor.Services.ISidecarPairingReporter,
     Ben.Web.WebApp.Services.SidecarPairingReporter>();
 builder.Services.Configure<WebApiOptions>(builder.Configuration.GetSection("WebApi"));
+// The site's own name and origin, in one place — see SiteIdentity. Used by the footer, page titles
+// and the link previews that carry a shared URL into a chat window.
+builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));
 builder.Services.AddScoped<IWebApiTokenStore, WebApiTokenStore>();
 builder.Services.AddHttpClient<IWebApiIdentityClient, WebApiIdentityClient>((sp, client) =>
 {

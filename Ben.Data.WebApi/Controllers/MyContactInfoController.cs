@@ -37,11 +37,15 @@ public sealed class MyContactInfoController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IAuditLogService _auditLog;
 
+    private readonly Ben.Data.Common.SiteIdentity _site;
+
     public MyContactInfoController(
-        IDbContextFactory<BenDataContext> dbContextFactory, IAuditLogService auditLog)
+        IDbContextFactory<BenDataContext> dbContextFactory, IAuditLogService auditLog,
+        Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site)
     {
         _dbContextFactory = dbContextFactory;
         _auditLog = auditLog;
+        _site = site.Value;
     }
 
     // ── Emails ────────────────────────────────────────────────────────────────
@@ -217,7 +221,7 @@ public sealed class MyContactInfoController : BenControllerBase
             try
             {
                 var maskedForSubject = System.Net.WebUtility.HtmlEncode(entity.EmailAddress);
-                var body = $"<p>Confirm that <strong>{maskedForSubject}</strong> belongs to your IsHaunted.com account.</p>" +
+                var body = $"<p>Confirm that <strong>{maskedForSubject}</strong> belongs to your {_site.Name} account.</p>" +
                            $"<p><a href=\"{link}\">Confirm this email address</a></p>" +
                            $"<p>This link expires in {ValidationLifetime.TotalDays:0} days.</p>";
                 await emailService.SendAsync(entity.EmailAddress, "Confirm your email address", body, ct);

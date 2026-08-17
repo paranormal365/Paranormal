@@ -14,7 +14,11 @@ public sealed class SmtpOptions
     public string? User { get; set; }
     public string? Password { get; set; }
     public string FromAddress { get; set; } = "no-reply@example.com";
-    public string FromName { get; set; } = "IsHaunted.com";
+    /// <summary>
+    /// Falls back to <see cref="Ben.Data.Common.SiteIdentity.Name"/> when unset, so the site's name
+    /// is configured once rather than repeated here.
+    /// </summary>
+    public string? FromName { get; set; }
     public bool UseSsl { get; set; } = true;
 }
 
@@ -27,10 +31,12 @@ public sealed class SmtpOptions
 public sealed class SmtpEmailService : IEmailService
 {
     private readonly SmtpOptions _options;
+    private readonly Ben.Data.Common.SiteIdentity _site;
 
-    public SmtpEmailService(IOptions<SmtpOptions> options)
+    public SmtpEmailService(IOptions<SmtpOptions> options, IOptions<Ben.Data.Common.SiteIdentity> site)
     {
         _options = options.Value;
+        _site    = site.Value;
     }
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_options.Host);
@@ -41,7 +47,7 @@ public sealed class SmtpEmailService : IEmailService
             throw new InvalidOperationException("SmtpEmailService.SendAsync called while unconfigured — callers must check IsConfigured first.");
 
         var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(_options.FromName, _options.FromAddress));
+        message.From.Add(new MailboxAddress(_options.FromName ?? _site.Name, _options.FromAddress));
         message.To.Add(MailboxAddress.Parse(to));
         message.Subject = subject;
         message.Body = new TextPart("html") { Text = htmlBody };
