@@ -4230,3 +4230,60 @@ from inside the app.**
 - Slugs for equipment models, using `UrlSlug`.
 - **Alias-and-redirect for changed slugs**, before anything ships publicly. Cheap now, and
   retrofitting it after links have been shared means the links are already dead.
+
+---
+
+## 90. Taxonomy typos and staleness — the Sansung problem (partly fixed 2026-08-17)
+
+Ben: *"if I make a piece of equipment from a manufacturer Sansung and I make a typo Samsung, and
+delete the item before someone else makes a Samsung product, what happens when I delete my Sansung
+product or what happens when I try to change Samsung to Sansung?"*
+
+### What happened before, which was worse than the question assumed
+
+- **Deleting the item left the typo behind.** The model and brand stayed in the shared catalog for
+  ever, unapproved and unreferenced, and **the member who created them could not remove them** —
+  rejecting taxonomy is a SuperAdmin action. Everybody adding a Samsung recorder afterwards was
+  offered two manufacturers, and the wrong one looked exactly as real as the right one.
+- **Renaming was impossible.** There is no rename endpoint for brands or models at all — only
+  approve and delete, and delete is refused while anything references them. So "change Samsung to
+  Sansung" could not be done, and its opposite could not be undone.
+- **Dedup was collation-dependent.** Proposing matched on `Name == name`, so whether "samsung" and
+  "Samsung" were one brand or two depended on the database's collation rather than on anything in
+  the code — the same fault as the slug lookups.
+
+### Fixed
+
+- **Near-duplicate detection at the moment of typing**, which is the only cheap moment. Proposing
+  "Sansung" when "Samsung" exists returns the suggestions instead of creating it; the person either
+  picks the real one or confirms theirs is genuinely different. The pattern already existed for
+  places, where `FindPlaceCandidatesAsync` asks "did you mean this?" before a duplicate exists.
+- **Case-insensitive dedup**, explicitly, rather than by collation.
+- **Orphan cleanup.** Deleting the last item that used an *unapproved* brand or model takes them
+  with it — model first, then the brand that existed only to hold it. **Approved entries are never
+  swept**: the catalog describes what exists in the world, not what somebody happens to own this
+  week, and a Zoom H1n is still a real recorder on the day the last owner here sells theirs. That is
+  the answer to "how long until a name goes stale" — an unapproved one goes the moment nothing uses
+  it; an approved one never does.
+
+### Two defects the positive tests found, which the negative ones would not have
+
+Ben's point that *"proving a single negative doesn't necessarily mean proving it positive"* was
+immediately borne out:
+
+- **"Olympsu" for "Olympus" was not caught.** A transposition is the commonest typo there is, and
+  plain Levenshtein charges two for it, putting it past the threshold. Now Damerau-Levenshtein,
+  where a swap costs one.
+- **"Ring" and "Ping" were flagged as the same name**, as were "Zoom" and "Boom". One letter is the
+  entire difference between two real companies at that length. Short names are now left alone
+  entirely — a check that cried wolf would train people to click past it, which is worse than not
+  having one.
+
+### Still to do
+
+- **Rename-as-merge for SuperAdmin.** The honest answer to "what happens when I change Samsung to
+  Sansung" should be: renaming onto a name that already exists is a **merge** — repoint the models,
+  delete the duplicate, keep the approved one — not a unique-index violation. Nothing can rename
+  today, so this is a new capability rather than a fix.
+- **The same treatment for other user-grown taxonomies.** Experience types and place names have the
+  same shape and, presumably, the same problem.

@@ -139,7 +139,10 @@ public class OrganizationSecurityService : IOrganizationSecurityService
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(token);
 
         var normalizedName = name.Trim();
-        var normalizedUrlName = urlName.Trim();
+        // Lowercased, not merely trimmed. The admin path already did this and registration did
+        // not, so an organization's public address worked or did not depending on which door it
+        // came through — and on SQL Server's case-insensitive collation, mostly by luck.
+        var normalizedUrlName = Ben.Data.Common.SlugText.NormalizeOrEmpty(urlName);
 
         if (string.IsNullOrWhiteSpace(normalizedName) || string.IsNullOrWhiteSpace(normalizedUrlName))
         {

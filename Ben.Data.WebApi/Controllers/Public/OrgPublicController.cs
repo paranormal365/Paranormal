@@ -29,8 +29,9 @@ public sealed class OrgPublicController : ControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        var orgSlug = Ben.Data.Common.SlugText.NormalizeOrEmpty(urlName);
         var org = await db.Organizations.AsNoTracking()
-            .FirstOrDefaultAsync(o => o.UrlName == urlName.ToLowerInvariant(), ct);
+            .FirstOrDefaultAsync(o => o.UrlName == orgSlug, ct);
 
         if (org is null) return NotFound();
 
@@ -53,12 +54,13 @@ public sealed class OrgPublicController : ControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        var orgSlug = Ben.Data.Common.SlugText.NormalizeOrEmpty(urlName);
         var org = await db.Organizations.AsNoTracking()
-            .FirstOrDefaultAsync(o => o.UrlName == urlName.ToLowerInvariant(), ct);
+            .FirstOrDefaultAsync(o => o.UrlName == orgSlug, ct);
 
         if (org is null) return NotFound();
 
-        var page = await BuildPageAsync(db, org.Id, isHome: false, pageSlug: pageSlug.ToLowerInvariant(), ct);
+        var page = await BuildPageAsync(db, org.Id, isHome: false, pageSlug: Ben.Data.Common.SlugText.NormalizeOrEmpty(pageSlug), ct);
         if (page is null) return NotFound();
 
         var logos    = await BuildLogosAsync(db, org.Id, ct);

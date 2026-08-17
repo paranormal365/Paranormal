@@ -31,8 +31,9 @@ public sealed class PublicCaseController : ControllerBase
         string orgUrlName, CancellationToken ct)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
+        var orgSlug = Ben.Data.Common.SlugText.NormalizeOrEmpty(orgUrlName);
         var org = await db.Organizations.AsNoTracking()
-            .FirstOrDefaultAsync(o => o.UrlName == orgUrlName, ct);
+            .FirstOrDefaultAsync(o => o.UrlName == orgSlug, ct);
         if (org is null) return NotFound();
 
         var cases = await db.Cases.AsNoTracking()
@@ -80,14 +81,15 @@ public sealed class PublicCaseController : ControllerBase
         string orgUrlName, string caseRef, CancellationToken ct)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
+        var orgSlug = Ben.Data.Common.SlugText.NormalizeOrEmpty(orgUrlName);
         var org = await db.Organizations.AsNoTracking()
-            .FirstOrDefaultAsync(o => o.UrlName == orgUrlName, ct);
+            .FirstOrDefaultAsync(o => o.UrlName == orgSlug, ct);
         if (org is null) return NotFound();
 
         // Accepts either the readable slug or the old "2026-042" reference. The slug is what people
         // share; the reference is what an organization says out loud to a client, and both should
         // land on the same page rather than one of them being a dead end.
-        var slug = caseRef.Trim().ToLowerInvariant();
+        var slug = Ben.Data.Common.SlugText.NormalizeOrEmpty(caseRef);
         var (refYear, refNumber) = ParseCaseReference(caseRef);
 
         var c = await db.Cases.AsNoTracking()

@@ -118,7 +118,7 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
 
-        var urlName = request.UrlName.Trim().ToLowerInvariant();
+        var urlName = Ben.Data.Common.SlugText.NormalizeOrEmpty(request.UrlName);
 
         // Refused before it can be saved. A page at a routed word saves happily and is then
         // unreachable for ever, with nothing to tell the person who made it — see CmsReservedSlugs.
@@ -176,7 +176,7 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
         var page = await db.OrganizationPages
             .FirstOrDefaultAsync(p => p.Id == pageId && p.OrganizationId == orgId, ct);
 
-        var urlName = request.UrlName.Trim().ToLowerInvariant();
+        var urlName = Ben.Data.Common.SlugText.NormalizeOrEmpty(request.UrlName);
 
         // Checked on the way in as well as on create: a page renamed onto a routed word would
         // vanish just as completely as one created there.
