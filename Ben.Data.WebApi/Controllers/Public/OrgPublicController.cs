@@ -1,6 +1,7 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
+using Ben.Data.Source.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -29,9 +30,9 @@ public sealed class OrgPublicController : ControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var orgSlug = Ben.Data.Common.SlugText.NormalizeOrEmpty(urlName);
-        var org = await db.Organizations.AsNoTracking()
-            .FirstOrDefaultAsync(o => o.UrlName == orgSlug, ct);
+        // Resolves a retired address too, so a link printed before a rename still opens. The
+        // response carries the current UrlName, which is how the page knows to correct the address.
+        var (org, _) = await OrganizationUrlNames.ResolveAsync(db, urlName, ct);
 
         if (org is null) return NotFound();
 
@@ -54,9 +55,9 @@ public sealed class OrgPublicController : ControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var orgSlug = Ben.Data.Common.SlugText.NormalizeOrEmpty(urlName);
-        var org = await db.Organizations.AsNoTracking()
-            .FirstOrDefaultAsync(o => o.UrlName == orgSlug, ct);
+        // Resolves a retired address too, so a link printed before a rename still opens. The
+        // response carries the current UrlName, which is how the page knows to correct the address.
+        var (org, _) = await OrganizationUrlNames.ResolveAsync(db, urlName, ct);
 
         if (org is null) return NotFound();
 

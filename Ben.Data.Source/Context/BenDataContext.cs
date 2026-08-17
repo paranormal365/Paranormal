@@ -53,6 +53,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrganizationAreaOfOperation> OrganizationAreaOfOperations { get; set; }
         public virtual DbSet<OrganizationUserMembership> OrganizationUserMemberships { get; set; }
         public virtual DbSet<OrganizationAccessGrant> OrganizationAccessGrants { get; set; }
+        public virtual DbSet<OrganizationUrlNameAlias> OrganizationUrlNameAliases { get; set; }
         public virtual DbSet<OrganizationMembershipRequest> OrganizationMembershipRequests { get; set; }
         public virtual DbSet<OrganizationMembershipQuestion> OrganizationMembershipQuestions { get; set; }
         public virtual DbSet<OrganizationMembershipAnswer> OrganizationMembershipAnswers { get; set; }
@@ -1915,6 +1916,24 @@ namespace Ben.Data.Source.Context
 
             modelBuilder.Entity<Organization>().Property(e => e.Name).HasMaxLength(200);
             modelBuilder.Entity<Organization>().Property(e => e.UrlName).HasMaxLength(100);
+            // One organization per address. Cases, investigations and events have had this since
+            // they were built; organizations, whose address is the one people actually type, never
+            // did — so two groups could hold "ghost-squad" and /o/ghost-squad resolved to whichever
+            // row the database returned first.
+            modelBuilder.Entity<Organization>()
+                .HasIndex(e => e.UrlName).IsUnique().HasFilter("[UrlName] IS NOT NULL");
+
+            // ── OrganizationUrlNameAlias ─────────────────────────────────────
+            modelBuilder.Entity<OrganizationUrlNameAlias>().Property(e => e.UrlName)
+                .HasMaxLength(100).IsRequired();
+            // Unique across all aliases, and checked against current names on write: an address a
+            // group has ever held is never handed to another one, because a captured link is worse
+            // than a dead one.
+            modelBuilder.Entity<OrganizationUrlNameAlias>()
+                .HasIndex(e => e.UrlName).IsUnique();
+            modelBuilder.Entity<OrganizationUrlNameAlias>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<Organization>().Property(e => e.PublicPhone).HasMaxLength(50);
             modelBuilder.Entity<Organization>().Property(e => e.PublicEmail).HasMaxLength(256);
             modelBuilder.Entity<Organization>().Property(e => e.PublicWebsite).HasMaxLength(500);

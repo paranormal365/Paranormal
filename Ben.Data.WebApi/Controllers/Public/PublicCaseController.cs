@@ -1,6 +1,7 @@
 using AutoMapper;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.Source.Services;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -31,9 +32,7 @@ public sealed class PublicCaseController : ControllerBase
         string orgUrlName, CancellationToken ct)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
-        var orgSlug = Ben.Data.Common.SlugText.NormalizeOrEmpty(orgUrlName);
-        var org = await db.Organizations.AsNoTracking()
-            .FirstOrDefaultAsync(o => o.UrlName == orgSlug, ct);
+        var (org, _) = await OrganizationUrlNames.ResolveAsync(db, orgUrlName, ct);
         if (org is null) return NotFound();
 
         var cases = await db.Cases.AsNoTracking()
@@ -81,9 +80,7 @@ public sealed class PublicCaseController : ControllerBase
         string orgUrlName, string caseRef, CancellationToken ct)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
-        var orgSlug = Ben.Data.Common.SlugText.NormalizeOrEmpty(orgUrlName);
-        var org = await db.Organizations.AsNoTracking()
-            .FirstOrDefaultAsync(o => o.UrlName == orgSlug, ct);
+        var (org, _) = await OrganizationUrlNames.ResolveAsync(db, orgUrlName, ct);
         if (org is null) return NotFound();
 
         // Accepts either the readable slug or the old "2026-042" reference. The slug is what people

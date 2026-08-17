@@ -1,5 +1,6 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.Source.Services;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -40,10 +41,11 @@ public sealed class PublicInvestigationController : BenControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var slug = Ben.Data.Common.SlugText.NormalizeOrEmpty(orgUrlName);
+        var (organization, _) = await OrganizationUrlNames.ResolveAsync(db, orgUrlName, ct);
+        if (organization is null) return Ok(Array.Empty<PublicInvestigationListItem>());
 
         var rows = await db.Investigations.AsNoTracking()
-            .Where(i => i.Organization.UrlName == slug)
+            .Where(i => i.OrganizationId == organization.Id)
             .Where(InvestigationVisibilityFilter.VisibleTo([], []))
             .OrderByDescending(i => i.ScheduledDateTime)
             .Select(i => new PublicInvestigationListItem(
@@ -65,13 +67,15 @@ public sealed class PublicInvestigationController : BenControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var org  = Ben.Data.Common.SlugText.NormalizeOrEmpty(orgUrlName);
         var slug = Ben.Data.Common.SlugText.NormalizeOrEmpty(investigationSlug);
+
+        var (organization, _) = await OrganizationUrlNames.ResolveAsync(db, orgUrlName, ct);
+        if (organization is null) return NotFound();
 
         var i = await db.Investigations.AsNoTracking()
             .Include(x => x.Organization)
             .Include(x => x.Place)
-            .Where(x => x.Organization.UrlName == org && x.UrlName == slug)
+            .Where(x => x.OrganizationId == organization.Id && x.UrlName == slug)
             .Where(InvestigationVisibilityFilter.VisibleTo([], []))
             .FirstOrDefaultAsync(ct);
 
