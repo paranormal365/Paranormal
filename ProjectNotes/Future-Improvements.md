@@ -3321,11 +3321,24 @@ Today `OrgCmsPageEdit.razor` edits sections in place and saves straight to the l
 way to see the page as a visitor would before committing. Two shapes, and they are not equal in
 cost:
 
-- **Preview the saved-but-unpublished page** — cheap. `OrganizationPage.IsPublished` already exists
-  and the editor already exposes it. A preview route that renders the page through the public
-  renderer while ignoring the publish flag (for members with `CmsPageAction.View`) is most of the
-  value for very little work.
-- **Preview *unsaved* edits** — expensive, because it needs draft storage. See part 3.
+- **Preview the saved-but-unpublished page** — ✅ **built 2026-08-17**, alongside the coordinate fix,
+  because it needed no schema and no decision. `/organizations/{OrgId}/cms/pages/{PageId}/preview`
+  and `CmsPagePreviewController` return exactly the public endpoint's shape, so `OrgPublicSection`
+  draws it and a preview cannot drift from the real page. **Only the publish flag is relaxed** —
+  which sections show and in what order stays the public rule, or the preview would be reassuring
+  about a page that will not look like that. Gated on `CmsSection` Read, answering 404 rather than
+  403 so an unpublished page is not confirmed to exist by the shape of the refusal. Both guards
+  verified by deletion.
+- **Preview *unsaved* edits** — still open, and still expensive, because it needs draft storage.
+  See part 3.
+
+> **Found while building it:** `OrgCmsPageEdit` already had a "Preview" button, but it renders a
+> **second, hand-written approximation** of each section (`RenderSectionPreview`) in a half-width
+> column — a duplicate of `OrgPublicSection` that will drift from it. It has a real use the new
+> preview cannot serve (it follows what you are typing, before saving), so it was kept and renamed
+> "Side-by-side", with "View as visitor" beside it for the real thing. **Collapsing the two
+> renderers is worth doing when part 3 lands**, since a draft store would let the side-by-side panel
+> use the public renderer too and the duplicate could go.
 
 ### 2. A template library
 
