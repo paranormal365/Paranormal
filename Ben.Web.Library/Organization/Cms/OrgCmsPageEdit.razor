@@ -544,8 +544,30 @@
     private List<CmsPagePermissionRecord> _permissionRecords = [];
 
     private static readonly List<SectionTypeOption> _sectionTypeOptions = Enum.GetValues<CmsSectionType>()
-        .Select(t => new SectionTypeOption(t, t.ToString()))
+        .Select(t => new SectionTypeOption(t, SectionTypeLabel(t)))
         .ToList();
+
+    /// <summary>
+    /// What each section type is called in the menu.
+    /// </summary>
+    /// <remarks>
+    /// The list is built from the enum so a new type cannot be added and forgotten, but the raw
+    /// names read like code — "EmbeddedInvestigations" is not something to put in front of somebody
+    /// choosing what to add to their page. Unlisted values fall back to the enum name, so the menu
+    /// still works before somebody gets round to naming a new one.
+    /// </remarks>
+    private static string SectionTypeLabel(CmsSectionType type) => type switch
+    {
+        CmsSectionType.RichText               => "Text",
+        CmsSectionType.ImageBanner            => "Image or banner",
+        CmsSectionType.FileGallery            => "File gallery",
+        CmsSectionType.ContactInfo            => "Contact details",
+        CmsSectionType.MemberRoster           => "Our members",
+        CmsSectionType.CustomHtml             => "Custom HTML",
+        CmsSectionType.EmbeddedInvestigations => "Our investigations",
+        CmsSectionType.EmbeddedCases          => "Our cases",
+        _                                     => type.ToString(),
+    };
 
     protected override async Task OnInitializedAsync()
     {

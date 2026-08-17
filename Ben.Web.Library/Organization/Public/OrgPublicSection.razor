@@ -41,6 +41,14 @@
             </div>
             break;
 
+        case CmsSectionType.EmbeddedInvestigations:
+            @RenderEmbeddedInvestigations()
+            break;
+
+        case CmsSectionType.EmbeddedCases:
+            @RenderEmbeddedCases()
+            break;
+
         default:
             <div class="text-muted small">Unknown section type.</div>
             break;
@@ -51,6 +59,125 @@
     [Parameter] public OrgPublicSectionItem? Section { get; set; }
     /// <summary>Base URL prefix for file downloads, e.g. "http://localhost:5252/api/upload-files/"</summary>
     [Parameter] public string FileBaseUrl { get; set; } = "";
+
+    /// <summary>
+    /// The group's own investigations, as the server chose to publish them.
+    /// </summary>
+    /// <remarks>
+    /// <para>Reads only what it is given. The exact coordinates and the client's real name are not
+    /// withheld here — they never arrive, because the projection has no field for them. That is the
+    /// point of doing the redaction in the WebApi: this component could be rewritten carelessly and
+    /// still could not leak an address it never received.</para>
+    ///
+    /// <para>The "approximate" wording is not decoration. A visitor shown a point without being told
+    /// it is a rough area will read it as the place, and a map pin is a confident thing.</para>
+    /// </remarks>
+    private RenderFragment RenderEmbeddedInvestigations() => @<text>
+        @{
+            var rows = ParseArray();
+        }
+        @if (rows.Count == 0)
+        {
+            <div class="text-muted small">Nothing to show here yet.</div>
+        }
+        else
+        {
+            <div class="row g-3">
+                @foreach (var row in rows)
+                {
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title mb-1">@Text(row, "title")</h5>
+                                @if (Text(row, "scheduledDateTime") is { Length: > 0 } when)
+                                {
+                                    <div class="text-secondary small mb-2">@FormatDate(when)</div>
+                                }
+                                @if (Text(row, "summary") is { Length: > 0 } summary)
+                                {
+                                    <p class="card-text small">@summary</p>
+                                }
+                                @RenderPlace(row)
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </text>;
+
+    /// <summary>The group's own cases, named only as the client chose to be named.</summary>
+    private RenderFragment RenderEmbeddedCases() => @<text>
+        @{
+            var rows = ParseArray();
+        }
+        @if (rows.Count == 0)
+        {
+            <div class="text-muted small">Nothing to show here yet.</div>
+        }
+        else
+        {
+            <div class="row g-3">
+                @foreach (var row in rows)
+                {
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title mb-1">@Text(row, "title")</h5>
+                                @if (Text(row, "clientName") is { Length: > 0 } client)
+                                {
+                                    <div class="text-secondary small mb-2">For @client</div>
+                                }
+                                @if (Text(row, "summary") is { Length: > 0 } summary)
+                                {
+                                    <p class="card-text small">@summary</p>
+                                }
+                                @RenderPlace(row)
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </text>;
+
+    private RenderFragment RenderPlace(JsonElement row) => @<text>
+        @{
+            var where = string.Join(", ", new[] { Text(row, "placeName"), Text(row, "city"), Text(row, "state") }
+                .Where(v => !string.IsNullOrWhiteSpace(v)));
+        }
+        @if (where.Length > 0)
+        {
+            <div class="text-secondary small">
+                📍 @where
+                <span class="fst-italic">(approximate area — the exact location is not published)</span>
+            </div>
+        }
+    </text>;
+
+    /// <summary>The resolved rows, or none. Malformed content shows nothing rather than guessing.</summary>
+    private List<JsonElement> ParseArray()
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(Section!.ContentJson);
+            return doc.RootElement.ValueKind == JsonValueKind.Array
+                ? [.. doc.RootElement.EnumerateArray().Select(e => e.Clone())]
+                : [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private static string? Text(JsonElement row, string property)
+        => row.TryGetProperty(property, out var v) && v.ValueKind == JsonValueKind.String
+            ? v.GetString()
+            : null;
+
+    private static string FormatDate(string raw)
+        => DateTime.TryParse(raw, out var parsed) ? parsed.ToString("d MMMM yyyy") : raw;
 
     private RenderFragment RenderHtml()
     {

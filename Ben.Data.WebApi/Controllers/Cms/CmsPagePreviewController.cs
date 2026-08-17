@@ -55,9 +55,18 @@ public sealed class CmsPagePreviewController : OrgCmsControllerBase
             .FirstOrDefaultAsync(p => p.Id == pageId && p.OrganizationId == orgId, ct);
         if (page is null) return NotFound();
 
-        var sections = page.CmsSections
-            .Select(s => new OrgPublicSectionItem(s.Id, s.SectionType, s.Title, s.ContentJson, s.SortOrder))
-            .ToList();
+        // Resolved exactly as the public endpoint resolves it. A preview that showed the raw
+        // references, or that redacted differently, would be reassuring about a page that will not
+        // look like that — which is the one thing a preview must never be.
+        var sections = new List<OrgPublicSectionItem>(page.CmsSections.Count);
+        foreach (var s in page.CmsSections)
+        {
+            var content = CmsEmbed.IsEmbed(s.SectionType)
+                ? await CmsEmbed.ResolveAsync(db, orgId, s.SectionType, s.ContentJson, ct)
+                : s.ContentJson;
+
+            sections.Add(new OrgPublicSectionItem(s.Id, s.SectionType, s.Title, content, s.SortOrder));
+        }
 
         var logos = await db.OrganizationLogos.AsNoTracking()
             .Where(l => l.OrganizationId == orgId && l.IsActive)

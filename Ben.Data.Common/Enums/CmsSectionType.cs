@@ -19,5 +19,19 @@ public enum CmsSectionType
     MemberRoster = 5,
 
     /// <summary>Free-form HTML block. ContentJson contains raw HTML authored by the user.</summary>
-    CustomHtml = 6
+    CustomHtml = 6,
+
+    /// <summary>
+    /// A selection of the group's own investigations, resolved and redacted by the server.
+    /// </summary>
+    /// <remarks>
+    /// Unlike every type above, the stored <c>ContentJson</c> is <b>not</b> what a visitor receives.
+    /// It holds ids and switches; the public endpoint replaces it with a projection built from the
+    /// live records, so redaction runs on every request and a later privacy change takes effect
+    /// immediately. Storing a snapshot would freeze whatever was true on the day it was embedded.
+    /// </remarks>
+    EmbeddedInvestigations = 7,
+
+    /// <summary>A selection of the group's own cases, resolved and redacted like <see cref="EmbeddedInvestigations"/>.</summary>
+    EmbeddedCases = 8
 }

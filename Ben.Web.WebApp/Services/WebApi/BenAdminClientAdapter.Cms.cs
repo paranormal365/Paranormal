@@ -104,4 +104,14 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<bool> DeleteCmsTemplateAsync(Guid orgId, Guid templateId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/cms-templates/{templateId}", token);
+
+    public async Task<IReadOnlyList<EmbeddableRecord>> GetEmbeddableInvestigationsAsync(
+        Guid orgId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<EmbeddableRecord>>(
+               $"/api/organizations/{orgId}/cms/embeddable/investigations", token) ?? [];
+
+    public async Task<IReadOnlyList<EmbeddableRecord>> GetEmbeddableCasesAsync(
+        Guid orgId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<EmbeddableRecord>>(
+               $"/api/organizations/{orgId}/cms/embeddable/cases", token) ?? [];
 }
