@@ -77,6 +77,12 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
         var items = cases.Select(c =>
         {
             voteCounts.TryGetValue(c.Id, out var vc);
+
+            // The field names have promised this since the endpoint was written; until now nothing
+            // performed it. Redacted here, in the projection, so the exact coordinates are never in
+            // the response for a client to ignore.
+            var (approxLat, approxLon) = PublicCoordinates.Approximate(c.Latitude, c.Longitude);
+
             return new PublicCaseDiscoveryItem(
                 CaseId:            c.Id,
                 CaseReference:     $"#{c.CaseYear}-{c.OrgCaseNumber:D3}",
@@ -96,8 +102,8 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
                 Score:             EvidenceVoteScore.FromCounts(
                                        vc?.Confirms ?? 0, vc?.Disputes ?? 0, vc?.Inconclusive ?? 0),
                 TotalVotes:        vc?.Total        ?? 0,
-                ApproxLatitude:    c.Latitude,
-                ApproxLongitude:   c.Longitude,
+                ApproxLatitude:    approxLat,
+                ApproxLongitude:   approxLon,
                 ClientName:        PublicClientName.For(c));
         }).ToList();
 
