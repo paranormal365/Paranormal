@@ -3354,18 +3354,46 @@ cost:
 > HTML, which is exactly what a non-technical author cannot do and `CustomHtml` already fails to
 > solve.
 
+> **Second clarification, same day, and it is the load-bearing one.** *"The templates created by
+> users are ones that put together the ones we create on the server-side. Like carrousel."*
+>
+> So there are **two tiers, and they are different kinds of thing**:
+>
+> - **Primitives, written by us.** A card, a collapsible list, an image, a block of text. Each is a
+>   real renderer with a real editing form.
+> - **Compositions, assembled by users.** A carousel of cards, a FAQ built from collapsibles, a
+>   three-across feature strip. A user never writes a renderer — they arrange primitives and save the
+>   arrangement as something they can reuse.
+>
+> **This means blocks must nest**, and that is the design consequence worth getting right before any
+> code. A `CmsSection`'s `ContentJson` stops being a flat record per section type and becomes a
+> **tree of typed nodes**: a node names a primitive and carries that primitive's own fields plus, for
+> primitives that hold others, a list of child nodes. A user template is then simply a saved subtree,
+> and composing is arranging nodes rather than generating markup.
+>
+> Two things follow that are easy to miss:
+> - **Only primitives that declare themselves containers may hold children.** A card body can hold
+>   blocks; a heading cannot. Without that rule the editor has no way to say where a drop is legal,
+>   and the renderer has no way to refuse a tree it cannot draw.
+> - **Depth has to be bounded and the tree validated server-side.** `ContentJson` is author-supplied,
+>   and a page that renders a 400-deep tree is a way to take the public site down. Validate on save,
+>   not on render.
+
 **Shape this implies, to settle when it is picked up:**
 
-- New structured section types (`Card`, `Accordion`, and whatever else earns its place) whose
-  `ContentJson` describes *parts* — a heading, a body, a list of items each with a label and content
-  — rather than a blob of markup. `OrgPublicSection` grows a renderer per type; `CmsSectionEditor`
-  grows a form per type instead of the raw-JSON box it falls back to today.
-- The **starter set is site-provided**, since these are shared vocabulary rather than one group's
-  content. Ben also asked for **save-your-own**, which lands naturally on top once the structured
-  types exist: saving a filled-in block as a reusable starting point is then a copy of well-formed
-  JSON rather than a copy of arbitrary markup.
-- Worth deciding then: does a saved block belong to the group or the person? Group, probably — the
-  same reasoning as group-owned equipment.
+- **The node vocabulary comes first.** A small set of primitives, each with a renderer in
+  `OrgPublicSection` and a real editing form in `CmsSectionEditor` (which today falls back to a raw
+  JSON box for anything it does not know). Container primitives — card, collapsible, carousel,
+  column strip — plus leaf primitives — heading, text, image, button.
+- **A user template is a saved subtree**, owned by the **group** rather than the person, on the same
+  reasoning as group-owned equipment: it is the group's site, and a member leaving should not take
+  its building blocks with them.
+- The **starter set is site-provided**, since primitives are shared vocabulary. Ben confirmed
+  **both** tiers (2026-08-17).
+- Worth settling then: whether a saved composition is a *copy* when inserted (edits diverge) or a
+  *reference* (edits propagate). Copy is far simpler and matches how the equipment FAQ promotion
+  works; reference is what people eventually ask for. Decide deliberately rather than by accident —
+  it is very hard to change afterwards.
 
 Answering the earlier open question for the record: Ben chose **both** site-provided and
 save-your-own (2026-08-17).
