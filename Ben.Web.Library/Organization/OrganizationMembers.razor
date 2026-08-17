@@ -50,7 +50,7 @@
                 <GridColumn Title="Member">
                     <Template>
                         @{ var m2 = (OrgMembershipItem)context; }
-                        <UserNameLink AppUserId="@m2.AppUserId" DisplayName="@m2.DisplayName" />
+                        <UserNameLink AppUserId="@m2.AppUserId" DisplayName="@m2.DisplayName" ShowAvatar="true" />
                     </Template>
                 </GridColumn>
                 <GridColumn Field="@nameof(OrgMembershipItem.IsActive)" Title="Active" Width="80px" />
