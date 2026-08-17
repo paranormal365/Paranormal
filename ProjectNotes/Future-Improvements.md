@@ -3970,7 +3970,17 @@ organization's calendar. Worth noting what this uncovered: `OrgCalendarEventType
 The calendar — the one place the distinction matters — rendered every appointment identically, so a
 month with thirty events told an organizer nothing until they clicked one. Both now show.
 
-**Attendees seeing it — not built, and the gap is specific.** `/my-investigations` exists, but it is
+**Attendees seeing it — ✅ built 2026-08-17.** `GET /api/public/events/mine` and an "Events you're
+going to" section on `/my-investigations`. Put there rather than on a page of its own because from
+the person's point of view "things I am going to" is one list, and the difference between being on a
+team and having signed up to a public walk is a distinction only the database cares about.
+
+Recently-finished events stay listed for thirty days: somebody asking *"what was that place
+called?"* the morning after has nowhere else to look. And the page's empty state now checks **both**
+lists — it would otherwise have told somebody they had nothing while hiding the event they signed up
+to that morning, which is the same bug in a new place.
+
+The original gap, for the record: `/my-investigations` exists, but it is
 fed by `InvestigationAttendee`. An RSVP to a public event creates an `OrgCalendarEventAttendee`, a
 different table, so **somebody who signs up to a public event sees it nowhere afterwards**. There is
 also no personal calendar surface at all — only a list. Two options:

@@ -301,6 +301,79 @@ public sealed class PublicEventControllerTests
         Assert.IsType<ConflictObjectResult>((await Build(w.Factory, VisitorId).Rsvp(w.PublicEventId, default)).Result);
     }
 
+    // ── What I said I would go to ────────────────────────────────────────────
+
+    /// <summary>
+    /// Saying you are coming has to leave a trace somewhere the person can find. Before this, an
+    /// RSVP created an <c>OrgCalendarEventAttendee</c> while <c>/my-investigations</c> read
+    /// <c>InvestigationAttendee</c>, so it vanished entirely.
+    /// </summary>
+    [Fact]
+    public async Task An_event_you_are_going_to_appears_on_your_own_list()
+    {
+        var w = await SeedAsync();
+
+        var before = await Build(w.Factory, VisitorId).GetMine(default);
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<PublicEventListItem>>(
+            Assert.IsType<OkObjectResult>(before.Result).Value));
+
+        await Build(w.Factory, VisitorId).Rsvp(w.PublicEventId, default);
+
+        var after = await Build(w.Factory, VisitorId).GetMine(default);
+        var mine = Assert.IsAssignableFrom<IReadOnlyList<PublicEventListItem>>(
+            Assert.IsType<OkObjectResult>(after.Result).Value);
+
+        var only = Assert.Single(mine);
+        Assert.Equal(w.PublicEventId, only.Id);
+        Assert.False(string.IsNullOrWhiteSpace(only.UrlName), "the card has nowhere to link");
+    }
+
+    [Fact]
+    public async Task Somebody_elses_rsvp_is_not_on_your_list()
+    {
+        var w = await SeedAsync();
+        await Build(w.Factory, VisitorId).Rsvp(w.PublicEventId, default);
+
+        var theirs = await Build(w.Factory, OtherVisitorId).GetMine(default);
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<PublicEventListItem>>(
+            Assert.IsType<OkObjectResult>(theirs.Result).Value));
+    }
+
+    [Fact]
+    public async Task Cancelling_takes_it_off_your_list()
+    {
+        var w = await SeedAsync();
+        await Build(w.Factory, VisitorId).Rsvp(w.PublicEventId, default);
+        await Build(w.Factory, VisitorId).CancelRsvp(w.PublicEventId, default);
+
+        var mine = await Build(w.Factory, VisitorId).GetMine(default);
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<PublicEventListItem>>(
+            Assert.IsType<OkObjectResult>(mine.Result).Value));
+    }
+
+    /// <summary>
+    /// Something that finished yesterday stays on the list for a while. Somebody asking "what was
+    /// that place called?" the morning after has nowhere else to look.
+    /// </summary>
+    [Fact]
+    public async Task A_recently_finished_event_is_still_listed()
+    {
+        var w = await SeedAsync();
+        await Build(w.Factory, VisitorId).Rsvp(w.PublicEventId, default);
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var ev = await db.OrgCalendarEvents.SingleAsync(e => e.Id == w.PublicEventId);
+            ev.StartDateTime = DateTime.UtcNow.AddDays(-2);
+            ev.EndDateTime   = DateTime.UtcNow.AddDays(-2).AddHours(3);
+            await db.SaveChangesAsync();
+        }
+
+        var mine = await Build(w.Factory, VisitorId).GetMine(default);
+        Assert.Single(Assert.IsAssignableFrom<IReadOnlyList<PublicEventListItem>>(
+            Assert.IsType<OkObjectResult>(mine.Result).Value));
+    }
+
     // ── The readable URL ─────────────────────────────────────────────────────
 
     [Fact]
