@@ -98,9 +98,15 @@
                             <div class="col-md-6">
                                 <div class="card h-100">
                                     <div class="card-body">
-                                        <h6 class="card-title mb-1">@item.DisplayName</h6>
+                                        @* Two destinations, deliberately: the piece itself, and every
+                                           copy of that product pooled together. *@
+                                        <h6 class="card-title mb-1">
+                                            <a href="@($"/equipment/{item.Id}")"
+                                               class="text-decoration-none">@item.DisplayName</a>
+                                        </h6>
                                         <div class="text-secondary small">
-                                            @item.BrandName · @item.ModelName
+                                            <a href="@($"/equipment-models/{item.EquipmentModelId}")"
+                                               class="text-decoration-none text-secondary">@item.BrandName · @item.ModelName</a>
                                             <span class="mx-1">·</span>@item.CategoryName
                                         </div>
 

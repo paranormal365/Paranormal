@@ -16,6 +16,11 @@ photos.
 Everything starts private to you. Listing a piece publicly, sharing it with a group, and offering
 it for loan are all separate choices you make piece by piece.
 
+Clicking a piece's name — anywhere it appears — opens its own page. That page shows each reader
+only what they are entitled to: you see its serial number and condition there, a member of a group
+you shared it with sees that it is yours and how to ask for it, and a passer-by from the public
+catalog sees the piece with no mention of you at all.
+
 ## What stays private
 
 Two things about a piece of equipment are **never** shown to anyone but you:
@@ -116,6 +121,23 @@ When you add a make or model that isn't listed yet, it goes into the catalog as 
 use it straight away on your own equipment. It appears in the public catalog once a site
 administrator approves it, which keeps the shared list from filling up with typos and duplicates.
 
+## Make and model pages
+
+Every make and model has its own page, reached by clicking the make and model under any piece of
+gear. It gathers what everyone who owns one has contributed: how many are owned, how many are
+offered for borrowing, the manufacturer links people have added, and their photos.
+
+Everything on that page is anonymous. It never says whose photo is whose, or who owns how many.
+Where you see a photo you can click, that is because you are allowed to open that particular piece —
+its owner listed it publicly, shared it with a group you are in, or it is your own. Everyone else
+sees the same photo with no link behind it.
+
+## The manufacturer's page
+
+Each piece of equipment can carry a link to the maker's own page for it. It is optional, and the
+links everyone adds for the same make and model are gathered on that model's page — so one person's
+research into a recorder's specifications saves the next person the search.
+
 ## Photos
 
 Each item can have as many photos as you like. The first one you add becomes the main photo — the
@@ -123,3 +145,18 @@ one shown first — and you can promote any other photo to main, or remove any o
 
 Photos load when you open your equipment list, not as thumbnails in a long grid, so a list of many
 items stays quick.
+
+**Hide from the model page** is set on each photo separately. A photo of the piece against a plain
+wall may be exactly what belongs on a make and model page, while the one taken in your living room
+is not — so the choice is per photo rather than all-or-nothing. Hiding a photo keeps it on the item
+itself; it only stops it appearing in the pooled set. Captions you write are shown publicly with the
+photo, so write them as something a stranger will read.
+
+## Who is looking
+
+Each piece counts how many times its page has been opened and how many times someone followed its
+manufacturer link. Those numbers are shown to the Administrators and Owner of the group that owns
+the equipment, and to site administrators. Nobody else sees them — not other members, and not the
+individual owner of a personal piece.
+
+The counts are totals only. Nothing is recorded about who did the looking.

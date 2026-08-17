@@ -55,6 +55,27 @@ public sealed partial class BenAdminClientAdapter
         return result ?? [];
     }
 
+    public Task<EquipmentModelPageRecord?> GetEquipmentModelPageAsync(Guid modelId, CancellationToken token = default)
+        => _api.GetAnonymousAsync<EquipmentModelPageRecord>($"/api/equipment-catalog/models/{modelId}", token);
+
+    public Task<EquipmentItemDetailRecord?> GetEquipmentItemAsync(Guid itemId, CancellationToken token = default)
+        => _api.GetAnonymousAsync<EquipmentItemDetailRecord>($"/api/equipment/items/{itemId}", token);
+
+    // Counters must never cost the reader anything: failures are swallowed, and the caller does not
+    // await these before doing the thing the user actually asked for.
+    public Task RecordEquipmentViewAsync(Guid itemId, CancellationToken token = default)
+        => _api.PostAnonymousVoidAsync($"/api/equipment-catalog/items/{itemId}/viewed", new object(), token);
+
+    public Task RecordEquipmentLinkClickAsync(Guid itemId, CancellationToken token = default)
+        => _api.PostAnonymousVoidAsync($"/api/equipment-catalog/items/{itemId}/link-clicked", new object(), token);
+
+    public Task<bool> SetPhotoCatalogExclusionAsync(Guid itemId, Guid photoId, bool exclude, Guid? orgId = null, CancellationToken token = default)
+        => _api.PutVoidAsync(
+               orgId is Guid o
+                   ? $"{OrgEquipBase(o)}/{itemId}/photos/{photoId}/catalog-exclusion"
+                   : $"{MyEquipmentBase}/{itemId}/photos/{photoId}/catalog-exclusion",
+               new SetPhotoCatalogExclusionRequest(exclude), token);
+
     public Task<EquipmentBrandRecord?> ProposeEquipmentBrandAsync(string name, CancellationToken token = default)
         => _api.PostAsync<UpsertEquipmentBrandRequest, EquipmentBrandRecord>(
                "/api/equipment-catalog/brands", new UpsertEquipmentBrandRequest(name), token);

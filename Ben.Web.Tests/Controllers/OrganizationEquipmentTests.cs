@@ -393,6 +393,40 @@ public class OrganizationEquipmentTests
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
+    // ── Interest counters ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Ben's audience for these is administrators — not whoever a group handed an equipment role
+    /// to. The two are different sets of people, so the check is on membership ROLE rather than
+    /// the Equipment permission, and this proves the distinction holds.
+    /// </summary>
+    [Fact]
+    public async Task CountersReachAdministratorsButNotAPermissionHoldingMember()
+    {
+        var w = await SeedAsync();
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var item = await db.EquipmentItems.SingleAsync(i => i.Id == w.ItemId);
+            item.ViewCount = 12;
+            item.LinkClickCount = 3;
+
+            // ManagerId holds the Equipment permission but is an ordinary Member by role.
+            var admin = await db.OrganizationUserMemberships
+                .SingleAsync(m => m.AppUserId == PlainMemberId && m.OrganizationId == OrgId);
+            admin.Role = OrganizationMemberRole.Administrator;
+            await db.SaveChangesAsync();
+        }
+
+        var asManager = await Build(w.Factory, ManagerId, canManageUserId: ManagerId).GetOrgEquipment(OrgId, default);
+        var managerView = Assert.IsType<OrgEquipmentListRecord>(Assert.IsType<OkObjectResult>(asManager.Result).Value);
+        Assert.Null(managerView.Items.Single().Counters);
+
+        var asAdmin = await Build(w.Factory, PlainMemberId, canManageUserId: ManagerId).GetOrgEquipment(OrgId, default);
+        var adminView = Assert.IsType<OrgEquipmentListRecord>(Assert.IsType<OkObjectResult>(asAdmin.Result).Value);
+        Assert.Equal(12, adminView.Items.Single().Counters!.ViewCount);
+        Assert.Equal(3, adminView.Items.Single().Counters!.LinkClickCount);
+    }
+
     // ── Photos (the capability the editor and help docs already claimed) ─────
 
     private static IFormFile Photo(string name = "kit.jpg")

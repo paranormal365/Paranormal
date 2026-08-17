@@ -20,6 +20,21 @@ public interface IBenEquipmentClient
     Task<IReadOnlyList<EquipmentBrandRecord>> GetEquipmentBrandsAsync(string? search = null, CancellationToken token = default);
     Task<IReadOnlyList<EquipmentModelRecord>> GetEquipmentModelsForBrandAsync(Guid brandId, Guid? categoryId = null, CancellationToken token = default);
     Task<IReadOnlyList<EquipmentModelRecord>> SearchEquipmentModelsAsync(string? search = null, Guid? categoryId = null, CancellationToken token = default);
+    /// <summary>One make and model, with links and photos pooled from every copy.</summary>
+    Task<EquipmentModelPageRecord?> GetEquipmentModelPageAsync(Guid modelId, CancellationToken token = default);
+
+    /// <summary>One piece of equipment, as this caller is entitled to see it.</summary>
+    Task<EquipmentItemDetailRecord?> GetEquipmentItemAsync(Guid itemId, CancellationToken token = default);
+
+    /// <summary>Records a view. Fire-and-forget — never let it block the page.</summary>
+    Task RecordEquipmentViewAsync(Guid itemId, CancellationToken token = default);
+
+    /// <summary>Records a website-link click, after the link has already opened.</summary>
+    Task RecordEquipmentLinkClickAsync(Guid itemId, CancellationToken token = default);
+
+    /// <summary>Hides or restores one photo on the make/model page.</summary>
+    Task<bool> SetPhotoCatalogExclusionAsync(Guid itemId, Guid photoId, bool exclude, Guid? orgId = null, CancellationToken token = default);
+
     /// <summary>Items their owners chose to list publicly. Carries no owner identity and no serial.</summary>
     Task<IReadOnlyList<PublicEquipmentItemRecord>> GetPublicEquipmentItemsAsync(string? search = null, Guid? categoryId = null, CancellationToken token = default);
 

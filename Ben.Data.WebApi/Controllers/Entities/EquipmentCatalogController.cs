@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Service.Models.Entities;
@@ -144,6 +145,7 @@ public sealed class EquipmentCatalogController : BenControllerBase
             .OrderBy(i => i.EquipmentModel.EquipmentBrand.Name).ThenBy(i => i.DisplayName)
             .Select(i => new PublicEquipmentItemRecord(
                 i.Id,
+                i.EquipmentModelId,
                 i.DisplayName,
                 i.EquipmentModel.EquipmentBrand.Name,
                 i.EquipmentModel.Name,
@@ -151,12 +153,177 @@ public sealed class EquipmentCatalogController : BenControllerBase
                 i.AcquisitionDate,
                 i.Notes,
                 i.LoanAudience,
+                i.WebsiteUrl,
                 i.Photos.OrderBy(p => p.SortOrder)
-                    .Select(p => new EquipmentItemPhotoRecord(p.Id, p.EquipmentItemId, p.UploadFileId, p.IsPrimary, p.Caption, p.SortOrder))
+                    .Select(p => new EquipmentItemPhotoRecord(p.Id, p.EquipmentItemId, p.UploadFileId, p.IsPrimary, p.Caption, p.SortOrder, p.ExcludeFromCatalog))
                     .ToList()))
             .ToListAsync(ct);
 
         return Ok(items);
+    }
+
+    /// <summary>
+    /// Records that somebody looked at a piece of equipment.
+    /// </summary>
+    /// <remarks>
+    /// <para>Anonymous, because the pages that call it are. Always answers 204, including for an id
+    /// that does not exist — varying the response would make this a cheaper existence probe than
+    /// any real endpoint offers.</para>
+    ///
+    /// <para>Fire-and-forget and unauthenticated by design: these are interest numbers, not
+    /// billing. Protection is the app's rate limiting; a determined script can inflate a counter
+    /// and that is an accepted trade for not making every page view an authenticated write.</para>
+    /// </remarks>
+    [HttpPost("items/{id:guid}/viewed")]
+    [AllowAnonymous]
+    public Task<IActionResult> RecordView(Guid id, CancellationToken ct)
+        => BumpAsync(id, item => item.ViewCount++, ct);
+
+    /// <summary>Records that somebody followed a piece's website link.</summary>
+    /// <remarks>
+    /// The client opens the link first and calls this afterwards, so a failure here can never cost
+    /// the reader the thing they actually asked for.
+    /// </remarks>
+    [HttpPost("items/{id:guid}/link-clicked")]
+    [AllowAnonymous]
+    public Task<IActionResult> RecordLinkClick(Guid id, CancellationToken ct)
+        => BumpAsync(id, item => item.LinkClickCount++, ct);
+
+    private async Task<IActionResult> BumpAsync(Guid id, Action<EquipmentItem> bump, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var item = await db.EquipmentItems.FirstOrDefaultAsync(i => i.Id == id, ct);
+
+        // No such item, or it is retired and out of circulation — nothing to count, and still 204.
+        if (item is null || item.IsRetired) return NoContent();
+
+        bump(item);
+        // Through the change tracker rather than ExecuteUpdate: the InMemory provider the tests run
+        // against does not support the latter, and a lost increment under concurrency costs nothing
+        // that matters for a number like this.
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// One make and model, with everything its owners have contributed pooled together.
+    /// </summary>
+    /// <remarks>
+    /// <para>Public. Photos come from every copy of the model whose owner has not excluded them,
+    /// shown anonymously — the projection carries no owner, no item id and no file id, so there is
+    /// nothing for a mistaken filter to leak later.</para>
+    ///
+    /// <para>The exception is <c>LinkedItemId</c>, resolved <i>per viewer</i>: an item is linked
+    /// only when this caller may open it — their own, one listed publicly, one shared into a group
+    /// they belong to, or their own group's. Everyone else gets a photo with nowhere to click.</para>
+    /// </remarks>
+    [HttpGet("models/{id:guid}")]
+    [AllowAnonymous]
+    public async Task<ActionResult<EquipmentModelPageRecord>> GetModelPage(Guid id, CancellationToken ct)
+    {
+        var callerId = GetCurrentUserIdOrNull();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var model = await db.EquipmentModels.AsNoTracking()
+            .Include(m => m.EquipmentBrand)
+            .Include(m => m.EquipmentCategory)
+            .FirstOrDefaultAsync(m => m.Id == id, ct);
+        if (model is null) return NotFound();
+
+        // An unapproved model is visible to whoever proposed it and to SuperAdmin, matching the
+        // search endpoint's rule — otherwise it is not public yet.
+        if (!model.IsApproved
+            && !(callerId is not null && model.ProposedByAppUserId == callerId)
+            && !User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin))
+            return NotFound();
+
+        var items = await db.EquipmentItems.AsNoTracking()
+            .Include(i => i.Photos)
+            .Where(i => i.EquipmentModelId == id && !i.IsRetired)
+            .ToListAsync(ct);
+
+        // Which of these items may this caller actually open? Resolved in one pass over the small
+        // per-model set rather than a query per photo.
+        var openableItemIds = await ResolveOpenableAsync(db, items, callerId, ct);
+
+        var photos = items
+            .SelectMany(i => i.Photos
+                .Where(p => !p.ExcludeFromCatalog)
+                .Select(p => new CatalogPhotoRecord(
+                    p.Id, p.Caption, p.SortOrder,
+                    openableItemIds.Contains(i.Id) ? i.Id : null)))
+            .OrderBy(p => p.SortOrder)
+            .ToList();
+
+        var links = items
+            .Select(i => i.WebsiteUrl)
+            .Where(u => !string.IsNullOrWhiteSpace(u))
+            .Select(u => u!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(u => u, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var record = new EquipmentModelRecord(
+            model.Id, model.EquipmentBrandId, model.EquipmentBrand.Name,
+            model.EquipmentCategoryId, model.EquipmentCategory.Name,
+            model.Name, model.ModelNumber, model.Description, model.IsApproved,
+            model.ProposedByOrganizationId, model.ProposedByAppUserId, model.DateCreated);
+
+        return Ok(new EquipmentModelPageRecord(
+            record,
+            items.Count,
+            items.Count(i => i.OwningOrganizationId is not null || i.LoanAudience != EquipmentLoanAudience.NotLoanable),
+            links,
+            photos));
+    }
+
+    /// <summary>
+    /// Of these items, the ones <paramref name="callerId"/> is allowed to open a page for.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors the photo-visibility rule rather than inventing a second one: own item, publicly
+    /// listed, shared into a group both parties are in, or the caller's own group's gear.
+    /// </remarks>
+    private static async Task<HashSet<Guid>> ResolveOpenableAsync(
+        BenDataContext db, IReadOnlyList<EquipmentItem> items, Guid? callerId, CancellationToken ct)
+    {
+        var openable = items
+            .Where(i => i.IncludeInGlobalCatalog)
+            .Select(i => i.Id)
+            .ToHashSet();
+
+        if (callerId is not Guid userId) return openable;
+
+        foreach (var item in items.Where(i => i.OwnerAppUserId == userId))
+            openable.Add(item.Id);
+
+        var myOrgIds = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.AppUserId == userId && m.IsActive)
+            .Select(m => m.OrganizationId)
+            .ToListAsync(ct);
+        if (myOrgIds.Count == 0) return openable;
+
+        foreach (var item in items.Where(i => i.OwningOrganizationId is Guid o && myOrgIds.Contains(o)))
+            openable.Add(item.Id);
+
+        // Personal gear shared into one of my groups, where the owner is still a member of it.
+        var candidateIds = items
+            .Where(i => i.OwnerAppUserId is not null && !openable.Contains(i.Id))
+            .Select(i => i.Id)
+            .ToList();
+        if (candidateIds.Count == 0) return openable;
+
+        var shared = await db.EquipmentItemShares.AsNoTracking()
+            .Where(s => candidateIds.Contains(s.EquipmentItemId) && myOrgIds.Contains(s.OrganizationId))
+            .Where(s => db.OrganizationUserMemberships.Any(m =>
+                m.OrganizationId == s.OrganizationId
+                && m.AppUserId == s.EquipmentItem.OwnerAppUserId
+                && m.IsActive))
+            .Select(s => s.EquipmentItemId)
+            .ToListAsync(ct);
+
+        foreach (var itemId in shared) openable.Add(itemId);
+        return openable;
     }
 
     /// <summary>

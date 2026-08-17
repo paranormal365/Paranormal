@@ -34,7 +34,9 @@
         {
             try
             {
-                var result = await AdminClient.GetEquipmentPhotoBytesAsync(photo.Id);
+                // Thumbnails: these are drawn 96px wide, and the endpoint applies the same
+                // visibility predicate as the full bytes, so nothing is loosened by using it.
+                var result = await AdminClient.GetEquipmentPhotoThumbnailAsync(photo.Id);
                 _dataUrls[photo.Id] = result is null
                     ? null
                     : $"data:{result.Value.ContentType};base64,{Convert.ToBase64String(result.Value.Data)}";

@@ -61,6 +61,24 @@ namespace Ben.Data.Source.Entities
         /// </summary>
         public EquipmentLoanAudience LoanAudience { get; set; }
 
+        /// <summary>
+        /// A page worth reading about this piece — the manufacturer's, a review, wherever the owner
+        /// found it. Collected per item and shown as a distinct set on the model page, so several
+        /// owners' links become one useful list for that make and model.
+        /// </summary>
+        public string? WebsiteUrl { get; set; }
+
+        /// <summary>How many times this piece's own page has been opened. Lifetime total.</summary>
+        /// <remarks>
+        /// Visible only to org Administrators and SuperAdmin. A plain counter rather than per-viewer
+        /// rows: the question is "is anyone interested in this", and recording <i>who</i> looked
+        /// would turn a vanity number into a log of who browsed whose equipment.
+        /// </remarks>
+        public int ViewCount { get; set; }
+
+        /// <summary>How many times <see cref="WebsiteUrl"/> has been followed. Lifetime total.</summary>
+        public int LinkClickCount { get; set; }
+
         // ── Org-owned-only fields (null on personal items) ──────────────────────────
         public Guid? CurrentHolderAppUserId { get; set; }
         public DateTime? LastServicedDate { get; set; }

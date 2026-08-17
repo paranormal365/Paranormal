@@ -98,7 +98,12 @@
     {
         <TelerikGrid Data="@_owned" TItem="EquipmentItemRecord" Sortable="true" Pageable="true" PageSize="20">
             <GridColumns>
-                <GridColumn Field="@nameof(EquipmentItemRecord.DisplayName)" Title="Name" />
+                <GridColumn Field="@nameof(EquipmentItemRecord.DisplayName)" Title="Name">
+                    <Template>
+                        @{ var row = (EquipmentItemRecord)context; }
+                        <a href="@($"/equipment/{row.Id}")">@row.DisplayName</a>
+                    </Template>
+                </GridColumn>
                 <GridColumn Field="@nameof(EquipmentItemRecord.BrandName)" Title="Make" Width="140px" />
                 <GridColumn Field="@nameof(EquipmentItemRecord.ModelName)" Title="Model" Width="140px" />
                 <GridColumn Title="Serial" Width="150px">
@@ -120,6 +125,24 @@
                         @(row.CurrentHolderDisplayName ?? "In storage")
                     </Template>
                 </GridColumn>
+
+                @* Only administrators are sent counters at all, so the columns appear when the
+                   payload has them rather than on a permission this page works out for itself. *@
+                @if (_owned.Any(i => i.Counters is not null))
+                {
+                    <GridColumn Title="Views" Width="90px">
+                        <Template>
+                            @{ var row = (EquipmentItemRecord)context; }
+                            @(row.Counters?.ViewCount.ToString() ?? "—")
+                        </Template>
+                    </GridColumn>
+                    <GridColumn Title="Link clicks" Width="110px">
+                        <Template>
+                            @{ var row = (EquipmentItemRecord)context; }
+                            @(row.Counters?.LinkClickCount.ToString() ?? "—")
+                        </Template>
+                    </GridColumn>
+                }
                 <GridColumn Title="Condition" Width="150px">
                     <Template>
                         @{ var row = (EquipmentItemRecord)context; }
@@ -197,7 +220,12 @@
                      Sortable="true" Pageable="true" PageSize="20">
             <GridColumns>
                 <GridColumn Field="@nameof(SharedEquipmentItemRecord.OwnerDisplayName)" Title="Owner" Width="180px" />
-                <GridColumn Field="@nameof(SharedEquipmentItemRecord.DisplayName)" Title="What they call it" />
+                <GridColumn Field="@nameof(SharedEquipmentItemRecord.DisplayName)" Title="What they call it">
+                    <Template>
+                        @{ var row = (SharedEquipmentItemRecord)context; }
+                        <a href="@($"/equipment/{row.Id}")">@row.DisplayName</a>
+                    </Template>
+                </GridColumn>
                 <GridColumn Field="@nameof(SharedEquipmentItemRecord.BrandName)" Title="Make" Width="150px" />
                 <GridColumn Field="@nameof(SharedEquipmentItemRecord.ModelName)" Title="Model" Width="150px" />
                 <GridColumn Field="@nameof(SharedEquipmentItemRecord.CategoryName)" Title="Category" Width="170px" />

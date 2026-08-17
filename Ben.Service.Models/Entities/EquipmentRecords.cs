@@ -80,7 +80,8 @@ public sealed record EquipmentItemPhotoRecord(
     Guid UploadFileId,
     bool IsPrimary,
     string? Caption,
-    int SortOrder);
+    int SortOrder,
+    bool ExcludeFromCatalog = false);
 
 public sealed record EquipmentItemRecord(
     Guid Id,
@@ -100,6 +101,9 @@ public sealed record EquipmentItemRecord(
     bool IsRetired,
     bool IncludeInGlobalCatalog,
     EquipmentLoanAudience LoanAudience,
+    string? WebsiteUrl,
+    /// <summary>Null unless the caller is an org Administrator or SuperAdmin.</summary>
+    EquipmentItemCountersRecord? Counters,
     Guid? CurrentHolderAppUserId,
     string? CurrentHolderDisplayName,
     DateTime? LastServicedDate,
@@ -114,7 +118,100 @@ public sealed record UpsertEquipmentItemRequest(
     DateTime? AcquisitionDate,
     string? Notes,
     bool IncludeInGlobalCatalog = false,
-    EquipmentLoanAudience LoanAudience = EquipmentLoanAudience.NotLoanable);
+    EquipmentLoanAudience LoanAudience = EquipmentLoanAudience.NotLoanable,
+    string? WebsiteUrl = null);
+
+// ── Model pages and interest counters (Phase 6b) ────────────────────────────
+
+/// <summary>
+/// One photo as it appears on a make/model page, pooled from every owner's copy of that model.
+/// </summary>
+/// <remarks>
+/// Deliberately carries no <c>EquipmentItemId</c>, no <c>UploadFileId</c> and nothing about an
+/// owner. The pooled photos are anonymous, and a shape that cannot carry an identifier cannot leak
+/// one — a per-viewer filter written wrongly later would still have nothing to expose. A reflection
+/// test asserts that.
+///
+/// <para><see cref="LinkedItemId"/> is the one exception, and it is computed per viewer: set only
+/// when this particular caller is allowed to open that item's page, null for everyone else. The
+/// client renders a link when it is present and plain image when it is not — the server's verdict,
+/// never re-derived.</para>
+/// </remarks>
+public sealed record CatalogPhotoRecord(
+    Guid PhotoId,
+    string? Caption,
+    int SortOrder,
+    Guid? LinkedItemId);
+
+/// <summary>Everything a make/model page shows, aggregated across every copy of that model.</summary>
+public sealed record EquipmentModelPageRecord(
+    EquipmentModelRecord Model,
+    int ItemCount,
+    int AvailableToBorrowCount,
+    IReadOnlyList<string> WebsiteLinks,
+    IReadOnlyList<CatalogPhotoRecord> Photos);
+
+/// <summary>Who owns a piece, for viewers entitled to know.</summary>
+public sealed record EquipmentItemOwnershipRecord(
+    Guid? OwnerAppUserId,
+    string? OwnerDisplayName,
+    Guid? OwningOrganizationId,
+    string? OwningOrganizationName);
+
+/// <summary>
+/// The parts of a piece only its custodians see: serial, condition, who is holding it.
+/// </summary>
+/// <remarks>
+/// A nested optional record rather than fields on the parent that are sometimes null. Absence is
+/// then structural — a viewer who should not see any of this receives a payload with no slot for
+/// it, instead of one carrying six nulls that a future change might start filling in.
+/// </remarks>
+public sealed record EquipmentItemManagementRecord(
+    string? SerialNumber,
+    Guid? CurrentHolderAppUserId,
+    string? CurrentHolderDisplayName,
+    DateTime? LastServicedDate,
+    string? DefectNotes);
+
+/// <summary>What the viewer may do on the item page. Rendered, never re-derived.</summary>
+public sealed record EquipmentItemDetailFlags(
+    bool IsOwner,
+    bool CanEdit,
+    bool CanRetire,
+    bool CanManagePhotos,
+    bool CanSeeCounters);
+
+/// <summary>
+/// One piece of equipment as a particular viewer is entitled to see it.
+/// </summary>
+/// <remarks>
+/// Serves owners, group members, borrowers and anonymous visitors from one endpoint, because the
+/// question "what may this person see" has one answer and splitting it across four surfaces is how
+/// the answers drift apart. Everything audience-dependent lives in a nullable sub-record.
+/// </remarks>
+public sealed record EquipmentItemDetailRecord(
+    Guid Id,
+    Guid EquipmentModelId,
+    string ModelName,
+    string BrandName,
+    string CategoryName,
+    string DisplayName,
+    string? Notes,
+    DateTime? AcquisitionDate,
+    bool IsRetired,
+    EquipmentLoanAudience LoanAudience,
+    string? WebsiteUrl,
+    IReadOnlyList<EquipmentItemPhotoRecord> Photos,
+    EquipmentItemOwnershipRecord? Ownership,
+    EquipmentItemManagementRecord? Management,
+    EquipmentItemCountersRecord? Counters,
+    EquipmentItemDetailFlags Flags);
+
+/// <summary>Lifetime interest in one piece. Org Administrators and SuperAdmin only.</summary>
+public sealed record EquipmentItemCountersRecord(int ViewCount, int LinkClickCount);
+
+/// <summary>Hides or restores one photo on the make/model page.</summary>
+public sealed record SetPhotoCatalogExclusionRequest(bool Exclude);
 
 // ── Condition photos, renewals, history (Phase 5) ───────────────────────────
 
@@ -323,7 +420,8 @@ public sealed record UpsertOrgEquipmentItemRequest(
     string? SerialNumber,
     DateTime? AcquisitionDate,
     string? Notes,
-    bool IncludeInGlobalCatalog = false);
+    bool IncludeInGlobalCatalog = false,
+    string? WebsiteUrl = null);
 
 /// <summary>Sets (or clears, with null) who is currently holding a piece of group gear.</summary>
 public sealed record SetEquipmentHolderRequest(Guid? AppUserId);
@@ -403,6 +501,8 @@ public sealed record SharedEquipmentItemRecord(
 /// </summary>
 public sealed record PublicEquipmentItemRecord(
     Guid Id,
+    /// <summary>Lets a catalog card navigate to the model page. Identifies a product, not a person.</summary>
+    Guid EquipmentModelId,
     string DisplayName,
     string BrandName,
     string ModelName,
@@ -410,4 +510,5 @@ public sealed record PublicEquipmentItemRecord(
     DateTime? AcquisitionDate,
     string? Notes,
     EquipmentLoanAudience LoanAudience,
+    string? WebsiteUrl,
     IReadOnlyList<EquipmentItemPhotoRecord> Photos);

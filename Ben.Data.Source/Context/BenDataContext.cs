@@ -1939,6 +1939,7 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EquipmentItem>().Property(e => e.SerialNumber).HasMaxLength(100);
             modelBuilder.Entity<EquipmentItem>().Property(e => e.Notes).HasMaxLength(2000);
             modelBuilder.Entity<EquipmentItem>().Property(e => e.DefectNotes).HasMaxLength(2000);
+            modelBuilder.Entity<EquipmentItem>().Property(e => e.WebsiteUrl).HasMaxLength(500);
             modelBuilder.Entity<EquipmentItem>().HasIndex(e => e.OwnerAppUserId);
             modelBuilder.Entity<EquipmentItem>().HasIndex(e => e.OwningOrganizationId);
             modelBuilder.Entity<EquipmentItem>().HasIndex(e => e.EquipmentModelId);

@@ -104,6 +104,7 @@ public sealed class MyEquipmentController : BenControllerBase
             IsRetired          = false,
             IncludeInGlobalCatalog = request.IncludeInGlobalCatalog,
             LoanAudience           = request.LoanAudience,
+            WebsiteUrl             = NormalizeWebsiteUrl(request.WebsiteUrl),
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
@@ -154,6 +155,7 @@ public sealed class MyEquipmentController : BenControllerBase
         entity.Notes            = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
         entity.IncludeInGlobalCatalog = request.IncludeInGlobalCatalog;
         entity.LoanAudience           = request.LoanAudience;
+        entity.WebsiteUrl             = NormalizeWebsiteUrl(request.WebsiteUrl);
         entity.DateUpdated        = DateTime.UtcNow;
         entity.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
@@ -324,7 +326,36 @@ public sealed class MyEquipmentController : BenControllerBase
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(EquipmentItemPhoto), photo.Id, photo, userId, Ben.Data.Common.Constants.AppSources.WebApi));
 
-        return Ok(new EquipmentItemPhotoRecord(photo.Id, photo.EquipmentItemId, photo.UploadFileId, photo.IsPrimary, photo.Caption, photo.SortOrder));
+        return Ok(new EquipmentItemPhotoRecord(photo.Id, photo.EquipmentItemId, photo.UploadFileId, photo.IsPrimary, photo.Caption, photo.SortOrder, photo.ExcludeFromCatalog));
+    }
+
+    /// <summary>
+    /// Hides one photo from the make/model page, or puts it back.
+    /// </summary>
+    /// <remarks>
+    /// Per photo rather than per item, because the reason to withhold one is usually something
+    /// visible in that particular picture — an address, a face, a room — and losing the other four
+    /// to protect one would be a poor trade.
+    /// </remarks>
+    [HttpPut("{id:guid}/photos/{photoId:guid}/catalog-exclusion")]
+    public async Task<IActionResult> SetPhotoCatalogExclusion(
+        Guid id, Guid photoId, [FromBody] SetPhotoCatalogExclusionRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (await EquipmentAccess.FindOwnedAsync(db, id, userId, ct) is null) return NotFound();
+
+        var photo = await db.EquipmentItemPhotos
+            .FirstOrDefaultAsync(p => p.Id == photoId && p.EquipmentItemId == id, ct);
+        if (photo is null) return NotFound();
+
+        photo.ExcludeFromCatalog  = request.Exclude;
+        photo.DateUpdated         = DateTime.UtcNow;
+        photo.UpdatedByAppUserId  = userId;
+        await db.SaveChangesAsync(ct);
+        return NoContent();
     }
 
     [HttpDelete("{id:guid}/photos/{photoId:guid}")]
@@ -542,6 +573,20 @@ public sealed class MyEquipmentController : BenControllerBase
 
     private bool IsSuperAdmin() => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
 
+    /// <summary>
+    /// Accepts only an absolute http/https address, so a stored link cannot become a
+    /// <c>javascript:</c> payload the moment somebody renders it as an anchor.
+    /// </summary>
+    internal static string? NormalizeWebsiteUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return null;
+        var trimmed = url.Trim();
+        return Uri.TryCreate(trimmed, UriKind.Absolute, out var parsed)
+               && (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps)
+            ? trimmed
+            : null;
+    }
+
     private static EquipmentItemRecord ToRecord(
         EquipmentItem item, EquipmentItemFlags flags, string? ownerName, string? orgName, string? holderName)
         => new(
@@ -561,12 +606,15 @@ public sealed class MyEquipmentController : BenControllerBase
             item.IsRetired,
             item.IncludeInGlobalCatalog,
             item.LoanAudience,
+            item.WebsiteUrl,
+            // Counters are for org Administrators and SuperAdmin — an owner does not see their own.
+            null,
             item.CurrentHolderAppUserId,
             holderName,
             item.LastServicedDate,
             flags.CanSeeSerial ? item.DefectNotes : null,
             item.Photos.OrderBy(p => p.SortOrder)
-                .Select(p => new EquipmentItemPhotoRecord(p.Id, p.EquipmentItemId, p.UploadFileId, p.IsPrimary, p.Caption, p.SortOrder))
+                .Select(p => new EquipmentItemPhotoRecord(p.Id, p.EquipmentItemId, p.UploadFileId, p.IsPrimary, p.Caption, p.SortOrder, p.ExcludeFromCatalog))
                 .ToList(),
             flags);
 }
@@ -711,8 +759,19 @@ public sealed class EquipmentPhotoContentController : BenControllerBase
 
         var item = photo.EquipmentItem;
 
+        // Retired gear is out of circulation entirely — no public route reaches it.
+        if (item.IsRetired)
+        {
+            var flagsForRetired = EquipmentAccess.ComputeItemFlags(item, userId, isSuperAdmin);
+            return flagsForRetired.IsOwner || isSuperAdmin ? photo : null;
+        }
+
         // Publicly listed by its owner — anyone may see it, signed in or not.
-        if (item.IncludeInGlobalCatalog && !item.IsRetired) return photo;
+        if (item.IncludeInGlobalCatalog) return photo;
+
+        // Pooled onto the make/model page, which is public. The owner opted this photo in by not
+        // excluding it, so the bytes have to be reachable or the page shows broken images.
+        if (!photo.ExcludeFromCatalog) return photo;
 
         var flags = EquipmentAccess.ComputeItemFlags(item, userId, isSuperAdmin);
         if (flags.IsOwner || isSuperAdmin) return photo;
