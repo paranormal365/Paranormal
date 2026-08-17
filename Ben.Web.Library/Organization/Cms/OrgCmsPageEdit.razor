@@ -49,6 +49,54 @@
         <div class="alert alert-success mb-3">@_successMessage</div>
     }
 
+    @* Drafts. A published page is not edited directly — changes go to a draft and become live when
+       somebody says so. An unpublished page has no draft and needs none: nobody can see it. *@
+    @if (_draft is not null && _draft.NeedsDraft)
+    {
+        @if (_draft.DraftPageId == PageId)
+        {
+            <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2 mb-3">
+                <strong>Draft.</strong>
+                <span>The live page is unchanged until you publish this.</span>
+                <span class="ms-auto d-flex gap-2">
+                    <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                   Size="@ThemeConstants.Button.Size.Small"
+                                   Enabled="@(!_draftBusy)"
+                                   OnClick="PublishDraftAsync">Publish changes</TelerikButton>
+                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                   Enabled="@(!_draftBusy)"
+                                   OnClick="@(() => _confirmDiscard = true)">Discard draft</TelerikButton>
+                </span>
+            </div>
+        }
+        else if (_draft.DraftPageId is Guid openDraftId)
+        {
+            <div class="alert alert-info d-flex flex-wrap align-items-center gap-2 mb-3">
+                <strong>There is an unpublished draft of this page.</strong>
+                <span>Editing here changes the live page straight away.</span>
+                <span class="ms-auto">
+                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                   OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cms/pages/{openDraftId}"))">
+                        Open the draft
+                    </TelerikButton>
+                </span>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info d-flex flex-wrap align-items-center gap-2 mb-3">
+                <strong>This page is live.</strong>
+                <span>Anything you change here is visible to visitors immediately.</span>
+                <span class="ms-auto">
+                    <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                   Size="@ThemeConstants.Button.Size.Small"
+                                   Enabled="@(!_draftBusy)"
+                                   OnClick="StartDraftAsync">Work on a draft instead</TelerikButton>
+                </span>
+            </div>
+        }
+    }
+
     @if (_page is null)
     {
         <TelerikLoaderContainer Visible="true" Text="Loading page…" />
@@ -275,6 +323,20 @@
     }
 </div>
 
+@* Discarding a draft throws away work with no way back, so it asks first — the same treatment
+   every other destructive action in this app gets. *@
+<Ben.Web.Library.Shared.ConfirmDialog Visible="@_confirmDiscard"
+                                      VisibleChanged="@(v => _confirmDiscard = v)"
+                                      Title="Discard this draft?"
+                                      ConfirmText="Discard"
+                                      Busy="@_draftBusy"
+                                      OnConfirm="DiscardDraftAsync">
+    <p class="mb-0">
+        Everything changed in this draft is lost, and the live page stays exactly as it is now.
+        This cannot be undone.
+    </p>
+</Ben.Web.Library.Shared.ConfirmDialog>
+
 @* ── Add/Edit Section dialog ──────────────────────────────────────────────── *@
 <TelerikWindow @bind-Visible="@_showSectionDialog" Width="720px" Modal="true">
     <WindowTitle>@(_editingSection is null ? "New Section" : "Edit Section")</WindowTitle>
@@ -489,6 +551,8 @@
     {
         _page = await AdminClient.GetCmsPageAsync(OrgId, PageId);
         if (_page is null) { _errorMessage = "Page not found."; return; }
+
+        await LoadDraftStateAsync();
 
         _sections = [.. _page.Sections.OrderBy(s => s.SortOrder)];
         _metaForm = new MetaFormModel
@@ -821,4 +885,64 @@
     private sealed record OrgMemberPermOption(Guid AppUserId, string DisplayName);
     private sealed record GroupPermOption(Guid Id, string Name);
     private sealed record GranteeTypeOption(string Label, string Value);
+
+    // ── Drafts (item #80, part 3) ───────────────────────────────────────────
+
+    private CmsDraftStateResponse? _draft;
+    private bool _draftBusy;
+    private bool _confirmDiscard;
+
+    private async Task LoadDraftStateAsync()
+        => _draft = await AdminClient.GetCmsDraftStateAsync(OrgId, PageId);
+
+    private async Task StartDraftAsync()
+    {
+        _draftBusy = true;
+        _errorMessage = null;
+
+        var state = await AdminClient.StartCmsDraftAsync(OrgId, PageId);
+        _draftBusy = false;
+
+        if (state?.DraftPageId is not Guid draftId)
+        {
+            _errorMessage = "That draft couldn't be started.";
+            return;
+        }
+
+        // Route to the draft: from here the editor edits an ordinary page row, so nothing else in
+        // this screen needs to know drafts exist.
+        NavManager.NavigateTo($"/organizations/{OrgId}/cms/pages/{draftId}");
+    }
+
+    private async Task PublishDraftAsync()
+    {
+        if (_draft is null) return;
+        _draftBusy = true;
+        _errorMessage = null;
+
+        var published = await AdminClient.PublishCmsDraftAsync(OrgId, _draft.LivePageId);
+        _draftBusy = false;
+
+        if (!published)
+        {
+            _errorMessage = "Those changes couldn't be published.";
+            return;
+        }
+
+        // The draft row is gone now, so staying on its id would be a dead page.
+        NavManager.NavigateTo($"/organizations/{OrgId}/cms/pages/{_draft.LivePageId}");
+    }
+
+    private async Task DiscardDraftAsync()
+    {
+        if (_draft is null) return;
+        _confirmDiscard = false;
+        _draftBusy = true;
+
+        var discarded = await AdminClient.DiscardCmsDraftAsync(OrgId, _draft.LivePageId);
+        _draftBusy = false;
+
+        if (!discarded) { _errorMessage = "That draft couldn't be discarded."; return; }
+        NavManager.NavigateTo($"/organizations/{OrgId}/cms/pages/{_draft.LivePageId}");
+    }
 }

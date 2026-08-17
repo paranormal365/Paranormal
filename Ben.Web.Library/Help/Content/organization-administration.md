@@ -169,3 +169,37 @@ often different people. Granting **Equipment** does not grant **Equipment Checko
 
 Neither permission has any say over a member's personal gear. A loan of somebody's own equipment is
 always approved by its owner.
+
+## Editing your public pages
+
+Pages you build under **CMS** appear on your group's public site. Two things control what visitors
+see, and they are different.
+
+**Published** decides whether the page exists for visitors at all. **Drafts** decide whether the
+edits you are making right now are visible while you make them.
+
+### Drafts
+
+Editing a page that is **not** published changes it directly. Nobody can see it, so there is nothing
+to protect.
+
+Editing a page that **is** published works differently. Open it and you will be offered **Work on a
+draft instead**. Take it, and your changes go into a copy — the live page carries on exactly as it
+was until you press **Publish changes**. Until then, visitors see the old version, and you can
+**Discard draft** to throw the work away and leave the live page untouched.
+
+A page has one draft at a time. If a colleague has already started one, you will see a note saying
+so with a link to open it, rather than being handed a second copy nobody knows about.
+
+Publishing keeps the page's address and its permissions — the live page is updated in place, not
+replaced, so nothing linking to it breaks.
+
+### Seeing a page before it goes live
+
+**View as visitor** on the editor opens the saved page exactly as the public renderer draws it,
+published or not. That is the honest check: the side-by-side panel next to the editor follows what
+you are typing, but it draws its own approximation in half a column, so a page can look right there
+and wrong in reality.
+
+The preview also tells you if the page is not in the menu yet, which is the usual reason a
+freshly-published page seems to have vanished.

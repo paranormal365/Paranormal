@@ -3340,34 +3340,124 @@ cost:
 > renderers is worth doing when part 3 lands**, since a draft store would let the side-by-side panel
 > use the public renderer too and the duplicate could go.
 
-### 2. A template library
+### 2. A template library — snippet insertion
 
-Both granularities Ben asked for. A section template (one `CmsSection` with pre-filled
-`ContentJson`) and a whole-page template (an ordered set of sections). The six section types in
-`CmsSectionType` — RichText, ImageBanner, FileGallery, ContactInfo, MemberRoster, CustomHtml — are
-the vocabulary a template is assembled from, so this is mostly a seeding-and-cloning job rather than
-new rendering.
+Ben clarified this three times on 2026-08-17, and the third is the one that settles it:
 
-Open question worth settling early: are templates **site-provided only**, or can a group save its
-own page as a template and reuse it? The second is a small extra step (a "save as template" that
-clones sections) but changes ownership and permissions.
+1. *"The templates are things like build a card with a header and body or build a collapsable set of
+   items. It is functionality and look helpers."*
+2. *"The templates created by users are ones that put together the ones we create on the
+   server-side. Like carrousel."*
+3. *"They can pick from a list and it adds to their html editor where it places it in for them to
+   fill in the parts."*
 
-### 3. Draft vs live
+**So this is a snippet palette, not a page builder.** An author editing a rich-text or custom-HTML
+section picks a block from a list; its markup is inserted at the cursor with the parts left blank,
+and they type into it. A "user template" is whatever they end up with — a carousel assembled from
+inserted pieces — saved as a block of their own to insert again later.
 
-`IsPublished` exists, the editor exposes it, and `OrgCmsEditor` already shows the state per page.
-What does *not* exist is a draft that differs from what is live — editing a published page edits the
-live page immediately, which is the actual gap behind Ben's "make them live when they are ready".
+That is dramatically less machinery than the earlier readings on this entry (a pre-filled section
+type, then a nested node tree with a visual composer). **Both of those overshot** — this needs no new
+`CmsSectionType`, no nesting model, no tree in `ContentJson`, and no changes to the public renderer
+at all, because the output is ordinary markup in the section types that already render markup.
 
-The honest options:
+**What it actually needs:**
 
-| Approach | Cost | Notes |
-|---|---|---|
-| Publish flag only (today) | done | Editing a live page is still live-editing |
-| Draft copy of the page + sections, promoted on publish | M | Real drafts; needs a clone + swap and a "discard draft" |
-| Version history with a published-version pointer | L | Gives rollback too; the most work |
+- A **snippet catalogue** — name, description, and a markup template with obvious placeholders. Card
+  with header and body, collapsible list, carousel, two- and three-column strips, call-to-action.
+  Site-provided, seeded, and using the Bootstrap classes the public pages already load, so a snippet
+  looks right without shipping new CSS.
+- A **picker in `CmsSectionEditor`** that inserts at the cursor rather than replacing the field.
+- **Group-owned saved snippets** for the user tier — a name plus a blob of markup. The same
+  reasoning as group-owned equipment: it is the group's site, and a member leaving should not take
+  its building blocks with them.
 
-Recommend the middle one unless rollback is wanted, in which case go straight to versions rather
-than building drafts twice.
+**✅ Built 2026-08-17 — the block palette half.** `CmsSnippets` is the catalogue (card, card with
+header, collapsible list, carousel, two columns, three across, callout, button link) and
+`CmsSectionEditor` gained an **Add a block** picker for the RichText and CustomHtml section types.
+Ids are made unique per insertion, and a test proves it by failing when they are fixed. Blocks are
+appended rather than inserted at the cursor: the cursor lives inside Telerik's rich-text engine and
+is not reachable from C#, and appending is honest about that rather than putting things somewhere
+surprising. Insertion goes through the same binding a typed edit takes — writing to the DOM would
+update neither the editor nor the saved JSON, a trap this codebase has already hit.
+
+**Two real gotchas, worth handling on the first pass rather than after somebody hits them:**
+
+- **Unique ids per insertion.** Bootstrap collapsibles and carousels are wired by `id`/`data-bs-target`.
+  Insert two carousels into one page from the same snippet and they will drive each other. The
+  inserter must rewrite the ids to something unique at insertion time.
+- **Sanitization is now load-bearing.** These sections already render as `MarkupString`, so the XSS
+  surface pre-dates this — but a palette that *encourages* pasting structural markup makes it much
+  more travelled. Sanitize on save, allow-listing the tags and attributes the snippets actually use
+  (including the `data-bs-*` the components need), rather than trying to block what is dangerous.
+  **Not done, and it is the open risk on this part.** The unique-id test asserts no snippet *we*
+  ship carries `<script>` or `<style>`, which is a different and much weaker guarantee than what an
+  author may type into the same box.
+
+### 2b. Page templates — "Investigation Results" (not started, scoped 2026-08-17)
+
+> Ben, fourth clarification: *"They create templates like Investigation Results and it gives them a
+> page to fill in or chose from their media and records in the case to add to the template."* And:
+> *"So, they put together the pieces they need to fill in for it to complete."*
+
+**This is a different feature from 2a, and much larger.** A block snippet is markup with blanks an
+author types into. A **page template** is a named, structured document — *Investigation Results* — that
+presents a set of **slots**, and an author fills each slot either by typing or by **choosing from the
+case's own media and records**. Assembling which slots a template has is itself something the author
+does: they put together the pieces the write-up needs.
+
+The distinction that matters for design: 2a's output is markup and knows nothing about the domain.
+2b's output is **bound to a case** — a slot holds "this photo from this case's media library", not a
+copy of it — which is why this overlaps **part 4** almost entirely and should be built with it rather
+than before it.
+
+**What it needs, roughly in dependency order:**
+
+- **A template definition**: an ordered list of slots, each with a kind — free text, a heading, one
+  photo from the case, a set of photos, a timeline entry, an investigation summary, equipment used
+  on a visit, a piece of evidence and its vote score. Group-owned, and composable by the author.
+- **A fill-in surface**: a page listing the template's slots, each with a picker scoped to **this
+  case**. This is where most of the work is, and most of the value.
+- **Rendering**, honouring part 4's rules — which is why it must not be built first. Coordinates are
+  already redacted (fixed 2026-08-17); client names already go through `PublicClientName`; **private
+  investigations and non-public media do not yet have an equivalent**, and a template that can pull
+  "any photo from the case" into a public page is precisely the hole part 4 exists to close.
+- **Binding, not copying.** A slot referencing a photo that is later deleted, or a case that is later
+  unpublished, must degrade to nothing rather than to a broken image or a leak. Copying the photo
+  into the page at fill-in time would make the page immune to a later "unpublish this" — which is
+  exactly the wrong behaviour.
+
+**Sequencing recommendation:** part 4 first (the redaction rules and the safe projections for
+embedding case data), then 2b on top of it. Building 2b first means writing the pickers twice, and
+the first version would be able to publish things part 4 is meant to prevent.
+
+### 3. Draft vs live — ✅ built 2026-08-17
+
+**Ben chose the draft copy** over version history, accepting no rollback for noticeably less work.
+
+A draft is a whole `OrganizationPage` row with its own sections, pointing at the page it will
+replace via `DraftOfOrganizationPageId` (unique, filtered). That shape is the point: every public
+query already filters `IsPublished && IsPublic`, and a draft is created with both false, so **the
+public read path needed no changes at all** and future queries cannot forget to exclude drafts.
+
+- **Copy-on-write, published pages only.** Nobody can see an unpublished page, so editing one
+  directly is already safe and a draft would be ceremony. `POST .../draft` is idempotent — two
+  editors opening a page at once must not make two drafts, and the unique index would otherwise turn
+  the second into a 500.
+- **Publishing copies onto the live row and deletes the draft**, rather than swapping ids. The live
+  page keeps its id, so links, permission rows and attached cases all survive.
+- **`IsHome`, `IsPublished`, `IsPublic` and `CaseId` are deliberately not copied** — they are the
+  page's place in the site, not content. A test asserts publishing a draft cannot make an
+  unpublished page live, which would otherwise be a way to publish something by accident.
+- The editor routes to the draft's own id, so from there it edits an ordinary page row and nothing
+  else in that screen knows drafts exist.
+
+Guards verified by breaking them: making the draft published/public, and copying the visibility
+flags on publish, each fail their tests.
+
+**Still open:** the side-by-side editor panel still has its own hand-written section renderer.
+Collapsing it into `OrgPublicSection` is easier now drafts exist — the panel could preview the draft
+through the real renderer — and is worth doing alongside part 2's new section types.
 
 ### 4. Embedding cases and investigations — the part with teeth
 

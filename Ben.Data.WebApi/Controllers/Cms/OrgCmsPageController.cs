@@ -38,9 +38,11 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
 
+        // Drafts are OrganizationPage rows too, so they have to be excluded here or the page list
+        // shows a phantom duplicate of everything anyone is part-way through editing.
         var pages = await db.OrganizationPages
             .AsNoTracking()
-            .Where(p => p.OrganizationId == orgId)
+            .Where(p => p.OrganizationId == orgId && p.DraftOfOrganizationPageId == null)
             .OrderBy(p => p.SortOrder).ThenBy(p => p.PageTitle)
             .ToListAsync(ct);
 

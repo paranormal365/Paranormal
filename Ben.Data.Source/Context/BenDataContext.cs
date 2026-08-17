@@ -417,6 +417,17 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrganizationPage>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // A draft points at the page it will replace. NoAction rather than Cascade: SQL Server
+            // refuses a self-referencing cascade, and deleting a live page with an outstanding draft
+            // should be a decision somebody makes explicitly, not a side effect.
+            modelBuilder.Entity<OrganizationPage>()
+                .HasOne(e => e.DraftOfOrganizationPage).WithMany(e => e.Drafts)
+                .HasForeignKey(e => e.DraftOfOrganizationPageId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // One draft per page. Filtered so the millions of live pages, all null, do not collide.
+            modelBuilder.Entity<OrganizationPage>()
+                .HasIndex(e => e.DraftOfOrganizationPageId)
+                .IsUnique()
+                .HasFilter("[DraftOfOrganizationPageId] IS NOT NULL");
 
             // ── VideoAsset ───────────────────────────────────────────────────
             // NoAction on both file FKs: deleting a file must not silently delete the catalog

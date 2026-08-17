@@ -8779,3 +8779,40 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817150953_AddCmsPageDrafts'
+)
+BEGIN
+    ALTER TABLE [OrganizationPages] ADD [DraftOfOrganizationPageId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817150953_AddCmsPageDrafts'
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX [IX_OrganizationPages_DraftOfOrganizationPageId] ON [OrganizationPages] ([DraftOfOrganizationPageId]) WHERE [DraftOfOrganizationPageId] IS NOT NULL');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817150953_AddCmsPageDrafts'
+)
+BEGIN
+    ALTER TABLE [OrganizationPages] ADD CONSTRAINT [FK_OrganizationPages_OrganizationPages_DraftOfOrganizationPageId] FOREIGN KEY ([DraftOfOrganizationPageId]) REFERENCES [OrganizationPages] ([Id]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817150953_AddCmsPageDrafts'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260817150953_AddCmsPageDrafts', N'10.0.11');
+END;
+
+COMMIT;
+GO
+
