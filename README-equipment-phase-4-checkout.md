@@ -70,7 +70,10 @@ org **Loans** queue, which does.
 
 ## Verification
 
-- Solution builds clean, 0 warnings.
+- Solution builds clean. (Corrected after merge: this originally claimed 0 warnings on the strength
+  of a grep that only matched errors. The build actually carried one — the `Request` action hid
+  `ControllerBase.Request`, CS0108 — fixed in `cfe1e4c` by renaming it to `RequestCheckout`. Zero
+  warnings now.)
 - Suite **2,426 → 2,455**, all green: 29 new tests in `EquipmentCheckoutTests`.
 - **Four guards were run against deliberately broken code first** — the claimed-borrowing-group
   check, both party checks, and the personal-gear approver rule — and all four failed. Restored and
