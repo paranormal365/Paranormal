@@ -3433,6 +3433,29 @@ the first version would be able to publish things part 4 is meant to prevent.
 
 > **✅ Part 4 built 2026-08-17.** See above. 2b is now unblocked.
 
+#### 2b, first half — page layouts ✅ built 2026-08-17
+
+**The storage already existed and nothing could reach it.** `CmsTemplateScope.Page` was defined,
+saved, listed, updated, deleted and sanitized by `OrgCmsTemplateController` — and no screen or
+endpoint ever created a page from one. The **sixth** write-only feature in this codebase, and the
+quietest, because every individual layer worked.
+
+So this half cost far less than the entry assumed:
+
+- `CreateCmsPageRequest.FromTemplateId` copies a page template's sections onto the new page,
+  **server-side**, so the sanitizer sees the markup on its way in. "Cleaned when the template was
+  saved" is not "clean now", and a rule enforced only by the browser is not a rule.
+- **Copied, not referenced**, matching the decision already recorded on the entity — proven by a test
+  that edits the template afterwards and asserts the page is untouched.
+- Another group's template, a section-scoped one, a deleted one and unparseable content all yield a
+  **bare page** rather than a failed create: the page is what the caller asked for.
+- UI both ways — **Save as a layout** on the page editor, and a layout picker when creating a page.
+  A source-scan test asserts both halves exist, because either alone is useless.
+
+**Still to do for 2b:** the case-bound *slots* proper — a section type holding chosen photos from the
+case, resolved through `CaseMediaPublication` below. A layout today carries whatever the sections
+already hold; re-pointing them at a new case is manual.
+
 #### 2b prerequisite — which of a case's files may be published (✅ built 2026-08-17)
 
 The gap this entry flagged — *"private investigations and non-public media do not yet have an

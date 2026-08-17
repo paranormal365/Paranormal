@@ -108,6 +108,41 @@ public sealed class ReachableComponentTests
             + string.Join(", ", withoutAnOverride));
     }
 
+    /// <summary>
+    /// Page-scoped templates can be both saved and applied from the UI.
+    /// </summary>
+    /// <remarks>
+    /// <para>The sixth instance of the write-only shape, and the quietest: <c>CmsTemplateScope.Page</c>
+    /// was defined, saved, listed, updated, deleted and sanitized by the API, and <b>no screen ever
+    /// created a page from one</b>. Every layer worked; the feature did not exist.</para>
+    ///
+    /// <para>Both halves are checked because either alone is useless — somewhere to save layouts
+    /// nobody can apply, or a picker that is always empty.</para>
+    /// </remarks>
+    [Fact]
+    public void Page_layouts_can_be_both_saved_and_applied()
+    {
+        var sources = RazorSources()
+            .Select(f => (Name: Path.GetFileName(f), Text: File.ReadAllText(f)))
+            .ToList();
+
+        var saves = sources
+            .Where(f => f.Text.Contains("CmsTemplateScope.Page", StringComparison.Ordinal)
+                     && f.Text.Contains("SaveCmsTemplateAsync", StringComparison.Ordinal))
+            .Select(f => f.Name).ToList();
+
+        var applies = sources
+            .Where(f => f.Text.Contains("FromTemplateId", StringComparison.Ordinal))
+            .Select(f => f.Name).ToList();
+
+        Assert.True(saves.Count > 0,
+            "No screen saves a page-scoped template, so the layout picker can only ever be empty.");
+
+        Assert.True(applies.Count > 0,
+            "No screen sends FromTemplateId, so a saved page layout can never be applied to a page. "
+            + "That is how this feature spent its first life: fully built in the API and unreachable.");
+    }
+
     [Theory]
     [MemberData(nameof(LoadBearingSwitches))]
     public void A_load_bearing_switch_is_actually_switched_on_somewhere(

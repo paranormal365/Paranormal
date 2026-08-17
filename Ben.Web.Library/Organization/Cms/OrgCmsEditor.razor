@@ -45,7 +45,7 @@
             <div class="d-flex justify-content-end mb-2">
                 <TelerikButton Icon="@SvgIcon.Plus"
                                ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                               OnClick="OpenNewPageDialog">
+                               OnClick="OpenNewPageDialogAsync">
                     New Page
                 </TelerikButton>
             </div>
@@ -284,6 +284,24 @@
                 <TelerikTextBox @bind-Value="@_pageForm.PageHtml" Width="100%" />
                 <div class="form-text">Short intro shown above sections. Full editing available in Sections.</div>
             </div>
+            @if (_editingPage is null && _pageTemplates.Count > 0)
+            {
+                @* Only when creating. Applying a layout to a page that already has sections would
+                   either duplicate them or silently replace what somebody wrote. *@
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Start from one of our layouts</label>
+                    <TelerikDropDownList Data="@_pageTemplates"
+                                         @bind-Value="@_pageForm.FromTemplateId"
+                                         ValueField="@nameof(CmsTemplateRecord.Id)"
+                                         TextField="@nameof(CmsTemplateRecord.Name)"
+                                         DefaultText="— Start with a blank page —"
+                                         Width="100%" />
+                    <div class="form-text">
+                        Copies that layout's sections onto the new page, ready to fill in. The copy is
+                        yours — editing the layout later leaves this page alone.
+                    </div>
+                </div>
+            }
             <div class="col-6">
                 <label class="form-label fw-semibold">Sort Order</label>
                 <TelerikNumericTextBox @bind-Value="@_pageForm.SortOrder" Width="100%" Min="0" />
@@ -680,14 +698,27 @@
             .Where(p => _editingPage is null || p.Id != _editingPage.Id)
             .Select(p => new PageOption(p.Id, p.PageTitle));
 
+    // ── Page layouts the group has saved ──────────────────────────────────────
+
+    /// <summary>
+    /// The group's page-scoped templates, offered when starting a new page.
+    /// </summary>
+    /// <remarks>
+    /// Loaded when the dialog opens rather than with the screen: most visits to this editor are not
+    /// about creating a page, and the list is only ever read by that one dropdown.
+    /// </remarks>
+    private List<CmsTemplateRecord> _pageTemplates = [];
+
     // ── Page dialog ───────────────────────────────────────────────────────────
 
-    private void OpenNewPageDialog()
+    private async Task OpenNewPageDialogAsync()
     {
         _editingPage  = null;
         _dialogError  = null;
         _pageForm     = new PageFormModel { SortOrder = (_pages?.Count ?? 0) + 1 };
         _showPageDialog = true;
+
+        _pageTemplates = [.. await AdminClient.GetCmsTemplatesAsync(OrgId, CmsTemplateScope.Page)];
     }
 
     private void OpenEditPageDialog(CmsPageListItem pg)
@@ -732,10 +763,17 @@
                 _pageForm.PageHtml,
                 _pageForm.IsPublic,
                 _pageForm.ParentPageId,
-                _pageForm.SortOrder));
+                _pageForm.SortOrder,
+                _pageForm.FromTemplateId));
 
             if (result is null) _dialogError = "Failed to create page. The URL slug may already be in use.";
-            else { _showPageDialog = false; _successMessage = $"Page '{result.PageTitle}' created."; }
+            else
+            {
+                _showPageDialog = false;
+                _successMessage = result.Sections.Count > 0
+                    ? $"Page '{result.PageTitle}' created with {result.Sections.Count} sections to fill in."
+                    : $"Page '{result.PageTitle}' created.";
+            }
         }
         else
         {
@@ -990,6 +1028,9 @@
         public bool IsPublic     { get; set; }
         public Guid? ParentPageId { get; set; }
         public int SortOrder     { get; set; } = 1;
+
+        /// <summary>A saved page layout to start from. Only meaningful when creating.</summary>
+        public Guid? FromTemplateId { get; set; }
     }
 
     private sealed record PageOption(Guid Id, string Title);
