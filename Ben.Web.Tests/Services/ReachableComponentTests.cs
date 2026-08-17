@@ -50,6 +50,64 @@ public sealed class ReachableComponentTests
         { "ShowAvatar=\"true\"", "UserNameLink.ShowAvatar", "member rosters, attendee lists and comment threads" },
     };
 
+    /// <summary>
+    /// A refusal the server takes trouble to explain has to be shown to the person it is about.
+    /// </summary>
+    /// <remarks>
+    /// <para>The fifth instance of the same shape, and the first that was <b>my own recent work</b>.
+    /// The taxonomy endpoints answer a probable typo with a 409 listing the names it might have been
+    /// — and both callers threw that away, showed "could not be added", and offered no way either to
+    /// take the suggested name or to insist on the typed one. The check fired perfectly and made the
+    /// feature strictly worse than not having it, because before it the word at least got created.
+    /// </para>
+    ///
+    /// <para>The unit tests all passed, on both sides. They asserted the server returns a 409 with
+    /// suggestions, which it did. Nothing asserted that a person ever sees them.</para>
+    ///
+    /// <para>Scoped to Razor, deliberately: the record legitimately appears in the API, the client
+    /// interfaces and the adapters, and finding it there proves only that the pipe exists.</para>
+    /// </remarks>
+    [Fact]
+    public void The_did_you_mean_suggestions_reach_a_screen()
+    {
+        var screens = RazorSources()
+            .Where(f => File.ReadAllText(f).Contains("DidYouMean", StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .ToList();
+
+        Assert.True(
+            screens.Count > 0,
+            "No screen renders ProbableDuplicateResponse.DidYouMean. The taxonomy endpoints refuse a "
+            + "probable typo and return the names it might have been; if no page shows them, the "
+            + "person is simply blocked from adding a name that resembles an existing one, with no "
+            + "way forward. Wire it to a 'did you mean' prompt with a way to insist.");
+    }
+
+    /// <summary>
+    /// Wherever those suggestions are shown, there is also a way to reject them.
+    /// </summary>
+    /// <remarks>
+    /// Showing the near-misses without <c>ConfirmDistinct</c> is still a dead end — a prettier one.
+    /// "Ring" and "Ping" are two real companies, so a person must always be able to say the word
+    /// they typed is genuinely their own.
+    /// </remarks>
+    [Fact]
+    public void Every_screen_showing_suggestions_can_also_overrule_them()
+    {
+        var withoutAnOverride = RazorSources()
+            .Select(f => (Name: Path.GetFileName(f), Text: File.ReadAllText(f)))
+            .Where(f => f.Text.Contains("DidYouMean", StringComparison.Ordinal))
+            .Where(f => !f.Text.Contains("onfirmDistinct", StringComparison.Ordinal))
+            .Select(f => f.Name)
+            .ToList();
+
+        Assert.True(
+            withoutAnOverride.Count == 0,
+            "These screens show the 'did you mean' suggestions but never send ConfirmDistinct, so a "
+            + "person whose name really is distinct cannot get past them: "
+            + string.Join(", ", withoutAnOverride));
+    }
+
     [Theory]
     [MemberData(nameof(LoadBearingSwitches))]
     public void A_load_bearing_switch_is_actually_switched_on_somewhere(

@@ -528,6 +528,41 @@ public sealed class ExperienceTaxonomyStalenessTests
     }
 
     /// <summary>
+    /// A type no group proposed is left alone even when it carries no approver either.
+    /// </summary>
+    /// <remarks>
+    /// The sweep has two conditions and they are not redundant. Seeded vocabulary happens to stamp
+    /// an approver, so the review check covers it — but the administrator create path records no
+    /// approver when the caller's id cannot be resolved, and then <c>ProposedByOrganizationId</c> is
+    /// the only thing standing between a deliberately-added word and deletion. Without this test the
+    /// second condition could be removed and every other test here would still pass.
+    /// </remarks>
+    [Fact]
+    public async Task A_type_no_group_proposed_is_left_alone_even_with_no_approver()
+    {
+        var w = await SeedAsync();
+
+        var typeId = Guid.NewGuid();
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            db.ExperienceTypes.Add(new ExperienceType
+            {
+                Id = typeId, ExperienceCategoryId = w.CategoryId, Name = "Tapping",
+                IsActive = true, IsApproved = true,
+                ApprovedByAppUserId = null,      // no approver recorded
+                ProposedByOrganizationId = null, // but no group proposed it either
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = AdminId,
+            });
+            await db.SaveChangesAsync();
+
+            await TaxonomyCleanup.RemoveOrphanedExperienceTypesAsync(db, [typeId], default);
+        }
+
+        await using var check = await w.Factory.CreateDbContextAsync();
+        Assert.True(await check.ExperienceTypes.AnyAsync(t => t.Id == typeId));
+    }
+
+    /// <summary>
     /// A type an administrator reviewed and endorsed survives losing its last tagging, even though
     /// it was originally proposed by a group. Review is the line, not origin.
     /// </summary>

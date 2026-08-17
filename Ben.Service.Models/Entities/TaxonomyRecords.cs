@@ -16,6 +16,25 @@ namespace Ben.Service.Models.Entities;
 public sealed record ProbableDuplicateResponse(string ProposedName, IReadOnlyList<string> DidYouMean);
 
 /// <summary>
+/// What came back from proposing a name: the entry, or the near-misses that stopped it.
+/// </summary>
+/// <remarks>
+/// <para>Exactly one side is set. The server answers a probable typo with a 409 carrying the
+/// suggestions, and a client that only knows "did it work" throws that away — which is how the
+/// first version of this shipped: the check fired, the person saw "could not be added", and the
+/// word they wanted was simply unreachable. Worse than not having the check at all.</para>
+///
+/// <para><c>Failed</c> is the third state, and it is neither of the other two: no entry, no
+/// suggestions, because the call was refused or never arrived.</para>
+/// </remarks>
+public sealed record TaxonomyProposal<T>(T? Created, ProbableDuplicateResponse? DidYouMean)
+    where T : class
+{
+    /// <summary>Nothing was created and there is nothing to suggest — the call did not succeed.</summary>
+    public bool Failed => Created is null && DidYouMean is null;
+}
+
+/// <summary>
 /// A rename that turned out to be a merge, and what merging would mean.
 /// </summary>
 /// <remarks>

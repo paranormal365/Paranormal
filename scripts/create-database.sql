@@ -9103,3 +9103,110 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817201721_AddExperienceTypeNameUniqueIndex'
+)
+BEGIN
+    WITH Survivors AS (
+        SELECT Id,
+               ExperienceCategoryId,
+               LOWER(LTRIM(RTRIM(Name))) AS NormalizedName,
+               ROW_NUMBER() OVER (
+                   PARTITION BY ExperienceCategoryId, LOWER(LTRIM(RTRIM(Name)))
+                   ORDER BY DateCreated, Id) AS Rn
+        FROM ExperienceTypes
+        WHERE Name IS NOT NULL
+    )
+    UPDATE j
+    SET j.ExperienceTypeId = keep.Id
+    FROM CaseTimelineEntryExperienceTypes j
+    INNER JOIN Survivors dup  ON dup.Id = j.ExperienceTypeId AND dup.Rn > 1
+    INNER JOIN Survivors keep ON keep.ExperienceCategoryId = dup.ExperienceCategoryId
+                             AND keep.NormalizedName = dup.NormalizedName
+                             AND keep.Rn = 1
+    -- An entry already tagged with the survivor would collide on the join's composite
+    -- key, so those rows are dropped by the delete below instead of being moved.
+    WHERE NOT EXISTS (
+        SELECT 1 FROM CaseTimelineEntryExperienceTypes existing
+        WHERE existing.CaseTimelineEntryId = j.CaseTimelineEntryId
+          AND existing.ExperienceTypeId = keep.Id);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817201721_AddExperienceTypeNameUniqueIndex'
+)
+BEGIN
+    WITH Duplicates AS (
+        SELECT Id,
+               ROW_NUMBER() OVER (
+                   PARTITION BY ExperienceCategoryId, LOWER(LTRIM(RTRIM(Name)))
+                   ORDER BY DateCreated, Id) AS Rn
+        FROM ExperienceTypes
+        WHERE Name IS NOT NULL
+    )
+    DELETE FROM CaseTimelineEntryExperienceTypes
+    WHERE ExperienceTypeId IN (SELECT Id FROM Duplicates WHERE Rn > 1);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817201721_AddExperienceTypeNameUniqueIndex'
+)
+BEGIN
+    WITH Duplicates AS (
+        SELECT Id,
+               ROW_NUMBER() OVER (
+                   PARTITION BY ExperienceCategoryId, LOWER(LTRIM(RTRIM(Name)))
+                   ORDER BY DateCreated, Id) AS Rn
+        FROM ExperienceTypes
+        WHERE Name IS NOT NULL
+    )
+    DELETE FROM ExperienceTypes
+    WHERE Id IN (SELECT Id FROM Duplicates WHERE Rn > 1);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817201721_AddExperienceTypeNameUniqueIndex'
+)
+BEGIN
+    DROP INDEX [IX_ExperienceTypes_ExperienceCategoryId] ON [ExperienceTypes];
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817201721_AddExperienceTypeNameUniqueIndex'
+)
+BEGIN
+    DECLARE @var25 nvarchar(max);
+    SELECT @var25 = QUOTENAME([d].[name])
+    FROM [sys].[default_constraints] [d]
+    INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+    WHERE ([d].[parent_object_id] = OBJECT_ID(N'[ExperienceTypes]') AND [c].[name] = N'Name');
+    IF @var25 IS NOT NULL EXEC(N'ALTER TABLE [ExperienceTypes] DROP CONSTRAINT ' + @var25 + ';');
+    ALTER TABLE [ExperienceTypes] ALTER COLUMN [Name] nvarchar(100) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817201721_AddExperienceTypeNameUniqueIndex'
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX [IX_ExperienceTypes_ExperienceCategoryId_Name] ON [ExperienceTypes] ([ExperienceCategoryId], [Name]) WHERE [Name] IS NOT NULL');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817201721_AddExperienceTypeNameUniqueIndex'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260817201721_AddExperienceTypeNameUniqueIndex', N'10.0.11');
+END;
+
+COMMIT;
+GO
+

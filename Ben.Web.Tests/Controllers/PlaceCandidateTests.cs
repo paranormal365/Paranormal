@@ -183,6 +183,32 @@ public class PlaceCandidateTests
         Assert.Equal("Bell Witch Cave", Assert.Single(candidates).Name);
     }
 
+    /// <summary>
+    /// A slipped keystroke in a landmark's name still finds it.
+    /// </summary>
+    /// <remarks>
+    /// Normalising handled case, punctuation and a leading "the", but not a typo — so "Bell Witch
+    /// Cav" found nothing and the second row got created. Safe to be generous here because the
+    /// candidate is only offered: a wrong suggestion costs a glance, a missed one costs a duplicate
+    /// somebody has to merge later. The proximity check has already passed by this point.
+    /// </remarks>
+    [Theory]
+    [InlineData("Bell Witch Cav")]
+    [InlineData("Bell Witch Caves")]
+    [InlineData("Bell Wich Cave")]
+    [InlineData("Bell Witch Cvae")]
+    public async Task A_mistyped_landmark_name_still_finds_the_place(string typed)
+    {
+        var f = await SeedAsync(NewPlace(
+            name: "Bell Witch Cave", city: "Adams", zip: null,
+            lat: 36.5893m, lon: -87.0625m, kind: PlaceKind.PublicLocation));
+
+        var candidates = await FindAsync(
+            f, name: typed, city: "Adams", zip: null, lat: 36.5893m, lon: -87.0625m);
+
+        Assert.Equal("Bell Witch Cave", Assert.Single(candidates).Name);
+    }
+
     [Fact]
     public async Task A_landmark_with_a_different_name_at_the_same_spot_is_not_offered()
     {

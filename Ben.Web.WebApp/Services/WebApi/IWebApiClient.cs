@@ -30,6 +30,18 @@ public interface IWebApiClient
     /// </remarks>
     Task<(TResponse? Result, string? Error)> SendExpectingReasonAsync<TRequest, TResponse>(
         HttpMethod method, string relativeUrl, TRequest payload, CancellationToken token = default);
+
+    /// <summary>
+    /// Posts, and returns either the result or <b>a typed 409 body</b> the caller can act on.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="SendExpectingReasonAsync"/>, which recovers a sentence to display.
+    /// This recovers a structure to build a choice from — the taxonomy endpoints answer a probable
+    /// typo with the names it might have been, and a "did you mean" prompt needs the names, not a
+    /// paragraph about them. Any other status is an ordinary failure and comes back as two nulls.
+    /// </remarks>
+    Task<(TResponse? Result, TConflict? Conflict)> PostExpectingConflictAsync<TRequest, TResponse, TConflict>(
+        string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> PutVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> PostVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> DeleteAsync(string relativeUrl, CancellationToken token = default);

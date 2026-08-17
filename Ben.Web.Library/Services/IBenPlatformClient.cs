@@ -172,7 +172,8 @@ public interface IBenPlatformClient
     /// Adds a type a group needs to an existing category. Live immediately and flagged for app
     /// administrators to review. Returns the existing type when the name is already taken.
     /// </summary>
-    Task<ExperienceTypeRecord?> AddOrgExperienceTypeAsync(Guid orgId, AddOrgExperienceTypeRequest request, CancellationToken token = default);
+    Task<TaxonomyProposal<ExperienceTypeRecord>> AddOrgExperienceTypeAsync(
+        Guid orgId, AddOrgExperienceTypeRequest request, CancellationToken token = default);
 
     // ── Votes ──────────────────────────────────────────────────────
 

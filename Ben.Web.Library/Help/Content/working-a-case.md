@@ -110,6 +110,25 @@ reading what you said on the night or what you say now.
 
 Everyone in the group can read all the accounts. That is the point of keeping them.
 
+## Tagging what kind of experience it was
+
+Timeline entries can be tagged with experience types — knocking, cold spots, shadow figures —
+grouped under categories. Tagging is what makes patterns findable later, across cases and across
+groups, so it is worth a moment even when the write-up already says it.
+
+If nothing in the list fits, group owners and administrators can **add a type inline**. It is usable
+immediately; nobody has to wait for approval to record tonight. Site administrators are told, and
+they confirm it or remove it afterwards.
+
+Two things happen quietly to keep that list from filling up with near-misses:
+
+- **We ask before creating a type spelled very like an existing one.** Pick the existing type if
+  that is what you meant, or say yours is different and we add it as typed. It is a question, not a
+  refusal.
+- **A type you added disappears again if you untag the last entry using it**, as long as no site
+  administrator has confirmed it yet. A word invented for one occurrence and then removed does not
+  outlive it. Confirmed types stay, and so do the ones we ship.
+
 ## Leading a visit
 
 The **Lead** column on the team list marks who is running this particular investigation. It is not

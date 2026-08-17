@@ -83,7 +83,14 @@ public interface IBenEquipmentClient
     /// <summary>Items their owners chose to list publicly. Carries no owner identity and no serial.</summary>
     Task<IReadOnlyList<PublicEquipmentItemRecord>> GetPublicEquipmentItemsAsync(string? search = null, Guid? categoryId = null, CancellationToken token = default);
 
-    Task<EquipmentBrandRecord?> ProposeEquipmentBrandAsync(string name, CancellationToken token = default);
+    /// <summary>
+    /// Proposes a make, or comes back with the makes it might be a mistyping of.
+    /// </summary>
+    /// <param name="confirmDistinct">
+    /// Set after the person has seen the near-misses and said theirs is genuinely different.
+    /// </param>
+    Task<TaxonomyProposal<EquipmentBrandRecord>> ProposeEquipmentBrandAsync(
+        string name, bool confirmDistinct = false, CancellationToken token = default);
     Task<EquipmentModelRecord?> ProposeEquipmentModelAsync(UpsertEquipmentModelRequest request, CancellationToken token = default);
 
     // ── My equipment (Phase 1) ───────────────────────────────────────────────

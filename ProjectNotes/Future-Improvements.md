@@ -4233,7 +4233,7 @@ from inside the app.**
 
 ---
 
-## 90. Taxonomy typos and staleness — the Sansung problem (partly fixed 2026-08-17)
+## 90. Taxonomy typos and staleness — the Sansung problem (closed 2026-08-17)
 
 Ben: *"if I make a piece of equipment from a manufacturer Sansung and I make a typo Samsung, and
 delete the item before someone else makes a Samsung product, what happens when I delete my Sansung
@@ -4295,5 +4295,58 @@ immediately borne out:
     one level down. Handling it here rather than failing is what makes the tool usable on real data.
   - **Models under different makes are not merged**; that silently changes what somebody owns, and
     it is the brand merge's decision rather than this one's.
-- **The same treatment for other user-grown taxonomies.** Experience types and place names have the
-  same shape and, presumably, the same problem.
+- **The same treatment for other user-grown taxonomies — ✅ done 2026-08-17.** The guess was half
+  right, and the wrong half is the more interesting one.
+
+  **Experience types were worse off than equipment ever was**, because a group cannot delete a type
+  it proposed — the only delete lives behind an app-administrator screen — so a mistyping was
+  permanent. Five distinct gaps, all now closed:
+  - No typo detection at all when a group proposed a type. Now checked against **reviewed** types in
+    the same category, with the same confirm-it-is-different escape.
+  - **The administrator's own create path never deduped**, so it could quietly make the second
+    "Knocking" that every group was being stopped from making.
+  - **Renaming onto a taken name silently produced twins** in one category — the exact mess the
+    rename was trying to clear up, now indistinguishable. Now offered as a merge.
+  - **No merge existed.** Now folds taggings onto the survivor, refusing to lose a review or to
+    cross a category, since moving a tagging from Visual to Auditory rewrites what somebody recorded
+    about their own night.
+  - **No orphan sweep**, on either untagging or deleting the occurrence. Both now sweep, on the
+    equipment rule: group-proposed and unreviewed only.
+
+  Two things worth remembering from the build:
+  - **"Reviewed" is `IsApproved && ApprovedByAppUserId != null`, not `IsApproved`.** An org-proposed
+    type goes live immediately with the approver left null, and that null is the entire marker.
+    Testing `IsApproved` alone would sweep away words an administrator had deliberately endorsed.
+  - **The join's primary key is the pair (entry, type)**, so a merge cannot repoint a tagging — EF
+    refuses to modify a key property on a tracked entity. Rows are deleted and re-added instead.
+    Caught by reading the model config, not by a test.
+
+  **The table had no unique index and no length cap at all** — `nvarchar(max)`, with the advertised
+  100-character limit enforced nowhere. Both added, with a dedupe pre-step in the migration so it
+  can apply to a database that already has twins. Verified against the real dev SQL Server, not only
+  in memory.
+
+  **Places turned out to be fine.** `PlaceMatcher` already had a genuine dedup rule — same address
+  *and* within a tenth of a mile — and already normalised case, punctuation and a leading "the". The
+  one gap was a mistyped landmark name, now tolerated, which is safe here in a way it would not be
+  elsewhere: candidates are only *offered*, and proximity has already been checked, so a wrong
+  suggestion costs a glance while a missed one costs a duplicate somebody must merge later.
+
+### The typo check was unreachable in the UI the whole time — ⚠ found and fixed 2026-08-17
+
+The most useful finding of the session, and it was **my own earlier work**. The server answers a
+probable typo with a 409 listing the names it might have been. Both callers — the equipment editor
+and the case timeline — threw it away and rendered "could not be added".
+
+So the person could not take the suggested name, could not insist on their own, and simply could not
+add any name resembling an existing one. **The check made the feature strictly worse than not having
+it**: before it, the word at least got created.
+
+Every unit test passed, on both sides. They asserted the server returns suggestions, which it did.
+Nothing asserted a person ever sees them — the same shape as the platform-messages and
+permission-requests findings, now the fifth instance.
+
+Both screens now show a "did you mean" prompt: each suggestion is one click, and *"no, mine is
+different"* creates it as typed. Two source-scan tests hold the line — one that the suggestions
+reach a screen at all, one that **every** screen showing them can also overrule them, since a
+prettier dead end is still a dead end.

@@ -27,6 +27,36 @@ published as something the editor cannot draw.
 Assets are **retired**, never deleted. Projects reference artwork by id, so removing one would
 break renders that already use it. A retired asset leaves the catalog and stays downloadable.
 
+## Keeping the shared vocabulary tidy
+
+Two lists grow by proposal rather than by decree: the **experience taxonomy** and the **equipment
+catalog**. Groups add what they need on the night, and you confirm or clear up afterwards.
+
+**Confirming** an entry marks it as reviewed. That matters beyond the badge: reviewed entries are
+the only ones offered as "did you mean" suggestions to the next person, and they stop being cleared
+away automatically. Confirming is how a word becomes shared vocabulary rather than one group's
+note.
+
+**Renaming** does what it says — until the new name is already taken. Then you are shown the entry
+it collided with and offered a merge, because renaming onto an existing name means two things
+become one and somebody's records change meaning. That is too large to happen because a name was
+typed, so it is always a second, deliberate step.
+
+**Merging** moves everything across and removes the duplicate. It cannot be undone. Two guards:
+
+- You cannot merge a **confirmed** entry into an unconfirmed one. That is almost always the
+  direction reversed, and the result would be a list where the endorsed word vanished and the
+  mistake survived. Merge the other way, or confirm the target first.
+- You cannot merge an experience type into a **different category**. Moving a tagging from Visual
+  to Auditory changes what somebody recorded about their own night, which is not a rename.
+
+**Deleting** is only for an entry nothing uses. If it is tagged on something, you are told how many
+and refused — **Reject** is the action that removes a type together with its taggings, and it tells
+you how many it took with it.
+
+Most tidying happens without you. An unconfirmed entry that a group proposed disappears on its own
+once the last thing using it is gone.
+
 ## Support tickets
 
 **Administration → Support Tickets** is the queue for the public contact form. A ticket arrives as
