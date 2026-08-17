@@ -1,0 +1,54 @@
+using Ben.Service.Models.Entities;
+
+namespace Ben.Web.Library.Services;
+
+/// <summary>
+/// The Equipment slice of <see cref="IBenAdminClient"/> — backlog item #55: personal and (later
+/// phases) org-owned equipment, the public catalog, and the loan/checkout workflow.
+/// </summary>
+/// <remarks>
+/// Part of the same domain-slice split as <see cref="IBenInvestigationClient"/> and the rest —
+/// <see cref="IBenAdminClient"/> inherits every slice, so the single adapter and existing callers
+/// are unaffected by a new one appearing.
+/// </remarks>
+public interface IBenEquipmentClient
+{
+    // ── Public catalog (Phase 1) ─────────────────────────────────────────────
+
+    Task<IReadOnlyList<EquipmentCategoryRecord>> GetEquipmentCategoriesAsync(CancellationToken token = default);
+    Task<IReadOnlyList<EquipmentBrandRecord>> GetEquipmentBrandsAsync(string? search = null, CancellationToken token = default);
+    Task<IReadOnlyList<EquipmentModelRecord>> GetEquipmentModelsForBrandAsync(Guid brandId, Guid? categoryId = null, CancellationToken token = default);
+    Task<IReadOnlyList<EquipmentModelRecord>> SearchEquipmentModelsAsync(string? search = null, Guid? categoryId = null, CancellationToken token = default);
+    /// <summary>Items their owners chose to list publicly. Carries no owner identity and no serial.</summary>
+    Task<IReadOnlyList<PublicEquipmentItemRecord>> GetPublicEquipmentItemsAsync(string? search = null, Guid? categoryId = null, CancellationToken token = default);
+
+    Task<EquipmentBrandRecord?> ProposeEquipmentBrandAsync(string name, CancellationToken token = default);
+    Task<EquipmentModelRecord?> ProposeEquipmentModelAsync(UpsertEquipmentModelRequest request, CancellationToken token = default);
+
+    // ── My equipment (Phase 1) ───────────────────────────────────────────────
+
+    Task<IReadOnlyList<EquipmentItemRecord>> GetMyEquipmentAsync(CancellationToken token = default);
+    Task<EquipmentItemRecord?> GetMyEquipmentItemAsync(Guid id, CancellationToken token = default);
+    Task<EquipmentItemRecord?> CreateMyEquipmentItemAsync(UpsertEquipmentItemRequest request, CancellationToken token = default);
+    Task<EquipmentItemRecord?> UpdateMyEquipmentItemAsync(Guid id, UpsertEquipmentItemRequest request, CancellationToken token = default);
+    Task<bool> DeleteMyEquipmentItemAsync(Guid id, CancellationToken token = default);
+    Task<EquipmentItemPhotoRecord?> AttachMyEquipmentPhotoAsync(Guid id, MultipartFormDataContent content, CancellationToken token = default);
+    Task<bool> DetachMyEquipmentPhotoAsync(Guid id, Guid photoId, CancellationToken token = default);
+    Task<bool> SetMyEquipmentPrimaryPhotoAsync(Guid id, Guid photoId, CancellationToken token = default);
+
+    /// <summary>Fetches an equipment photo's raw bytes for data:-URI rendering — never a plain &lt;img src&gt;.</summary>
+    Task<(byte[] Data, string ContentType, string FileName)?> GetEquipmentPhotoBytesAsync(Guid photoId, CancellationToken token = default);
+
+    // ── SuperAdmin taxonomy moderation (Phase 1) ─────────────────────────────
+
+    Task<IReadOnlyList<EquipmentCategoryRecord>> GetAdminEquipmentCategoriesAsync(CancellationToken token = default);
+    Task<EquipmentCategoryRecord?> CreateEquipmentCategoryAsync(UpsertEquipmentCategoryRequest request, CancellationToken token = default);
+    Task<EquipmentCategoryRecord?> UpdateEquipmentCategoryAsync(Guid id, UpsertEquipmentCategoryRequest request, CancellationToken token = default);
+    Task<bool> DeleteEquipmentCategoryAsync(Guid id, CancellationToken token = default);
+    Task<IReadOnlyList<EquipmentBrandRecord>> GetAdminEquipmentBrandsAsync(CancellationToken token = default);
+    Task<EquipmentBrandRecord?> ApproveEquipmentBrandAsync(Guid id, CancellationToken token = default);
+    Task<bool> RejectEquipmentBrandAsync(Guid id, CancellationToken token = default);
+    Task<IReadOnlyList<EquipmentModelRecord>> GetAdminEquipmentModelsAsync(Guid? brandId = null, CancellationToken token = default);
+    Task<EquipmentModelRecord?> ApproveEquipmentModelAsync(Guid id, CancellationToken token = default);
+    Task<bool> RejectEquipmentModelAsync(Guid id, CancellationToken token = default);
+}

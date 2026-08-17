@@ -17,6 +17,7 @@ internal static class UploadFileTypeSeeder
     internal const string PublishedVideoFileTypeName = "Published Video";
     internal const string AudioMixFileTypeName       = "Audio Mix";
     internal const string ProfilePhotoFileTypeName   = "Profile Photo";
+    internal const string EquipmentPhotoFileTypeName = "Equipment Photo";
 
     // Fixed GUID so VideoProjectController can reference it without a DB lookup.
     internal static readonly Guid PublishedVideoFileTypeId = new("30000000-0000-0000-0000-000000000001");
@@ -26,6 +27,9 @@ internal static class UploadFileTypeSeeder
 
     // Fixed GUID so MyProfileController can reference it without a DB lookup.
     internal static readonly Guid ProfilePhotoFileTypeId = new("50000000-0000-0000-0000-000000000001");
+
+    // Fixed GUID so MyEquipmentController (and later phases) can reference it without a DB lookup.
+    internal static readonly Guid EquipmentPhotoFileTypeId = new("60000000-0000-0000-0000-000000000001");
 
     private static readonly string[] LogoExtensions =
         [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"];
@@ -75,6 +79,8 @@ internal static class UploadFileTypeSeeder
         await SeedAudioMixFileTypeAsync(db, owner.Id);
 
         await SeedProfilePhotoFileTypeAsync(db, owner.Id);
+
+        await SeedEquipmentPhotoFileTypeAsync(db, owner.Id);
     }
 
     // ── Private helper ────────────────────────────────────────────────────────
@@ -222,6 +228,43 @@ internal static class UploadFileTypeSeeder
             {
                 Id                 = Guid.NewGuid(),
                 UploadFileTypeId   = ProfilePhotoFileTypeId,
+                Pattern            = ext,
+                DateCreated        = DateTime.UtcNow,
+                CreatedByAppUserId = ownerId,
+            });
+        }
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Ensures the Equipment Photo file type exists (fixed GUID so MyEquipmentController can use
+    /// it directly). Same browser-displayable-raster-only reasoning as Profile Photo — these
+    /// render in an &lt;img&gt; wherever an item's gallery appears.
+    /// </summary>
+    private static async Task SeedEquipmentPhotoFileTypeAsync(BenDataContext db, Guid ownerId)
+    {
+        if (await db.UploadFileTypes.AnyAsync(t => t.Id == EquipmentPhotoFileTypeId)) return;
+
+        db.UploadFileTypes.Add(new UploadFileType
+        {
+            Id                 = EquipmentPhotoFileTypeId,
+            Name               = EquipmentPhotoFileTypeName,
+            Description        = "Equipment item photos — JPEG, PNG, GIF, WebP",
+            IsActive           = true,
+            IsPublic           = false,
+            SortOrder          = 8,
+            AllowAllExtensions = false,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+
+        foreach (var ext in ProfilePhotoExtensions)
+        {
+            db.UploadFileTypeExtensions.Add(new UploadFileTypeExtension
+            {
+                Id                 = Guid.NewGuid(),
+                UploadFileTypeId   = EquipmentPhotoFileTypeId,
                 Pattern            = ext,
                 DateCreated        = DateTime.UtcNow,
                 CreatedByAppUserId = ownerId,

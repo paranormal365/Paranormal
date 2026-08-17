@@ -4,6 +4,7 @@ using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Ben.Data.Source.Migrations
 {
     [DbContext(typeof(BenDataContext))]
-    partial class BenDataContextModelSnapshot : ModelSnapshot
+    [Migration("20260816190437_AddEquipmentCore")]
+    partial class AddEquipmentCore
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1425,17 +1428,11 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid>("EquipmentModelId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<bool>("IncludeInGlobalCatalog")
-                        .HasColumnType("bit");
-
                     b.Property<bool>("IsRetired")
                         .HasColumnType("bit");
 
                     b.Property<DateTime?>("LastServicedDate")
                         .HasColumnType("datetime2");
-
-                    b.Property<int>("LoanAudience")
-                        .HasColumnType("int");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(2000)

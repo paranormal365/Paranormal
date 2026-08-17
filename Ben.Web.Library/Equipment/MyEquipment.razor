@@ -1,0 +1,223 @@
+@page "/my-equipment"
+@namespace Ben.Web.Library.Equipment
+@using Ben.Service.Models.Entities
+@using Ben.Web.Library.Services
+@using Ben.Web.Library.Shared
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>My Equipment</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:900px;">
+    <div class="d-flex justify-content-between align-items-start mb-1">
+        <h3 class="mb-0">My Equipment<HelpLink Slug="your-equipment" /></h3>
+        <TelerikButton Icon="@SvgIcon.Plus"
+                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                       Enabled="@(!_loading)"
+                       OnClick="OpenCreate">Add equipment</TelerikButton>
+    </div>
+    <p class="text-secondary small mb-4">
+        Your own gear. Serial numbers stay private to you — nobody else sees them, ever.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <TelerikLoaderContainer Visible="true" Text="Loading your equipment…" />
+    }
+    else if (_items.Count == 0)
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <h6 class="mb-2">You haven't logged any equipment yet</h6>
+                <p class="text-secondary small mb-3">
+                    Keep a record of what you own — make, model, serial number and photos.
+                </p>
+                <TelerikButton Icon="@SvgIcon.Plus"
+                               ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                               OnClick="OpenCreate">Add your first piece</TelerikButton>
+            </div>
+        </div>
+    }
+    else
+    {
+        @foreach (var item in _items)
+        {
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="card-title mb-1">
+                                @item.DisplayName
+                                @if (item.IsRetired)
+                                {
+                                    <span class="badge bg-secondary ms-2">Retired</span>
+                                }
+                            </h6>
+                            <div class="text-secondary small">
+                                @item.BrandName · @item.ModelName
+                                <span class="mx-1">·</span>
+                                @item.CategoryName
+                            </div>
+                            <div class="mt-1 d-flex flex-wrap gap-1">
+                                @if (item.IncludeInGlobalCatalog)
+                                {
+                                    <span class="badge bg-info text-dark" title="Visible in the public catalog, without your name">Public</span>
+                                }
+                                @if (item.LoanAudience == EquipmentLoanAudience.NotLoanable)
+                                {
+                                    <span class="badge bg-light text-secondary border">Not lent out</span>
+                                }
+                                else
+                                {
+                                    @if ((item.LoanAudience & EquipmentLoanAudience.SharedGroups) != 0)
+                                    {
+                                        <span class="badge bg-success">Lends to my groups</span>
+                                    }
+                                    @if ((item.LoanAudience & EquipmentLoanAudience.GroupMembers) != 0)
+                                    {
+                                        <span class="badge bg-success">Lends to people in my groups</span>
+                                    }
+                                    @if ((item.LoanAudience & EquipmentLoanAudience.IndividualUsers) != 0)
+                                    {
+                                        <span class="badge bg-success">Lends to anyone</span>
+                                    }
+                                }
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <TelerikButton Icon="@SvgIcon.Pencil" Size="@ThemeConstants.Button.Size.Small"
+                                           Enabled="@item.Flags.CanEdit"
+                                           OnClick="@(() => OpenEdit(item))">Edit</TelerikButton>
+                            <TelerikButton Icon="@SvgIcon.Trash" Size="@ThemeConstants.Button.Size.Small"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                           Enabled="@item.Flags.CanDelete"
+                                           OnClick="@(() => ConfirmDelete(item))">Delete</TelerikButton>
+                        </div>
+                    </div>
+
+                    <dl class="row mb-0 mt-2 small">
+                        @if (item.Flags.CanSeeSerial && !string.IsNullOrWhiteSpace(item.SerialNumber))
+                        {
+                            <dt class="col-sm-3 text-secondary fw-normal">Serial</dt>
+                            <dd class="col-sm-9 mb-1">@item.SerialNumber</dd>
+                        }
+                        @if (item.AcquisitionDate is not null)
+                        {
+                            <dt class="col-sm-3 text-secondary fw-normal">Acquired</dt>
+                            <dd class="col-sm-9 mb-1">@item.AcquisitionDate.Value.ToShortDateString()</dd>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(item.Notes))
+                        {
+                            <dt class="col-sm-3 text-secondary fw-normal">Notes</dt>
+                            <dd class="col-sm-9 mb-1">@item.Notes</dd>
+                        }
+                    </dl>
+
+                    <div class="mt-3">
+                        <div class="text-secondary small mb-1">Photos</div>
+                        <EquipmentPhotoStrip ItemId="@item.Id"
+                                             Photos="@item.Photos"
+                                             CanEdit="@item.Flags.CanEdit"
+                                             OnChanged="LoadAsync" />
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<MyEquipmentItemEditor Visible="@_editorVisible"
+                       VisibleChanged="@(v => _editorVisible = v)"
+                       Item="@_editing"
+                       OnSaved="LoadAsync" />
+
+<ConfirmDialog @bind-Visible="@_confirmVisible"
+               Title="Delete equipment"
+               Busy="@_deleting"
+               OnConfirm="DeleteConfirmedAsync">
+    @if (_pendingDelete is not null)
+    {
+        <p class="mb-0">
+            Delete <strong>@_pendingDelete.DisplayName</strong>? Its photos are deleted too.
+            This can't be undone.
+        </p>
+    }
+</ConfirmDialog>
+
+@code {
+    private List<EquipmentItemRecord> _items = [];
+    private EquipmentItemRecord? _editing;
+    private EquipmentItemRecord? _pendingDelete;
+    private bool _confirmVisible;
+    private bool _deleting;
+    private bool _editorVisible;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        // Auth must be settled before IsAuthenticated is meaningful — otherwise a hard navigation
+        // shows a signed-in user the login page.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _items = [.. await AdminClient.GetMyEquipmentAsync()];
+        }
+        catch (Exception ex)
+        {
+            _error = $"Your equipment could not be loaded: {ex.Message}";
+        }
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void OpenCreate()
+    {
+        _editing = null;
+        _editorVisible = true;
+    }
+
+    private void OpenEdit(EquipmentItemRecord item)
+    {
+        _editing = item;
+        _editorVisible = true;
+    }
+
+    private void ConfirmDelete(EquipmentItemRecord item)
+    {
+        _pendingDelete = item;
+        _confirmVisible = true;
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        if (_pendingDelete is null) return;
+        _deleting = true;
+        _error = null;
+
+        if (!await AdminClient.DeleteMyEquipmentItemAsync(_pendingDelete.Id))
+            _error = "That item could not be deleted.";
+
+        _deleting = false;
+        _confirmVisible = false;
+        _pendingDelete = null;
+        await LoadAsync();
+    }
+}
