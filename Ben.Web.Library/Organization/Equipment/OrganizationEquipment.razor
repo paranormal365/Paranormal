@@ -3,6 +3,7 @@
 @using Ben.Web.Library.Services
 @using Ben.Web.Library.Shared
 @inject IBenAdminClient AdminClient
+@inject NavigationManager NavManager
 
 @* Equipment as this group sees it. Phase 2 is members' shared personal gear; phase 3 adds the
    group's own equipment alongside it. EmbeddedMode so the same component works as an org tab and,
@@ -46,12 +47,6 @@
                     OrgId="@OrgId"
                     Item="@_editing"
                     OnSaved="LoadOwnedAsync" />
-
-<OrgEquipmentServiceLog Visible="@_logVisible"
-                        VisibleChanged="@(v => _logVisible = v)"
-                        OrgId="@OrgId"
-                        Item="@_logFor"
-                        OnChanged="LoadOwnedAsync" />
 
 <Ben.Web.Library.Equipment.EquipmentCheckoutRequestDialog
     Visible="@_borrowVisible"
@@ -152,7 +147,7 @@
                                                OnClick="@(() => OpenBorrow(row.Id, row.DisplayName))">Borrow</TelerikButton>
                             }
                             <TelerikButton Size="@ThemeConstants.Button.Size.Small"
-                                           OnClick="@(() => OpenLog(row))">History</TelerikButton>
+                                           OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/equipment/{row.Id}"))">History</TelerikButton>
                             @* Buttons render from the server's verdict, never from a guess. *@
                             @if (row.Flags.CanEdit)
                             {
@@ -305,10 +300,8 @@
     private Guid _loadedForOrg;
 
     private EquipmentItemRecord? _editing;
-    private EquipmentItemRecord? _logFor;
     private EquipmentItemRecord? _pendingDelete;
     private bool _editorVisible;
-    private bool _logVisible;
     private bool _borrowVisible;
     private Guid _borrowItemId;
     private string? _borrowItemName;
@@ -374,12 +367,6 @@
     {
         _editing = item;
         _editorVisible = true;
-    }
-
-    private void OpenLog(EquipmentItemRecord item)
-    {
-        _logFor = item;
-        _logVisible = true;
     }
 
     private async Task DeleteConfirmedAsync()

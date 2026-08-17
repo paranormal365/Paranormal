@@ -106,7 +106,20 @@
 
                                         @if (item.LoanAudience != EquipmentLoanAudience.NotLoanable)
                                         {
-                                            <span class="badge bg-success mt-2">Available to borrow</span>
+                                            <div class="mt-2 d-flex align-items-center gap-2">
+                                                <span class="badge bg-success">Available to borrow</span>
+                                                @if (_isAuthenticated)
+                                                {
+                                                    @* Whether this caller may actually ask is the server's call — the
+                                                       dialog asks it and shows the reason when the answer is no. *@
+                                                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                                                   OnClick="@(() => OpenBorrow(item.Id, item.DisplayName))">Ask to borrow</TelerikButton>
+                                                }
+                                                else
+                                                {
+                                                    <a class="small" href="/login">Sign in to ask</a>
+                                                }
+                                            </div>
                                         }
 
                                         @if (!string.IsNullOrWhiteSpace(item.Notes))
@@ -142,7 +155,23 @@
     }
 </div>
 
+<EquipmentCheckoutRequestDialog Visible="@_borrowVisible"
+                                VisibleChanged="@(v => _borrowVisible = v)"
+                                ItemId="@_borrowItemId"
+                                ItemDisplayName="@_borrowItemName" />
+
 @code {
+    private bool _borrowVisible;
+    private Guid _borrowItemId;
+    private string? _borrowItemName;
+
+    private void OpenBorrow(Guid itemId, string displayName)
+    {
+        _borrowItemId = itemId;
+        _borrowItemName = displayName;
+        _borrowVisible = true;
+    }
+
     private List<EquipmentCategoryRecord> _categories = [];
     private List<EquipmentModelRecord> _models = [];
     private List<PublicEquipmentItemRecord> _items = [];
