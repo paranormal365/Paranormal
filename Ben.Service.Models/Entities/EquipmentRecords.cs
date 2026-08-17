@@ -149,7 +149,13 @@ public sealed record EquipmentModelPageRecord(
     int ItemCount,
     int AvailableToBorrowCount,
     IReadOnlyList<string> WebsiteLinks,
-    IReadOnlyList<CatalogPhotoRecord> Photos);
+    IReadOnlyList<CatalogPhotoRecord> Photos,
+    /// <summary>
+    /// FAQ entries from publicly-listed copies of this model only — a fixed public rule, not a
+    /// per-viewer one. An aggregate that widened for members would let a reader infer that somebody
+    /// in their group owns one.
+    /// </summary>
+    IReadOnlyList<CatalogFaqRecord> Faqs);
 
 /// <summary>Who owns a piece, for viewers entitled to know.</summary>
 public sealed record EquipmentItemOwnershipRecord(
@@ -512,3 +518,83 @@ public sealed record PublicEquipmentItemRecord(
     EquipmentLoanAudience LoanAudience,
     string? WebsiteUrl,
     IReadOnlyList<EquipmentItemPhotoRecord> Photos);
+
+// ── Owner FAQs and anonymous questions (Phase 6c) ───────────────────────────
+
+/// <summary>
+/// One entry in an item's FAQ, as everybody reads it.
+/// </summary>
+/// <remarks>
+/// No author, anywhere, for anyone — including the owner who wrote it. On an item page the reader
+/// already knows whose gear it is, but the same shape feeds the make/model aggregate where several
+/// owners' entries sit side by side, and an aggregate that named its authors would say who owns
+/// what. One unattributed shape rather than two that could drift.
+/// </remarks>
+public sealed record EquipmentFaqRecord(
+    Guid Id,
+    string Question,
+    string Answer,
+    int SortOrder);
+
+/// <summary>An FAQ entry on a make/model page, with the item it came from deliberately dropped.</summary>
+public sealed record CatalogFaqRecord(
+    string Question,
+    string Answer);
+
+public sealed record UpsertEquipmentFaqRequest(
+    string Question,
+    string Answer,
+    int SortOrder = 0);
+
+/// <summary>
+/// A question as the person who <b>asked</b> it sees it: their own words, the answer if one came,
+/// and nothing about who wrote that answer.
+/// </summary>
+public sealed record AskedQuestionRecord(
+    Guid Id,
+    Guid EquipmentItemId,
+    string ItemDisplayName,
+    string BrandName,
+    string ModelName,
+    string QuestionText,
+    string? AnswerText,
+    EquipmentQuestionStatus Status,
+    DateTime DateAsked,
+    DateTime? AnsweredDate);
+
+/// <summary>
+/// A question as the person who must <b>answer</b> it sees it.
+/// </summary>
+/// <remarks>
+/// A separate type from <see cref="AskedQuestionRecord"/> with no asker id and no asker name — not
+/// the same type with those fields left null. The anonymity is then a property of the shape rather
+/// than of every projection that builds one, and a later change cannot quietly start filling a slot
+/// that should never have existed. A reflection test asserts the absence.
+/// </remarks>
+public sealed record ReceivedQuestionRecord(
+    Guid Id,
+    Guid EquipmentItemId,
+    string ItemDisplayName,
+    string BrandName,
+    string ModelName,
+    string QuestionText,
+    string? AnswerText,
+    EquipmentQuestionStatus Status,
+    DateTime DateAsked,
+    DateTime? AnsweredDate,
+    /// <summary>True once this answer has been published as an FAQ entry; publishing twice is refused.</summary>
+    bool PromotedToFaq);
+
+public sealed record AskEquipmentQuestionRequest(string QuestionText);
+
+/// <summary>
+/// Answers a question, or declines it. <paramref name="AnswerText"/> is required to answer and
+/// ignored when declining — an owner who would rather not say should not have to invent something.
+/// </summary>
+public sealed record AnswerEquipmentQuestionRequest(string? AnswerText, bool Decline = false);
+
+/// <summary>
+/// Publishes an answered question as an FAQ entry. The text is editable first: what reads well as
+/// a reply to one person rarely reads well as a public answer.
+/// </summary>
+public sealed record PromoteQuestionToFaqRequest(string Question, string Answer);

@@ -316,4 +316,56 @@ public class EquipmentModelPageTests
         Assert.IsType<NotFoundResult>((await Build(w.Factory, StrangerId).GetModelPage(w.ModelId, default)).Result);
         Assert.IsType<OkObjectResult>((await Build(w.Factory, OwnerId).GetModelPage(w.ModelId, default)).Result);
     }
+
+    // ── The FAQ aggregate (Phase 6c) ─────────────────────────────────────────
+
+    /// <summary>
+    /// The aggregate draws from publicly-listed items only, <b>for every caller alike</b> — including
+    /// the owner of the private one and a member of the group it is shared with.
+    /// </summary>
+    /// <remarks>
+    /// A per-viewer aggregate would leak by inference: a member seeing an extra entry appear would
+    /// learn that somebody in one of their groups owns this model, which no individual entry says.
+    /// The owner is included in the assertion deliberately — they lose nothing, since their own
+    /// item's page shows their own FAQ in full.
+    /// </remarks>
+    [Fact]
+    public async Task TheModelFaqDrawsOnlyFromPubliclyListedItems_ForEveryone()
+    {
+        var w = await SeedAsync();
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            db.EquipmentItemFaqs.Add(new EquipmentItemFaq
+            {
+                Id = Guid.NewGuid(), EquipmentItemId = w.PublicItemId,
+                Question = "Public question", Answer = "Public answer",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+            });
+            db.EquipmentItemFaqs.Add(new EquipmentItemFaq
+            {
+                Id = Guid.NewGuid(), EquipmentItemId = w.PrivateItemId,
+                Question = "Private question", Answer = "Private answer",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        foreach (var viewer in new Guid?[] { null, StrangerId, FellowMemberId, OwnerId })
+        {
+            var page = await GetPageAsync(w, viewer);
+            Assert.Equal("Public question", Assert.Single(page.Faqs).Question);
+        }
+    }
+
+    [Fact]
+    public void TheModelFaqEntriesCarryNothingIdentifying()
+    {
+        var names = typeof(CatalogFaqRecord).GetProperties().Select(p => p.Name).ToList();
+
+        // No item id either: knowing which copy an entry came from would let a reader map an
+        // answer back to a person via any other surface that names that item.
+        Assert.DoesNotContain(names, n => n.Contains("Item", StringComparison.OrdinalIgnoreCase)
+                                       || n.Contains("Owner", StringComparison.OrdinalIgnoreCase)
+                                       || n.Contains("AppUser", StringComparison.OrdinalIgnoreCase));
+    }
 }

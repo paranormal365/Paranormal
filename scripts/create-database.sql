@@ -8562,3 +8562,130 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817135757_AddEquipmentFaqAndQuestions'
+)
+BEGIN
+    CREATE TABLE [EquipmentItemFaqs] (
+        [Id] uniqueidentifier NOT NULL,
+        [EquipmentItemId] uniqueidentifier NOT NULL,
+        [Question] nvarchar(500) NOT NULL,
+        [Answer] nvarchar(4000) NOT NULL,
+        [SortOrder] int NOT NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_EquipmentItemFaqs] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_EquipmentItemFaqs_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentItemFaqs_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentItemFaqs_EquipmentItems_EquipmentItemId] FOREIGN KEY ([EquipmentItemId]) REFERENCES [EquipmentItems] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817135757_AddEquipmentFaqAndQuestions'
+)
+BEGIN
+    CREATE TABLE [EquipmentQuestions] (
+        [Id] uniqueidentifier NOT NULL,
+        [EquipmentItemId] uniqueidentifier NOT NULL,
+        [AskedByAppUserId] uniqueidentifier NOT NULL,
+        [QuestionText] nvarchar(2000) NOT NULL,
+        [AnswerText] nvarchar(4000) NULL,
+        [Status] int NOT NULL,
+        [AnsweredByAppUserId] uniqueidentifier NULL,
+        [AnsweredDate] datetime2 NULL,
+        [PromotedToFaqId] uniqueidentifier NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_EquipmentQuestions] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_EquipmentQuestions_AppUsers_AnsweredByAppUserId] FOREIGN KEY ([AnsweredByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentQuestions_AppUsers_AskedByAppUserId] FOREIGN KEY ([AskedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentQuestions_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentQuestions_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentQuestions_EquipmentItems_EquipmentItemId] FOREIGN KEY ([EquipmentItemId]) REFERENCES [EquipmentItems] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817135757_AddEquipmentFaqAndQuestions'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentItemFaqs_CreatedByAppUserId] ON [EquipmentItemFaqs] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817135757_AddEquipmentFaqAndQuestions'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentItemFaqs_EquipmentItemId_SortOrder] ON [EquipmentItemFaqs] ([EquipmentItemId], [SortOrder]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817135757_AddEquipmentFaqAndQuestions'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentItemFaqs_UpdatedByAppUserId] ON [EquipmentItemFaqs] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817135757_AddEquipmentFaqAndQuestions'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentQuestions_AnsweredByAppUserId] ON [EquipmentQuestions] ([AnsweredByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817135757_AddEquipmentFaqAndQuestions'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentQuestions_AskedByAppUserId] ON [EquipmentQuestions] ([AskedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817135757_AddEquipmentFaqAndQuestions'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentQuestions_CreatedByAppUserId] ON [EquipmentQuestions] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817135757_AddEquipmentFaqAndQuestions'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentQuestions_EquipmentItemId_Status] ON [EquipmentQuestions] ([EquipmentItemId], [Status]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817135757_AddEquipmentFaqAndQuestions'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentQuestions_UpdatedByAppUserId] ON [EquipmentQuestions] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817135757_AddEquipmentFaqAndQuestions'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260817135757_AddEquipmentFaqAndQuestions', N'10.0.11');
+END;
+
+COMMIT;
+GO
+

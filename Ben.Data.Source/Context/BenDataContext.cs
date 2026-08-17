@@ -117,6 +117,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<EquipmentCheckout> EquipmentCheckouts { get; set; }
         public virtual DbSet<EquipmentCheckoutPhoto> EquipmentCheckoutPhotos { get; set; }
         public virtual DbSet<EquipmentCheckoutRenewal> EquipmentCheckoutRenewals { get; set; }
+        public virtual DbSet<EquipmentItemFaq> EquipmentItemFaqs { get; set; }
+        public virtual DbSet<EquipmentQuestion> EquipmentQuestions { get; set; }
         public virtual DbSet<VideoProject> VideoProjects { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -1997,6 +1999,43 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<EquipmentServiceLog>().Property(e => e.Notes).HasMaxLength(2000);
             modelBuilder.Entity<EquipmentServiceLog>().HasIndex(e => new { e.EquipmentItemId, e.EntryDate });
+
+            // FAQ entries belong to the piece and go with it. Unlike loans, they are the owner's own
+            // words about their own thing — there is no second party whose record would be destroyed.
+            modelBuilder.Entity<EquipmentItemFaq>()
+                .HasOne(e => e.EquipmentItem).WithMany(e => e.Faqs)
+                .HasForeignKey(e => e.EquipmentItemId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EquipmentItemFaq>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentItemFaq>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentItemFaq>().Property(e => e.Question).HasMaxLength(500);
+            modelBuilder.Entity<EquipmentItemFaq>().Property(e => e.Answer).HasMaxLength(4000);
+            modelBuilder.Entity<EquipmentItemFaq>().HasIndex(e => new { e.EquipmentItemId, e.SortOrder });
+
+            modelBuilder.Entity<EquipmentQuestion>()
+                .HasOne(e => e.EquipmentItem).WithMany(e => e.Questions)
+                .HasForeignKey(e => e.EquipmentItemId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EquipmentQuestion>()
+                .HasOne(e => e.AskedByAppUser).WithMany()
+                .HasForeignKey(e => e.AskedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentQuestion>()
+                .HasOne(e => e.AnsweredByAppUser).WithMany()
+                .HasForeignKey(e => e.AnsweredByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentQuestion>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentQuestion>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentQuestion>().Property(e => e.QuestionText).HasMaxLength(2000);
+            modelBuilder.Entity<EquipmentQuestion>().Property(e => e.AnswerText).HasMaxLength(4000);
+            // No FK on PromotedToFaqId on purpose: it stamps that publishing happened, and deleting
+            // the published FAQ must not reopen a question that was genuinely answered.
+            modelBuilder.Entity<EquipmentQuestion>().HasIndex(e => new { e.EquipmentItemId, e.Status });
+            modelBuilder.Entity<EquipmentQuestion>().HasIndex(e => e.AskedByAppUserId);
 
             // NoAction from the item: a loan is the record of what happened to a piece of gear, and
             // an item with any loan history refuses deletion in favour of being retired, so there is
