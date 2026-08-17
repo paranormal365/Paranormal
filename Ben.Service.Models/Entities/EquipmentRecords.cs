@@ -151,6 +151,62 @@ public sealed record EquipmentModelPageRecord(
     IReadOnlyList<string> WebsiteLinks,
     IReadOnlyList<CatalogPhotoRecord> Photos);
 
+/// <summary>Who owns a piece, for viewers entitled to know.</summary>
+public sealed record EquipmentItemOwnershipRecord(
+    Guid? OwnerAppUserId,
+    string? OwnerDisplayName,
+    Guid? OwningOrganizationId,
+    string? OwningOrganizationName);
+
+/// <summary>
+/// The parts of a piece only its custodians see: serial, condition, who is holding it.
+/// </summary>
+/// <remarks>
+/// A nested optional record rather than fields on the parent that are sometimes null. Absence is
+/// then structural — a viewer who should not see any of this receives a payload with no slot for
+/// it, instead of one carrying six nulls that a future change might start filling in.
+/// </remarks>
+public sealed record EquipmentItemManagementRecord(
+    string? SerialNumber,
+    Guid? CurrentHolderAppUserId,
+    string? CurrentHolderDisplayName,
+    DateTime? LastServicedDate,
+    string? DefectNotes);
+
+/// <summary>What the viewer may do on the item page. Rendered, never re-derived.</summary>
+public sealed record EquipmentItemDetailFlags(
+    bool IsOwner,
+    bool CanEdit,
+    bool CanRetire,
+    bool CanManagePhotos,
+    bool CanSeeCounters);
+
+/// <summary>
+/// One piece of equipment as a particular viewer is entitled to see it.
+/// </summary>
+/// <remarks>
+/// Serves owners, group members, borrowers and anonymous visitors from one endpoint, because the
+/// question "what may this person see" has one answer and splitting it across four surfaces is how
+/// the answers drift apart. Everything audience-dependent lives in a nullable sub-record.
+/// </remarks>
+public sealed record EquipmentItemDetailRecord(
+    Guid Id,
+    Guid EquipmentModelId,
+    string ModelName,
+    string BrandName,
+    string CategoryName,
+    string DisplayName,
+    string? Notes,
+    DateTime? AcquisitionDate,
+    bool IsRetired,
+    EquipmentLoanAudience LoanAudience,
+    string? WebsiteUrl,
+    IReadOnlyList<EquipmentItemPhotoRecord> Photos,
+    EquipmentItemOwnershipRecord? Ownership,
+    EquipmentItemManagementRecord? Management,
+    EquipmentItemCountersRecord? Counters,
+    EquipmentItemDetailFlags Flags);
+
 /// <summary>Lifetime interest in one piece. Org Administrators and SuperAdmin only.</summary>
 public sealed record EquipmentItemCountersRecord(int ViewCount, int LinkClickCount);
 

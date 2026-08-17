@@ -492,6 +492,30 @@ public sealed class OrganizationEquipmentController : BenControllerBase
         return NoContent();
     }
 
+    /// <summary>Hides one photo of the group's gear from the make/model page, or puts it back.</summary>
+    [HttpPut("{id:guid}/photos/{photoId:guid}/catalog-exclusion")]
+    public async Task<IActionResult> SetPhotoCatalogExclusion(
+        Guid orgId, Guid id, Guid photoId, [FromBody] SetPhotoCatalogExclusionRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        if (!await CanManageAsync(userId, orgId, OrganizationSecurityAction.Update, ct)) return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await db.EquipmentItems.AnyAsync(i => i.Id == id && i.OwningOrganizationId == orgId, ct))
+            return NotFound();
+
+        var photo = await db.EquipmentItemPhotos
+            .FirstOrDefaultAsync(p => p.Id == photoId && p.EquipmentItemId == id, ct);
+        if (photo is null) return NotFound();
+
+        photo.ExcludeFromCatalog = request.Exclude;
+        photo.DateUpdated        = DateTime.UtcNow;
+        photo.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
     /// <summary>Makes one photo the one shown first.</summary>
     [HttpPut("{id:guid}/photos/{photoId:guid}/primary")]
     public async Task<IActionResult> SetPrimaryPhoto(Guid orgId, Guid id, Guid photoId, CancellationToken ct)

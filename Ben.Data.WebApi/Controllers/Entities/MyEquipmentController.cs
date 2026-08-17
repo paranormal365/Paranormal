@@ -329,6 +329,35 @@ public sealed class MyEquipmentController : BenControllerBase
         return Ok(new EquipmentItemPhotoRecord(photo.Id, photo.EquipmentItemId, photo.UploadFileId, photo.IsPrimary, photo.Caption, photo.SortOrder, photo.ExcludeFromCatalog));
     }
 
+    /// <summary>
+    /// Hides one photo from the make/model page, or puts it back.
+    /// </summary>
+    /// <remarks>
+    /// Per photo rather than per item, because the reason to withhold one is usually something
+    /// visible in that particular picture — an address, a face, a room — and losing the other four
+    /// to protect one would be a poor trade.
+    /// </remarks>
+    [HttpPut("{id:guid}/photos/{photoId:guid}/catalog-exclusion")]
+    public async Task<IActionResult> SetPhotoCatalogExclusion(
+        Guid id, Guid photoId, [FromBody] SetPhotoCatalogExclusionRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (await EquipmentAccess.FindOwnedAsync(db, id, userId, ct) is null) return NotFound();
+
+        var photo = await db.EquipmentItemPhotos
+            .FirstOrDefaultAsync(p => p.Id == photoId && p.EquipmentItemId == id, ct);
+        if (photo is null) return NotFound();
+
+        photo.ExcludeFromCatalog  = request.Exclude;
+        photo.DateUpdated         = DateTime.UtcNow;
+        photo.UpdatedByAppUserId  = userId;
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
     [HttpDelete("{id:guid}/photos/{photoId:guid}")]
     public async Task<IActionResult> DetachPhoto(Guid id, Guid photoId, CancellationToken ct)
     {
