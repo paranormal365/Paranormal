@@ -20,8 +20,9 @@ it for loan are all separate choices you make piece by piece.
 
 Two things about a piece of equipment are **never** shown to anyone but you:
 
-- **Who owns it.** Nothing anywhere links your name to a particular piece of equipment — not even
-  in the public catalog, where a piece you chose to list appears without an owner.
+- **Who owns it, outside your groups.** The public catalog never links your name to a piece — one
+  you chose to list appears without an owner. Inside a group you have shared with, your name does
+  appear beside your gear: that is the point of sharing, so members know whose kit is whose.
 - **The serial number.** This one stays private even later on, when you can share gear with a group
   and lend it out. Somebody borrowing your recorder does not need its serial number, and neither
   does the person approving the loan.
@@ -83,6 +84,26 @@ date empty if you are not worried about getting it back by a particular day.
 
 If you allow anyone to borrow a piece but do not list it publicly, the form will say so: people
 outside your groups have no way to find it, so the offer does nothing until you list it.
+
+## Retiring a piece
+
+When you stop using something, **retire** it rather than deleting it. Retired gear disappears from
+borrowing and from the public catalog, but its loans and service history stay readable — and you
+can put it back in service whenever you like.
+
+Once a piece has been lent or serviced, deleting becomes unavailable for exactly that reason:
+removing it would take the record of what happened to it, including loans other people were part
+of, along with it.
+
+## What we keep about your photos
+
+A photo carries more than the picture: most phones record where and when it was taken, and which
+device took it. When you upload one, that information is separated out and stored against the
+record, and the copy anybody sees has none of it — so a photo of gear at your home does not carry
+your address with it.
+
+Your original file is kept exactly as you sent it and never shown to anyone. The separated details
+are readable only by group Administrators and site administrators.
 
 ## The public catalog
 

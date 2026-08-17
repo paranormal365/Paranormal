@@ -112,7 +112,8 @@ Two lists, because a group deals with two kinds of gear.
 group has is not a secret from the people who use it — but adding, editing and deleting it needs
 the **Equipment** permission, and so does seeing serial numbers.
 
-Each piece tracks who is holding it, when it was last serviced, and whether it is currently faulty.
+Each piece tracks who is holding it, when it was last serviced, whether it is currently faulty, and
+its photos.
 **Held by** can be set by hand: kit gets passed over in a car park without anyone opening the app,
 and the record should still be able to tell the truth. A holder has to be an active member.
 
@@ -132,17 +133,21 @@ Equipment permission. The entry type does real work rather than just labelling t
 The entry and its consequence are saved together, so the log never disagrees with the piece it
 describes. Entries are kept — fixing a fault does not erase the report of it.
 
-Once a piece has any history, deleting it is refused and you are asked to **retire** it instead.
-Destroying a serial-numbered asset would take the account of what happened to it along too.
+Once a piece has any loan or service history, deleting it is refused and you are asked to
+**retire** it instead — the button sits in the item editor. Retired gear drops out of borrowing,
+out of the public catalog and out of the group list, while everything that happened to it stays
+readable. You can put it back in service the same way. Destroying a serial-numbered asset would
+take the account of what happened to it along too.
 
 **Members' shared gear** is the second list: equipment members own personally and have chosen to
 show this group. It is read-only here — it belongs to its owner — and it needs no permission to
 read, because the sharing itself is the owner's decision, not the group's to gate. Serial numbers
 stay with owners even here.
 
-The **Borrowing** column says whether a piece can actually be borrowed, which is a separate choice
-from sharing it. A member can let the group know they own something without offering to lend it,
-and the column distinguishes gear offered to this group from gear its owner only lends personally.
+The **Borrowing** column says whether a piece can be borrowed at all, which is a separate choice
+from sharing it — a member can let the group know they own something without offering to lend it.
+Whether a particular piece is offered to the group or only lent personally is shown when you
+actually ask to borrow it, since that is the point at which the difference matters.
 
 A shared piece disappears from this tab if its owner leaves the group. Their sharing choice is
 kept, so it comes back if they rejoin.

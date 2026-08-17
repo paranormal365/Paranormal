@@ -105,4 +105,71 @@ internal static class TestImages
         payload.CopyTo(segment, 4);
         return segment;
     }
+
+    /// <summary>
+    /// A JPEG carrying DateTimeOriginal, and optionally the OffsetTimeOriginal that says which
+    /// timezone that reading was taken in.
+    /// </summary>
+    internal static byte[] JpegWithCaptureTime(string exifDateTime, string? offset)
+    {
+        using var bitmap = new SKBitmap(32, 24);
+        using (var canvas = new SKCanvas(bitmap)) canvas.Clear(SKColors.DarkSlateGray);
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Jpeg, 90);
+        var plain = data.ToArray();
+
+        var exif = BuildCaptureTimeApp1(exifDateTime, offset);
+        var result = new byte[plain.Length + exif.Length];
+        plain.AsSpan(0, 2).CopyTo(result);
+        exif.CopyTo(result, 2);
+        plain.AsSpan(2).CopyTo(result.AsSpan(2 + exif.Length));
+        return result;
+    }
+
+    private static byte[] BuildCaptureTimeApp1(string exifDateTime, string? offset)
+    {
+        using var body = new MemoryStream();
+        using var w = new BinaryWriter(body);
+
+        void U16(ushort v) => w.Write(v);
+        void U32(uint v) => w.Write(v);
+        void Entry(ushort tag, ushort type, uint count, uint value)
+        {
+            U16(tag); U16(type); U32(count); U32(value);
+        }
+
+        var dateBytes = System.Text.Encoding.ASCII.GetBytes(exifDateTime + "\0");        // 20 bytes
+        var offsetBytes = offset is null ? null : System.Text.Encoding.ASCII.GetBytes(offset + "\0"); // 7 bytes
+
+        w.Write("Exif\0\0"u8.ToArray());
+        w.Write("II"u8.ToArray());
+        U16(42);
+        U32(8);                                  // -> IFD0
+
+        U16(1);                                  // IFD0: one entry
+        Entry(0x8769, 4, 1, 26);                 // ExifSubIFDPointer -> 26
+        U32(0);
+
+        // SubIFD at 26: DateTimeOriginal (+ OffsetTimeOriginal when supplied)
+        var entryCount = (ushort)(offsetBytes is null ? 1 : 2);
+        var subIfdSize = 2 + entryCount * 12 + 4;
+        var dataStart = (uint)(26 + subIfdSize);
+
+        U16(entryCount);
+        Entry(0x9003, 2, (uint)dateBytes.Length, dataStart);                 // DateTimeOriginal
+        if (offsetBytes is not null)
+            Entry(0x9011, 2, (uint)offsetBytes.Length, dataStart + (uint)dateBytes.Length);  // OffsetTimeOriginal
+        U32(0);
+
+        w.Write(dateBytes);
+        if (offsetBytes is not null) w.Write(offsetBytes);
+
+        var payload = body.ToArray();
+        var segment = new byte[4 + payload.Length];
+        segment[0] = 0xFF; segment[1] = 0xE1;
+        var len = payload.Length + 2;
+        segment[2] = (byte)(len >> 8); segment[3] = (byte)(len & 0xFF);
+        payload.CopyTo(segment, 4);
+        return segment;
+    }
 }

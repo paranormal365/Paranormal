@@ -343,8 +343,14 @@ public sealed class EquipmentCheckoutController : BenControllerBase
     }
 
     /// <summary>One group's loan queue. Needs the EquipmentCheckout permission.</summary>
+    /// <remarks>
+    /// Returns the verdict alongside the rows, like <c>OrgEquipmentListRecord</c> does, because the
+    /// two answers "you may not see this" and "there is nothing yet" are different and the UI has
+    /// to tell them apart. Rendering the tab on row count meant a permitted approver saw no loans
+    /// tab at all until somebody happened to ask for something.
+    /// </remarks>
     [HttpGet("/api/organizations/{orgId:guid}/equipment-checkouts")]
-    public async Task<ActionResult<IEnumerable<EquipmentCheckoutRecord>>> GetForOrg(
+    public async Task<ActionResult<OrgCheckoutListRecord>> GetForOrg(
         Guid orgId, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
@@ -361,7 +367,7 @@ public sealed class EquipmentCheckoutController : BenControllerBase
             .OrderBy(c => c.Status).ThenByDescending(c => c.DateCreated)
             .ToListAsync(ct);
 
-        return Ok(await ProjectManyAsync(db, checkouts, userId, ct));
+        return Ok(new OrgCheckoutListRecord(true, await ProjectManyAsync(db, checkouts, userId, ct)));
     }
 
     /// <summary>One item's loan history.</summary>

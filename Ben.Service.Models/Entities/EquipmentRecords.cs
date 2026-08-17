@@ -235,6 +235,17 @@ public sealed record EquipmentCheckoutRecord(
     DateTime DateCreated,
     EquipmentCheckoutFlags Flags);
 
+/// <summary>
+/// A group's loan queue, plus whether this caller may review loans at all.
+/// </summary>
+/// <remarks>
+/// Same reason <c>OrgEquipmentListRecord</c> is wrapped: "you may not see this" and "there is
+/// nothing here yet" are different answers, and an empty list cannot tell them apart on its own.
+/// </remarks>
+public sealed record OrgCheckoutListRecord(
+    bool CanReviewLoans,
+    IReadOnlyList<EquipmentCheckoutRecord> Items);
+
 /// <summary>What the viewer may do with this loan right now. Rendered, never re-derived.</summary>
 public sealed record EquipmentCheckoutFlags(
     bool IsBorrower,

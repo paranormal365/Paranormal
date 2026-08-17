@@ -214,10 +214,11 @@ public sealed partial class BenAdminClientAdapter
         return result ?? [];
     }
 
-    public async Task<IReadOnlyList<EquipmentCheckoutRecord>> GetOrgEquipmentCheckoutsAsync(Guid orgId, CancellationToken token = default)
+    public async Task<OrgCheckoutListRecord> GetOrgEquipmentCheckoutsAsync(Guid orgId, CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<EquipmentCheckoutRecord>>($"/api/organizations/{orgId}/equipment-checkouts", token);
-        return result ?? [];
+        var result = await _api.GetAsync<OrgCheckoutListRecord>($"/api/organizations/{orgId}/equipment-checkouts", token);
+        // A swallowed 404 means no permission — default to the closed answer.
+        return result ?? new OrgCheckoutListRecord(false, []);
     }
 
     public async Task<IReadOnlyList<EquipmentCheckoutRecord>> GetEquipmentItemCheckoutsAsync(Guid itemId, CancellationToken token = default)

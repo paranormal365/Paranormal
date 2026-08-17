@@ -668,8 +668,25 @@ public class EquipmentCheckoutTests
 
         var byManager = await Build(w.Factory, OrgManagerId, checkoutApproverId: OrgManagerId)
             .GetForOrg(OrgId, default);
-        var rows = Assert.IsAssignableFrom<IEnumerable<EquipmentCheckoutRecord>>(
-            Assert.IsType<OkObjectResult>(byManager.Result).Value);
-        Assert.Single(rows);
+        var payload = Assert.IsType<OrgCheckoutListRecord>(Assert.IsType<OkObjectResult>(byManager.Result).Value);
+        Assert.True(payload.CanReviewLoans);
+        Assert.Single(payload.Items);
+    }
+
+    /// <summary>
+    /// The loans tab rendered on row count, so an approver at a group whose gear had never been
+    /// borrowed saw no tab at all and no way to discover the surface existed.
+    /// </summary>
+    [Fact]
+    public async Task AnApproverWithNoLoansYetIsStillToldTheyMayReviewThem()
+    {
+        var w = await SeedAsync();   // nobody has asked for anything
+
+        var result = await Build(w.Factory, OrgManagerId, checkoutApproverId: OrgManagerId)
+            .GetForOrg(OrgId, default);
+        var payload = Assert.IsType<OrgCheckoutListRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        Assert.Empty(payload.Items);
+        Assert.True(payload.CanReviewLoans);
     }
 }

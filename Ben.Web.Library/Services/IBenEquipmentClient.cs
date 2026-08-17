@@ -102,7 +102,8 @@ public interface IBenEquipmentClient
     /// <summary>The caller's loans. <paramref name="role"/> is "borrower" or "approver".</summary>
     Task<IReadOnlyList<EquipmentCheckoutRecord>> GetMyEquipmentCheckoutsAsync(string role = "borrower", CancellationToken token = default);
 
-    Task<IReadOnlyList<EquipmentCheckoutRecord>> GetOrgEquipmentCheckoutsAsync(Guid orgId, CancellationToken token = default);
+    /// <summary>A group's loans, plus whether the caller may review them at all.</summary>
+    Task<OrgCheckoutListRecord> GetOrgEquipmentCheckoutsAsync(Guid orgId, CancellationToken token = default);
     Task<IReadOnlyList<EquipmentCheckoutRecord>> GetEquipmentItemCheckoutsAsync(Guid itemId, CancellationToken token = default);
 
     // ── Condition photos, renewals, history (Phase 5) ────────────────────────

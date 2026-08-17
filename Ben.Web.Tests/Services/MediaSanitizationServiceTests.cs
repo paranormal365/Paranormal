@@ -115,6 +115,38 @@ public class MediaSanitizationServiceTests
         Assert.Equal(expected, _service.CanSanitize(contentType));
     }
 
+    /// <summary>
+    /// Capture time is the field an investigation actually cares about, and EXIF stores it without
+    /// a timezone. Where the camera recorded the offset we must use it rather than assuming the
+    /// server's — a photo taken abroad would otherwise land hours from when it was really taken.
+    /// </summary>
+    [Fact]
+    public void CaptureTimeUsesTheOffsetTheCameraRecorded()
+    {
+        var extractor = new FileMetadataExtractorService();
+
+        // Shot at 21:30 with the camera set to +05:00 — so 16:30 UTC, wherever this test runs.
+        var meta = extractor.Extract(
+            Guid.NewGuid(), "image/jpeg", TestImages.JpegWithCaptureTime("2026:03:14 21:30:00", "+05:00"));
+
+        Assert.NotNull(meta.CapturedAtUtc);
+        Assert.Equal(new DateTime(2026, 3, 14, 16, 30, 0, DateTimeKind.Utc), meta.CapturedAtUtc!.Value);
+    }
+
+    [Fact]
+    public void CaptureTimeIsStillRecordedWhenTheCameraGaveNoOffset()
+    {
+        var extractor = new FileMetadataExtractorService();
+
+        var meta = extractor.Extract(
+            Guid.NewGuid(), "image/jpeg", TestImages.JpegWithCaptureTime("2026:03:14 21:30:00", offset: null));
+
+        // No offset to trust, so the server's is assumed — recorded rather than dropped, and the
+        // untouched original value stays in RawMetadataJson.
+        Assert.NotNull(meta.CapturedAtUtc);
+        Assert.Contains("2026", meta.RawMetadataJson!);
+    }
+
     [Fact]
     public void DerivativePathsSitBesideTheOriginal()
     {
