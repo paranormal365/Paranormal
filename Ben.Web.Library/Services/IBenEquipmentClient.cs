@@ -72,6 +72,21 @@ public interface IBenEquipmentClient
 
     Task<IReadOnlyList<EquipmentServiceLogRecord>> GetOrgEquipmentServiceLogAsync(Guid orgId, Guid itemId, CancellationToken token = default);
 
+    /// <summary>Photos on a group's own gear — same pipeline as personal equipment.</summary>
+    Task<EquipmentItemPhotoRecord?> AttachOrgEquipmentPhotoAsync(Guid orgId, Guid itemId, MultipartFormDataContent content, CancellationToken token = default);
+    Task<bool> DetachOrgEquipmentPhotoAsync(Guid orgId, Guid itemId, Guid photoId, CancellationToken token = default);
+    Task<bool> SetOrgEquipmentPrimaryPhotoAsync(Guid orgId, Guid itemId, Guid photoId, CancellationToken token = default);
+
+    /// <summary>Takes a piece out of service, or puts it back. Keeps its history either way.</summary>
+    Task<bool> RetireMyEquipmentAsync(Guid itemId, bool retired, CancellationToken token = default);
+    Task<bool> RetireOrgEquipmentAsync(Guid orgId, Guid itemId, bool retired, CancellationToken token = default);
+
+    /// <summary>A small copy of a photo, for grids. Same visibility rule as the full bytes.</summary>
+    Task<(byte[] Data, string ContentType, string FileName)?> GetEquipmentPhotoThumbnailAsync(Guid photoId, CancellationToken token = default);
+
+    /// <summary>What was stripped out of a picture. Org Administrators and SuperAdmin only.</summary>
+    Task<UploadFileMetadataRecord?> GetEquipmentPhotoMetadataAsync(Guid photoId, CancellationToken token = default);
+
     // ── Borrowing (Phase 4) ──────────────────────────────────────────────────
 
     /// <summary>Whether the caller may ask to borrow an item, and on whose behalf they could.</summary>

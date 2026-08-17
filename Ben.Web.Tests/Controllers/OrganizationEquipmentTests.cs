@@ -1,6 +1,8 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
+using Microsoft.Extensions.Logging.Abstractions;
+using Ben.Data.WebApi.Services;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Entities;
 using Ben.Service.Models.Entities;
@@ -51,10 +53,10 @@ public class OrganizationEquipmentTests
                 .ReturnsAsync((Guid u, Guid _, OrganizationSecurityTable _, OrganizationSecurityAction _, CancellationToken _)
                     => canManageUserId is not null && u == canManageUserId);
 
+        var storageMock = storage ?? new Mock<IFileStorageService>();
         return new OrganizationEquipmentController(
-            f, security.Object,
-            (storage ?? new Mock<IFileStorageService>()).Object,
-            new Mock<IAuditLogService>().Object)
+            f, security.Object, storageMock.Object,
+            new Mock<IAuditLogService>().Object, BuildIngest(storageMock))
         {
             ControllerContext = new ControllerContext
             {
@@ -122,6 +124,17 @@ public class OrganizationEquipmentTests
         => new(modelId, name, serial, null, null);
 
     // ── Reading: membership is enough, but serials are not ───────────────────
+
+    /// <summary>
+    /// A real ingest service over the mocked storage — tests exercise the actual sanitize/extract
+    /// path rather than mocking past the thing phase 6a exists to guarantee.
+    /// </summary>
+    private static IMediaIngestService BuildIngest(Mock<IFileStorageService>? storage = null)
+        => new MediaIngestService(
+            (storage ?? new Mock<IFileStorageService>()).Object,
+            new FileMetadataExtractorService(),
+            new MediaSanitizationService(),
+            NullLogger<MediaIngestService>.Instance);
 
     [Fact]
     public async Task PlainMember_SeesTheKitList_ButNoSerialNumbers()
@@ -378,6 +391,71 @@ public class OrganizationEquipmentTests
             new AddEquipmentServiceLogRequest(EquipmentServiceLogType.Service, DateTime.UtcNow, "Calibrated", OutsiderId),
             default);
         Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    // ── Photos (the capability the editor and help docs already claimed) ─────
+
+    private static IFormFile Photo(string name = "kit.jpg")
+    {
+        var bytes = TestImages.Jpeg();
+        var file = new Mock<IFormFile>();
+        file.Setup(f => f.FileName).Returns(name);
+        file.Setup(f => f.Length).Returns(bytes.Length);
+        file.Setup(f => f.ContentType).Returns("image/jpeg");
+        file.Setup(f => f.OpenReadStream()).Returns(() => new MemoryStream(bytes));
+        return file.Object;
+    }
+
+    [Fact]
+    public async Task SomeoneWithTheEquipmentPermission_CanAttachAPhotoToGroupGear()
+    {
+        var w = await SeedAsync();
+
+        var result = await Build(w.Factory, ManagerId, canManageUserId: ManagerId)
+            .AttachPhoto(OrgId, w.ItemId, Photo(), default);
+        var photo = Assert.IsType<EquipmentItemPhotoRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        Assert.True(photo.IsPrimary);   // the first photo leads
+
+        await using var db = await w.Factory.CreateDbContextAsync();
+        // Metadata was recorded, exactly as for personal gear.
+        Assert.True(await db.UploadFileMetadata.AnyAsync());
+    }
+
+    [Fact]
+    public async Task PlainMember_CannotAttachAPhotoToGroupGear()
+    {
+        var w = await SeedAsync();
+        var result = await Build(w.Factory, PlainMemberId, canManageUserId: ManagerId)
+            .AttachPhoto(OrgId, w.ItemId, Photo(), default);
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task APhotoCanBeRemovedAndAnotherMadePrimary()
+    {
+        var w = await SeedAsync();
+        var ctrl = Build(w.Factory, ManagerId, canManageUserId: ManagerId);
+
+        var first = (EquipmentItemPhotoRecord)((OkObjectResult)(await ctrl.AttachPhoto(OrgId, w.ItemId, Photo("a.jpg"), default)).Result!).Value!;
+        var second = (EquipmentItemPhotoRecord)((OkObjectResult)(await ctrl.AttachPhoto(OrgId, w.ItemId, Photo("b.jpg"), default)).Result!).Value!;
+
+        Assert.IsType<NoContentResult>(await ctrl.SetPrimaryPhoto(OrgId, w.ItemId, second.Id, default));
+        Assert.IsType<NoContentResult>(await ctrl.DetachPhoto(OrgId, w.ItemId, first.Id, default));
+
+        await using var db = await w.Factory.CreateDbContextAsync();
+        var remaining = await db.EquipmentItemPhotos.SingleAsync();
+        Assert.Equal(second.Id, remaining.Id);
+        Assert.True(remaining.IsPrimary);
+    }
+
+    [Fact]
+    public async Task AnotherGroupsItemCannotBePhotographed()
+    {
+        var w = await SeedAsync();
+        var result = await Build(w.Factory, ManagerId, canManageUserId: ManagerId)
+            .AttachPhoto(Guid.NewGuid(), w.ItemId, Photo(), default);
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     // ── Delete vs retire ─────────────────────────────────────────────────────

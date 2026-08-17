@@ -80,7 +80,29 @@
             </label>
         </div>
 
+        @* The capability this editor has claimed since phase 3, finally real. *@
+        @if (Item is not null)
+        {
+            <div class="mb-2">
+                <label class="form-label fw-semibold">Photos</label>
+                <Ben.Web.Library.Equipment.EquipmentPhotoStrip ItemId="@Item.Id"
+                                                              OrgId="@OrgId"
+                                                              CanEdit="true"
+                                                              Photos="@Item.Photos" />
+            </div>
+        }
+        else
+        {
+            <p class="text-secondary small">Photos can be added once the piece is saved.</p>
+        }
+
         <div class="dialog-footer-actions">
+            @if (Item is not null)
+            {
+                <TelerikButton OnClick="ToggleRetiredAsync" Enabled="@(!_busy)">
+                    @(Item.IsRetired ? "Put back in service" : "Retire")
+                </TelerikButton>
+            }
             <span class="dialog-footer-spacer"></span>
             <TelerikButton OnClick="@(() => OnVisibleChanged(false))" Enabled="@(!_busy)">Cancel</TelerikButton>
             <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
@@ -192,6 +214,22 @@
 
         await OnSaved.InvokeAsync();
         await OnVisibleChanged(false);
+    }
+
+    private async Task ToggleRetiredAsync()
+    {
+        if (Item is null) return;
+        _busy = true;
+        _error = null;
+
+        if (!await AdminClient.RetireOrgEquipmentAsync(OrgId, Item.Id, !Item.IsRetired))
+            _error = Item.IsRetired
+                ? "That couldn't be put back in service."
+                : "That couldn't be retired — it may be out on loan right now.";
+
+        _busy = false;
+        await OnSaved.InvokeAsync();
+        if (_error is null) await OnVisibleChanged(false);
     }
 
     private async Task OnVisibleChanged(bool visible)

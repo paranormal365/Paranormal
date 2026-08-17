@@ -2,6 +2,8 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
+using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.SeedData;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Service.Models.Entities;
 using Ben.Service.RepositoryService.GenericInterfaces;
@@ -34,17 +36,20 @@ public sealed class OrganizationEquipmentController : BenControllerBase
     private readonly IOrganizationSecurityService _security;
     private readonly IFileStorageService _fileStorage;
     private readonly IAuditLogService _auditLog;
+    private readonly IMediaIngestService _mediaIngest;
 
     public OrganizationEquipmentController(
         IDbContextFactory<BenDataContext> db,
         IOrganizationSecurityService security,
         IFileStorageService fileStorage,
-        IAuditLogService auditLog)
+        IAuditLogService auditLog,
+        IMediaIngestService mediaIngest)
     {
         _db          = db;
         _security    = security;
         _fileStorage = fileStorage;
         _auditLog    = auditLog;
+        _mediaIngest = mediaIngest;
     }
 
     private bool IsSuperAdmin() => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
@@ -368,6 +373,125 @@ public sealed class OrganizationEquipmentController : BenControllerBase
 
         var holderNames = await HolderNamesAsync(db, [entity], ct);
         return Ok(ToOrgRecord(entity, canManage: true, holderNames));
+    }
+
+    // ── Photos ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Attaches a photo to a piece of the group's gear.
+    /// </summary>
+    /// <remarks>
+    /// Group equipment had no photo capability at all until now, while the editor and the help docs
+    /// both said it did — and the projections already read a photo collection that could never be
+    /// non-empty. Same ingest pipeline as personal gear: metadata to its own table, original kept,
+    /// sanitized copy served.
+    /// </remarks>
+    [HttpPost("{id:guid}/photos")]
+    [Consumes("multipart/form-data")]
+    [DisableRequestSizeLimit]
+    public async Task<ActionResult<EquipmentItemPhotoRecord>> AttachPhoto(
+        Guid orgId, Guid id, IFormFile file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0) return BadRequest("File is empty.");
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        if (!await CanManageAsync(userId, orgId, OrganizationSecurityAction.Update, ct)) return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var item = await db.EquipmentItems.Include(i => i.Photos)
+            .FirstOrDefaultAsync(i => i.Id == id && i.OwningOrganizationId == orgId, ct);
+        if (item is null) return NotFound();
+
+        var storedName   = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+        var storagePath  = _fileStorage.OrgFilePath(orgId, storedName);
+        var uploadFileId = Guid.NewGuid();
+
+        IngestedMedia ingested;
+        try
+        {
+            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct);
+        }
+        catch (UnreadableImageException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+
+        db.UploadFiles.Add(new UploadFile
+        {
+            Id                 = uploadFileId,
+            UploadFileTypeId   = UploadFileTypeSeeder.EquipmentPhotoFileTypeId,
+            AppUserId          = userId,
+            FileName           = file.FileName,
+            StoredFileName     = storedName,
+            ContentType        = ingested.ServedContentType,
+            FileSize           = ingested.ServedFileSize,
+            StoragePath        = storagePath,
+            IsPublic           = false,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        });
+        db.UploadFileMetadata.Add(ingested.Metadata);
+
+        var photo = new EquipmentItemPhoto
+        {
+            Id                 = Guid.NewGuid(),
+            EquipmentItemId    = id,
+            UploadFileId       = uploadFileId,
+            IsPrimary          = item.Photos.Count == 0,
+            SortOrder          = item.Photos.Count,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        };
+        db.EquipmentItemPhotos.Add(photo);
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(EquipmentItemPhoto), photo.Id, photo, userId, Ben.Data.Common.Constants.AppSources.WebApi));
+
+        return Ok(new EquipmentItemPhotoRecord(photo.Id, photo.EquipmentItemId, photo.UploadFileId, photo.IsPrimary, photo.Caption, photo.SortOrder));
+    }
+
+    [HttpDelete("{id:guid}/photos/{photoId:guid}")]
+    public async Task<IActionResult> DetachPhoto(Guid orgId, Guid id, Guid photoId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        if (!await CanManageAsync(userId, orgId, OrganizationSecurityAction.Update, ct)) return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await db.EquipmentItems.AnyAsync(i => i.Id == id && i.OwningOrganizationId == orgId, ct))
+            return NotFound();
+
+        var photo = await db.EquipmentItemPhotos
+            .Include(p => p.UploadFile)
+            .FirstOrDefaultAsync(p => p.Id == photoId && p.EquipmentItemId == id, ct);
+        if (photo is null) return NotFound();
+
+        var storagePath = photo.UploadFile.StoragePath;
+        db.EquipmentItemPhotos.Remove(photo);
+        db.UploadFiles.Remove(photo.UploadFile);
+        await db.SaveChangesAsync(ct);
+
+        if (storagePath is not null) await _mediaIngest.DeleteAllAsync(storagePath, ct);
+        return NoContent();
+    }
+
+    /// <summary>Makes one photo the one shown first.</summary>
+    [HttpPut("{id:guid}/photos/{photoId:guid}/primary")]
+    public async Task<IActionResult> SetPrimaryPhoto(Guid orgId, Guid id, Guid photoId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        if (!await CanManageAsync(userId, orgId, OrganizationSecurityAction.Update, ct)) return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await db.EquipmentItems.AnyAsync(i => i.Id == id && i.OwningOrganizationId == orgId, ct))
+            return NotFound();
+
+        var photos = await db.EquipmentItemPhotos.Where(p => p.EquipmentItemId == id).ToListAsync(ct);
+        if (photos.All(p => p.Id != photoId)) return NotFound();
+
+        foreach (var p in photos) p.IsPrimary = p.Id == photoId;
+        await db.SaveChangesAsync(ct);
+        return NoContent();
     }
 
     // ── Service and defect log ───────────────────────────────────────────────

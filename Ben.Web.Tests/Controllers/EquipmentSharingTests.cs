@@ -60,7 +60,8 @@ public class EquipmentSharingTests
     }
 
     private static OrganizationEquipmentController BuildOrg(IDbContextFactory<BenDataContext> f, Guid userId)
-        => new(f, new Mock<IOrganizationSecurityService>().Object, new Mock<IFileStorageService>().Object, new Mock<IAuditLogService>().Object)
+        => new(f, new Mock<IOrganizationSecurityService>().Object, new Mock<IFileStorageService>().Object,
+               new Mock<IAuditLogService>().Object, BuildIngest())
         {
             ControllerContext = new ControllerContext
             {
