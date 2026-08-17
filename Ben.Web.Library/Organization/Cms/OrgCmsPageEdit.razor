@@ -22,11 +22,21 @@
             <h3 class="d-inline-block ms-3 mb-0">@(_page?.PageTitle ?? "Edit Page")</h3>
         </div>
         <div class="col-auto d-flex gap-2">
+            @* Two different things, so they are named differently. The side-by-side panel follows
+               what you are typing but draws its own approximation of each section in half a column.
+               "View as visitor" opens the real public renderer on the saved page — which is what
+               tells you whether it is actually ready to publish. *@
             <TelerikButton Icon="@SvgIcon.Eye"
                            FillMode="@ThemeConstants.Button.FillMode.Outline"
                            OnClick="TogglePreview">
-                @(_showPreview ? "Hide Preview" : "Preview")
+                @(_showPreview ? "Hide side-by-side" : "Side-by-side")
             </TelerikButton>
+            <a class="btn btn-outline-primary"
+               href="@($"/organizations/{OrgId}/cms/pages/{PageId}/preview")"
+               target="_blank" rel="noopener"
+               title="Opens the saved page in the public renderer, published or not">
+                View as visitor
+            </a>
         </div>
     </div>
 

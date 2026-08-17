@@ -154,6 +154,11 @@ public sealed partial class BenAdminClientAdapter
     public Task<OrgPublicPageResponse?> GetPublicOrgPageAsync(string urlName, string pageSlug, CancellationToken token = default)
         => _api.GetAnonymousAsync<OrgPublicPageResponse>($"/api/public/organizations/{Uri.EscapeDataString(urlName)}/pages/{Uri.EscapeDataString(pageSlug)}", token);
 
+    // Authenticated, unlike its public twin: a preview shows unpublished work, so the server has to
+    // know who is asking.
+    public Task<OrgPublicPageResponse?> GetCmsPagePreviewAsync(Guid orgId, Guid pageId, CancellationToken token = default)
+        => _api.GetAsync<OrgPublicPageResponse>($"/api/organizations/{orgId}/cms/pages/{pageId}/preview", token);
+
     public string GetFileDownloadUrl(Guid uploadFileId)
         => $"{_webApiBaseUrl}/api/upload-files/{uploadFileId}/download";
     public string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId)

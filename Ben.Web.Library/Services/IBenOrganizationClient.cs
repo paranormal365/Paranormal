@@ -96,6 +96,13 @@ public interface IBenOrganizationClient
 
     Task<OrgPublicHomeResponse?> GetPublicOrgAsync(string urlName, CancellationToken token = default);
     Task<OrgPublicPageResponse?> GetPublicOrgPageAsync(string urlName, string pageSlug, CancellationToken token = default);
+
+    /// <summary>
+    /// One of the group's CMS pages as a visitor would see it, whether or not it is published.
+    /// Returns the same shape as <see cref="GetPublicOrgPageAsync"/> so one renderer draws both and
+    /// a preview cannot drift from the real page.
+    /// </summary>
+    Task<OrgPublicPageResponse?> GetCmsPagePreviewAsync(Guid orgId, Guid pageId, CancellationToken token = default);
     string GetFileDownloadUrl(Guid uploadFileId);
     string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId);
 
