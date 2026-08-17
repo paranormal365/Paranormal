@@ -49,6 +49,31 @@ public static class EquipmentAccess
         => items.ToDictionary(i => i.Id, i => ComputeItemFlags(i, userId, isSuperAdmin));
 
     /// <summary>
+    /// Whether <paramref name="viewerUserId"/> can see this item by way of a group it is shared
+    /// with — that is, a group both they and the owner are currently active members of.
+    /// </summary>
+    /// <remarks>
+    /// Membership is verified live for both sides rather than being inferred from the share row
+    /// existing. A share is a standing statement ("this group may see my recorder"), and it should
+    /// stop meaning anything the moment either party is no longer in that group — otherwise leaving
+    /// a group would quietly leave your gear visible to it.
+    /// </remarks>
+    public static Task<bool> IsSharedWithAGroupSharedWithAsync(
+        BenDataContext db, Guid itemId, Guid? ownerUserId, Guid viewerUserId, CancellationToken ct)
+    {
+        if (ownerUserId is null || viewerUserId == Guid.Empty) return Task.FromResult(false);
+
+        return db.EquipmentItemShares.AsNoTracking()
+            .Where(s => s.EquipmentItemId == itemId)
+            .AnyAsync(s =>
+                db.OrganizationUserMemberships.Any(m =>
+                    m.OrganizationId == s.OrganizationId && m.AppUserId == viewerUserId && m.IsActive)
+                && db.OrganizationUserMemberships.Any(m =>
+                    m.OrganizationId == s.OrganizationId && m.AppUserId == ownerUserId && m.IsActive),
+                ct);
+    }
+
+    /// <summary>
     /// Ownership check for the <c>api/me/equipment</c> surface: matches id AND owner together and
     /// answers with the row (or null) rather than a bool, so callers return 404 — not 403 — on a
     /// mismatch. Confirming an id exists to someone who does not own it is its own small leak.

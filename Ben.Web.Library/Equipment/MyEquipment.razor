@@ -26,6 +26,36 @@
         <div class="alert alert-danger">@_error</div>
     }
 
+    @* Bulk sharing writes the same per-item rows the per-item editor does, so a piece can still be
+       excluded afterwards without unpicking the rest. Only shown when there is a group to share
+       with — an action with nothing to act on is noise. *@
+    @if (!_loading && _items.Count > 0 && _myGroups.Count > 0)
+    {
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <span class="small fw-semibold">All my gear:</span>
+                    <TelerikDropDownList Data="@_myGroups" TItem="EquipmentShareOptionRecord" TValue="Guid?"
+                                         Value="@_bulkOrgId" ValueChanged="@((Guid? v) => _bulkOrgId = v)"
+                                         TextField="@nameof(EquipmentShareOptionRecord.OrganizationName)"
+                                         ValueField="@nameof(EquipmentShareOptionRecord.OrganizationId)"
+                                         DefaultText="Choose a group…" Width="220px" />
+                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                   Enabled="@(_bulkOrgId is not null && !_bulkBusy)"
+                                   OnClick="@(() => BulkShareAsync(true))">Share all</TelerikButton>
+                    <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                   Enabled="@(_bulkOrgId is not null && !_bulkBusy)"
+                                   OnClick="@(() => BulkShareAsync(false))">Stop sharing all</TelerikButton>
+                    @if (_bulkMessage is not null)
+                    {
+                        <span class="text-secondary small">@_bulkMessage</span>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
     @if (_loading)
     {
         <TelerikLoaderContainer Visible="true" Text="Loading your equipment…" />
@@ -91,6 +121,9 @@
                             </div>
                         </div>
                         <div class="d-flex gap-2">
+                            <TelerikButton Icon="@SvgIcon.Share" Size="@ThemeConstants.Button.Size.Small"
+                                           Enabled="@item.Flags.CanManageSharing"
+                                           OnClick="@(() => OpenShare(item))">Share</TelerikButton>
                             <TelerikButton Icon="@SvgIcon.Pencil" Size="@ThemeConstants.Button.Size.Small"
                                            Enabled="@item.Flags.CanEdit"
                                            OnClick="@(() => OpenEdit(item))">Edit</TelerikButton>
@@ -137,6 +170,11 @@
                        Item="@_editing"
                        OnSaved="LoadAsync" />
 
+<EquipmentShareEditor Visible="@_shareVisible"
+                      VisibleChanged="@(v => _shareVisible = v)"
+                      Item="@_sharing"
+                      OnSaved="LoadAsync" />
+
 <ConfirmDialog @bind-Visible="@_confirmVisible"
                Title="Delete equipment"
                Busy="@_deleting"
@@ -153,12 +191,19 @@
 @code {
     private List<EquipmentItemRecord> _items = [];
     private EquipmentItemRecord? _editing;
+    private EquipmentItemRecord? _sharing;
+    private bool _shareVisible;
     private EquipmentItemRecord? _pendingDelete;
     private bool _confirmVisible;
     private bool _deleting;
     private bool _editorVisible;
     private bool _loading = true;
     private string? _error;
+
+    private List<EquipmentShareOptionRecord> _myGroups = [];
+    private Guid? _bulkOrgId;
+    private bool _bulkBusy;
+    private string? _bulkMessage;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -179,6 +224,12 @@
         try
         {
             _items = [.. await AdminClient.GetMyEquipmentAsync()];
+
+            // The share options for any one item double as "the groups I'm in" — the endpoint
+            // returns every group with a flag, so one item's list answers the bulk panel too.
+            _myGroups = _items.Count > 0
+                ? [.. await AdminClient.GetMyEquipmentSharesAsync(_items[0].Id)]
+                : [];
         }
         catch (Exception ex)
         {
@@ -186,6 +237,23 @@
         }
         _loading = false;
         StateHasChanged();
+    }
+
+    private async Task BulkShareAsync(bool share)
+    {
+        if (_bulkOrgId is null) return;
+        _bulkBusy = true;
+        _bulkMessage = null;
+
+        var result = await AdminClient.BulkShareMyEquipmentAsync(_bulkOrgId.Value, share);
+        _bulkMessage = result is null
+            ? "That didn't work."
+            : share
+                ? $"Shared {result.ItemsAffected} of {result.TotalItems}."
+                : $"Stopped sharing {result.ItemsAffected}.";
+
+        _bulkBusy = false;
+        await LoadAsync();
     }
 
     private void OpenCreate()
@@ -198,6 +266,12 @@
     {
         _editing = item;
         _editorVisible = true;
+    }
+
+    private void OpenShare(EquipmentItemRecord item)
+    {
+        _sharing = item;
+        _shareVisible = true;
     }
 
     private void ConfirmDelete(EquipmentItemRecord item)

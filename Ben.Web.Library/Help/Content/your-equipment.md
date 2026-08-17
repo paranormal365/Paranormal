@@ -49,9 +49,25 @@ Not everything has a manufacturer and a product name, and you should never have 
 These are two separate choices, set per piece of equipment, and both start switched off. Letting
 people know you own something is not the same as offering to lend it.
 
-**Who can see it.** By default only you. You can tick **List this in the public catalog** to show
-the piece under *Gear people own* — visible to anyone, signed in or not. Even then, it shows the
-item, its make and model and its photos, and never your name or its serial number.
+**Who can see it.** By default only you. Two ways to widen that, and they are independent:
+
+- **Share it with a group** — use the **Share** button on the piece and tick the groups that should
+  see it. They see the make, model, photos and what you call it, alongside your name. They never
+  see the serial number.
+- **List it in the public catalog** — shows the piece under *Gear people own*, visible to anyone,
+  signed in or not. Even then it never carries your name or its serial number.
+
+## Sharing with your groups
+
+Sharing is per piece and per group, so you can put most of your kit in front of a group and keep
+one piece out of it. You can only share with groups you are actually a member of.
+
+If you have a lot of gear, the **All my gear** row at the top of My Equipment shares or unshares
+everything with one group at once. It still writes the same per-piece choices underneath, so you
+can immediately go and untick the one piece you would rather keep back.
+
+A share lasts as long as your membership. If you leave a group, your gear stops appearing to it
+straight away — the choice is remembered, so it applies again if you rejoin.
 
 **Who can borrow it.** Three options, and you can pick any combination:
 

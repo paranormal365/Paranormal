@@ -96,6 +96,31 @@ public sealed partial class BenAdminClientAdapter
     public Task<(byte[] Data, string ContentType, string FileName)?> GetEquipmentPhotoBytesAsync(Guid photoId, CancellationToken token = default)
         => _api.GetBytesAsync($"/api/equipment/photos/{photoId}/content", "photo", token);
 
+    // ── Sharing with groups ───────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<EquipmentShareOptionRecord>> GetMyEquipmentSharesAsync(Guid itemId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<EquipmentShareOptionRecord>>($"{MyEquipmentBase}/{itemId}/shares", token);
+        return result ?? [];
+    }
+
+    public async Task<IReadOnlyList<EquipmentShareOptionRecord>> SetMyEquipmentSharesAsync(Guid itemId, IReadOnlyList<Guid> organizationIds, CancellationToken token = default)
+    {
+        var result = await _api.PutAsync<SetEquipmentSharesRequest, IReadOnlyList<EquipmentShareOptionRecord>>(
+            $"{MyEquipmentBase}/{itemId}/shares", new SetEquipmentSharesRequest(organizationIds), token);
+        return result ?? [];
+    }
+
+    public Task<BulkEquipmentShareResult?> BulkShareMyEquipmentAsync(Guid organizationId, bool share, CancellationToken token = default)
+        => _api.PostAsync<BulkEquipmentShareRequest, BulkEquipmentShareResult>(
+               $"{MyEquipmentBase}/shares/bulk", new BulkEquipmentShareRequest(organizationId, share), token);
+
+    public async Task<IReadOnlyList<SharedEquipmentItemRecord>> GetOrgSharedEquipmentAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<SharedEquipmentItemRecord>>($"/api/organizations/{orgId}/equipment/shared", token);
+        return result ?? [];
+    }
+
     // ── SuperAdmin taxonomy moderation ───────────────────────────────────────
 
     private const string AdminTaxonomyBase = "/api/admin/equipment-taxonomy";

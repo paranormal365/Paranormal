@@ -39,6 +39,20 @@ public interface IBenEquipmentClient
     /// <summary>Fetches an equipment photo's raw bytes for data:-URI rendering — never a plain &lt;img src&gt;.</summary>
     Task<(byte[] Data, string ContentType, string FileName)?> GetEquipmentPhotoBytesAsync(Guid photoId, CancellationToken token = default);
 
+    // ── Sharing with groups (Phase 2) ────────────────────────────────────────
+
+    /// <summary>The caller's groups, each flagged with whether this item is shared with it.</summary>
+    Task<IReadOnlyList<EquipmentShareOptionRecord>> GetMyEquipmentSharesAsync(Guid itemId, CancellationToken token = default);
+
+    /// <summary>Replaces the item's shares wholesale; groups omitted are unshared.</summary>
+    Task<IReadOnlyList<EquipmentShareOptionRecord>> SetMyEquipmentSharesAsync(Guid itemId, IReadOnlyList<Guid> organizationIds, CancellationToken token = default);
+
+    /// <summary>Shares or unshares every one of the caller's non-retired items with one group.</summary>
+    Task<BulkEquipmentShareResult?> BulkShareMyEquipmentAsync(Guid organizationId, bool share, CancellationToken token = default);
+
+    /// <summary>Members' personal gear shared with this group. Never carries a serial number.</summary>
+    Task<IReadOnlyList<SharedEquipmentItemRecord>> GetOrgSharedEquipmentAsync(Guid orgId, CancellationToken token = default);
+
     // ── SuperAdmin taxonomy moderation (Phase 1) ─────────────────────────────
 
     Task<IReadOnlyList<EquipmentCategoryRecord>> GetAdminEquipmentCategoriesAsync(CancellationToken token = default);

@@ -313,6 +313,159 @@ public sealed class MyEquipmentController : BenControllerBase
         return NoContent();
     }
 
+    // ── Sharing with groups ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// The caller's groups, each flagged with whether this item is shared with it.
+    /// </summary>
+    /// <remarks>
+    /// Returns the options rather than just the current shares: the editor needs both, and asking
+    /// "which groups am I in" and "which of them can see this" separately is the same question
+    /// twice. Groups the owner has since left simply drop off the list — and stop granting
+    /// visibility, because every read checks live membership.
+    /// </remarks>
+    [HttpGet("{id:guid}/shares")]
+    public async Task<ActionResult<IEnumerable<EquipmentShareOptionRecord>>> GetShares(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var item = await db.EquipmentItems.AsNoTracking()
+            .FirstOrDefaultAsync(i => i.Id == id && i.OwnerAppUserId == userId, ct);
+        if (item is null) return NotFound();
+
+        var sharedOrgIds = await db.EquipmentItemShares.AsNoTracking()
+            .Where(s => s.EquipmentItemId == id)
+            .Select(s => s.OrganizationId)
+            .ToListAsync(ct);
+
+        var options = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.AppUserId == userId && m.IsActive)
+            .Join(db.Organizations.AsNoTracking(), m => m.OrganizationId, o => o.Id, (m, o) => new { o.Id, o.Name })
+            .OrderBy(o => o.Name)
+            .ToListAsync(ct);
+
+        return Ok(options.Select(o => new EquipmentShareOptionRecord(o.Id, o.Name, sharedOrgIds.Contains(o.Id))));
+    }
+
+    /// <summary>
+    /// Replaces which groups can see this item. Any group not in the list is unshared.
+    /// </summary>
+    /// <remarks>
+    /// Only groups the caller is an active member of are accepted — you cannot push your gear into
+    /// a group you do not belong to. Rejects org-owned items outright: that gear already belongs to
+    /// a group, so a share row would mean nothing.
+    /// </remarks>
+    [HttpPut("{id:guid}/shares")]
+    public async Task<ActionResult<IEnumerable<EquipmentShareOptionRecord>>> SetShares(
+        Guid id, [FromBody] SetEquipmentSharesRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var item = await db.EquipmentItems.FirstOrDefaultAsync(i => i.Id == id && i.OwnerAppUserId == userId, ct);
+        if (item is null) return NotFound();
+        if (item.OwningOrganizationId is not null)
+            return BadRequest("Group-owned equipment already belongs to a group and cannot be shared this way.");
+
+        var requested = (request.OrganizationIds ?? []).Distinct().ToList();
+
+        var myOrgIds = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.AppUserId == userId && m.IsActive)
+            .Select(m => m.OrganizationId)
+            .ToListAsync(ct);
+
+        var notMine = requested.Where(o => !myOrgIds.Contains(o)).ToList();
+        if (notMine.Count > 0)
+            return BadRequest("You can only share equipment with groups you are an active member of.");
+
+        var existing = await db.EquipmentItemShares.Where(s => s.EquipmentItemId == id).ToListAsync(ct);
+
+        var toRemove = existing.Where(s => !requested.Contains(s.OrganizationId)).ToList();
+        if (toRemove.Count > 0) db.EquipmentItemShares.RemoveRange(toRemove);
+
+        var existingOrgIds = existing.Select(s => s.OrganizationId).ToHashSet();
+        foreach (var orgId in requested.Where(o => !existingOrgIds.Contains(o)))
+        {
+            db.EquipmentItemShares.Add(new EquipmentItemShare
+            {
+                Id                 = Guid.NewGuid(),
+                EquipmentItemId    = id,
+                OrganizationId     = orgId,
+                DateCreated        = DateTime.UtcNow,
+                CreatedByAppUserId = userId,
+            });
+        }
+
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(EquipmentItem), id,
+            new { SharedWith = existing.Select(s => s.OrganizationId).ToList() },
+            new { SharedWith = requested },
+            userId, Ben.Data.Common.Constants.AppSources.WebApi));
+
+        return await GetShares(id, ct);
+    }
+
+    /// <summary>
+    /// Shares or unshares every one of the caller's non-retired personal items with one group.
+    /// </summary>
+    /// <remarks>
+    /// A convenience over the per-item endpoint, not a second model: it writes the same per-item
+    /// rows, so the owner can immediately exclude one piece without undoing the rest.
+    /// </remarks>
+    [HttpPost("shares/bulk")]
+    public async Task<ActionResult<BulkEquipmentShareResult>> BulkShare(
+        [FromBody] BulkEquipmentShareRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var isMember = await db.OrganizationUserMemberships.AsNoTracking()
+            .AnyAsync(m => m.AppUserId == userId && m.OrganizationId == request.OrganizationId && m.IsActive, ct);
+        if (!isMember)
+            return BadRequest("You can only share equipment with groups you are an active member of.");
+
+        var myItemIds = await db.EquipmentItems.AsNoTracking()
+            .Where(i => i.OwnerAppUserId == userId && !i.IsRetired)
+            .Select(i => i.Id)
+            .ToListAsync(ct);
+
+        var existing = await db.EquipmentItemShares
+            .Where(s => s.OrganizationId == request.OrganizationId && myItemIds.Contains(s.EquipmentItemId))
+            .ToListAsync(ct);
+
+        var affected = 0;
+        if (request.Share)
+        {
+            var alreadyShared = existing.Select(s => s.EquipmentItemId).ToHashSet();
+            foreach (var itemId in myItemIds.Where(i => !alreadyShared.Contains(i)))
+            {
+                db.EquipmentItemShares.Add(new EquipmentItemShare
+                {
+                    Id                 = Guid.NewGuid(),
+                    EquipmentItemId    = itemId,
+                    OrganizationId     = request.OrganizationId,
+                    DateCreated        = DateTime.UtcNow,
+                    CreatedByAppUserId = userId,
+                });
+                affected++;
+            }
+        }
+        else
+        {
+            db.EquipmentItemShares.RemoveRange(existing);
+            affected = existing.Count;
+        }
+
+        if (affected > 0) await db.SaveChangesAsync(ct);
+
+        return Ok(new BulkEquipmentShareResult(affected, myItemIds.Count));
+    }
+
     private bool IsSuperAdmin() => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
 
     private static EquipmentItemRecord ToRecord(
@@ -390,10 +543,18 @@ public sealed class EquipmentPhotoContentController : BenControllerBase
         // Publicly listed by its owner — anyone may see it, signed in or not.
         var isPubliclyListed = photo.EquipmentItem.IncludeInGlobalCatalog && !photo.EquipmentItem.IsRetired;
 
-        // Otherwise: owner or SuperAdmin only. Phase 2/3 widen this to shared-with-my-group and
-        // org-member visibility once those exist.
         var flags = EquipmentAccess.ComputeItemFlags(photo.EquipmentItem, userId, isSuperAdmin);
-        if (!isPubliclyListed && !flags.IsOwner && !isSuperAdmin) return NotFound();
+
+        // Shared with a group the caller and the owner are both active members of. Checked live
+        // rather than trusted from the share row, so a share left behind after either of them left
+        // the group stops granting anything.
+        var isSharedWithMyGroup = !isPubliclyListed && !flags.IsOwner && !isSuperAdmin
+            && userId != Guid.Empty
+            && !photo.EquipmentItem.IsRetired
+            && await EquipmentAccess.IsSharedWithAGroupSharedWithAsync(
+                   db, photo.EquipmentItemId, photo.EquipmentItem.OwnerAppUserId, userId, ct);
+
+        if (!isPubliclyListed && !isSharedWithMyGroup && !flags.IsOwner && !isSuperAdmin) return NotFound();
 
         if (photo.UploadFile.StoragePath is null) return NotFound();
         var stream = await _fileStorage.OpenReadAsync(photo.UploadFile.StoragePath, ct);
