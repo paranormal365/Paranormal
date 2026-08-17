@@ -3887,6 +3887,74 @@ sub-part because it is only meaningful once public events exist, and it should n
 planning a trip, for anyone who declines the permission, and on a desktop where the browser's guess
 is often wrong by a county.
 
+### 87b. Hidden locations, and how somebody without an account attends
+
+Ben: *"If it is made hidden, they cannot see the actual location unless they choose to attend and
+they ask to attend. Then they can see the actual address — assuming they have contact information if
+they do not have an account yet. They can create one or maybe we allow the temporary with contact
+info. I am not sure how this is usually handled."*
+
+**The hidden-location pattern is well established** — Airbnb shows a circle until a booking is
+confirmed, Eventbrite hides the address until a ticket is issued, and recovery meetings and private
+supper clubs have done the same thing for decades. So the shape is not in doubt; the question is
+what unlocks it.
+
+**Two reveal modes, chosen per event**, because Ben described both "choose to attend" and "ask to
+attend":
+
+- **Open** — the address appears as soon as somebody confirms they are coming.
+- **By request** — the organization approves first, and the address appears on approval. The
+  equipment loan lifecycle is already exactly this shape (requested → approved → …) and is the
+  pattern to copy rather than reinvent.
+
+#### The account question — recommendation: a magic link that leaves a real account behind
+
+The three options in the wild are guest RSVP with an email (Eventbrite), a required account
+(Meetup), and a **magic link that creates a lightweight passwordless account on first click**
+(Luma, Partiful). **The third is right here**, for three reasons that are specific to this product
+rather than to taste:
+
+1. **The reveal has to be gated on a *verified* email, not a typed one.** If anyone can type an
+   address into a box and be shown where a group is meeting, the hidden location is theatre. A
+   click-through link is the cheapest gate that actually verifies anything.
+2. **Ben's stated purpose is acquisition** — *"an introduction to them by people attending."* A guest
+   RSVP leaves nothing behind. A magic-link RSVP leaves the organization a contactable person and
+   the platform a user, which is the entire point of the feature.
+3. **Strangers are meeting at a location, often at night.** A persistent identity is the minimum for
+   an organization to notice somebody who no-showed twice, or to remove them.
+
+It also reconciles Ben's two statements — *"they have to be a site user"* and *"maybe we allow the
+temporary with contact info"*. They **are** a site user; they simply never had to invent a password.
+Setting one later is an upgrade, not a requirement.
+
+**The infrastructure is already here.** `IEmailService` exists, and `CaseClientInvite` is already an
+email + token + expiry + `AcceptedByAppUserId` flow built for item #4 — the same shape, pointed at
+an event instead of a case.
+
+**Worth getting right:**
+- **Expire the link and single-use it.** A forwarded email should not hand the address to a mailing
+  list.
+- **The address lives behind the endpoint, not in the page.** Reveal means the server checks the
+  RSVP and returns the address; it does not mean shipping it to the browser with `display:none`.
+- **Cancelling revokes the reveal** for future loads. It cannot un-tell somebody, and pretending
+  otherwise would be dishonest — but it should stop the page serving it again.
+- **Say what happens before they commit.** "The exact address is shared with people who are coming"
+  on the listing, so nobody feels tricked into identifying themselves.
+
+#### The radius filter, and the leak it would otherwise create
+
+A distance dropdown (**5 / 10 / 25 / 50 / 100 miles**) over the calendar and the map, per Ben.
+
+**Filter and plot against the *redacted* coordinate, never the true one.** This is the part that is
+easy to get wrong: if the radius query runs against the real position, somebody can narrow the
+radius step by step around a guessed point and binary-search their way to the exact location —
+the filter becomes an oracle that gives away precisely what the hidden address was protecting.
+Running it against the `PublicCoordinates` cell centre caps the resolution of any such attack at the
+cell size, by construction.
+
+Same rule for the map pin, and show **"about 12 miles away"** rather than a precise figure or a line
+drawn from the visitor to the venue.
+
 ### Smaller things to settle when it is picked up
 
 - **Who sees the attendee list?** These are strangers. Default to the organization seeing names and
