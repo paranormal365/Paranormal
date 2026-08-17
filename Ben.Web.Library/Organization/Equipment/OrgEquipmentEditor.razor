@@ -68,6 +68,15 @@
                       @oninput="@(e => _notes = e.Value?.ToString() ?? string.Empty)"></textarea>
         </div>
 
+        <div class="mb-2">
+            <label class="form-label fw-semibold">Manufacturer's page</label>
+            <input class="form-control" maxlength="500" placeholder="https://…" value="@_websiteUrl"
+                   @oninput="@(e => _websiteUrl = e.Value?.ToString() ?? string.Empty)" />
+            <div class="form-text">
+                Optional. Gathered with everyone else's links on this make and model's catalog page.
+            </div>
+        </div>
+
         <div class="d-flex align-items-start gap-2">
             <input type="checkbox" class="form-check-input mt-1" id="org-eq-global"
                    checked="@_includeInGlobalCatalog"
@@ -85,10 +94,14 @@
         {
             <div class="mb-2">
                 <label class="form-label fw-semibold">Photos</label>
+                @* Its own list rather than Item.Photos: the parent's reload does not hand this
+                   window a fresh record, so without this the strip would show a stale tick after
+                   a photo is added, removed or hidden from the model page. *@
                 <Ben.Web.Library.Equipment.EquipmentPhotoStrip ItemId="@Item.Id"
                                                               OrgId="@OrgId"
                                                               CanEdit="true"
-                                                              Photos="@Item.Photos" />
+                                                              Photos="@_photos"
+                                                              OnChanged="ReloadPhotosAsync" />
             </div>
         }
         else
@@ -128,7 +141,9 @@
     private string _serialNumber = string.Empty;
     private DateTime? _acquisitionDate;
     private string _notes = string.Empty;
+    private string _websiteUrl = string.Empty;
     private bool _includeInGlobalCatalog;
+    private IReadOnlyList<EquipmentItemPhotoRecord> _photos = [];
 
     private bool _busy;
     private string? _error;
@@ -152,16 +167,20 @@
             _categoryId = null; _brandId = null; _modelId = null;
             _displayName = string.Empty; _serialNumber = string.Empty;
             _acquisitionDate = null; _notes = string.Empty;
+            _websiteUrl = string.Empty;
             _includeInGlobalCatalog = false;
             _models = [];
+            _photos = [];
         }
         else
         {
+            _photos = Item.Photos;
             _modelId         = Item.EquipmentModelId;
             _displayName     = Item.DisplayName;
             _serialNumber    = Item.SerialNumber ?? string.Empty;
             _acquisitionDate = Item.AcquisitionDate;
             _notes           = Item.Notes ?? string.Empty;
+            _websiteUrl      = Item.WebsiteUrl ?? string.Empty;
             _includeInGlobalCatalog = Item.IncludeInGlobalCatalog;
 
             // Work back from the model so the cascading pickers open on the right rungs.
@@ -170,6 +189,19 @@
             if (_brandId is not null)
                 _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)];
         }
+    }
+
+    /// <summary>
+    /// Re-reads this piece after any photo change. The unified item endpoint answers rather than an
+    /// org-specific one — it already serves equipment managers everything they may see, so there is
+    /// no second projection to keep in step with the first.
+    /// </summary>
+    private async Task ReloadPhotosAsync()
+    {
+        if (Item is null) return;
+        var refreshed = await AdminClient.GetEquipmentItemAsync(Item.Id);
+        if (refreshed is not null) _photos = refreshed.Photos;
+        await OnSaved.InvokeAsync();
     }
 
     private async Task OnCategoryChangedAsync(Guid? categoryId)
@@ -198,7 +230,8 @@
             string.IsNullOrWhiteSpace(_serialNumber) ? null : _serialNumber.Trim(),
             _acquisitionDate,
             string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim(),
-            _includeInGlobalCatalog);
+            _includeInGlobalCatalog,
+            string.IsNullOrWhiteSpace(_websiteUrl) ? null : _websiteUrl.Trim());
 
         var saved = Item is null
             ? await AdminClient.CreateOrgEquipmentAsync(OrgId, request)

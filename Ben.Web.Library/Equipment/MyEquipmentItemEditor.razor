@@ -116,6 +116,16 @@
                       @oninput="@(e => _notes = e.Value?.ToString() ?? string.Empty)"></textarea>
         </div>
 
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Manufacturer's page</label>
+            <input class="form-control" maxlength="500" placeholder="https://…" value="@_websiteUrl"
+                   @oninput="@(e => _websiteUrl = e.Value?.ToString() ?? string.Empty)" />
+            <div class="form-text">
+                Optional. Links added by everyone who owns this make and model are gathered on its
+                catalog page, so one person's research helps the next.
+            </div>
+        </div>
+
         <hr />
 
         <div class="mb-3">
@@ -231,6 +241,7 @@
     private string _serialNumber = string.Empty;
     private DateTime? _acquisitionDate;
     private string _notes = string.Empty;
+    private string _websiteUrl = string.Empty;
     private string _newBrandName = string.Empty;
     private string _newModelName = string.Empty;
     private bool _includeInGlobalCatalog;
@@ -266,6 +277,7 @@
             _brands = []; _models = [];
             _displayName = string.Empty; _serialNumber = string.Empty;
             _acquisitionDate = null; _notes = string.Empty;
+            _websiteUrl = string.Empty;
             _includeInGlobalCatalog = false;
             _loanAudience = EquipmentLoanAudience.NotLoanable;
         }
@@ -276,6 +288,7 @@
             _serialNumber    = Item.SerialNumber ?? string.Empty;
             _acquisitionDate = Item.AcquisitionDate;
             _notes           = Item.Notes ?? string.Empty;
+            _websiteUrl      = Item.WebsiteUrl ?? string.Empty;
             _includeInGlobalCatalog = Item.IncludeInGlobalCatalog;
             _loanAudience           = Item.LoanAudience;
 
@@ -359,7 +372,8 @@
             _acquisitionDate,
             string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim(),
             _includeInGlobalCatalog,
-            _loanAudience);
+            _loanAudience,
+            string.IsNullOrWhiteSpace(_websiteUrl) ? null : _websiteUrl.Trim());
 
         var saved = Item is null
             ? await AdminClient.CreateMyEquipmentItemAsync(request)

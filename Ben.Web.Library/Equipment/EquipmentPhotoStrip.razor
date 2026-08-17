@@ -36,6 +36,11 @@
                 {
                     <span class="badge bg-primary position-absolute top-0 start-0 m-1" style="font-size:.6rem;">Main</span>
                 }
+                @if (photo.ExcludeFromCatalog)
+                {
+                    <span class="badge bg-secondary position-absolute top-0 end-0 m-1"
+                          style="font-size:.6rem;" title="Not shown on the make and model page">Hidden</span>
+                }
 
                 @if (CanEdit)
                 {
@@ -50,6 +55,16 @@
                                 style="font-size:.7rem;" disabled="@_busy"
                                 @onclick="@(() => RemoveAsync(photo.Id))">Remove</button>
                     </div>
+
+                    @* Per photo, not per item — someone may be happy for a clean product shot to
+                       appear on the model page but not the one taken in their living room. *@
+                    <label class="d-flex align-items-start gap-1 mt-1 mb-0 text-secondary"
+                           style="font-size:.7rem;cursor:pointer;">
+                        <input type="checkbox" class="form-check-input mt-0" disabled="@_busy"
+                               checked="@photo.ExcludeFromCatalog"
+                               @onchange="@(e => SetCatalogExclusionAsync(photo.Id, (bool)(e.Value ?? false)))" />
+                        <span>Hide from the model page</span>
+                    </label>
                 }
             </div>
         }
@@ -174,6 +189,17 @@
             _dataUrls.Remove(photoId);
             await OnChanged.InvokeAsync();
         }
+        _busy = false;
+    }
+
+    private async Task SetCatalogExclusionAsync(Guid photoId, bool exclude)
+    {
+        _busy = true;
+        _error = null;
+        if (!await AdminClient.SetPhotoCatalogExclusionAsync(ItemId, photoId, exclude, OrgId))
+            _error = "That photo's catalog setting could not be changed.";
+        else
+            await OnChanged.InvokeAsync();   // the parent reloads, which is what re-renders the tick
         _busy = false;
     }
 }

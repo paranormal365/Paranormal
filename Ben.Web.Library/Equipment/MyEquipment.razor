@@ -95,14 +95,15 @@
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
                             <h6 class="card-title mb-1">
-                                @item.DisplayName
+                                <a href="@($"/equipment/{item.Id}")" class="text-decoration-none">@item.DisplayName</a>
                                 @if (item.IsRetired)
                                 {
                                     <span class="badge bg-secondary ms-2">Retired</span>
                                 }
                             </h6>
                             <div class="text-secondary small">
-                                @item.BrandName · @item.ModelName
+                                <a href="@($"/equipment-models/{item.EquipmentModelId}")"
+                                   class="text-decoration-none text-secondary">@item.BrandName · @item.ModelName</a>
                                 <span class="mx-1">·</span>
                                 @item.CategoryName
                             </div>
