@@ -2,6 +2,7 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.SeedData;
+using Ben.Data.WebApi.Services;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Service.Models.Entities;
 using Ben.Service.RepositoryService.GenericInterfaces;
@@ -176,7 +177,7 @@ public sealed class EquipmentCheckoutController : BenControllerBase
                 checkout.DateReviewed        = DateTime.UtcNow;
                 NotifyBorrower(db, checkout, userId,
                     "Your equipment request was declined",
-                    $"Your request to borrow equipment was declined. Reason given: {checkout.ReviewNotes}");
+                    $"Your request to borrow equipment was declined. Reason given: {NotificationText.Safe(checkout.ReviewNotes)}");
             });
     }
 
@@ -432,7 +433,7 @@ public sealed class EquipmentCheckoutController : BenControllerBase
 
         AddMessage(db, recipients, requesterId,
             "Equipment borrowing request",
-            $"{requesterName} has asked to borrow {item.DisplayName}. It's waiting for your decision.");
+            $"{NotificationText.Safe(requesterName)} has asked to borrow {NotificationText.Safe(item.DisplayName)}. It's waiting for your decision.");
     }
 
     private static void NotifyBorrower(

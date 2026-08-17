@@ -277,7 +277,7 @@ public sealed class EquipmentLoanHistoryController : BenControllerBase
 
         await NotifyApproversAsync(db, checkout, userId,
             "Request for more time on borrowed equipment",
-            $"A renewal has been asked for on {checkout.EquipmentItem.DisplayName}, until {request.RequestedDateDue:d MMM yyyy}.", ct);
+            $"A renewal has been asked for on {NotificationText.Safe(checkout.EquipmentItem.DisplayName)}, until {request.RequestedDateDue:d MMM yyyy}.", ct);
 
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(EquipmentCheckoutRenewal), renewal.Id, renewal, userId, Ben.Data.Common.Constants.AppSources.WebApi));
@@ -330,7 +330,7 @@ public sealed class EquipmentLoanHistoryController : BenControllerBase
             request.Approve ? "More time granted on borrowed equipment" : "Request for more time declined",
             request.Approve
                 ? $"Your loan now runs until {tracked.RequestedDateDue:d MMM yyyy}."
-                : $"Your request for more time was declined. Reason given: {tracked.ReviewNotes}");
+                : $"Your request for more time was declined. Reason given: {NotificationText.Safe(tracked.ReviewNotes)}");
 
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(EquipmentCheckoutRenewal), tracked.Id, renewal, tracked, userId, Ben.Data.Common.Constants.AppSources.WebApi));

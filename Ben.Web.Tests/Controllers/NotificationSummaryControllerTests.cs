@@ -60,6 +60,69 @@ public class NotificationSummaryControllerTests
 
     // ── Auth ──────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Groundwork for the anonymous question channel: a message flagged to hide its sender must
+    /// give up BOTH the name and the id. Leaving the id would deanonymise it just as thoroughly,
+    /// and the name's fallback is the author's email address.
+    /// </summary>
+    [Fact]
+    public async Task AMessageMarkedAnonymousRevealsNeitherTheSendersNameNorTheirId()
+    {
+        var factory = TestDbFactory.Create();
+        var authorId = Guid.NewGuid();
+        var recipientId = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser
+            { Id = authorId, UserName = "asker@t", Email = "asker@t", DisplayName = "The Asker" });
+            db.Users.Add(new AppUser
+            { Id = recipientId, UserName = "owner@t", Email = "owner@t", DisplayName = "The Owner" });
+
+            var typeId = Guid.NewGuid();
+            db.UserMessageTypes.Add(new UserMessageType
+            { Id = typeId, Name = "Equipment Question", IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = authorId });
+
+            var messageId = Guid.NewGuid();
+            db.UserMessages.Add(new UserMessage
+            {
+                Id = messageId, UserMessageTypeId = typeId,
+                MessageSubject = "A question about your equipment",
+                MessageBody = "Does it come with the windshield?",
+                HideSenderIdentity = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = authorId,
+            });
+            db.UserMessageTos.Add(new UserMessageTo
+            { Id = Guid.NewGuid(), MessageId = messageId, ToAppUserId = recipientId });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl = new MyMessagesController(factory)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.NameIdentifier, recipientId.ToString())], "Bearer"))
+                }
+            }
+        };
+
+        var result = await ctrl.GetMine(unreadOnly: false, default);
+        var messages = Assert.IsAssignableFrom<IEnumerable<MyMessageRecord>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value).ToList();
+
+        var message = Assert.Single(messages);
+        Assert.True(message.SenderHidden);
+        Assert.Null(message.SentByDisplayName);
+        Assert.Null(message.SentByAppUserId);
+
+        // The database still knows — anonymity is a presentation rule, not lost provenance.
+        await using var check = await factory.CreateDbContextAsync();
+        Assert.Equal(authorId, (await check.UserMessages.SingleAsync()).CreatedByAppUserId);
+    }
+
     [Fact]
     public async Task GetSummary_ReturnsUnauthorized_WhenNoUserClaim()
     {
