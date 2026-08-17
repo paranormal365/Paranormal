@@ -3475,3 +3475,121 @@ doesn't require reading the source to know what "Investigations: Update" actuall
 > actions aren't uniform CRUD. Touches the same `Sections` list in `OrgRoleEditor.razor` that item
 > #55 (equipment) is about to add two rows to — do this one either just before or just after #55
 > Phase 3, while that file is already open, rather than as a separate later pass.
+
+---
+
+## 84. Organization subscription lapse, and what happens to their clients (not started, designed 2026-08-17)
+
+Ben's policy, worked out while sizing monetisation (see item #85 for the billing model itself).
+Deferred with the rest of monetisation until the site's functionality and help documents are
+complete — this entry exists so the design is not re-derived later.
+
+### The group's own wind-down
+
+"Closed" does not mean gone. Billing stops at the end of the cycle and **everything stays available
+until the paid period ends** — so a group that closes is simply active with a known end date, not a
+new state. They keep every paid-for ability in the meantime, and can re-enable billing or upgrade
+before the date arrives.
+
+At the billing date:
+
+- They **stop being able to add records**. No new scheduling, no new entries dated past the billing
+  date.
+- **Everything already there remains**: a scheduled investigation stays as a record, along with the
+  history collection, visits and client interaction done up to that date.
+- Read access continues until they are disabled.
+
+### Notifications, escalating
+
+| When | Who | What |
+|---|---|---|
+| ~2 weeks out | Owner, Administrators, and the group's **treasurer** if it has one | Billing is ending |
+| 1 week out | The group | **They must notify existing clients** their cases will need reassigning |
+| Date passes | Clients | Their case is paused; they may choose a new organization |
+
+The owner should be able to **nominate who receives billing notices** rather than the system
+guessing from roles — a group's treasurer is not necessarily an Administrator.
+
+### What happens to the clients
+
+Cases the organization worked go into a **paused** state, and the client may select a new
+organization to investigate — if they wish to at all.
+
+If they pick a new one, that organization can see the client's existing records, and **the client
+chooses what carries over**, per category:
+
+- whether to share the **history collected** by the original group, and
+- whether to share the **investigations and investigation records** of the original group.
+
+**Findings remain the original group's — and also the client's.** Dual ownership is the rule, which
+is why the client can share them onward without the original group's permission.
+
+This applies to every way a client relationship can end, not only a lapse: the group drops the
+client, the client drops the group, or payment lapses. In all three, the information becomes
+shareable at the client's discretion.
+
+Groups are to be told all of this **when they join**, not when it happens.
+
+### Notes for whoever builds it
+
+- The per-category share choice is the same **two-key consent** shape already used for private
+  member photos — one side offers, the other opts in — rather than a new mechanism.
+- "Paused" is a real case state distinct from Closed and Transferred; check `CaseStatus` and the
+  places that branch on it (`CaseOrgAccess`, the client-facing `MyCaseController`, the discovery
+  endpoints) before adding it.
+- The existing `CaseTransferLog` and its Pending/Accepted/Rejected/Cancelled flow is the closest
+  prior art for moving a case between organizations — extend it rather than inventing a parallel
+  path.
+- Dual ownership means deletion by the original group must not remove what the client can still
+  share. The equipment work's retire-instead-of-delete rule is the same instinct.
+
+---
+
+## 85. Monetisation: subscriptions, and paid rental (not started, direction set 2026-08-17)
+
+Deferred by Ben until the site's functionality and help documents are complete. Recorded so the
+thinking is not repeated. Payment provider undecided — **Square or PayPal** are the candidates.
+
+### The model Ben has converged on
+
+**The platform bills organizations, tiered by member count** — e.g. 1–3 members free, 4–10 at
+around $15/month. One merchant, money flowing inward only. Deliberately **not** collecting money the
+platform has not earned: a group may run its own member billing, but the platform does not handle
+it.
+
+That choice matters more than it looks. Collecting dues on a group's behalf, or taking a cut of
+equipment rental, would make the platform a payment facilitator — payouts to each group, identity
+verification per group, and the regulatory weight of holding other people's money. Billing
+organizations directly avoids all of it and is a fraction of the work (weeks, against months).
+
+Wind-down when a subscription ends is item #84.
+
+### Sizing, if paid rental is ever revisited
+
+| | What | Cost |
+|---|---|---|
+| Tier 1 | Record the agreed price and deposit; money changes hands outside the app | ~2–4 days |
+| Tier 2 | Borrower pays through the app, settled with lenders manually | ~2–3 weeks, plus the question of holding funds |
+| Tier 3 | Real marketplace with automatic payouts | ~6–10 weeks, plus terms, tax reporting and likely legal review |
+
+Most of the rental *domain* already exists: the loan lifecycle, one-item-one-holder, due dates and
+overdue, condition photos at both ends, ratings, and audit on every transition. Money attaches to
+transitions that are already there; it does not reshape them.
+
+### Monetising rental without handling money
+
+**Sell the tooling, not the transaction.** A paid tier for the rental features — deposit tracking,
+late fees, and a printable or e-signable rental agreement with the condition photos embedded as
+evidence — is worth paying for precisely because the condition-photo and history work already
+exists. The platform never touches a payment.
+
+Secondary: promoted listings in the catalog, with the interest counters (phase 6b) as the evidence
+that promotion works.
+
+### Design consequences to raise when this is built, not before
+
+- Member count becomes a **billing input**, so add/remove-member and active/inactive transitions
+  become financially meaningful, and the tier boundary creates an incentive to under-report. Count
+  actives at a defined moment rather than continuously.
+- Financially relevant records must not be destroyable. The equipment work's
+  retire-instead-of-delete rule is the pattern to follow.
