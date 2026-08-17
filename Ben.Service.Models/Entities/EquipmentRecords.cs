@@ -38,7 +38,11 @@ public sealed record EquipmentModelRecord(
     bool IsApproved,
     Guid? ProposedByOrganizationId,
     Guid? ProposedByAppUserId,
-    DateTime DateCreated);
+    DateTime DateCreated,
+    /// <summary>The readable address segment — "h1n" in /equipment/zoom/h1n.</summary>
+    string? UrlName = null,
+    /// <summary>The make's segment, so a caller holding only this record can build the link.</summary>
+    string? BrandUrlName = null);
 
 /// <summary>
 /// Proposes a brand for the shared catalog.

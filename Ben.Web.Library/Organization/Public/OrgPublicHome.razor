@@ -97,5 +97,15 @@ else
         StateHasChanged();
         _org     = await AdminClient.GetPublicOrgAsync(UrlName);
         _loading = false;
+
+        // Arrived on an address the group has since changed. The page loads either way — an old
+        // link must never simply die — but the browser is moved to the current address so that what
+        // gets copied, bookmarked and shared onward is the one that will still be right tomorrow.
+        // Replace, not push, so Back goes where the visitor came from rather than round in a loop.
+        if (_org is not null
+            && !string.Equals(_org.OrgUrlName, UrlName, StringComparison.OrdinalIgnoreCase))
+        {
+            NavManager.NavigateTo($"/o/{_org.OrgUrlName}", replace: true);
+        }
     }
 }

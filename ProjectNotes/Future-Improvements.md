@@ -4106,7 +4106,7 @@ So plotting groups needs one of:
 
 ---
 
-## 89. Readable URLs — the scheme, settled 2026-08-17
+## 89. Readable URLs — the scheme, settled 2026-08-17 (closed 2026-08-17)
 
 Ben: *"we use the GUID for many of the IDs. That is not human readable... I was thinking we need
 '/c' for cases and '/i' for investigations."* Then, on single letters: *"how can we provide a
@@ -4227,9 +4227,48 @@ from inside the app.**
   The place page's rows now link to it — they carried no slug, which is the third time in this
   session a list has shipped unable to open its own contents.
 
-- Slugs for equipment models, using `UrlSlug`.
-- **Alias-and-redirect for changed slugs**, before anything ships publicly. Cheap now, and
-  retrofitting it after links have been shared means the links are already dead.
+- **Equipment model slugs — ✅ built 2026-08-17.** `/equipment/{make}/{model}` — the last page in
+  this work still wearing a GUID, and the one Ben raised first.
+
+  **This slug is regenerated on rename**, which is the opposite of every other slug here and
+  deliberate. A case, an event and an organization freeze theirs because somebody chose and shared
+  it. The catalog is the site's own vocabulary and its rename path exists specifically to correct
+  mistakes — a page for a make fixed from "Sansung" to "Samsung" that still answered only to
+  `/equipment/sansung` would preserve the error in the most visible place there is. The cost is that
+  a catalog link shared before a correction dies; accepted because these addresses are brand new, so
+  nothing has been shared yet.
+
+  Model slugs are unique **within the make**, matching how the names are: two manufacturers may both
+  make an "X1", and neither should be forced to take a suffix. Existing rows are backfilled by the
+  seeder in C# rather than by SQL in the migration, so there is one definition of how a name becomes
+  a slug — a SQL approximation would quietly disagree with `UrlSlug` on accents and length.
+
+  The GUID route stays and **redirects to the readable address**, because every list in the app
+  still links by id. Without that the readable route would exist and nothing would ever reach it.
+
+- **Alias-and-redirect for changed slugs — ✅ built 2026-08-17**, and the investigation found three
+  faults rather than the one that was expected.
+
+  **The expected one:** renaming an organization broke every link ever shared, silently. Old
+  addresses are now kept as aliases and still resolve, and the public page moves the browser to the
+  current address so what gets copied onward is the one that will still be right tomorrow. Aliases
+  are **never reassigned** — pointing a saved link at a different group is worse than the link being
+  dead, because a dead link says "gone" while a captured one says something false.
+
+  **Two that were not:**
+  - **`Organization.UrlName` had no unique index and the rename path never checked.** Create checked;
+    rename did not. Two groups could hold one address, and all seventeen lookup sites are first-match
+    queries — so a group could rename onto another group's address and take their public traffic.
+  - **Nothing validated the characters.** Both write paths trimmed and lowercased and stopped there,
+    so `ghost squad`, `a/b` and `../admin` were all storable.
+
+  There turned out to be **three** creation paths, not two: the admin endpoint, the org endpoint, and
+  `RegisterOrganizationAsync` in the repository layer, which knew about none of this. They now share
+  one helper, in `Ben.Data.Source` because that is the only project all three can see. Two endpoints
+  writing one column with different rules is exactly how the original collation bug happened.
+
+  Cases, investigations and events need no aliases: all three generate a slug once and return early
+  if one exists. **If any of them ever becomes editable, it needs this on the same day.**
 
 ---
 

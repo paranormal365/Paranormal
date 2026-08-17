@@ -111,6 +111,7 @@ internal static class EquipmentTaxonomySeeder
                 CreatedByAppUserId  = ownerId,
             };
             db.EquipmentBrands.Add(genericBrand);
+            await Services.EquipmentCatalogSlugs.AssignAsync(db, genericBrand, default);
             await db.SaveChangesAsync();
         }
 
@@ -126,7 +127,7 @@ internal static class EquipmentTaxonomySeeder
         foreach (var category in categories)
         {
             if (existingGenericModelCategoryIds.Contains(category.Id)) continue;
-            db.EquipmentModels.Add(new EquipmentModel
+            var genericModel = new EquipmentModel
             {
                 Id                  = Guid.NewGuid(),
                 EquipmentBrandId    = genericBrand.Id,
@@ -140,9 +141,41 @@ internal static class EquipmentTaxonomySeeder
                 DateApproved        = now,
                 DateCreated         = now,
                 CreatedByAppUserId  = ownerId,
-            });
+            };
+            db.EquipmentModels.Add(genericModel);
+            await Services.EquipmentCatalogSlugs.AssignAsync(db, genericModel, default);
             modelAdded = true;
         }
         if (modelAdded) await db.SaveChangesAsync();
+
+        await BackfillSlugsAsync(db);
+    }
+
+    /// <summary>
+    /// Gives an address to any make or model created before the catalog had them.
+    /// </summary>
+    /// <remarks>
+    /// <para>Done here in C# rather than in the migration's SQL so there is exactly <b>one</b>
+    /// definition of how a name becomes a slug. A SQL approximation with nested REPLACEs would
+    /// handle the ordinary names and quietly disagree with <c>UrlSlug</c> on accents, punctuation
+    /// and length — and a row whose address does not match the rule everything else follows is
+    /// worse than a row with no address at all.</para>
+    ///
+    /// <para>Idempotent, as everything in this seeder is: rows that already have an address are not
+    /// touched, so a rename is never undone by a restart.</para>
+    /// </remarks>
+    private static async Task BackfillSlugsAsync(BenDataContext db)
+    {
+        var brands = await db.EquipmentBrands.Where(b => b.UrlName == null).ToListAsync();
+        foreach (var brand in brands)
+            await Services.EquipmentCatalogSlugs.AssignAsync(db, brand, default);
+
+        if (brands.Count > 0) await db.SaveChangesAsync();
+
+        var models = await db.EquipmentModels.Where(m => m.UrlName == null).ToListAsync();
+        foreach (var model in models)
+            await Services.EquipmentCatalogSlugs.AssignAsync(db, model, default);
+
+        if (models.Count > 0) await db.SaveChangesAsync();
     }
 }

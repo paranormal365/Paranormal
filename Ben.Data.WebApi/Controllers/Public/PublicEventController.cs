@@ -1,6 +1,7 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
+using Ben.Data.Source.Services;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -56,8 +57,12 @@ public sealed class PublicEventController : BenControllerBase
 
         if (!string.IsNullOrWhiteSpace(orgUrlName))
         {
-            var slug = Ben.Data.Common.SlugText.NormalizeOrEmpty(orgUrlName);
-            query = query.Where(e => e.Organization.UrlName == slug);
+            // Resolved to an id first rather than joined on the name: it picks up a retired address
+            // as well as the current one, and filters on an indexed key instead of a string.
+            var (org, _) = await OrganizationUrlNames.ResolveAsync(db, orgUrlName, ct);
+            if (org is null) return Ok(Array.Empty<PublicEventListItem>());
+
+            query = query.Where(e => e.OrganizationId == org.Id);
         }
 
         var events = await query
@@ -147,10 +152,12 @@ public sealed class PublicEventController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
 
         var slug = Ben.Data.Common.SlugText.NormalizeOrEmpty(eventSlug);
-        var org  = Ben.Data.Common.SlugText.NormalizeOrEmpty(orgUrlName);
+
+        var (org, _) = await OrganizationUrlNames.ResolveAsync(db, orgUrlName, ct);
+        if (org is null) return NotFound();
 
         var id = await VisibleEvents(db)
-            .Where(e => e.Organization.UrlName == org && e.UrlName == slug)
+            .Where(e => e.OrganizationId == org.Id && e.UrlName == slug)
             .Select(e => (Guid?)e.Id)
             .FirstOrDefaultAsync(ct);
 
