@@ -376,3 +376,35 @@ body[data-bs-theme="dark"] .k-drawer {
 }
 
 .dialog-footer-spacer { flex: 1 1 auto; }
+
+/* ── Calendar appointments (item #87) ──────────────────────────────────────
+   Every appointment used to render identically, so a calendar of thirty events
+   told an organizer nothing until they clicked one. Event types have carried a
+   colour and an icon since they were built; this is where they finally show.
+
+   Public events get their own treatment on top of the type's own colour, because
+   "strangers are coming to this one" is the thing worth seeing at a glance —
+   and it is the one an organizer must not confuse with a private visit. */
+.cal-item {
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.cal-item__title { overflow: hidden; text-overflow: ellipsis; }
+
+.cal-item__icon,
+.cal-item__badge { flex: 0 0 auto; font-size: .8em; line-height: 1; }
+
+/* A left bar rather than a different background: the background is how Telerik
+   shows selection and drag state, and overriding it would break both. */
+.cal-item--public {
+    border-left: 4px solid #f0a500;
+    padding-left: .3rem;
+    font-weight: 600;
+}
+
+.cal-item--public .cal-item__badge { color: #f0a500; }
