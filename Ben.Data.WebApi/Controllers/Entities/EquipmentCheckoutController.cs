@@ -86,7 +86,9 @@ public sealed class EquipmentCheckoutController : BenControllerBase
         if (!eligibility.Options.Any(o => o.OrganizationId == request.BorrowedForOrganizationId))
             return BadRequest("You can't borrow this equipment on that group's behalf.");
 
-        // One live ask per person per item: a second is a duplicate, not a queue position.
+        // One live ask per person per item: a second from the SAME person is a duplicate, not a
+        // queue position. Other people may still ask while it is out — approval is where the
+        // one-holder rule is enforced, so a queue can form without anyone being told "no" early.
         var alreadyAsking = await db.EquipmentCheckouts.AnyAsync(c =>
             c.EquipmentItemId == item.Id
             && c.BorrowerAppUserId == userId
@@ -133,6 +135,16 @@ public sealed class EquipmentCheckoutController : BenControllerBase
     public async Task<ActionResult<EquipmentCheckoutRecord>> Approve(
         Guid id, [FromBody] ApproveEquipmentCheckoutRequest request, CancellationToken ct)
         => await TransitionAsync(id, EquipmentCheckoutStatus.Requested, requireApprover: true, ct,
+            // One item, one holder. Several people may ask at once — that is a queue — but only one
+            // of those asks can be granted until the gear is back.
+            guardAsync: async (db, checkout) =>
+                await db.EquipmentCheckouts.AnyAsync(c =>
+                    c.EquipmentItemId == checkout.EquipmentItemId
+                    && c.Id != checkout.Id
+                    && (c.Status == EquipmentCheckoutStatus.Approved
+                        || c.Status == EquipmentCheckoutStatus.CheckedOut), ct)
+                    ? "This equipment is already promised to someone else. It has to come back before it can go out again."
+                    : null,
             apply: (db, checkout, userId) =>
             {
                 checkout.Status              = EquipmentCheckoutStatus.Approved;
@@ -233,7 +245,8 @@ public sealed class EquipmentCheckoutController : BenControllerBase
         CancellationToken ct,
         Action<BenDataContext, EquipmentCheckout, Guid> apply,
         bool requireBorrower = false,
-        IReadOnlyList<EquipmentCheckoutStatus>? allowedFrom = null)
+        IReadOnlyList<EquipmentCheckoutStatus>? allowedFrom = null,
+        Func<BenDataContext, EquipmentCheckout, Task<string?>>? guardAsync = null)
     {
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
@@ -258,6 +271,10 @@ public sealed class EquipmentCheckoutController : BenControllerBase
             : requiredStatus is null || checkout.Status == requiredStatus;
         if (!statusOk)
             return Conflict($"This request is already {checkout.Status.ToString().ToLowerInvariant()}.");
+
+        // Preconditions that need a query of their own — checked after the cheap guards above.
+        if (guardAsync is not null && await guardAsync(db, checkout) is string refusal)
+            return Conflict(refusal);
 
         var before = new
         {

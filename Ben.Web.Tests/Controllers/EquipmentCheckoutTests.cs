@@ -446,6 +446,65 @@ public class EquipmentCheckoutTests
         Assert.IsType<NotFoundResult>(byOutsider.Result);   // 404, not 403 — no id probing
     }
 
+    // ── One item, one holder ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// The bug this covers: the duplicate-request check was per person, and approval had no guard
+    /// at all, so two people could both be approved for the same physical recorder.
+    /// </summary>
+    [Fact]
+    public async Task AnItemAlreadyPromisedToSomeoneCannotBeApprovedForSomeoneElse()
+    {
+        var w = await SeedAsync(EquipmentLoanAudience.IndividualUsers);
+
+        var first = await RequestAsync(w, w.PersonalItemId, StrangerId, null);
+        var second = await RequestAsync(w, w.PersonalItemId, FellowMemberId, null);
+
+        // Both may ASK — that is a queue, and telling the second person "no" early would lose it.
+        Assert.IsType<OkObjectResult>((await Build(w.Factory, OwnerId)
+            .Approve(first, new ApproveEquipmentCheckoutRequest(null, null), default)).Result);
+
+        // But only one can be granted.
+        var clash = await Build(w.Factory, OwnerId)
+            .Approve(second, new ApproveEquipmentCheckoutRequest(null, null), default);
+        Assert.IsType<ConflictObjectResult>(clash.Result);
+    }
+
+    [Fact]
+    public async Task OnceItIsBackTheQueuedRequestCanBeApproved()
+    {
+        var w = await SeedAsync(EquipmentLoanAudience.IndividualUsers);
+        var first = await RequestAsync(w, w.PersonalItemId, StrangerId, null);
+        var second = await RequestAsync(w, w.PersonalItemId, FellowMemberId, null);
+
+        await Build(w.Factory, OwnerId).Approve(first, new ApproveEquipmentCheckoutRequest(null, null), default);
+        await Build(w.Factory, StrangerId).ConfirmHandoff(first, default);
+        await Build(w.Factory, OwnerId).Return(first, new ReturnEquipmentCheckoutRequest(null), default);
+
+        var now = await Build(w.Factory, OwnerId)
+            .Approve(second, new ApproveEquipmentCheckoutRequest(null, null), default);
+        Assert.IsType<OkObjectResult>(now.Result);
+    }
+
+    [Fact]
+    public async Task EligibilitySaysWhenAPieceIsAlreadyOut_AndWhenItIsDueBack()
+    {
+        var w = await SeedAsync(EquipmentLoanAudience.IndividualUsers);
+        var due = DateTime.UtcNow.AddDays(5);
+
+        var first = await RequestAsync(w, w.PersonalItemId, StrangerId, null);
+        await Build(w.Factory, OwnerId).Approve(first, new ApproveEquipmentCheckoutRequest(due, null), default);
+        await Build(w.Factory, StrangerId).ConfirmHandoff(first, default);
+
+        var result = await Build(w.Factory, FellowMemberId).GetEligibility(w.PersonalItemId, default);
+        var eligibility = Assert.IsType<BorrowEligibilityRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        Assert.True(eligibility.IsCurrentlyOut);
+        Assert.Equal(due, eligibility.ExpectedBackOn);
+        // Still askable — the queue is the point.
+        Assert.True(eligibility.CanRequest);
+    }
+
     // ── Holder tracking and overdue ──────────────────────────────────────────
 
     [Fact]
