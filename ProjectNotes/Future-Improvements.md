@@ -3965,3 +3965,74 @@ drawn from the visitor to the venue.
 - **Real-world safety.** This arranges strangers meeting at a location, often at night. Not a
   blocker, but the listing should carry what to bring and what to expect, and the organization
   should be named — an anonymous invitation to a dark building is not something to ship.
+
+---
+
+## 88. Local discovery — "what's near me" across groups, events and places (partly built, scoped 2026-08-17)
+
+Ben: *"Like if a person wants to see what is local... group events or actually local groups etc."*
+
+The natural companion to item #87. A visitor picks a distance and sees what is around them —
+**groups, public events, and places worth visiting** — on a list and a map. This is the front door
+for somebody who has never heard of any of these organizations, which makes it the same acquisition
+argument as #87 and probably the same piece of work.
+
+### What already exists, which is more than it looks
+
+**Two different "nearby" questions are already implemented, and they are not the same question.**
+
+- **"Which groups serve my area?"** — `PublicOrganizationSearchController.Search`, **live and wired**
+  into `HomeHero`, `OrgDiscovery` and the client request wizard. Matches the visitor's point against
+  each organization's declared `AreaOfOperation` circle and filters on `IsAcceptingClients`. The
+  radius here belongs to the **organization** — it is their service range — and the endpoint
+  deliberately **never returns an org's coordinates**, only a label, a distance, and whether the
+  point falls inside their range.
+- **"What is within N miles of me?"** — `SearchController.Nearby` at `/api/public/search/nearby`,
+  which honours each `OrganizationAddress`'s `IsSearchable`, `SearchVisibility` and
+  `SearchRadiusMiles`, takes a caller-supplied radius, and **nothing anywhere calls it**. Ben's
+  distance dropdown is, almost exactly, a parameter that already exists and was never exposed.
+
+So the second implementation is dead code that happens to be most of the feature being asked for.
+Worth deciding on sight whether to wire it up or fold it into the live one, rather than writing a
+third.
+
+**What does not exist at all:** local *events*. `OrgCalendarEvent.IsPublic` is written and never
+read (item #87) — so there is nothing to plot even once the map exists.
+
+### The rule that must not be applied uniformly
+
+Three kinds of thing would appear on one map, and **they do not share a privacy rule**. Getting this
+wrong in either direction breaks something:
+
+| What | Location shown | Why |
+|---|---|---|
+| **Organizations** | as precisely as they chose | A group ticking "searchable" *wants* to be found. It is a business listing. Grid-snapping it would defeat the feature. |
+| **Public events** | approximate until attending | Item #87b — an invitation with an address is a different thing from a listing. |
+| **Public cases** | always approximate | Somebody's home. `PublicCoordinates`, already enforced. |
+
+The temptation, having just built coordinate redaction, is to apply it everywhere. **Do not.** An
+organization that cannot be found has been broken, not protected.
+
+### The decision this forces
+
+The live org search **deliberately withholds organization coordinates** — it returns a distance and
+a label, never a point. That is a good decision for "who serves my postcode" and an impossible one
+for "show me a map", which needs somewhere to draw a pin.
+
+So plotting groups needs one of:
+- Use `OrganizationAddress` (where `IsSearchable` and the public display mode already permit it) as
+  the map identity, leaving `AreaOfOperation` for the service-area question. **Recommended** — the
+  two questions stay separate, and the address already carries per-address visibility controls
+  built for exactly this.
+- Or let `AreaOfOperation` return its centre when the org opts in, which conflates a service area
+  with a location and means a group "is" wherever the middle of its patch happens to be.
+
+### Shape
+
+- One **"Near me"** surface with a distance dropdown (5 / 10 / 25 / 50 / 100), a list and a map, and
+  toggles for **groups / events / places**.
+- Location by opt-in geolocation **or** a typed town or postcode — see 87a; the typed box is not a
+  fallback, it is what most desktop visitors will actually use.
+- Reuses `PublicCaseDiscovery`'s existing map rather than adding a second one.
+- Empty states that do something: "no groups within 25 miles — try 50" beats a blank list, and is
+  the difference between a visitor leaving and widening the search.
