@@ -2124,18 +2124,37 @@ carefully enough this session to be certain it's the same root cause rather than
 
 ---
 
-## 54. Member photos (not started)
+## 54. Member photos (✅ Complete — delivered by Area 4, closed out 2026-08-17)
 
 Let members add a profile photo, with a per-photo choice of visibility: public (visible to anyone,
 e.g. on a public case page or org roster) or members-only (visible only to other active members of
 the same organization).
 
 > Raised 2026-08-11 alongside item #55 (equipment tracking) — Ben WebApi/WebApp, not Ben.Video.Editor.
-> Not scoped: needs a storage decision (reuse the existing `UploadFile`/Media Library pipeline
-> rather than a bespoke upload path — item #6 already built a general-purpose, audience-aware file
-> system with public/org/private visibility tiers via `FileAudienceAccess`, which is very likely the
-> right mechanism to reuse here rather than inventing a second one), plus a profile-photo field on
-> `AppUser` or a dedicated join, and UI for setting/changing the visibility choice.
+
+**Delivered by the "Things to Add" roadmap's Area 4 (U1–U6), merged to `main` 2026-08-15** — which
+went further than this entry asked, giving the product its first self-service account surface:
+
+- `AppUserPhoto` with **two slots**, public and private, one active each via a filtered unique
+  index, rather than one photo with a visibility flag. Two pictures serve two purposes; forcing one
+  photo to be either meant choosing between a face colleagues recognise and one a stranger may see.
+- `GET /api/users/{id}/avatar` — the caller names a **person**, never a photo, and the server
+  decides which (if either) that viewer gets. `AvatarCache` is circuit-scoped for correctness, not
+  memory: avatar resolution depends on who is asking.
+- The **two-key consent rule** in `PrivatePhotoConsent.MayShowToClient`: showing a member's private
+  photo to a client needs both the group's policy and the member's own opt-in.
+- `/profile`, `UserMenu`, plus witness photos and `Case.ClientDisplayAlias`.
+
+**Closed out 2026-08-17.** `UserNameLink.ShowAvatar` existed but no caller ever set it, so the whole
+avatar-rendering path was unreachable in the UI — the same write-only shape this backlog has now hit
+three times. Now wired on the organization member roster, investigation attendee lists, and file
+comment threads.
+
+**Still unverified:** the `InputFile` → upload chain has never been exercised by a real click (the
+dev tooling cannot drive an OS file picker). Profile and witness photos were verified via the API.
+
+> The public **CMS member roster** section (`CmsSectionType.MemberRoster`) is still a placeholder
+> that renders "Member roster section." — that belongs to item #80's CMS phases, not here.
 
 ## 55. Equipment inventory & checkout tracking (not started)
 
