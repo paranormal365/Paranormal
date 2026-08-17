@@ -87,6 +87,26 @@
             </div>
         }
 
+        @* ── What borrowers thought of the gear itself ───────────────────────── *@
+        @if (_reviews.Count > 0)
+        {
+            <h5 class="mb-2">What borrowers said about it</h5>
+            <p class="text-secondary small">
+                Left after borrowing one, without their names.
+            </p>
+            <div class="mb-4">
+                @foreach (var review in _reviews)
+                {
+                    <div class="border-bottom py-2 small">
+                        <div class="text-secondary" style="font-size:.75rem;">
+                            @review.DateCreated.ToLocalTime().ToString("d MMM yyyy")
+                        </div>
+                        <div style="white-space:pre-line;">@review.Comment</div>
+                    </div>
+                }
+            </div>
+        }
+
         @* ── The pooled photos ──────────────────────────────────────────────── *@
         <h5 class="mb-2">Photos</h5>
         @if (_page.Photos.Count == 0)
@@ -122,6 +142,7 @@
     [Parameter] public Guid ModelId { get; set; }
 
     private EquipmentModelPageRecord? _page;
+    private IReadOnlyList<ProductReviewRecord> _reviews = [];
     private readonly Dictionary<Guid, string?> _thumbnails = [];
     private bool _loading = true;
     private Guid _loadedFor;
@@ -152,6 +173,9 @@
         StateHasChanged();
 
         if (_page is null) return;
+
+        _reviews = await AdminClient.GetProductReviewsAsync(ModelId);
+        StateHasChanged();
 
         // Thumbnails, not full-resolution files — these are drawn 150px wide.
         foreach (var photo in _page.Photos)

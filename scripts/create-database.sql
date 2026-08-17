@@ -8689,3 +8689,93 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817140747_AddEquipmentLoanFeedback'
+)
+BEGIN
+    CREATE TABLE [EquipmentLoanFeedbacks] (
+        [Id] uniqueidentifier NOT NULL,
+        [EquipmentCheckoutId] uniqueidentifier NOT NULL,
+        [AuthorAppUserId] uniqueidentifier NOT NULL,
+        [Role] int NOT NULL,
+        [CounterpartyComment] nvarchar(2000) NULL,
+        [Rating] int NULL,
+        [ProductComment] nvarchar(2000) NULL,
+        [SubjectAppUserId] uniqueidentifier NULL,
+        [SubjectOrganizationId] uniqueidentifier NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_EquipmentLoanFeedbacks] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_EquipmentLoanFeedbacks_AppUsers_AuthorAppUserId] FOREIGN KEY ([AuthorAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentLoanFeedbacks_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentLoanFeedbacks_AppUsers_SubjectAppUserId] FOREIGN KEY ([SubjectAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentLoanFeedbacks_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentLoanFeedbacks_EquipmentCheckouts_EquipmentCheckoutId] FOREIGN KEY ([EquipmentCheckoutId]) REFERENCES [EquipmentCheckouts] ([Id]) ON DELETE CASCADE,
+        CONSTRAINT [FK_EquipmentLoanFeedbacks_Organizations_SubjectOrganizationId] FOREIGN KEY ([SubjectOrganizationId]) REFERENCES [Organizations] ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817140747_AddEquipmentLoanFeedback'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentLoanFeedbacks_AuthorAppUserId] ON [EquipmentLoanFeedbacks] ([AuthorAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817140747_AddEquipmentLoanFeedback'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentLoanFeedbacks_CreatedByAppUserId] ON [EquipmentLoanFeedbacks] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817140747_AddEquipmentLoanFeedback'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_EquipmentLoanFeedbacks_EquipmentCheckoutId_Role] ON [EquipmentLoanFeedbacks] ([EquipmentCheckoutId], [Role]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817140747_AddEquipmentLoanFeedback'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentLoanFeedbacks_SubjectAppUserId_Role] ON [EquipmentLoanFeedbacks] ([SubjectAppUserId], [Role]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817140747_AddEquipmentLoanFeedback'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentLoanFeedbacks_SubjectOrganizationId_Role] ON [EquipmentLoanFeedbacks] ([SubjectOrganizationId], [Role]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817140747_AddEquipmentLoanFeedback'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentLoanFeedbacks_UpdatedByAppUserId] ON [EquipmentLoanFeedbacks] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817140747_AddEquipmentLoanFeedback'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260817140747_AddEquipmentLoanFeedback', N'10.0.11');
+END;
+
+COMMIT;
+GO
+

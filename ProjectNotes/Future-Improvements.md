@@ -3593,3 +3593,37 @@ that promotion works.
   actives at a defined moment rather than continuously.
 - Financially relevant records must not be destroyable. The equipment work's
   retire-instead-of-delete rule is the pattern to follow.
+
+---
+
+## 86. Equipment: what phase 6 deliberately left (recorded 2026-08-17)
+
+Item #55 closed across six phases. These were considered and deferred with a reason, so they are
+here rather than lost in a branch README.
+
+**SuperAdmin cross-group equipment browse.** There is no single screen listing every group's gear.
+A SuperAdmin passes each group's own permission check anyway, so nothing is inaccessible — it is
+purely a convenience, and building it invites treating the whole estate as one inventory when it
+belongs to separate groups.
+
+**Folding the org maintenance page into the unified item page.** Phase 6b's `/equipment/{id}` now
+serves every audience, and `/organizations/{orgId}/equipment/{itemId}` overlaps it substantially.
+The two were left side by side rather than merged mid-phase; the merge is small and safe once
+somebody has used both for a while and can say which surface's habits should win.
+
+**Model-page review and FAQ pagination.** Both aggregates cap at 20 with no paging. Fine while no
+model has more than a handful; revisit when one does, together with caching, since a model page is
+public and cheap to hammer.
+
+**Time-series interest counters.** `ViewCount` and `LinkClickCount` are lifetime totals. "Views this
+month" needs a separate table; nobody has asked, and the totals answer the question that prompted
+them ("is anyone looking at this?").
+
+**Future-dated borrowing / reservations.** Explicitly deferred with Ben during phase 6a: the request
+queue plus visible current-holder covers the need. Revisit only if people start asking for gear
+weeks ahead and the queue stops being enough.
+
+**Video and audio metadata stripping.** Phase 6a strips images by re-encoding through SkiaSharp.
+A/V needs an ffmpeg remux (`-map_metadata -1`) and ffmpeg is reachable only from the sidecar, not
+the WebApi — a hosting decision, not a code change. Metadata is already *extracted* from A/V, so the
+Admin view is complete; only the stripping half waits.

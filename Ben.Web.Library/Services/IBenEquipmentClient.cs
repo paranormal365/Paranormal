@@ -57,6 +57,29 @@ public interface IBenEquipmentClient
     /// <summary>Publishes an answered question as an FAQ entry — a copy, not the thread.</summary>
     Task<EquipmentFaqRecord?> PromoteQuestionToFaqAsync(Guid questionId, PromoteQuestionToFaqRequest request, CancellationToken token = default);
 
+    // ── Mutual loan feedback (Phase 6d) ─────────────────────────────────────
+
+    Task<bool> SubmitLoanFeedbackAsync(Guid checkoutId, SubmitLoanFeedbackRequest request, CancellationToken token = default);
+
+    /// <summary>Whether this caller can leave feedback on this loan, and as which side.</summary>
+    Task<LoanFeedbackStateRecord?> GetLoanFeedbackStateAsync(Guid checkoutId, CancellationToken token = default);
+
+    /// <summary>What past lenders said about the person asking for this loan. Approver only.</summary>
+    Task<BorrowerFeedbackPanelRecord?> GetBorrowerFeedbackAsync(Guid checkoutId, CancellationToken token = default);
+
+    /// <summary>What past borrowers said about whoever lends this piece. Never the lender themselves.</summary>
+    Task<LenderFeedbackPanelRecord?> GetLenderFeedbackAsync(Guid itemId, CancellationToken token = default);
+
+    /// <summary>Borrowers' remarks about a product, for its make/model page.</summary>
+    Task<IReadOnlyList<ProductReviewRecord>> GetProductReviewsAsync(Guid modelId, CancellationToken token = default);
+
+    /// <summary>
+    /// Feedback touching one group, for its moderators. <b>Null</b> when the server refused — an
+    /// empty list means "none yet", and a moderation page must be able to tell those apart.
+    /// </summary>
+    Task<IReadOnlyList<ModeratedFeedbackRecord>?> GetEquipmentFeedbackForModerationAsync(Guid orgId, CancellationToken token = default);
+    Task<bool> DeleteEquipmentFeedbackAsync(Guid orgId, Guid feedbackId, CancellationToken token = default);
+
     /// <summary>Items their owners chose to list publicly. Carries no owner identity and no serial.</summary>
     Task<IReadOnlyList<PublicEquipmentItemRecord>> GetPublicEquipmentItemsAsync(string? search = null, Guid? categoryId = null, CancellationToken token = default);
 

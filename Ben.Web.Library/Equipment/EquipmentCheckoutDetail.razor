@@ -51,8 +51,14 @@
                 }
             </div>
 
+            @* Only whoever is deciding this request sees it, and the borrower never does — the
+               endpoint refuses them, so the panel is absent rather than hidden. *@
+            <BorrowerHistoryPanel CheckoutId="@Loan.Id" />
+
             <h6 class="mb-2">Condition</h6>
             <CheckoutConditionPhotos Loan="@Loan" OnChanged="LoadAsync" />
+
+            <LoanFeedbackForm CheckoutId="@Loan.Id" OnSubmitted="LoadAsync" />
 
             <hr />
 
