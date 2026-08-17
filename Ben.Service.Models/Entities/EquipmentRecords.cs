@@ -54,6 +54,24 @@ public sealed record UpsertEquipmentBrandRequest(string Name, bool ConfirmDistin
 /// </summary>
 public sealed record ProbableDuplicateResponse(string ProposedName, IReadOnlyList<string> DidYouMean);
 
+/// <summary>
+/// A rename that turned out to be a merge, and what merging would mean.
+/// </summary>
+/// <remarks>
+/// Returned rather than performed. Renaming onto an existing name makes two manufacturers into one
+/// and changes what make somebody's equipment is — a large thing to have happen because a name was
+/// typed, so it is offered and confirmed rather than done.
+/// </remarks>
+public sealed record TaxonomyMergeOffer(
+    Guid SourceId,
+    string SourceName,
+    Guid TargetId,
+    string TargetName,
+    string Message);
+
+/// <summary>Renames a model, optionally correcting its model number at the same time.</summary>
+public sealed record RenameEquipmentModelRequest(string Name, string? ModelNumber = null);
+
 public sealed record UpsertEquipmentModelRequest(
     Guid EquipmentBrandId,
     Guid EquipmentCategoryId,
