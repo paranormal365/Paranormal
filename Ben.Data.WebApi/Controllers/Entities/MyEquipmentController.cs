@@ -248,8 +248,13 @@ public sealed class MyEquipmentController : BenControllerBase
             db.EquipmentItemPhotos.RemoveRange(entity.Photos);
             db.UploadFiles.RemoveRange(uploadFiles);
         }
+        var modelId = entity.EquipmentModelId;
         db.EquipmentItems.Remove(entity);
         await db.SaveChangesAsync(ct);
+
+        // A brand and model somebody typed for this item, and nothing else uses, goes with it —
+        // otherwise a typo outlives the thing it was typed for, and its author cannot remove it.
+        await TaxonomyCleanup.RemoveOrphanedTaxonomyAsync(db, modelId, ct);
         _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(EquipmentItem), entity.Id, entity, userId, Ben.Data.Common.Constants.AppSources.WebApi));
 
         foreach (var path in photoPaths)

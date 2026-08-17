@@ -40,7 +40,19 @@ public sealed record EquipmentModelRecord(
     Guid? ProposedByAppUserId,
     DateTime DateCreated);
 
-public sealed record UpsertEquipmentBrandRequest(string Name);
+/// <summary>
+/// Proposes a brand for the shared catalog.
+/// </summary>
+/// <param name="ConfirmDistinct">
+/// Set once the person has been shown the close matches and said theirs is genuinely different.
+/// Without it a probable typo is refused with the suggestions rather than silently created.
+/// </param>
+public sealed record UpsertEquipmentBrandRequest(string Name, bool ConfirmDistinct = false);
+
+/// <summary>
+/// "Did you mean one of these?" — returned instead of creating a probable duplicate.
+/// </summary>
+public sealed record ProbableDuplicateResponse(string ProposedName, IReadOnlyList<string> DidYouMean);
 
 public sealed record UpsertEquipmentModelRequest(
     Guid EquipmentBrandId,

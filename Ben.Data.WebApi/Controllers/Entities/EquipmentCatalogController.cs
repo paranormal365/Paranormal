@@ -1,5 +1,6 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.WebApi.Services;
 using Ben.Data.Source.Entities;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -357,7 +358,21 @@ public sealed class EquipmentCatalogController : BenControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var existing = await db.EquipmentBrands.FirstOrDefaultAsync(b => b.Name == name, ct);
+        // Case-insensitively, so "samsung" and "Samsung" are one manufacturer whatever the
+        // database's collation happens to be — the same rule slugs now follow.
+        var normalized = name.ToLowerInvariant();
+        var existing = await db.EquipmentBrands
+            .FirstOrDefaultAsync(b => b.Name.ToLower() == normalized, ct);
+
+        if (existing is null)
+        {
+            // Nothing matches exactly — but something close might, and this is the only cheap
+            // moment to ask. Afterwards it takes a SuperAdmin noticing, and a merge.
+            var nearMisses = await FindProbableTyposAsync(db, name, ct);
+            if (nearMisses.Count > 0 && !request.ConfirmDistinct)
+                return Conflict(new ProbableDuplicateResponse(name, nearMisses));
+        }
+
         if (existing is null)
         {
             var isSuperAdmin = User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
@@ -378,6 +393,31 @@ public sealed class EquipmentCatalogController : BenControllerBase
 
         return Ok(new EquipmentBrandRecord(existing.Id, existing.Name, existing.IsApproved,
             existing.ProposedByOrganizationId, existing.ProposedByAppUserId, existing.DateCreated));
+    }
+
+
+    /// <summary>
+    /// Approved brands whose names look like mistypings of this one.
+    /// </summary>
+    /// <remarks>
+    /// Only <b>approved</b> brands are offered as suggestions. Proposing against somebody else's
+    /// unapproved typo would spread it rather than catch it, and the approved set is the shared
+    /// vocabulary the catalog is actually trying to converge on.
+    /// </remarks>
+    private static async Task<List<string>> FindProbableTyposAsync(
+        BenDataContext db, string name, CancellationToken ct)
+    {
+        // Length-bounded in the query so this reads a handful of rows rather than the catalogue:
+        // anything more than two characters different in length is not a typo of this.
+        var lower = name.Length - 2;
+        var upper = name.Length + 2;
+
+        var candidates = await db.EquipmentBrands.AsNoTracking()
+            .Where(b => b.IsApproved && b.Name.Length >= lower && b.Name.Length <= upper)
+            .Select(b => b.Name)
+            .ToListAsync(ct);
+
+        return [.. candidates.Where(c => NameSimilarity.IsProbableTypo(name, c)).OrderBy(c => c)];
     }
 
     /// <summary>Proposes a model under a brand. Same auto-approve/dedupe rules as <see cref="ProposeBrand"/>.</summary>
