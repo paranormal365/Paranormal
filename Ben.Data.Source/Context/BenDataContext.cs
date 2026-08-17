@@ -121,6 +121,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<EquipmentQuestion> EquipmentQuestions { get; set; }
         public virtual DbSet<EquipmentLoanFeedback> EquipmentLoanFeedbacks { get; set; }
         public virtual DbSet<OrganizationCmsTemplate> OrganizationCmsTemplates { get; set; }
+        public virtual DbSet<EventAttendanceInvite> EventAttendanceInvites { get; set; }
         public virtual DbSet<VideoProject> VideoProjects { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -418,6 +419,24 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrganizationPage>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventAttendanceInvite>()
+                .HasOne(e => e.OrgCalendarEvent).WithMany()
+                .HasForeignKey(e => e.OrgCalendarEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EventAttendanceInvite>()
+                .HasOne(e => e.ConfirmedByAppUser).WithMany()
+                .HasForeignKey(e => e.ConfirmedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.Email).HasMaxLength(320);
+            modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.DisplayName).HasMaxLength(200);
+            modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.Token).HasMaxLength(128);
+            // The token is how the link is resolved, and it must be unique while it exists. Filtered
+            // because it is cleared on confirmation and a pile of nulls would collide.
+            modelBuilder.Entity<EventAttendanceInvite>()
+                .HasIndex(e => e.Token).IsUnique().HasFilter("[Token] IS NOT NULL");
+            // One pending invitation per address per event: asking twice is the same statement, and
+            // this is what lets a resend reuse the row rather than litter.
+            modelBuilder.Entity<EventAttendanceInvite>()
+                .HasIndex(e => new { e.OrgCalendarEventId, e.Email });
+
             // NoAction: deleting a place must not delete the record that somebody met there.
             modelBuilder.Entity<OrgCalendarEvent>()
                 .HasOne(e => e.Place).WithMany()

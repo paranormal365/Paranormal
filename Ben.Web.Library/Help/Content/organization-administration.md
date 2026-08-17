@@ -244,3 +244,19 @@ from its date and title the first time you publish it. That is the link to put o
 
 It does not change afterwards, even if you rename the event. A link somebody has already shared
 should keep working.
+
+### People coming who don't have an account
+
+Somebody who finds your event and has never been here before doesn't have to sign up for anything
+first. They give an email address, we send them a link, and clicking it is what actually confirms
+they're coming.
+
+The link matters: an address typed into a box proves nothing, and an event that hides its exact
+location until people are coming would be protecting nothing if anyone could type any address and be
+shown where you're meeting.
+
+Confirming makes them an account with no password. They can set one later if they want to sign in
+properly, but they don't have to — it exists so you have somebody you can reach, and so they can see
+what they've said they're going to.
+
+You'll see them in the attendee list like anybody else.

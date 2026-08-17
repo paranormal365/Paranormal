@@ -189,6 +189,19 @@ public interface IBenOrganizationClient
     /// <summary>Says the signed-in caller is coming. Returns the refreshed event.</summary>
     Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, CancellationToken token = default);
 
+    /// <summary>
+    /// Asks to attend by email, for somebody who is not signed in. Always succeeds from the
+    /// caller's point of view — a different answer for a known address would let anyone test which
+    /// emails have accounts here.
+    /// </summary>
+    Task<bool> RequestEventAttendanceAsync(Guid eventId, string email, string? displayName, CancellationToken token = default);
+
+    /// <summary>What a confirmation link points at, before it is used.</summary>
+    Task<EventAttendanceInviteInfo?> GetEventAttendanceInviteAsync(string token, CancellationToken cancellationToken = default);
+
+    /// <summary>Uses a confirmation link. Creates a passwordless account if there is not one.</summary>
+    Task<EventAttendanceConfirmation?> ConfirmEventAttendanceAsync(string token, CancellationToken cancellationToken = default);
+
     /// <summary>Says they are no longer coming.</summary>
     Task<bool> CancelEventRsvpAsync(Guid eventId, CancellationToken token = default);
 }

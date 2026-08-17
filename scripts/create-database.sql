@@ -8984,3 +8984,64 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817171953_AddEventAttendanceInvites'
+)
+BEGIN
+    CREATE TABLE [EventAttendanceInvites] (
+        [Id] uniqueidentifier NOT NULL,
+        [OrgCalendarEventId] uniqueidentifier NOT NULL,
+        [Email] nvarchar(320) NOT NULL,
+        [DisplayName] nvarchar(200) NULL,
+        [Token] nvarchar(128) NULL,
+        [DateExpires] datetime2 NOT NULL,
+        [DateConfirmed] datetime2 NULL,
+        [ConfirmedByAppUserId] uniqueidentifier NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_EventAttendanceInvites] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_EventAttendanceInvites_AppUsers_ConfirmedByAppUserId] FOREIGN KEY ([ConfirmedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EventAttendanceInvites_OrgCalendarEvents_OrgCalendarEventId] FOREIGN KEY ([OrgCalendarEventId]) REFERENCES [OrgCalendarEvents] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817171953_AddEventAttendanceInvites'
+)
+BEGIN
+    CREATE INDEX [IX_EventAttendanceInvites_ConfirmedByAppUserId] ON [EventAttendanceInvites] ([ConfirmedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817171953_AddEventAttendanceInvites'
+)
+BEGIN
+    CREATE INDEX [IX_EventAttendanceInvites_OrgCalendarEventId_Email] ON [EventAttendanceInvites] ([OrgCalendarEventId], [Email]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817171953_AddEventAttendanceInvites'
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX [IX_EventAttendanceInvites_Token] ON [EventAttendanceInvites] ([Token]) WHERE [Token] IS NOT NULL');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817171953_AddEventAttendanceInvites'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260817171953_AddEventAttendanceInvites', N'10.0.11');
+END;
+
+COMMIT;
+GO
+

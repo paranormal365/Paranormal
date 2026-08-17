@@ -3990,7 +3990,28 @@ also no personal calendar surface at all — only a list. Two options:
 - A proper personal calendar. More work, and worth it only if there is enough on it to be worth
   opening.
 
-**Non-users — this is 87b, and Ben has now decided it.** *"we need enough to be able to show them
+**Non-users — ✅ built 2026-08-17.** An email box on the public event page, a single-use link good
+for a fortnight, and confirming creates a passwordless account and records the attendance in one
+save. `EventAttendanceInvite` is modelled on `CaseClientInvite`, the same shape pointed at an event.
+
+Three things worth knowing about how it behaves:
+- **Asking always answers the same way**, whether or not that address already has an account, and
+  whether or not the mail actually went. Anything else makes the endpoint a way of testing which
+  emails are registered here.
+- **Nothing happens until the link is clicked** — no attendee row, no account. A typed address is a
+  claim, not a confirmation, and the page confirms on a button press rather than on load so a mail
+  scanner prefetching the link cannot sign somebody up.
+- **Capacity is re-checked when the link is used**, not only when it was sent. A fortnight is long
+  enough for an event to fill.
+
+Both guarantees verified by breaking them: leaving the token usable, and creating the attendee at
+request time, each fail their tests.
+
+**Still to do here:** a reminder before the date. Ben's *"I base this off my experience"* is the
+argument — somebody who signed up three weeks ago needs telling again, and a stranger who does not
+turn up is worse for the organization than one who never signed up.
+
+**The original decision, for the record —** *"we need enough to be able to show them
 they have elected to attend if not already users of our site"* settles the open question in favour of
 the magic-link approach: collect an email, send a link that both confirms the address and creates a
 lightweight passwordless account, and that link is thereafter **their view of the event** — proof

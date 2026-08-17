@@ -184,6 +184,18 @@ public sealed partial class BenAdminClientAdapter
     public Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, CancellationToken token = default)
         => _api.PostAsync<object, PublicEventRecord>($"/api/public/events/{eventId}/rsvp", new object(), token);
 
+    public Task<bool> RequestEventAttendanceAsync(Guid eventId, string email, string? displayName, CancellationToken token = default)
+        => _api.PostAnonymousVoidAsync($"/api/public/event-attendance/{eventId}/request",
+               new RequestEventAttendanceRequest(email, displayName), token);
+
+    public Task<EventAttendanceInviteInfo?> GetEventAttendanceInviteAsync(string token, CancellationToken cancellationToken = default)
+        => _api.GetAnonymousAsync<EventAttendanceInviteInfo>(
+               $"/api/public/event-attendance/{Uri.EscapeDataString(token)}", cancellationToken);
+
+    public Task<EventAttendanceConfirmation?> ConfirmEventAttendanceAsync(string token, CancellationToken cancellationToken = default)
+        => _api.PostAnonymousAsync<object, EventAttendanceConfirmation>(
+               $"/api/public/event-attendance/{Uri.EscapeDataString(token)}/confirm", new object(), cancellationToken);
+
     public Task<bool> CancelEventRsvpAsync(Guid eventId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/public/events/{eventId}/rsvp", token);
 
