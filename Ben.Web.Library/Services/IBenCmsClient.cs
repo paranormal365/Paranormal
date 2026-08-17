@@ -56,6 +56,12 @@ public interface IBenCmsClient
 
     Task<IReadOnlyList<CmsTemplateRecord>> GetCmsTemplatesAsync(Guid orgId, CmsTemplateScope? scope = null, CancellationToken token = default);
     Task<CmsTemplateRecord?> SaveCmsTemplateAsync(Guid orgId, SaveCmsTemplateRequest request, CancellationToken token = default);
+
+    /// <summary>The group's own investigations, for the embed picker, flagged by whether each is already public.</summary>
+    Task<IReadOnlyList<EmbeddableRecord>> GetEmbeddableInvestigationsAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>The group's own cases, same shape and same purpose.</summary>
+    Task<IReadOnlyList<EmbeddableRecord>> GetEmbeddableCasesAsync(Guid orgId, CancellationToken token = default);
     Task<CmsTemplateRecord?> UpdateCmsTemplateAsync(Guid orgId, Guid templateId, SaveCmsTemplateRequest request, CancellationToken token = default);
     Task<bool> DeleteCmsTemplateAsync(Guid orgId, Guid templateId, CancellationToken token = default);
 }

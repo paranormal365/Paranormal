@@ -3459,7 +3459,43 @@ flags on publish, each fail their tests.
 Collapsing it into `OrgPublicSection` is easier now drafts exist — the panel could preview the draft
 through the real renderer — and is worth doing alongside part 2's new section types.
 
-### 4. Embedding cases and investigations — the part with teeth
+### 4. Embedding cases and investigations — ✅ built 2026-08-17
+
+Two section types, `EmbeddedInvestigations` and `EmbeddedCases`. The design decision everything else
+follows from: **references are stored, records are resolved.** The section holds ids and switches,
+never a copy of the data — so redaction runs on every request against live rows, and a client who
+withdraws their alias next month disappears from pages published today. A snapshot taken at embed
+time would freeze whatever happened to be true that afternoon and outlive every later decision.
+
+**The published shapes have no field for the dangerous values.** No exact latitude, no street
+address, no real name anywhere in `EmbeddedInvestigation` or `EmbeddedCase` — absent, not nulled.
+Reflection tests assert that, which is the cheapest guard here and the strongest: every other test
+checks what the code currently puts in the payload, this checks what the payload is *able* to hold.
+
+Rules, all enforced at read:
+- **Ownership is re-checked when the page is rendered.** The picker offers only the group's own work,
+  but a picker is a convenience and a request can say anything.
+- **Work not already public needs a deliberate acknowledgement**, so a section saved by an older
+  editor cannot publish something by omission.
+- **Client names route through `PublicClientName`**, which has no branch that returns a real name.
+- **Malformed settings publish nothing.** Elsewhere in the CMS an unparseable section renders an
+  empty box; here it would be deciding whether an address goes out, so it fails closed.
+- **Preview resolves identically** to the public endpoint — a preview that redacted differently would
+  be reassuring about a page that will not look like that.
+
+The editor keeps Ben's order: warn about non-public work, *then* ask about the address, *then* about
+identities. The warning is what makes the two questions land as decisions rather than as settings.
+
+**Found while testing:** the resolver emitted PascalCase while the renderer reads camelCase, so every
+embedded card would have rendered blank on a real page. Caught by a test asserting the title *is*
+published — not by any of the ones asserting an address is not. The positive tests earned their place
+again.
+
+**Found by the discrimination run:** breaking the location switch on the investigation branch alone
+failed nothing, because every location test happened to use a case. Two branches resolve locations
+and only one was covered. Both are now.
+
+### 4-original. Embedding cases and investigations — the part with teeth
 
 Appending public cases and investigations to a page is straightforward. **Private investigations are
 not**, and Ben's two safeguards are the right ones. Both must be enforced **server-side, before the

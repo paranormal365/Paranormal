@@ -99,6 +99,117 @@ else if (SectionType == CmsSectionType.ImageBanner)
         </div>
     </div>
 }
+else if (SectionType is CmsSectionType.EmbeddedInvestigations or CmsSectionType.EmbeddedCases)
+{
+    @* Ben's order, kept deliberately: warn on adding something not already public, THEN ask about
+       the address, THEN about identities. The warning is what makes the two questions land as
+       decisions rather than as a settings screen. *@
+    <div class="mb-3">
+        <label class="form-label fw-semibold">
+            Which of your @(SectionType == CmsSectionType.EmbeddedCases ? "cases" : "investigations") should this show?
+        </label>
+
+        @if (_embedLoading)
+        {
+            <div class="text-secondary small">Loading…</div>
+        }
+        else if (_embedChoices.Count == 0)
+        {
+            <div class="alert alert-light py-2 mb-0">
+                Your group has nothing to show here yet.
+            </div>
+        }
+        else
+        {
+            <div class="border rounded p-2" style="max-height:260px; overflow-y:auto;">
+                @foreach (var choice in _embedChoices)
+                {
+                    var chosen = _embedIds.Contains(choice.Id);
+                    <div class="form-check d-flex align-items-start gap-2 py-1">
+                        <input class="form-check-input mt-1" type="checkbox" checked="@chosen"
+                               id="@($"embed-{choice.Id}")"
+                               @onchange="@(e => ToggleEmbed(choice, (bool?)e.Value == true))" />
+                        <label class="form-check-label flex-grow-1" for="@($"embed-{choice.Id}")">
+                            <span class="fw-semibold">@choice.Title</span>
+                            @if (choice.Date is { } d)
+                            {
+                                <span class="text-secondary small"> — @d.ToString("d MMM yyyy")</span>
+                            }
+                            @if (!choice.IsAlreadyPublic)
+                            {
+                                <span class="badge bg-warning text-dark ms-2">Not public yet</span>
+                            }
+                        </label>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @* The warning, shown only once something not already public is selected. *@
+    @if (_embedIncludesNonPublic)
+    {
+        <div class="alert alert-warning py-2">
+            <div class="fw-semibold mb-1">Some of these are not public yet.</div>
+            <p class="small mb-2">
+                Adding them to this page publishes them to anyone who visits your site. Work that is
+                private today becomes readable by everyone, including the person it is about.
+            </p>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="embed-ack"
+                       checked="@_embedIncludeNonPublic"
+                       @onchange="@(e => SetIncludeNonPublic((bool?)e.Value == true))" />
+                <label class="form-check-label" for="embed-ack">
+                    I understand, and I want to publish these.
+                </label>
+            </div>
+            @if (!_embedIncludeNonPublic)
+            {
+                <div class="small text-secondary mt-1">
+                    Until you tick this, the ones marked <em>Not public yet</em> will not appear on
+                    the page.
+                </div>
+            }
+        </div>
+    }
+
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Where it happened</label>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="embed-loc"
+                   checked="@_embedShowLocation"
+                   @onchange="@(e => SetShowLocation((bool?)e.Value == true))" />
+            <label class="form-check-label" for="embed-loc">
+                Show the rough area — town, state, and a point on a map
+            </label>
+        </div>
+        <div class="form-text">
+            The exact address is never published, whichever way you set this. The point we show is
+            the centre of an area several miles across, so it cannot be traced back to a building.
+            Leave it off to say nothing about location at all.
+        </div>
+    </div>
+
+    @if (SectionType == CmsSectionType.EmbeddedCases)
+    {
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Who it was for</label>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="embed-client"
+                       checked="@_embedShowClientName"
+                       @onchange="@(e => SetShowClientName((bool?)e.Value == true))" />
+                <label class="form-check-label" for="embed-client">
+                    Show the client's chosen name
+                </label>
+            </div>
+            <div class="form-text">
+                Only the alias the client picked, or the one your group set for them. A client's real
+                name is never published here — if neither alias is set, the case appears with no name
+                at all.
+            </div>
+        </div>
+    }
+}
 else if (SectionType == CmsSectionType.ContactInfo)
 {
     <div class="row g-2 mt-1">
@@ -210,12 +321,6 @@ else
     /// </remarks>
     private Guid? _templatesLoadedFor;
 
-    protected override async Task OnParametersSetAsync()
-    {
-        if (OrgId is not Guid orgId || _templatesLoadedFor == orgId) return;
-        _templatesLoadedFor = orgId;
-        await LoadOrgTemplatesAsync();
-    }
 
     private async Task InsertSnippetAsync(CmsSnippet snippet)
         => await AppendMarkupAsync(CmsSnippets.Render(snippet));
@@ -299,9 +404,119 @@ else
     private bool _contactShowPhones    = true;
     private bool _contactShowLinks     = true;
 
-    protected override void OnParametersSet()
+
+    // ── Embedded cases / investigations (item #80 part 4) ────────────────────
+    // The editor only ever offers this group's own work, and the server re-checks that on read.
+    // Nothing here is a control; it is the place where the group is told what publishing means.
+
+    private List<EmbeddableRecord> _embedChoices = [];
+    private bool _embedLoading;
+    private List<Guid> _embedIds = [];
+    private bool _embedIncludeNonPublic;
+    private bool _embedShowLocation;
+    private bool _embedShowClientName;
+
+    /// <summary>True when the selection contains work that is not already public.</summary>
+    private bool _embedIncludesNonPublic
+        => _embedChoices.Any(c => _embedIds.Contains(c.Id) && !c.IsAlreadyPublic);
+
+    private async Task LoadEmbedChoicesAsync()
+    {
+        if (OrgId is not { } orgId) return;
+
+        _embedLoading = true;
+        _embedChoices = SectionType == CmsSectionType.EmbeddedCases
+            ? [.. await AdminClient.GetEmbeddableCasesAsync(orgId)]
+            : [.. await AdminClient.GetEmbeddableInvestigationsAsync(orgId)];
+        _embedLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task ToggleEmbed(EmbeddableRecord choice, bool selected)
+    {
+        if (selected)
+        {
+            if (!_embedIds.Contains(choice.Id)) _embedIds.Add(choice.Id);
+        }
+        else
+        {
+            _embedIds.Remove(choice.Id);
+
+            // Nothing non-public left selected, so the acknowledgement no longer applies. Clearing
+            // it means re-adding one asks again, rather than inheriting a yes given for a different
+            // record entirely.
+            if (!_embedIncludesNonPublic) _embedIncludeNonPublic = false;
+        }
+
+        await WriteEmbedAsync();
+    }
+
+    private async Task SetIncludeNonPublic(bool value)
+    {
+        _embedIncludeNonPublic = value;
+        await WriteEmbedAsync();
+    }
+
+    private async Task SetShowLocation(bool value)
+    {
+        _embedShowLocation = value;
+        await WriteEmbedAsync();
+    }
+
+    private async Task SetShowClientName(bool value)
+    {
+        _embedShowClientName = value;
+        await WriteEmbedAsync();
+    }
+
+    private async Task WriteEmbedAsync()
+    {
+        var json = new JsonObject
+        {
+            ["ids"] = new JsonArray([.. _embedIds.Select(id => JsonValue.Create(id.ToString()))]),
+            ["includeNonPublic"] = _embedIncludeNonPublic,
+            ["showApproximateLocation"] = _embedShowLocation,
+            ["showClientName"] = _embedShowClientName,
+        }.ToJsonString();
+
+        await ContentJsonChanged.InvokeAsync(json);
+    }
+
+    private void ParseEmbed(JsonElement root)
+    {
+        _embedIds = root.TryGetProperty("ids", out var ids) && ids.ValueKind == JsonValueKind.Array
+            ? [.. ids.EnumerateArray()
+                     .Select(e => Guid.TryParse(e.GetString(), out var g) ? g : Guid.Empty)
+                     .Where(g => g != Guid.Empty)]
+            : [];
+
+        _embedIncludeNonPublic = GetBool(root, "includeNonPublic", false);
+        _embedShowLocation     = GetBool(root, "showApproximateLocation", false);
+        _embedShowClientName   = GetBool(root, "showClientName", false);
+    }
+
+    /// <summary>
+    /// One override for all three concerns, because there can only be one.
+    /// </summary>
+    /// <remarks>
+    /// Parsing runs first and unconditionally. The template load below returns early once it has
+    /// run for this organization, and when that guard lived in its own override it sat in front of
+    /// everything — so adding a second override here was the moment the section's own content would
+    /// have stopped being parsed. Order matters more than it looks.
+    /// </remarks>
+    protected override async Task OnParametersSetAsync()
     {
         ParseContentJson();
+
+        if (SectionType is CmsSectionType.EmbeddedInvestigations or CmsSectionType.EmbeddedCases
+            && _embedChoices.Count == 0 && !_embedLoading)
+        {
+            await LoadEmbedChoicesAsync();
+        }
+
+        if (OrgId is not Guid orgId || _templatesLoadedFor == orgId) return;
+        _templatesLoadedFor = orgId;
+        await LoadOrgTemplatesAsync();
     }
 
     private void ParseContentJson()
@@ -324,6 +539,10 @@ else
                 _imgFileId = root.TryGetProperty("uploadFileId", out var id)  ? id.GetString()  ?? "" : "";
                 _imgAlt    = root.TryGetProperty("altText",      out var alt) ? alt.GetString() ?? "" : "";
                 _imgLink   = root.TryGetProperty("linkUrl",      out var lnk) ? lnk.GetString() ?? "" : "";
+            }
+            else if (SectionType is CmsSectionType.EmbeddedInvestigations or CmsSectionType.EmbeddedCases)
+            {
+                ParseEmbed(root);
             }
             else if (SectionType == CmsSectionType.ContactInfo)
             {
