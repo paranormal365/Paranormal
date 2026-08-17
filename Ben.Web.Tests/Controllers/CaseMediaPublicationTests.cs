@@ -142,7 +142,7 @@ public sealed class CaseMediaPublicationTests
         var w = await SeedAsync();
 
         var file = Assert.Single(
-            (await PublishableAsync(w)).Where(f => f.UploadFileId == w.PublicEvidenceFileId));
+            await PublishableAsync(w), f => f.UploadFileId == w.PublicEvidenceFileId);
 
         Assert.Equal("The hallway photo", file.Context);
         Assert.NotNull(file.When);
