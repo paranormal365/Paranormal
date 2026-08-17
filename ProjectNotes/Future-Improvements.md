@@ -3372,6 +3372,15 @@ at all, because the output is ordinary markup in the section types that already 
   reasoning as group-owned equipment: it is the group's site, and a member leaving should not take
   its building blocks with them.
 
+**✅ Built 2026-08-17 — the block palette half.** `CmsSnippets` is the catalogue (card, card with
+header, collapsible list, carousel, two columns, three across, callout, button link) and
+`CmsSectionEditor` gained an **Add a block** picker for the RichText and CustomHtml section types.
+Ids are made unique per insertion, and a test proves it by failing when they are fixed. Blocks are
+appended rather than inserted at the cursor: the cursor lives inside Telerik's rich-text engine and
+is not reachable from C#, and appending is honest about that rather than putting things somewhere
+surprising. Insertion goes through the same binding a typed edit takes — writing to the DOM would
+update neither the editor nor the saved JSON, a trap this codebase has already hit.
+
 **Two real gotchas, worth handling on the first pass rather than after somebody hits them:**
 
 - **Unique ids per insertion.** Bootstrap collapsibles and carousels are wired by `id`/`data-bs-target`.
@@ -3381,6 +3390,46 @@ at all, because the output is ordinary markup in the section types that already 
   surface pre-dates this — but a palette that *encourages* pasting structural markup makes it much
   more travelled. Sanitize on save, allow-listing the tags and attributes the snippets actually use
   (including the `data-bs-*` the components need), rather than trying to block what is dangerous.
+  **Not done, and it is the open risk on this part.** The unique-id test asserts no snippet *we*
+  ship carries `<script>` or `<style>`, which is a different and much weaker guarantee than what an
+  author may type into the same box.
+
+### 2b. Page templates — "Investigation Results" (not started, scoped 2026-08-17)
+
+> Ben, fourth clarification: *"They create templates like Investigation Results and it gives them a
+> page to fill in or chose from their media and records in the case to add to the template."* And:
+> *"So, they put together the pieces they need to fill in for it to complete."*
+
+**This is a different feature from 2a, and much larger.** A block snippet is markup with blanks an
+author types into. A **page template** is a named, structured document — *Investigation Results* — that
+presents a set of **slots**, and an author fills each slot either by typing or by **choosing from the
+case's own media and records**. Assembling which slots a template has is itself something the author
+does: they put together the pieces the write-up needs.
+
+The distinction that matters for design: 2a's output is markup and knows nothing about the domain.
+2b's output is **bound to a case** — a slot holds "this photo from this case's media library", not a
+copy of it — which is why this overlaps **part 4** almost entirely and should be built with it rather
+than before it.
+
+**What it needs, roughly in dependency order:**
+
+- **A template definition**: an ordered list of slots, each with a kind — free text, a heading, one
+  photo from the case, a set of photos, a timeline entry, an investigation summary, equipment used
+  on a visit, a piece of evidence and its vote score. Group-owned, and composable by the author.
+- **A fill-in surface**: a page listing the template's slots, each with a picker scoped to **this
+  case**. This is where most of the work is, and most of the value.
+- **Rendering**, honouring part 4's rules — which is why it must not be built first. Coordinates are
+  already redacted (fixed 2026-08-17); client names already go through `PublicClientName`; **private
+  investigations and non-public media do not yet have an equivalent**, and a template that can pull
+  "any photo from the case" into a public page is precisely the hole part 4 exists to close.
+- **Binding, not copying.** A slot referencing a photo that is later deleted, or a case that is later
+  unpublished, must degrade to nothing rather than to a broken image or a leak. Copying the photo
+  into the page at fill-in time would make the page immune to a later "unpublish this" — which is
+  exactly the wrong behaviour.
+
+**Sequencing recommendation:** part 4 first (the redaction rules and the safe projections for
+embedding case data), then 2b on top of it. Building 2b first means writing the pickers twice, and
+the first version would be able to publish things part 4 is meant to prevent.
 
 ### 3. Draft vs live — ✅ built 2026-08-17
 

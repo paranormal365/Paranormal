@@ -12,10 +12,34 @@
 @if (SectionType is CmsSectionType.RichText or CmsSectionType.CustomHtml)
 {
     <div class="mt-3">
-        <label class="form-label fw-semibold">Content</label>
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="form-label fw-semibold mb-0">Content</label>
+
+            @* Ready-made blocks. Picking one adds it to the end of the content with the parts left
+               blank to fill in — the editor's own cursor lives inside its rich-text engine and is
+               not reachable from C#, and appending is honest about that rather than putting things
+               somewhere surprising. *@
+            <TelerikDropDownButton Icon="@SvgIcon.Plus">
+                <DropDownButtonContent>Add a block</DropDownButtonContent>
+                <DropDownButtonItems>
+                    @foreach (var snippet in CmsSnippets.All)
+                    {
+                        var chosen = snippet;
+                        <DropDownButtonItem OnClick="@(() => InsertSnippetAsync(chosen))">
+                            @chosen.Name — <span class="text-secondary">@chosen.Description</span>
+                        </DropDownButtonItem>
+                    }
+                </DropDownButtonItems>
+            </TelerikDropDownButton>
+        </div>
+
         <TelerikEditor Value="@_html"
                        ValueChanged="@OnHtmlChanged"
                        Height="300px" />
+        <div class="form-text">
+            Blocks are added at the end. Move them where you want them, then replace the placeholder
+            text.
+        </div>
     </div>
 }
 else if (SectionType == CmsSectionType.ImageBanner)
@@ -102,6 +126,22 @@ else
 
     // RichText / CustomHtml
     private string _html = "";
+
+    /// <summary>
+    /// Adds a ready-made block to the content.
+    /// </summary>
+    /// <remarks>
+    /// Goes through the same <c>OnHtmlChanged</c> path a typed edit takes, so the value the editor
+    /// shows and the JSON that gets saved cannot disagree. Setting the DOM directly would update
+    /// neither — Telerik inputs ignore values written by anything but their own binding, which has
+    /// produced a convincing-but-wrong result in this codebase before.
+    /// </remarks>
+    private async Task InsertSnippetAsync(CmsSnippet snippet)
+    {
+        var markup = CmsSnippets.Render(snippet);
+        var combined = string.IsNullOrWhiteSpace(_html) ? markup : _html + "\n" + markup;
+        await OnHtmlChanged(combined);
+    }
     private string? _contentWarning;
 
     // ImageBanner
