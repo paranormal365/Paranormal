@@ -37,8 +37,53 @@
                title="Opens the saved page in the public renderer, published or not">
                 View as visitor
             </a>
+            @* Saving the arrangement, not the page. A group that has built a write-up layout once
+               should be able to start the next one from it. *@
+            <TelerikButton Icon="@SvgIcon.Save"
+                           FillMode="@ThemeConstants.Button.FillMode.Outline"
+                           Enabled="@(_sections.Count > 0)"
+                           OnClick="@(() => _savingLayout = true)">
+                Save as a layout
+            </TelerikButton>
         </div>
     </div>
+
+    @* Small, single-purpose, and not about authoring — so a window is right here, unlike the
+       section editor below. *@
+    <TelerikWindow Visible="@_savingLayout" VisibleChanged="@(v => _savingLayout = v)"
+                   Modal="true" Width="460px">
+        <WindowTitle>Save this page's layout</WindowTitle>
+        <WindowContent>
+            @if (_layoutError is not null)
+            {
+                <div class="alert alert-danger py-2">@_layoutError</div>
+            }
+
+            <label class="form-label fw-semibold">Name it</label>
+            <input class="form-control mb-2" maxlength="200" value="@_layoutName"
+                   placeholder="e.g. Investigation Results"
+                   @oninput="@(e => _layoutName = e.Value?.ToString() ?? string.Empty)" />
+
+            <label class="form-label fw-semibold">What is it for? (optional)</label>
+            <input class="form-control" maxlength="500" value="@_layoutDescription"
+                   @oninput="@(e => _layoutDescription = e.Value?.ToString() ?? string.Empty)" />
+
+            <div class="form-text mt-2">
+                Saves this page's <strong>@_sections.Count</strong>
+                @(_sections.Count == 1 ? "section" : "sections") — their types, titles and current
+                content — as a layout the whole group can start a new page from. This page is not
+                changed, and later edits to the layout will not change it.
+            </div>
+
+            <div class="dialog-footer-actions">
+                <span class="dialog-footer-spacer"></span>
+                <TelerikButton OnClick="@(() => _savingLayout = false)" Enabled="@(!_layoutBusy)">Cancel</TelerikButton>
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                               Enabled="@(!_layoutBusy && !string.IsNullOrWhiteSpace(_layoutName))"
+                               OnClick="SaveLayoutAsync">Save</TelerikButton>
+            </div>
+        </WindowContent>
+    </TelerikWindow>
 
     @* ── Editing a section ─────────────────────────────────────────────────
        In the body of the page, at full width, never in a window. Writing a page needs the room —
@@ -737,6 +782,59 @@
     // ── Preview ───────────────────────────────────────────────────────────────
 
     private void TogglePreview() => _showPreview = !_showPreview;
+
+    // ── Saving this page's arrangement as a reusable layout ──────────────────
+
+    private bool _savingLayout, _layoutBusy;
+    private string _layoutName = "", _layoutDescription = "";
+    private string? _layoutError;
+
+    /// <summary>
+    /// Saves the page's sections as a group-owned page template.
+    /// </summary>
+    /// <remarks>
+    /// <para>Stores each section's type, title and <b>current content</b>. Storing the content is
+    /// the point — a layout whose sections arrived empty would save nobody any work, and the parts
+    /// worth keeping are exactly the standing headings and boilerplate somebody already wrote.</para>
+    ///
+    /// <para>Bound sections travel as their references, which is correct: an embed holds ids, and a
+    /// layout reused on a different case is expected to have its pickers re-pointed. The server
+    /// re-checks ownership of every referenced record when the page is read, so a layout cannot
+    /// carry another group's investigation into a new page.</para>
+    /// </remarks>
+    private async Task SaveLayoutAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_layoutName) || _sections.Count == 0) return;
+
+        _layoutBusy = true;
+        _layoutError = null;
+
+        var layout = _sections
+            .OrderBy(x => x.SortOrder)
+            .Select((x, index) => new CmsTemplateSectionRecord(
+                x.SectionType, x.Title, x.ContentJson, index))
+            .ToList();
+
+        var saved = await AdminClient.SaveCmsTemplateAsync(OrgId, new SaveCmsTemplateRequest(
+            _layoutName.Trim(),
+            string.IsNullOrWhiteSpace(_layoutDescription) ? null : _layoutDescription.Trim(),
+            CmsTemplateScope.Page,
+            // Meaningless for a page template; the entity says so. Sent as the default rather than
+            // left to whatever the request record happens to initialise.
+            CmsSectionType.RichText,
+            JsonSerializer.Serialize(layout)));
+
+        _layoutBusy = false;
+
+        if (saved is null)
+        {
+            _layoutError = "That couldn't be saved. The group may already have a layout with that name.";
+            return;
+        }
+
+        _savingLayout = false;
+        _layoutName = _layoutDescription = "";
+    }
 
     private RenderFragment RenderSectionPreview(CmsSectionRecord section)
     {

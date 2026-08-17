@@ -233,6 +233,24 @@ and wrong in reality.
 The preview also tells you if the page is not in the menu yet, which is the usual reason a
 freshly-published page seems to have vanished.
 
+## Reusing a page layout
+
+Built a write-up you want to do again? On the page's editing screen, **Save as a layout** keeps its
+sections — their types, titles and current wording — as a named layout, for example *Investigation
+Results*.
+
+Next time you add a page, pick that layout under **Start from one of our layouts** and the new page
+arrives with those sections ready to fill in.
+
+Two things worth knowing:
+
+- **The layout belongs to the group**, not to whoever saved it, so it stays when people come and go.
+- **The copy is yours.** Editing the layout later does not touch pages already made from it, and
+  editing one of those pages does not change the layout.
+
+Sections that point at a case or an investigation keep the *shape* but you will want to re-point the
+pickers — a layout reused for a different night should show that night's work.
+
 ## Putting your cases and investigations on a page
 
 Two section types — **Our investigations** and **Our cases** — let you show your own work on a

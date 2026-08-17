@@ -198,7 +198,12 @@ public sealed record CmsPageDetail(
     DateTime? DateUpdated,
     IReadOnlyList<CmsSectionRecord> Sections);
 
-public sealed record CmsCreatePageRequest(string PageTitle, string UrlName, string? PageHtml, bool IsPublic, Guid? ParentPageId, int SortOrder);
+/// <summary>Creates a page, optionally starting from one of the group's saved layouts.</summary>
+/// <param name="FromTemplateId">
+/// A page-scoped template to copy sections from. Copied, not referenced — editing the template
+/// later leaves this page alone.
+/// </param>
+public sealed record CmsCreatePageRequest(string PageTitle, string UrlName, string? PageHtml, bool IsPublic, Guid? ParentPageId, int SortOrder, Guid? FromTemplateId = null);
 public sealed record CmsUpdatePageRequest(string PageTitle, string UrlName, string? PageHtml, bool IsPublished, bool IsPublic, Guid? ParentPageId, int SortOrder);
 public sealed record CmsCreateSectionRequest(CmsSectionType SectionType, string? Title, string ContentJson, int SortOrder, bool IsActive);
 public sealed record CmsUpdateSectionRequest(string? Title, string ContentJson, bool IsActive);
