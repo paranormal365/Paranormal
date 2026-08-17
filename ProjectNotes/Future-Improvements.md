@@ -3955,6 +3955,42 @@ cell size, by construction.
 Same rule for the map pin, and show **"about 12 miles away"** rather than a precise figure or a line
 drawn from the visitor to the venue.
 
+### 87c. Seeing it on your own calendar, and confirming a non-user is coming
+
+Ben, 2026-08-17: *"On the org calendar, we should make this event a different color and have a
+different icon to represent public investigations. If someone chooses and is accepted or is
+auto-accepted to attend an investigation, they should see it on their calendar. If not a member, we
+should at least let them know when they are expected to attend an investigation. I base this off my
+experience. Someone may give some information, but we need enough to be able to show them they have
+elected to attend if not already users of our site."*
+
+**Calendar styling — ✅ built 2026-08-17.** Public events now render with their own marker on the
+organization's calendar. Worth noting what this uncovered: `OrgCalendarEventType` has carried
+`ColorClass` and `IconClass` since it was built, and **only the type-manager screen ever read them**.
+The calendar — the one place the distinction matters — rendered every appointment identically, so a
+month with thirty events told an organizer nothing until they clicked one. Both now show.
+
+**Attendees seeing it — not built, and the gap is specific.** `/my-investigations` exists, but it is
+fed by `InvestigationAttendee`. An RSVP to a public event creates an `OrgCalendarEventAttendee`, a
+different table, so **somebody who signs up to a public event sees it nowhere afterwards**. There is
+also no personal calendar surface at all — only a list. Two options:
+
+- Surface RSVP'd events on `/my-investigations` alongside assigned investigations. Cheap, and
+  probably right: from the attendee's point of view "things I am going to" is one list.
+- A proper personal calendar. More work, and worth it only if there is enough on it to be worth
+  opening.
+
+**Non-users — this is 87b, and Ben has now decided it.** *"we need enough to be able to show them
+they have elected to attend if not already users of our site"* settles the open question in favour of
+the magic-link approach: collect an email, send a link that both confirms the address and creates a
+lightweight passwordless account, and that link is thereafter **their view of the event** — proof
+they are coming, the exact address, and a way to cancel. They are a site user; they simply never had
+to invent a password.
+
+A reminder before the date belongs here too. Ben's *"I base this off my experience"* is the argument
+for it: somebody who signed up three weeks ago needs telling again, and a stranger who does not turn
+up is worse for the organization than one who never signed up.
+
 ### Smaller things to settle when it is picked up
 
 - **Who sees the attendee list?** These are strangers. Default to the organization seeing names and

@@ -33,6 +33,27 @@
                           AllowDelete="true"
                           OnEdit="@OnSchedulerEdit"
                           OnDelete="@OnSchedulerDelete">
+            @* Every appointment rendered identically was hiding real information. Event types have
+               carried ColorClass and IconClass since they were built and only the type-manager
+               screen ever read them — so the calendar, the one place the distinction matters, was
+               the one place it did not show. Public events get their own treatment on top, because
+               "strangers are coming to this one" is the thing an organizer most needs to see at a
+               glance. *@
+            <ItemTemplate>
+                @{ var appt = (OrgCalendarAppointment)context; }
+                <div class="cal-item @(appt.IsPublic ? "cal-item--public" : "") @appt.ColorClass">
+                    @if (appt.IsPublic)
+                    {
+                        <span class="cal-item__badge" title="Open to the public">◆</span>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(appt.IconClass))
+                    {
+                        <i class="@appt.IconClass cal-item__icon"></i>
+                    }
+                    <span class="cal-item__title">@appt.Title</span>
+                </div>
+            </ItemTemplate>
+
             <SchedulerViews>
                 <SchedulerDayView StartTime="@_dayStart" EndTime="@_dayEnd" />
                 <SchedulerWeekView StartTime="@_dayStart" EndTime="@_dayEnd" />
@@ -459,7 +480,25 @@
         RecurrenceRule       = e.RecurrenceRule,
         RecurrenceExceptions = null,
         RecurrenceId         = null,
+        IsPublic             = e.IsPublic,
+        ColorClass           = EventTypeStyle(e.EventTypeId).Color,
+        IconClass            = EventTypeStyle(e.EventTypeId).Icon,
     };
+
+    /// <summary>
+    /// The colour and icon an event type carries, or nothing when it has none.
+    /// </summary>
+    /// <remarks>
+    /// Resolved from the types already loaded for the picker rather than per appointment — the same
+    /// answer for every event of a type, and a lookup per row on a busy month view is the N+1 shape
+    /// in a different costume.
+    /// </remarks>
+    private (string? Color, string? Icon) EventTypeStyle(Guid? eventTypeId)
+    {
+        if (eventTypeId is not Guid id) return (null, null);
+        var type = _eventTypes.FirstOrDefault(t => t.Id == id);
+        return (type?.ColorClass, type?.IconClass);
+    }
 
     // ── Scheduler event handlers (correct API from docs) ──────────────────────
 
@@ -615,6 +654,11 @@
         public string?         RecurrenceRule       { get; set; }
         public List<DateTime>? RecurrenceExceptions { get; set; }
         public Guid?           RecurrenceId         { get; set; }
+
+        // Ours, not Telerik's — read only by the item template above.
+        public bool            IsPublic             { get; set; }
+        public string?         ColorClass           { get; set; }
+        public string?         IconClass            { get; set; }
 
         public OrgCalendarAppointment() { Id = Guid.NewGuid(); }
     }
