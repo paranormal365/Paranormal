@@ -36,17 +36,19 @@ public sealed record NotificationSummaryResponse(
     NotificationBucket CaseMessagesAsClient,
     NotificationBucket SystemMessages,
     NotificationBucket PendingPermissionRequests,
-    NotificationBucket InvestigationInvites)
+    NotificationBucket InvestigationInvites,
+    NotificationBucket EquipmentCheckouts)
 {
     public static readonly NotificationSummaryResponse Empty = new(
         NotificationBucket.Empty, NotificationBucket.Empty, NotificationBucket.Empty,
-        NotificationBucket.Empty, NotificationBucket.Empty, NotificationBucket.Empty);
+        NotificationBucket.Empty, NotificationBucket.Empty, NotificationBucket.Empty,
+        NotificationBucket.Empty);
 
     /// <summary>All buckets, for callers that want to iterate rather than name each one.</summary>
     [JsonIgnore]
     public IReadOnlyList<NotificationBucket> AllBuckets =>
         [OrgMessages, CaseMessagesAsOrgMember, CaseMessagesAsClient, SystemMessages,
-         PendingPermissionRequests, InvestigationInvites];
+         PendingPermissionRequests, InvestigationInvites, EquipmentCheckouts];
 
     /// <summary>Total across every bucket — the number on the bell.</summary>
     [JsonIgnore]

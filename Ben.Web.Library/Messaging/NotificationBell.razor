@@ -115,6 +115,9 @@
         // whether or not you replied, and the badge colour can't convey that (see the DTO).
         if (s.InvestigationInvites.Count > 0)
             yield return new("Investigation invitations", "/my-investigations", s.InvestigationInvites);
+
+        if (s.EquipmentCheckouts.Count > 0)
+            yield return new("Equipment requests & overdue gear", "/my-checkouts", s.EquipmentCheckouts);
         if (s.CaseMessagesAsClient.Count > 0)
             yield return new("Replies on your cases", "/my-cases", s.CaseMessagesAsClient);
         if (s.CaseMessagesAsOrgMember.Count > 0)

@@ -156,6 +156,52 @@ public sealed partial class BenAdminClientAdapter
         => _api.PostAsync<AddEquipmentServiceLogRequest, EquipmentServiceLogRecord>(
                $"{OrgEquipBase(orgId)}/{itemId}/service-log", request, token);
 
+    // ── Borrowing ─────────────────────────────────────────────────────────────
+
+    private const string CheckoutBase = "/api/equipment-checkouts";
+
+    public Task<BorrowEligibilityRecord?> GetBorrowEligibilityAsync(Guid itemId, CancellationToken token = default)
+        => _api.GetAsync<BorrowEligibilityRecord>($"{CheckoutBase}/eligibility/{itemId}", token);
+
+    public Task<EquipmentCheckoutRecord?> RequestEquipmentCheckoutAsync(RequestEquipmentCheckoutRequest request, CancellationToken token = default)
+        => _api.PostAsync<RequestEquipmentCheckoutRequest, EquipmentCheckoutRecord>(CheckoutBase, request, token);
+
+    public Task<EquipmentCheckoutRecord?> ApproveEquipmentCheckoutAsync(Guid checkoutId, DateTime? dateDue, string? reviewNotes, CancellationToken token = default)
+        => _api.PostAsync<ApproveEquipmentCheckoutRequest, EquipmentCheckoutRecord>(
+               $"{CheckoutBase}/{checkoutId}/approve", new ApproveEquipmentCheckoutRequest(dateDue, reviewNotes), token);
+
+    public Task<EquipmentCheckoutRecord?> DenyEquipmentCheckoutAsync(Guid checkoutId, string reviewNotes, CancellationToken token = default)
+        => _api.PostAsync<DenyEquipmentCheckoutRequest, EquipmentCheckoutRecord>(
+               $"{CheckoutBase}/{checkoutId}/deny", new DenyEquipmentCheckoutRequest(reviewNotes), token);
+
+    public Task<EquipmentCheckoutRecord?> CancelEquipmentCheckoutAsync(Guid checkoutId, CancellationToken token = default)
+        => _api.PostAsync<object, EquipmentCheckoutRecord>($"{CheckoutBase}/{checkoutId}/cancel", new object(), token);
+
+    public Task<EquipmentCheckoutRecord?> ConfirmEquipmentHandoffAsync(Guid checkoutId, CancellationToken token = default)
+        => _api.PostAsync<object, EquipmentCheckoutRecord>($"{CheckoutBase}/{checkoutId}/confirm-handoff", new object(), token);
+
+    public Task<EquipmentCheckoutRecord?> ReturnEquipmentCheckoutAsync(Guid checkoutId, string? conditionNotes, CancellationToken token = default)
+        => _api.PostAsync<ReturnEquipmentCheckoutRequest, EquipmentCheckoutRecord>(
+               $"{CheckoutBase}/{checkoutId}/return", new ReturnEquipmentCheckoutRequest(conditionNotes), token);
+
+    public async Task<IReadOnlyList<EquipmentCheckoutRecord>> GetMyEquipmentCheckoutsAsync(string role = "borrower", CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<EquipmentCheckoutRecord>>($"/api/me/equipment-checkouts?role={role}", token);
+        return result ?? [];
+    }
+
+    public async Task<IReadOnlyList<EquipmentCheckoutRecord>> GetOrgEquipmentCheckoutsAsync(Guid orgId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<EquipmentCheckoutRecord>>($"/api/organizations/{orgId}/equipment-checkouts", token);
+        return result ?? [];
+    }
+
+    public async Task<IReadOnlyList<EquipmentCheckoutRecord>> GetEquipmentItemCheckoutsAsync(Guid itemId, CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<EquipmentCheckoutRecord>>($"/api/equipment/{itemId}/checkouts", token);
+        return result ?? [];
+    }
+
     // ── SuperAdmin taxonomy moderation ───────────────────────────────────────
 
     private const string AdminTaxonomyBase = "/api/admin/equipment-taxonomy";

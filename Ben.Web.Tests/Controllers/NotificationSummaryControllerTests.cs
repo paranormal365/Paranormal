@@ -1,5 +1,6 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Service.RepositoryService.GenericInterfaces;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers;
 using Ben.Service.Models.Entities;
@@ -8,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using System.Security.Claims;
+using Moq;
 using Xunit;
 
 namespace Ben.Web.Tests.Controllers;
@@ -35,7 +37,7 @@ public class NotificationSummaryControllerTests
     private static NotificationSummaryController Build(
         IDbContextFactory<BenDataContext> factory, Guid? userId)
     {
-        var ctrl = new NotificationSummaryController(factory);
+        var ctrl = new NotificationSummaryController(factory, new Mock<IOrganizationSecurityService>().Object);
         var claims = userId.HasValue
             ? new ClaimsPrincipal(new ClaimsIdentity([
                 new Claim(ClaimTypes.NameIdentifier, userId.Value.ToString())
