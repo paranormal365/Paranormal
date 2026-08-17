@@ -18,6 +18,18 @@ public interface IWebApiClient
     Task<bool> PostAnonymousVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<TResponse?> PostMultipartAsync<TResponse>(string relativeUrl, MultipartFormDataContent content, CancellationToken token = default);
     Task<TResponse?> PutAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);
+
+    /// <summary>
+    /// Sends, and returns either the result or <b>the server's own refusal message</b>.
+    /// </summary>
+    /// <remarks>
+    /// The ordinary Post/Put swallow a non-2xx into <c>null</c>, which leaves the caller with
+    /// nothing to say but "Save failed." That is fine for a network blip and useless for a rule —
+    /// an organizer told a public event cannot be at a private residence can fix it; one told
+    /// "Save failed" cannot. Use this wherever the endpoint refuses for a reason worth reading.
+    /// </remarks>
+    Task<(TResponse? Result, string? Error)> SendExpectingReasonAsync<TRequest, TResponse>(
+        HttpMethod method, string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> PutVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> PostVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> DeleteAsync(string relativeUrl, CancellationToken token = default);

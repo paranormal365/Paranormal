@@ -56,6 +56,30 @@ public sealed class WebApiClient : IWebApiClient
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
     }
 
+    /// <inheritdoc />
+    public async Task<(TResponse? Result, string? Error)> SendExpectingReasonAsync<TRequest, TResponse>(
+        HttpMethod method, string relativeUrl, TRequest payload, CancellationToken token = default)
+    {
+        using var req = Auth(method, relativeUrl);
+        req.Content = JsonContent.Create(payload);
+        using var response = await _httpClient.SendAsync(req, token);
+
+        if (response.IsSuccessStatusCode)
+            return (await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token), null);
+
+        var body = await response.Content.ReadAsStringAsync(token);
+
+        // A refusal we wrote is a plain sentence; a framework error is a ProblemDetails blob or an
+        // HTML page. Showing either to a person is worse than saying nothing useful, so anything
+        // that does not look like prose is dropped.
+        var looksLikeProse = !string.IsNullOrWhiteSpace(body)
+                          && body.Length < 400
+                          && !body.TrimStart().StartsWith('{')
+                          && !body.TrimStart().StartsWith('<');
+
+        return (default, looksLikeProse ? body.Trim('"', ' ', '\n') : null);
+    }
+
     public async Task<TResponse?> PostAnonymousAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
         using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = JsonContent.Create(payload) };

@@ -119,6 +119,17 @@ public interface IBenPlacesClient
     Task<IReadOnlyList<OrgCalendarEventRecord>> GetCalendarEventsAsync(Guid orgId, DateTime? from = null, DateTime? to = null, CancellationToken token = default);
     Task<OrgCalendarEventRecord?> GetCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default);
     Task<OrgCalendarEventRecord?> CreateCalendarEventAsync(Guid orgId, UpsertCalendarEventRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// Saves a calendar event and, when the server refuses, gives back <b>its reason</b>.
+    /// </summary>
+    /// <remarks>
+    /// The public-event rules refuse with a sentence written to be read — a residence, a case link.
+    /// The ordinary create/update swallow that into null, leaving the calendar able to say only
+    /// "Save failed", which tells an organizer nothing about what to change.
+    /// </remarks>
+    Task<(OrgCalendarEventRecord? Result, string? Error)> SaveCalendarEventAsync(
+        Guid orgId, Guid? eventId, UpsertCalendarEventRequest request, CancellationToken token = default);
     Task<OrgCalendarEventRecord?> UpdateCalendarEventAsync(Guid orgId, Guid eventId, UpsertCalendarEventRequest request, CancellationToken token = default);
     Task<bool> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default);
 

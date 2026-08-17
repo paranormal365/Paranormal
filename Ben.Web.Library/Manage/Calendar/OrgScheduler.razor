@@ -225,6 +225,113 @@
                     <label for="ev-public" class="form-label mb-0">Public</label>
                 </div>
             </div>
+
+            @* Only shown once the event is public: these four settings mean nothing otherwise, and
+               a form that always showed them would make "public" look like a detail rather than the
+               decision it is. *@
+            @if (_form.IsPublic)
+            {
+                <div class="col-12">
+                    <div class="border rounded p-3">
+                        <div class="fw-semibold mb-1">Open to the public</div>
+                        <p class="text-secondary small">
+                            This appears on your public site and on the site-wide What's on list, and
+                            anyone with an account can say they're coming.
+                            <strong>Not for events at somebody's home</strong> — a public listing is a
+                            date and an address advertised to strangers, and a client didn't agree to
+                            that.
+                        </p>
+
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label class="form-label fw-semibold">Where (a place)</label>
+                                @if (_form.PlaceId is not null)
+                                {
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge bg-secondary">@(_selectedPlaceName ?? "Selected")</span>
+                                        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                                       FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                                       OnClick="ClearPlace">Change</TelerikButton>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="d-flex gap-2">
+                                        <input class="form-control form-control-sm" style="max-width:320px;"
+                                               placeholder="Search places by name"
+                                               value="@_placeSearch"
+                                               @oninput="@(e => _placeSearch = e.Value?.ToString() ?? "")" />
+                                        <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                                       FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                                       Enabled="@(!string.IsNullOrWhiteSpace(_placeSearch))"
+                                                       OnClick="SearchPlacesAsync">Search</TelerikButton>
+                                    </div>
+
+                                    @if (_placeCandidates.Count > 0)
+                                    {
+                                        <div class="list-group mt-2" style="max-height:180px;overflow-y:auto;">
+                                            @foreach (var candidate in _placeCandidates)
+                                            {
+                                                var chosen = candidate;
+                                                var isResidence = chosen.Kind == PlaceKind.PrivateResidence;
+                                                <button type="button"
+                                                        class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                                                        disabled="@isResidence"
+                                                        @onclick="@(() => SelectPlace(chosen))">
+                                                    <span>
+                                                        @(chosen.Name ?? "Unnamed")
+                                                        <span class="d-block text-secondary small">
+                                                            @chosen.StreetAddress1 @chosen.City @chosen.State
+                                                        </span>
+                                                    </span>
+                                                    @if (isResidence)
+                                                    {
+                                                        @* Disabled rather than hidden: somebody
+                                                           searching for it needs to know it was
+                                                           found and why it cannot be used. *@
+                                                        <span class="badge bg-warning text-dark">Private home</span>
+                                                    }
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                    else if (_placeSearched)
+                                    {
+                                        <div class="form-text">No places found by that name.</div>
+                                    }
+                                }
+                                <div class="form-text">
+                                    A place gives the event a map pin, and is how we know it isn't
+                                    somebody's home.
+                                </div>
+                            </div>
+
+                            <div class="col-12 d-flex align-items-start gap-2">
+                                <TelerikCheckBox @bind-Value="@_form.HideExactLocation" Id="ev-hideloc" />
+                                <label for="ev-hideloc" class="form-label mb-0">
+                                    Hide the exact address until somebody says they're coming
+                                    <span class="d-block text-secondary small">
+                                        The town still shows, so people can tell whether it's near them.
+                                    </span>
+                                </label>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Places (optional)</label>
+                                <TelerikNumericTextBox @bind-Value="@_form.AttendeeCapacity"
+                                                       Min="1" Width="100%" />
+                                <div class="form-text">Leave empty for no limit.</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Sign-ups close (optional)</label>
+                                <TelerikDateTimePicker @bind-Value="@_form.RsvpClosesAt" Width="100%" />
+                                <div class="form-text">Leave empty to allow sign-ups until it starts.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
         @if (_dialogError is not null)
         {
@@ -534,6 +641,10 @@
                 End            = _editingEvent.EndDateTime.ToViewerLocalTime(UserState),
                 IsAllDay       = _editingEvent.IsAllDay,
                 IsPublic       = _editingEvent.IsPublic,
+                PlaceId           = _editingEvent.PlaceId,
+                HideExactLocation = _editingEvent.HideExactLocation,
+                AttendeeCapacity  = _editingEvent.AttendeeCapacity,
+                RsvpClosesAt      = _editingEvent.RsvpClosesAt,
                 EventTypeId    = _editingEvent.EventTypeId,
                 OrganizationAddressId = _editingEvent.OrganizationAddressId,
                 MeetingUrl     = _editingEvent.MeetingUrl ?? "",
@@ -593,17 +704,21 @@
                 OrganizationAddressId: _form.OrganizationAddressId,
                 MeetingUrl:     _form.MeetingUrl,
                 CaseId:         _editingEvent?.CaseId,
-                RecurrenceRule: string.IsNullOrWhiteSpace(_form.RecurrenceRule) ? null : _form.RecurrenceRule.Trim());
+                RecurrenceRule: string.IsNullOrWhiteSpace(_form.RecurrenceRule) ? null : _form.RecurrenceRule.Trim(),
+                PlaceId:           _form.PlaceId,
+                HideExactLocation: _form.HideExactLocation,
+                AttendeeCapacity:  _form.AttendeeCapacity,
+                RsvpClosesAt:      _form.RsvpClosesAt?.ToUtcFromViewerLocal(UserState));
 
-            OrgCalendarEventRecord? result;
-            if (_isNewEvent || _editingEvent is null)
-                result = await AdminClient.CreateCalendarEventAsync(OrgId, req);
-            else
-                result = await AdminClient.UpdateCalendarEventAsync(OrgId, _editingEvent.Id, req);
+            // Saved through the variant that keeps the server's refusal, because the public-event
+            // rules refuse with a sentence written to be read — "Save failed" would throw it away
+            // and leave an organizer with nothing to act on.
+            var (result, error) = await AdminClient.SaveCalendarEventAsync(
+                OrgId, _isNewEvent || _editingEvent is null ? null : _editingEvent.Id, req);
 
             if (result is null)
             {
-                _dialogError = "Save failed.";
+                _dialogError = error ?? "Save failed.";
             }
             else
             {
@@ -672,11 +787,53 @@
         public DateTime End            { get; set; } = DateTime.Now.AddHours(1);
         public bool     IsAllDay       { get; set; }
         public bool     IsPublic       { get; set; }
+        public Guid?    PlaceId        { get; set; }
+        public bool     HideExactLocation { get; set; }
+        public int?     AttendeeCapacity  { get; set; }
+        public DateTime? RsvpClosesAt     { get; set; }
         public Guid?    EventTypeId    { get; set; }
         public Guid?    OrganizationAddressId { get; set; }
         public string   MeetingUrl     { get; set; } = "";
         public HashSet<Guid> InviteeIds { get; set; } = new();
         public string   RecurrenceRule { get; set; } = "";
+    }
+
+    // ── Choosing a place for a public event ─────────────────────────────────
+
+    private string _placeSearch = "";
+    private bool _placeSearched;
+    private List<PlaceCandidate> _placeCandidates = [];
+    private string? _selectedPlaceName;
+
+    /// <summary>
+    /// Finds places by name, reusing the duplicate-detection search rather than adding a second one.
+    /// </summary>
+    /// <remarks>
+    /// Residences come back and are shown <b>disabled</b> rather than filtered out. Somebody
+    /// searching for a place they know exists needs to see that it was found and why it cannot be
+    /// used here — a search that silently returns nothing reads as a broken search.
+    /// </remarks>
+    private async Task SearchPlacesAsync()
+    {
+        _placeSearched = true;
+        _placeCandidates = [.. await AdminClient.FindPlaceCandidatesAsync(
+            street: null, city: null, state: null, zip: null,
+            name: _placeSearch.Trim(), latitude: null, longitude: null)];
+    }
+
+    private void SelectPlace(PlaceCandidate candidate)
+    {
+        _form.PlaceId      = candidate.Id;
+        _selectedPlaceName = candidate.Name ?? candidate.StreetAddress1 ?? "Selected place";
+        _placeCandidates   = [];
+        _placeSearch       = "";
+        _placeSearched     = false;
+    }
+
+    private void ClearPlace()
+    {
+        _form.PlaceId      = null;
+        _selectedPlaceName = null;
     }
 
     private record EventTypeOption(Guid? Value, string Label);

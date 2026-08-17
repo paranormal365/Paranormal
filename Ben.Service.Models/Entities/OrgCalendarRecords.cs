@@ -43,6 +43,24 @@ public record OrgCalendarEventRecord
     public DateTime EndDateTime { get; init; }
     public bool IsAllDay { get; init; }
     public bool IsPublic { get; init; }
+
+    // ── Public-event settings (item #87) ────────────────────────────────────
+
+    /// <summary>The shared place this event is at — its map pin, and how we know it is not a home.</summary>
+    public Guid? PlaceId { get; init; }
+
+    /// <summary>Show the town but not the street until somebody says they are coming.</summary>
+    public bool HideExactLocation { get; init; }
+
+    /// <summary>How many may say they are coming, or null for no limit.</summary>
+    public int? AttendeeCapacity { get; init; }
+
+    /// <summary>After this, no new attendees. Null means right up to the start.</summary>
+    public DateTime? RsvpClosesAt { get; init; }
+
+    /// <summary>The readable slug this event is public at, or null while it is private.</summary>
+    public string? UrlName { get; init; }
+
     public string? RecurrenceRule { get; init; }
     public int AttendeeCount { get; init; }
     public DateTime DateCreated { get; init; }

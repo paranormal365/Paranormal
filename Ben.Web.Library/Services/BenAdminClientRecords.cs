@@ -738,7 +738,12 @@ public sealed record UpsertCalendarEventRequest(
     Guid? CaseId,
     string? RecurrenceRule,
     Guid? OrganizationAddressId = null,
-    string? MeetingUrl = null);
+    string? MeetingUrl = null,
+    // Public-event settings (item #87), defaulted so existing callers are unaffected.
+    Guid? PlaceId = null,
+    bool HideExactLocation = false,
+    int? AttendeeCapacity = null,
+    DateTime? RsvpClosesAt = null);
 
 public sealed record AddAttendeeRequest(Guid AppUserId, string? AssignedTask);
 

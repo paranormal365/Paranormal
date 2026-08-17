@@ -243,4 +243,103 @@ public class OrgCalendarControllerTests
 
         Assert.IsType<NotFoundResult>(result.Result);
     }
+
+    // ── Public events (item #87) ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Refusing a public event at somebody's home explains what to do instead. The message matters
+    /// as much as the refusal: an organizer told "Save failed" has learned nothing, which is why the
+    /// calendar now surfaces the server's own words.
+    /// </summary>
+    [Fact]
+    public async Task Making_an_event_public_at_a_residence_is_refused_with_a_reason()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+
+        var placeId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Places.Add(new Place
+            {
+                Id = placeId, Name = "A client's house", Kind = PlaceKind.PrivateResidence,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var request = MakeEventRequest("Vigil") with { IsPublic = true, PlaceId = placeId };
+        var result = await Build(factory, userId).Create(orgId, request, default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        var message = Assert.IsType<string>(bad.Value);
+        Assert.Contains("private residence", message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Making_an_event_public_while_attached_to_a_case_is_refused_with_a_reason()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+
+        var request = MakeEventRequest("Vigil") with { IsPublic = true, CaseId = Guid.NewGuid() };
+        var result = await Build(factory, userId).Create(orgId, request, default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("case", Assert.IsType<string>(bad.Value), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// A public event at a landmark is allowed, and gets the readable slug its shareable URL needs.
+    /// </summary>
+    [Fact]
+    public async Task A_public_event_at_a_landmark_is_allowed_and_gets_a_slug()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+
+        var placeId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Places.Add(new Place
+            {
+                Id = placeId, Name = "The Old Mill", Kind = PlaceKind.PublicLocation,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var request = MakeEventRequest("Ghost Walk") with { IsPublic = true, PlaceId = placeId };
+        var result = await Build(factory, userId).Create(orgId, request, default);
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+
+        await using var check = await factory.CreateDbContextAsync();
+        var saved = await check.OrgCalendarEvents.AsNoTracking().FirstAsync(e => e.Title == "Ghost Walk");
+
+        Assert.False(string.IsNullOrWhiteSpace(saved.UrlName));
+        Assert.Contains("ghost-walk", saved.UrlName!);
+    }
+
+    /// <summary>
+    /// A slug is a promise: renaming the event later leaves the URL people have already shared alone.
+    /// </summary>
+    [Fact]
+    public async Task Renaming_a_public_event_does_not_change_its_url()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+
+        var created = await Build(factory, userId)
+            .Create(orgId, MakeEventRequest("Ghost Walk") with { IsPublic = true }, default);
+        var record = Assert.IsType<OrgCalendarEventRecord>(
+            Assert.IsType<CreatedAtActionResult>(created.Result).Value);
+
+        string slugBefore;
+        await using (var db = await factory.CreateDbContextAsync())
+            slugBefore = (await db.OrgCalendarEvents.AsNoTracking().FirstAsync(e => e.Id == record.Id)).UrlName!;
+
+        await Build(factory, userId).Update(
+            orgId, record.Id, MakeEventRequest("Ghost Walk (rescheduled)") with { IsPublic = true }, default);
+
+        await using var check = await factory.CreateDbContextAsync();
+        var after = await check.OrgCalendarEvents.AsNoTracking().FirstAsync(e => e.Id == record.Id);
+
+        Assert.Equal(slugBefore, after.UrlName);
+    }
 }
