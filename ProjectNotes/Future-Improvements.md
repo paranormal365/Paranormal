@@ -3340,63 +3340,47 @@ cost:
 > renderers is worth doing when part 3 lands**, since a draft store would let the side-by-side panel
 > use the public renderer too and the duplicate could go.
 
-### 2. A template library
+### 2. A template library — snippet insertion
 
-> **Ben clarified 2026-08-17, and it changes the shape of this part.** *"The templates are things
-> like build a card with a header and body or build a collapsable set of items. It is functionality
-> and look helpers."*
->
-> This is **not** page cloning. It is a library of **layout building blocks** — a card with a header
-> and a body, a collapsible list of items, and their relatives — that an author drops into a page and
-> fills in. The earlier reading (a template as a pre-filled `CmsSection` plus a whole-page template)
-> was mostly a seeding-and-cloning job; this is mostly **new rendering**, because the six existing
-> section types have no vocabulary for structure. `RichText` can hold a card only as hand-written
-> HTML, which is exactly what a non-technical author cannot do and `CustomHtml` already fails to
-> solve.
+Ben clarified this three times on 2026-08-17, and the third is the one that settles it:
 
-> **Second clarification, same day, and it is the load-bearing one.** *"The templates created by
-> users are ones that put together the ones we create on the server-side. Like carrousel."*
->
-> So there are **two tiers, and they are different kinds of thing**:
->
-> - **Primitives, written by us.** A card, a collapsible list, an image, a block of text. Each is a
->   real renderer with a real editing form.
-> - **Compositions, assembled by users.** A carousel of cards, a FAQ built from collapsibles, a
->   three-across feature strip. A user never writes a renderer — they arrange primitives and save the
->   arrangement as something they can reuse.
->
-> **This means blocks must nest**, and that is the design consequence worth getting right before any
-> code. A `CmsSection`'s `ContentJson` stops being a flat record per section type and becomes a
-> **tree of typed nodes**: a node names a primitive and carries that primitive's own fields plus, for
-> primitives that hold others, a list of child nodes. A user template is then simply a saved subtree,
-> and composing is arranging nodes rather than generating markup.
->
-> Two things follow that are easy to miss:
-> - **Only primitives that declare themselves containers may hold children.** A card body can hold
->   blocks; a heading cannot. Without that rule the editor has no way to say where a drop is legal,
->   and the renderer has no way to refuse a tree it cannot draw.
-> - **Depth has to be bounded and the tree validated server-side.** `ContentJson` is author-supplied,
->   and a page that renders a 400-deep tree is a way to take the public site down. Validate on save,
->   not on render.
+1. *"The templates are things like build a card with a header and body or build a collapsable set of
+   items. It is functionality and look helpers."*
+2. *"The templates created by users are ones that put together the ones we create on the
+   server-side. Like carrousel."*
+3. *"They can pick from a list and it adds to their html editor where it places it in for them to
+   fill in the parts."*
 
-**Shape this implies, to settle when it is picked up:**
+**So this is a snippet palette, not a page builder.** An author editing a rich-text or custom-HTML
+section picks a block from a list; its markup is inserted at the cursor with the parts left blank,
+and they type into it. A "user template" is whatever they end up with — a carousel assembled from
+inserted pieces — saved as a block of their own to insert again later.
 
-- **The node vocabulary comes first.** A small set of primitives, each with a renderer in
-  `OrgPublicSection` and a real editing form in `CmsSectionEditor` (which today falls back to a raw
-  JSON box for anything it does not know). Container primitives — card, collapsible, carousel,
-  column strip — plus leaf primitives — heading, text, image, button.
-- **A user template is a saved subtree**, owned by the **group** rather than the person, on the same
+That is dramatically less machinery than the earlier readings on this entry (a pre-filled section
+type, then a nested node tree with a visual composer). **Both of those overshot** — this needs no new
+`CmsSectionType`, no nesting model, no tree in `ContentJson`, and no changes to the public renderer
+at all, because the output is ordinary markup in the section types that already render markup.
+
+**What it actually needs:**
+
+- A **snippet catalogue** — name, description, and a markup template with obvious placeholders. Card
+  with header and body, collapsible list, carousel, two- and three-column strips, call-to-action.
+  Site-provided, seeded, and using the Bootstrap classes the public pages already load, so a snippet
+  looks right without shipping new CSS.
+- A **picker in `CmsSectionEditor`** that inserts at the cursor rather than replacing the field.
+- **Group-owned saved snippets** for the user tier — a name plus a blob of markup. The same
   reasoning as group-owned equipment: it is the group's site, and a member leaving should not take
   its building blocks with them.
-- The **starter set is site-provided**, since primitives are shared vocabulary. Ben confirmed
-  **both** tiers (2026-08-17).
-- Worth settling then: whether a saved composition is a *copy* when inserted (edits diverge) or a
-  *reference* (edits propagate). Copy is far simpler and matches how the equipment FAQ promotion
-  works; reference is what people eventually ask for. Decide deliberately rather than by accident —
-  it is very hard to change afterwards.
 
-Answering the earlier open question for the record: Ben chose **both** site-provided and
-save-your-own (2026-08-17).
+**Two real gotchas, worth handling on the first pass rather than after somebody hits them:**
+
+- **Unique ids per insertion.** Bootstrap collapsibles and carousels are wired by `id`/`data-bs-target`.
+  Insert two carousels into one page from the same snippet and they will drive each other. The
+  inserter must rewrite the ids to something unique at insertion time.
+- **Sanitization is now load-bearing.** These sections already render as `MarkupString`, so the XSS
+  surface pre-dates this — but a palette that *encourages* pasting structural markup makes it much
+  more travelled. Sanitize on save, allow-listing the tags and attributes the snippets actually use
+  (including the `data-bs-*` the components need), rather than trying to block what is dangerous.
 
 ### 3. Draft vs live — ✅ built 2026-08-17
 
