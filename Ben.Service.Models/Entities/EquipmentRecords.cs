@@ -117,6 +117,96 @@ public sealed record UpsertEquipmentItemRequest(
     bool IncludeInGlobalCatalog = false,
     EquipmentLoanAudience LoanAudience = EquipmentLoanAudience.NotLoanable);
 
+// ── Checkouts (Phase 4) ─────────────────────────────────────────────────────
+
+/// <summary>
+/// One loan, as whichever party is looking at it sees it.
+/// </summary>
+/// <remarks>
+/// <c>IsOverdue</c> is computed server-side rather than left to the client: it depends on "now",
+/// and a borrower whose clock is wrong should not see a different answer from the lender's.
+/// </remarks>
+public sealed record EquipmentCheckoutRecord(
+    Guid Id,
+    Guid EquipmentItemId,
+    string ItemDisplayName,
+    string BrandName,
+    string ModelName,
+    Guid? ItemOwnerAppUserId,
+    string? ItemOwnerDisplayName,
+    Guid? ItemOwningOrganizationId,
+    Guid BorrowerAppUserId,
+    string? BorrowerDisplayName,
+    Guid? BorrowedForOrganizationId,
+    string? BorrowedForOrganizationName,
+    Guid? InvestigationId,
+    string? InvestigationTitle,
+    EquipmentCheckoutStatus Status,
+    bool IsOverdue,
+    string? RequestNotes,
+    string? ReviewNotes,
+    Guid? ReviewedByAppUserId,
+    string? ReviewedByDisplayName,
+    DateTime? DateReviewed,
+    DateTime? DateNeededFrom,
+    DateTime? DateDue,
+    DateTime? DateCheckedOut,
+    DateTime? DateReturned,
+    string? ReturnConditionNotes,
+    DateTime DateCreated,
+    EquipmentCheckoutFlags Flags);
+
+/// <summary>What the viewer may do with this loan right now. Rendered, never re-derived.</summary>
+public sealed record EquipmentCheckoutFlags(
+    bool IsBorrower,
+    bool IsApprover,
+    bool CanCancel,
+    bool CanApprove,
+    bool CanDeny,
+    bool CanConfirmHandoff,
+    bool CanReceiveReturn);
+
+/// <summary>
+/// A group the caller could borrow a given item for — or, with a null id, borrowing it personally.
+/// </summary>
+/// <remarks>
+/// Personal borrowing is offered as an option in the same list rather than a separate control,
+/// because from the borrower's side "who am I borrowing this for?" is one question with several
+/// answers, one of which is "myself".
+/// </remarks>
+public sealed record BorrowOptionRecord(Guid? OrganizationId, string Label);
+
+/// <summary>
+/// Whether the caller may ask to borrow an item, and on whose behalf they could.
+/// </summary>
+/// <remarks>
+/// Returned by the server so the request form never has to work out the loan-audience rules for
+/// itself. An empty <c>Options</c> with <c>CanRequest</c> false is the ordinary answer for gear that
+/// is visible but not lent out.
+/// </remarks>
+public sealed record BorrowEligibilityRecord(
+    Guid EquipmentItemId,
+    bool CanRequest,
+    string? Reason,
+    IReadOnlyList<BorrowOptionRecord> Options);
+
+/// <summary>Asks to borrow a piece of equipment.</summary>
+public sealed record RequestEquipmentCheckoutRequest(
+    Guid EquipmentItemId,
+    Guid? BorrowedForOrganizationId,
+    Guid? InvestigationId,
+    DateTime? DateNeededFrom,
+    string? RequestNotes);
+
+/// <summary>Approves a request, optionally setting when the gear is due back.</summary>
+public sealed record ApproveEquipmentCheckoutRequest(DateTime? DateDue, string? ReviewNotes);
+
+/// <summary>Turns a request down. A reason is required.</summary>
+public sealed record DenyEquipmentCheckoutRequest(string ReviewNotes);
+
+/// <summary>Records the gear coming back, with any note on its condition.</summary>
+public sealed record ReturnEquipmentCheckoutRequest(string? ReturnConditionNotes);
+
 // ── Group-owned equipment and the service log (Phase 3) ─────────────────────
 
 /// <summary>

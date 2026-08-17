@@ -107,6 +107,7 @@ internal static class OrganizationSeeder
         await EnsureMembershipResponseMessageType(db, owner.Id);
         await EnsureTaxonomyReviewMessageType(db, owner.Id);
         await EnsureSupportTicketMessageType(db, owner.Id);
+        await EnsureEquipmentCheckoutMessageType(db, owner.Id);
     }
 
     /// <summary>
@@ -150,6 +151,35 @@ internal static class OrganizationSeeder
         });
         await db.SaveChangesAsync();
         Console.WriteLine("[OrganizationSeeder] Seeded 'Support Ticket' UserMessageType.");
+    }
+
+    /// <summary>
+    /// Fixed ID for the "Equipment Checkout" UserMessageType — the notices sent when somebody asks
+    /// to borrow equipment and when that request is decided.
+    /// </summary>
+    internal static readonly Guid EquipmentCheckoutMessageTypeId =
+        new("d4e5f607-1829-0123-def0-456789012345");
+
+    private static async Task EnsureEquipmentCheckoutMessageType(BenDataContext db, Guid createdByUserId)
+    {
+        if (await db.UserMessageTypes.AnyAsync(t => t.Id == EquipmentCheckoutMessageTypeId))
+            return;
+
+        db.UserMessageTypes.Add(new UserMessageType
+        {
+            Id                 = EquipmentCheckoutMessageTypeId,
+            Name               = "Equipment Checkout",
+            Description        = "System-generated notice about an equipment borrowing request or its outcome.",
+            IconClass          = "fa-toolbox",
+            ColorClass         = "text-primary",
+            IsActive           = true,
+            IsPublic           = false,
+            SortOrder          = 130,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = createdByUserId,
+        });
+        await db.SaveChangesAsync();
+        Console.WriteLine("[OrganizationSeeder] Seeded 'Equipment Checkout' UserMessageType.");
     }
 
     private static async Task EnsureTaxonomyReviewMessageType(BenDataContext db, Guid createdByUserId)

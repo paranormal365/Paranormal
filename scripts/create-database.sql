@@ -8263,3 +8263,110 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817110128_AddEquipmentCheckout'
+)
+BEGIN
+    CREATE TABLE [EquipmentCheckouts] (
+        [Id] uniqueidentifier NOT NULL,
+        [EquipmentItemId] uniqueidentifier NOT NULL,
+        [BorrowerAppUserId] uniqueidentifier NOT NULL,
+        [BorrowedForOrganizationId] uniqueidentifier NULL,
+        [InvestigationId] uniqueidentifier NULL,
+        [Status] int NOT NULL,
+        [RequestNotes] nvarchar(1000) NULL,
+        [ReviewNotes] nvarchar(1000) NULL,
+        [ReviewedByAppUserId] uniqueidentifier NULL,
+        [DateReviewed] datetime2 NULL,
+        [DateNeededFrom] datetime2 NULL,
+        [DateDue] datetime2 NULL,
+        [DateCheckedOut] datetime2 NULL,
+        [CheckedOutConfirmedByAppUserId] uniqueidentifier NULL,
+        [DateReturned] datetime2 NULL,
+        [ReturnedReceivedByAppUserId] uniqueidentifier NULL,
+        [ReturnConditionNotes] nvarchar(2000) NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_EquipmentCheckouts] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_EquipmentCheckouts_AppUsers_BorrowerAppUserId] FOREIGN KEY ([BorrowerAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentCheckouts_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentCheckouts_AppUsers_ReviewedByAppUserId] FOREIGN KEY ([ReviewedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentCheckouts_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_EquipmentCheckouts_EquipmentItems_EquipmentItemId] FOREIGN KEY ([EquipmentItemId]) REFERENCES [EquipmentItems] ([Id]),
+        CONSTRAINT [FK_EquipmentCheckouts_Investigations_InvestigationId] FOREIGN KEY ([InvestigationId]) REFERENCES [Investigations] ([Id]),
+        CONSTRAINT [FK_EquipmentCheckouts_Organizations_BorrowedForOrganizationId] FOREIGN KEY ([BorrowedForOrganizationId]) REFERENCES [Organizations] ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817110128_AddEquipmentCheckout'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentCheckouts_BorrowedForOrganizationId_Status] ON [EquipmentCheckouts] ([BorrowedForOrganizationId], [Status]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817110128_AddEquipmentCheckout'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentCheckouts_BorrowerAppUserId] ON [EquipmentCheckouts] ([BorrowerAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817110128_AddEquipmentCheckout'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentCheckouts_CreatedByAppUserId] ON [EquipmentCheckouts] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817110128_AddEquipmentCheckout'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentCheckouts_EquipmentItemId_Status] ON [EquipmentCheckouts] ([EquipmentItemId], [Status]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817110128_AddEquipmentCheckout'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentCheckouts_InvestigationId] ON [EquipmentCheckouts] ([InvestigationId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817110128_AddEquipmentCheckout'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentCheckouts_ReviewedByAppUserId] ON [EquipmentCheckouts] ([ReviewedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817110128_AddEquipmentCheckout'
+)
+BEGIN
+    CREATE INDEX [IX_EquipmentCheckouts_UpdatedByAppUserId] ON [EquipmentCheckouts] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817110128_AddEquipmentCheckout'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260817110128_AddEquipmentCheckout', N'10.0.11');
+END;
+
+COMMIT;
+GO
+

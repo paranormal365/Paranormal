@@ -1,6 +1,7 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Service.Models.Entities;
+using Ben.Service.RepositoryService.GenericInterfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -27,10 +28,14 @@ namespace Ben.Data.WebApi.Controllers;
 public sealed class NotificationSummaryController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
+    private readonly IOrganizationSecurityService _security;
 
-    public NotificationSummaryController(IDbContextFactory<BenDataContext> dbContextFactory)
+    public NotificationSummaryController(
+        IDbContextFactory<BenDataContext> dbContextFactory,
+        IOrganizationSecurityService security)
     {
         _dbContextFactory = dbContextFactory;
+        _security = security;
     }
 
     [HttpGet("notification-summary")]
@@ -112,9 +117,41 @@ public sealed class NotificationSummaryController : BenControllerBase
                        && a.Investigation.Status != InvestigationStatus.Cancelled)
               .Select(a => (DateTime?)a.DateCreated), ct);
 
+        // ── Equipment loans wanting something from me ────────────────────────
+        // Two different obligations in one bucket, because both mean "go and do something about a
+        // piece of equipment": requests I have to decide on, and gear of mine that is overdue back.
+        //
+        // Personal gear resolves from the item's owner column. Group gear needs the group's
+        // EquipmentCheckout permission, which is why the org list is filtered through the security
+        // service first rather than joined — the permission can come from a role, a direct grant,
+        // or being an owner/administrator, and only that service knows all three.
+        var checkoutOrgIds = new List<Guid>();
+        foreach (var orgId in myOrgIds)
+        {
+            if (await _security.HasAccessAsync(userId, orgId,
+                    OrganizationSecurityTable.EquipmentCheckout, OrganizationSecurityAction.Update, ct))
+                checkoutOrgIds.Add(orgId);
+        }
+
+        var equipmentCheckouts = await BucketAsync(
+            db.EquipmentCheckouts.AsNoTracking()
+              .Where(c =>
+                  // Waiting on my decision.
+                  (c.Status == EquipmentCheckoutStatus.Requested
+                   && (c.EquipmentItem.OwnerAppUserId == userId
+                       || (c.EquipmentItem.OwningOrganizationId != null
+                           && checkoutOrgIds.Contains(c.EquipmentItem.OwningOrganizationId.Value))))
+                  // Or out with somebody and late back to me.
+                  || (c.Status == EquipmentCheckoutStatus.CheckedOut
+                      && c.DateDue != null && c.DateDue < nowUtc
+                      && (c.EquipmentItem.OwnerAppUserId == userId
+                          || (c.EquipmentItem.OwningOrganizationId != null
+                              && checkoutOrgIds.Contains(c.EquipmentItem.OwningOrganizationId.Value)))))
+              .Select(c => (DateTime?)c.DateCreated), ct);
+
         return Ok(new NotificationSummaryResponse(
             orgMessages, caseMessagesAsOrg, caseMessagesAsClient, systemMessages, pendingRequests,
-            investigationInvites));
+            investigationInvites, equipmentCheckouts));
     }
 
     /// <summary>

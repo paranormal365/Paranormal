@@ -290,6 +290,11 @@
                 $"Waiting on your decision · oldest {NotificationBadge.DescribeAge(s.PendingPermissionRequests.OldestUnreadUtc)}",
                 SvgIcon.Lock, "/notifications", s.PendingPermissionRequests);
 
+        if (s.EquipmentCheckouts.Count > 0)
+            yield return new("Equipment requests & overdue gear",
+                $"Waiting on your decision, or late back · oldest {NotificationBadge.DescribeAge(s.EquipmentCheckouts.OldestUnreadUtc)}",
+                SvgIcon.Wrench, "/my-checkouts", s.EquipmentCheckouts);
+
         if (s.SystemMessages.Count > 0)
             yield return new("Unread messages",
                 $"Sent to you through the platform · oldest {NotificationBadge.DescribeAge(s.SystemMessages.OldestUnreadUtc)}",

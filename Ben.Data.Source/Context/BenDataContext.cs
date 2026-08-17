@@ -114,6 +114,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<EquipmentItemPhoto> EquipmentItemPhotos { get; set; }
         public virtual DbSet<EquipmentItemShare> EquipmentItemShares { get; set; }
         public virtual DbSet<EquipmentServiceLog> EquipmentServiceLogs { get; set; }
+        public virtual DbSet<EquipmentCheckout> EquipmentCheckouts { get; set; }
         public virtual DbSet<VideoProject> VideoProjects { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -1993,6 +1994,39 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<EquipmentServiceLog>().Property(e => e.Notes).HasMaxLength(2000);
             modelBuilder.Entity<EquipmentServiceLog>().HasIndex(e => new { e.EquipmentItemId, e.EntryDate });
+
+            // NoAction from the item: a loan is the record of what happened to a piece of gear, and
+            // an item with any loan history refuses deletion in favour of being retired, so there is
+            // never a cascade to perform. Organization is NoAction for the multiple-cascade-path
+            // reason the share table documents.
+            modelBuilder.Entity<EquipmentCheckout>()
+                .HasOne(e => e.EquipmentItem).WithMany()
+                .HasForeignKey(e => e.EquipmentItemId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentCheckout>()
+                .HasOne(e => e.BorrowerAppUser).WithMany()
+                .HasForeignKey(e => e.BorrowerAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentCheckout>()
+                .HasOne(e => e.BorrowedForOrganization).WithMany()
+                .HasForeignKey(e => e.BorrowedForOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentCheckout>()
+                .HasOne(e => e.Investigation).WithMany()
+                .HasForeignKey(e => e.InvestigationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentCheckout>()
+                .HasOne(e => e.ReviewedByAppUser).WithMany()
+                .HasForeignKey(e => e.ReviewedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentCheckout>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentCheckout>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EquipmentCheckout>().Property(e => e.RequestNotes).HasMaxLength(1000);
+            modelBuilder.Entity<EquipmentCheckout>().Property(e => e.ReviewNotes).HasMaxLength(1000);
+            modelBuilder.Entity<EquipmentCheckout>().Property(e => e.ReturnConditionNotes).HasMaxLength(2000);
+            modelBuilder.Entity<EquipmentCheckout>().HasIndex(e => new { e.EquipmentItemId, e.Status });
+            modelBuilder.Entity<EquipmentCheckout>().HasIndex(e => e.BorrowerAppUserId);
+            modelBuilder.Entity<EquipmentCheckout>().HasIndex(e => new { e.BorrowedForOrganizationId, e.Status });
+            modelBuilder.Entity<EquipmentCheckout>().HasIndex(e => e.InvestigationId);
 
         }
     }

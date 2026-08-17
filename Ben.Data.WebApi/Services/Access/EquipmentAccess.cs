@@ -109,6 +109,153 @@ public static class EquipmentAccess
                 ct);
     }
 
+    // ── Checkouts (Phase 4) ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Whether <paramref name="userId"/> may review loans of this item — approve, deny, hand over,
+    /// receive back.
+    /// </summary>
+    /// <remarks>
+    /// The approver is a property of the item, not of the loan: group-owned gear is reviewed by
+    /// holders of <see cref="OrganizationSecurityTable.EquipmentCheckout"/> in the owning group,
+    /// and a member's personal gear is always reviewed by its owner. Deliberately one place, so
+    /// every transition endpoint asks the same question.
+    /// </remarks>
+    public static async Task<bool> CanReviewCheckoutAsync(
+        IOrganizationSecurityService security, EquipmentItem item, Guid userId, bool isSuperAdmin,
+        CancellationToken ct)
+    {
+        if (isSuperAdmin) return true;
+        if (userId == Guid.Empty) return false;
+
+        if (item.OwningOrganizationId is Guid orgId)
+            return await security.HasAccessAsync(
+                userId, orgId, OrganizationSecurityTable.EquipmentCheckout,
+                OrganizationSecurityAction.Update, ct);
+
+        // Personal gear: the owner decides, and nobody's group permission overrides that.
+        return item.OwnerAppUserId == userId;
+    }
+
+    /// <summary>
+    /// Whether the caller may ask to borrow this item, and which groups they could borrow it for.
+    /// </summary>
+    /// <remarks>
+    /// <para>Reads <see cref="EquipmentItem.LoanAudience"/>, whose three flags answer different
+    /// questions. <c>SharedGroups</c> offers the groups the item is shared with that the caller is
+    /// also in — those loans are attributed to a group. <c>GroupMembers</c> and
+    /// <c>IndividualUsers</c> both offer a personal loan with no group; they differ in reach, the
+    /// former requiring a shared group with the owner and the latter requiring nothing.</para>
+    ///
+    /// <para>Group-owned gear ignores the audience entirely: it is borrowable by the group's active
+    /// members, always for that group.</para>
+    ///
+    /// <para>The reasons are written to be shown to a person, because a borrow button that is
+    /// simply missing tells them nothing.</para>
+    /// </remarks>
+    public static async Task<BorrowEligibilityRecord> ComputeBorrowEligibilityAsync(
+        BenDataContext db, EquipmentItem item, Guid userId, CancellationToken ct)
+    {
+        if (userId == Guid.Empty)
+            return new BorrowEligibilityRecord(item.Id, false, "You need to be signed in to borrow equipment.", []);
+
+        if (item.IsRetired)
+            return new BorrowEligibilityRecord(item.Id, false, "This equipment has been retired.", []);
+
+        // Group-owned: any active member may ask, always on the group's behalf.
+        if (item.OwningOrganizationId is Guid owningOrgId)
+        {
+            var isMember = await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == owningOrgId && m.AppUserId == userId && m.IsActive, ct);
+            if (!isMember)
+                return new BorrowEligibilityRecord(item.Id, false, "Only members of the group that owns this can borrow it.", []);
+
+            var orgName = await db.Organizations.AsNoTracking()
+                .Where(o => o.Id == owningOrgId).Select(o => o.Name).FirstOrDefaultAsync(ct);
+            return new BorrowEligibilityRecord(item.Id, true, null, [new BorrowOptionRecord(owningOrgId, orgName ?? "the group")]);
+        }
+
+        if (item.OwnerAppUserId == userId)
+            return new BorrowEligibilityRecord(item.Id, false, "This is your own equipment.", []);
+
+        if (item.LoanAudience == EquipmentLoanAudience.NotLoanable)
+            return new BorrowEligibilityRecord(item.Id, false, "The owner isn't lending this out.", []);
+
+        var options = new List<BorrowOptionRecord>();
+
+        // Borrowing FOR a group: the groups this item is shared with that the caller is in too.
+        if ((item.LoanAudience & EquipmentLoanAudience.SharedGroups) != 0)
+        {
+            var groups = await db.EquipmentItemShares.AsNoTracking()
+                .Where(s => s.EquipmentItemId == item.Id)
+                .Where(s => db.OrganizationUserMemberships.Any(m =>
+                                m.OrganizationId == s.OrganizationId && m.AppUserId == userId && m.IsActive)
+                         && db.OrganizationUserMemberships.Any(m =>
+                                m.OrganizationId == s.OrganizationId && m.AppUserId == item.OwnerAppUserId && m.IsActive))
+                .Join(db.Organizations.AsNoTracking(), s => s.OrganizationId, o => o.Id, (s, o) => new { o.Id, o.Name })
+                .Distinct()
+                .ToListAsync(ct);
+
+            options.AddRange(groups.Select(g => new BorrowOptionRecord(g.Id, $"For {g.Name}")));
+        }
+
+        // Borrowing personally. Either flag allows it; they differ only in who qualifies.
+        var personalAllowed =
+            (item.LoanAudience & EquipmentLoanAudience.IndividualUsers) != 0
+            || ((item.LoanAudience & EquipmentLoanAudience.GroupMembers) != 0
+                && await SharesAnActiveGroupWithOwnerAsync(db, item.OwnerAppUserId, userId, ct));
+
+        if (personalAllowed)
+            options.Add(new BorrowOptionRecord(null, "For myself"));
+
+        if (options.Count == 0)
+        {
+            var reason = (item.LoanAudience & EquipmentLoanAudience.SharedGroups) != 0
+                ? "You're not in a group this equipment is shared with."
+                : "The owner only lends this to people in their groups.";
+            return new BorrowEligibilityRecord(item.Id, false, reason, []);
+        }
+
+        return new BorrowEligibilityRecord(item.Id, true, null, options);
+    }
+
+    /// <summary>Whether two people are both active members of at least one group in common.</summary>
+    private static Task<bool> SharesAnActiveGroupWithOwnerAsync(
+        BenDataContext db, Guid? ownerUserId, Guid viewerUserId, CancellationToken ct)
+    {
+        if (ownerUserId is null) return Task.FromResult(false);
+
+        return db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.AppUserId == viewerUserId && m.IsActive)
+            .AnyAsync(m => db.OrganizationUserMemberships.Any(o =>
+                o.OrganizationId == m.OrganizationId && o.AppUserId == ownerUserId && o.IsActive), ct);
+    }
+
+    /// <summary>Whether this loan is out and past its due date. Computed, never stored.</summary>
+    public static bool IsOverdue(EquipmentCheckout checkout, DateTime utcNow)
+        => checkout.Status == EquipmentCheckoutStatus.CheckedOut
+           && checkout.DateDue is not null
+           && checkout.DateDue < utcNow;
+
+    /// <summary>What the viewer may do with this loan, given whether they are its approver.</summary>
+    public static EquipmentCheckoutFlags ComputeCheckoutFlags(
+        EquipmentCheckout checkout, Guid userId, bool isApprover)
+    {
+        var isBorrower = userId != Guid.Empty && checkout.BorrowerAppUserId == userId;
+        var status     = checkout.Status;
+
+        return new EquipmentCheckoutFlags(
+            IsBorrower: isBorrower,
+            IsApprover: isApprover,
+            // The borrower can pull out any time before they actually have it.
+            CanCancel: isBorrower && status is EquipmentCheckoutStatus.Requested or EquipmentCheckoutStatus.Approved,
+            CanApprove: isApprover && status == EquipmentCheckoutStatus.Requested,
+            CanDeny: isApprover && status == EquipmentCheckoutStatus.Requested,
+            // Each party attests to the transfer coming toward them.
+            CanConfirmHandoff: isBorrower && status == EquipmentCheckoutStatus.Approved,
+            CanReceiveReturn: isApprover && status == EquipmentCheckoutStatus.CheckedOut);
+    }
+
     /// <summary>
     /// Ownership check for the <c>api/me/equipment</c> surface: matches id AND owner together and
     /// answers with the row (or null) rather than a bool, so callers return 404 — not 403 — on a

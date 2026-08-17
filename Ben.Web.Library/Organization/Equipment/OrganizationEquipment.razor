@@ -29,6 +29,15 @@
             @RenderShared
         </TabStripTab>
 
+        @* Only rendered when the server actually returned a queue — the endpoint 404s for anyone
+           without the Equipment Checkouts permission, so an empty tab would be a lie. *@
+        @if (_loans.Count > 0)
+        {
+            <TabStripTab Title="Loans" Id="loans">
+                @RenderLoans
+            </TabStripTab>
+        }
+
     </TelerikTabStrip>
 </div>
 
@@ -43,6 +52,12 @@
                         OrgId="@OrgId"
                         Item="@_logFor"
                         OnChanged="LoadOwnedAsync" />
+
+<Ben.Web.Library.Equipment.EquipmentCheckoutRequestDialog
+    Visible="@_borrowVisible"
+    VisibleChanged="@(v => _borrowVisible = v)"
+    ItemId="@_borrowItemId"
+    ItemDisplayName="@_borrowItemName" />
 
 <ConfirmDialog Visible="@(_pendingDelete is not null)"
                Title="Delete this equipment?"
@@ -127,10 +142,15 @@
                         }
                     </Template>
                 </GridColumn>
-                <GridCommandColumn Width="230px">
+                <GridCommandColumn Width="300px">
                     <Template>
                         @{ var row = (EquipmentItemRecord)context; }
                         <div class="d-flex gap-1">
+                            @if (!row.IsRetired)
+                            {
+                                <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                               OnClick="@(() => OpenBorrow(row.Id, row.DisplayName))">Borrow</TelerikButton>
+                            }
                             <TelerikButton Size="@ThemeConstants.Button.Size.Small"
                                            OnClick="@(() => OpenLog(row))">History</TelerikButton>
                             @* Buttons render from the server's verdict, never from a guess. *@
@@ -186,20 +206,19 @@
                 <GridColumn Field="@nameof(SharedEquipmentItemRecord.BrandName)" Title="Make" Width="150px" />
                 <GridColumn Field="@nameof(SharedEquipmentItemRecord.ModelName)" Title="Model" Width="150px" />
                 <GridColumn Field="@nameof(SharedEquipmentItemRecord.CategoryName)" Title="Category" Width="170px" />
-                <GridColumn Title="Borrowing" Width="150px">
+                <GridColumn Title="Borrowing" Width="230px">
                     <Template>
                         @{ var row = (SharedEquipmentItemRecord)context; }
                         @if (row.LoanAudience == EquipmentLoanAudience.NotLoanable)
                         {
                             <span class="text-secondary small">Not lent out</span>
                         }
-                        else if ((row.LoanAudience & EquipmentLoanAudience.SharedGroups) != 0)
-                        {
-                            <span class="badge bg-success">Lends to this group</span>
-                        }
                         else
                         {
-                            <span class="badge bg-secondary">Personal loans only</span>
+                            @* The server decides whether this caller may actually ask; the dialog
+                               shows its answer, including the reason when it is no. *@
+                            <TelerikButton Size="@ThemeConstants.Button.Size.Small"
+                                           OnClick="@(() => OpenBorrow(row.Id, row.DisplayName))">Ask to borrow</TelerikButton>
                         }
                     </Template>
                 </GridColumn>
@@ -212,11 +231,73 @@
     }
     </text>;
 
+    private RenderFragment RenderLoans => @<text>
+    <p class="text-secondary small mt-2">
+        Every loan of this group's equipment. Approving and receiving gear back is done from
+        <a href="/my-checkouts">My Checkouts</a>, which is where your own decisions queue up.
+    </p>
+
+    <TelerikGrid Data="@_loans" TItem="EquipmentCheckoutRecord" Sortable="true" Pageable="true" PageSize="20">
+        <GridColumns>
+            <GridColumn Field="@nameof(EquipmentCheckoutRecord.ItemDisplayName)" Title="Equipment" />
+            <GridColumn Field="@nameof(EquipmentCheckoutRecord.BorrowerDisplayName)" Title="Borrower" Width="170px" />
+            <GridColumn Title="For" Width="170px">
+                <Template>
+                    @{ var row = (EquipmentCheckoutRecord)context; }
+                    @(row.BorrowedForOrganizationName ?? "Personal loan")
+                </Template>
+            </GridColumn>
+            <GridColumn Title="Status" Width="130px">
+                <Template>
+                    @{ var row = (EquipmentCheckoutRecord)context; }
+                    <span class="badge @StatusClass(row)">@StatusLabel(row)</span>
+                </Template>
+            </GridColumn>
+            <GridColumn Title="Due" Width="140px">
+                <Template>
+                    @{ var row = (EquipmentCheckoutRecord)context; }
+                    @if (row.DateDue is null)
+                    {
+                        <span class="text-secondary small">—</span>
+                    }
+                    else
+                    {
+                        <span class="@(row.IsOverdue ? "text-danger fw-semibold" : "")">
+                            @row.DateDue.Value.ToString("d MMM yyyy")
+                        </span>
+                    }
+                </Template>
+            </GridColumn>
+        </GridColumns>
+    </TelerikGrid>
+    </text>;
+
+    private static string StatusLabel(EquipmentCheckoutRecord loan) => loan.Status switch
+    {
+        EquipmentCheckoutStatus.Requested  => "Waiting",
+        EquipmentCheckoutStatus.Approved   => "Approved",
+        EquipmentCheckoutStatus.Denied     => "Declined",
+        EquipmentCheckoutStatus.Cancelled  => "Cancelled",
+        EquipmentCheckoutStatus.CheckedOut => loan.IsOverdue ? "Overdue" : "Out",
+        EquipmentCheckoutStatus.Returned   => "Returned",
+        _                                  => loan.Status.ToString(),
+    };
+
+    private static string StatusClass(EquipmentCheckoutRecord loan) => loan.Status switch
+    {
+        EquipmentCheckoutStatus.Requested  => "bg-warning text-dark",
+        EquipmentCheckoutStatus.Approved   => "bg-info text-dark",
+        EquipmentCheckoutStatus.CheckedOut => loan.IsOverdue ? "bg-danger" : "bg-success",
+        EquipmentCheckoutStatus.Returned   => "bg-light text-secondary border",
+        _                                  => "bg-secondary",
+    };
+
     [Parameter, EditorRequired] public Guid OrgId { get; set; }
     [Parameter] public bool EmbeddedMode { get; set; }
 
     private List<SharedEquipmentItemRecord> _items = [];
     private List<EquipmentItemRecord> _owned = [];
+    private List<EquipmentCheckoutRecord> _loans = [];
     private string _activeTab = "owned";
     private bool _loading = true;
     private bool _ownedLoading = true;
@@ -228,6 +309,16 @@
     private EquipmentItemRecord? _pendingDelete;
     private bool _editorVisible;
     private bool _logVisible;
+    private bool _borrowVisible;
+    private Guid _borrowItemId;
+    private string? _borrowItemName;
+
+    private void OpenBorrow(Guid itemId, string displayName)
+    {
+        _borrowItemId = itemId;
+        _borrowItemName = displayName;
+        _borrowVisible = true;
+    }
 
     /// <summary>
     /// The server's verdict on whether this caller may add equipment — rendered, never re-derived.
@@ -242,6 +333,9 @@
         _loadedForOrg = OrgId;
         await LoadOwnedAsync();
         await LoadAsync();
+        // Empty for anyone without the checkout permission — the endpoint 404s and the client
+        // turns that into an empty list, which is exactly the right default here.
+        _loans = [.. await AdminClient.GetOrgEquipmentCheckoutsAsync(OrgId)];
     }
 
     private async Task LoadOwnedAsync()
