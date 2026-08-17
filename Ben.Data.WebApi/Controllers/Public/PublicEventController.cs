@@ -157,6 +157,59 @@ public sealed class PublicEventController : BenControllerBase
         return id is Guid eventId ? await GetEvent(eventId, ct) : NotFound();
     }
 
+    /// <summary>
+    /// The public events this caller has said they are coming to.
+    /// </summary>
+    /// <remarks>
+    /// Without this, saying you are coming to something is a statement that vanishes: the RSVP
+    /// creates an <c>OrgCalendarEventAttendee</c>, and <c>/my-investigations</c> reads
+    /// <c>InvestigationAttendee</c> — a different table — so nothing anywhere afterwards told a
+    /// person what they had signed up for.
+    ///
+    /// <para>Recently-past events are included rather than dropped on the day. Somebody checking
+    /// "what was that place called?" the morning after has nowhere else to look, and a list that
+    /// empties itself the moment an event ends is the kind of tidiness nobody asked for.</para>
+    /// </remarks>
+    [HttpGet("mine")]
+    [Authorize]
+    public async Task<ActionResult<IReadOnlyList<PublicEventListItem>>> GetMine(CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var since = DateTime.UtcNow.AddDays(-30);
+
+        var events = await VisibleEvents(db)
+            .Where(e => e.EndDateTime >= since
+                     && e.Attendees.Any(a => a.AppUserId == userId && a.RsvpStatus == RsvpStatus.Accepted))
+            .OrderBy(e => e.StartDateTime)
+            .Select(e => new
+            {
+                e.Id, e.UrlName, e.OrganizationId, OrgName = e.Organization.Name, OrgUrl = e.Organization.UrlName,
+                e.Title, e.StartDateTime, e.EndDateTime, e.IsAllDay, e.MeetingUrl,
+                e.AttendeeCapacity,
+                PlaceCity = e.Place != null ? e.Place.City : null,
+                PlaceState = e.Place != null ? e.Place.State : null,
+                PlaceLat = e.Place != null ? e.Place.Latitude : null,
+                PlaceLon = e.Place != null ? e.Place.Longitude : null,
+                Attending = e.Attendees.Count(a => a.RsvpStatus == RsvpStatus.Accepted),
+            })
+            .ToListAsync(ct);
+
+        return Ok(events.Select(e =>
+        {
+            var (lat, lon) = PublicCoordinates.Approximate(e.PlaceLat, e.PlaceLon);
+            return new PublicEventListItem(
+                e.Id, e.UrlName, e.OrganizationId, e.OrgName, e.OrgUrl, e.Title,
+                e.StartDateTime, e.EndDateTime, e.IsAllDay,
+                e.PlaceCity, e.PlaceState, lat, lon,
+                e.Attending, e.AttendeeCapacity,
+                IsOnline: !string.IsNullOrWhiteSpace(e.MeetingUrl));
+        }).ToList());
+    }
+
     // ── Coming along ─────────────────────────────────────────────────────────
 
     /// <summary>

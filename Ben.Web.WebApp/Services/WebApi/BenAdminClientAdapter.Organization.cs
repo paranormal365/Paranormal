@@ -175,6 +175,12 @@ public sealed partial class BenAdminClientAdapter
         => _api.GetAnonymousAsync<PublicEventRecord>(
                $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/events/{Uri.EscapeDataString(eventSlug)}", token);
 
+    public async Task<IReadOnlyList<PublicEventListItem>> GetMyPublicEventsAsync(CancellationToken token = default)
+    {
+        var result = await _api.GetAsync<IReadOnlyList<PublicEventListItem>>("/api/public/events/mine", token);
+        return result ?? [];
+    }
+
     public Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, CancellationToken token = default)
         => _api.PostAsync<object, PublicEventRecord>($"/api/public/events/{eventId}/rsvp", new object(), token);
 

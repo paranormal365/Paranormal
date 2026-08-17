@@ -183,6 +183,9 @@ public interface IBenOrganizationClient
     /// <summary>One public event by its readable URL.</summary>
     Task<PublicEventRecord?> GetPublicEventAsync(string orgUrlName, string eventSlug, CancellationToken token = default);
 
+    /// <summary>Public events this caller has said they are coming to, recent past included.</summary>
+    Task<IReadOnlyList<PublicEventListItem>> GetMyPublicEventsAsync(CancellationToken token = default);
+
     /// <summary>Says the signed-in caller is coming. Returns the refreshed event.</summary>
     Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, CancellationToken token = default);
 

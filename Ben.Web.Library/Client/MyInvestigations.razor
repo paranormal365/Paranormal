@@ -21,11 +21,16 @@
     {
         <TelerikLoaderContainer Visible="true" Text="Loading your investigations…" />
     }
-    else if (_items.Count == 0)
+    else if (_items.Count == 0 && _myEvents.Count == 0)
     {
+        @* Both empty, or the page would tell somebody they have nothing while listing the event
+           they signed up to this morning — which is the bug this section exists to fix, put back. *@
         <div class="text-center py-5 text-secondary">
             <p class="mb-3">You have not been assigned to any investigations.</p>
             <p class="small">When an investigation group schedules a visit and adds you to the team, it will appear here.</p>
+            <p class="small">
+                Anyone can come along to a group's <a href="/events">public events</a>.
+            </p>
         </div>
     }
     else
@@ -71,6 +76,65 @@
                                     Attendance: <strong>@(inv.DidAttend.Value ? "Attended" : "Did not attend")</strong>
                                 </div>
                             }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @* ── Public events I said I would go to ───────────────────────────── *@
+        @* Here rather than on a page of its own: from the person's point of view "things I am
+           going to" is one list, and the difference between being on a team and having signed up
+           to a public walk is a distinction only the database cares about. *@
+        @if (_myEvents.Count > 0)
+        {
+            <h5 class="text-secondary mb-3">Events you're going to</h5>
+            <div class="d-flex flex-column gap-3 mb-4">
+                @foreach (var ev in _myEvents)
+                {
+                    var isPast = ev.EndDateTime < DateTime.UtcNow;
+                    <div class="card @(isPast ? "opacity-75" : "")">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                <div>
+                                    <div class="fw-semibold">
+                                        @if (ev.UrlName is string slug)
+                                        {
+                                            <a href="@($"/o/{ev.OrganizationUrlName}/events/{slug}")"
+                                               class="text-decoration-none">@ev.Title</a>
+                                        }
+                                        else
+                                        {
+                                            @ev.Title
+                                        }
+                                    </div>
+                                    <div class="text-secondary small">
+                                        @ev.OrganizationName
+                                        @if (ev.City is not null)
+                                        {
+                                            <span> · @ev.City@(ev.State is null ? "" : $", {ev.State}")</span>
+                                        }
+                                        @if (ev.IsOnline)
+                                        {
+                                            <span class="badge bg-info text-dark ms-1">Online</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="text-secondary small text-end flex-shrink-0">
+                                    @ev.StartDateTime.ToViewerLocalTime(UserState).ToString("ddd d MMM")
+                                    @if (!ev.IsAllDay)
+                                    {
+                                        <span class="d-block">@ev.StartDateTime.ToViewerLocalTime(UserState).ToString("h:mm tt")</span>
+                                    }
+                                </div>
+                            </div>
+
+                            @* The address, when there is one to have, lives on the event's own page
+                               — it is only served to people who are coming, and repeating it here
+                               would mean a second place to keep that rule right. *@
+                            <div class="text-secondary mt-2" style="font-size:.75rem;">
+                                @(isPast ? "This has already happened." : "You said you're coming. Open it for the details.")
+                            </div>
                         </div>
                     </div>
                 }
@@ -123,6 +187,9 @@
 @code {
     private List<MyInvestigationItem>? _items;
     private List<AttendedInvestigationItem> _attended = [];
+
+    /// <summary>Public events this person said they would attend. Empty is the ordinary case.</summary>
+    private IReadOnlyList<PublicEventListItem> _myEvents = [];
     private List<InvestigationMapPin> _attendedPins = [];
     private string? _error;
     private HashSet<Guid> _saving = [];
@@ -132,6 +199,8 @@
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+        _myEvents = await AdminClient.GetMyPublicEventsAsync();
+
         try { _items = (await AdminClient.GetMyInvestigationsAsync()).ToList(); }
         catch { _error = "Failed to load investigations."; _items = []; }
 
