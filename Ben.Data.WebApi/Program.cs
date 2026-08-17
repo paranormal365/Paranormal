@@ -155,6 +155,8 @@ builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IFileStorageService, Be
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.FileMetadataExtractorService>();
 // Separates a media file's metadata from the bytes that get served — see IMediaSanitizationService.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.IMediaSanitizationService, Ben.Data.WebApi.Services.MediaSanitizationService>();
+// The one place an uploaded media file is taken in — see IMediaIngestService.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.IMediaIngestService, Ben.Data.WebApi.Services.MediaIngestService>();
 // Scoped: it opens its own DbContext per call and holds no state between them.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.SiteSettingsService>();
 // Stateless apart from its keys, so one instance serves every request.

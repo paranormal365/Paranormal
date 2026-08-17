@@ -25,12 +25,16 @@ public sealed class MyEquipmentController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IFileStorageService _fileStorage;
     private readonly IAuditLogService _auditLog;
+    private readonly IMediaIngestService _mediaIngest;
 
-    public MyEquipmentController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage, IAuditLogService auditLog)
+    public MyEquipmentController(
+        IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
+        IAuditLogService auditLog, IMediaIngestService mediaIngest)
     {
         _db          = db;
         _fileStorage = fileStorage;
         _auditLog    = auditLog;
+        _mediaIngest = mediaIngest;
     }
 
     [HttpGet]
@@ -217,23 +221,38 @@ public sealed class MyEquipmentController : BenControllerBase
 
         var storedName  = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
         var storagePath = _fileStorage.UserFilePath(userId, storedName);
-        await _fileStorage.WriteFormFileAsync(storagePath, file, ct);
+        var uploadFileId = Guid.NewGuid();
+
+        // Metadata off to its own table, original kept, sanitized copy served — see
+        // IMediaIngestService. A non-decodable file is the caller's mistake, not a server fault.
+        IngestedMedia ingested;
+        try
+        {
+            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct);
+        }
+        catch (UnreadableImageException ex)
+        {
+            return BadRequest(ex.Message);
+        }
 
         var uploadFile = new UploadFile
         {
-            Id                 = Guid.NewGuid(),
+            Id                 = uploadFileId,
             UploadFileTypeId   = UploadFileTypeSeeder.EquipmentPhotoFileTypeId,
             AppUserId          = userId,
             FileName           = file.FileName,
             StoredFileName     = storedName,
-            ContentType        = file.ContentType,
-            FileSize           = file.Length,
+            // What a viewer downloads is the sanitized copy, so its type and size are what belong
+            // on the row — the original's are recorded in the metadata table beside its EXIF.
+            ContentType        = ingested.ServedContentType,
+            FileSize           = ingested.ServedFileSize,
             StoragePath        = storagePath,
             IsPublic           = false,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
         db.UploadFiles.Add(uploadFile);
+        db.UploadFileMetadata.Add(ingested.Metadata);
 
         var isFirstPhoto = item.Photos.Count == 0;
         var photo = new EquipmentItemPhoto
@@ -508,11 +527,14 @@ public sealed class EquipmentPhotoContentController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IFileStorageService _fileStorage;
+    private readonly IMediaIngestService _mediaIngest;
 
-    public EquipmentPhotoContentController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage)
+    public EquipmentPhotoContentController(
+        IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage, IMediaIngestService mediaIngest)
     {
         _db          = db;
         _fileStorage = fileStorage;
+        _mediaIngest = mediaIngest;
     }
 
     /// <summary>
@@ -557,7 +579,9 @@ public sealed class EquipmentPhotoContentController : BenControllerBase
         if (!isPubliclyListed && !isSharedWithMyGroup && !flags.IsOwner && !isSuperAdmin) return NotFound();
 
         if (photo.UploadFile.StoragePath is null) return NotFound();
-        var stream = await _fileStorage.OpenReadAsync(photo.UploadFile.StoragePath, ct);
+        // The sanitized copy is what leaves the server; the original stays for evidence only.
+        var servingPath = _mediaIngest.ServingPathFor(photo.UploadFile.StoragePath);
+        var stream = await _fileStorage.OpenReadAsync(servingPath, ct);
         return File(stream, photo.UploadFile.ContentType);
     }
 }

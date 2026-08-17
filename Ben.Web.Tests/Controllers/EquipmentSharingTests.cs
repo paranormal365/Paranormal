@@ -1,6 +1,8 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
+using Microsoft.Extensions.Logging.Abstractions;
+using Ben.Data.WebApi.Services;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Entities;
 using Ben.Service.Models.Entities;
@@ -44,7 +46,7 @@ public class EquipmentSharingTests
         storage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
                .Returns(Task.CompletedTask);
 
-        return new MyEquipmentController(f, storage.Object, new Mock<IAuditLogService>().Object)
+        return new MyEquipmentController(f, storage.Object, new Mock<IAuditLogService>().Object, BuildIngest(storage))
         {
             ControllerContext = new ControllerContext
             {
@@ -138,6 +140,17 @@ public class EquipmentSharingTests
     }
 
     // ── Setting shares ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A real ingest service over the mocked storage — tests exercise the actual sanitize/extract
+    /// path rather than mocking past the thing phase 6a exists to guarantee.
+    /// </summary>
+    private static IMediaIngestService BuildIngest(Mock<IFileStorageService>? storage = null)
+        => new MediaIngestService(
+            (storage ?? new Mock<IFileStorageService>()).Object,
+            new FileMetadataExtractorService(),
+            new MediaSanitizationService(),
+            NullLogger<MediaIngestService>.Instance);
 
     [Fact]
     public async Task GetShares_ListsTheOwnersGroups_WithSharedFlags()
@@ -364,7 +377,7 @@ public class EquipmentSharingTests
         storage.Setup(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                .ReturnsAsync(() => new MemoryStream([1, 2, 3]));
 
-        return new EquipmentPhotoContentController(f, storage.Object)
+        return new EquipmentPhotoContentController(f, storage.Object, BuildIngest(storage))
         {
             ControllerContext = new ControllerContext
             {
