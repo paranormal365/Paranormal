@@ -3431,6 +3431,34 @@ than before it.
 embedding case data), then 2b on top of it. Building 2b first means writing the pickers twice, and
 the first version would be able to publish things part 4 is meant to prevent.
 
+> **✅ Part 4 built 2026-08-17.** See above. 2b is now unblocked.
+
+#### 2b prerequisite — which of a case's files may be published (✅ built 2026-08-17)
+
+The gap this entry flagged — *"private investigations and non-public media do not yet have an
+equivalent"* — was half true. Investigations got theirs in part 4; **media had nothing at all**, and a
+slot offering "a photo from the case" would have been a way to publish the investigators' working
+files.
+
+`CaseMediaPublication` answers it, and deliberately **grants nothing new**: the rule is the one the
+public case page already follows, restated in one place rather than invented. A file is publishable
+when it hangs off a timeline entry that is `Public`, on a case that is itself public. A template can
+publish what a visitor could already reach and not one file more.
+
+- **Resolved at read**, like `CmsEmbed`. Narrowing an entry to `OrgOnly` next month withdraws its
+  photo from pages published today; unpublishing the case withdraws everything at once. Both proven
+  by tests, which is the binding-not-copying requirement this entry asks for.
+- **`Client` visibility is not public.** Shared with the family is not shared with the world — the
+  one a reader gets wrong by treating "shared" as "not internal".
+- Both guards verified by breaking them.
+
+> **⚠ A decision for Ben.** Files on the case's **general Files tab** (`CaseFile`) are treated as
+> never publishable, because that table **has no visibility column at all** — there is no answer to
+> "did anybody agree to this being public?", and defaulting would publish in bulk exactly the
+> material nobody has reviewed. That matches today's behaviour exactly (the public case page has
+> never shown them). If those should be publishable, `CaseFile` needs a visibility field and a person
+> to set it, which is a product decision rather than a guess.
+
 ### 3. Draft vs live — ✅ built 2026-08-17
 
 **Ben chose the draft copy** over version history, accepting no rollback for noticeably less work.
