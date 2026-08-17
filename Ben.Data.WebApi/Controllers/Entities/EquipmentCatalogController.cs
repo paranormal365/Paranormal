@@ -563,6 +563,184 @@ public sealed class AdminEquipmentTaxonomyController : BenControllerBase
         return Ok(brands);
     }
 
+
+    // ── Renaming, and the merge a rename sometimes turns out to be ────────────
+
+    /// <summary>
+    /// Renames a brand, or says that the name is taken and offers to merge.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben's question: <i>"what happens when I try to change Samsung to Sansung?"</i> Until now
+    /// nothing happened, because nothing could rename — only approve and delete, and delete is
+    /// refused while anything references the row. So a typo was unfixable and a correct name was
+    /// unchangeable.</para>
+    ///
+    /// <para><b>A collision is refused, not silently merged.</b> Renaming onto an existing name
+    /// means two manufacturers become one and somebody's equipment changes make — a large thing to
+    /// have happen because a name was typed. The 409 carries the id of the brand it collided with,
+    /// so the caller can choose the merge deliberately.</para>
+    /// </remarks>
+    [HttpPut("brands/{id:guid}")]
+    public async Task<ActionResult<EquipmentBrandRecord>> RenameBrand(
+        Guid id, [FromBody] UpsertEquipmentBrandRequest request, CancellationToken ct)
+    {
+        var name = request.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(name)) return BadRequest("Name is required.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var brand = await db.EquipmentBrands.FirstOrDefaultAsync(b => b.Id == id, ct);
+        if (brand is null) return NotFound();
+
+        var normalized = name.ToLowerInvariant();
+        var clash = await db.EquipmentBrands.AsNoTracking()
+            .FirstOrDefaultAsync(b => b.Id != id && b.Name.ToLower() == normalized, ct);
+
+        if (clash is not null)
+            return Conflict(new TaxonomyMergeOffer(
+                brand.Id, brand.Name, clash.Id, clash.Name,
+                $"\"{clash.Name}\" already exists. Merging moves everything under \"{brand.Name}\" "
+                + "onto it and removes the duplicate. That cannot be undone."));
+
+        brand.Name = name;
+        brand.DateUpdated = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        return Ok(new EquipmentBrandRecord(
+            brand.Id, brand.Name, brand.IsApproved,
+            brand.ProposedByOrganizationId, brand.ProposedByAppUserId, brand.DateCreated));
+    }
+
+    /// <summary>
+    /// Folds one brand into another: its models move across, and it is removed.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Refused when it would lose an approval.</b> Merging an approved brand into an
+    /// unapproved one is almost always the direction reversed — somebody correcting "Sansung" has
+    /// the two the wrong way round — and the result would be a catalog where the endorsed name
+    /// vanished and the typo survived. Saying so is more useful than doing it.</para>
+    ///
+    /// <para>A model whose name already exists under the target is <b>folded rather than moved</b>:
+    /// two "H1n" rows under one brand would break the unique index, so its items move to the
+    /// surviving model and the duplicate goes. That is the same merge one level down, and doing it
+    /// here rather than failing is what makes the operation usable on real data.</para>
+    /// </remarks>
+    [HttpPost("brands/{id:guid}/merge-into/{targetId:guid}")]
+    public async Task<IActionResult> MergeBrand(Guid id, Guid targetId, CancellationToken ct)
+    {
+        if (id == targetId) return BadRequest("A brand cannot be merged into itself.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var source = await db.EquipmentBrands.FirstOrDefaultAsync(b => b.Id == id, ct);
+        var target = await db.EquipmentBrands.FirstOrDefaultAsync(b => b.Id == targetId, ct);
+        if (source is null || target is null) return NotFound();
+
+        if (source.IsApproved && !target.IsApproved)
+            return Conflict(
+                $"\"{source.Name}\" is approved and \"{target.Name}\" is not. Merge the other way "
+                + "round, or approve the target first — otherwise the endorsed name is the one that "
+                + "disappears.");
+
+        var sourceModels = await db.EquipmentModels
+            .Where(m => m.EquipmentBrandId == source.Id).ToListAsync(ct);
+        var targetModels = await db.EquipmentModels.AsNoTracking()
+            .Where(m => m.EquipmentBrandId == target.Id).ToListAsync(ct);
+
+        foreach (var model in sourceModels)
+        {
+            var twin = targetModels.FirstOrDefault(
+                t => string.Equals(t.Name, model.Name, StringComparison.OrdinalIgnoreCase));
+
+            if (twin is null)
+            {
+                model.EquipmentBrandId = target.Id;
+                continue;
+            }
+
+            // Same model name on both sides: move its items to the survivor and drop the duplicate,
+            // because two rows with one name under one brand is exactly what the index forbids.
+            var items = await db.EquipmentItems
+                .Where(i => i.EquipmentModelId == model.Id).ToListAsync(ct);
+            foreach (var item in items) item.EquipmentModelId = twin.Id;
+
+            db.EquipmentModels.Remove(model);
+        }
+
+        db.EquipmentBrands.Remove(source);
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>Renames a model, or says the name is taken under this brand and offers to merge.</summary>
+    [HttpPut("models/{id:guid}")]
+    public async Task<ActionResult<EquipmentModelRecord>> RenameModel(
+        Guid id, [FromBody] RenameEquipmentModelRequest request, CancellationToken ct)
+    {
+        var name = request.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(name)) return BadRequest("Name is required.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var model = await db.EquipmentModels
+            .Include(m => m.EquipmentBrand).Include(m => m.EquipmentCategory)
+            .FirstOrDefaultAsync(m => m.Id == id, ct);
+        if (model is null) return NotFound();
+
+        var normalized = name.ToLowerInvariant();
+        var clash = await db.EquipmentModels.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id != id
+                                   && m.EquipmentBrandId == model.EquipmentBrandId
+                                   && m.Name.ToLower() == normalized, ct);
+
+        if (clash is not null)
+            return Conflict(new TaxonomyMergeOffer(
+                model.Id, model.Name, clash.Id, clash.Name,
+                $"\"{clash.Name}\" already exists under this make. Merging moves everything under "
+                + $"\"{model.Name}\" onto it and removes the duplicate. That cannot be undone."));
+
+        model.Name = name;
+        if (request.ModelNumber is not null) model.ModelNumber = request.ModelNumber.Trim();
+        model.DateUpdated = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        return Ok(new EquipmentModelRecord(
+            model.Id, model.EquipmentBrandId, model.EquipmentBrand.Name,
+            model.EquipmentCategoryId, model.EquipmentCategory.Name,
+            model.Name, model.ModelNumber, model.Description, model.IsApproved,
+            model.ProposedByOrganizationId, model.ProposedByAppUserId, model.DateCreated));
+    }
+
+    /// <summary>Folds one model into another under the same brand: its items move across.</summary>
+    [HttpPost("models/{id:guid}/merge-into/{targetId:guid}")]
+    public async Task<IActionResult> MergeModel(Guid id, Guid targetId, CancellationToken ct)
+    {
+        if (id == targetId) return BadRequest("A model cannot be merged into itself.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var source = await db.EquipmentModels.FirstOrDefaultAsync(m => m.Id == id, ct);
+        var target = await db.EquipmentModels.FirstOrDefaultAsync(m => m.Id == targetId, ct);
+        if (source is null || target is null) return NotFound();
+
+        // Across brands this would silently change what make somebody's equipment is. That may be
+        // a legitimate correction, but it is a different decision and belongs to the brand merge.
+        if (source.EquipmentBrandId != target.EquipmentBrandId)
+            return BadRequest("Those models belong to different makes. Merge the makes instead.");
+
+        if (source.IsApproved && !target.IsApproved)
+            return Conflict(
+                $"\"{source.Name}\" is approved and \"{target.Name}\" is not. Merge the other way "
+                + "round, or approve the target first.");
+
+        var items = await db.EquipmentItems.Where(i => i.EquipmentModelId == source.Id).ToListAsync(ct);
+        foreach (var item in items) item.EquipmentModelId = target.Id;
+
+        db.EquipmentModels.Remove(source);
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
     [HttpPut("brands/{id:guid}/approve")]
     public async Task<ActionResult<EquipmentBrandRecord>> ApproveBrand(Guid id, CancellationToken ct)
     {

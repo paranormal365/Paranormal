@@ -4281,9 +4281,19 @@ immediately borne out:
 
 ### Still to do
 
-- **Rename-as-merge for SuperAdmin.** The honest answer to "what happens when I change Samsung to
-  Sansung" should be: renaming onto a name that already exists is a **merge** — repoint the models,
-  delete the duplicate, keep the approved one — not a unique-index violation. Nothing can rename
-  today, so this is a new capability rather than a fix.
+- **Rename-as-merge — ✅ built 2026-08-17.** Brands and models can be renamed at last, and a
+  collision is **offered as a merge rather than performed**: two manufacturers becoming one changes
+  what make somebody's equipment is, which is far too large a thing to happen because a name was
+  typed. The 409 carries the id it collided with, so the caller chooses deliberately.
+
+  Three rules worth knowing:
+  - **Merging an approved brand into an unapproved one is refused.** Somebody correcting a typo has
+    the two the wrong way round more often than not, and the result would be a catalog where the
+    endorsed name vanished and the typo survived.
+  - **A model name on both sides is folded, not moved.** Two "X1" rows under one brand is exactly
+    what the unique index forbids, so the duplicate's items move to the survivor — the same merge
+    one level down. Handling it here rather than failing is what makes the tool usable on real data.
+  - **Models under different makes are not merged**; that silently changes what somebody owns, and
+    it is the brand merge's decision rather than this one's.
 - **The same treatment for other user-grown taxonomies.** Experience types and place names have the
   same shape and, presumably, the same problem.
