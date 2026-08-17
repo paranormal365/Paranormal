@@ -14,6 +14,11 @@ namespace Ben.Data.Source.Entities
         public Guid EquipmentCategoryId { get; set; }
 
         public string Name { get; set; } = null!;
+
+        /// <summary>The readable part of this model's address, as in <c>/equipment/zoom/h1n</c>.</summary>
+        /// <remarks>Unique within the make, and regenerated on rename — see <see cref="EquipmentBrand.UrlName"/>.</remarks>
+        public string? UrlName { get; set; }
+
         public string? ModelNumber { get; set; }
         public string? Description { get; set; }
 

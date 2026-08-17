@@ -1990,6 +1990,9 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<EquipmentBrand>().Property(e => e.Name).HasMaxLength(200);
             modelBuilder.Entity<EquipmentBrand>().HasIndex(e => e.Name).IsUnique();
+            modelBuilder.Entity<EquipmentBrand>().Property(e => e.UrlName).HasMaxLength(100);
+            modelBuilder.Entity<EquipmentBrand>()
+                .HasIndex(e => e.UrlName).IsUnique().HasFilter("[UrlName] IS NOT NULL");
 
             modelBuilder.Entity<EquipmentModel>()
                 .HasOne(e => e.EquipmentBrand).WithMany(e => e.EquipmentModels)
@@ -2019,6 +2022,11 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EquipmentModel>().Property(e => e.ModelNumber).HasMaxLength(100);
             modelBuilder.Entity<EquipmentModel>().Property(e => e.Description).HasMaxLength(1000);
             modelBuilder.Entity<EquipmentModel>().HasIndex(e => new { e.EquipmentBrandId, e.Name }).IsUnique();
+            modelBuilder.Entity<EquipmentModel>().Property(e => e.UrlName).HasMaxLength(100);
+            // Scoped to the make, exactly as the name is: two manufacturers may both make an "X1".
+            modelBuilder.Entity<EquipmentModel>()
+                .HasIndex(e => new { e.EquipmentBrandId, e.UrlName })
+                .IsUnique().HasFilter("[UrlName] IS NOT NULL");
             modelBuilder.Entity<EquipmentModel>().HasIndex(e => e.EquipmentCategoryId);
 
             // NoAction on both ownership FKs: an item's identity/history must outlive its owner

@@ -17,6 +17,18 @@ namespace Ben.Data.Source.Entities
         public string Name { get; set; } = null!;
 
         /// <summary>
+        /// The readable part of this make's address, as in <c>/equipment/zoom</c>.
+        /// </summary>
+        /// <remarks>
+        /// Derived from the name rather than typed, and <b>regenerated when the name changes</b> —
+        /// unlike a case or an organization, whose slug is frozen because somebody chose and shared
+        /// it. This catalog is the site's own vocabulary, its rename path exists specifically to
+        /// correct mistakes, and a page for a corrected make that still answered to the typo would
+        /// preserve the error in the one place everybody sees.
+        /// </remarks>
+        public string? UrlName { get; set; }
+
+        /// <summary>
         /// True when approved by a SuperAdmin for platform-wide, anonymous visibility.
         /// SuperAdmin-created entries are approved on creation. User- or org-proposed
         /// entries start as false, but remain usable by their own proposer meanwhile.

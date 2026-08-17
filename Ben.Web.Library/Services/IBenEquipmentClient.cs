@@ -23,6 +23,10 @@ public interface IBenEquipmentClient
     /// <summary>One make and model, with links and photos pooled from every copy.</summary>
     Task<EquipmentModelPageRecord?> GetEquipmentModelPageAsync(Guid modelId, CancellationToken token = default);
 
+    /// <summary>The same page, fetched by the address a person would share — /equipment/zoom/h1n.</summary>
+    Task<EquipmentModelPageRecord?> GetEquipmentModelPageBySlugAsync(
+        string brandSlug, string modelSlug, CancellationToken token = default);
+
     /// <summary>One piece of equipment, as this caller is entitled to see it.</summary>
     Task<EquipmentItemDetailRecord?> GetEquipmentItemAsync(Guid itemId, CancellationToken token = default);
 

@@ -1,6 +1,8 @@
 @page "/equipment-models/{ModelId:guid}"
+@page "/equipment/{BrandSlug}/{ModelSlug}"
 @namespace Ben.Web.Library.Equipment
 @inject IBenAdminClient AdminClient
+@inject NavigationManager NavManager
 
 <PageTitle>@(_page is null ? "Equipment" : $"{_page.Model.BrandName} {_page.Model.Name}")</PageTitle>
 
@@ -141,6 +143,11 @@
 @code {
     [Parameter] public Guid ModelId { get; set; }
 
+    // The readable address — /equipment/zoom/h1n. The GUID route stays because links to it already
+    // exist inside the app; this is the one worth sharing.
+    [Parameter] public string? BrandSlug { get; set; }
+    [Parameter] public string? ModelSlug { get; set; }
+
     private EquipmentModelPageRecord? _page;
     private IReadOnlyList<ProductReviewRecord> _reviews = [];
     private readonly Dictionary<Guid, string?> _thumbnails = [];
@@ -164,17 +171,37 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (ModelId == Guid.Empty || _loadedFor == ModelId) return;
-        _loadedFor = ModelId;
+        var bySlug = BrandSlug is not null && ModelSlug is not null;
+
+        if (!bySlug && (ModelId == Guid.Empty || _loadedFor == ModelId)) return;
+        if (bySlug && _loadedFor != Guid.Empty && _page is not null
+            && string.Equals(_page.Model.UrlName, ModelSlug, StringComparison.OrdinalIgnoreCase))
+            return;
 
         _loading = true;
-        _page = await AdminClient.GetEquipmentModelPageAsync(ModelId);
+        _page = bySlug
+            ? await AdminClient.GetEquipmentModelPageBySlugAsync(BrandSlug!, ModelSlug!)
+            : await AdminClient.GetEquipmentModelPageAsync(ModelId);
         _loading = false;
         StateHasChanged();
 
         if (_page is null) return;
 
-        _reviews = await AdminClient.GetProductReviewsAsync(ModelId);
+        _loadedFor = _page.Model.Id;
+
+        // Arrived by id — every link inside the app still points that way. Move the browser to the
+        // readable address so that what somebody copies out of the bar is /equipment/zoom/h1n and
+        // not a GUID, which was Ben's original complaint. Without this the readable route would
+        // exist and nothing would ever reach it.
+        if (!bySlug
+            && _page.Model.BrandUrlName is { Length: > 0 } brandSlug
+            && _page.Model.UrlName is { Length: > 0 } modelSlug)
+        {
+            NavManager.NavigateTo($"/equipment/{brandSlug}/{modelSlug}", replace: true);
+            return;
+        }
+
+        _reviews = await AdminClient.GetProductReviewsAsync(_loadedFor);
         StateHasChanged();
 
         // Thumbnails, not full-resolution files — these are drawn 150px wide.

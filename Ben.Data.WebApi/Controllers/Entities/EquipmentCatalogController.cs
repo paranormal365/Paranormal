@@ -218,6 +218,37 @@ public sealed class EquipmentCatalogController : BenControllerBase
     /// only when this caller may open it — their own, one listed publicly, one shared into a group
     /// they belong to, or their own group's. Everyone else gets a photo with nowhere to click.</para>
     /// </remarks>
+    /// <summary>
+    /// The same page, at the address a person would actually type or share.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>/equipment/zoom/h1n</c> rather than <c>/equipment-models/3f2a9c81-…</c>. This was
+    /// the last thing in the readable-URL work still wearing a GUID, and it is the one Ben raised
+    /// first: an address nobody can read is one nobody clicks and nobody recognises in their own
+    /// history.</para>
+    ///
+    /// <para>Resolves to an id and hands off, so the whole audience and photo-visibility apparatus
+    /// stays in one place. A second copy of those rules living behind a prettier route is how two
+    /// endpoints for one page start disagreeing about who may see what.</para>
+    /// </remarks>
+    [HttpGet("makes/{brandSlug}/{modelSlug}")]
+    [AllowAnonymous]
+    public async Task<ActionResult<EquipmentModelPageRecord>> GetModelPageBySlug(
+        string brandSlug, string modelSlug, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var brand = Ben.Data.Common.SlugText.NormalizeOrEmpty(brandSlug);
+        var model = Ben.Data.Common.SlugText.NormalizeOrEmpty(modelSlug);
+
+        var id = await db.EquipmentModels.AsNoTracking()
+            .Where(m => m.UrlName == model && m.EquipmentBrand.UrlName == brand)
+            .Select(m => (Guid?)m.Id)
+            .FirstOrDefaultAsync(ct);
+
+        return id is Guid modelId ? await GetModelPage(modelId, ct) : NotFound();
+    }
+
     [HttpGet("models/{id:guid}")]
     [AllowAnonymous]
     public async Task<ActionResult<EquipmentModelPageRecord>> GetModelPage(Guid id, CancellationToken ct)
@@ -280,7 +311,8 @@ public sealed class EquipmentCatalogController : BenControllerBase
             model.Id, model.EquipmentBrandId, model.EquipmentBrand.Name,
             model.EquipmentCategoryId, model.EquipmentCategory.Name,
             model.Name, model.ModelNumber, model.Description, model.IsApproved,
-            model.ProposedByOrganizationId, model.ProposedByAppUserId, model.DateCreated);
+            model.ProposedByOrganizationId, model.ProposedByAppUserId, model.DateCreated,
+            model.UrlName, model.EquipmentBrand.UrlName);
 
         return Ok(new EquipmentModelPageRecord(
             record,
@@ -388,6 +420,7 @@ public sealed class EquipmentCatalogController : BenControllerBase
                 CreatedByAppUserId   = userId,
             };
             db.EquipmentBrands.Add(existing);
+            await EquipmentCatalogSlugs.AssignAsync(db, existing, ct);
             await db.SaveChangesAsync(ct);
         }
 
@@ -460,6 +493,7 @@ public sealed class EquipmentCatalogController : BenControllerBase
                 CreatedByAppUserId   = userId,
             };
             db.EquipmentModels.Add(existing);
+            await EquipmentCatalogSlugs.AssignAsync(db, existing, ct);
             await db.SaveChangesAsync(ct);
             await db.Entry(existing).Reference(m => m.EquipmentBrand).LoadAsync(ct);
             await db.Entry(existing).Reference(m => m.EquipmentCategory).LoadAsync(ct);
@@ -604,6 +638,9 @@ public sealed class AdminEquipmentTaxonomyController : BenControllerBase
 
         brand.Name = name;
         brand.DateUpdated = DateTime.UtcNow;
+        // The address follows the corrected name — see EquipmentCatalogSlugs for why this one is
+        // regenerated while a case's or an organization's is frozen.
+        await EquipmentCatalogSlugs.AssignAsync(db, brand, ct);
         await db.SaveChangesAsync(ct);
 
         return Ok(new EquipmentBrandRecord(
@@ -702,6 +739,7 @@ public sealed class AdminEquipmentTaxonomyController : BenControllerBase
         model.Name = name;
         if (request.ModelNumber is not null) model.ModelNumber = request.ModelNumber.Trim();
         model.DateUpdated = DateTime.UtcNow;
+        await EquipmentCatalogSlugs.AssignAsync(db, model, ct);
         await db.SaveChangesAsync(ct);
 
         return Ok(new EquipmentModelRecord(

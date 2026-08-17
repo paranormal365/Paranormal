@@ -58,6 +58,11 @@ public sealed partial class BenAdminClientAdapter
     public Task<EquipmentModelPageRecord?> GetEquipmentModelPageAsync(Guid modelId, CancellationToken token = default)
         => _api.GetAnonymousAsync<EquipmentModelPageRecord>($"/api/equipment-catalog/models/{modelId}", token);
 
+    public Task<EquipmentModelPageRecord?> GetEquipmentModelPageBySlugAsync(
+        string brandSlug, string modelSlug, CancellationToken token = default)
+        => _api.GetAsync<EquipmentModelPageRecord>(
+               $"/api/equipment-catalog/makes/{Uri.EscapeDataString(brandSlug)}/{Uri.EscapeDataString(modelSlug)}", token);
+
     public Task<EquipmentItemDetailRecord?> GetEquipmentItemAsync(Guid itemId, CancellationToken token = default)
         => _api.GetAnonymousAsync<EquipmentItemDetailRecord>($"/api/equipment/items/{itemId}", token);
 

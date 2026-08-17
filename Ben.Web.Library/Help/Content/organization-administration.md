@@ -16,6 +16,22 @@ switches worth understanding.
 
 **Accepting membership applications** controls whether people can apply to join.
 
+### Your web address
+
+Your group lives at `/o/your-address` — the link you put on a card, in a post, or in an email to a
+client. It can use lowercase letters, numbers and hyphens, like `ghost-squad`. Spaces, slashes and
+punctuation are refused, and a handful of words the site uses itself are reserved.
+
+No two groups can share an address, and **you can change yours whenever you like**. When you do:
+
+- **The old address keeps working.** Every link anyone has already shared still opens your pages —
+  visitors are simply moved along to the new address, so what they copy next is the current one.
+- **The old address stays yours.** No other group can take it later, even years on. Pointing
+  somebody's saved link at a different group would be worse than the link not working at all.
+
+So changing your address is safe. Changing it often is still worth avoiding, because the address is
+what people remember.
+
 **Let clients see members' private photos** is one half of a two-key rule. Turning it on shares
 nothing by itself; it only permits members who have *also* opted in on their own profile. This is
 deliberate: a group cannot volunteer its members' faces, and a member cannot overrule a group that

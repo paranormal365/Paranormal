@@ -66,6 +66,16 @@ You always have both answers:
 We only ask about makes an administrator has already confirmed, so you are never being pointed at
 somebody else's typo.
 
+## Linking to a make or model
+
+Every make and model has a readable address — `/equipment/zoom/h1n` — so a link you paste into a
+message says what it points at. If you arrive by an older link, the address bar updates itself to
+the readable one.
+
+Correcting a name corrects its address too, so a make fixed from "Sansung" to "Samsung" no longer
+answers to the mistake. That means a catalog link shared before a correction may stop working; the
+catalog is shared vocabulary, and keeping the typo alive in the URL would be the worse trade.
+
 ## Tidying up after yourself
 
 A make or model you added is removed automatically when the last piece of equipment using it goes

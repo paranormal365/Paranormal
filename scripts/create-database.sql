@@ -9210,3 +9210,127 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817212140_AddOrganizationUrlNameUniquenessAndAliases'
+)
+BEGIN
+    UPDATE Organizations SET UrlName = LOWER(LTRIM(RTRIM(UrlName))) WHERE UrlName IS NOT NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817212140_AddOrganizationUrlNameUniquenessAndAliases'
+)
+BEGIN
+    WITH Duplicates AS (
+        SELECT Id, UrlName,
+               ROW_NUMBER() OVER (PARTITION BY UrlName ORDER BY DateCreated, Id) AS Rn
+        FROM Organizations
+        WHERE UrlName IS NOT NULL
+    )
+    UPDATE d
+    SET d.UrlName = LEFT(dup.UrlName, 96) + '-' + CAST(dup.Rn AS nvarchar(3))
+    FROM Organizations d
+    INNER JOIN Duplicates dup ON dup.Id = d.Id
+    WHERE dup.Rn > 1;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817212140_AddOrganizationUrlNameUniquenessAndAliases'
+)
+BEGIN
+    CREATE TABLE [OrganizationUrlNameAliases] (
+        [Id] uniqueidentifier NOT NULL,
+        [OrganizationId] uniqueidentifier NOT NULL,
+        [UrlName] nvarchar(100) NOT NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [CreatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_OrganizationUrlNameAliases] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_OrganizationUrlNameAliases_Organizations_OrganizationId] FOREIGN KEY ([OrganizationId]) REFERENCES [Organizations] ([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817212140_AddOrganizationUrlNameUniquenessAndAliases'
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX [IX_Organizations_UrlName] ON [Organizations] ([UrlName]) WHERE [UrlName] IS NOT NULL');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817212140_AddOrganizationUrlNameUniquenessAndAliases'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationUrlNameAliases_OrganizationId] ON [OrganizationUrlNameAliases] ([OrganizationId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817212140_AddOrganizationUrlNameUniquenessAndAliases'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_OrganizationUrlNameAliases_UrlName] ON [OrganizationUrlNameAliases] ([UrlName]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817212140_AddOrganizationUrlNameUniquenessAndAliases'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260817212140_AddOrganizationUrlNameUniquenessAndAliases', N'10.0.11');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817212937_AddEquipmentCatalogSlugs'
+)
+BEGIN
+    ALTER TABLE [EquipmentModels] ADD [UrlName] nvarchar(100) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817212937_AddEquipmentCatalogSlugs'
+)
+BEGIN
+    ALTER TABLE [EquipmentBrands] ADD [UrlName] nvarchar(100) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817212937_AddEquipmentCatalogSlugs'
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX [IX_EquipmentModels_EquipmentBrandId_UrlName] ON [EquipmentModels] ([EquipmentBrandId], [UrlName]) WHERE [UrlName] IS NOT NULL');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817212937_AddEquipmentCatalogSlugs'
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX [IX_EquipmentBrands_UrlName] ON [EquipmentBrands] ([UrlName]) WHERE [UrlName] IS NOT NULL');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817212937_AddEquipmentCatalogSlugs'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260817212937_AddEquipmentCatalogSlugs', N'10.0.11');
+END;
+
+COMMIT;
+GO
+
