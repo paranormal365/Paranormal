@@ -8816,3 +8816,65 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817152743_AddOrganizationCmsTemplates'
+)
+BEGIN
+    CREATE TABLE [OrganizationCmsTemplates] (
+        [Id] uniqueidentifier NOT NULL,
+        [OrganizationId] uniqueidentifier NOT NULL,
+        [Name] nvarchar(200) NOT NULL,
+        [Description] nvarchar(500) NULL,
+        [Scope] int NOT NULL,
+        [SectionType] int NOT NULL,
+        [ContentJson] nvarchar(max) NOT NULL,
+        [SortOrder] int NOT NULL,
+        [DateCreated] datetime2 NOT NULL,
+        [DateUpdated] datetime2 NULL,
+        [CreatedByAppUserId] uniqueidentifier NOT NULL,
+        [UpdatedByAppUserId] uniqueidentifier NULL,
+        CONSTRAINT [PK_OrganizationCmsTemplates] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_OrganizationCmsTemplates_AppUsers_CreatedByAppUserId] FOREIGN KEY ([CreatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_OrganizationCmsTemplates_AppUsers_UpdatedByAppUserId] FOREIGN KEY ([UpdatedByAppUserId]) REFERENCES [AppUsers] ([Id]),
+        CONSTRAINT [FK_OrganizationCmsTemplates_Organizations_OrganizationId] FOREIGN KEY ([OrganizationId]) REFERENCES [Organizations] ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817152743_AddOrganizationCmsTemplates'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationCmsTemplates_CreatedByAppUserId] ON [OrganizationCmsTemplates] ([CreatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817152743_AddOrganizationCmsTemplates'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_OrganizationCmsTemplates_OrganizationId_Scope_Name] ON [OrganizationCmsTemplates] ([OrganizationId], [Scope], [Name]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817152743_AddOrganizationCmsTemplates'
+)
+BEGIN
+    CREATE INDEX [IX_OrganizationCmsTemplates_UpdatedByAppUserId] ON [OrganizationCmsTemplates] ([UpdatedByAppUserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817152743_AddOrganizationCmsTemplates'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260817152743_AddOrganizationCmsTemplates', N'10.0.11');
+END;
+
+COMMIT;
+GO
+

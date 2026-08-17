@@ -3788,3 +3788,57 @@ weeks ahead and the queue stops being enough.
 A/V needs an ffmpeg remux (`-map_metadata -1`) and ffmpeg is reachable only from the sidecar, not
 the WebApi — a hosting decision, not a code change. Metadata is already *extracted* from A/V, so the
 Admin view is complete; only the stripping half waits.
+
+---
+
+## 87. Open investigations — anyone in the group may attend (not started, requested 2026-08-17)
+
+Ben: *"Can an organization create an Open investigation where anyone could attend who is a member?
+If not, we need to create this with the caveat that all collected evidence and data is public and
+cannot be made private for an open investigation. The location can be scrubbed and hidden to the
+public not attending, but evidence is not."*
+
+**It does not exist today.** Attendance is invitation-only: `InvestigationAttendee` rows are created
+by `AddAttendee`, which somebody with manage rights calls with a specific `AppUserId`, and
+`RsvpStatus` starts at `Invited`. There is no way for a member to put themselves on the list.
+
+`InvestigationVisibility` (`GroupOnly` / `SharedPlace` / `Public`) already exists but answers a
+different question — who may *read* the findings, not who may *attend*.
+
+### The bargain, which is the good part of this idea
+
+Open attendance and public evidence go together: if anyone may come, nobody may afterwards decide
+what the group saw is theirs to withhold. People who turned up have a claim on the record. Ben's
+split is right too — **the location may be hidden from non-attendees while the evidence is not**,
+and `PublicCoordinates` (built 2026-08-17 for the case-discovery leak) already does exactly that
+scrubbing, so attendees can see the exact point and everyone else a several-mile cell.
+
+### The constraint that decides the shape
+
+**`InvestigationVisibility.Public` is currently refused on a private residence**, deliberately:
+publishing what happened inside somebody's home is theirs to agree to, and there is no mechanism for
+asking. An open investigation that *forces* evidence public would drive straight through that.
+
+So one of these has to be true, and it should be chosen deliberately:
+
+- **Open investigations are restricted to non-residence places** — landmarks, public sites, and
+  case-less visits. Simple, safe, and probably what the feature is actually for.
+- Or the client-consent mechanism gets built first, and an open investigation at a residence needs
+  it. Much more work, and it is the same missing piece the `Public` visibility note already waits on.
+
+Recommend the first, with the second recorded as what would lift the restriction.
+
+### Other things to settle when it is picked up
+
+- **"Anyone who is a member"** — of the *organization*, or of the *site*? Ben's wording fits either.
+  Org-only is the conservative reading and matches how everything else here is scoped; site-wide
+  turns this into a public events feature, which is a bigger and different thing.
+- **Irreversibility has to be enforced, not defaulted.** "Cannot be made private" means the
+  visibility is locked once the investigation is open and people have joined — otherwise somebody
+  flips it afterwards and the attendees lose the deal they turned up under. Equally, openness itself
+  should not be revocable once anyone has joined.
+- **A cap and a cut-off.** A real site has a capacity and a point after which turning up is not
+  useful. Not essential to a first version, but a field that is easy to add now and awkward later.
+- **Self-join needs its own endpoint and its own permission** — it is the one place a member creates
+  an `InvestigationAttendee` for themselves, and it must refuse a closed investigation rather than
+  quietly succeeding.

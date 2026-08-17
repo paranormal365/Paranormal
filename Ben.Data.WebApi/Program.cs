@@ -157,6 +157,9 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.FileMetadataExtractorServ
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.IMediaSanitizationService, Ben.Data.WebApi.Services.MediaSanitizationService>();
 // The one place an uploaded media file is taken in — see IMediaIngestService.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.IMediaIngestService, Ben.Data.WebApi.Services.MediaIngestService>();
+// Author-written page markup is cleaned at the point it is stored, so what is in the database is
+// what will be rendered — see ICmsMarkupSanitizer for why provenance alone is not enough.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.ICmsMarkupSanitizer, Ben.Data.WebApi.Services.CmsMarkupSanitizer>();
 // Scoped: it opens its own DbContext per call and holds no state between them.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.SiteSettingsService>();
 // Stateless apart from its keys, so one instance serves every request.

@@ -11,6 +11,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="HtmlSanitizer" Version="9.2.995" />
         <PackageReference Include="MailKit" Version="4.17.0" />
         <PackageReference Include="MetadataExtractor" Version="2.9.3" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />

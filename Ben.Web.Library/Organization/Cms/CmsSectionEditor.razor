@@ -3,6 +3,8 @@
 @using System.Text.Json
 @using System.Text.Json.Nodes
 @using Ben.Data.Common.Enums
+@using Ben.Web.Library.Services
+@inject IBenAdminClient AdminClient
 
 @if (_contentWarning is not null)
 {
@@ -19,18 +21,48 @@
                blank to fill in — the editor's own cursor lives inside its rich-text engine and is
                not reachable from C#, and appending is honest about that rather than putting things
                somewhere surprising. *@
-            <TelerikDropDownButton Icon="@SvgIcon.Plus">
-                <DropDownButtonContent>Add a block</DropDownButtonContent>
-                <DropDownButtonItems>
-                    @foreach (var snippet in CmsSnippets.All)
-                    {
-                        var chosen = snippet;
-                        <DropDownButtonItem OnClick="@(() => InsertSnippetAsync(chosen))">
-                            @chosen.Name — <span class="text-secondary">@chosen.Description</span>
-                        </DropDownButtonItem>
-                    }
-                </DropDownButtonItems>
-            </TelerikDropDownButton>
+            <span class="d-flex gap-2">
+                <TelerikDropDownButton Icon="@SvgIcon.Plus">
+                    <DropDownButtonContent>Add a block</DropDownButtonContent>
+                    <DropDownButtonItems>
+                        @foreach (var snippet in CmsSnippets.All)
+                        {
+                            var chosen = snippet;
+                            <DropDownButtonItem OnClick="@(() => InsertSnippetAsync(chosen))">
+                                @chosen.Name — <span class="text-secondary">@chosen.Description</span>
+                            </DropDownButtonItem>
+                        }
+                    </DropDownButtonItems>
+                </TelerikDropDownButton>
+
+                @* The group's own saved blocks, offered beside ours — from an author's point of
+                   view they are the same kind of thing, and separating them into two screens would
+                   only make the ones they built themselves harder to find. *@
+                @if (OrgId is not null)
+                {
+                    <TelerikDropDownButton Icon="@SvgIcon.Folder" Enabled="@(_orgTemplates.Count > 0)">
+                        <DropDownButtonContent>
+                            @(_orgTemplates.Count > 0 ? "Our blocks" : "No saved blocks")
+                        </DropDownButtonContent>
+                        <DropDownButtonItems>
+                            @foreach (var template in _orgTemplates)
+                            {
+                                var chosen = template;
+                                <DropDownButtonItem OnClick="@(() => InsertTemplateAsync(chosen))">
+                                    @chosen.Name
+                                </DropDownButtonItem>
+                            }
+                        </DropDownButtonItems>
+                    </TelerikDropDownButton>
+
+                    <TelerikButton Icon="@SvgIcon.Save"
+                                   FillMode="@ThemeConstants.Button.FillMode.Outline"
+                                   Enabled="@(!string.IsNullOrWhiteSpace(_html))"
+                                   OnClick="@(() => { _saveTemplateName = ""; _savingTemplate = true; })">
+                        Save as ours
+                    </TelerikButton>
+                }
+            </span>
         </div>
 
         <TelerikEditor Value="@_html"
@@ -119,8 +151,48 @@ else
     </div>
 }
 
+@* Saving what is in the editor as one of the group's own reusable blocks. A small
+   single-purpose interaction, so it stays a window. *@
+<TelerikWindow Visible="@_savingTemplate" VisibleChanged="@(v => _savingTemplate = v)" Modal="true" Width="460px">
+    <WindowTitle>Save this as one of our blocks</WindowTitle>
+    <WindowContent>
+        @if (_templateError is not null)
+        {
+            <div class="alert alert-danger py-2">@_templateError</div>
+        }
+
+        <label class="form-label fw-semibold">Name it</label>
+        <input class="form-control mb-2" maxlength="200" value="@_saveTemplateName"
+               placeholder="e.g. Investigation write-up layout"
+               @oninput="@(e => _saveTemplateName = e.Value?.ToString() ?? string.Empty)" />
+
+        <label class="form-label fw-semibold">What is it for? (optional)</label>
+        <input class="form-control" maxlength="500" value="@_saveTemplateDescription"
+               @oninput="@(e => _saveTemplateDescription = e.Value?.ToString() ?? string.Empty)" />
+
+        <div class="form-text mt-2">
+            Saved for the whole group, not just you. Anyone who can edit pages will be able to
+            insert it.
+        </div>
+
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <TelerikButton OnClick="@(() => _savingTemplate = false)" Enabled="@(!_templateBusy)">Cancel</TelerikButton>
+            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Enabled="@(!_templateBusy && !string.IsNullOrWhiteSpace(_saveTemplateName))"
+                           OnClick="SaveAsTemplateAsync">Save</TelerikButton>
+        </div>
+    </WindowContent>
+</TelerikWindow>
+
 @code {
     [Parameter] public CmsSectionType SectionType { get; set; }
+
+    /// <summary>
+    /// Whose saved blocks to offer. Null in contexts with no organization in scope, where the
+    /// palette we ship is still available but the group's own is not.
+    /// </summary>
+    [Parameter] public Guid? OrgId { get; set; }
     [Parameter] public string ContentJson { get; set; } = "{}";
     [Parameter] public EventCallback<string> ContentJsonChanged { get; set; }
 
@@ -136,11 +208,83 @@ else
     /// neither — Telerik inputs ignore values written by anything but their own binding, which has
     /// produced a convincing-but-wrong result in this codebase before.
     /// </remarks>
-    private async Task InsertSnippetAsync(CmsSnippet snippet)
+    private Guid? _templatesLoadedFor;
+
+    protected override async Task OnParametersSetAsync()
     {
-        var markup = CmsSnippets.Render(snippet);
+        if (OrgId is not Guid orgId || _templatesLoadedFor == orgId) return;
+        _templatesLoadedFor = orgId;
+        await LoadOrgTemplatesAsync();
+    }
+
+    private async Task InsertSnippetAsync(CmsSnippet snippet)
+        => await AppendMarkupAsync(CmsSnippets.Render(snippet));
+
+    // ── The group's own saved blocks ────────────────────────────────────────
+
+    private IReadOnlyList<CmsTemplateRecord> _orgTemplates = [];
+    private bool _savingTemplate, _templateBusy;
+    private string _saveTemplateName = "", _saveTemplateDescription = "";
+    private string? _templateError;
+
+    private async Task LoadOrgTemplatesAsync()
+    {
+        if (OrgId is not Guid orgId) return;
+        _orgTemplates = await AdminClient.GetCmsTemplatesAsync(orgId, CmsTemplateScope.Section);
+    }
+
+    /// <summary>
+    /// Inserts one of the group's saved blocks. Its stored content is a section's own JSON, so the
+    /// markup is read out of it rather than assumed — a saved block of a different section type
+    /// contributes nothing here rather than pasting raw JSON into the page.
+    /// </summary>
+    private async Task InsertTemplateAsync(CmsTemplateRecord template)
+    {
+        string? markup = null;
+        try
+        {
+            var node = JsonNode.Parse(template.ContentJson);
+            markup = node?["html"]?.GetValue<string>();
+        }
+        catch (JsonException) { }
+
+        if (!string.IsNullOrWhiteSpace(markup)) await AppendMarkupAsync(markup);
+    }
+
+    private async Task AppendMarkupAsync(string markup)
+    {
         var combined = string.IsNullOrWhiteSpace(_html) ? markup : _html + "\n" + markup;
         await OnHtmlChanged(combined);
+    }
+
+    private async Task SaveAsTemplateAsync()
+    {
+        if (OrgId is not Guid orgId) return;
+        _templateBusy = true;
+        _templateError = null;
+
+        // Stored as a section's own content shape, so inserting it later is the same operation as
+        // inserting one of ours.
+        var content = new JsonObject { ["html"] = _html }.ToJsonString();
+
+        var saved = await AdminClient.SaveCmsTemplateAsync(orgId, new SaveCmsTemplateRequest(
+            _saveTemplateName.Trim(),
+            string.IsNullOrWhiteSpace(_saveTemplateDescription) ? null : _saveTemplateDescription.Trim(),
+            CmsTemplateScope.Section,
+            SectionType,
+            content));
+
+        _templateBusy = false;
+
+        if (saved is null)
+        {
+            _templateError = "That couldn't be saved. The group may already have a block with that name.";
+            return;
+        }
+
+        _savingTemplate = false;
+        _saveTemplateName = _saveTemplateDescription = "";
+        await LoadOrgTemplatesAsync();
     }
     private string? _contentWarning;
 

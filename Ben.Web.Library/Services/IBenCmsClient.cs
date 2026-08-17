@@ -51,4 +51,11 @@ public interface IBenCmsClient
 
     /// <summary>Throws the draft away, leaving the live page as it was.</summary>
     Task<bool> DiscardCmsDraftAsync(Guid orgId, Guid pageId, CancellationToken token = default);
+
+    // ── The group's saved templates (item #80, part 2) ──────────────────────
+
+    Task<IReadOnlyList<CmsTemplateRecord>> GetCmsTemplatesAsync(Guid orgId, CmsTemplateScope? scope = null, CancellationToken token = default);
+    Task<CmsTemplateRecord?> SaveCmsTemplateAsync(Guid orgId, SaveCmsTemplateRequest request, CancellationToken token = default);
+    Task<CmsTemplateRecord?> UpdateCmsTemplateAsync(Guid orgId, Guid templateId, SaveCmsTemplateRequest request, CancellationToken token = default);
+    Task<bool> DeleteCmsTemplateAsync(Guid orgId, Guid templateId, CancellationToken token = default);
 }

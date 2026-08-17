@@ -40,6 +40,73 @@
         </div>
     </div>
 
+    @* ── Editing a section ─────────────────────────────────────────────────
+       In the body of the page, at full width, never in a window. Writing a page needs the room —
+       a 720px modal was the whole editing surface for the one task on this screen that most
+       deserves space. Small formatting (bold, a link) still belongs in the toolbar; building the
+       thing does not belong in a box. *@
+    @if (_showSectionEditor)
+    {
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>@(_editingSection is null ? "New section" : "Edit section")</strong>
+                <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat"
+                               Icon="@SvgIcon.X"
+                               OnClick="CloseSectionDialog">Close</TelerikButton>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    @if (_editingSection is null)
+                    {
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Section type <span class="text-danger">*</span></label>
+                            <TelerikDropDownList Data="@_sectionTypeOptions"
+                                                 @bind-Value="@_sectionForm.SectionType"
+                                                 ValueField="@nameof(SectionTypeOption.Value)"
+                                                 TextField="@nameof(SectionTypeOption.Label)"
+                                                 Width="100%" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Section type</label>
+                            <p class="mb-0"><strong>@_sectionForm.SectionType</strong></p>
+                        </div>
+                    }
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Section title (optional)</label>
+                        <TelerikTextBox @bind-Value="@_sectionForm.Title" Width="100%"
+                                        Placeholder="Optional heading above this section" />
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end gap-2 pb-2">
+                        <TelerikCheckBox @bind-Value="@_sectionForm.IsActive" Id="sec-active" />
+                        <label for="sec-active" class="form-label mb-0">Visible</label>
+                    </div>
+                </div>
+
+                <CmsSectionEditor SectionType="@_sectionForm.SectionType"
+                                  OrgId="@OrgId"
+                                  @bind-ContentJson="@_sectionForm.ContentJson" />
+
+                @if (_sectionError is not null)
+                {
+                    <div class="alert alert-danger mt-3 mb-0">@_sectionError</div>
+                }
+
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <TelerikButton OnClick="CloseSectionDialog" Enabled="@(!_isBusy)">Cancel</TelerikButton>
+                    <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                   Icon="@SvgIcon.Save"
+                                   OnClick="SaveSection"
+                                   Enabled="@(!_isBusy)">
+                        @(_isBusy ? "Saving…" : "Save section")
+                    </TelerikButton>
+                </div>
+            </div>
+        </div>
+    }
+
     @if (_errorMessage is not null)
     {
         <div class="alert alert-danger mb-3">@_errorMessage</div>
@@ -106,7 +173,9 @@
         <div class="row">
 
             @* ── Main editing column ───────────────────────────────────────── *@
-            <div class="@(_showPreview ? "col-md-6" : "col-12")">
+            @* The side-by-side panel steps aside while a section is being written: the editor
+               needs the width more than the preview does. *@
+            <div class="@(_showPreview && !_showSectionEditor ? "col-md-6" : "col-12")">
 
                 @* Page metadata card *@
                 <div class="card mb-4">
@@ -293,7 +362,7 @@
             </div>
 
             @* ── Inline preview column ─────────────────────────────────────── *@
-            @if (_showPreview)
+            @if (_showPreview && !_showSectionEditor)
             {
                 <div class="col-md-6">
                     <div class="card sticky-top" style="top:1rem;max-height:85vh;overflow-y:auto;">
@@ -336,60 +405,6 @@
         This cannot be undone.
     </p>
 </Ben.Web.Library.Shared.ConfirmDialog>
-
-@* ── Add/Edit Section dialog ──────────────────────────────────────────────── *@
-<TelerikWindow @bind-Visible="@_showSectionDialog" Width="720px" Modal="true">
-    <WindowTitle>@(_editingSection is null ? "New Section" : "Edit Section")</WindowTitle>
-    <WindowContent>
-        <div class="row g-3">
-            @if (_editingSection is null)
-            {
-                <div class="col-12">
-                    <label class="form-label fw-semibold">Section Type <span class="text-danger">*</span></label>
-                    <TelerikDropDownList Data="@_sectionTypeOptions"
-                                         @bind-Value="@_sectionForm.SectionType"
-                                         ValueField="@nameof(SectionTypeOption.Value)"
-                                         TextField="@nameof(SectionTypeOption.Label)"
-                                         Width="100%" />
-                </div>
-            }
-            else
-            {
-                <div class="col-12">
-                    <p class="mb-0 text-secondary">Type: <strong>@_sectionForm.SectionType</strong></p>
-                </div>
-            }
-            <div class="col-12">
-                <label class="form-label fw-semibold">Section Title (optional)</label>
-                <TelerikTextBox @bind-Value="@_sectionForm.Title" Width="100%" Placeholder="Optional heading above this section" />
-            </div>
-            <div class="col-md-6 d-flex align-items-center gap-2">
-                <TelerikCheckBox @bind-Value="@_sectionForm.IsActive" Id="sec-active" />
-                <label for="sec-active" class="form-label mb-0">Active (visible)</label>
-            </div>
-        </div>
-
-        @* Type-specific content editor *@
-        <CmsSectionEditor SectionType="@_sectionForm.SectionType"
-                          @bind-ContentJson="@_sectionForm.ContentJson" />
-
-        @if (_sectionError is not null)
-        {
-            <div class="alert alert-danger mt-3 mb-0">@_sectionError</div>
-        }
-            <div class="dialog-footer-actions">
-            <span class="dialog-footer-spacer"></span>
-
-            <TelerikButton OnClick="CloseSectionDialog">Cancel</TelerikButton>
-            <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                           Icon="@SvgIcon.Save"
-                           OnClick="SaveSection"
-                           Enabled="@(!_isBusy)">
-                @(_isBusy ? "Saving…" : "Save Section")
-            </TelerikButton>
-        </div>
-    </WindowContent>
-</TelerikWindow>
 
 @* ── Delete section confirmation ──────────────────────────────────────────── *@
 <TelerikWindow @bind-Visible="@_showDeleteSectionDialog" Width="400px" Modal="true">
@@ -498,7 +513,7 @@
     private MetaFormModel _metaForm = new();
 
     // Section dialog
-    private bool _showSectionDialog;
+    private bool _showSectionEditor;
     private string? _sectionError;
     private CmsSectionRecord? _editingSection;
     private SectionFormModel _sectionForm = new();
@@ -759,7 +774,7 @@
         _editingSection  = null;
         _sectionError    = null;
         _sectionForm     = new SectionFormModel { SortOrder = _sections.Count + 1 };
-        _showSectionDialog = true;
+        _showSectionEditor = true;
     }
 
     private void OpenEditSectionDialog(CmsSectionRecord s)
@@ -774,12 +789,12 @@
             IsActive    = s.IsActive,
             SortOrder   = s.SortOrder
         };
-        _showSectionDialog = true;
+        _showSectionEditor = true;
     }
 
     private void CloseSectionDialog()
     {
-        _showSectionDialog = false;
+        _showSectionEditor = false;
         _editingSection    = null;
         _sectionError      = null;
     }
@@ -799,7 +814,7 @@
             else
             {
                 _sections.Add(result);
-                _showSectionDialog = false;
+                _showSectionEditor = false;
                 _successMessage = "Section added.";
             }
         }
@@ -813,7 +828,7 @@
             {
                 var idx = _sections.FindIndex(s => s.Id == _editingSection.Id);
                 if (idx >= 0) _sections[idx] = result;
-                _showSectionDialog = false;
+                _showSectionEditor = false;
                 _successMessage = "Section updated.";
             }
         }
