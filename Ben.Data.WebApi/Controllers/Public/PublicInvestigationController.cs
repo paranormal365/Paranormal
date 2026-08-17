@@ -40,7 +40,7 @@ public sealed class PublicInvestigationController : BenControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var slug = orgUrlName.Trim().ToLowerInvariant();
+        var slug = Ben.Data.Common.SlugText.NormalizeOrEmpty(orgUrlName);
 
         var rows = await db.Investigations.AsNoTracking()
             .Where(i => i.Organization.UrlName == slug)
@@ -65,8 +65,8 @@ public sealed class PublicInvestigationController : BenControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var org  = orgUrlName.Trim().ToLowerInvariant();
-        var slug = investigationSlug.Trim().ToLowerInvariant();
+        var org  = Ben.Data.Common.SlugText.NormalizeOrEmpty(orgUrlName);
+        var slug = Ben.Data.Common.SlugText.NormalizeOrEmpty(investigationSlug);
 
         var i = await db.Investigations.AsNoTracking()
             .Include(x => x.Organization)

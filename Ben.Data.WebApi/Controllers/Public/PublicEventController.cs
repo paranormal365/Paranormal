@@ -56,7 +56,7 @@ public sealed class PublicEventController : BenControllerBase
 
         if (!string.IsNullOrWhiteSpace(orgUrlName))
         {
-            var slug = orgUrlName.Trim().ToLowerInvariant();
+            var slug = Ben.Data.Common.SlugText.NormalizeOrEmpty(orgUrlName);
             query = query.Where(e => e.Organization.UrlName == slug);
         }
 
@@ -146,8 +146,8 @@ public sealed class PublicEventController : BenControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var slug = eventSlug.Trim().ToLowerInvariant();
-        var org  = orgUrlName.Trim().ToLowerInvariant();
+        var slug = Ben.Data.Common.SlugText.NormalizeOrEmpty(eventSlug);
+        var org  = Ben.Data.Common.SlugText.NormalizeOrEmpty(orgUrlName);
 
         var id = await VisibleEvents(db)
             .Where(e => e.Organization.UrlName == org && e.UrlName == slug)
