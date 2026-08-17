@@ -319,6 +319,8 @@ public sealed record PlaceCandidate(
 
 public sealed record PublicPlaceInvestigationRow(
     Guid Id,
+    // The readable address of this investigation's own page, or null when it predates slugs.
+    string? UrlName,
     string Title,
     DateTime ScheduledDateTime,
     Ben.Data.Common.Enums.InvestigationStatus Status,

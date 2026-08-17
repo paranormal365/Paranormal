@@ -266,4 +266,20 @@ public sealed partial class BenAdminClientAdapter
     public Task<SidecarTelemetrySummaryRecord?> GetSidecarTelemetrySummaryAsync(
         CancellationToken token = default)
         => _api.GetAsync<SidecarTelemetrySummaryRecord>("/api/sidecar-telemetry/summary", token);
+
+    // ── Published investigations (item #89) ─────────────────────────────────
+
+    public async Task<IReadOnlyList<PublicInvestigationListItem>> GetPublishedInvestigationsAsync(
+        string orgUrlName, CancellationToken token = default)
+    {
+        var result = await _api.GetAnonymousAsync<IReadOnlyList<PublicInvestigationListItem>>(
+            $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/investigations", token);
+        return result ?? [];
+    }
+
+    public Task<PublicInvestigationDetail?> GetPublishedInvestigationAsync(
+        string orgUrlName, string investigationSlug, CancellationToken token = default)
+        => _api.GetAnonymousAsync<PublicInvestigationDetail>(
+               $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/investigations/{Uri.EscapeDataString(investigationSlug)}",
+               token);
 }

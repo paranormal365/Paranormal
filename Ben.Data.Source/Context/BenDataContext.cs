@@ -406,6 +406,12 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
+            modelBuilder.Entity<Investigation>().Property(e => e.UrlName).HasMaxLength(140);
+            modelBuilder.Entity<Investigation>()
+                .HasIndex(e => new { e.OrganizationId, e.UrlName })
+                .IsUnique()
+                .HasFilter("[UrlName] IS NOT NULL");
+
             modelBuilder.Entity<Case>().Property(e => e.UrlName).HasMaxLength(120);
             // One slug per organization. Filtered: a private case has none, and a pile of nulls
             // would collide.

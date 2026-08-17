@@ -9074,3 +9074,32 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817183946_AddInvestigationSlug'
+)
+BEGIN
+    ALTER TABLE [Investigations] ADD [UrlName] nvarchar(140) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817183946_AddInvestigationSlug'
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX [IX_Investigations_OrganizationId_UrlName] ON [Investigations] ([OrganizationId], [UrlName]) WHERE [UrlName] IS NOT NULL');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817183946_AddInvestigationSlug'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260817183946_AddInvestigationSlug', N'10.0.11');
+END;
+
+COMMIT;
+GO
+
