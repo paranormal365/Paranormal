@@ -19,3 +19,19 @@ public sealed record EmbeddableRecord(
     DateTime? Date,
     bool IsAlreadyPublic,
     string? Where);
+
+/// <summary>
+/// One file from a case that a group is allowed to put on a public page.
+/// </summary>
+/// <param name="Context">The timeline entry's title — what the photo was of, so a picker is
+/// choosable rather than a wall of thumbnails.</param>
+/// <remarks>
+/// Carries no case id, no author and no visibility flag. The caller already knows the case, and the
+/// other two are how the answer was reached rather than part of it — a shape that cannot carry them
+/// cannot leak them into a page.
+/// </remarks>
+public sealed record PublishableCaseFile(
+    Guid UploadFileId,
+    string? Context,
+    DateTime? When,
+    Ben.Data.Common.Enums.CaseTimelineEntryType EntryType);
