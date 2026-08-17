@@ -113,7 +113,7 @@ public class Phase6AdapterTests
         var api = ApiMock();
         api.Setup(x => x.GetAnonymousAsync<IReadOnlyList<PublicCaseListItem>>(
                 "/api/public/organizations/ghost-hunters-tn/cases", It.IsAny<CancellationToken>()))
-           .ReturnsAsync([new("#2026-042", "Smith, Nashville TN", "Nashville", "TN",
+           .ReturnsAsync([new("#2026-042", "the-mill-house", "Smith, Nashville TN", "Nashville", "TN",
                CaseStatus.Public, DateTime.UtcNow, null, false)]);
 
         var result = await Build(api).GetPublicCasesAsync("ghost-hunters-tn");

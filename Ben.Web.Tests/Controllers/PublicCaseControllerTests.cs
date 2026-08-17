@@ -105,12 +105,21 @@ public class PublicCaseControllerTests
 
     // ── GetPublicCase ─────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Renamed and inverted deliberately when cases gained readable addresses (item #89).
+    /// </summary>
+    /// <remarks>
+    /// This asserted a 400 saying "expected format 2026-042", which was right while a case could
+    /// only be reached by reference. Now that the same segment carries a slug, "not-a-ref" is an
+    /// ordinary address that happens not to exist — and complaining about its format would be wrong
+    /// for every readable URL on the site.
+    /// </remarks>
     [Fact]
-    public async Task GetPublicCase_InvalidRef_Returns400()
+    public async Task GetPublicCase_UnknownAddress_Returns404()
     {
         var factory = TestDbFactory.Create();
         var result  = await Build(factory).GetPublicCase("test-org", "not-a-ref", CancellationToken.None);
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
@@ -218,5 +227,82 @@ public class PublicCaseControllerTests
         Assert.DoesNotContain("Latitude",      props);
         Assert.DoesNotContain("Longitude",     props);
         Assert.DoesNotContain("StreetAddress1", props);
+    }
+
+    // ── Readable addresses (item #89) ────────────────────────────────────────
+
+    /// <summary>
+    /// A case is reachable by its readable slug — the thing people actually paste to each other.
+    /// </summary>
+    [Fact]
+    public async Task A_case_opens_by_its_readable_slug()
+    {
+        var factory = TestDbFactory.Create();
+        var (org, c) = await SeedPublicCaseAsync(factory);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var row = await db.Cases.SingleAsync(x => x.Id == c.Id);
+            row.UrlName = "the-haunted-manor";
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory).GetPublicCase(org.UrlName, "the-haunted-manor", default);
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    /// <summary>
+    /// The old reference still opens the same case. It is what an organization says out loud to a
+    /// client, and turning it into a dead end would be a regression dressed up as an improvement.
+    /// </summary>
+    [Fact]
+    public async Task The_case_reference_still_opens_the_same_case()
+    {
+        var factory = TestDbFactory.Create();
+        var (org, c) = await SeedPublicCaseAsync(factory);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var row = await db.Cases.SingleAsync(x => x.Id == c.Id);
+            row.UrlName = "the-haunted-manor";
+            await db.SaveChangesAsync();
+        }
+
+        foreach (var reference in new[] { "2026-001", "#2026-001" })
+            Assert.IsType<OkObjectResult>(
+                (await Build(factory).GetPublicCase(org.UrlName, reference, default)).Result);
+    }
+
+    /// <summary>
+    /// A segment that is neither a slug nor a reference is simply not found. It used to be a 400
+    /// saying "expected format 2026-042", which would now be wrong for every readable address.
+    /// </summary>
+    [Fact]
+    public async Task An_unknown_address_is_not_found_rather_than_a_complaint_about_format()
+    {
+        var factory = TestDbFactory.Create();
+        var (org, _) = await SeedPublicCaseAsync(factory);
+
+        var result = await Build(factory).GetPublicCase(org.UrlName, "no-such-case", default);
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Another_organizations_slug_does_not_resolve_here()
+    {
+        var factory = TestDbFactory.Create();
+        var (_, c) = await SeedPublicCaseAsync(factory);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var row = await db.Cases.SingleAsync(x => x.Id == c.Id);
+            row.UrlName = "the-haunted-manor";
+            db.Organizations.Add(new Organization
+            { Id = Guid.NewGuid(), Name = "Rivals", UrlName = "rivals", CreatedByAppUserId = Guid.NewGuid() });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory).GetPublicCase("rivals", "the-haunted-manor", default);
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 }

@@ -71,6 +71,31 @@ public static class UrlSlug
     }
 
     /// <summary>
+    /// Whether this text reads like a street address.
+    /// </summary>
+    /// <remarks>
+    /// <para>Used where a slug describes something at somebody's home. A slug is public text that
+    /// ends up in browser histories, referrer headers and pasted links, and
+    /// <c>/cases/42-elm-street-hauntings</c> would hand back everything the coordinate redaction was
+    /// built to protect.</para>
+    ///
+    /// <para>A leading number followed by a street word is the shape worth catching — "42 Elm
+    /// Street", "1600 Pennsylvania Ave". Deliberately narrow: this refuses a title an organization
+    /// typed, so a rule that fired on "The 1892 Mill House" would be a nuisance that teaches people
+    /// to work around it. It is a guard against the obvious mistake, not a claim to catch every
+    /// address a person could write.</para>
+    /// </remarks>
+    public static bool LooksLikeAStreetAddress(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+
+        return Regex.IsMatch(
+            text,
+            @"\b\d{1,6}\s+([A-Za-z'\-]+\s+){0,3}(st|street|rd|road|ave|avenue|ln|lane|dr|drive|blvd|boulevard|ct|court|way|close|terrace|place|pl)\b",
+            RegexOptions.IgnoreCase);
+    }
+
+    /// <summary>
     /// Makes <paramref name="candidate"/> unique against slugs already taken, by suffixing.
     /// </summary>
     /// <param name="candidate">The slug to use if nothing has taken it.</param>

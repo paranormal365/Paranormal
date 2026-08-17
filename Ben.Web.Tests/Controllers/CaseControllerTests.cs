@@ -824,4 +824,141 @@ public class CaseControllerTests
         await db.SaveChangesAsync();
         return caseId;
     }
+
+    // ── Readable case addresses (item #89) ───────────────────────────────────
+
+    private static async Task<Guid> SeedCaseForPublishingAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid userId, string title)
+    {
+        var caseId = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.Cases.Add(new Case
+        {
+            Id = caseId, OrganizationId = orgId, Title = title,
+            CaseYear = 2026, OrgCaseNumber = 7,
+            StreetAddress1 = "1 Main", City = "Nashville", State = "TN",
+            ZipCode = "37201", Country = "US",
+            DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        });
+        await db.SaveChangesAsync();
+        return caseId;
+    }
+
+    [Fact]
+    public async Task Publishing_a_case_gives_it_a_readable_address()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await SeedCaseForPublishingAsync(factory, orgId, userId, "The Mill House Investigation");
+
+        var result = await Build(factory, userId, isAdmin: true).Update(
+            orgId, caseId,
+            new UpdateCaseRequest("The Mill House Investigation", null, CaseStatus.Public, "A Client", true, null),
+            default);
+        Assert.IsType<OkObjectResult>(result.Result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var saved = await db.Cases.AsNoTracking().SingleAsync(c => c.Id == caseId);
+        Assert.Equal("the-mill-house-investigation", saved.UrlName);
+    }
+
+    /// <summary>
+    /// A private case has no address to promise, so it does not get one.
+    /// </summary>
+    [Fact]
+    public async Task An_unpublished_case_has_no_address()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await SeedCaseForPublishingAsync(factory, orgId, userId, "The Mill House");
+
+        await Build(factory, userId, isAdmin: true).Update(
+            orgId, caseId,
+            new UpdateCaseRequest("The Mill House", null, CaseStatus.Active, null, false, null),
+            default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Null((await db.Cases.AsNoTracking().SingleAsync(c => c.Id == caseId)).UrlName);
+    }
+
+    /// <summary>
+    /// The title becomes part of a public URL, and a URL outlives the page it points at — it sits
+    /// in browser histories, referrer headers and pasted links. Publishing a case whose title is a
+    /// street address is refused rather than quietly slugged.
+    /// </summary>
+    [Fact]
+    public async Task Publishing_a_case_titled_with_a_street_address_is_refused()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await SeedCaseForPublishingAsync(factory, orgId, userId, "42 Elm Street Hauntings");
+
+        var result = await Build(factory, userId, isAdmin: true).Update(
+            orgId, caseId,
+            new UpdateCaseRequest("42 Elm Street Hauntings", null, CaseStatus.Public, "A Client", true, null),
+            default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        var message = Assert.IsType<string>(bad.Value);
+        Assert.Contains("street address", message, StringComparison.OrdinalIgnoreCase);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Null((await db.Cases.AsNoTracking().SingleAsync(c => c.Id == caseId)).UrlName);
+    }
+
+    /// <summary>
+    /// An address is a promise. Renaming the case afterwards leaves it alone, or every link
+    /// somebody has already shared breaks.
+    /// </summary>
+    [Fact]
+    public async Task Renaming_a_published_case_does_not_change_its_address()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await SeedCaseForPublishingAsync(factory, orgId, userId, "The Mill House");
+
+        var ctrl = Build(factory, userId, isAdmin: true);
+        await ctrl.Update(orgId, caseId,
+            new UpdateCaseRequest("The Mill House", null, CaseStatus.Public, "A Client", true, null), default);
+
+        await ctrl.Update(orgId, caseId,
+            new UpdateCaseRequest("The Mill House (revisited)", null, CaseStatus.Public, "A Client", true, null), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal("the-mill-house", (await db.Cases.AsNoTracking().SingleAsync(c => c.Id == caseId)).UrlName);
+    }
+
+    /// <summary>Two cases with the same title in one group get distinct addresses.</summary>
+    [Fact]
+    public async Task A_second_case_with_the_same_title_gets_its_own_address()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var ctrl = Build(factory, userId, isAdmin: true);
+
+        var first  = await SeedCaseForPublishingAsync(factory, orgId, userId, "The Mill House");
+        await ctrl.Update(orgId, first,
+            new UpdateCaseRequest("The Mill House", null, CaseStatus.Public, "A Client", true, null), default);
+
+        var secondId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Cases.Add(new Case
+            {
+                Id = secondId, OrganizationId = orgId, Title = "The Mill House",
+                CaseYear = 2026, OrgCaseNumber = 8,
+                StreetAddress1 = "2 Main", City = "Nashville", State = "TN",
+                ZipCode = "37201", Country = "US",
+                DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow,
+                CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await ctrl.Update(orgId, secondId,
+            new UpdateCaseRequest("The Mill House", null, CaseStatus.Public, "A Client", true, null), default);
+
+        await using var check = await factory.CreateDbContextAsync();
+        var slugs = await check.Cases.AsNoTracking()
+            .Where(c => c.UrlName != null).Select(c => c.UrlName!).ToListAsync();
+
+        Assert.Equal(2, slugs.Count);
+        Assert.Equal(2, slugs.Distinct().Count());
+    }
 }

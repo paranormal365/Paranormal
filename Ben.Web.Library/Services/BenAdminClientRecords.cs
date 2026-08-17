@@ -593,6 +593,9 @@ public sealed record OrgBrowsePage(
 // ── Phase 6: Case Transfer + Public Discovery records ─────────────────────────
 public sealed record PublicCaseListItem(
     string CaseReference,
+    // The readable address to link to. Falls back to the reference for a case published before
+    // slugs existed, so a card always has somewhere to point.
+    string UrlName,
     string Title,
     string City,
     string State,

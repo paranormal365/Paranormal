@@ -9045,3 +9045,32 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817182911_AddCaseSlug'
+)
+BEGIN
+    ALTER TABLE [Cases] ADD [UrlName] nvarchar(120) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817182911_AddCaseSlug'
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX [IX_Cases_OrganizationId_UrlName] ON [Cases] ([OrganizationId], [UrlName]) WHERE [UrlName] IS NOT NULL');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260817182911_AddCaseSlug'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260817182911_AddCaseSlug', N'10.0.11');
+END;
+
+COMMIT;
+GO
+
