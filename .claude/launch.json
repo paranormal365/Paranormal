@@ -2,15 +2,15 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "ben-webapp",
+      "name": "ben-website",
       "runtimeExecutable": "bash",
-      "runtimeArgs": ["scripts/start-webapp-with-api.sh"],
+      "runtimeArgs": ["scripts/start-website-with-api.sh"],
       "port": 5078
     },
     {
-      "name": "ben-website",
-      "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "/Users/ben/Source/Ben/Ben.Web.Website", "--configuration", "Debug"],
+      "name": "ben-webapp",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["scripts/start-webapp-with-api.sh"],
       "port": 5079
     },
     {

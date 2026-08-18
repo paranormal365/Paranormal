@@ -89,7 +89,7 @@ still issues a correct OIDC challenge (PKCE + downstream API scope), no console 
 
 ### Phase 2 notes — the shell
 
-`Ben.Web.Website` (host, ports **5079**/7051) + `Ben.Web.Website.Library` (RCL). `Program.cs` is
+`Ben.Web.Website` (host, ports **5078**/7050 — see the port-swap note below) + `Ben.Web.Website.Library` (RCL). `Program.cs` is
 a clone of the original host's differing by exactly two lines — the components namespace and the
 router's additional assembly — so every DI registration, the whole Entra OIDC block, the token
 capture middleware and both `/auth/entra-*` endpoints carry over byte-identically. MainLayout's
@@ -137,3 +137,33 @@ regression the original host removed Bootstrap's JS to avoid.
 
 Not yet ported (so their routes 404 on this host until their wave lands): everything in
 `Ben.Web.Library`. `/find` is the one you will hit first.
+
+### Port swap — the new site holds :5078
+
+The two front ends traded ports:
+
+| App | Ports |
+|---|---|
+| `Ben.Web.Website` (SmartAdmin/Night) | **5078** / 7050 |
+| `Ben.Web.WebApp` (original, Telerik) | **5079** / 7051 |
+
+:5078 is not arbitrary — it is the redirect URI already registered with Entra
+(`http://localhost:5078/signin-oidc`) and an allow-listed CORS origin on the API. Giving it to
+the new site means Microsoft sign-in works there with no change to the app registration; the
+original app keeps working on :5079, which was added to the API's dev CORS list alongside it.
+
+Start either with the API attached:
+
+```bash
+bash scripts/start-website-with-api.sh   # new site,  :5078
+bash scripts/start-webapp-with-api.sh    # original,  :5079
+```
+
+Both scripts share one implementation — `start-webapp-with-api.sh` now takes `BEN_APP_PROJECT`
+and `BEN_WEBAPP_URL`, and the website script just sets them.
+
+The Playwright suite's `BEN_BASE_URL` default moved to **:5079**, because its pages still live in
+the original app; flip it to :5078 as the migration waves land. Fixed along the way:
+`ErrorHandlingTests` derived the API URL by string-replacing `"5078"` out of the base URL, which
+silently pointed at the front end for any other port. It now reads a `BEN_API_URL`/`ApiUrl` of
+its own.

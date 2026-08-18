@@ -16,7 +16,10 @@ Full-stack .NET solution — ASP.NET Core Web API + Blazor Server + EF Core + SQ
 | `Ben.Service.RepositoryService` | Repository pattern over `BenDataContext` |
 | `Ben.Service.Security` | Org-level tenant security service |
 | `Ben.Web.Library` | Razor Class Library — Blazor + Telerik components: `WaveSurferPlayer`, `AudioFilePreview`, `AddressMapPlayer`, `IconClassPicker`, `IconPickerDialog`, org/CMS/user management pages |
-| `Ben.Web.WebApp` | Blazor Server app — Telerik UI for Blazor (`:5078`) |
+| `Ben.Web.WebApp` | Blazor Server app — Telerik UI for Blazor (`:5079`) |
+| `Ben.Web.Website` | Blazor Server app — SmartAdmin/Night template (`:5078`) |
+| `Ben.Web.Website.Library` | Razor Class Library — the template-skinned components |
+| `Ben.Web.Services` | Shared service layer — WebApi clients, auth state, notifications |
 | `Ben.Service.RepositoryService.Tests` | xUnit — 374 tests |
 | `Ben.Web.Tests` | xUnit — 1,278 tests |
 
@@ -54,7 +57,8 @@ request past `/v1/health` is rejected with a 403.
 
 # Or manually:
 dotnet run --project Ben.Data.WebApi/Ben.Data.WebApi.csproj --urls http://localhost:5252
-dotnet run --project Ben.Web.WebApp/Ben.Web.WebApp.csproj --urls http://localhost:5078
+dotnet run --project Ben.Web.Website/Ben.Web.Website.csproj --urls http://localhost:5078
+dotnet run --project Ben.Web.WebApp/Ben.Web.WebApp.csproj   --urls http://localhost:5079
 ```
 
 > **No Docker.** Development runs against a dedicated SQL Server (see *Database Setup* below), and

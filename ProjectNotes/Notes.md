@@ -82,9 +82,16 @@ app.UseCors("WebAppPolicy");
 | Application | Port | Typical URL |
 |---|---|---|
 | WebApi | 5252 | `http://localhost:5252/swagger/v1/swagger.json` |
-| WebApp | 5078 | `http://localhost:5078/` |
+| Website (SmartAdmin/Night) | 5078 | `http://localhost:5078/` |
+| WebApp (Telerik, original) | 5079 | `http://localhost:5079/` |
 
-Both must be running for the WebApp to function. Use `bash scripts/start-webapp-with-api.sh` to start both automatically.
+The WebApi must be running for either front end to function.
+Use `bash scripts/start-website-with-api.sh` (new site) or `bash scripts/start-webapp-with-api.sh`
+(original) to start the API alongside it.
+
+`Ben.Web.Website` holds :5078 because that is the port registered with Entra as a redirect URI
+(`http://localhost:5078/signin-oidc`), so Microsoft sign-in works there without changing the app
+registration.
 
 ---
 
