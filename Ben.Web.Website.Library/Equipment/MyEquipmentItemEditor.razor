@@ -1,0 +1,462 @@
+@namespace Ben.Web.Website.Library.Equipment
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+
+@* Create/edit one personal equipment item. Cascading category -> brand -> model pickers, each
+   able to propose a new catalog entry inline.
+
+   Rendered inline in the page body rather than in a TelerikWindow. The form outgrew a modal once
+   it carried the catalog pickers, the visibility choice and the three lending options: the window
+   sized itself past the viewport and its own body did not scroll, so the Save button became
+   unreachable. A form this long belongs in the page, where the browser scrolls it normally. *@
+
+@if (Visible)
+{
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="mb-3">@(_isEdit ? "Edit equipment" : "Add equipment")</h5>
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger py-2">@_error</div>
+        }
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold">What kind of gear is it?</label>
+            <TelerikDropDownList Data="@_categories" TItem="EquipmentCategoryRecord" TValue="Guid?"
+                                 Value="@_categoryId" ValueChanged="@((Guid? v) => OnCategoryChangedAsync(v))"
+                                 TextField="@nameof(EquipmentCategoryRecord.Name)"
+                                 ValueField="@nameof(EquipmentCategoryRecord.Id)"
+                                 DefaultText="Choose a category…" Width="100%" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Make</label>
+            <TelerikDropDownList Data="@_brands" TItem="EquipmentBrandRecord" TValue="Guid?"
+                                 Value="@_brandId" ValueChanged="@((Guid? v) => OnBrandChangedAsync(v))"
+                                 TextField="@nameof(EquipmentBrandRecord.Name)"
+                                 ValueField="@nameof(EquipmentBrandRecord.Id)"
+                                 Enabled="@(_categoryId is not null)"
+                                 DefaultText="Choose a make…" Width="100%" />
+            <div class="form-text">
+                No manufacturer, or homemade? Pick <strong>Generic / Unbranded</strong>.
+            </div>
+
+            @if (_categoryId is not null)
+            {
+                <div class="d-flex gap-2 mt-2">
+                    @* Plain input: Telerik text boxes commit on blur, which drops the last
+                       keystroke when the button is clicked straight from the field. *@
+                    <input class="form-control form-control-sm" placeholder="Or add a make that isn't listed"
+                           value="@_newBrandName"
+                           @oninput="@(e => _newBrandName = e.Value?.ToString() ?? string.Empty)" />
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => AddBrandAsync())" disabled="@(!(!_busy && !string.IsNullOrWhiteSpace(_newBrandName)))">Add</button>
+                </div>
+
+                @* The catalog already has something spelled almost this way. Offered as a choice —
+                   picking the existing make is one click, and insisting adds the new one. *@
+                @if (_brandDidYouMean is not null)
+                {
+                    <div class="alert alert-warning py-2 px-3 mt-2 mb-0 small">
+                        <div class="mb-2">
+                            <strong>@_brandDidYouMean.ProposedName</strong> is close to
+                            @(_brandDidYouMean.DidYouMean.Count == 1 ? "a make" : "makes")
+                            already in the catalog. Did you mean:
+                        </div>
+                        <div class="d-flex flex-wrap gap-1 mb-2">
+                            @foreach (var suggestion in _brandDidYouMean.DidYouMean)
+                            {
+                                <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => UseSuggestedBrandAsync(suggestion))">@suggestion</button>
+                            }
+                        </div>
+                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => AddBrandAsync(confirmDistinct: true))" disabled="@(!(!_busy))">
+                            No, "@_brandDidYouMean.ProposedName" is a different make — add it
+                        </button>
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Model</label>
+            <TelerikDropDownList Data="@_models" TItem="EquipmentModelRecord" TValue="Guid?"
+                                 Value="@_modelId" ValueChanged="@((Guid? v) => _modelId = v)"
+                                 TextField="@nameof(EquipmentModelRecord.Name)"
+                                 ValueField="@nameof(EquipmentModelRecord.Id)"
+                                 Enabled="@(_brandId is not null)"
+                                 DefaultText="Choose a model…" Width="100%" />
+
+            @if (_brandId is not null)
+            {
+                <div class="d-flex gap-2 mt-2">
+                    <input class="form-control form-control-sm" placeholder="Or add a model that isn't listed"
+                           value="@_newModelName"
+                           @oninput="@(e => _newModelName = e.Value?.ToString() ?? string.Empty)" />
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => AddModelAsync(_newModelName))" disabled="@(!(!_busy && !string.IsNullOrWhiteSpace(_newModelName)))">Add</button>
+                </div>
+
+                @* A known make with no product line — an Eveready flashlight — still needs a row.
+                   This proposes the same conventional name everyone else lands on, so the catalog
+                   gets one shared "generic" entry per make rather than a dozen spellings. *@
+                @if (!_models.Any(m => m.Name == GenericModelName))
+                {
+                    <button type="button" class="btn btn-link btn-sm px-0 mt-1"
+                            disabled="@_busy" @onclick="@(() => AddModelAsync(GenericModelName))">
+                        I don't know the exact model
+                    </button>
+                }
+            }
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold">What do you call it?</label>
+            <input class="form-control" maxlength="200" placeholder="e.g. My backup recorder"
+                   value="@_displayName"
+                   @oninput="@(e => _displayName = e.Value?.ToString() ?? string.Empty)" />
+        </div>
+
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label fw-semibold">Serial number</label>
+                <input class="form-control" maxlength="100" value="@_serialNumber"
+                       @oninput="@(e => _serialNumber = e.Value?.ToString() ?? string.Empty)" />
+                <div class="form-text">Only ever shown to you.</div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label fw-semibold">When did you get it?</label>
+                <TelerikDatePicker @bind-Value="@_acquisitionDate" Width="100%" />
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Notes</label>
+            <textarea class="form-control" rows="2" maxlength="2000" value="@_notes"
+                      @oninput="@(e => _notes = e.Value?.ToString() ?? string.Empty)"></textarea>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Manufacturer's page</label>
+            <input class="form-control" maxlength="500" placeholder="https://…" value="@_websiteUrl"
+                   @oninput="@(e => _websiteUrl = e.Value?.ToString() ?? string.Empty)" />
+            <div class="form-text">
+                Optional. Links added by everyone who owns this make and model are gathered on its
+                catalog page, so one person's research helps the next.
+            </div>
+        </div>
+
+        <hr />
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Who can see it</label>
+            <div class="d-flex align-items-start gap-2">
+                <input type="checkbox" class="form-check-input mt-1" id="eq-global"
+                       checked="@_includeInGlobalCatalog"
+                       @onchange="@(e => _includeInGlobalCatalog = (bool)(e.Value ?? false))" />
+                <label for="eq-global" class="mb-0">
+                    List this in the public catalog
+                    <span class="d-block text-secondary small">
+                        Anyone, signed in or not, can see this piece and its photos — but never your
+                        name and never its serial number.
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <div class="mb-2">
+            <label class="form-label fw-semibold">Who can borrow it</label>
+            <span class="d-block text-secondary small mb-2">
+                Separate from who can see it — letting people know you own something isn't offering
+                to lend it. Leave all three unticked to keep it unlendable.
+            </span>
+
+            <div class="d-flex align-items-start gap-2 mb-2">
+                <input type="checkbox" class="form-check-input mt-1" id="eq-loan-groups"
+                       checked="@HasAudience(EquipmentLoanAudience.SharedGroups)"
+                       @onchange="@(e => ToggleAudience(EquipmentLoanAudience.SharedGroups, (bool)(e.Value ?? false)))" />
+                <label for="eq-loan-groups" class="mb-0">
+                    Groups I've shared it with
+                    <span class="d-block text-secondary small">
+                        A group can borrow it for its own use, and the loan records which group —
+                        and which investigation, if there is one.
+                    </span>
+                </label>
+            </div>
+
+            <div class="d-flex align-items-start gap-2 mb-2">
+                <input type="checkbox" class="form-check-input mt-1" id="eq-loan-members"
+                       checked="@HasAudience(EquipmentLoanAudience.GroupMembers)"
+                       @onchange="@(e => ToggleAudience(EquipmentLoanAudience.GroupMembers, (bool)(e.Value ?? false)))" />
+                <label for="eq-loan-members" class="mb-0">
+                    People in my groups
+                    <span class="d-block text-secondary small">
+                        Someone you share a group with can borrow it as themselves, rather than on
+                        the group's behalf.
+                    </span>
+                </label>
+            </div>
+
+            <div class="d-flex align-items-start gap-2">
+                <input type="checkbox" class="form-check-input mt-1" id="eq-loan-anyone"
+                       checked="@HasAudience(EquipmentLoanAudience.IndividualUsers)"
+                       @onchange="@(e => ToggleAudience(EquipmentLoanAudience.IndividualUsers, (bool)(e.Value ?? false)))" />
+                <label for="eq-loan-anyone" class="mb-0">
+                    Anyone with an account
+                    <span class="d-block text-secondary small">
+                        Any signed-in user can ask; you still approve or deny every request.
+                    </span>
+                </label>
+            </div>
+
+            @* An offer nobody can find is not an offer — say so rather than letting it look active. *@
+            @if (HasAudience(EquipmentLoanAudience.IndividualUsers) && !_includeInGlobalCatalog)
+            {
+                <div class="alert alert-warning py-2 mt-2 mb-0 small">
+                    Anyone can borrow this, but it isn't in the public catalog — so people outside
+                    your groups have no way to find it. Tick "List this in the public catalog" above
+                    if you want it discoverable.
+                </div>
+            }
+        </div>
+
+        <div class="d-flex justify-content-end gap-2 border-top pt-3 mt-3">
+            @* Retiring keeps everything that happened to a piece; deleting is refused once there
+               is any history to lose. *@
+            @if (_isEdit && Item is not null)
+            {
+                <button type="button" class="btn btn-secondary" @onclick="ToggleRetiredAsync" disabled="@(!(!_busy))">
+                    @(Item.IsRetired ? "Put back in service" : "Retire")
+                </button>
+                <span class="flex-grow-1"></span>
+            }
+            <button type="button" class="btn btn-secondary" @onclick="@(() => OnVisibleChanged(false))" disabled="@(!(!_busy))">Cancel</button>
+            <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(!(!_busy && _modelId is not null && !string.IsNullOrWhiteSpace(_displayName)))">Save</button>
+        </div>
+        </div>
+    </div>
+}
+
+@code {
+    private const string GenericModelName = "Generic (model not specified)";
+
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    /// <summary>The item being edited, or null to create a new one.</summary>
+    [Parameter] public EquipmentItemRecord? Item { get; set; }
+
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private List<EquipmentCategoryRecord> _categories = [];
+    private List<EquipmentBrandRecord> _brands = [];
+    private List<EquipmentModelRecord> _models = [];
+
+    private Guid? _categoryId;
+    private Guid? _brandId;
+    private Guid? _modelId;
+    private string _displayName = string.Empty;
+    private string _serialNumber = string.Empty;
+    private DateTime? _acquisitionDate;
+    private string _notes = string.Empty;
+    private string _websiteUrl = string.Empty;
+    private string _newBrandName = string.Empty;
+    private ProbableDuplicateResponse? _brandDidYouMean;
+    private string _newModelName = string.Empty;
+    private bool _includeInGlobalCatalog;
+    private EquipmentLoanAudience _loanAudience = EquipmentLoanAudience.NotLoanable;
+
+    private bool HasAudience(EquipmentLoanAudience flag) => (_loanAudience & flag) != 0;
+
+    private void ToggleAudience(EquipmentLoanAudience flag, bool on)
+        => _loanAudience = on ? _loanAudience | flag : _loanAudience & ~flag;
+
+    private bool _isEdit;
+    private bool _busy;
+    private bool _loaded;
+    private string? _error;
+    private Guid? _loadedForItemId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Visible) { _loadedForItemId = null; return; }
+
+        // Re-seed the form when the window opens, or when it opens for a different item.
+        var key = Item?.Id;
+        if (_loadedForItemId == key && _loaded) return;
+        _loadedForItemId = key;
+
+        _error = null;
+        _categories = [.. await AdminClient.GetEquipmentCategoriesAsync()];
+
+        if (Item is null)
+        {
+            _isEdit = false;
+            _categoryId = null; _brandId = null; _modelId = null;
+            _brands = []; _models = [];
+            _displayName = string.Empty; _serialNumber = string.Empty;
+            _acquisitionDate = null; _notes = string.Empty;
+            _websiteUrl = string.Empty;
+            _includeInGlobalCatalog = false;
+            _loanAudience = EquipmentLoanAudience.NotLoanable;
+        }
+        else
+        {
+            _isEdit = true;
+            _displayName     = Item.DisplayName;
+            _serialNumber    = Item.SerialNumber ?? string.Empty;
+            _acquisitionDate = Item.AcquisitionDate;
+            _notes           = Item.Notes ?? string.Empty;
+            _websiteUrl      = Item.WebsiteUrl ?? string.Empty;
+            _includeInGlobalCatalog = Item.IncludeInGlobalCatalog;
+            _loanAudience           = Item.LoanAudience;
+
+            // Resolve the item's model back to its category/brand so the pickers open populated.
+            var model = (await AdminClient.SearchEquipmentModelsAsync()).FirstOrDefault(m => m.Id == Item.EquipmentModelId);
+            _categoryId = model?.EquipmentCategoryId;
+            _brandId    = model?.EquipmentBrandId;
+            _modelId    = Item.EquipmentModelId;
+            if (_categoryId is not null) _brands = [.. await AdminClient.GetEquipmentBrandsAsync()];
+            if (_brandId is not null) _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)];
+        }
+
+        _newBrandName = string.Empty;
+        _newModelName = string.Empty;
+        _loaded = true;
+    }
+
+    private async Task OnCategoryChangedAsync(Guid? categoryId)
+    {
+        _categoryId = categoryId;
+        _brandId = null; _modelId = null;
+        _models = [];
+        _brands = categoryId is null ? [] : [.. await AdminClient.GetEquipmentBrandsAsync()];
+    }
+
+    private async Task OnBrandChangedAsync(Guid? brandId)
+    {
+        _brandId = brandId;
+        _modelId = null;
+        _models = brandId is null || _categoryId is null
+            ? []
+            : [.. await AdminClient.GetEquipmentModelsForBrandAsync(brandId.Value, _categoryId)];
+    }
+
+    /// <summary>
+    /// Proposes a make, handling the "did you mean" the catalog answers a near-miss with.
+    /// </summary>
+    /// <remarks>
+    /// The suggestions used to be discarded here — the server refused a probable typo, this showed
+    /// "That make could not be added", and the person had no way either to take the existing make or
+    /// to insist on their own. A check nobody can get past is worse than no check.
+    /// </remarks>
+    private async Task AddBrandAsync(bool confirmDistinct = false)
+    {
+        if (string.IsNullOrWhiteSpace(_newBrandName) || _categoryId is null) return;
+        _busy = true; _error = null; _brandDidYouMean = null;
+
+        var proposal = await AdminClient.ProposeEquipmentBrandAsync(
+            _newBrandName.Trim(), confirmDistinct);
+
+        if (proposal.DidYouMean is not null)
+        {
+            _brandDidYouMean = proposal.DidYouMean;
+        }
+        else if (proposal.Created is null)
+        {
+            _error = "That make could not be added.";
+        }
+        else
+        {
+            _brands = [.. await AdminClient.GetEquipmentBrandsAsync()];
+            _newBrandName = string.Empty;
+            await OnBrandChangedAsync(proposal.Created.Id);
+        }
+        _busy = false;
+    }
+
+    /// <summary>
+    /// Takes one of the suggested makes instead of the name that was typed.
+    /// </summary>
+    /// <remarks>
+    /// Re-posts the suggested name rather than matching it against the loaded list: the server
+    /// returns the existing row for a name already taken, so this selects the same make without a
+    /// second idea of what counts as the same name living in the browser.
+    /// </remarks>
+    private async Task UseSuggestedBrandAsync(string name)
+    {
+        _newBrandName = name;
+        await AddBrandAsync();
+    }
+
+    private async Task AddModelAsync(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || _brandId is null || _categoryId is null) return;
+        _busy = true; _error = null;
+        var created = await AdminClient.ProposeEquipmentModelAsync(
+            new UpsertEquipmentModelRequest(_brandId.Value, _categoryId.Value, name.Trim(), null, null));
+        if (created is null)
+        {
+            _error = "That model could not be added.";
+        }
+        else
+        {
+            _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)];
+            _newModelName = string.Empty;
+            _modelId = created.Id;
+        }
+        _busy = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_modelId is null || string.IsNullOrWhiteSpace(_displayName)) return;
+        _busy = true; _error = null;
+
+        var request = new UpsertEquipmentItemRequest(
+            _modelId.Value,
+            _displayName.Trim(),
+            string.IsNullOrWhiteSpace(_serialNumber) ? null : _serialNumber.Trim(),
+            _acquisitionDate,
+            string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim(),
+            _includeInGlobalCatalog,
+            _loanAudience,
+            string.IsNullOrWhiteSpace(_websiteUrl) ? null : _websiteUrl.Trim());
+
+        var saved = Item is null
+            ? await AdminClient.CreateMyEquipmentItemAsync(request)
+            : await AdminClient.UpdateMyEquipmentItemAsync(Item.Id, request);
+
+        if (saved is null)
+        {
+            _error = "That could not be saved.";
+        }
+        else
+        {
+            await OnSaved.InvokeAsync();
+            await OnVisibleChanged(false);
+        }
+        _busy = false;
+    }
+
+    private async Task ToggleRetiredAsync()
+    {
+        if (Item is null) return;
+        _busy = true;
+        _error = null;
+
+        if (!await AdminClient.RetireMyEquipmentAsync(Item.Id, !Item.IsRetired))
+            _error = Item.IsRetired
+                ? "That couldn't be put back in service."
+                : "That couldn't be retired — it may be out on loan right now.";
+
+        _busy = false;
+        await OnSaved.InvokeAsync();
+        if (_error is null) await OnVisibleChanged(false);
+    }
+
+    private async Task OnVisibleChanged(bool visible)
+    {
+        Visible = visible;
+        if (!visible) { _loaded = false; _loadedForItemId = null; }
+        await VisibleChanged.InvokeAsync(visible);
+    }
+}

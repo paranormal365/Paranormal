@@ -38,11 +38,11 @@ else if (_editingReport is null)
                     </div>
                     @if (r.ExpectedDeliveryDate.HasValue)
                     {
-                        <div class="text-secondary small">Expected: @r.ExpectedDeliveryDate.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")</div>
+                        <div class="text-secondary small">Expected: @r.ExpectedDeliveryDate.Value.ToViewerLocalTime(UserState).ToDisplayDate()</div>
                     }
                     @if (r.PublishedAt.HasValue)
                     {
-                        <div class="text-secondary small">Published: @r.PublishedAt.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")</div>
+                        <div class="text-secondary small">Published: @r.PublishedAt.Value.ToViewerLocalTime(UserState).ToDisplayDate()</div>
                     }
                 </div>
                 <div class="d-flex gap-1">

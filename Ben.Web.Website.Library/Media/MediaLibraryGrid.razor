@@ -75,7 +75,7 @@
                             </div>
                             <div class="small text-truncate fw-semibold" title="@file.FileName">@file.FileName</div>
                             <div class="text-secondary" style="font-size:.72rem;">
-                                @FormatSize(file.FileSize) · @file.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")
+                                @FormatSize(file.FileSize) · @file.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()
                             </div>
                             @if (ShowVoting)
                             {
@@ -121,7 +121,7 @@
                 <GridColumn Title="Uploaded" Width="140px">
                     <Template>
                         @{ var row4 = (UploadFileRecord)context; }
-                        @row4.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")
+                        @row4.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()
                     </Template>
                 </GridColumn>
                 @if (ShowVoting)

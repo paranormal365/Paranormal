@@ -38,7 +38,7 @@
                             </span>
                             <span class="badge text-bg-light border">@AudienceLabel(c)</span>
                             <span class="text-muted" style="font-size:.7rem;">
-                                @c.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+                                @c.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
                                 @if (c.DateUpdated.HasValue) { <text> (edited)</text> }
                             </span>
                         </div>

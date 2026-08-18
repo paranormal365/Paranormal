@@ -1,0 +1,51 @@
+@namespace Ben.Web.Website.Library.Equipment
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+
+@* Read-only photos for a publicly-listed item. Same data:-URI approach as EquipmentPhotoStrip —
+   an <img src> pointing at the API sends no bearer token — but with no edit affordances and no
+   assumption of a signed-in caller: the bytes endpoint serves publicly-listed items anonymously,
+   and the client attaches a token only when there is one. *@
+
+<div class="d-flex flex-wrap gap-2">
+    @foreach (var photo in Photos.OrderBy(p => p.SortOrder))
+    {
+        @if (_dataUrls.TryGetValue(photo.Id, out var url) && url is not null)
+        {
+            <img src="@url" alt="@(photo.Caption ?? "Equipment photo")"
+                 title="@photo.Caption"
+                 style="width:96px;height:66px;object-fit:cover;border-radius:4px;" />
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<EquipmentItemPhotoRecord> Photos { get; set; } = [];
+
+    private readonly Dictionary<Guid, string?> _dataUrls = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var missing = Photos.Where(p => !_dataUrls.ContainsKey(p.Id)).ToList();
+        if (missing.Count == 0) return;
+
+        foreach (var photo in missing)
+        {
+            try
+            {
+                // Thumbnails: these are drawn 96px wide, and the endpoint applies the same
+                // visibility predicate as the full bytes, so nothing is loosened by using it.
+                var result = await AdminClient.GetEquipmentPhotoThumbnailAsync(photo.Id);
+                _dataUrls[photo.Id] = result is null
+                    ? null
+                    : $"data:{result.Value.ContentType};base64,{Convert.ToBase64String(result.Value.Data)}";
+            }
+            catch
+            {
+                // A photo that won't load is simply not shown — never a page error on a public page.
+                _dataUrls[photo.Id] = null;
+            }
+        }
+    }
+}

@@ -214,7 +214,7 @@ else
                 {
                     <tr>
                         <td class="text-nowrap">
-                            @row.ScheduledDateTime.ToLocalTime().ToString("d MMM yyyy, HH:mm")
+                            @row.ScheduledDateTime.ToLocalTime().ToDisplayDateTime()
                         </td>
                         <td>
                             @row.Title

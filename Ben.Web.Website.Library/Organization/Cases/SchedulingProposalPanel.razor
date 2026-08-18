@@ -22,7 +22,7 @@ else
                 <div class="d-flex align-items-start justify-content-between">
                     <div class="flex-grow-1">
                         <span class="badge @StatusBadge(prop.Status) me-2">@prop.Status</span>
-                        <span class="text-secondary small">Sent @prop.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d")</span>
+                        <span class="text-secondary small">Sent @prop.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()</span>
                         @if (!string.IsNullOrWhiteSpace(prop.Notes))
                         {
                             <div class="text-secondary small mt-1">@prop.Notes</div>
@@ -34,7 +34,7 @@ else
                                 <div class="small @(isAccepted ? "text-success fw-semibold" : "")">
                                     @(isAccepted ? "✓ " : "• ")
                                     @slot.StartDateTime.ToViewerLocalTime(UserState).ToString("ddd MMM d, yyyy h:mm tt")
-                                    @if (slot.EndDateTime.HasValue) { <span> – @slot.EndDateTime.Value.ToViewerLocalTime(UserState).ToString("h:mm tt")</span> }
+                                    @if (slot.EndDateTime.HasValue) { <span> – @slot.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTime()</span> }
                                 </div>
                             }
                         </div>

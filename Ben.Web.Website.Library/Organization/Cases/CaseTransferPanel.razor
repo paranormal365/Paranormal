@@ -37,7 +37,7 @@
                             <div>
                                 <div class="d-flex align-items-center gap-2 mb-1">
                                     <span class="badge @StatusBadge(transfer.Status)">@StatusLabel(transfer.Status)</span>
-                                    <span class="small text-secondary">@transfer.DateProposed.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")</span>
+                                    <span class="small text-secondary">@transfer.DateProposed.ToViewerLocalTime(UserState).ToDisplayDate()</span>
                                 </div>
                                 <div class="small">
                                     <span class="fw-semibold">@(transfer.FromOrganizationName ?? "This org")</span>

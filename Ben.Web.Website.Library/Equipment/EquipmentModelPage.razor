@@ -1,0 +1,224 @@
+@page "/equipment-models/{ModelId:guid}"
+@page "/equipment/{BrandSlug}/{ModelSlug}"
+@namespace Ben.Web.Website.Library.Equipment
+@inject IBenAdminClient AdminClient
+@inject NavigationManager NavManager
+
+<PageTitle>@(_page is null ? "Equipment" : $"{_page.Model.BrandName} {_page.Model.Name}")</PageTitle>
+
+@* One product, with what every owner has contributed pooled together. Public — the photos arrive
+   anonymously, and a photo only becomes a link when the server says this viewer may open that
+   particular item. *@
+
+<div class="container-fluid py-3" style="max-width:900px;">
+    <div class="mb-3">
+        <a href="/equipment-catalog" class="text-decoration-none small">&larr; Back to the catalog</a>
+    </div>
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+    }
+    else if (_page is null)
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <h6 class="mb-2">That make and model could not be found</h6>
+                <p class="text-secondary small mb-0">It may not have been approved for the catalog yet.</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <h3 class="mb-1">@_page.Model.BrandName @_page.Model.Name<HelpLink Slug="your-equipment" Anchor="the-public-catalog" /></h3>
+        <p class="text-secondary small mb-4">
+            @_page.Model.CategoryName
+            @if (!string.IsNullOrWhiteSpace(_page.Model.ModelNumber))
+            {
+                <span> · model @_page.Model.ModelNumber</span>
+            }
+        </p>
+
+        @if (!string.IsNullOrWhiteSpace(_page.Model.Description))
+        {
+            <p>@_page.Model.Description</p>
+        }
+
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+                <div class="card h-100"><div class="card-body py-3 text-center">
+                    <div class="h4 mb-0">@_page.ItemCount</div>
+                    <div class="text-secondary small">@(_page.ItemCount == 1 ? "one is owned" : "owned by members")</div>
+                </div></div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card h-100"><div class="card-body py-3 text-center">
+                    <div class="h4 mb-0">@_page.AvailableToBorrowCount</div>
+                    <div class="text-secondary small">offered for borrowing</div>
+                </div></div>
+            </div>
+        </div>
+
+        @* ── What owners have read about it ─────────────────────────────────── *@
+        @if (_page.WebsiteLinks.Count > 0)
+        {
+            <h5 class="mb-2">Links owners have added</h5>
+            <ul class="mb-4">
+                @foreach (var link in _page.WebsiteLinks)
+                {
+                    <li><a href="@link" target="_blank" rel="noopener noreferrer">@link</a></li>
+                }
+            </ul>
+        }
+
+        @* ── What owners have written about theirs ───────────────────────────── *@
+        @if (_page.Faqs.Count > 0)
+        {
+            <h5 class="mb-2">Things owners say about it</h5>
+            <p class="text-secondary small">
+                Written by people who own one, and shown without saying which of them wrote what.
+            </p>
+            <div class="mb-4">
+                @foreach (var faq in _page.Faqs)
+                {
+                    <div class="border-bottom py-2">
+                        <div class="fw-semibold">@faq.Question</div>
+                        <div class="small" style="white-space:pre-line;">@faq.Answer</div>
+                    </div>
+                }
+            </div>
+        }
+
+        @* ── What borrowers thought of the gear itself ───────────────────────── *@
+        @if (_reviews.Count > 0)
+        {
+            <h5 class="mb-2">What borrowers said about it</h5>
+            <p class="text-secondary small">
+                Left after borrowing one, without their names.
+            </p>
+            <div class="mb-4">
+                @foreach (var review in _reviews)
+                {
+                    <div class="border-bottom py-2 small">
+                        <div class="text-secondary" style="font-size:.75rem;">
+                            @review.DateCreated.ToLocalTime().ToDisplayDate()
+                        </div>
+                        <div style="white-space:pre-line;">@review.Comment</div>
+                    </div>
+                }
+            </div>
+        }
+
+        @* ── The pooled photos ──────────────────────────────────────────────── *@
+        <h5 class="mb-2">Photos</h5>
+        @if (_page.Photos.Count == 0)
+        {
+            <p class="text-secondary small">Nobody has added a photo of one yet.</p>
+        }
+        else
+        {
+            <p class="text-secondary small">
+                From members who own one. Photos are shown without saying whose they are.
+            </p>
+            <div class="d-flex flex-wrap gap-2">
+                @foreach (var photo in _page.Photos)
+                {
+                    @* A link only where the server said this viewer may open that item. *@
+                    @if (photo.LinkedItemId is Guid itemId)
+                    {
+                        <a href="@($"/equipment/{itemId}")" title="@(photo.Caption ?? "View this one")">
+                            @RenderPhoto(photo)
+                        </a>
+                    }
+                    else
+                    {
+                        @RenderPhoto(photo)
+                    }
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid ModelId { get; set; }
+
+    // The readable address — /equipment/zoom/h1n. The GUID route stays because links to it already
+    // exist inside the app; this is the one worth sharing.
+    [Parameter] public string? BrandSlug { get; set; }
+    [Parameter] public string? ModelSlug { get; set; }
+
+    private EquipmentModelPageRecord? _page;
+    private IReadOnlyList<ProductReviewRecord> _reviews = [];
+    private readonly Dictionary<Guid, string?> _thumbnails = [];
+    private bool _loading = true;
+    private Guid _loadedFor;
+
+    private RenderFragment RenderPhoto(CatalogPhotoRecord photo) => @<text>
+        @if (_thumbnails.TryGetValue(photo.PhotoId, out var url) && url is not null)
+        {
+            <img src="@url" alt="@(photo.Caption ?? "Equipment photo")"
+                 style="width:150px;height:104px;object-fit:cover;border-radius:4px;" />
+        }
+        else
+        {
+            <div class="bg-body-secondary d-flex align-items-center justify-content-center"
+                 style="width:150px;height:104px;border-radius:4px;">
+                <span class="text-secondary small">…</span>
+            </div>
+        }
+    </text>;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var bySlug = BrandSlug is not null && ModelSlug is not null;
+
+        if (!bySlug && (ModelId == Guid.Empty || _loadedFor == ModelId)) return;
+        if (bySlug && _loadedFor != Guid.Empty && _page is not null
+            && string.Equals(_page.Model.UrlName, ModelSlug, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        _loading = true;
+        _page = bySlug
+            ? await AdminClient.GetEquipmentModelPageBySlugAsync(BrandSlug!, ModelSlug!)
+            : await AdminClient.GetEquipmentModelPageAsync(ModelId);
+        _loading = false;
+        StateHasChanged();
+
+        if (_page is null) return;
+
+        _loadedFor = _page.Model.Id;
+
+        // Arrived by id — every link inside the app still points that way. Move the browser to the
+        // readable address so that what somebody copies out of the bar is /equipment/zoom/h1n and
+        // not a GUID, which was Ben's original complaint. Without this the readable route would
+        // exist and nothing would ever reach it.
+        if (!bySlug
+            && _page.Model.BrandUrlName is { Length: > 0 } brandSlug
+            && _page.Model.UrlName is { Length: > 0 } modelSlug)
+        {
+            NavManager.NavigateTo($"/equipment/{brandSlug}/{modelSlug}", replace: true);
+            return;
+        }
+
+        _reviews = await AdminClient.GetProductReviewsAsync(_loadedFor);
+        StateHasChanged();
+
+        // Thumbnails, not full-resolution files — these are drawn 150px wide.
+        foreach (var photo in _page.Photos)
+        {
+            try
+            {
+                var bytes = await AdminClient.GetEquipmentPhotoThumbnailAsync(photo.PhotoId);
+                _thumbnails[photo.PhotoId] = bytes is null
+                    ? null
+                    : $"data:{bytes.Value.ContentType};base64,{Convert.ToBase64String(bytes.Value.Data)}";
+            }
+            catch
+            {
+                _thumbnails[photo.PhotoId] = null;   // a photo that won't load is simply not shown
+            }
+            StateHasChanged();
+        }
+    }
+}

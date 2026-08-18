@@ -426,3 +426,24 @@ What was actually wrong, in order:
   opened it. The template solves this with a backdrop in `_Sidebar.cshtml` that both dims the page
   and toggles the menu closed — omitted when the sidebar was rebuilt as `BenNav`, and now restored.
   Verified: tapping the backdrop closes the menu.
+
+### Wave F — `Client/` and `Equipment/`
+
+25 components, including `MyCaseDetail` at 1,346 lines — the largest single file in the app.
+Routes added: `/my-cases`, `/my-cases/{id}`, `/my-requests` (+ new/edit/detail),
+`/my-investigations`, `/equipment-catalog`, `/equipment/{id}`, `/equipment-models/{id}`,
+`/my-equipment`, `/my-equipment/questions`, `/my-checkouts`, `/my-checkouts/{id}`.
+
+**Converted:** 101 buttons, 14 loaders, 13 icons, 10 windows → `BenModal`, 10 text boxes,
+2 tab strips. **Kept:** 7 templated dropdowns, 6 date/time pickers, a calendar, a grid and an
+editor. The site now serves **49 routes**.
+
+Three familiar shapes recurred and were fixed the same way: dialog titles built from literal text
+plus a C# expression (`Title="Ask about @(…)"`) became properties, since that is mixed content in
+a component attribute; a four-way icon ternary needed all its branches converted, not just the
+first two; and the last `ConfirmDialog` call sites were renamed to `BenConfirmDialog`.
+
+**Date formats swept again.** Wave A's pass only covered the files that existed then, so the newer
+waves arrived with `"MMMM d, yyyy"`, `"MMM d, yyyy"` and friends — "Opened August 11, 2026" on
+`/my-cases` is what surfaced it. 32 files normalised onto the shared helpers; the only literal date
+format left in the library is `ToString("D")` on a **Guid**, which is not a date at all.

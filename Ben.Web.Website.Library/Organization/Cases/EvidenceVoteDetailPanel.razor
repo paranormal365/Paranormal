@@ -52,7 +52,7 @@ else
                         <div class="text-secondary mt-1">@v.Comment</div>
                     }
                     <div class="text-muted mt-1" style="font-size:.7rem;">
-                        @v.DateVoted.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+                        @v.DateVoted.ToViewerLocalTime(UserState).ToDisplayDateTime()
                         @if (v.CaseReference is not null)
                         {
                             <span class="ms-2">Case @v.CaseReference</span>

@@ -1,0 +1,250 @@
+@page "/my-requests"
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>My Investigation Requests</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:860px;">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <h3 class="mb-0">My Investigation Requests</h3>
+        <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo("/my-requests/new"))"><BenIcon Name="plus" Class="me-1" />
+            New Request
+        </button>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_requests is null)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading your requests…" />
+    }
+    else if (_requests.Count == 0)
+    {
+        <div class="text-center py-5 text-secondary">
+            <p class="mb-3">You haven't submitted an investigation request yet.</p>
+            <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo("/my-requests/new"))">
+                Submit Your First Request
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="d-flex flex-column gap-3">
+            @foreach (var r in _requests)
+            {
+                <div class="card" style="cursor:pointer;" @onclick="@(() => NavManager.NavigateTo($"/my-requests/{r.Id}"))">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start justify-content-between">
+                            <div>
+                                <div class="fw-semibold">@r.City, @r.State @r.ZipCode</div>
+                                <div class="text-secondary small">@r.StreetAddress1</div>
+                            </div>
+                            <div class="d-flex flex-column align-items-end gap-1">
+                                <span class="badge @StatusBadgeClass(r.Status)">@StatusLabel(r.Status)</span>
+                                @if (r.OrgCount > 0)
+                                {
+                                    <span class="badge bg-light text-dark border" style="font-size:.7rem;">
+                                        @r.OrgCount org@(r.OrgCount == 1 ? "" : "s")
+                                    </span>
+                                }
+                                @if (r.Status is ClientRequestStatus.Declined or ClientRequestStatus.Withdrawn)
+                                {
+                                    <span @onclick="@(() => { })" @onclick:stopPropagation="true">
+                                        <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => OpenPickerAsync(r))">
+                                            @(r.Status == ClientRequestStatus.Withdrawn ? "Resubmit to an Organization" : "Choose Another Organization")
+                                        </button>
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(r.Description))
+                        {
+                            <div class="text-secondary small mt-2" style="max-height:3em;overflow:hidden;">
+                                @((MarkupString)TruncateHtml(r.Description, 120))
+                            </div>
+                        }
+                        <div class="text-secondary small mt-2">Submitted @r.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()</div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@* ── Choose another organization picker ──────────────────────────────────── *@
+@if (_pickerTarget is not null)
+{
+    <BenModal Visible="true" Title="@(_pickerTarget?.Status == ClientRequestStatus.Withdrawn ? "Resubmit to an Organization" : "Choose Another Organization")">
+    <ChildContent>
+            @if (_pickerOrgs is null)
+            {
+                <BenLoaderOverlay Visible="true" Text="Finding organizations near you…" />
+            }
+            else if (_pickerOrgs.Count == 0)
+            {
+                <div class="alert alert-warning mb-0">
+                    No other organizations are currently accepting cases in your area.
+                </div>
+            }
+            else
+            {
+                <div class="d-flex flex-column gap-2">
+                    @foreach (var org in _pickerOrgs)
+                    {
+                        <div class="border rounded p-3 d-flex align-items-center justify-content-between gap-3">
+                            <div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <strong>@org.Name</strong>
+                                    @if (org.IsWithinRange)
+                                    {
+                                        <span class="badge bg-success">Within range</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Outside range — accepts</span>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrEmpty(org.DisplayLabel))
+                                {
+                                    <small class="text-secondary">@org.DisplayLabel</small>
+                                }
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="text-secondary small">@org.DistanceFromSearchMiles mi</span>
+                                <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => SelectOrganizationAsync(org.OrganizationId))" disabled="@(!(!_isPickerBusy))">
+                                    Select
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            @if (_pickerError is not null)
+            {
+                <div class="alert alert-danger mt-2 mb-0">@_pickerError</div>
+            }
+        </ChildContent>
+</BenModal>
+}
+
+@code {
+    private List<ClientRequestRecord>? _requests;
+    private string? _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated)
+        {
+            NavManager.NavigateTo("/login");
+            return;
+        }
+        try
+        {
+            _requests = (await AdminClient.GetMyClientRequestsAsync()).ToList();
+        }
+        catch { _error = "Failed to load requests."; _requests = []; }
+        StateHasChanged();
+    }
+
+    private static string StatusBadgeClass(ClientRequestStatus s) => s switch
+    {
+        ClientRequestStatus.Draft      => "bg-secondary",
+        ClientRequestStatus.Submitted  => "bg-primary",
+        ClientRequestStatus.Assigned   => "bg-success",
+        ClientRequestStatus.Closed     => "bg-dark",
+        ClientRequestStatus.Withdrawn  => "bg-warning text-dark",
+        ClientRequestStatus.Declined   => "bg-danger",
+        _                              => "bg-secondary",
+    };
+
+    private static string StatusLabel(ClientRequestStatus s) => s switch
+    {
+        ClientRequestStatus.Draft      => "Draft",
+        ClientRequestStatus.Submitted  => "Submitted",
+        ClientRequestStatus.Assigned   => "Assigned",
+        ClientRequestStatus.Closed     => "Closed",
+        ClientRequestStatus.Withdrawn  => "Withdrawn",
+        ClientRequestStatus.Declined   => "Declined",
+        _                              => s.ToString(),
+    };
+
+    // ── Choose another organization ─────────────────────────────────────────
+
+    private ClientRequestRecord?         _pickerTarget;
+    private List<OrgSearchResult>?       _pickerOrgs;
+    private bool                         _isPickerBusy;
+    private string?                      _pickerError;
+
+    private async Task OpenPickerAsync(ClientRequestRecord request)
+    {
+        _pickerTarget = request;
+        _pickerOrgs   = null;
+        _pickerError  = null;
+
+        if (request.Latitude is null || request.Longitude is null)
+        {
+            _pickerOrgs = [];
+            return;
+        }
+
+        try
+        {
+            var alreadyApplied = (await AdminClient.GetClientRequestOrgsAsync(request.Id))
+                .Select(a => a.OrganizationId)
+                .ToHashSet();
+            var results = await AdminClient.SearchOrganizationsAsync(
+                (double)request.Latitude.Value, (double)request.Longitude.Value);
+            _pickerOrgs = results.Where(o => !alreadyApplied.Contains(o.OrganizationId)).ToList();
+        }
+        catch
+        {
+            _pickerOrgs  = [];
+            _pickerError = "Failed to load organizations. Please try again.";
+        }
+    }
+
+    private async Task SelectOrganizationAsync(Guid organizationId)
+    {
+        if (_pickerTarget is null || _isPickerBusy) return;
+        _isPickerBusy = true;
+        _pickerError  = null;
+        try
+        {
+            var result = await AdminClient.AddOrganizationToRequestAsync(_pickerTarget.Id, organizationId);
+            if (result is not null)
+            {
+                _pickerTarget = null;
+                _requests = (await AdminClient.GetMyClientRequestsAsync()).ToList();
+            }
+            else
+            {
+                _pickerError = "Failed to submit to this organization. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _pickerError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _isPickerBusy = false;
+        }
+    }
+
+    /// <summary>Strip HTML tags and truncate for the card preview.</summary>
+    private static string TruncateHtml(string html, int maxChars)
+    {
+        var text = System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", " ")
+                       .Replace("&nbsp;", " ").Trim();
+        return text.Length > maxChars ? text[..maxChars] + "…" : text;
+    }
+}

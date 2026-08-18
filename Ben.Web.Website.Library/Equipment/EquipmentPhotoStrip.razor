@@ -1,0 +1,205 @@
+@namespace Ben.Web.Website.Library.Equipment
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+
+@* Photos for one equipment item. Bytes are fetched through the authenticated client and rendered
+   as data: URIs — a plain <img src="/api/..."> sends no bearer token, which is the trap that has
+   already broken avatars and the image editor twice. Loading is deferred until the strip is
+   actually shown (item detail/editor), never in a list row, because UserMediaPreview has no
+   thumbnail mode and fetches full bytes. *@
+
+<div class="d-flex flex-wrap gap-2 align-items-start">
+    @if (_loading)
+    {
+        <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
+    }
+    else
+    {
+        @foreach (var photo in Photos.OrderBy(p => p.SortOrder))
+        {
+            <div class="position-relative border rounded p-1" style="width:110px;">
+                @if (_dataUrls.TryGetValue(photo.Id, out var url) && url is not null)
+                {
+                    <img src="@url" alt="@(photo.Caption ?? "Equipment photo")"
+                         style="width:100%;height:74px;object-fit:cover;border-radius:3px;" />
+                }
+                else
+                {
+                    <div class="d-flex align-items-center justify-content-center bg-light text-secondary"
+                         style="width:100%;height:74px;border-radius:3px;font-size:.75rem;">
+                        no preview
+                    </div>
+                }
+
+                @if (photo.IsPrimary)
+                {
+                    <span class="badge bg-primary position-absolute top-0 start-0 m-1" style="font-size:.6rem;">Main</span>
+                }
+                @if (photo.ExcludeFromCatalog)
+                {
+                    <span class="badge bg-secondary position-absolute top-0 end-0 m-1"
+                          style="font-size:.6rem;" title="Not shown on the make and model page">Hidden</span>
+                }
+
+                @if (CanEdit)
+                {
+                    <div class="d-flex gap-1 mt-1">
+                        @if (!photo.IsPrimary)
+                        {
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1 flex-fill"
+                                    style="font-size:.7rem;" disabled="@_busy"
+                                    @onclick="@(() => SetPrimaryAsync(photo.Id))">Main</button>
+                        }
+                        <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 flex-fill"
+                                style="font-size:.7rem;" disabled="@_busy"
+                                @onclick="@(() => RemoveAsync(photo.Id))">Remove</button>
+                    </div>
+
+                    @* Per photo, not per item — someone may be happy for a clean product shot to
+                       appear on the model page but not the one taken in their living room. *@
+                    <label class="d-flex align-items-start gap-1 mt-1 mb-0 text-secondary"
+                           style="font-size:.7rem;cursor:pointer;">
+                        <input type="checkbox" class="form-check-input mt-0" disabled="@_busy"
+                               checked="@photo.ExcludeFromCatalog"
+                               @onchange="@(e => SetCatalogExclusionAsync(photo.Id, (bool)(e.Value ?? false)))" />
+                        <span>Hide from the model page</span>
+                    </label>
+                }
+            </div>
+        }
+
+        @if (CanEdit)
+        {
+            <label class="border rounded d-flex flex-column align-items-center justify-content-center text-secondary"
+                   style="width:110px;height:74px;cursor:pointer;font-size:.75rem;">
+                <BenIcon Name="plus" />
+                <span>Add photo</span>
+                <InputFile OnChange="OnFileSelectedAsync" accept="image/*" style="display:none;" />
+            </label>
+        }
+    }
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger py-1 px-2 mt-2 mb-0 small">@_error</div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ItemId { get; set; }
+
+    /// <summary>
+    /// Set for a group's own gear, left null for somebody's personal item. The only difference is
+    /// which endpoints the three actions call — the strip itself is the same either way, so one
+    /// component serves both rather than two drifting apart.
+    /// </summary>
+    [Parameter] public Guid? OrgId { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<EquipmentItemPhotoRecord> Photos { get; set; } = [];
+    [Parameter] public bool CanEdit { get; set; }
+
+    /// <summary>Raised after any change so the parent can reload the item and its photo list.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private readonly Dictionary<Guid, string?> _dataUrls = [];
+    private bool _loading;
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Only fetch bytes for photos not already resolved — this re-runs on every parent render.
+        var missing = Photos.Where(p => !_dataUrls.ContainsKey(p.Id)).ToList();
+        if (missing.Count == 0) return;
+
+        _loading = true;
+        foreach (var photo in missing)
+        {
+            try
+            {
+                var result = await AdminClient.GetEquipmentPhotoThumbnailAsync(photo.Id);
+                _dataUrls[photo.Id] = result is null
+                    ? null
+                    : $"data:{result.Value.ContentType};base64,{Convert.ToBase64String(result.Value.Data)}";
+            }
+            catch
+            {
+                // A photo that won't load is a placeholder, not a page error.
+                _dataUrls[photo.Id] = null;
+            }
+        }
+        _loading = false;
+    }
+
+    private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        if (e.File is null) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            // 25 MB ceiling on the read, not a policy limit — the server sets no cap by design.
+            var stream = e.File.OpenReadStream(maxAllowedSize: 25 * 1024 * 1024);
+            var fileContent = new StreamContent(stream);
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+                string.IsNullOrWhiteSpace(e.File.ContentType) ? "application/octet-stream" : e.File.ContentType);
+            content.Add(fileContent, "file", e.File.Name);
+
+            var result = OrgId is Guid orgId
+                ? await AdminClient.AttachOrgEquipmentPhotoAsync(orgId, ItemId, content)
+                : await AdminClient.AttachMyEquipmentPhotoAsync(ItemId, content);
+            if (result is null) _error = "That photo could not be uploaded.";
+            else await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"That photo could not be uploaded: {ex.Message}";
+        }
+        _busy = false;
+    }
+
+    private async Task SetPrimaryAsync(Guid photoId)
+    {
+        _busy = true;
+        _error = null;
+        var madePrimary = OrgId is Guid primaryOrgId
+            ? await AdminClient.SetOrgEquipmentPrimaryPhotoAsync(primaryOrgId, ItemId, photoId)
+            : await AdminClient.SetMyEquipmentPrimaryPhotoAsync(ItemId, photoId);
+        if (!madePrimary)
+            _error = "That photo could not be set as the main one.";
+        else
+            await OnChanged.InvokeAsync();
+        _busy = false;
+    }
+
+    private async Task RemoveAsync(Guid photoId)
+    {
+        _busy = true;
+        _error = null;
+        var detached = OrgId is Guid detachOrgId
+            ? await AdminClient.DetachOrgEquipmentPhotoAsync(detachOrgId, ItemId, photoId)
+            : await AdminClient.DetachMyEquipmentPhotoAsync(ItemId, photoId);
+        if (!detached)
+        {
+            _error = "That photo could not be removed.";
+        }
+        else
+        {
+            _dataUrls.Remove(photoId);
+            await OnChanged.InvokeAsync();
+        }
+        _busy = false;
+    }
+
+    private async Task SetCatalogExclusionAsync(Guid photoId, bool exclude)
+    {
+        _busy = true;
+        _error = null;
+        if (!await AdminClient.SetPhotoCatalogExclusionAsync(ItemId, photoId, exclude, OrgId))
+            _error = "That photo's catalog setting could not be changed.";
+        else
+            await OnChanged.InvokeAsync();   // the parent reloads, which is what re-renders the tick
+        _busy = false;
+    }
+}
