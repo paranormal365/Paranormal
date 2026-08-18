@@ -8,6 +8,12 @@
       "port": 5078
     },
     {
+      "name": "ben-website",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "/Users/ben/Source/Ben/Ben.Web.Website", "--configuration", "Debug"],
+      "port": 5079
+    },
+    {
       "name": "smartadmin-template",
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "/Users/ben/Source/ASP.NET-Core10/Full/SmartAdmin", "--configuration", "Debug"],

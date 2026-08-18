@@ -14,6 +14,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- HelpContentService renders the embedded help documents. -->
+    <PackageReference Include="Markdig" Version="0.37.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Help documents ship inside the assembly rather than under wwwroot: a wwwroot file is
+         served raw to anyone who guesses its name, which would hand out the app-administration
+         documents past their audience gate. -->
+    <EmbeddedResource Include="Help\Content\*.md" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Ben.Data.Common\Ben.Data.Common.csproj" />
     <ProjectReference Include="..\Ben.Service.Models\Ben.Service.Models.csproj" />
     <!-- VideoExportPublisher, BenMediaLibraryProvider and SidecarPairingReporter implement

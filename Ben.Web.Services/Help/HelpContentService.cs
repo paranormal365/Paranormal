@@ -2,7 +2,7 @@ using Ben.Data.Common.Enums;
 using System.Reflection;
 using Markdig;
 
-namespace Ben.Web.Library.Help;
+namespace Ben.Web.Services.Help;
 
 /// <summary>
 /// Loads the help documents and renders them.
@@ -19,7 +19,11 @@ namespace Ben.Web.Library.Help;
 /// </remarks>
 public sealed class HelpContentService
 {
-    private const string ResourcePrefix = "Ben.Web.Library.Help.Content.";
+    // Derived rather than hard-coded: a literal assembly name here survives a project move as a
+    // clean compile that silently finds zero documents, which reads as "help is empty" rather
+    // than as a build failure.
+    private static readonly string ResourcePrefix =
+        typeof(HelpContentService).Assembly.GetName().Name + ".Help.Content.";
 
     private readonly Lazy<IReadOnlyList<HelpDocument>> _documents;
     private readonly MarkdownPipeline _pipeline;

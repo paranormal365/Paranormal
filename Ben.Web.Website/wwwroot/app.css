@@ -1,0 +1,99 @@
+/* App-specific styles layered on the template.
+   The template owns layout, spacing and colour — anything here is either brand or a gap the
+   template does not cover. Keep it small; if a rule fights smartapp.min.css, the template's
+   own class is almost always the better answer. */
+
+@import url('https://fonts.googleapis.com/css2?family=Irish+Grover&display=swap');
+
+/* ── Brand ──────────────────────────────────────────────────────────────── */
+.is-haunted-text {
+    font-family: 'Irish Grover', system-ui, sans-serif;
+    font-size: 1.05rem;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.is-haunted-text strong { font-weight: 400; opacity: .6; }
+.is-haunted-text em     { font-style: normal; }
+
+.ben-brand,
+.ben-brand:hover {
+    text-decoration: none;
+    color: inherit;
+    white-space: nowrap;
+    padding-left: .75rem;
+}
+
+/* App-shell height.
+
+   The template's .app-wrap grid is content-sized, so with a long sidebar the whole document
+   scrolls — header and all — instead of the sidebar scrolling inside a fixed shell. Pinning the
+   wrap to the viewport turns the sidebar and the content area into their own scroll regions.
+
+   The min-height:0 declarations are the load-bearing part: a flex/grid child defaults to
+   min-height:auto and refuses to shrink below its content, which is why overflow-y alone does
+   nothing here.
+
+   .custom-scroll got its scrollbar from smartSlimscroll.js in the template; this app does not
+   ship that script (it mutated DOM Blazor owns), so the nav scrolls natively instead. The
+   selector carries the .custom-scroll class purely to out-specify the template's own rule. */
+.app-wrap { height: 100vh; }
+
+.app-sidebar {
+    overflow: hidden;
+    min-height: 0;
+}
+
+.app-body { min-height: 0; }
+
+.app-sidebar .primary-nav.custom-scroll {
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+}
+
+/* Sign-in reads as one control: label inherits the icon's colour and sits well below the
+   body size, so it does not compete with the page's own headings. */
+.ben-signin-text {
+    font-size: .75rem;
+    line-height: 1;
+    color: inherit;
+}
+
+/* ── Click-away layer for the Blazor-owned dropdowns ────────────────────── */
+/* The bell and user menu manage their own open state, so they need their own dismiss layer.
+   Sits under the menu but over everything else. */
+.ben-dropdown-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: transparent;
+}
+
+.notification-bell .dropdown-menu,
+.user-menu .dropdown-menu { z-index: 1001; }
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.app-footer-link,
+.app-footer-link:hover { color: inherit; opacity: .85; }
+
+/* ── Blazor's error bar ─────────────────────────────────────────────────── */
+#blazor-error-ui {
+    background: var(--bs-warning-bg-subtle, #ffe69c);
+    color: var(--bs-warning-text-emphasis, #664d03);
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, .2);
+    display: none;
+    left: 0;
+    padding: .6rem 1.25rem .7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1080;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: .75rem;
+    top: .5rem;
+}

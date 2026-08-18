@@ -27,11 +27,4 @@
     <InternalsVisibleTo Include="Ben.Web.Tests" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Help documents ship inside the assembly rather than under wwwroot: a wwwroot file is
-         served raw to anyone who guesses its name, which would hand out the app-administration
-         documents past their audience gate. -->
-    <EmbeddedResource Include="Help\Content\*.md" />
-  </ItemGroup>
-
 </Project>

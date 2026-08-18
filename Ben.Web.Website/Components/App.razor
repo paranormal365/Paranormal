@@ -1,0 +1,84 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <!-- Every asset href/src below is explicitly root-relative (leading slash) rather than
+         relying on <base href> resolution — Safari has a known quirk where relative URLs in
+         elements parsed from a streamed SSR response (Blazor Web Apps stream by default) can
+         resolve against the current page path instead of <base> on a hard navigation to a
+         nested route, breaking asset loading (and any @import inside an affected stylesheet,
+         since a wrongly-fetched stylesheet's own relative @imports inherit its wrong base too).
+         The template ships these paths relative; they are rewritten here for that reason. -->
+
+    <!-- Bootstrap 5.3.8 is compiled INTO smartapp.min.css — do not also load it from a CDN,
+         two copies fight over the same cascade. -->
+    <link rel="stylesheet" href="/css/smartapp.min.css" />
+    <!-- The Night skin, layered on the base stylesheet. Server-rendered rather than injected by
+         script, so it survives JS being disabled and cannot flash a different palette first. -->
+    <link id="theme-style" rel="stylesheet" media="screen" href="/css/themes/night.min.css" />
+    <link rel="stylesheet" href="/webfonts/smartadmin/sa-icons.css" />
+    <link rel="stylesheet" href="/webfonts/fontawesome/fontawesome.css" />
+    <link rel="stylesheet" href="/plugins/waves/waves.min.css" />
+
+    <!-- Applies theme + layout classes to <html> before first paint. Must stay render-blocking. -->
+    <script src="/scripts/core/ben-boot.js"></script>
+
+    <!-- Bootstrap's JS is loaded exactly once, here in <head>, and never from inside a component.
+         The old host removed it because re-executing it on Blazor's enhanced navigation threw
+         "Cannot redefine property: delegateTarget" on every soft nav. A head script on a Blazor
+         Web App runs once per real document load, so that path is not re-entered — and the
+         components in Kit/ own their own show/hide state rather than delegating to Bootstrap's
+         JS, which keeps the blast radius to dropdown/collapse behaviour only. -->
+    <script src="/plugins/bootstrap/bootstrap.bundle.min.js"></script>
+
+    <!-- Kendo's Bootstrap-flavoured theme is the closest starting point for the widgets kept from
+         Telerik (Grid, Scheduler, Editor, Map, pickers). telerik-night.css then remaps its CSS
+         variables onto the Night palette so those widgets read as part of the template rather
+         than as a control suite dropped on top of it. Load order matters: override comes last. -->
+    <link rel="stylesheet" href="/_content/Telerik.UI.for.Blazor/css/kendo-theme-bootstrap/all.css" />
+    <link rel="stylesheet" href="/theme/telerik-night.css" />
+    <script src="/_content/Telerik.UI.for.Blazor/js/telerik-blazor.js" defer></script>
+    <!-- ffmpeg.wasm — served locally so the worker chunk (814.ffmpeg.js) is same-origin -->
+    <script src="/_content/Ben.Video.Editor/js/ffmpeg.umd.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/fabric@@6/dist/index.min.js" defer></script>
+    <link href="/_content/Ben.Video.Editor/css/ben-video-variables.css" rel="stylesheet" />
+    @* No themeSwitcher.js here — the old host's version swapped between two compiled Kendo
+       theme files, which this host does not have. ben-boot.js owns setTheme/toggleTheme using
+       the template's own layoutSettings convention. *@
+    <script src="/js/geolocation.js"></script>
+    <script src="/js/timezone.js"></script>
+    <link rel="stylesheet" href="/@Assets["Ben.Web.Website.styles.css"]" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <HeadOutlet @rendermode="@InteractiveServer" />
+    <link rel="stylesheet" href="/@Assets["app.css"]" />
+</head>
+
+@* k-body is required by the Kendo theme for the widgets kept from Telerik; the template's own
+   chrome classes live on the layout's wrapper elements, so the two do not overlap. *@
+<body class="k-body">
+    <!-- Serializes the EntraTokenHolder (HTTP scope) into the page HTML so
+         the Interactive Server circuit can restore it via PersistentComponentState. -->
+    <EntraTokenPersister />
+    <Routes @rendermode="@InteractiveServer" />
+    <script src="/_framework/blazor.web.js" autostart="false"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            Blazor.start();
+        });
+
+        function downloadFileFromBase64(base64, contentType, fileName) {
+            const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+            const blob = new Blob([bytes], { type: contentType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = fileName; a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+
+</html>

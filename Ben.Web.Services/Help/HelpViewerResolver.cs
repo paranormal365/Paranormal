@@ -1,7 +1,7 @@
 using Ben.Data.Common.Enums;
 using Ben.Web.Services;
 
-namespace Ben.Web.Library.Help;
+namespace Ben.Web.Services.Help;
 
 /// <summary>
 /// Works out how much of the help a given reader may see.

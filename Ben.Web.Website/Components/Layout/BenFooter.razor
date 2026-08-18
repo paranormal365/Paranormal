@@ -1,0 +1,9 @@
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+
+<footer class="app-footer">
+    <span class="app-footer-text">@SiteOptions.Value.Name &copy; @DateTime.Today.Year</span>
+    @* Both reachable signed out: the guides explaining how to request an investigation are
+       for people without an account, and so is the contact form. *@
+    <a href="/help" class="app-footer-link ms-3">Help</a>
+    <a href="/contact" class="app-footer-link ms-3">Contact</a>
+</footer>

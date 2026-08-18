@@ -1,6 +1,6 @@
 using Ben.Data.Common.Enums;
 
-namespace Ben.Web.Library.Help;
+namespace Ben.Web.Services.Help;
 
 /// <summary>What a given reader is entitled to see.</summary>
 /// <param name="Highest">

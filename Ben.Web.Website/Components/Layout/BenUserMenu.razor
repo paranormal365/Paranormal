@@ -1,0 +1,119 @@
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    Port of the library's UserMenu onto the template's dropdown markup.
+
+    The avatar/initials logic and the deliberately-quiet error handling are carried over as-is.
+    What changed is the shell: TelerikPopover becomes a Bootstrap dropdown whose open state is a
+    C# field, not data-bs-toggle. Bootstrap's own dropdown JS would fight Blazor for the same
+    DOM here, and anything interactive inside it would stop binding.
+*@
+
+@if (UserState.IsAuthenticated)
+{
+    <div class="dropdown user-menu">
+        <button type="button" title="@(UserState.UserEmail ?? "Account")"
+                class="btn-system bg-transparent d-flex flex-shrink-0 align-items-center justify-content-center"
+                aria-label="Open Profile Dropdown" aria-expanded="@_open.ToString().ToLowerInvariant()"
+                @onclick="Toggle">
+            @if (_avatarFileId is { } fileId)
+            {
+                <img src="@AdminClient.GetFileDownloadUrl(fileId)" alt=""
+                     class="profile-image profile-image-md rounded-circle" />
+            }
+            else
+            {
+                @* Initials rather than a generic silhouette: it identifies the account at a
+                   glance and doesn't look like a broken image. *@
+                <span class="profile-image profile-image-md rounded-circle d-inline-flex align-items-center justify-content-center bg-secondary text-white">@Initials</span>
+            }
+        </button>
+
+        <div class="dropdown-menu dropdown-menu-end dropdown-menu-animated @(_open ? "show" : null)">
+            <div class="notification-header rounded-top mb-2 p-3">
+                <div class="fs-lg text-truncate">@(_displayName ?? "Your account")</div>
+                <span class="text-truncate opacity-80 fs-sm">@UserState.UserEmail</span>
+            </div>
+            <div class="dropdown-divider m-0"></div>
+            <button type="button" class="dropdown-item" @onclick="GoToProfile">My Profile</button>
+            <div class="dropdown-divider m-0"></div>
+            <button type="button" class="dropdown-item text-danger" @onclick="SignOutAsync">Sign Out</button>
+        </div>
+    </div>
+
+    @if (_open)
+    {
+        @* Click-away layer: cheaper and more reliable than a document-level JS listener, and it
+           cannot leak past this component's lifetime. *@
+        <div class="ben-dropdown-backdrop" @onclick="Close"></div>
+    }
+}
+
+@code {
+    /// <summary>Invoked when the user picks Sign Out — the layout owns what signing out means.</summary>
+    [Parameter] public EventCallback OnSignOut { get; set; }
+
+    private bool _open;
+    private Guid?   _avatarFileId;
+    private string? _displayName;
+    private bool    _loaded;
+
+    private string Initials
+    {
+        get
+        {
+            var source = _displayName ?? UserState.UserEmail ?? "?";
+            var parts  = source.Split(new[] { ' ', '.', '@', '-' }, StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length switch
+            {
+                0 => "?",
+                1 => parts[0][..1].ToUpperInvariant(),
+                _ => (parts[0][..1] + parts[1][..1]).ToUpperInvariant(),
+            };
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _loaded) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) return;
+
+        _loaded = true;
+        try
+        {
+            var profile = await AdminClient.GetMyProfileAsync();
+            if (profile is null) return;
+            _displayName = profile.DisplayName;
+            // Public photo only. This chrome renders on every page for the signed-in user
+            // themselves, so there is no audience question to answer here.
+            _avatarFileId = profile.PublicPhoto?.UploadFileId;
+            StateHasChanged();
+        }
+        catch
+        {
+            // Quiet on purpose, and narrowly so: this is chrome on every page, and an error banner
+            // in the header because a picture didn't load would be worse than the initials that
+            // appear instead. Note the limit — a failed fetch is indistinguishable from having no
+            // public photo, so "my avatar is missing" needs checking against the profile page
+            // rather than assumed to be a display bug.
+        }
+    }
+
+    private void Toggle() => _open = !_open;
+    private void Close()  => _open = false;
+
+    private void GoToProfile()
+    {
+        _open = false;
+        NavManager.NavigateTo("/profile");
+    }
+
+    private async Task SignOutAsync()
+    {
+        _open = false;
+        if (OnSignOut.HasDelegate) await OnSignOut.InvokeAsync();
+    }
+}

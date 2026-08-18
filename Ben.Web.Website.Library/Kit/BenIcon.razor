@@ -1,0 +1,32 @@
+@*
+    Sprite-backed icon, replacing TelerikSvgIcon.
+
+    The sprite (Feather icon set, 575 symbols) is served from the host's wwwroot at
+    /icons/sprite.svg. The href is written root-relative on purpose — the template ships these
+    as "icons/sprite.svg#name", which only resolves on single-segment routes and 404s on a
+    nested one like /organizations/{id}/cases.
+*@
+
+<svg class="@CssClass" aria-hidden="@(Title is null ? "true" : "false")" role="@(Title is null ? "presentation" : "img")" @attributes="Extra">
+    @if (Title is not null)
+    {
+        <title>@Title</title>
+    }
+    <use href="/icons/sprite.svg#@Name"></use>
+</svg>
+
+@code {
+    /// <summary>Sprite symbol id, e.g. "home", "bell", "log-in".</summary>
+    [Parameter, EditorRequired] public string Name { get; set; } = "circle";
+
+    /// <summary>Extra classes appended after the base <c>sa-icon</c> class.</summary>
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>Renders a &lt;title&gt; and switches the icon from decorative to labelled.</summary>
+    [Parameter] public string? Title { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? Extra { get; set; }
+
+    private string CssClass => string.IsNullOrWhiteSpace(Class) ? "sa-icon" : $"sa-icon {Class}";
+}
