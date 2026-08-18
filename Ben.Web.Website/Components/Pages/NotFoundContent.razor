@@ -1,0 +1,19 @@
+@*
+    The body of the "page not found" screen, shared by the two paths that can produce one.
+
+    Both are required, and each covers a case the other cannot:
+
+      • UseStatusCodePagesWithReExecute → /not-found handles the *server* render. The Router's
+        <NotFound> block does not run for server-rendered requests in a Blazor Web App, so
+        without the middleware an unmatched URL returned a 404 with an empty body.
+
+      • <NotFound> in Routes.razor handles the render after the circuit connects. The interactive
+        pass re-evaluates the real URL client-side, and with no block to fall back on it matched
+        nothing and rendered nothing — blanking the page the middleware had just drawn.
+*@
+
+<div class="text-center py-5">
+    <h1 class="display-6">Page not found</h1>
+    <p class="text-muted mb-4">There is nothing at this address.</p>
+    <a class="btn btn-primary" href="/">Back to the home page</a>
+</div>
