@@ -234,7 +234,12 @@
        `.primary-nav ul ul ul`, so the depth costs nothing extra. *@
     private RenderFragment RenderItem(NavItem item) => __builder =>
     {
-        <li class="nav-item @(item.Children.Count > 0 && IsExpanded(item) ? "open active" : null) @(item.Children.Count == 0 && IsActive(item) ? "active" : null)">
+        @* has-ul and aria-haspopup are what the template's own nav script sets on a parent item;
+           the template's CSS keys its active-state styling off has-ul, and the chevron below is
+           the affordance that tells a reader the item opens at all. Rendered here in C# because
+           that script is not shipped — without them Administration looked like a plain link. *@
+        <li class="nav-item @(item.Children.Count > 0 ? "has-ul" : null) @(item.Children.Count > 0 && IsExpanded(item) ? "open active" : null) @(item.Children.Count == 0 && IsActive(item) ? "active" : null)"
+            aria-haspopup="@(item.Children.Count > 0 ? "true" : null)">
             @if (item.Children.Count == 0)
             {
                 <a href="@item.Url" title="@item.Text">
@@ -249,11 +254,20 @@
             }
             else
             {
-                <a href="#" title="@item.Text" @onclick="() => ToggleGroup(item.Text)" @onclick:preventDefault="true">
+                <a href="#" title="@item.Text"
+                   aria-expanded="@IsExpanded(item).ToString().ToLowerInvariant()"
+                   @onclick="() => ToggleGroup(item.Text)" @onclick:preventDefault="true">
                     <BenIcon Name="@item.Icon" />
                     <span class="nav-link-text">@item.Text</span>
+                    <span class="collapse-sign" aria-hidden="true">
+                        <i class="sa @(IsExpanded(item) ? "sa-chevron-up" : "sa-chevron-down")"></i>
+                    </span>
                 </a>
-                <ul style="@(IsExpanded(item) ? null : "display:none")">
+                @* The template hides every nav list with `.primary-nav ul { display: none }` and
+                   reveals a submenu with `.primary-nav ul.nav-menu ul.active` — the class belongs
+                   on the <ul> itself, not the parent <li>. Toggling an inline style instead left
+                   the CSS default in force, so the group opened in the DOM and stayed invisible. *@
+                <ul class="@(IsExpanded(item) ? "active" : null)">
                     @foreach (var child in item.Children)
                     {
                         @RenderItem(child)

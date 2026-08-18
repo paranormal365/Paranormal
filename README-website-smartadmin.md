@@ -529,3 +529,18 @@ Worth recording: my own verification missed this because I re-tested the *featur
 survive navigation?) rather than the *page* (does anything still work?). A JS exception in
 `App.razor` breaks everything downstream of it, so that file deserves a login check after every
 edit, not a feature check.
+
+**The nested admin menu did not actually open**, though the DOM said it had. Two template hooks
+were missing, and both are the same lesson as the mobile backdrop and the menu filter:
+
+- The template's nav script adds `has-ul` and a `<span class="collapse-sign">` chevron to any item
+  with a submenu. Without them the group carried no affordance at all — it looked like a plain
+  link, which is what Ben reported first.
+- More seriously, the template hides **every** nav list with `.primary-nav ul { display: none }`
+  and reveals a submenu with `.primary-nav ul.nav-menu ul.active` — the class belongs on the
+  `<ul>` itself. Toggling an inline `display` style instead left the stylesheet's default in force,
+  so the group opened in the DOM, reported `open`, and stayed invisible.
+
+That is three times now that rebuilding template markup "equivalently" cost a bug. The rule for the
+remaining work: **copy the template's class names and hooks verbatim, then change behaviour** —
+the class names are not decoration, they are the API.
