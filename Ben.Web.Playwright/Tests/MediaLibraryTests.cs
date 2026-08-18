@@ -123,7 +123,7 @@ public class MediaLibraryTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Page.GetByText("Cases", new() { Exact = true })).First;
+                            .Or(Main.GetByText("Cases", new() { Exact = true })).First;
         await casesLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -133,7 +133,7 @@ public class MediaLibraryTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         var filesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Files", Exact = true })
-                           .Or(Page.GetByText("Files", new() { Exact = true })).First;
+                           .Or(Main.GetByText("Files", new() { Exact = true })).First;
         await filesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
     }

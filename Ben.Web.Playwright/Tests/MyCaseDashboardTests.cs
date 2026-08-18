@@ -238,7 +238,7 @@ public class MyCaseDashboardTests : BenTestBase
         var body = await Page.InnerTextAsync("body");
         if (body.Contains("Investigations"))
         {
-            var invSection = Page.GetByText("Investigations", new() { Exact = false });
+            var invSection = Main.GetByText("Investigations", new() { Exact = false });
             await Expect(invSection).ToBeVisibleAsync(new() { Timeout = 5_000 });
         }
         Assert.That(body, Does.Not.Contain("An unhandled error has occurred"));

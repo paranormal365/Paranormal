@@ -25,7 +25,7 @@ public class CaseManagerAssignmentTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Page.GetByText("Cases", new() { Exact = true })).First;
+                            .Or(Main.GetByText("Cases", new() { Exact = true })).First;
         await casesLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -50,7 +50,7 @@ public class CaseManagerAssignmentTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Page.GetByText("Cases", new() { Exact = true })).First;
+                            .Or(Main.GetByText("Cases", new() { Exact = true })).First;
         await casesLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 

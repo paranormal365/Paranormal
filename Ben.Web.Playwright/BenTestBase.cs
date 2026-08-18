@@ -78,6 +78,18 @@ public abstract class BenTestBase : PageTest
     }
 
     /// <summary>
+    /// The page's main content, excluding the chrome.
+    /// <para>
+    /// Tab and link lookups need this on the new site: its sidebar lists "My Cases",
+    /// "Cases &amp; Investigations", "Equipment", "Messages" and more, and sits *before* the
+    /// content in the DOM — so an unscoped <c>GetByText("Cases").First</c> resolves to a nav entry
+    /// and either clicks the wrong thing or trips strict mode. Matches the original site's layout
+    /// too, where it simply narrows to the same region.
+    /// </para>
+    /// </summary>
+    protected ILocator Main => Page.Locator(".app-content, main, .content-wrapper").First;
+
+    /// <summary>
     /// Opens the header's profile menu, which is where the new site keeps the signed-in email and
     /// the Sign Out button. The original showed both directly in the app bar, so this is a no-op
     /// there — it only clicks when the menu's contents are not already visible.

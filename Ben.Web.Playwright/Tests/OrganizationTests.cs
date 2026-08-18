@@ -87,7 +87,7 @@ public class OrganizationTests : BenTestBase
                            .First;
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var membersTab = Page.GetByText("Members", new() { Exact = false });
+        var membersTab = Main.GetByText("Members", new() { Exact = false });
         await Expect(membersTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await membersTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
@@ -106,7 +106,7 @@ public class OrganizationTests : BenTestBase
                            .First;
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var casesTab = Page.GetByText("Cases", new() { Exact = false });
+        var casesTab = Main.GetByText("Cases", new() { Exact = false });
         await Expect(casesTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
@@ -148,7 +148,7 @@ public class OrganizationTests : BenTestBase
                            .First;
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var filesTab = Page.GetByText("Files", new() { Exact = false });
+        var filesTab = Main.GetByText("Files", new() { Exact = false });
         if (await filesTab.IsVisibleAsync())
         {
             await filesTab.ClickAsync();
@@ -172,7 +172,7 @@ public class OrganizationTests : BenTestBase
                            .First;
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var msgTab = Page.GetByText("Messages", new() { Exact = false });
+        var msgTab = Main.GetByText("Messages", new() { Exact = false });
         if (await msgTab.IsVisibleAsync())
         {
             await msgTab.ClickAsync();

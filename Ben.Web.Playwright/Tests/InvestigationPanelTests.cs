@@ -38,7 +38,7 @@ public class InvestigationPanelTests : BenTestBase
     public async Task InvestigationsTab_IsVisibleOnCaseDetail()
     {
         await NavigateToInvestigationsTabAsync();
-        var casesTab = Page.GetByText("Cases", new() { Exact = false });
+        var casesTab = Main.GetByText("Cases", new() { Exact = false });
         await Expect(casesTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
@@ -55,7 +55,7 @@ public class InvestigationPanelTests : BenTestBase
         await caseLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var invTab = Page.GetByText("Investigations", new() { Exact = false });
+        var invTab = Main.GetByText("Investigations", new() { Exact = false });
         await Expect(invTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 
@@ -74,7 +74,7 @@ public class InvestigationPanelTests : BenTestBase
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var casesTab = Page.GetByText("Cases", new() { Exact = false });
+        var casesTab = Main.GetByText("Cases", new() { Exact = false });
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -86,7 +86,7 @@ public class InvestigationPanelTests : BenTestBase
         await caseLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var invTab = Page.GetByText("Investigations", new() { Exact = false });
+        var invTab = Main.GetByText("Investigations", new() { Exact = false });
         await invTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -107,7 +107,7 @@ public class InvestigationPanelTests : BenTestBase
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var casesTab = Page.GetByText("Cases", new() { Exact = false });
+        var casesTab = Main.GetByText("Cases", new() { Exact = false });
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -119,7 +119,7 @@ public class InvestigationPanelTests : BenTestBase
         await caseLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var invTab = Page.GetByText("Investigations", new() { Exact = false });
+        var invTab = Main.GetByText("Investigations", new() { Exact = false });
         await invTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -166,7 +166,7 @@ public class InvestigationPanelTests : BenTestBase
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var casesTab = Page.GetByText("Cases", new() { Exact = false });
+        var casesTab = Main.GetByText("Cases", new() { Exact = false });
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -177,7 +177,7 @@ public class InvestigationPanelTests : BenTestBase
         await caseLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var invTab = Page.GetByText("Investigations", new() { Exact = false });
+        var invTab = Main.GetByText("Investigations", new() { Exact = false });
         await invTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 

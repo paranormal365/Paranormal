@@ -28,6 +28,9 @@ public class NavigationTests : BenTestBase
         await LoginAsync(UserEmail, UserPassword);
         await Page.GotoAsync(BaseUrl);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // Identity moved into the profile menu on the new site; a no-op where it is already shown.
+        await OpenProfileMenuAsync();
+
         var emailText = Page.GetByText(UserEmail.Split('@')[0], new() { Exact = false });
         await Expect(emailText.First).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }

@@ -163,7 +163,7 @@ public class CaseMessageBoardTests : BenTestBase
 
         // Go to Cases
         var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Page.GetByText("Cases", new() { Exact = true }))
+                            .Or(Main.GetByText("Cases", new() { Exact = true }))
                             .First;
         await Expect(casesLink).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await casesLink.ClickAsync();
@@ -177,7 +177,7 @@ public class CaseMessageBoardTests : BenTestBase
 
         // Messages tab should be present
         var messagesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Messages" })
-                              .Or(Page.GetByText("Messages", new() { Exact = true }))
+                              .Or(Main.GetByText("Messages", new() { Exact = true }))
                               .First;
         await Expect(messagesTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
@@ -195,7 +195,7 @@ public class CaseMessageBoardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Page.GetByText("Cases", new() { Exact = true }))
+                            .Or(Main.GetByText("Cases", new() { Exact = true }))
                             .First;
         await casesLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
@@ -207,7 +207,7 @@ public class CaseMessageBoardTests : BenTestBase
 
         // Click Messages tab
         var messagesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Messages" })
-                              .Or(Page.GetByText("Messages", new() { Exact = true }))
+                              .Or(Main.GetByText("Messages", new() { Exact = true }))
                               .First;
         await messagesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
@@ -230,7 +230,7 @@ public class CaseMessageBoardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Page.GetByText("Cases", new() { Exact = true }))
+                            .Or(Main.GetByText("Cases", new() { Exact = true }))
                             .First;
         await casesLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
@@ -241,7 +241,7 @@ public class CaseMessageBoardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         var messagesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Messages" })
-                              .Or(Page.GetByText("Messages", new() { Exact = true }))
+                              .Or(Main.GetByText("Messages", new() { Exact = true }))
                               .First;
         await messagesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
