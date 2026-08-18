@@ -46,7 +46,7 @@ else
                                 <div class="small text-secondary mt-1">@f.Description</div>
                             }
                             <div class="text-muted mt-1" style="font-size:.7rem;">
-                                @FormatSize(f.FileSize) · Added @f.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+                                @FormatSize(f.FileSize) · Added @f.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
                             </div>
                             <div @onclick:stopPropagation="true">
                                 <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => ToggleComments(f.Id))"><BenIcon Name="message-square" Class="me-1" />

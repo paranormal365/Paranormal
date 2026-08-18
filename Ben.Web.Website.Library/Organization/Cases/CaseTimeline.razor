@@ -77,7 +77,7 @@
                                     @if (e.EventDateTime.HasValue)
                                     {
                                         <small class="text-secondary">
-                                            @e.EventDateTime.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+                                            @e.EventDateTime.Value.ToViewerLocalTime(UserState).ToDisplayDateTime()
                                         </small>
                                     }
                                     @if (moment is { } mm)

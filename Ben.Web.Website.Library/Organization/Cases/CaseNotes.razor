@@ -43,10 +43,10 @@ else
                                 }
                                 <div class="small" style="white-space:pre-wrap;">@n.Body</div>
                                 <div class="text-secondary mt-2" style="font-size:.75rem;">
-                                    @(n.AuthorDisplayName ?? "Unknown") · @n.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+                                    @(n.AuthorDisplayName ?? "Unknown") · @n.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
                                     @if (n.DateUpdated.HasValue)
                                     {
-                                        <span> · edited @n.DateUpdated.Value.ToViewerLocalTime(UserState).ToString("MMM d")</span>
+                                        <span> · edited @n.DateUpdated.Value.ToViewerLocalTime(UserState).ToDisplayDate()</span>
                                     }
                                 </div>
                             </div>

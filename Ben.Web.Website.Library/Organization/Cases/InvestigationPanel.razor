@@ -50,9 +50,9 @@
                                 <strong>@i.Title</strong>
                             </div>
                             <div class="text-secondary small">
-                                @i.ScheduledDateTime.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+                                @i.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
                                 @if (i.EndDateTime.HasValue)
-                                { <span> – @i.EndDateTime.Value.ToViewerLocalTime(UserState).ToString("h:mm tt")</span> }
+                                { <span> – @i.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTime()</span> }
                                 @if (!string.IsNullOrEmpty(i.Location))
                                 { <span> · @i.Location</span> }
                             </div>
@@ -111,7 +111,7 @@
                                                                 </span>
                                                                 <span class="small fw-semibold">@entry.Title</span>
                                                                 <span class="text-secondary" style="font-size:.72rem;">
-                                                                    @((entry.EventDateTime ?? entry.DateCreated).ToViewerLocalTime(UserState).ToString("MMM d, h:mm tt"))
+                                                                    @((entry.EventDateTime ?? entry.DateCreated).ToViewerLocalTime(UserState).ToDisplayDateTime())
                                                                 </span>
                                                             </div>
                                                             @if (!string.IsNullOrWhiteSpace(entry.Body))

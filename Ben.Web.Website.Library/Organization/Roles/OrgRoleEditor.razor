@@ -128,7 +128,7 @@ else if (_role is not null)
                         <Template>
                             @{
                                 var row = (OrganizationRoleMembershipRecord)context;
-                                <span>@row.DateCreated.ToString("yyyy-MM-dd")</span>
+                                <span>@row.DateCreated.ToDisplayDate()</span>
                             }
                         </Template>
                     </GridColumn>

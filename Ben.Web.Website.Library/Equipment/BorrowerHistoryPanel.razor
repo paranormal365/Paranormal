@@ -1,0 +1,73 @@
+@namespace Ben.Web.Website.Library.Equipment
+@inject IBenAdminClient AdminClient
+
+@* What past lenders said about the person asking for this loan — Ben's "so we know they are
+   trustworthy and respectful with equipment". Scoped to the request being decided: you can read
+   somebody's history because they have asked you for something, not because you were curious.
+
+   The borrower never sees this, and the endpoint refuses them rather than this page hiding it. *@
+
+@if (_panel is not null && (_panel.Comments.Count > 0 || _panel.Summary.RatingCount > 0))
+{
+    <details class="mb-3">
+        <summary class="small fw-semibold" style="cursor:pointer;">
+            Past feedback about this borrower
+            @if (_panel.Summary.AverageRating is double average)
+            {
+                <span class="badge bg-secondary ms-2">
+                    @average.ToString("0.0") across @_panel.Summary.RatingCount ratings
+                </span>
+            }
+            else if (_panel.Summary.RatingCount > 0)
+            {
+                @* Below three ratings no average is shown: one sour opinion rendered as a number
+                   reads as a verdict when it is one voice. *@
+                <span class="badge bg-light text-secondary border ms-2">
+                    @_panel.Summary.RatingCount @(_panel.Summary.RatingCount == 1 ? "rating" : "ratings") — too few to average
+                </span>
+            }
+        </summary>
+
+        <div class="mt-2">
+            @foreach (var entry in _panel.Comments)
+            {
+                <div class="border-bottom py-2 small">
+                    <div class="d-flex justify-content-between">
+                        <span class="fw-semibold">@entry.AuthorDisplayName</span>
+                        <span class="text-secondary">
+                            @entry.ItemDisplayName · returned @entry.DateReturned.ToLocalTime().ToDisplayDate()
+                            @if (entry.Rating is int rating)
+                            {
+                                <span class="badge bg-secondary ms-2">@rating/5</span>
+                            }
+                        </span>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(entry.Comment))
+                    {
+                        <div style="white-space:pre-line;">@entry.Comment</div>
+                    }
+                </div>
+            }
+
+            <div class="text-secondary mt-2" style="font-size:.75rem;">
+                Left by lenders after previous loans. The borrower cannot see any of it.
+            </div>
+        </div>
+    </details>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid CheckoutId { get; set; }
+
+    private BorrowerFeedbackPanelRecord? _panel;
+    private Guid _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (CheckoutId == Guid.Empty || _loadedFor == CheckoutId) return;
+        _loadedFor = CheckoutId;
+
+        // A 404 here means "not yours to read", and the panel simply does not appear.
+        _panel = await AdminClient.GetBorrowerFeedbackAsync(CheckoutId);
+    }
+}

@@ -1,0 +1,199 @@
+@namespace Ben.Web.Website.Library.Equipment
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+
+@* Ask to borrow a piece of gear. The server decides who may ask and on whose behalf — this form
+   renders that answer and never works the loan-audience rules out for itself. *@
+
+<BenModal Visible="@Visible" Title="@DialogTitle">
+    <ChildContent>
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger py-2">@_error</div>
+        }
+
+        @if (_loading)
+        {
+            <p class="text-secondary">Checking…</p>
+        }
+        else if (_eligibility is null || !_eligibility.CanRequest)
+        {
+            <div class="alert alert-info py-2 mb-0">
+                @(_eligibility?.Reason ?? "You can't borrow this equipment.")
+            </div>
+        }
+        else
+        {
+            @* Someone already has it. Asking is still allowed — it queues — but saying so up front
+               is the difference between a considered request and a surprised borrower. *@
+            @if (_eligibility.IsCurrentlyOut)
+            {
+                <div class="alert alert-warning py-2">
+                    <strong>Currently on loan.</strong>
+                    @if (_eligibility.ExpectedBackOn is not null)
+                    {
+                        <span> Expected back on @_eligibility.ExpectedBackOn.Value.ToDisplayDate().</span>
+                    }
+                    else
+                    {
+                        <span> No return date has been set.</span>
+                    }
+                    <span class="d-block small">You can still ask — your request waits until it's back.</span>
+                </div>
+            }
+
+            @* One option means there is nothing to decide — don't make them pick from a list of one. *@
+            @if (_eligibility.Options.Count > 1)
+            {
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Who are you borrowing this for?</label>
+                    @foreach (var option in _eligibility.Options)
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="borrow-for"
+                                   id="@($"borrow-{option.OrganizationId?.ToString() ?? "self"}")"
+                                   checked="@(_selectedOrgId == option.OrganizationId)"
+                                   @onchange="@(() => OnOptionChanged(option.OrganizationId))" />
+                            <label class="form-check-label" for="@($"borrow-{option.OrganizationId?.ToString() ?? "self"}")">
+                                @option.Label
+                            </label>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="text-secondary small">@_eligibility.Options[0].Label.</p>
+            }
+
+            @if (_investigations.Count > 0)
+            {
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">For a particular visit? <span class="text-secondary fw-normal">(optional)</span></label>
+                    <TelerikDropDownList Data="@_investigations" TItem="OrgInvestigationOption" TValue="Guid?"
+                                         Value="@_investigationId" ValueChanged="@((Guid? v) => _investigationId = v)"
+                                         TextField="@nameof(OrgInvestigationOption.Title)"
+                                         ValueField="@nameof(OrgInvestigationOption.Id)"
+                                         DefaultText="Not for a specific visit" Width="100%" />
+                </div>
+            }
+
+            <div class="mb-2">
+                <label class="form-label fw-semibold">When do you need it? <span class="text-secondary fw-normal">(optional)</span></label>
+                <TelerikDatePicker @bind-Value="@_neededFrom" Width="100%" />
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label fw-semibold">Anything to add? <span class="text-secondary fw-normal">(optional)</span></label>
+                <textarea class="form-control" rows="2" maxlength="1000" value="@_notes"
+                          @oninput="@(e => _notes = e.Value?.ToString() ?? string.Empty)"></textarea>
+            </div>
+        }
+
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-secondary" @onclick="@(() => OnVisibleChanged(false))" disabled="@(!(!_busy))">Cancel</button>
+            @if (_eligibility?.CanRequest == true)
+            {
+                <button type="button" class="btn btn-primary" @onclick="SubmitAsync" disabled="@(!(!_busy))">Send request</button>
+            }
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    /// <summary>Dialog heading. A property because literal text plus a C# expression is mixed
+    /// content in a component attribute, which does not parse.</summary>
+    private string DialogTitle => $"Borrow {ItemDisplayName ?? "equipment"}";
+
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    [Parameter] public Guid ItemId { get; set; }
+    [Parameter] public string? ItemDisplayName { get; set; }
+    [Parameter] public EventCallback OnRequested { get; set; }
+
+    private BorrowEligibilityRecord? _eligibility;
+    private List<OrgInvestigationOption> _investigations = [];
+    private Guid? _selectedOrgId;
+    private Guid? _investigationId;
+    private DateTime? _neededFrom;
+    private string _notes = string.Empty;
+    private bool _loading;
+    private bool _busy;
+    private string? _error;
+    private Guid? _loadedFor;
+
+    /// <summary>A visit the loan could be tied to. Only meaningful for a group-attributed loan.</summary>
+    public sealed record OrgInvestigationOption(Guid? Id, string Title);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Visible || ItemId == Guid.Empty) { _loadedFor = null; return; }
+        if (_loadedFor == ItemId) return;
+        _loadedFor = ItemId;
+
+        _loading = true;
+        _error = null;
+        _notes = string.Empty;
+        _neededFrom = null;
+        _investigationId = null;
+
+        _eligibility = await AdminClient.GetBorrowEligibilityAsync(ItemId);
+        _selectedOrgId = _eligibility?.Options.FirstOrDefault()?.OrganizationId;
+        await LoadInvestigationsAsync();
+
+        _loading = false;
+    }
+
+    private async Task OnOptionChanged(Guid? orgId)
+    {
+        _selectedOrgId = orgId;
+        _investigationId = null;
+        await LoadInvestigationsAsync();
+    }
+
+    /// <summary>
+    /// Visits belong to a group, so this list only makes sense once a borrowing group is chosen —
+    /// and the server rejects a visit from any other group anyway.
+    /// </summary>
+    private async Task LoadInvestigationsAsync()
+    {
+        if (_selectedOrgId is null) { _investigations = []; return; }
+
+        var investigations = await AdminClient.GetOrgInvestigationsAsync(_selectedOrgId.Value);
+        _investigations = [.. investigations
+            .Where(i => i.Status != InvestigationStatus.Cancelled)
+            .OrderByDescending(i => i.ScheduledDateTime)
+            .Take(25)
+            .Select(i => new OrgInvestigationOption(i.Id, i.Title))];
+    }
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        var created = await AdminClient.RequestEquipmentCheckoutAsync(
+            new RequestEquipmentCheckoutRequest(ItemId, _selectedOrgId, _investigationId, _neededFrom,
+                string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim()));
+
+        _busy = false;
+
+        if (created is null)
+        {
+            _error = "That request couldn't be sent. You may already have one open for this equipment.";
+            return;
+        }
+
+        await OnRequested.InvokeAsync();
+        await OnVisibleChanged(false);
+    }
+
+    private async Task OnVisibleChanged(bool visible)
+    {
+        Visible = visible;
+        if (!visible) _loadedFor = null;
+        await VisibleChanged.InvokeAsync(visible);
+    }
+}
