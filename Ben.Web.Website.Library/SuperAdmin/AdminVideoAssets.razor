@@ -1,0 +1,258 @@
+@page "/admin/video-assets"
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>SuperAdmin — Clipart Library</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:1000px;">
+    <h3 class="mb-1">Clipart Library<HelpLink Slug="site-administration" Anchor="the-clipart-library" /></h3>
+    <p class="text-secondary small mb-4">
+        Shared artwork every group can use in the video editor. Upload the file first under
+        <a href="/upload-files">Upload Files</a> (the <em>Logo</em> type accepts SVG), then publish
+        it here by its file id.
+    </p>
+
+    @if (_error is not null)   { <div class="alert alert-danger">@_error</div> }
+    @if (_notice is not null)  { <div class="alert alert-success py-2">@_notice</div> }
+
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">Publish an asset</div>
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-12 col-md-5">
+                    <label class="form-label small fw-semibold">Upload file id</label>
+                    <input class="form-control form-control-sm" placeholder="GUID of the uploaded file"
+                           value="@_newFileId"
+                           @oninput="@(e => _newFileId = e.Value?.ToString() ?? string.Empty)" />
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label small fw-semibold">Name</label>
+                    <input class="form-control form-control-sm" placeholder="e.g. Right Arrow"
+                           value="@_newName"
+                           @oninput="@(e => _newName = e.Value?.ToString() ?? string.Empty)" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label small fw-semibold">Kind</label>
+                    @* Plain select — Telerik dropdowns have repeatedly failed to push their
+                       selection to the bound field in this codebase. *@
+                    <select class="form-select form-select-sm"
+                            value="@((int)_newType)"
+                            @onchange="@(e => _newType = (VideoAssetType)int.Parse(e.Value?.ToString() ?? "0"))">
+                        @foreach (var t in Enum.GetValues<VideoAssetType>())
+                        {
+                            <option value="@((int)t)">@t</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-6 col-md-4">
+                    <label class="form-label small fw-semibold">Category</label>
+                    <input class="form-control form-control-sm" placeholder="e.g. Arrows"
+                           value="@_newCategory"
+                           @oninput="@(e => _newCategory = e.Value?.ToString() ?? string.Empty)" />
+                </div>
+                <div class="col-12 col-md-5">
+                    <label class="form-label small fw-semibold">Tags</label>
+                    <input class="form-control form-control-sm" placeholder="comma,separated,tags"
+                           value="@_newTags"
+                           @oninput="@(e => _newTags = e.Value?.ToString() ?? string.Empty)" />
+                </div>
+                <div class="col-12 col-md-3 d-flex align-items-end">
+                    <button type="button" class="btn btn-primary" @onclick="PublishAsync" disabled="@(!(!_busy && Guid.TryParse(_newFileId, out _) && !string.IsNullOrWhiteSpace(_newName)))">Publish</button>
+                </div>
+            </div>
+            <div class="text-secondary small mt-2">
+                The format is read from the file itself — SVG, PNG, WebP, AVIF, GIF or Lottie JSON.
+                Anything else is refused rather than published as something the editor can't draw.
+            </div>
+        </div>
+    </div>
+
+    @if (_assets is null)
+    {
+        <p class="text-secondary">Loading…</p>
+    }
+    else if (_assets.Count == 0)
+    {
+        <p class="text-secondary">Nothing published yet.</p>
+    }
+    else
+    {
+        <div class="d-flex flex-column gap-2">
+            @foreach (var asset in _assets)
+            {
+                var a = asset;
+                <div class="card @(a.IsActive ? "" : "opacity-50")">
+                    <div class="card-body py-2 d-flex align-items-center gap-3 flex-wrap">
+                        @if (_thumbs.TryGetValue(a.Id, out var src))
+                        {
+                            <img src="@src" alt="@a.Name" class="border rounded bg-body-tertiary"
+                                 style="width:48px;height:48px;object-fit:contain;flex:0 0 auto;" />
+                        }
+                        else
+                        {
+                            <div class="border rounded d-flex align-items-center justify-content-center text-secondary"
+                                 style="width:48px;height:48px;flex:0 0 auto;font-size:.65rem;">@a.Format</div>
+                        }
+
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold">
+                                @a.Name
+                                @if (!a.IsActive) { <span class="badge bg-secondary ms-1">Retired</span> }
+                            </div>
+                            <div class="text-secondary small">
+                                @a.Type · @a.Format
+                                @if (!string.IsNullOrWhiteSpace(a.Category)) { <span> · @a.Category</span> }
+                                <span> · @Size(a.FileSizeBytes)</span>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(a.Tags))
+                            {
+                                <div class="d-flex gap-1 flex-wrap mt-1">
+                                    @foreach (var tag in a.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                                    {
+                                        <span class="badge bg-info-subtle text-info-emphasis" style="font-size:.65rem;">@tag</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @if (a.IsActive)
+                        {
+                            @* Retire, not delete: projects reference assets by id, so removing
+                               the row would break renders that already use it. *@
+                            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => RetireAsync(a))" disabled="@(!(!_busy))">Retire</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => RestoreAsync(a))" disabled="@(!(!_busy))">Restore</button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<VideoAssetAdminRecord>? _assets;
+    private readonly Dictionary<Guid, string> _thumbs = [];
+    private bool _busy;
+    private string? _error;
+    private string? _notice;
+
+    private string _newFileId  = string.Empty;
+    private string _newName    = string.Empty;
+    private string _newCategory = string.Empty;
+    private string _newTags    = string.Empty;
+    private VideoAssetType _newType = VideoAssetType.Clipart;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+        await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _assets is not null) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    /// <summary>Bytes below a kilobyte read as "0 KB" if you just divide — small SVGs are common here.</summary>
+    private static string Size(long bytes)
+        => bytes < 1024 ? $"{bytes} B"
+         : bytes < 1024 * 1024 ? $"{bytes / 1024.0:0.#} KB"
+         : $"{bytes / (1024.0 * 1024):0.#} MB";
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _assets = await AdminClient.GetVideoAssetsAsync();
+            await LoadThumbsAsync();
+        }
+        catch { _error = "Couldn't load the clipart library."; }
+    }
+
+    /// <summary>
+    /// Loads previews through the authenticated client as data URIs. The catalog's own thumbnail
+    /// endpoint is anonymous, but the source file may not be — going through the client keeps
+    /// this working either way.
+    /// </summary>
+    private async Task LoadThumbsAsync()
+    {
+        foreach (var a in _assets ?? [])
+        {
+            var fileId = a.ThumbnailUploadFileId ?? a.UploadFileId;
+            if (_thumbs.ContainsKey(a.Id)) continue;
+            try
+            {
+                var file = await AdminClient.GetFileDataAsync(fileId);
+                if (file is { } f)
+                    _thumbs[a.Id] = $"data:{f.ContentType};base64,{Convert.ToBase64String(f.Data)}";
+            }
+            catch { /* the row still lists without a preview */ }
+        }
+    }
+
+    private async Task PublishAsync()
+    {
+        if (!Guid.TryParse(_newFileId, out var fileId)) return;
+        _busy = true; _error = null; _notice = null;
+        try
+        {
+            var created = await AdminClient.CreateVideoAssetAsync(new CreateVideoAssetRequest(
+                fileId, _newName.Trim(),
+                null,
+                string.IsNullOrWhiteSpace(_newCategory) ? null : _newCategory.Trim(),
+                string.IsNullOrWhiteSpace(_newTags) ? null : _newTags.Trim(),
+                _newType));
+            if (created is null)
+            {
+                _error = "Couldn't publish that file. Check the id exists and the format is supported.";
+                return;
+            }
+            _notice = $"Published “{created.Name}”.";
+            _newFileId = ""; _newName = ""; _newCategory = ""; _newTags = "";
+            await LoadAsync();
+        }
+        catch { _error = "Couldn't publish that file."; }
+        finally { _busy = false; StateHasChanged(); }
+    }
+
+    private async Task RetireAsync(VideoAssetAdminRecord a)
+    {
+        _busy = true; _error = null; _notice = null;
+        try
+        {
+            if (!await AdminClient.RetireVideoAssetAsync(a.Id)) { _error = "Couldn't retire that asset."; return; }
+            _notice = $"“{a.Name}” retired — it's out of the catalog but existing projects still resolve it.";
+            await LoadAsync();
+        }
+        catch { _error = "Couldn't retire that asset."; }
+        finally { _busy = false; StateHasChanged(); }
+    }
+
+    private async Task RestoreAsync(VideoAssetAdminRecord a)
+    {
+        _busy = true; _error = null; _notice = null;
+        try
+        {
+            var updated = await AdminClient.UpdateVideoAssetAsync(a.Id, new UpdateVideoAssetRequest(
+                a.Name, a.Description, a.Category, a.Tags, a.Type, IsActive: true,
+                a.ThumbnailUploadFileId, a.NativeWidth, a.NativeHeight, a.SortOrder));
+            if (updated is null) { _error = "Couldn't restore that asset."; return; }
+            _notice = $"“{a.Name}” is back in the catalog.";
+            await LoadAsync();
+        }
+        catch { _error = "Couldn't restore that asset."; }
+        finally { _busy = false; StateHasChanged(); }
+    }
+}

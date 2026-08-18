@@ -1,0 +1,373 @@
+@page "/admin/lookup-types"
+@using Ben.Web.Website.Library.Shared
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@using Ben.Web.Website.Library.Manage.Icon
+
+<PageTitle>SuperAdmin — Lookup Types</PageTitle>
+
+<div class="container-fluid px-3">
+
+    @* ── Header ── *@
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Lookup Types</h3>
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-primary" @onclick="OpenCreate"><BenIcon Name="plus" Class="me-1" />New</button>
+        </div>
+    </div>
+
+    @* ── Family selector ── *@
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">Type Family</label>
+            <TelerikDropDownList Data="@_families"
+                                 Value="@_selectedFamily"
+                                 ValueChanged="@((string r) => OnFamilyChanged(r))"
+                                 TextField="@nameof(LookupFamily.Label)"
+                                 ValueField="@nameof(LookupFamily.Route)"
+                                 Width="100%" />
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <p>Loading…</p>
+    }
+    else if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+    else
+    {
+        <TelerikGrid Data="@_items"
+                     TItem="LookupTypeAdminRecord"
+                     Sortable="true"
+                     Pageable="true"
+                     PageSize="20">
+            <GridColumns>
+                <GridColumn Field="@nameof(LookupTypeAdminRecord.Name)" Title="Name" />
+                <GridColumn Field="@nameof(LookupTypeAdminRecord.Description)" Title="Description" />
+                <GridColumn Field="@nameof(LookupTypeAdminRecord.IconClass)" Title="Icon" Width="110px">
+                    <Template>
+                        @{ var row = (LookupTypeAdminRecord)context; }
+                        @if (!string.IsNullOrWhiteSpace(row.IconClass))
+                        {
+                            @if (row.IconClass.StartsWith("t:"))
+                            {
+                                @* Kept Telerik, as in OrgCalendarEventTypesManager: a stored
+                                   "t:" value names a Telerik icon, so the icon set is what the
+                                   data means rather than a styling choice. *@
+                                var ico = IconPickerDialog.ResolveTelerikIcon(row.IconClass);
+                                @if (ico is not null)
+                                {
+                                    <span title="@row.IconClass">
+                                        <TelerikSvgIcon Icon="@ico" />
+                                    </span>
+                                }
+                            }
+                            else
+                            {
+                                <span title="@row.IconClass">
+                                    <i class="@row.IconClass" style="font-size:1.1rem;"></i>
+                                </span>
+                            }
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Field="@nameof(LookupTypeAdminRecord.SortOrder)" Title="Sort" Width="70px" />
+                <GridColumn Field="@nameof(LookupTypeAdminRecord.IsActive)" Title="Active" Width="80px">
+                    <Template>
+                        @if (((LookupTypeAdminRecord)context).IsActive)
+                        {
+                            <BenIcon Name="check" />
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Field="@nameof(LookupTypeAdminRecord.IsPublic)" Title="Public" Width="80px">
+                    <Template>
+                        @if (((LookupTypeAdminRecord)context).IsPublic)
+                        {
+                            <BenIcon Name="check" />
+                        }
+                    </Template>
+                </GridColumn>
+                <GridCommandColumn Width="140px">
+                    <GridCommandButton Command="Edit"
+                                       Icon="@SvgIcon.Pencil"
+                                       OnClick="@((GridCommandEventArgs e) => OpenEdit((LookupTypeAdminRecord)e.Items.First()))">
+                        Edit
+                    </GridCommandButton>
+                    <GridCommandButton Command="Delete"
+                                       Icon="@SvgIcon.Trash"
+                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                       OnClick="@((GridCommandEventArgs e) => ConfirmDelete((LookupTypeAdminRecord)e.Items.First()))">
+                    </GridCommandButton>
+                </GridCommandColumn>
+            </GridColumns>
+        </TelerikGrid>
+    }
+</div>
+
+@* ── Add / Edit dialog ── *@
+<BenModal @bind-Visible="@_showDialog" Title="@(_editingItem is null ? $"New {_familyLabel}" : $"Edit {_familyLabel}")">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" @bind="@_form.Name" @bind:event="oninput" />
+            </div>
+            <div class="col-12">
+                <label class="form-label">Description</label>
+                <input type="text" class="form-control" @bind="@_form.Description" @bind:event="oninput" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Icon <span class="text-secondary small">(optional)</span></label>
+                <IconClassPicker @bind-Value="@_form.IconClass" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Color Class</label>
+                <input type="text" class="form-control" @bind="@_form.ColorClass" @bind:event="oninput" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Sort Order</label>
+                <input type="number" class="form-control" min="0" max="100" step="1" @bind="@_form.SortOrder" @bind:event="oninput" />
+            </div>
+            <div class="col-md-4 d-flex align-items-end gap-2">
+                <input type="checkbox" class="form-check-input" id="chkActive" @bind="@_form.IsActive" />
+                <label for="chkActive">Active</label>
+            </div>
+            <div class="col-md-4 d-flex align-items-end gap-2">
+                <input type="checkbox" class="form-check-input" id="chkPublic" @bind="@_form.IsPublic" />
+                <label for="chkPublic">Public</label>
+            </div>
+            @if (_dialogError is not null)
+            {
+                <div class="col-12">
+                    <div class="alert alert-danger py-2">@_dialogError</div>
+                </div>
+            }
+        </div>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(!(!string.IsNullOrWhiteSpace(_form.Name)))">
+                Save
+            </button>
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => _showDialog = false)">Cancel</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@* ── Delete confirm dialog ────────────────────────────────── *@
+<BenConfirmDialog @bind-Visible="@_showDeleteDialog" Title="Confirm Delete" Width="400px"
+               OnConfirm="ExecuteDeleteAsync" OnCancel="@(() => _deletingItem = null)">
+    <p>Delete <strong>@_deletingItem?.Name</strong>? This cannot be undone.</p>
+</BenConfirmDialog>
+@code {
+
+    // ── Family catalog ────────────────────────────────────────────────────────
+
+    private sealed record LookupFamily(string Label, string Route);
+
+    private static readonly List<LookupFamily> _families =
+    [
+        new("User — Address Types",        "api/admin/user-address-types"),
+        new("User — Email Types",          "api/admin/user-email-types"),
+        new("User — Phone Types",          "api/admin/user-phone-types"),
+        new("User — Link Types",           "api/admin/user-link-types"),
+        new("User — Note Types",           "api/admin/user-note-types"),
+        new("User — Message Types",        "api/admin/user-message-types"),
+        new("Org — Address Types",         "api/admin/organization-address-types"),
+        new("Org — Email Types",           "api/admin/organization-email-types"),
+        new("Org — Phone Types",           "api/admin/organization-phone-types"),
+        new("Org — Link Types",            "api/admin/organization-link-types"),
+        new("Org — Note Types",            "api/admin/organization-note-types"),
+    ];
+
+    // ── State ─────────────────────────────────────────────────────────────────
+
+    private string _selectedFamily = _families[0].Route;
+    private string _familyLabel => _families.FirstOrDefault(f => f.Route == _selectedFamily)?.Label ?? "Type";
+
+    private IReadOnlyList<LookupTypeAdminRecord> _items = [];
+    private bool _loading;
+    private string? _error;
+
+    // ── Dialog state ──────────────────────────────────────────────────────────
+
+    private bool _showDialog;
+    private LookupTypeAdminRecord? _editingItem;
+    private FormModel _form = new();
+    private string? _dialogError;
+
+    private bool _showDeleteDialog;
+    private LookupTypeAdminRecord? _deletingItem;
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────────
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin)
+            NavManager.NavigateTo("/");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+            await LoadAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _items = await AdminClient.GetLookupTypesAsync(_selectedFamily);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnFamilyChanged(string route)
+    {
+        _selectedFamily = route;
+        await LoadAsync();
+    }
+
+    // ── CRUD ──────────────────────────────────────────────────────────────────
+
+    private void OpenCreate()
+    {
+        _editingItem = null;
+        _form        = new FormModel { IsActive = true, SortOrder = 0 };
+        _dialogError = null;
+        _showDialog  = true;
+    }
+
+    private void OpenEdit(LookupTypeAdminRecord item)
+    {
+        _editingItem = item;
+        _form = new FormModel
+        {
+            Name        = item.Name,
+            Description = item.Description,
+            IconClass   = item.IconClass,
+            ColorClass  = item.ColorClass,
+            IsActive    = item.IsActive,
+            IsPublic    = item.IsPublic,
+            SortOrder   = item.SortOrder,
+        };
+        _dialogError = null;
+        _showDialog = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Name))
+        {
+            _dialogError = "Name is required.";
+            return;
+        }
+
+        _dialogError = null;
+        var userId = UserState.UserId ?? Guid.Empty;
+
+        if (_editingItem is null)
+        {
+            // Create
+            var req = new LookupTypeUpsertRequest(
+                Guid.Empty,
+                _form.Name,
+                string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description,
+                string.IsNullOrWhiteSpace(_form.IconClass)   ? null : _form.IconClass,
+                string.IsNullOrWhiteSpace(_form.ColorClass)  ? null : _form.ColorClass,
+                _form.IsActive,
+                _form.IsPublic,
+                _form.SortOrder,
+                DateTime.UtcNow,
+                null,
+                userId,
+                null);
+
+            var created = await AdminClient.CreateLookupTypeAsync(_selectedFamily, req);
+            if (created is null)
+            {
+                _dialogError = "Create failed. Check the API logs.";
+                return;
+            }
+            _items = [created, .._items];
+        }
+        else
+        {
+            // Update
+            var req = new LookupTypeUpsertRequest(
+                _editingItem.Id,
+                _form.Name,
+                string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description,
+                string.IsNullOrWhiteSpace(_form.IconClass)   ? null : _form.IconClass,
+                string.IsNullOrWhiteSpace(_form.ColorClass)  ? null : _form.ColorClass,
+                _form.IsActive,
+                _form.IsPublic,
+                _form.SortOrder,
+                _editingItem.DateCreated,
+                DateTime.UtcNow,
+                _editingItem.CreatedByAppUserId,
+                userId);
+
+            var updated = await AdminClient.UpdateLookupTypeAsync(_selectedFamily, _editingItem.Id, req);
+            if (updated is null)
+            {
+                _dialogError = "Update failed. Check the API logs.";
+                return;
+            }
+            _items = [.._items.Select(i => i.Id == updated.Id ? updated : i)];
+        }
+
+        _showDialog = false;
+    }
+
+    private void ConfirmDelete(LookupTypeAdminRecord item)
+    {
+        _deletingItem = item;
+        _showDeleteDialog = true;
+    }
+
+    private async Task ExecuteDeleteAsync()
+    {
+        if (_deletingItem is null) return;
+        var ok = await AdminClient.DeleteLookupTypeAsync(_selectedFamily, _deletingItem.Id);
+        if (ok)
+            _items = [.._items.Where(i => i.Id != _deletingItem.Id)];
+        _showDeleteDialog = false;
+        _deletingItem = null;
+    }
+
+    // ── Form model ────────────────────────────────────────────────────────────
+
+    private sealed class FormModel
+    {
+        public string Name        { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string? IconClass  { get; set; }
+        public string? ColorClass { get; set; }
+        public bool IsActive      { get; set; } = true;
+        public bool IsPublic      { get; set; }
+        public int SortOrder      { get; set; }
+    }
+}

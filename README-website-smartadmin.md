@@ -498,3 +498,34 @@ were being lost on navigation too.
 Also fixed alongside it: the menu filter kept the wrong markup. The template hides it with
 `.app-menu-filter-container #searchInput`, so a differently-named wrapper left the box on screen at
 70px wide. It uses the template's own class and id now.
+
+### Wave H — `SuperAdmin/`
+
+12 admin screens: audit log (618 lines), file types (512), experience and equipment taxonomies,
+lookup types, roles, all-cases, all-investigations, site settings, support tickets, video assets and
+sidecar telemetry. **`AdminSidePanel` is deliberately not ported** — Administration lives in the
+sidebar here, so a second right-hand drawer would be the same navigation twice.
+
+**Converted:** 62 buttons, 15 text boxes, 9 windows → `BenModal`, 8 loaders, 7 check boxes,
+5 numeric inputs, 4 text areas and a tab strip. **Kept:** 10 grids, 4 templated dropdowns, 2 date
+pickers, and one `TelerikSvgIcon` for the same reason as before — a stored `t:` value names a
+Telerik icon. The site now serves **64 routes**.
+
+### I broke sign-in, and it took a report to find it
+
+The layout-persistence fix registered its listener as `Blazor.addEventListener("enhancedload", …)`
+— **which does not exist**. The exception was thrown on the line *before* `Blazor.start()`, so
+Blazor never started: nothing on the site was interactive and sign-in silently failed. The
+symptom Ben saw second — "you never organized the administration into groups" — was the same bug,
+since Administration only renders for a signed-in SuperAdmin.
+
+Two things changed as a result:
+
+- `Blazor.start()` now runs **first**, and the optional listener follows it inside a `try`. Nothing
+  that can throw belongs ahead of the call that makes the site work.
+- The listener uses `document.addEventListener("enhancedload", …)`, which is the actual API.
+
+Worth recording: my own verification missed this because I re-tested the *feature* (does the class
+survive navigation?) rather than the *page* (does anything still work?). A JS exception in
+`App.razor` breaks everything downstream of it, so that file deserves a login check after every
+edit, not a feature check.

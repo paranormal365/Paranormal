@@ -1,0 +1,489 @@
+@page "/admin/file-types"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@using Ben.Web.Website.Library.Manage.Icon
+
+<PageTitle>SuperAdmin — File Types</PageTitle>
+
+<div class="container-fluid px-3">
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">File Types</h3>
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-primary" @onclick="OpenCreate"><BenIcon Name="plus" Class="me-1" />New File Type</button>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <p>Loading…</p>
+    }
+    else if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+    else
+    {
+        <TelerikGrid Data="@_types"
+                     TItem="AdminFileTypeWithExtensionsResponse"
+                     Sortable="true"
+                     Class="file-types-grid">
+            <GridColumns>
+                <GridColumn Field="@($"{nameof(AdminFileTypeWithExtensionsResponse.FileType)}.{nameof(UploadFileTypeRecord.Name)}")"
+                            Title="Name" />
+                <GridColumn Field="@($"{nameof(AdminFileTypeWithExtensionsResponse.FileType)}.{nameof(UploadFileTypeRecord.Description)}")"
+                            Title="Description" />
+                <GridColumn Field="@($"{nameof(AdminFileTypeWithExtensionsResponse.FileType)}.{nameof(UploadFileTypeRecord.SortOrder)}")"
+                            Title="Sort" Width="70px" />
+                <GridColumn Field="@($"{nameof(AdminFileTypeWithExtensionsResponse.FileType)}.{nameof(UploadFileTypeRecord.IsActive)}")"
+                            Title="Active" Width="80px">
+                    <Template>
+                        @if (((AdminFileTypeWithExtensionsResponse)context).FileType.IsActive)
+                        {
+                            <BenIcon Name="check" />
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Field="@($"{nameof(AdminFileTypeWithExtensionsResponse.FileType)}.{nameof(UploadFileTypeRecord.AllowAllExtensions)}")"
+                            Title="Extensions" Width="130px">
+                    <Template>
+                        @{
+                            var row = (AdminFileTypeWithExtensionsResponse)context;
+                            if (row.FileType.AllowAllExtensions)
+                            {
+                                <span class="badge bg-secondary">Any</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-primary">@row.Extensions.Count pattern(s)</span>
+                            }
+                        }
+                    </Template>
+                </GridColumn>
+                <GridCommandColumn Width="220px">
+                    <GridCommandButton Command="Edit"
+                                       Icon="@SvgIcon.Pencil"
+                                       OnClick="@((GridCommandEventArgs e) => OpenEdit((AdminFileTypeWithExtensionsResponse)e.Items.First()))">
+                        Edit
+                    </GridCommandButton>
+                    <GridCommandButton Command="Extensions"
+                                       Icon="@SvgIcon.FileWrench"
+                                       OnClick="@((GridCommandEventArgs e) => OpenExtensions((AdminFileTypeWithExtensionsResponse)e.Items.First()))">
+                        Extensions
+                    </GridCommandButton>
+                    <GridCommandButton Command="Delete"
+                                       Icon="@SvgIcon.Trash"
+                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                       OnClick="@((GridCommandEventArgs e) => ConfirmDelete((AdminFileTypeWithExtensionsResponse)e.Items.First()))">
+                        Delete
+                    </GridCommandButton>
+                </GridCommandColumn>
+            </GridColumns>
+        </TelerikGrid>
+    }
+</div>
+
+@* ── Create / Edit Dialog ── *@
+<BenModal @bind-Visible="@_showTypeDialog" Title="@(_editingType is null ? "New File Type" : "Edit File Type")">
+    <ChildContent>
+        <EditForm Model="_typeForm" OnValidSubmit="SaveType">
+            <DataAnnotationsValidator />
+            <div class="mb-3">
+                <label class="form-label">Name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" @bind="_typeForm.Name" @bind:event="oninput" />
+                <ValidationMessage For="@(() => _typeForm.Name)" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Description</label>
+                <textarea class="form-control" rows="3" @bind="_typeForm.Description"></textarea>
+            </div>
+            <div class="row mb-3">
+                <div class="col">
+                    <label class="form-label">Icon CSS class</label>
+                    <IconClassPicker @bind-Value="_typeForm.IconClass" />
+                </div>
+                <div class="col">
+                    <label class="form-label">Color CSS class</label>
+                    <input type="text" class="form-control" @bind="_typeForm.ColorClass" @bind:event="oninput" />
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-auto">
+                    <label class="form-label">Sort order</label>
+                    <input type="number" class="form-control" min="0" max="100" step="1" style="max-width:90px;" @bind="_typeForm.SortOrder" @bind:event="oninput" />
+                </div>
+                <div class="col-auto d-flex align-items-end gap-3 pb-1">
+                    <label>
+                        <input type="checkbox" class="form-check-input" @bind="_typeForm.IsActive" />
+                        <span class="ms-1">Active</span>
+                    </label>
+                    <label>
+                        <input type="checkbox" class="form-check-input" @bind="_typeForm.IsPublic" />
+                        <span class="ms-1">Public</span>
+                    </label>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label d-block">Allowed extensions</label>
+                <label>
+                    <input type="checkbox" class="form-check-input" @bind="_typeForm.AllowAllExtensions" />
+                    <span class="ms-1">Allow <strong>all</strong> file extensions</span>
+                </label>
+                @if (!_typeForm.AllowAllExtensions)
+                {
+                    <p class="text-muted mt-1 mb-0" style="font-size:.85em">
+                        Extension patterns can be added/edited via the <em>Extensions</em> button after saving.
+                    </p>
+                }
+            </div>
+            @if (_saveError is not null)
+            {
+                <div class="alert alert-danger py-1">@_saveError</div>
+            }
+            <div class="d-flex gap-2 justify-content-end">
+                <button type="button" class="btn btn-secondary" @onclick="CloseTypeDialog">Cancel</button>
+                <button type="button" class="btn btn-primary" disabled="@(!(!_saving))">
+                    @(_saving ? "Saving…" : "Save")
+                </button>
+            </div>
+        </EditForm>
+    </ChildContent>
+</BenModal>
+
+@* ── Extensions Dialog ── *@
+<BenModal @bind-Visible="@_showExtDialog" Title="@($"Extensions — {_extFileType?.FileType.Name}")">
+    <ChildContent>
+        @if (_extFileType is not null)
+        {
+            @if (_extFileType.FileType.AllowAllExtensions)
+            {
+                <div class="alert alert-info py-2 mb-3">
+                    This file type allows <strong>all</strong> extensions. Enable restricted mode on the file type to manage patterns.
+                </div>
+            }
+            else
+            {
+                <div class="mb-3 d-flex gap-2">
+                    <input type="text" class="form-control" placeholder=".txt  or  .tx*" style="max-width:200px;" @bind="_newPattern" @bind:event="oninput" />
+                    <button type="button" class="btn btn-primary" @onclick="AddExtension" disabled="@(!(!string.IsNullOrWhiteSpace(_newPattern)))"><BenIcon Name="plus" Class="me-1" />Add</button>
+                </div>
+                @if (_extError is not null)
+                {
+                    <div class="alert alert-danger py-1 mb-2">@_extError</div>
+                }
+                @if (!_extFileType.Extensions.Any())
+                {
+                    <p class="text-muted">No extension patterns defined yet.</p>
+                }
+                else
+                {
+                    <table class="table table-sm">
+                        <thead><tr><th>Pattern</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var ext in _extList)
+                            {
+                                <tr>
+                                    <td>
+                                        @if (_editingExtId == ext.Id)
+                                        {
+                                            <input type="text" class="form-control" style="max-width:150px;" @bind="_editPattern" @bind:event="oninput" />
+                                        }
+                                        else
+                                        {
+                                            <code>@ext.Pattern</code>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        @if (_editingExtId == ext.Id)
+                                        {
+                                            <button type="button" class="btn btn-primary btn-sm" @onclick="() => SaveExtension(ext.Id)">Save</button>
+                                            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="CancelEditExtension">Cancel</button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="() => StartEditExtension(ext)"><BenIcon Name="edit-2" Class="me-1" />Edit</button>
+                                            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="() => DeleteExtension(ext.Id)"><BenIcon Name="trash-2" Class="me-1" />Delete</button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            }
+            <div class="d-flex justify-content-end mt-2">
+                <button type="button" class="btn btn-secondary" @onclick="CloseExtDialog">Close</button>
+            </div>
+        }
+    </ChildContent>
+</BenModal>
+
+@* ── Delete Confirmation ── *@
+<BenModal @bind-Visible="@_showDeleteConfirm" Title="Delete File Type" Size="sm">
+    <ChildContent>
+        <p>Delete <strong>@_deleteTarget?.FileType.Name</strong>? This cannot be undone.</p>
+        <div class="d-flex gap-2 justify-content-end">
+            <button type="button" class="btn btn-secondary" @onclick="@(() => _showDeleteConfirm = false)">Cancel</button>
+            <button type="button" class="btn btn-danger" @onclick="ExecuteDelete">Delete</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    // ── State ─────────────────────────────────────────────────────────────────
+    private IReadOnlyList<AdminFileTypeWithExtensionsResponse> _types = [];
+    private bool _loading = true;
+    private string? _error;
+
+    // Type dialog
+    private bool _showTypeDialog;
+    private AdminFileTypeWithExtensionsResponse? _editingType;
+    private FileTypeFormModel _typeForm = new();
+    private bool _saving;
+    private string? _saveError;
+
+    // Extensions dialog
+    private bool _showExtDialog;
+    private AdminFileTypeWithExtensionsResponse? _extFileType;
+    private List<UploadFileTypeExtensionRecord> _extList = [];
+    private string _newPattern = string.Empty;
+    private Guid? _editingExtId;
+    private string _editPattern = string.Empty;
+    private string? _extError;
+
+    // Delete dialog
+    private bool _showDeleteConfirm;
+    private AdminFileTypeWithExtensionsResponse? _deleteTarget;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
+        {
+            NavManager.NavigateTo("/");
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _types = await AdminClient.GetFileTypesWithExtensionsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load file types: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    // ── Create / Edit ─────────────────────────────────────────────────────────
+    private void OpenCreate()
+    {
+        _editingType = null;
+        _typeForm = new FileTypeFormModel();
+        _saveError = null;
+        _showTypeDialog = true;
+    }
+
+    private void OpenEdit(AdminFileTypeWithExtensionsResponse item)
+    {
+        _editingType = item;
+        _typeForm = new FileTypeFormModel
+        {
+            Name = item.FileType.Name,
+            Description = item.FileType.Description,
+            IconClass = item.FileType.IconClass,
+            ColorClass = item.FileType.ColorClass,
+            IsActive = item.FileType.IsActive,
+            IsPublic = item.FileType.IsPublic,
+            SortOrder = item.FileType.SortOrder,
+            AllowAllExtensions = item.FileType.AllowAllExtensions
+        };
+        _saveError = null;
+        _showTypeDialog = true;
+    }
+
+    private async Task SaveType()
+    {
+        _saving = true;
+        _saveError = null;
+        try
+        {
+            if (_editingType is null)
+            {
+                var req = new AdminCreateFileTypeRequest(
+                    _typeForm.Name,
+                    _typeForm.Description,
+                    _typeForm.IconClass,
+                    _typeForm.ColorClass,
+                    _typeForm.IsActive,
+                    _typeForm.IsPublic,
+                    _typeForm.SortOrder,
+                    _typeForm.AllowAllExtensions,
+                    UserState.UserId ?? Guid.Empty);
+
+                await AdminClient.CreateFileTypeAsync(req);
+            }
+            else
+            {
+                var req = new AdminUpdateFileTypeRequest(
+                    _typeForm.Name,
+                    _typeForm.Description,
+                    _typeForm.IconClass,
+                    _typeForm.ColorClass,
+                    _typeForm.IsActive,
+                    _typeForm.IsPublic,
+                    _typeForm.SortOrder,
+                    _typeForm.AllowAllExtensions,
+                    UserState.UserId);
+
+                await AdminClient.UpdateFileTypeAsync(_editingType.FileType.Id, req);
+            }
+
+            _showTypeDialog = false;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _saveError = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void CloseTypeDialog() => _showTypeDialog = false;
+
+    // ── Extensions ────────────────────────────────────────────────────────────
+    private void OpenExtensions(AdminFileTypeWithExtensionsResponse item)
+    {
+        _extFileType = item;
+        _extList = item.Extensions.ToList();
+        _newPattern = string.Empty;
+        _editingExtId = null;
+        _extError = null;
+        _showExtDialog = true;
+    }
+
+    private async Task AddExtension()
+    {
+        _extError = null;
+        if (string.IsNullOrWhiteSpace(_newPattern) || _extFileType is null) return;
+
+        try
+        {
+            var req = new AdminCreateFileTypeExtensionRequest(
+                _extFileType.FileType.Id,
+                _newPattern.Trim(),
+                UserState.UserId ?? Guid.Empty);
+
+            var created = await AdminClient.CreateFileTypeExtensionAsync(req);
+            if (created is not null)
+            {
+                _extList.Add(created);
+                _newPattern = string.Empty;
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _extError = ex.Message;
+        }
+    }
+
+    private void StartEditExtension(UploadFileTypeExtensionRecord ext)
+    {
+        _editingExtId = ext.Id;
+        _editPattern = ext.Pattern;
+    }
+
+    private void CancelEditExtension()
+    {
+        _editingExtId = null;
+        _editPattern = string.Empty;
+    }
+
+    private async Task SaveExtension(Guid id)
+    {
+        _extError = null;
+        try
+        {
+            var updated = await AdminClient.UpdateFileTypeExtensionAsync(id, _editPattern);
+            if (updated is not null)
+            {
+                var idx = _extList.FindIndex(e => e.Id == id);
+                if (idx >= 0) _extList[idx] = updated;
+            }
+            _editingExtId = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _extError = ex.Message;
+        }
+    }
+
+    private async Task DeleteExtension(Guid id)
+    {
+        _extError = null;
+        try
+        {
+            await AdminClient.DeleteFileTypeExtensionAsync(id);
+            _extList.RemoveAll(e => e.Id == id);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _extError = ex.Message;
+        }
+    }
+
+    private void CloseExtDialog()
+    {
+        _showExtDialog = false;
+        _extFileType = null;
+    }
+
+    // ── Delete ────────────────────────────────────────────────────────────────
+    private void ConfirmDelete(AdminFileTypeWithExtensionsResponse item)
+    {
+        _deleteTarget = item;
+        _showDeleteConfirm = true;
+    }
+
+    private async Task ExecuteDelete()
+    {
+        if (_deleteTarget is null) return;
+        _showDeleteConfirm = false;
+        await AdminClient.DeleteFileTypeAsync(_deleteTarget.FileType.Id);
+        await LoadAsync();
+    }
+
+    // ── Form Model ────────────────────────────────────────────────────────────
+    private sealed class FileTypeFormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string? IconClass { get; set; }
+        public string? ColorClass { get; set; }
+        public bool IsActive { get; set; } = true;
+        public bool IsPublic { get; set; }
+        public int SortOrder { get; set; }
+        public bool AllowAllExtensions { get; set; } = true;
+    }
+}

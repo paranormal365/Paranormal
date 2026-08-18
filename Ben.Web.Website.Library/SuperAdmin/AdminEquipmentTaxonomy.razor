@@ -1,0 +1,320 @@
+@page "/admin/equipment-taxonomy"
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Shared
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>SuperAdmin — Equipment Taxonomy</PageTitle>
+
+<div class="container-fluid px-3">
+    <div class="row mb-3 align-items-center">
+        <div class="col"><h3 class="mb-0">Equipment Taxonomy</h3></div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    <p class="text-secondary small">
+        Categories are the fixed vocabulary. Makes and models accumulate from what members add —
+        they stay out of the public catalog until approved here, though whoever proposed one can
+        keep using it in the meantime.
+    </p>
+
+    <BenTabs @bind-ActiveId="@_activeTab">
+        <BenTab Title="Makes" Id="brands">
+            @if (_loading)
+            {
+                <BenLoaderOverlay Visible="true" Text="Loading…" />
+            }
+            else
+            {
+                <TelerikGrid Data="@_brands" TItem="EquipmentBrandRecord" Sortable="true" Pageable="true" PageSize="20">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(EquipmentBrandRecord.Name)" Title="Make" />
+                        <GridColumn Title="Status" Width="130px">
+                            <Template>
+                                @{ var row = (EquipmentBrandRecord)context; }
+                                @if (row.IsApproved)
+                                {
+                                    <span class="badge bg-success">Approved</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning text-dark">Pending</span>
+                                }
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="@nameof(EquipmentBrandRecord.DateCreated)" Title="Added" Width="160px" DisplayFormat="{0:d}" />
+                        <GridColumn Title="" Width="200px">
+                            <Template>
+                                @{ var row = (EquipmentBrandRecord)context; }
+                                <div class="d-flex gap-1">
+                                    @if (!row.IsApproved)
+                                    {
+                                        <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ApproveBrandAsync(row.Id))" disabled="@(!(!_busy))">Approve</button>
+                                    }
+                                    <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => RejectBrandAsync(row.Id))" disabled="@(!(!_busy))">Reject</button>
+                                </div>
+                            </Template>
+                        </GridColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            }
+        </BenTab>
+
+        <BenTab Title="Models" Id="models">
+            @if (_loading)
+            {
+                <BenLoaderOverlay Visible="true" Text="Loading…" />
+            }
+            else
+            {
+                <TelerikGrid Data="@_models" TItem="EquipmentModelRecord" Sortable="true" Pageable="true" PageSize="20">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(EquipmentModelRecord.BrandName)" Title="Make" Width="180px" />
+                        <GridColumn Field="@nameof(EquipmentModelRecord.Name)" Title="Model" />
+                        <GridColumn Field="@nameof(EquipmentModelRecord.CategoryName)" Title="Category" Width="180px" />
+                        <GridColumn Title="Status" Width="130px">
+                            <Template>
+                                @{ var row = (EquipmentModelRecord)context; }
+                                @if (row.IsApproved)
+                                {
+                                    <span class="badge bg-success">Approved</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning text-dark">Pending</span>
+                                }
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Title="" Width="200px">
+                            <Template>
+                                @{ var row = (EquipmentModelRecord)context; }
+                                <div class="d-flex gap-1">
+                                    @if (!row.IsApproved)
+                                    {
+                                        <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ApproveModelAsync(row.Id))" disabled="@(!(!_busy))">Approve</button>
+                                    }
+                                    <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => RejectModelAsync(row.Id))" disabled="@(!(!_busy))">Reject</button>
+                                </div>
+                            </Template>
+                        </GridColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            }
+        </BenTab>
+
+        <BenTab Title="Categories" Id="categories">
+            @if (_loading)
+            {
+                <BenLoaderOverlay Visible="true" Text="Loading…" />
+            }
+            else
+            {
+                <div class="mb-2">
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="OpenCreateCategory"><BenIcon Name="plus" Class="me-1" />New category</button>
+                </div>
+                <TelerikGrid Data="@_categories" TItem="EquipmentCategoryRecord" Sortable="true" Pageable="true" PageSize="20">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(EquipmentCategoryRecord.Name)" Title="Name" />
+                        <GridColumn Field="@nameof(EquipmentCategoryRecord.Description)" Title="Description" />
+                        <GridColumn Field="@nameof(EquipmentCategoryRecord.SortOrder)" Title="Order" Width="90px" />
+                        <GridColumn Title="Active" Width="90px">
+                            <Template>
+                                @{ var row = (EquipmentCategoryRecord)context; }
+                                @(row.IsActive ? "Yes" : "No")
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Title="" Width="160px">
+                            <Template>
+                                @{ var row = (EquipmentCategoryRecord)context; }
+                                <div class="d-flex gap-1">
+                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenEditCategory(row))" disabled="@(!(!_busy))">Edit</button>
+                                    <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => DeleteCategoryAsync(row.Id))" disabled="@(!(!_busy))">Delete</button>
+                                </div>
+                            </Template>
+                        </GridColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            }
+        </BenTab>
+    </BenTabs>
+</div>
+
+<BenModal @bind-Visible="@_categoryEditorVisible" Title="@(_editingCategory is null ? "New category" : "Edit category")">
+    <ChildContent>
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Name</label>
+            <input class="form-control" maxlength="100" value="@_catName"
+                   @oninput="@(e => _catName = e.Value?.ToString() ?? string.Empty)" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Description</label>
+            <input class="form-control" maxlength="500" value="@_catDescription"
+                   @oninput="@(e => _catDescription = e.Value?.ToString() ?? string.Empty)" />
+        </div>
+        <div class="row">
+            <div class="col-6 mb-3">
+                <label class="form-label fw-semibold">Icon class</label>
+                <input class="form-control" maxlength="100" value="@_catIconClass"
+                       @oninput="@(e => _catIconClass = e.Value?.ToString() ?? string.Empty)" />
+            </div>
+            <div class="col-3 mb-3">
+                <label class="form-label fw-semibold">Order</label>
+                <input type="number" class="form-control" min="0" max="100" step="1" @bind="@_catSortOrder" @bind:event="oninput" />
+            </div>
+            <div class="col-3 mb-3 d-flex align-items-end">
+                <label class="d-flex align-items-center gap-2 mb-2">
+                    <input type="checkbox" class="form-check-input mt-0" checked="@_catIsActive"
+                           @onchange="@(e => _catIsActive = (bool)(e.Value ?? false))" />
+                    Active
+                </label>
+            </div>
+        </div>
+
+        @* In-content footer rather than WindowActions — see MyEquipmentItemEditor for why. *@
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-secondary" @onclick="@(() => _categoryEditorVisible = false)" disabled="@(!(!_busy))">Cancel</button>
+            <button type="button" class="btn btn-primary" @onclick="SaveCategoryAsync" disabled="@(!(!_busy && !string.IsNullOrWhiteSpace(_catName)))">Save</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    private List<EquipmentBrandRecord> _brands = [];
+    private List<EquipmentModelRecord> _models = [];
+    private List<EquipmentCategoryRecord> _categories = [];
+
+    private string _activeTab = "brands";
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+
+    private bool _categoryEditorVisible;
+    private EquipmentCategoryRecord? _editingCategory;
+    private string _catName = string.Empty;
+    private string _catDescription = string.Empty;
+    private string _catIconClass = string.Empty;
+    private int _catSortOrder;
+    private bool _catIsActive = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated || !UserState.IsSuperAdmin) { NavManager.NavigateTo("/"); return; }
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _brands     = [.. await AdminClient.GetAdminEquipmentBrandsAsync()];
+            _models     = [.. await AdminClient.GetAdminEquipmentModelsAsync()];
+            _categories = [.. await AdminClient.GetAdminEquipmentCategoriesAsync()];
+        }
+        catch (Exception ex)
+        {
+            _error = $"The taxonomy could not be loaded: {ex.Message}";
+        }
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task ApproveBrandAsync(Guid id)
+    {
+        _busy = true; _error = null;
+        if (await AdminClient.ApproveEquipmentBrandAsync(id) is null) _error = "That make could not be approved.";
+        _busy = false;
+        await LoadAsync();
+    }
+
+    private async Task RejectBrandAsync(Guid id)
+    {
+        _busy = true; _error = null;
+        if (!await AdminClient.RejectEquipmentBrandAsync(id))
+            _error = "That make could not be rejected — it may still have models attached.";
+        _busy = false;
+        await LoadAsync();
+    }
+
+    private async Task ApproveModelAsync(Guid id)
+    {
+        _busy = true; _error = null;
+        if (await AdminClient.ApproveEquipmentModelAsync(id) is null) _error = "That model could not be approved.";
+        _busy = false;
+        await LoadAsync();
+    }
+
+    private async Task RejectModelAsync(Guid id)
+    {
+        _busy = true; _error = null;
+        if (!await AdminClient.RejectEquipmentModelAsync(id))
+            _error = "That model could not be rejected — it may still be in use by someone's equipment.";
+        _busy = false;
+        await LoadAsync();
+    }
+
+    private void OpenCreateCategory()
+    {
+        _editingCategory = null;
+        _catName = string.Empty;
+        _catDescription = string.Empty;
+        _catIconClass = string.Empty;
+        _catSortOrder = _categories.Count == 0 ? 1 : _categories.Max(c => c.SortOrder) + 1;
+        _catIsActive = true;
+        _categoryEditorVisible = true;
+    }
+
+    private void OpenEditCategory(EquipmentCategoryRecord row)
+    {
+        _editingCategory = row;
+        _catName = row.Name;
+        _catDescription = row.Description ?? string.Empty;
+        _catIconClass = row.IconClass ?? string.Empty;
+        _catSortOrder = row.SortOrder;
+        _catIsActive = row.IsActive;
+        _categoryEditorVisible = true;
+    }
+
+    private async Task SaveCategoryAsync()
+    {
+        _busy = true; _error = null;
+        var request = new UpsertEquipmentCategoryRequest(
+            _catName.Trim(),
+            string.IsNullOrWhiteSpace(_catDescription) ? null : _catDescription.Trim(),
+            string.IsNullOrWhiteSpace(_catIconClass) ? null : _catIconClass.Trim(),
+            _catSortOrder,
+            _catIsActive);
+
+        var saved = _editingCategory is null
+            ? await AdminClient.CreateEquipmentCategoryAsync(request)
+            : await AdminClient.UpdateEquipmentCategoryAsync(_editingCategory.Id, request);
+
+        if (saved is null) _error = "That category could not be saved.";
+        else _categoryEditorVisible = false;
+
+        _busy = false;
+        await LoadAsync();
+    }
+
+    private async Task DeleteCategoryAsync(Guid id)
+    {
+        _busy = true; _error = null;
+        if (!await AdminClient.DeleteEquipmentCategoryAsync(id))
+            _error = "That category could not be deleted — models are still using it.";
+        _busy = false;
+        await LoadAsync();
+    }
+}
