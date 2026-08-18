@@ -30,4 +30,29 @@ public static class DateTimeViewerExtensions
     /// <summary>The current instant, expressed in the viewer's local wall-clock time.</summary>
     public static DateTime NowInViewerTimeZone(this IBenUserState userState) =>
         DateTime.UtcNow.ToViewerLocalTime(userState);
+
+    // ── Display formats ──────────────────────────────────────────────────────
+    // One place decides how a date looks, so pages cannot drift apart the way they had: the same
+    // screens were mixing "yyyy-MM-dd", "d MMM yyyy", "MMM d, yyyy h:mm tt" and "d MMM, HH:mm".
+    //
+    // These format an already-local value and deliberately do not convert: each call site keeps
+    // whatever timezone handling it already had, so this changes appearance only. Pair them with
+    // ToViewerLocalTime when the source is UTC.
+
+    /// <summary>A date on its own: <c>08/04/2026</c>.</summary>
+    public static string ToDisplayDate(this DateTime local) =>
+        local.ToString("MM/dd/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A date and time: <c>08/04/2026 09:30:00 PM</c>.</summary>
+    public static string ToDisplayDateTime(this DateTime local) =>
+        local.ToString("MM/dd/yyyy hh:mm:ss tt", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A time on its own: <c>09:30:00 PM</c>.</summary>
+    public static string ToDisplayTime(this DateTime local) =>
+        local.ToString("hh:mm:ss tt", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Nullable overloads, so call sites keep their own placeholder for "not set".</summary>
+    public static string? ToDisplayDate(this DateTime? local) => local?.ToDisplayDate();
+
+    public static string? ToDisplayDateTime(this DateTime? local) => local?.ToDisplayDateTime();
 }

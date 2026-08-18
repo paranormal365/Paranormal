@@ -38,7 +38,7 @@
             <GridColumn Field="@nameof(AppUserRecord.Email)" Title="Email" />
             <GridColumn Field="@nameof(AppUserRecord.DateCreated)" Title="Created" Width="110px">
                 <Template>
-                    @(((AppUserRecord)context).DateCreated.ToViewerLocalTime(UserState).ToString("yyyy-MM-dd"))
+                    @(((AppUserRecord)context).DateCreated.ToViewerLocalTime(UserState).ToDisplayDate())
                 </Template>
             </GridColumn>
             <GridColumn Field="@nameof(AppUserRecord.IsEmailConfirmed)" Title="Verified" Width="80px">

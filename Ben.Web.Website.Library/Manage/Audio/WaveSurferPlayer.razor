@@ -1,0 +1,544 @@
+@*
+  WaveSurferPlayer.razor
+  ─────────────────────
+  A Blazor wrapper around WaveSurfer.js v7.12.11.
+
+  Primary usage — single WsConfig object (most flexible):
+    <WaveSurferPlayer Config="@_config" OnReady="@OnAudioReady" />
+
+  Config can be built directly or loaded from DB via UploadFileAudioConfigRecord.ToWsConfig():
+    Config = dbRecord.ToWsConfig(WsAudioSource.FromUrl("/api/upload-files/{id}/download"))
+
+  ESM bundles must exist at /js/wavesurfer/. Build command:
+    cd Ben.Web.WebApp/wwwroot/ts/wavesurfer && npm run build:blazor
+*@
+@namespace Ben.Web.Website.Library.Manage.Audio
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@{
+    var cfg = Config ?? WsConfig.Default();
+}
+
+<div class="ws-player @cfg.CssClass"
+     style="width:100%;
+            min-height:@cfg.MinHeight;
+            max-height:@cfg.MaxHeight;
+            height:@cfg.InitialHeight;
+            @(Resizable ? "resize:vertical;" : "")
+            overflow:hidden;
+            display:flex;
+            flex-direction:column;
+            box-sizing:border-box;
+            position:relative;">
+
+    @* ── Loading overlay ──────────────────────────────────────────────────── *@
+    @if (_loading)
+    {
+        <div class="ws-player-loading"
+             style="position:absolute;inset:0;display:flex;align-items:center;
+                    justify-content:center;gap:.5rem;z-index:2;
+                    background:rgba(var(--kendo-body-bg-rgb,255,255,255),.7);">
+            <span class="spinner-border spinner-border-sm" role="status"></span>
+            @if (_loadingPercent > 0)
+            {
+                <span class="small text-secondary">@_loadingPercent%</span>
+            }
+        </div>
+    }
+
+    @* ── Error banner ──────────────────────────────────────────────────────── *@
+    @if (_errorMessage is not null)
+    {
+        <div class="ws-player-error alert alert-danger alert-sm mb-0 py-1 px-2 small"
+             style="flex:0 0 auto;">
+            ⚠ @_errorMessage
+        </div>
+    }
+
+    @* ── WaveSurfer container — fills all remaining flex space ────────────── *@
+    <div id="@_containerId"
+         style="flex:1;min-height:0;width:100%;overflow:hidden;">
+    </div>
+    @* ── Timeline bar — OUTSIDE the waveform container so it is never clipped ── *@
+    @* The Timeline plugin inserts its 20 px canvas here via the `container`    *@
+    @* option.  display:none collapses it; flex:1 on the waveform fills the gap. *@
+    <div id="@(_containerId)-tl"
+         style="width:100%;overflow:hidden;">
+    </div>
+    @* ── Built-in controls bar ─────────────────────────────────────────────── *@
+    @if (cfg.ShowControls && _ready)
+    {
+        <div class="ws-player-controls d-flex align-items-center gap-2 flex-wrap"
+             style="flex:0 0 auto;padding:.35rem .5rem;
+                    border-top:1px solid var(--kendo-color-border,#dee2e6);">
+
+            @* Play / Pause *@
+            <button class="btn btn-sm btn-outline-primary" title="@(_playing ? "Pause" : "Play")"
+                    @onclick="PlayPauseAsync">
+                @(_playing ? "⏸" : "▶")
+            </button>
+
+            @* Stop *@
+            <button class="btn btn-sm btn-outline-secondary" title="Stop" @onclick="StopAsync">
+                ⏹
+            </button>
+
+            @* Time display *@
+            <span class="small text-secondary ws-player-time" style="min-width:7rem;font-variant-numeric:tabular-nums;">
+                @FormatTime(_currentTime) / @FormatTime(_duration)
+            </span>
+
+            @* Volume *@
+            <label class="d-flex align-items-center gap-1 small mb-0" title="Volume">
+                🔊
+                <input type="range" class="form-range" style="width:5rem;"
+                       min="0" max="1" step="0.02"
+                       value="@_volume.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)"
+                       @oninput="OnVolumeInput" />
+            </label>
+
+            @* Zoom slider (only when Zoom plugin enabled) *@
+            @if (cfg.Plugins.Zoom)
+            {
+                <label class="d-flex align-items-center gap-1 small mb-0" title="Zoom">
+                    🔍
+                    <input type="range" class="form-range" style="width:5rem;"
+                           min="@cfg.MinZoom.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                           max="@cfg.MaxZoom.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                           step="1"
+                           value="@_zoomLevel.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                           @oninput="OnZoomInput" />
+                </label>
+            }
+
+            @* Playback rate *@
+            <label class="d-flex align-items-center gap-1 small mb-0" title="Speed">
+                ⏩
+                <select class="form-select form-select-sm" style="width:auto;" @onchange="OnRateChange">
+                    <option value="0.5">0.5×</option>
+                    <option value="0.75">0.75×</option>
+                    <option value="1" selected>1×</option>
+                    <option value="1.25">1.25×</option>
+                    <option value="1.5">1.5×</option>
+                    <option value="2">2×</option>
+                </select>
+            </label>
+
+            @* Consumer-supplied extra controls *@
+            @if (ExtraControls is not null)
+            {
+                @ExtraControls
+            }
+        </div>
+    }
+</div>
+
+@code {
+    // ── Primary parameter ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Complete player configuration. Supply this to configure the player from a single object
+    /// (including audio source, WaveSurfer options, plugin config, and layout settings).
+    /// When null the player uses <see cref="WsConfig.Default"/>.
+    /// </summary>
+    [Parameter] public WsConfig? Config { get; set; }
+
+    // ── Supplementary rendering parameters ───────────────────────────────────
+
+    /// <summary>Additional controls rendered inside the built-in controls bar.</summary>
+    [Parameter] public RenderFragment? ExtraControls { get; set; }
+
+    // ── Event callbacks ───────────────────────────────────────────────────────
+
+    [Parameter] public EventCallback             OnReady   { get; set; }
+    [Parameter] public EventCallback             OnPlay    { get; set; }
+    [Parameter] public EventCallback             OnPause   { get; set; }
+    [Parameter] public EventCallback             OnFinish  { get; set; }
+    [Parameter] public EventCallback<double>     OnTimeUpdate  { get; set; }
+    [Parameter] public EventCallback<int>        OnLoading     { get; set; }
+    [Parameter] public EventCallback<string>     OnError       { get; set; }
+    [Parameter] public EventCallback<double>     OnZoom        { get; set; }
+    [Parameter] public EventCallback<double>     OnSeeking     { get; set; }
+
+    // Region events
+    [Parameter] public EventCallback<WsRegionData> OnRegionCreated { get; set; }
+    [Parameter] public EventCallback<WsRegionData> OnRegionUpdated { get; set; }
+    [Parameter] public EventCallback<string>        OnRegionRemoved { get; set; }
+    [Parameter] public EventCallback<string>        OnRegionClicked { get; set; }
+    [Parameter] public EventCallback<string>        OnRegionIn      { get; set; }
+    [Parameter] public EventCallback<string>        OnRegionOut     { get; set; }
+
+    [Parameter] public EventCallback<WsRegionContextMenuArgs> OnRegionContextMenu { get; set; }
+
+    // Envelope events
+    [Parameter] public EventCallback<List<WsEnvelopePoint>> OnEnvelopePointsChanged  { get; set; }
+    [Parameter] public EventCallback<double>                 OnEnvelopeVolumeChanged  { get; set; }
+
+    // Spectrogram events
+    [Parameter] public EventCallback<int>       OnSpectrogramProgress    { get; set; }
+    [Parameter] public EventCallback             OnSpectrogramReady        { get; set; }
+    [Parameter] public EventCallback<WsPointArgs> OnSpectrogramContextMenu { get; set; }
+
+    // ── Layout parameters ─────────────────────────────────────────────────────
+
+    /// <summary>When <c>true</c> the player container gets <c>resize: vertical</c> so the user can drag to resize.</summary>
+    [Parameter] public bool Resizable { get; set; }
+
+    // ── Public state ──────────────────────────────────────────────────────────
+
+    public bool   IsReady      => _ready;
+    public bool   IsPlaying    => _playing;
+    public double Duration     => _duration;
+    public double CurrentTime  => _currentTime;
+    public int    LoadingPercent => _loadingPercent;
+
+    // ── Private state ─────────────────────────────────────────────────────────
+
+    private IJSObjectReference?             _module;
+    private DotNetObjectReference<WaveSurferPlayer>? _dotnetRef;
+    private readonly string                 _containerId = $"ws-{Guid.NewGuid():N}";
+
+    private bool   _ready;
+    private bool   _playing;
+    private bool   _loading;
+    private int    _loadingPercent;
+    private string? _errorMessage;
+    private double _duration;
+    private double _currentTime;
+    private double _volume    = 1.0;
+    private double _zoomLevel = 0;
+
+    private WsAudioSource? _lastSource;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Web.Website.Library/Manage/Audio/WaveSurferPlayer.razor.js");
+
+            _dotnetRef = DotNetObjectReference.Create(this);
+
+            await InitAsync();
+        }
+        catch (Exception ex)
+        {
+            _loading = false;
+            _errorMessage = $"Player init failed: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reload audio when the source changes after first render
+        if (_module is null) return;
+        var currentSource = (Config ?? WsConfig.Default()).Source;
+        if (currentSource == _lastSource) return;
+        _lastSource = currentSource;
+        if (currentSource is not null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("load", _containerId, currentSource.ToLoadUrl());
+            }
+            catch (Exception ex)
+            {
+                _errorMessage = $"Load failed: {ex.Message}";
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task InitAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        var cfg = Config ?? WsConfig.Default();
+        var audioUrl = cfg.Source?.ToLoadUrl();
+        _lastSource  = cfg.Source;
+
+        await _module!.InvokeVoidAsync("create", _containerId, cfg.Options, cfg.Plugins, _dotnetRef, audioUrl);
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    // ── Public control methods ────────────────────────────────────────────────
+
+    public async Task PlayAsync()         => await Invoke("play");
+    public async Task PauseAsync()        => await Invoke("pause");
+    public async Task PlayPauseAsync()    => await Invoke("playPause");
+    public async Task StopAsync()         => await Invoke("stop");
+
+    public async Task SeekToAsync(double progress)
+        => await Invoke("seekTo", Math.Clamp(progress, 0, 1));
+
+    public async Task SetVolumeAsync(double volume)
+    {
+        _volume = Math.Clamp(volume, 0, 1);
+        await Invoke("setVolume", _volume);
+    }
+
+    public async Task SetMutedAsync(bool muted)     => await Invoke("setMuted", muted);
+    public async Task SetPlaybackRateAsync(double r) => await Invoke("setPlaybackRate", r);
+    public async Task SetZoomAsync(double minPxPerSec) => await Invoke("setZoom", minPxPerSec);
+
+    public async Task LoadAsync(string url)
+    {
+        _loading = true; _ready = false; _errorMessage = null;
+        StateHasChanged();
+        await Invoke("load", url);
+    }
+
+    public async Task<bool>   IsPlayingAsync()    => await InvokeGet<bool>("isPlaying");
+    public async Task<double> GetCurrentTimeAsync() => await InvokeGet<double>("getCurrentTime");
+    public async Task<double> GetDurationAsync()  => await InvokeGet<double>("getDuration");
+    public async Task<double> GetVolumeAsync()    => await InvokeGet<double>("getVolume");
+
+    /// <summary>Updates the text label of an existing region without recreating it.</summary>
+    public async Task UpdateRegionLabelAsync(string regionId, string? label)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("updateRegionLabel", _containerId, regionId, label);
+    }
+
+    // ── Timeline ─────────────────────────────────────────────────────────
+
+    /// <summary>Shows or hides the Timeline plugin bar. When showing, fires zoom() to repaint labels.</summary>
+    public async Task ToggleTimelineAsync(bool visible)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("toggleTimeline", _containerId, visible);
+    }
+
+    // ── Spectrogram ──────────────────────────────────────────────────────
+
+    /// <summary>Enables or disables the canvas-based spectrogram (Web Worker FFT). Idempotent.</summary>
+    public async Task ToggleSpectrogramAsync(bool enable, bool showLabels, int fftSamples = 512)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("toggleSpectrogram", _containerId, enable, showLabels, fftSamples, _dotnetRef);
+    }
+
+    /// <summary>Re-computes the spectrogram at a different FFT window size. Only effective when the spectrogram is currently visible.</summary>
+    public async Task SetSpectrogramResolutionAsync(int fftSamples, bool showLabels)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("setSpectrogramResolution", _containerId, fftSamples, showLabels, _dotnetRef);
+    }
+
+    /// <summary>Re-renders the spectrogram with a different colormap preset.</summary>
+    public async Task SetSpectrogramColormapAsync(string colormap, bool showLabels, int fftSamples)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("setSpectrogramColormap", _containerId, colormap, showLabels, fftSamples, _dotnetRef);
+    }
+
+    // ── Phase C: audio processing ──────────────────────────────────────────────
+
+    public async Task InitAudioProcessingAsync()           => await Invoke("initAudioProcessing");
+    public async Task SetEqBandAsync(int band, double db)  => await Invoke("setEqBand", band, db);
+    public async Task SetAllEqBandsAsync(double[] gains)   => await Invoke("setAllEqBands", gains);
+    public async Task SetHighPassAsync(int freq, bool on)  => await Invoke("setHighPass", freq, on);
+    public async Task SetLowPassAsync(int freq, bool on)   => await Invoke("setLowPass",  freq, on);
+    public async Task SetCompressorAsync(bool enabled, double threshold, double ratio, double attack, double release)
+        => await Invoke("setCompressor", enabled, threshold, ratio, attack, release);
+    public async Task SetNoiseGateAsync(bool enabled, double threshold, double attack, double release)
+        => await Invoke("setNoiseGate", enabled, threshold, attack, release);
+    public async Task SetSpectrogramMelScaleAsync(bool useMel)
+        => await Invoke("setSpectrogramMelScale", useMel, _dotnetRef);
+    public async Task ToggleVoiceBandOverlayAsync(bool show)
+        => await Invoke("toggleVoiceBandOverlay", show);
+    public async Task DetectSilenceAsync(double thresholdDb, double windowSeconds = 0.15)
+        => await Invoke("detectSilence", thresholdDb, windowSeconds);
+    public async Task ClearSilenceDetectionAsync()
+        => await Invoke("clearSilenceDetection");
+
+    /// <summary>Redraws the spectrogram with cached FFT data, toggling frequency-axis labels.</summary>
+    public async Task UpdateSpectrogramLabelsAsync(bool showLabels)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("updateSpectrogramLabels", _containerId, showLabels);
+    }
+
+    /// <summary>
+    /// Switches what click-and-drag does on the waveform (only meaningful when the player
+    /// was configured with <see cref="WsPluginConfig.RegionsDragToCreate"/>): drawing a
+    /// selection region (<paramref name="regionMode"/> <c>true</c>, the default), or
+    /// scrubbing the playhead — playing audio audibly while dragging — when <c>false</c>.
+    /// </summary>
+    public async Task SetDragModeAsync(bool regionMode)
+        => await Invoke("setDragMode", regionMode ? "region" : "scrub");
+
+    // Regions
+    public async Task<string?> AddRegionAsync(WsRegionParams region)
+        => _module is null ? null : await _module.InvokeAsync<string?>("addRegion", _containerId, region);
+
+    public async Task RemoveRegionAsync(string id)    => await Invoke("removeRegion", id);
+    public async Task ClearRegionsAsync()             => await Invoke("clearRegions");
+
+    /// <summary>Removes all user-drawn regions, keeping the specified IDs (e.g. saved-clip overlays).</summary>
+    public async Task ClearUserRegionsAsync(IEnumerable<string> keepIds)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("clearUserRegions", _containerId, keepIds.ToArray());
+    }
+
+    public async Task PlayRegionAsync(string id)      => await Invoke("playRegion", id);
+
+    /// <summary>
+    /// Makes one region editable and locks the rest; pass null to lock everything. Returns the
+    /// editable region's bounds, or null when there is no such region.
+    /// </summary>
+    public async Task<WsRegionData?> SetRegionEditableAsync(string? id)
+        => _module is null ? null : await _module.InvokeAsync<WsRegionData?>("setRegionEditable", _containerId, id);
+
+    public async Task<List<WsRegionData>> GetRegionsAsync()
+        => _module is null ? [] : await _module.InvokeAsync<List<WsRegionData>>("getRegions", _containerId);
+
+    // Envelope
+    public async Task SetEnvelopePointsAsync(List<WsEnvelopePoint> pts) => await Invoke("setEnvelopePoints", pts);
+    public async Task AddEnvelopePointAsync(WsEnvelopePoint pt)          => await Invoke("addEnvelopePoint", pt);
+    public async Task RemoveEnvelopePointAsync(string id)                => await Invoke("removeEnvelopePoint", id);
+    public async Task SetEnvelopeVolumeAsync(double v)                   => await Invoke("setEnvelopeVolume", v);
+
+    public async Task<List<WsEnvelopePoint>> GetEnvelopePointsAsync()
+        => _module is null ? [] : await _module.InvokeAsync<List<WsEnvelopePoint>>("getEnvelopePoints", _containerId);
+
+    // ── JS-invokable callbacks ────────────────────────────────────────────────
+
+    [JSInvokable] public async Task OnWsReady(double duration)
+    {
+        _ready = true; _loading = false; _duration = duration; _errorMessage = null;
+        StateHasChanged();
+        await OnReady.InvokeAsync();
+    }
+
+    [JSInvokable] public async Task OnWsPlay()
+    {
+        _playing = true; StateHasChanged();
+        await OnPlay.InvokeAsync();
+    }
+
+    [JSInvokable] public async Task OnWsPause()
+    {
+        _playing = false; StateHasChanged();
+        await OnPause.InvokeAsync();
+    }
+
+    [JSInvokable] public async Task OnWsFinish()
+    {
+        _playing = false; StateHasChanged();
+        await OnFinish.InvokeAsync();
+    }
+
+    [JSInvokable] public async Task OnWsTimeUpdate(double time)
+    {
+        _currentTime = time; StateHasChanged();
+        await OnTimeUpdate.InvokeAsync(time);
+    }
+
+    [JSInvokable] public async Task OnWsLoading(int percent)
+    {
+        _loadingPercent = percent; _loading = percent < 100; StateHasChanged();
+        await OnLoading.InvokeAsync(percent);
+    }
+
+    [JSInvokable] public async Task OnWsError(string message)
+    {
+        _errorMessage = message; _loading = false; StateHasChanged();
+        await OnError.InvokeAsync(message);
+    }
+
+    [JSInvokable] public async Task OnWsZoom(double minPxPerSec)
+    {
+        _zoomLevel = minPxPerSec; StateHasChanged();
+        await OnZoom.InvokeAsync(minPxPerSec);
+    }
+
+    [JSInvokable] public async Task OnWsSeeking(double time)
+    {
+        _currentTime = time; StateHasChanged();
+        await OnSeeking.InvokeAsync(time);
+    }
+
+    [JSInvokable] public async Task OnWsRegionContextMenu(WsRegionContextMenuArgs args)
+    {
+        await OnRegionContextMenu.InvokeAsync(args);
+    }
+
+    [JSInvokable] public async Task OnWsRegionCreated(WsRegionData r) => await OnRegionCreated.InvokeAsync(r);
+    [JSInvokable] public async Task OnWsRegionUpdated(WsRegionData r) => await OnRegionUpdated.InvokeAsync(r);
+    [JSInvokable] public async Task OnWsRegionRemoved(string id)      => await OnRegionRemoved.InvokeAsync(id);
+    [JSInvokable] public async Task OnWsRegionClicked(string id)      => await OnRegionClicked.InvokeAsync(id);
+    [JSInvokable] public async Task OnWsRegionIn(string id)           => await OnRegionIn.InvokeAsync(id);
+    [JSInvokable] public async Task OnWsRegionOut(string id)          => await OnRegionOut.InvokeAsync(id);
+
+    [JSInvokable] public async Task OnWsEnvelopePointsChanged(List<WsEnvelopePoint> pts) => await OnEnvelopePointsChanged.InvokeAsync(pts);
+    [JSInvokable] public async Task OnWsEnvelopeVolumeChanged(double v)                  => await OnEnvelopeVolumeChanged.InvokeAsync(v);
+
+    // Spectrogram callbacks
+    [JSInvokable] public async Task OnWsSpectrogramProgress(int percent)  => await OnSpectrogramProgress.InvokeAsync(percent);
+    [JSInvokable] public async Task OnWsSpectrogramReady()                 => await OnSpectrogramReady.InvokeAsync();
+    [JSInvokable] public async Task OnWsSpectrogramContextMenu(double clientX, double clientY)
+        => await OnSpectrogramContextMenu.InvokeAsync(new WsPointArgs { ClientX = clientX, ClientY = clientY });
+
+    // ── UI handlers ───────────────────────────────────────────────────────────
+
+    private async Task OnVolumeInput(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any,
+                            System.Globalization.CultureInfo.InvariantCulture, out var v))
+            await SetVolumeAsync(v);
+    }
+
+    private async Task OnZoomInput(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any,
+                            System.Globalization.CultureInfo.InvariantCulture, out var z))
+            await SetZoomAsync(z);
+    }
+
+    private async Task OnRateChange(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any,
+                            System.Globalization.CultureInfo.InvariantCulture, out var r))
+            await SetPlaybackRateAsync(r);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static string FormatTime(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.TotalHours >= 1 ? ts.ToString(@"h\:mm\:ss") : ts.ToString(@"m\:ss");
+    }
+
+    private async Task Invoke(string fn, params object?[] args)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync(fn, new object?[] { _containerId }.Concat(args).ToArray());
+    }
+
+    private async Task<T> InvokeGet<T>(string fn)
+        => _module is null ? default! : await _module.InvokeAsync<T>(fn, _containerId);
+
+    // ── Disposal ──────────────────────────────────────────────────────────────
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try { await _module.InvokeVoidAsync("destroy", _containerId); } catch { }
+            await _module.DisposeAsync();
+        }
+        _dotnetRef?.Dispose();
+    }
+}

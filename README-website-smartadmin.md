@@ -36,7 +36,7 @@ unchanged — what changes is the widget layer and the page chrome.
 - [x] **Phase 1** — Extract `Ben.Web.Services`
 - [x] **Phase 2** — New projects + host shell
 - [x] **Phase 3** — Component kit + Telerik Night restyle
-- [ ] **Phase 4** — Library migration waves A–J *(Wave A done)*
+- [ ] **Phase 4** — Library migration waves *(A, B, C done; Manage/ pulled forward)*
 - [ ] **Phase 5** — Parity, guard tests, docs
 
 ### Phase 0 notes — the Night theme was broken upstream
@@ -310,3 +310,42 @@ Sizing and colour, all from Ben's review:
 **Verified:** solution builds clean, 2430/2430 tests pass, `/profile` renders all four cards with
 live data and contains no Kendo markup beyond `k-body` on `<body>`, `/admin/users` loads six real
 users into a kept grid that now inherits its panel's surface, and header controls sit correctly.
+
+### Wave C — `Manage/`
+
+The whole `Manage/` area: `Audio/` (WaveSurfer player, `AudioFilePreview` at 2,091 lines,
+`WsRegionExplorer`), `Calendar/OrgScheduler`, `Icon/`, `Media/ImageEditorPlayer`, `Video/`, and
+`UploadFileVoteBar`. **`AdminUserDetail` is un-deferred** — it needed Audio, Media and Icon, and
+now renders all eight of its tabs with live data. Routes added: `/my-videos`, `/video-editor`,
+`/admin/users/{id}`, `/organizations/{id}/calendar`.
+
+**Converted:** 99 buttons, 16 sliders, 12 check boxes, 11 windows → `BenModal`, 10 text boxes,
+5 numeric inputs, 5 `ExpansionPanel` → `BenPanel`, and 3 `TelerikNotification` instances →
+`BenToastService` (the `@ref`/`Show()` calls became service calls). **Kept:** the scheduler, the
+rich-text editors, the maps, the date and colour pickers, one grid, and the templated dropdowns.
+
+**Two parser bugs and one code-generation bug, all found by building rather than by reading.**
+
+The tag scanner needed a third fix: an attribute value of the form `@Helper("arg")` — as in
+`FillMode="@Fm("select")"` — has to balance parentheses just like `@( … )`, or it truncates at the
+nested quote. That is the same lesson as wave B for the third time, and the scanner now handles
+`@(…)`, `@Helper(…)` and bare values uniformly.
+
+The generation bug was worse, because it compiled in some files and not others. For a conditional
+`ThemeColor` the converter emitted `class="btn @($"btn-{cond ? "a" : "b"}")"` — a ternary inside an
+interpolated string, where the `:` terminates the interpolation. It now emits
+`@(cond ? "btn-a" : "btn-b")` instead. Two related cases hit the same rule: an interpolated string
+in a component *attribute* (`Title="@($"Edit: {FileName}")"`) fails where the identical expression
+as element content is fine, so those titles moved to `HeaderContent`.
+
+Diagnosis was by bisection — reverting to the original and re-applying one conversion pass at a
+time — after brace and quote counts came back identical to the original and proved nothing. Worth
+remembering: **matching brace counts do not mean the markup parses the same way.**
+
+Also fixed: `ImageEditorPlayer`'s dialog was `Width="94vw"`, which the width-to-size mapping read
+as 94 pixels and made a *small* modal out of a near-fullscreen editor. It is `Size="fullscreen"`
+now; the mapping only ever made sense for pixel widths.
+
+**Verified:** solution builds clean, 2430/2430 tests pass, `/admin/users/{id}` renders its eight
+tabs and switches between them with a kept grid showing live memberships, `/my-videos` renders with
+the toast host in place and no Telerik notification element left, and the console is clean.
