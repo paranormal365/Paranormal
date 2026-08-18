@@ -3740,26 +3740,53 @@ Live-verified on "Cave return visit", a visit with no case: the team panel opens
 
 ---
 
-## 83. Explain and list available permissions to assign to roles individually in an organization (not started, requested 2026-08-16)
+## 83. Explain and list available permissions to assign to roles individually in an organization (built 2026-08-17, pending click-test)
 
 Ben, raised mid-planning-session for item #55: *"Explain and list available permissions to assign
 to roles individually in an organization — each one has their own."*
 
-Today `OrgRoleEditor.razor`'s Permissions section renders one create/read/update/delete toggle row
-per `PermissionSection` (a hardcoded `DisplayName` + `OrganizationSecurityTable` pair), and the
-`DisplayName` is the only explanation a role-builder gets — "Files", "Membership Applications",
-"Investigations." What each toggle actually *grants* only exists as an XML doc comment on the
+Previously `OrgRoleEditor.razor`'s Permissions section rendered one create/read/update/delete toggle
+row per `PermissionSection` (a hardcoded `DisplayName` + `OrganizationSecurityTable` pair), and the
+`DisplayName` was the only explanation a role-builder got — "Files", "Membership Applications",
+"Investigations." What each toggle actually *grants* only existed as an XML doc comment on the
 corresponding `OrganizationSecurityTable` enum value, invisible from the UI.
 
-The ask: surface that explanation in the role editor itself, so assigning permissions to a role
-doesn't require reading the source to know what "Investigations: Update" actually lets someone do.
+**Built**: `PermissionSection` now carries a fourth field, `Description`, rendered as always-visible
+small muted text under each row's `DisplayName` — chosen over a hover tooltip so the explanation
+doesn't require discovering it. All 22 rows in the current `Sections` list have one. For the eight
+values that already carried an XML doc comment (`OrganizationSettings`,
+`OrganizationAddressMemberAccess`, `OrganizationAddressSearch`, `MembershipRequests`,
+`OrganizationFiles`, `Investigation`, `Equipment`, `EquipmentCheckout`), the description is adapted
+from that comment; the other fourteen (plain CRUD tables with no prior doc comment, e.g.
+`OrganizationAddress`, `OrganizationNoteType`) got a new one-line description written for this pass.
+Text lives only in `OrgRoleEditor.razor` — it is not read from the enum's XML doc comments at
+runtime (Blazor Server doesn't ship the doc XML, and reflecting it in would be real machinery for
+static strings), so a future doc-comment edit does **not** automatically update the row; whoever
+touches the enum doc comment should update the matching `Description` in the same commit.
 
-> Not scoped. Likely shape: a short description string per `PermissionSection` (sourced from — or
-> kept in sync with — each enum value's existing XML doc comment) rendered as help text/tooltip next
-> to its row, possibly with the C/R/U/D columns themselves individually explained where a table's
-> actions aren't uniform CRUD. Touches the same `Sections` list in `OrgRoleEditor.razor` that item
-> #55 (equipment) is about to add two rows to — do this one either just before or just after #55
-> Phase 3, while that file is already open, rather than as a separate later pass.
+Not built: the "possibly explain C/R/U/D individually where a table's actions aren't uniform CRUD"
+stretch goal — skipped, the per-row description already answers what a role-builder needs and no
+current table has meaningfully non-uniform CRUD semantics.
+
+**Guarded by a source scan** (`RolePermissionCoverageTests`). The `Sections` list is hand-written, and
+a permission missing from it is *invisible* rather than broken — the enum value exists, the server
+enforces it, and no role can ever be granted it. Three assertions: every organization-scoped value has
+a row, no row names a value that does not exist, and every row carries a description. Verified by
+removing a row and watching it fail.
+
+> **Found by that scan on its first run:** `OrganizationSecurityTable.AppUser` (= 13) is **referenced
+> nowhere in the codebase** — no controller checks it, no screen assigns it, and it has no row in the
+> role editor. It is excluded from the scan as user-scoped rather than given a row, deliberately: a
+> toggle that grants nothing is worse than no toggle, because it tells a role-builder something
+> untrue. **Worth deleting**, but renumbering a persisted enum is not free — the stored
+> `OrganizationAccessGrant.TableName` values would need migrating — so it is recorded here rather
+> than done in passing.
+
+**⚠ Not click-tested.** `Ben.Web.Tests.Services.GrantablePermissionTests` passes (unaffected — it
+source-scans for `OrganizationSecurityTable.X` references, and the new code only adds plain string
+literals) and the solution builds clean, but the actual rendered rows are behind Entra login, which
+this environment cannot pass. Ben should open an org's role editor once and confirm the description
+text reads well under real Telerik table layout before considering this fully done.
 
 ---
 
