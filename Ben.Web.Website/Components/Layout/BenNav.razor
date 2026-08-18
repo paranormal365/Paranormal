@@ -37,40 +37,7 @@
 
                 @foreach (var item in section.Items)
                 {
-                    @if (item.Children.Count == 0)
-                    {
-                        <li class="nav-item @(IsActive(item) ? "active" : null)">
-                            <a href="@item.Url" title="@item.Text">
-                                <BenIcon Name="@item.Icon" />
-                                <span class="nav-link-text">@item.Text</span>
-                                @if (item.Count > 0)
-                                {
-                                    <span class="badge badge-end @NotificationBadge.CssClass(item.Urgency)"
-                                          title="@($"{item.Count} waiting")">@NotificationBadge.Text(item.Count)</span>
-                                }
-                            </a>
-                        </li>
-                    }
-                    else
-                    {
-                        var expanded = IsExpanded(item);
-                        <li class="nav-item @(expanded ? "open active" : null)">
-                            <a href="#" title="@item.Text" @onclick="() => ToggleGroup(item.Text)" @onclick:preventDefault="true">
-                                <BenIcon Name="@item.Icon" />
-                                <span class="nav-link-text">@item.Text</span>
-                            </a>
-                            <ul style="@(expanded ? null : "display:none")">
-                                @foreach (var child in item.Children)
-                                {
-                                    <li class="@(IsActive(child) ? "active" : null)">
-                                        <a href="@child.Url">
-                                            <span class="nav-link-text">@child.Text</span>
-                                        </a>
-                                    </li>
-                                }
-                            </ul>
-                        </li>
-                    }
+                    @RenderItem(item)
                 }
             }
         </ul>
@@ -187,7 +154,15 @@
             sections.Add(new Section(null, home));
 
             if (IsSuperAdmin && !IsImpersonating)
-                sections.Add(new Section("Administration", AdminGroups));
+            {
+                // One expandable entry rather than a headed section: the admin tools are a place
+                // you go, not a permanent third of the sidebar. Everything below it stays grouped
+                // by area, one level further in.
+                sections.Add(new Section(null, new[]
+                {
+                    new NavItem("Administration", "settings", children: AdminGroups),
+                }));
+            }
 
             sections.Add(new Section(null, main));
 
@@ -249,8 +224,51 @@
     }
 
     /// <summary>A group is open when the user opened it, or when the current page is inside it.</summary>
+
+    @* Rendered recursively rather than as fixed levels, so Administration can hold groups that
+       themselves hold links. The template's own nav nests three <ul> deep and styles
+       `.primary-nav ul ul ul`, so the depth costs nothing extra. *@
+    private RenderFragment RenderItem(NavItem item) => __builder =>
+    {
+        <li class="nav-item @(item.Children.Count > 0 && IsExpanded(item) ? "open active" : null) @(item.Children.Count == 0 && IsActive(item) ? "active" : null)">
+            @if (item.Children.Count == 0)
+            {
+                <a href="@item.Url" title="@item.Text">
+                    <BenIcon Name="@item.Icon" />
+                    <span class="nav-link-text">@item.Text</span>
+                    @if (item.Count > 0)
+                    {
+                        <span class="badge badge-end @NotificationBadge.CssClass(item.Urgency)"
+                              title="@($"{item.Count} waiting")">@NotificationBadge.Text(item.Count)</span>
+                    }
+                </a>
+            }
+            else
+            {
+                <a href="#" title="@item.Text" @onclick="() => ToggleGroup(item.Text)" @onclick:preventDefault="true">
+                    <BenIcon Name="@item.Icon" />
+                    <span class="nav-link-text">@item.Text</span>
+                </a>
+                <ul style="@(IsExpanded(item) ? null : "display:none")">
+                    @foreach (var child in item.Children)
+                    {
+                        @RenderItem(child)
+                    }
+                </ul>
+            }
+        </li>
+    };
+
+    /// <summary>
+    /// Open if the reader opened it, or if the current page is anywhere beneath it — checked
+    /// recursively, so Administration opens along with the group holding the active link rather
+    /// than only when that link is its direct child.
+    /// </summary>
     private bool IsExpanded(NavItem group)
-        => _openGroups.Contains(group.Text) || group.Children.Any(IsActive);
+        => _openGroups.Contains(group.Text) || ContainsActive(group);
+
+    private bool ContainsActive(NavItem group)
+        => group.Children.Any(c => IsActive(c) || ContainsActive(c));
 
     private bool IsActive(NavItem item)
     {

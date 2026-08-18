@@ -474,3 +474,12 @@ rich-text editors — the CMS is exactly the place where a real editor earns its
 
 **Verified:** solution builds clean, 2430/2430 tests pass, `/organizations/{id}` renders 13 tabs
 with its Cases and CMS tabs both live, and the CMS editor lists real pages in a kept grid.
+
+**Administration is now one expandable entry.** It was a headed section taking a permanent third of
+the sidebar; it is a single top-level item holding the same four groups (Users, Cases &
+Investigations, Content, System), each still expandable — three levels in total. The template's own
+nav nests three `<ul>` deep and styles `.primary-nav ul ul ul`, so the depth costs nothing.
+
+Two changes made it work: the item markup is rendered **recursively** rather than as two fixed
+levels, and the auto-open check recurses too — landing on `/admin/users` opens Administration *and*
+the Users group beneath it, where a one-level check would have opened neither.
