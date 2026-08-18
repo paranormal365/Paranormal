@@ -248,15 +248,49 @@
 
 
 /* ── Sidebar type ───────────────────────────────────────────────────────────
-   The template sets the nav at 600 (semibold), which reads heavy down a long list. Regular for
-   the resting state, with the active item only one step up — enough to find your place without
-   the whole column shouting. */
-.app-sidebar .nav-menu .nav-link-text,
-.app-sidebar .nav-menu > li > a {
+   The template sets the nav at 600, which reads heavy down a long list. Light for the resting
+   state, with the active item one step up — enough to find your place without the column
+   shouting. The selectors carry .primary-nav as well as .app-sidebar so they out-specify the
+   template's own nav rules, which an earlier, shorter selector lost to. */
+.app-sidebar .primary-nav .nav-menu li > a,
+.app-sidebar .primary-nav .nav-menu li > a .nav-link-text,
+.app-sidebar .nav-menu .nav-item > a,
+.app-sidebar .nav-menu .nav-item > a .nav-link-text {
+    font-weight: 300;
+}
+
+.app-sidebar .primary-nav .nav-menu li.active > a,
+.app-sidebar .primary-nav .nav-menu li.active > a .nav-link-text,
+.app-sidebar .nav-menu .nav-item.active > a,
+.app-sidebar .nav-menu .nav-item.active > a .nav-link-text {
     font-weight: 400;
 }
 
-.app-sidebar .nav-menu .nav-item.active > a,
-.app-sidebar .nav-menu .nav-item.active > a .nav-link-text {
-    font-weight: 500;
+/* ── Header control hover ───────────────────────────────────────────────────
+   The template draws the hover state as a circle behind the icon: .btn-system::before at
+   2.875rem, centred with translate(-50%, -50%). Against its own 34px button that is a 46px
+   halo — a comfortable 1.35x.
+
+   Here the buttons are 32px, and the circle rendered 56px: nearly double the button, so it
+   spilled up and to the left of the glyph rather than sitting behind it. Sized to the button it
+   actually has to sit behind, and re-centred explicitly so it does not depend on which rule wins. */
+/* Every header control is clickable, so every one gets the hand. Bootstrap 5 only sets
+   cursor: pointer on <button>, and the template's own .btn-system reset drops it for the anchor
+   that Sign In is — leaving an arrow over an obviously clickable control. */
+.app-header .btn-system,
+.app-header .collapse-icon,
+.app-header .mobile-menu-icon,
+.app-header .dropdown > .btn,
+.app-header .ben-signin,
+.app-header .ben-brand {
+    cursor: pointer;
+}
+
+.app-header .btn-system::before,
+.app-header .dropdown > .btn::before {
+    width: 2.25rem;
+    height: 2.25rem;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
 }
