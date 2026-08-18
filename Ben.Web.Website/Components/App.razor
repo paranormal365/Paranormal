@@ -69,15 +69,23 @@
     <script src="/_framework/blazor.web.js" autostart="false"></script>
     <script>
         document.addEventListener("DOMContentLoaded", function() {
+            // Start Blazor FIRST, and never let anything before it throw. An earlier version
+            // called Blazor.addEventListener here, which does not exist — the exception stopped
+            // Blazor.start() from running at all, so nothing on the site was interactive and
+            // sign-in silently failed. Anything optional goes after the start call, in a try.
+            Blazor.start();
+
             // Enhanced navigation patches <html> from the server's response, which does not carry
             // the reader's layout preference (minified nav, dark nav, fixed header) — those live
-            // in localStorage. Re-assert them after each navigation or they vanish on the first
-            // link click. Registered here rather than in ben-boot.js because Blazor only exists
-            // once this script has run.
-            Blazor.addEventListener("enhancedload", function () {
-                if (typeof benApplyLayoutSettings === "function") benApplyLayoutSettings();
-            });
-            Blazor.start();
+            // in localStorage, so re-assert them after each navigation. Blazor raises
+            // "enhancedload" as a DOM event on document.
+            try {
+                document.addEventListener("enhancedload", function () {
+                    if (typeof benApplyLayoutSettings === "function") benApplyLayoutSettings();
+                });
+            } catch (e) {
+                console.warn("Layout preferences will not survive navigation:", e);
+            }
         });
 
         function downloadFileFromBase64(base64, contentType, fileName) {
