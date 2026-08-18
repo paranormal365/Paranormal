@@ -33,7 +33,7 @@
                 <GridColumn Field="@nameof(AdminInvestigationSummaryRecord.ScheduledDateTime)" Title="Scheduled" Width="180px">
                     <Template>
                         @{ var inv = (AdminInvestigationSummaryRecord)context; }
-                        @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+                        @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
                     </Template>
                 </GridColumn>
                 <GridCommandColumn Width="90px">

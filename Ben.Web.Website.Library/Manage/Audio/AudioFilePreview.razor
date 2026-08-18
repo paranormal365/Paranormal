@@ -167,9 +167,7 @@ else
                                     var b = idx;
                                     <div class="d-flex align-items-center gap-1 mb-1">
                                         <span class="text-muted" style="width:28px; text-align:right; font-size:0.7rem;">@lbl</span>
-                                        <TelerikSlider Value="@_eqGains[b]" Min="-12" Max="12"
-                                                       SmallStep="1" LargeStep="6"
-                                                       ValueChanged="@((double v) => _ = OnEqGainChanged(b, v))" />
+                                        <input type="range" class="form-range" min="-12" max="12" step="1" value="@_eqGains[b]" @oninput="@(e => { var v = AsRangeValue(e.Value); _ = OnEqGainChanged(b, v); })" />
                                         <span class="text-muted small" style="width:28px;">@(_eqGains[b] > 0 ? "+" : "")@_eqGains[b].ToString("0.#")</span>
                                     </div>
                                 }
@@ -615,7 +613,7 @@ else
         </div>
         <div class="mb-2">
             <label class="form-label fw-semibold">Note</label>
-            <TelerikTextArea @bind-Value="@_markerNote" Rows="3" Width="100%" />
+            <textarea class="form-control" rows="3" @bind="@_markerNote"></textarea>
         </div>
             <div class="dialog-footer-actions">
             <span class="dialog-footer-spacer"></span>
@@ -652,7 +650,7 @@ else
             </div>
             <div class="mb-2">
                 <label class="form-label fw-semibold">Note</label>
-                <TelerikTextArea @bind-Value="@_confirmNote" Rows="2" Width="100%" />
+                <textarea class="form-control" rows="2" @bind="@_confirmNote"></textarea>
             </div>
             @if (_confirmError is not null)
             {
@@ -766,6 +764,15 @@ else
 @* ── Toast notifications ────────────────────────────────────────────── *@
 
 @code {
+
+    /// <summary>
+    /// Reads a range input's value. The DOM hands back a string; the handlers these replaced took
+    /// a number, so parse once here rather than at each call site. A half-typed or empty value
+    /// falls back to 0 instead of throwing.
+    /// </summary>
+    private static int AsRangeValue(object? raw)
+        => int.TryParse(raw?.ToString(), System.Globalization.NumberStyles.Integer,
+                        System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0;
     // ── Parameters ────────────────────────────────────────────────────────────
 
     [Parameter, EditorRequired] public Guid   FileId      { get; set; }

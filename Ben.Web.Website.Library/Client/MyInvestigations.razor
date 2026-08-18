@@ -121,7 +121,7 @@
                                     </div>
                                 </div>
                                 <div class="text-secondary small text-end flex-shrink-0">
-                                    @ev.StartDateTime.ToViewerLocalTime(UserState).ToString("ddd d MMM")
+                                    @ev.StartDateTime.ToViewerLocalTime(UserState).ToDisplayDate()
                                     @if (!ev.IsAllDay)
                                     {
                                         <span class="d-block">@ev.StartDateTime.ToViewerLocalTime(UserState).ToDisplayTime()</span>
@@ -290,7 +290,7 @@
                 </div>
                 <div class="small mt-1">
                     <BenIcon Name="calendar" />
-                    @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToString("ddd MMM d, yyyy h:mm tt")
+                    @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
                     @if (inv.EndDateTime.HasValue)
                     {
                         <span class="text-secondary"> – @inv.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTime()</span>

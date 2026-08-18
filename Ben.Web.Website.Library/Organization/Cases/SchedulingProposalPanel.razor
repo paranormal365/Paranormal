@@ -33,7 +33,7 @@ else
                                 var isAccepted = prop.AcceptedSlotId == slot.Id;
                                 <div class="small @(isAccepted ? "text-success fw-semibold" : "")">
                                     @(isAccepted ? "✓ " : "• ")
-                                    @slot.StartDateTime.ToViewerLocalTime(UserState).ToString("ddd MMM d, yyyy h:mm tt")
+                                    @slot.StartDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
                                     @if (slot.EndDateTime.HasValue) { <span> – @slot.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTime()</span> }
                                 </div>
                             }
@@ -41,7 +41,7 @@ else
                         @if (prop.Status == ScheduleProposalStatus.Countered && prop.ClientCounterDateTime.HasValue)
                         {
                             <div class="text-warning small mt-1">
-                                Client proposed: @prop.ClientCounterDateTime.Value.ToViewerLocalTime(UserState).ToString("ddd MMM d, yyyy h:mm tt")
+                                Client proposed: @prop.ClientCounterDateTime.Value.ToViewerLocalTime(UserState).ToDisplayDateTime()
                                 @if (!string.IsNullOrEmpty(prop.ClientResponseNotes)) { <span> — @prop.ClientResponseNotes</span> }
                             </div>
                         }

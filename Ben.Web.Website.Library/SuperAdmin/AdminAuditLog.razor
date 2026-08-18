@@ -121,7 +121,7 @@
                     <div class="col-sm-3 text-secondary small">Source</div>
                     <div class="col-sm-9 small">@log.Source</div>
                     <div class="col-sm-3 text-secondary small">Occurred</div>
-                    <div class="col-sm-9 small">@log.OccurredAt.ToString("yyyy-MM-dd HH:mm:ss") UTC</div>
+                    <div class="col-sm-9 small">@log.OccurredAt.ToDisplayDateTime() UTC</div>
                 </div>
                 @if (!string.IsNullOrWhiteSpace(log.ChangesJson))
                 {
@@ -135,7 +135,7 @@
             <GridColumn Field="@nameof(AuditLogRecord.OccurredAt)" Title="Time" Width="170px">
                 <Template>
                     @{ var r = (AuditLogRecord)context; }
-                    <span class="small">@r.OccurredAt.ToString("yyyy-MM-dd HH:mm")</span>
+                    <span class="small">@r.OccurredAt.ToDisplayDateTime()</span>
                 </Template>
             </GridColumn>
             <GridColumn Field="@nameof(AuditLogRecord.EntityType)" Title="Entity" Width="180px" />
@@ -184,7 +184,7 @@
         {
             <div class="mb-3 p-2 bg-light rounded small">
                 <strong>@_mailTarget.EntityType</strong> · @ActionLabel(_mailTarget.Action) ·
-                @_mailTarget.OccurredAt.ToString("yyyy-MM-dd HH:mm") UTC
+                @_mailTarget.OccurredAt.ToDisplayDateTime() UTC
             </div>
 
             <div class="mb-3">

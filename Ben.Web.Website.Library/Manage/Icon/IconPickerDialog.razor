@@ -24,10 +24,7 @@
 
         @* Search *@
         <div class="icon-picker-search px-3 pt-2 d-flex align-items-center gap-2">
-            <TelerikTextBox Value="@_search"
-                            ValueChanged="@((string v) => _search = v)"
-                            PlaceHolder="Search icons by name…"
-                            Width="100%" />
+            <input type="text" class="form-control" value="@_search" @oninput="@(e => { var v = e.Value?.ToString() ?? string.Empty; _search = v; })" />
             @if (!string.IsNullOrEmpty(_search))
             {
                 <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _search = string.Empty)"><BenIcon Name="x" /></button>

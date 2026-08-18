@@ -39,7 +39,7 @@
                 <GridColumn Field="@nameof(AdminCaseSummaryRecord.DateCaseOpened)" Title="Opened" Width="120px">
                     <Template>
                         @{ var cs = (AdminCaseSummaryRecord)context; }
-                        @cs.DateCaseOpened.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")
+                        @cs.DateCaseOpened.ToViewerLocalTime(UserState).ToDisplayDate()
                     </Template>
                 </GridColumn>
                 <GridCommandColumn Width="90px">

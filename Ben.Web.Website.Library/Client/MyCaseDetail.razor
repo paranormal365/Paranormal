@@ -257,7 +257,7 @@
                                 var s = slot;
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="small">
-                                        @s.StartDateTime.ToViewerLocalTime(UserState).ToString("ddd MMM d, yyyy h:mm tt")
+                                        @s.StartDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
                                         @if (s.EndDateTime.HasValue) { <span> – @s.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTime()</span> }
                                     </span>
                                     <button type="button" class="btn btn-success btn-sm" @onclick="@(async () => await AcceptProposal(p.Id, s.Id))" disabled="@(!(!_respondingProposal))">Accept</button>
