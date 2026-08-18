@@ -34,8 +34,20 @@ namespace Ben.Web.Playwright;
 /// </remarks>
 public abstract class BenTestBase : PageTest
 {
-    /// <summary>Root URL of the running Blazor WebApp. Override with BEN_BASE_URL env var.</summary>
-    protected static string BaseUrl => Environment.GetEnvironmentVariable("BEN_BASE_URL") ?? "http://localhost:5078";
+    /// <summary>
+    /// Root URL of the front end under test. Override with the BEN_BASE_URL env var.
+    /// <para>
+    /// Defaults to :5079 — the original <c>Ben.Web.WebApp</c>, which is where these tests' pages
+    /// still live. <c>Ben.Web.Website</c> took over :5078 (the port Entra has a redirect URI for),
+    /// but its migration from <c>Ben.Web.Library</c> is still in progress, so pointing the suite
+    /// there today would fail on routes that do not exist yet. Flip this default to :5078 once
+    /// the migration waves land.
+    /// </para>
+    /// </summary>
+    protected static string BaseUrl => Environment.GetEnvironmentVariable("BEN_BASE_URL") ?? "http://localhost:5079";
+
+    /// <summary>Root URL of the WebApi. Override with the BEN_API_URL env var.</summary>
+    protected static string ApiUrl => Environment.GetEnvironmentVariable("BEN_API_URL") ?? "http://localhost:5252";
 
     protected static string SuperAdminEmail    => Environment.GetEnvironmentVariable("BEN_SUPERADMIN_EMAIL")    ?? "haveben@msn.com";
     protected static string SuperAdminPassword => Environment.GetEnvironmentVariable("BEN_SUPERADMIN_PASSWORD") ?? "Y@ung615";

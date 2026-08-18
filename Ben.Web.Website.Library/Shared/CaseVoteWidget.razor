@@ -1,0 +1,157 @@
+@namespace Ben.Web.Website.Library.Shared
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@*
+  Community vote widget for a public case.
+  Shows aggregate vote counts (confirms/disputes/inconclusive) and,
+  for authenticated users, buttons to cast or change their vote.
+*@
+
+<div class="case-vote-widget d-flex flex-column gap-2">
+    @if (_summary is null && _loading)
+    {
+        <span class="text-secondary small">Loading votes…</span>
+    }
+    else if (_summary is null && _error is not null)
+    {
+        <span class="text-danger small">@_error</span>
+    }
+    else if (_summary is not null)
+    {
+        @* ── Vote progress bar ──────────────────────────────────────────────── *@
+        @if (_summary.TotalVotes > 0)
+        {
+            <div class="mb-1">
+                <div class="progress" style="height:5px; border-radius:3px;">
+                    <div class="progress-bar bg-success" style="width:@ConfirmsPct%" title="@_summary.ConfirmsCount confirms"></div>
+                    <div class="progress-bar bg-danger"  style="width:@DisputesPct%" title="@_summary.DisputesCount disputes"></div>
+                    <div class="progress-bar bg-warning" style="width:@InconclusivePct%" title="@_summary.InconclusiveCount inconclusive"></div>
+                </div>
+            </div>
+        }
+        <div class="d-flex gap-2 align-items-center" style="font-size:.78rem;">
+            <span class="text-success">✓ @_summary.ConfirmsCount</span>
+            <span class="text-danger">✗ @_summary.DisputesCount</span>
+            <span class="text-warning-emphasis">? @_summary.InconclusiveCount</span>
+            <span class="text-muted ms-auto">@_summary.TotalVotes vote@(_summary.TotalVotes == 1 ? "" : "s")</span>
+            <VoteScoreBadge Score="@_summary.Score" Total="@_summary.TotalVotes" />
+        </div>
+
+        @* ── Vote buttons (authenticated users only) ──────────────────────── *@
+        @if (UserState.IsAuthenticated)
+        {
+            <div class="d-flex gap-1 flex-wrap">
+                @foreach (var vt in Enum.GetValues<EvidenceVoteType>())
+                {
+                    var v = vt;
+                    var isActive = _summary.CurrentUserVote == v;
+                    @* Solid marks the vote this user has cast, outline the ones they have not —
+                       aria-pressed carries the same fact for anyone not seeing the fill. *@
+                    <button type="button"
+                            class="btn btn-sm @VoteButtonClass(v, isActive)"
+                            aria-pressed="@isActive.ToString().ToLowerInvariant()"
+                            @onclick="@(() => CastVote(v))"
+                            disabled="@_isBusy">
+                        @VoteLabel(v)
+                    </button>
+                }
+                @if (_summary.CurrentUserVote.HasValue)
+                {
+                    <button type="button" class="btn btn-sm btn-link text-decoration-none"
+                            @onclick="RemoveVote" disabled="@_isBusy">
+                        Remove
+                    </button>
+                }
+            </div>
+            @if (_actionError is not null)
+            {
+                <span class="text-danger small">@_actionError</span>
+            }
+        }
+        else
+        {
+            <a href="/login" class="text-secondary text-decoration-none" style="font-size:.75rem;">Sign in to vote</a>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid CaseId { get; set; }
+    /// <summary>When provided, skips the API fetch. Used by list views that pre-load summaries in batch.</summary>
+    [Parameter] public CaseVoteSummary? PreloadedSummary { get; set; }
+
+    private CaseVoteSummary? _summary;
+    private bool _loading = true;
+    private bool _isBusy;
+    private string? _error;
+    private string? _actionError;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (PreloadedSummary is not null)
+        {
+            _summary = PreloadedSummary;
+            _loading = false;
+            return;
+        }
+        _loading = true;
+        try { _summary = await AdminClient.GetCaseVoteSummaryAsync(CaseId); }
+        catch { _error = "Failed to load votes."; }
+        _loading = false;
+    }
+
+    private async Task CastVote(EvidenceVoteType voteType)
+    {
+        _isBusy = true;
+        _actionError = null;
+        try
+        {
+            var updated = await AdminClient.CastCaseVoteAsync(CaseId, voteType);
+            if (updated is not null) _summary = updated;
+            else _actionError = "Failed to cast your vote. Please try again.";
+        }
+        catch { _actionError = "Failed to cast your vote. Please try again."; }
+        finally { _isBusy = false; }
+    }
+
+    private async Task RemoveVote()
+    {
+        _isBusy = true;
+        _actionError = null;
+        try
+        {
+            await AdminClient.RemoveCaseVoteAsync(CaseId);
+            _summary = await AdminClient.GetCaseVoteSummaryAsync(CaseId);
+        }
+        catch { _actionError = "Failed to remove your vote. Please try again."; }
+        finally { _isBusy = false; }
+    }
+
+    private double ConfirmsPct     => _summary is { TotalVotes: > 0 } ? _summary.ConfirmsCount     * 100.0 / _summary.TotalVotes : 0;
+    private double DisputesPct     => _summary is { TotalVotes: > 0 } ? _summary.DisputesCount     * 100.0 / _summary.TotalVotes : 0;
+    private double InconclusivePct => _summary is { TotalVotes: > 0 } ? _summary.InconclusiveCount * 100.0 / _summary.TotalVotes : 0;
+
+    private static string VoteLabel(EvidenceVoteType v) => v switch
+    {
+        EvidenceVoteType.Confirms     => "✓ Confirms",
+        EvidenceVoteType.Disputes     => "✗ Disputes",
+        EvidenceVoteType.Inconclusive => "? Inconclusive",
+        _                             => v.ToString(),
+    };
+
+    /// <summary>Bootstrap button class for a vote: solid once cast, outline until then.</summary>
+    private static string VoteButtonClass(EvidenceVoteType v, bool isActive)
+        => (isActive ? "btn-" : "btn-outline-") + VoteThemeColor(v);
+
+    private static string VoteThemeColor(EvidenceVoteType v) => v switch
+    {
+        EvidenceVoteType.Confirms     => "success",
+        EvidenceVoteType.Disputes     => "danger",
+        EvidenceVoteType.Inconclusive => "secondary",
+        _                             => "secondary",
+    };
+}

@@ -1,8 +1,7 @@
-using Ben.Web.WebApp.Services.WebApi;
-using Ben.Web.WebApp.Services;
+using Ben.Web.Services.WebApi;
+using Ben.Web.Services;
 using Ben.Web.WebApp.Components;
-using Ben.Web.Library.Services;
-using Ben.Web.Library.Help;
+using Ben.Web.Services.Help;
 using Ben.Video.Editor.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -68,7 +67,7 @@ builder.Services.AddScoped<VideoExportPublisher>();
 // Records a sidecar pairing against the signed-in account, using the circuit's token. The WASM
 // host registers its own implementation; the editor calls whichever it finds, or none.
 builder.Services.AddScoped<Ben.Video.Editor.Services.ISidecarPairingReporter,
-    Ben.Web.WebApp.Services.SidecarPairingReporter>();
+    Ben.Web.Services.SidecarPairingReporter>();
 builder.Services.Configure<WebApiOptions>(builder.Configuration.GetSection("WebApi"));
 // The site's own name and origin, in one place — see SiteIdentity. Used by the footer, page titles
 // and the link previews that carry a shared URL into a chat window.

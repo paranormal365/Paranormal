@@ -1,0 +1,398 @@
+@*
+  AddressMapPlayer.razor
+  ──────────────────────
+  Reusable map component for displaying and configuring a single address on a
+  Telerik Blazor Map (OpenStreetMap tiles).
+
+  Features:
+  • Tile layer — OpenStreetMap (no API key required)
+  • Marker layer — colored SVG pin using a Telerik icon, with tooltip
+  • Shape layer — geographically accurate radius circle (64-sided polygon)
+  • Config panel — toggle visibility, pick colors (TelerikColorPicker),
+                   pick icon (TelerikDropDownList with icon preview),
+                   set radius via numeric input or slider,
+                   OR click directly on the map to set the region edge
+  • Real-time updates — map reflects every form change before saving
+
+  Usage:
+    <AddressMapPlayer Latitude="@lat"
+                      Longitude="@lon"
+                      Title="@addressLabel"
+                      Config="@_mapConfig"
+                      ConfigChanged="@OnConfigChanged"
+                      ShowConfigPanel="true" />
+
+  The parent is responsible for persisting the config (via IBenAdminClient).
+  This component only edits a local copy and fires ConfigChanged on save.
+*@
+
+@namespace Ben.Web.Website.Library.Manage.Maps
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@if (_invalidCoords)
+{
+    <div class="alert alert-warning py-2 small mb-0">
+        No geocoded coordinates available for this address — map cannot be shown.
+        Save the address and geocoding will run automatically.
+    </div>
+}
+else
+{
+    <div class="address-map-player">
+
+        @* ── Telerik Map ──────────────────────────────────────────────────── *@
+        <TelerikMap @ref="_mapRef"
+                    Center="@_center"
+                    Zoom="@_zoom"
+                    Height="@Height"
+                    Width="100%"
+                    OnClick="@OnMapClick">
+            <MapLayers>
+
+                @* Tile (OpenStreetMap) — UrlTemplate refers to the JS function
+                   defined in AddressMapPlayer.razor.js that returns the tile URL. *@
+                <MapLayer Type="@MapLayersType.Tile"
+                          Attribution="&copy; <a href='https://osm.org/copyright'>OpenStreetMap contributors</a>"
+                          Subdomains="@_tileSubdomains"
+                          UrlTemplate="addressMapTileTemplate" />
+
+                @* Region circle — Shape layer with computed GeoJSON polygon *@
+                @if (_form.ShowRegion && _circleGeoJson is not null)
+                {
+                    <MapLayer Type="@MapLayersType.Shape"
+                              Data="@_circleGeoJson">
+                        <MapLayerShapeSettings>
+                            <MapLayerShapeSettingsStyle>
+                                <MapLayerShapeSettingsStyleFill
+                                    Color="@_form.RegionFillColor"
+                                    Opacity="@_form.RegionFillOpacity" />
+                                <MapLayerShapeSettingsStyleStroke
+                                    Color="@_form.RegionStrokeColor"
+                                    Opacity="@_form.RegionStrokeOpacity"
+                                    Width="@_form.RegionStrokeWidth" />
+                            </MapLayerShapeSettingsStyle>
+                        </MapLayerShapeSettings>
+                    </MapLayer>
+                }
+
+                @* Marker — custom SVG pin via JS template *@
+                @if (_form.ShowMarker)
+                {
+                    <MapLayer Type="@MapLayersType.Marker"
+                              Data="@_markerData"
+                              LocationField="@nameof(AddressMarkerModel.LatLng)"
+                              TitleField="@nameof(AddressMarkerModel.Title)">
+                        <MapLayerMarkerSettings Template="addressMapMarkerTemplate" />
+                    </MapLayer>
+                }
+
+            </MapLayers>
+        </TelerikMap>
+
+        @* ── Click-to-set-radius instruction banner ────────────────────────── *@
+        @if (_resizeMode)
+        {
+            <div class="map-resize-hint alert alert-info py-1 mb-0 small">
+                📍 Click on the map to set the region edge &mdash; click distance from the center sets the radius.
+                <button type="button" class="btn btn-link text-decoration-none btn-sm" @onclick="@(() => _resizeMode = false)">✕ Cancel</button>
+            </div>
+        }
+
+        @* ── Config panel (collapsible) ───────────────────────────────────── *@
+        @if (ShowConfigPanel && !ReadOnly)
+        {
+            <div class="map-config-panel mt-2 p-3 rounded border">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h6 class="mb-0 fw-semibold">Map Settings</h6>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary btn-sm" @onclick="SaveAsync">💾 Save</button>
+                        @if (OnCancel.HasDelegate)
+                        {
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => OnCancel.InvokeAsync())">Cancel</button>
+                        }
+                    </div>
+                </div>
+
+                <div class="row g-3">
+
+                    @* Row 1: visibility toggles *@
+                    <div class="col-12 d-flex flex-wrap gap-3 align-items-center">
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="amp-ison"
+                                   checked="@_form.IsOnMap"
+                                   @onchange="@(e => UpdateForm(_form with { IsOnMap = (bool)e.Value! }))" />
+                            <label class="form-check-label" for="amp-ison">Show on Map</label>
+                        </div>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="amp-showmarker"
+                                   checked="@_form.ShowMarker"
+                                   @onchange="@(e => UpdateForm(_form with { ShowMarker = (bool)e.Value! }))" />
+                            <label class="form-check-label" for="amp-showmarker">Show Marker Pin</label>
+                        </div>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="amp-showregion"
+                                   checked="@_form.ShowRegion"
+                                   @onchange="@(e => UpdateForm(_form with { ShowRegion = (bool)e.Value! }))" />
+                            <label class="form-check-label" for="amp-showregion">Show Radius Region</label>
+                        </div>
+                    </div>
+
+                    @* Row 2: marker color + icon *@
+                    <div class="col-12 col-md-6">
+                        <label class="form-label fw-semibold small">Marker Color</label>
+                        <TelerikColorPicker Value="@_form.MarkerColor"
+                                            ValueChanged="@((string c) => UpdateForm(_form with { MarkerColor = c }))"
+                                            Format="@ColorFormat.Hex"
+                                            ShowPreview="true" />
+                    </div>
+
+                    <div class="col-12 col-md-6">
+                        <label class="form-label fw-semibold small">Marker Icon</label>
+                        <TelerikDropDownList Data="@AddressMapIconRegistry.All"
+                                             Value="@(_form.MarkerIconKey ?? "map-marker-target")"
+                                             ValueChanged="@((string k) => UpdateForm(_form with { MarkerIconKey = k == "map-marker-target" ? null : k }))"
+                                             TextField="@nameof(MapMarkerIconOption.Label)"
+                                             ValueField="@nameof(MapMarkerIconOption.Key)"
+                                             Width="100%">
+                            <ItemTemplate>
+                                @{ var opt = (MapMarkerIconOption)context; }
+                                <span class="d-flex align-items-center gap-2">
+                                    <TelerikSvgIcon Icon="@opt.Icon" />
+                                    @opt.Label
+                                </span>
+                            </ItemTemplate>
+                        </TelerikDropDownList>
+                    </div>
+
+                    @* Row 3: region settings (visible when ShowRegion) *@
+                    @if (_form.ShowRegion)
+                    {
+                        @* Radius *@
+                        <div class="col-12">
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <label class="form-label fw-semibold small mb-0">
+                                    Region Radius: <strong>@_form.RegionRadiusMiles.ToString("F2") mi</strong>
+                                </label>
+                                @* Highlighted while armed, so it is clear the next click on the
+                                   map means "set the edge" rather than "pan". *@
+                                <button type="button"
+                                        class="btn btn-sm @(_resizeMode ? "btn-outline-primary" : "btn-outline-secondary")"
+                                        aria-pressed="@_resizeMode.ToString().ToLowerInvariant()"
+                                        @onclick="@(() => _resizeMode = !_resizeMode)"
+                                        title="Click the map to set where the region edge is">
+                                    🎯 @(_resizeMode ? "Click map to set edge…" : "Click Map to Resize")
+                                </button>
+                            </div>
+                            <input type="range" class="form-range" min="0.1" max="50.0" step="0.1"
+                                   value="@_form.RegionRadiusMiles"
+                                   @oninput="@(e => UpdateForm(_form with { RegionRadiusMiles = Math.Round(AsDouble(e.Value, _form.RegionRadiusMiles), 2) }))" />
+                            <input type="number" class="form-control mt-1" style="max-width:140px;"
+                                       min="0.1" max="500.0" step="0.1"
+                                       value="@_form.RegionRadiusMiles"
+                                       @onchange="@(e => UpdateForm(_form with { RegionRadiusMiles = Math.Round(Math.Max(0.1, AsDouble(e.Value, _form.RegionRadiusMiles)), 2) }))" />
+                        </div>
+
+                        @* Region fill color + opacity *@
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold small">Region Fill Color</label>
+                            <TelerikColorPicker Value="@_form.RegionFillColor"
+                                                ValueChanged="@((string c) => UpdateForm(_form with { RegionFillColor = c }))"
+                                                Format="@ColorFormat.Hex"
+                                                ShowPreview="true" />
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold small">
+                                Fill Opacity: <strong>@((_form.RegionFillOpacity * 100).ToString("F0"))%</strong>
+                            </label>
+                            <input type="range" class="form-range" min="0.0" max="1.0" step="0.05"
+                                   value="@_form.RegionFillOpacity"
+                                   @oninput="@(e => UpdateForm(_form with { RegionFillOpacity = Math.Round(AsDouble(e.Value, _form.RegionFillOpacity), 2) }))" />
+                        </div>
+
+                        @* Region stroke color *@
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold small">Region Border Color</label>
+                            <TelerikColorPicker Value="@_form.RegionStrokeColor"
+                                                ValueChanged="@((string c) => UpdateForm(_form with { RegionStrokeColor = c }))"
+                                                Format="@ColorFormat.Hex"
+                                                ShowPreview="true" />
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold small">
+                                Border Width: <strong>@_form.RegionStrokeWidth px</strong>
+                            </label>
+                            <input type="range" class="form-range" min="0.0" max="8.0" step="0.5"
+                                   value="@_form.RegionStrokeWidth"
+                                   @oninput="@(e => UpdateForm(_form with { RegionStrokeWidth = Math.Round(AsDouble(e.Value, _form.RegionStrokeWidth), 1) }))" />
+                        </div>
+                    }
+
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// Reads a number out of an input event. Range and number inputs both hand back strings, and a
+    /// number box mid-edit ("", "-", "0.") parses as nothing at all — falling back to the current
+    /// value stops the control jumping to zero while somebody is still typing.
+    /// </summary>
+    private static double AsDouble(object? raw, double fallback)
+        => double.TryParse(raw?.ToString(), System.Globalization.NumberStyles.Float,
+                           System.Globalization.CultureInfo.InvariantCulture, out var v)
+           ? v : fallback;
+
+    // ── Parameters ────────────────────────────────────────────────────────────
+
+    /// <summary>Latitude of the address in decimal degrees.</summary>
+    [Parameter, EditorRequired] public double Latitude { get; set; }
+
+    /// <summary>Longitude of the address in decimal degrees.</summary>
+    [Parameter, EditorRequired] public double Longitude { get; set; }
+
+    /// <summary>Label shown in the marker tooltip.</summary>
+    [Parameter] public string Title { get; set; } = string.Empty;
+
+    /// <summary>Current map configuration. Null = use defaults (marker only, not on map).</summary>
+    [Parameter] public AddressMapConfig? Config { get; set; }
+
+    /// <summary>Fires when the user clicks Save in the config panel with the updated config.</summary>
+    [Parameter] public EventCallback<AddressMapConfig> ConfigChanged { get; set; }
+
+    /// <summary>Fires when the user clicks Cancel in the config panel.</summary>
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    /// <summary>Whether to show the config form panel below the map.</summary>
+    [Parameter] public bool ShowConfigPanel { get; set; } = false;
+
+    /// <summary>Hides the config form regardless of <see cref="ShowConfigPanel"/>.</summary>
+    [Parameter] public bool ReadOnly { get; set; } = false;
+
+    /// <summary>CSS height of the map tile area (default "380px").</summary>
+    [Parameter] public string Height { get; set; } = "380px";
+
+    /// <summary>Initial zoom level. If null, automatically derived from region radius.</summary>
+    [Parameter] public double? Zoom { get; set; }
+
+    // ── Internal state ────────────────────────────────────────────────────────
+
+    private static readonly string[] _tileSubdomains = ["a", "b", "c"];
+
+    private TelerikMap? _mapRef;
+    private IJSObjectReference? _jsModule;
+
+    private bool _invalidCoords;
+    private bool _resizeMode;
+
+    private double[] _center = [0, 0];
+    private double   _zoom   = 13;
+
+    private AddressMapConfig _form = AddressMapConfig.Default;
+
+    private List<AddressMarkerModel>? _markerData;
+    private object? _circleGeoJson;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override void OnParametersSet()
+    {
+        _invalidCoords = Latitude == 0 && Longitude == 0;
+        if (_invalidCoords) return;
+
+        _center = [Latitude, Longitude];
+        _form   = AddressMapConfig.FromRecord(null) with
+        {
+            IsOnMap           = Config?.IsOnMap           ?? false,
+            ShowMarker        = Config?.ShowMarker        ?? true,
+            ShowRegion        = Config?.ShowRegion        ?? false,
+            RegionRadiusMiles = Config?.RegionRadiusMiles ?? 1.0,
+            MarkerColor       = Config?.MarkerColor       ?? "#e63535",
+            MarkerIconKey     = Config?.MarkerIconKey,
+            RegionFillColor   = Config?.RegionFillColor   ?? "#3388ff",
+            RegionFillOpacity = Config?.RegionFillOpacity ?? 0.2,
+            RegionStrokeColor = Config?.RegionStrokeColor ?? "#1155cc",
+            RegionStrokeOpacity = Config?.RegionStrokeOpacity ?? 0.8,
+            RegionStrokeWidth   = Config?.RegionStrokeWidth   ?? 2.0,
+        };
+
+        _zoom = Zoom ?? (
+            _form.ShowRegion
+                ? MapGeoJsonHelper.ZoomForRadius(_form.RegionRadiusMiles)
+                : 14);
+
+        RebuildMapData();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_invalidCoords)
+        {
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "./_content/Ben.Web.Website.Library/Manage/Maps/AddressMapPlayer.razor.js");
+            await _jsModule.InvokeVoidAsync("initAddressMapTemplates");
+            _mapRef?.Refresh();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_jsModule is not null)
+            await _jsModule.DisposeAsync();
+    }
+
+    // ── Map data builders ─────────────────────────────────────────────────────
+
+    private void RebuildMapData()
+    {
+        _markerData = [
+            new AddressMarkerModel
+            {
+                LatLng      = [Latitude, Longitude],
+                Title       = Title,
+                Color       = _form.MarkerColor,
+                IconSvgPath = AddressMapIconRegistry.GetPath(_form.MarkerIconKey),
+            }
+        ];
+
+        _circleGeoJson = _form.ShowRegion && _form.RegionRadiusMiles > 0
+            ? MapGeoJsonHelper.ComputeCircleGeoJson(Latitude, Longitude, _form.RegionRadiusMiles)
+            : null;
+    }
+
+    private void UpdateForm(AddressMapConfig updated)
+    {
+        _form = updated;
+        RebuildMapData();
+
+        if (_form.ShowRegion)
+            _zoom = MapGeoJsonHelper.ZoomForRadius(_form.RegionRadiusMiles);
+
+        _mapRef?.Refresh();
+    }
+
+    // ── Map click — set region edge ───────────────────────────────────────────
+
+    private void OnMapClick(MapClickEventArgs args)
+    {
+        if (!_resizeMode) return;
+
+        double miles = MapGeoJsonHelper.HaversineDistanceMiles(
+            Latitude, Longitude,
+            args.Location.Latitude, args.Location.Longitude);
+
+        miles = Math.Round(Math.Max(0.1, miles), 2);
+        UpdateForm(_form with { RegionRadiusMiles = miles });
+        _resizeMode = false;
+    }
+
+    // ── Save ──────────────────────────────────────────────────────────────────
+
+    private async Task SaveAsync()
+    {
+        if (ConfigChanged.HasDelegate)
+            await ConfigChanged.InvokeAsync(_form);
+    }
+}

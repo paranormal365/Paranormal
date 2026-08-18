@@ -18,8 +18,11 @@
     <Project Path="Ben.Video.Sidecar.Tests/Ben.Video.Sidecar.Tests.csproj" />
   </Folder>
   <Folder Name="/Web Layer/">
+    <Project Path="Ben.Web.Services/Ben.Web.Services.csproj" />
     <Project Path="Ben.Web.Library/Ben.Web.Library.csproj" />
     <Project Path="Ben.Web.WebApp/Ben.Web.WebApp.csproj" Id="8b8326c5-3f81-470c-aead-743cd856c613" />
+    <Project Path="Ben.Web.Website.Library/Ben.Web.Website.Library.csproj" />
+    <Project Path="Ben.Web.Website/Ben.Web.Website.csproj" />
   </Folder>
   <Folder Name="/Media Projects/">
     <Project Path="Ben.Video.Editor/Ben.Video.Editor.csproj" />

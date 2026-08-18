@@ -1,0 +1,223 @@
+@page "/styleguide"
+@inject BenToastService Toasts
+@inject IWebHostEnvironment Env
+
+<PageTitle>Style guide</PageTitle>
+
+@*
+    Development-only harness for the Kit components and the Telerik widgets kept by design.
+
+    Its job is to make the two halves of the UI checkable side by side in both themes: if a kept
+    Telerik widget still reads as a control suite dropped onto the template, it shows up here
+    rather than three waves into the migration. Toggle light/dark in the header while looking at
+    this page.
+*@
+
+@if (!Env.IsDevelopment())
+{
+    <div class="alert alert-warning">The style guide is only available in Development.</div>
+}
+else
+{
+<BenPageHeader Title="Style guide"
+               Subtitle="Kit + kept Telerik"
+               Icon="layers"
+               Description="Every shared component, so the template's own controls and the Telerik widgets kept by design can be compared in both themes."
+               Breadcrumbs="_crumbs" />
+
+<div class="row">
+
+    <div class="col-xl-6">
+        <BenPanel Title="Buttons &amp; inputs" Subtitle="native Bootstrap">
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <button class="btn btn-primary">Primary</button>
+                <button class="btn btn-secondary">Secondary</button>
+                <button class="btn btn-success">Success</button>
+                <button class="btn btn-danger">Danger</button>
+                <button class="btn btn-outline-secondary">Outline</button>
+                <button class="btn btn-link">Link</button>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="sg-text">Text</label>
+                <input id="sg-text" class="form-control" @bind="_text" placeholder="Type here" />
+                <div class="form-text">Bound value: <code>@_text</code></div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="sg-select">Select</label>
+                <select id="sg-select" class="form-select" @bind="_choice">
+                    <option>First</option><option>Second</option><option>Third</option>
+                </select>
+            </div>
+            <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="sg-switch" @bind="_switch" />
+                <label class="form-check-label" for="sg-switch">Switch (@(_switch ? "on" : "off"))</label>
+            </div>
+            <label class="form-label" for="sg-range">Range: @_range</label>
+            <input id="sg-range" type="range" class="form-range" min="0" max="100" @bind="_range" @bind:event="oninput" />
+        </BenPanel>
+
+        <BenPanel Title="BenTabs" Subtitle="TelerikTabStrip replacement">
+            <BenTabs @bind-ActiveIndex="_tab">
+                <BenTab Title="Overview" Icon="grid">
+                    <p class="mb-0">Panels render from the component's own tree — no <code>data-bs-toggle</code>.</p>
+                </BenTab>
+                <BenTab Title="Form" Icon="edit" Badge="2">
+                    <label class="form-label" for="sg-tabinput">An input inside a tab</label>
+                    <input id="sg-tabinput" class="form-control" @bind="_tabText" />
+                    <div class="form-text">Bound: <code>@_tabText</code> — proves binding survives tab switches.</div>
+                </BenTab>
+                <BenTab Title="Disabled" Disabled="true"><p>Unreachable.</p></BenTab>
+            </BenTabs>
+        </BenPanel>
+
+        <BenPanel Title="BenLoaderOverlay" Fullscreenable="true">
+            <div class="mb-2">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => _loading = !_loading">
+                    Toggle overlay
+                </button>
+            </div>
+            <BenLoaderOverlay Visible="_loading" Text="Loading…">
+                <div class="border rounded p-3">
+                    <p class="mb-0">Content stays in place while the overlay covers it, so nothing jumps.</p>
+                </div>
+            </BenLoaderOverlay>
+        </BenPanel>
+    </div>
+
+    <div class="col-xl-6">
+        <BenPanel Title="Overlays" Subtitle="modal, confirm, toasts, dropdown">
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <button class="btn btn-primary" @onclick="() => _modal = true">Open BenModal</button>
+                <button class="btn btn-danger" @onclick="() => _confirm = true">Destructive confirm</button>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <button class="btn btn-success btn-sm" @onclick="ToastSuccess">Success toast</button>
+                <button class="btn btn-primary btn-sm" @onclick="ToastInfo">Info</button>
+                <button class="btn btn-warning btn-sm" @onclick="ToastWarning">Warning</button>
+                <button class="btn btn-danger btn-sm" @onclick="ToastError">Error (sticky)</button>
+            </div>
+
+            <BenDropdown Title="A dropdown" ToggleClass="btn btn-outline-secondary" MinWidth="260px">
+                <ToggleContent>Open menu</ToggleContent>
+                <ChildContent>
+                    <h6 class="dropdown-header">Menu with an input</h6>
+                    <div class="px-3 pb-2">
+                        <input class="form-control form-control-sm" placeholder="Filter…" @bind="_dropText" />
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <button class="dropdown-item" type="button">First action</button>
+                    <button class="dropdown-item" type="button">Second action</button>
+                    <div class="px-3 pt-2 small text-muted">Bound: <code>@_dropText</code></div>
+                </ChildContent>
+            </BenDropdown>
+        </BenPanel>
+
+        <BenPanel Title="Kept Telerik" Subtitle="restyled via telerik-night.css">
+            <p class="text-muted small">
+                These have no honest Bootstrap equivalent, so they stay Telerik and are themed to
+                match. Check them in both light and dark.
+            </p>
+
+            <label class="form-label">TelerikDatePicker</label>
+            <TelerikDatePicker @bind-Value="_date" Width="100%" />
+
+            <label class="form-label mt-3">TelerikDropDownList (templated)</label>
+            <TelerikDropDownList Data="@_options" @bind-Value="_option" Width="100%" />
+
+            <label class="form-label mt-3">TelerikGrid</label>
+            <TelerikGrid Data="@_rows" Pageable="true" Sortable="true" PageSize="4" Height="260px">
+                <GridColumns>
+                    <GridColumn Field="@nameof(Row.Name)" Title="Name" />
+                    <GridColumn Field="@nameof(Row.Status)" Title="Status" />
+                    <GridColumn Field="@nameof(Row.Count)" Title="Count" Width="90px" />
+                </GridColumns>
+            </TelerikGrid>
+        </BenPanel>
+
+        <BenPanel Title="Alerts &amp; badges" Collapsible="true" Collapsed="false">
+            <div class="alert alert-primary py-2">Primary alert</div>
+            <div class="alert alert-success py-2">Success alert</div>
+            <div class="alert alert-warning py-2">Warning alert</div>
+            <div class="alert alert-danger py-2 mb-3">Danger alert</div>
+            <div class="d-flex flex-wrap gap-2">
+                <span class="badge text-bg-primary">primary</span>
+                <span class="badge text-bg-success">success</span>
+                <span class="badge text-bg-warning">warning</span>
+                <span class="badge text-bg-danger">danger</span>
+                <span class="badge text-bg-secondary">secondary</span>
+            </div>
+        </BenPanel>
+    </div>
+</div>
+
+<BenModal @bind-Visible="_modal" Title="A dialog with a form in it" Size="lg">
+    <ChildContent>
+        <p>
+            The point of this dialog: inputs inside it must keep binding. TelerikDialog is banned
+            in this codebase because they stopped — type below, close, and reopen.
+        </p>
+        <label class="form-label" for="sg-modal-input">Name</label>
+        <input id="sg-modal-input" class="form-control" @bind="_modalText" />
+        <div class="form-text">Bound value: <code>@_modalText</code></div>
+    </ChildContent>
+    <FooterContent>
+        <button class="btn btn-outline-secondary" @onclick="() => _modal = false">Cancel</button>
+        <button class="btn btn-primary" @onclick="() => _modal = false">Save</button>
+    </FooterContent>
+</BenModal>
+
+<BenConfirmDialog @bind-Visible="_confirm"
+                  Title="Delete this case?"
+                  Message="Deleting a case removes its files and notes as well. This cannot be undone."
+                  ConfirmText="Delete"
+                  Destructive="true"
+                  OnConfirm="OnConfirmed" />
+}
+
+@code {
+    private readonly IReadOnlyList<BenPageHeader.Crumb> _crumbs = new[]
+    {
+        new BenPageHeader.Crumb("Home", "/"),
+        new BenPageHeader.Crumb("Style guide"),
+    };
+
+    private string _text = string.Empty;
+    private string _choice = "First";
+    private bool _switch = true;
+    private int _range = 40;
+    private int _tab;
+    private string _tabText = string.Empty;
+    private bool _loading;
+    private bool _modal;
+    private string _modalText = string.Empty;
+    private bool _confirm;
+    private string _dropText = string.Empty;
+
+    private DateTime? _date = DateTime.Today;
+    private string _option = "Second";
+    private readonly List<string> _options = new() { "First", "Second", "Third" };
+
+    private sealed record Row(string Name, string Status, int Count);
+
+    private readonly List<Row> _rows = new()
+    {
+        new("Ravenswood Manor", "Open", 12),
+        new("Old Mill Road", "Closed", 4),
+        new("Harborview Inn", "Open", 9),
+        new("Pine Hollow", "Pending", 2),
+        new("Cedar Street", "Open", 7),
+        new("The Old Rectory", "Closed", 1),
+    };
+
+    private void ToastSuccess() => Toasts.Success("Saved.");
+    private void ToastInfo()    => Toasts.Info("Nine files queued.");
+    private void ToastWarning() => Toasts.Warning("Two photos were skipped.");
+    private void ToastError()   => Toasts.Error("Upload failed — the file is larger than the server allows.");
+
+    private void OnConfirmed()
+    {
+        _confirm = false;
+        Toasts.Success("Deleted.", "Case removed");
+    }
+}

@@ -1,0 +1,45 @@
+@implements IDisposable
+@inject BenToastService Toasts
+
+@*
+    Renders the toast queue. Lives once, in the layout.
+
+    Bootstrap's Toast plugin is not used: it hides and removes elements itself, which would leave
+    Blazor's render tree describing nodes that are no longer there. The service owns the list and
+    this component renders it — dismissal is a list removal, not a DOM operation.
+*@
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:1095;">
+    @foreach (var toast in _toasts)
+    {
+        <div class="toast show" role="@(toast.Level == BenToastLevel.Error ? "alert" : "status")"
+             aria-live="@(toast.Level == BenToastLevel.Error ? "assertive" : "polite")" aria-atomic="true">
+            <div class="toast-header @toast.HeaderClass">
+                <BenIcon Name="@toast.Icon" Class="me-2" />
+                <strong class="me-auto">@(toast.Title ?? toast.DefaultTitle)</strong>
+                <button type="button" class="btn-close btn-close-white" aria-label="Close"
+                        @onclick="() => Toasts.Dismiss(toast.Id)"></button>
+            </div>
+            <div class="toast-body">@toast.Message</div>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<BenToast> _toasts = Array.Empty<BenToast>();
+
+    protected override void OnInitialized()
+    {
+        Toasts.Changed += OnChanged;
+        _toasts = Toasts.Current;
+    }
+
+    // Auto-dismiss fires on a timer thread, so marshal onto the renderer before touching state.
+    private void OnChanged() => InvokeAsync(() =>
+    {
+        _toasts = Toasts.Current;
+        StateHasChanged();
+    });
+
+    public void Dispose() => Toasts.Changed -= OnChanged;
+}

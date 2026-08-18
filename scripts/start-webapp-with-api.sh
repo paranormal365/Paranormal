@@ -3,7 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 API_URL="${BEN_WEBAPI_URL:-http://localhost:5252}"
-WEBAPP_URL="${BEN_WEBAPP_URL:-http://localhost:5078}"
+
+# Which front end to launch. Defaults to the original Telerik-skinned WebApp, which moved to
+# :5079 when Ben.Web.Website took over :5078 (the port registered with Entra as a redirect URI
+# and already allow-listed for CORS). start-website-with-api.sh sets these for the new site.
+APP_PROJECT="${BEN_APP_PROJECT:-Ben.Web.WebApp/Ben.Web.WebApp.csproj}"
+WEBAPP_URL="${BEN_WEBAPP_URL:-http://localhost:5079}"
 API_PID_FILE="$ROOT_DIR/.vscode/.webapi.pid"
 
 is_api_up() {
@@ -41,7 +46,7 @@ else
   start_api
 fi
 
-echo "[startup] Launching WebApp at $WEBAPP_URL"
+echo "[startup] Launching $APP_PROJECT at $WEBAPP_URL"
 
 # Open the browser once the webapp is accepting connections.
 # Runs as an orphaned background process so exec can replace this shell immediately.
@@ -57,4 +62,4 @@ echo "[startup] Launching WebApp at $WEBAPP_URL"
 
 cd "$ROOT_DIR"
 exec env ASPNETCORE_ENVIRONMENT=Development \
-  dotnet run --project Ben.Web.WebApp/Ben.Web.WebApp.csproj --urls "$WEBAPP_URL"
+  dotnet run --project "$APP_PROJECT" --urls "$WEBAPP_URL"

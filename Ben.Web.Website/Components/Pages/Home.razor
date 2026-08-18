@@ -1,0 +1,14 @@
+@page "/"
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+
+<PageTitle>@SiteOptions.Value.Name — @SiteOptions.Value.Tagline</PageTitle>
+
+@*
+    The landing page is three library components, same as the original host: the hero with its
+    location search, then what is near the visitor, then the public case map. All three are
+    anonymous-safe — they degrade to a browse or a prompt rather than requiring a sign-in.
+*@
+
+<HomeHero />
+<NearbyDiscovery />
+<PublicCaseDiscovery />

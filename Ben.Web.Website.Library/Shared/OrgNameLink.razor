@@ -1,0 +1,29 @@
+@if (OrganizationId is null || string.IsNullOrWhiteSpace(OrganizationName))
+{
+    <span>@(OrganizationName ?? "Unknown organization")</span>
+}
+else if (IsMember)
+{
+    <a href="/organizations/@OrganizationId">@OrganizationName</a>
+}
+else if (!string.IsNullOrWhiteSpace(OrgUrlName))
+{
+    <a href="/o/@OrgUrlName">@OrganizationName</a>
+}
+else
+{
+    <span>@OrganizationName</span>
+}
+
+@code {
+    /// <summary>The organization to display. If null, "Unknown organization" is shown.</summary>
+    [Parameter] public Guid? OrganizationId { get; set; }
+
+    [Parameter] public string? OrganizationName { get; set; }
+
+    /// <summary>URL slug for the public org home page (e.g. "/o/{UrlName}"). Required to link non-members anywhere.</summary>
+    [Parameter] public string? OrgUrlName { get; set; }
+
+    /// <summary>Whether the current viewer is a member of this org (or SuperAdmin) — caller determines this, since it varies by data already loaded at each call site.</summary>
+    [Parameter] public bool IsMember { get; set; }
+}

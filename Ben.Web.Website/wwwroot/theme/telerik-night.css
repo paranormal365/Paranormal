@@ -1,0 +1,104 @@
+/* Telerik/Kendo → Night bridge.
+ *
+ * Loaded after kendo-theme-bootstrap/all.css. Kendo themes in Telerik 14.x are CSS-variable
+ * driven, so remapping the variables is enough to make the widgets kept from Telerik (Grid,
+ * Scheduler, Editor, Map, date/time pickers, ColorPicker, ContextMenu) read as part of the
+ * template rather than as a control suite dropped on top of it.
+ *
+ * Values come from the Night skin's own compiled palette, referenced through Bootstrap's
+ * custom properties so light and dark both follow whatever data-bs-theme is active — the same
+ * attribute the template and Bootstrap already key off. That is why this file has no explicit
+ * dark-mode block: the variables it reads are themselves theme-dependent.
+ *
+ * Phase 3 fills in the per-component corrections (grid header/row treatment, popup surfaces,
+ * focus rings) once there is a styleguide page to check them against in both themes.
+ */
+
+:root {
+    /* Brand */
+    --kendo-color-primary:            var(--bs-primary, #37508a);
+    --kendo-color-primary-contrast:   #fff;
+    --kendo-color-secondary:          var(--bs-secondary, #6c757d);
+    --kendo-color-success:            var(--bs-success, #489e48);
+    --kendo-color-info:               var(--bs-info, #66366c);
+    --kendo-color-warning:            var(--bs-warning, #aaa256);
+    --kendo-color-error:              var(--bs-danger, #a85593);
+
+    /* Surfaces — follow the template's body/card colours so widgets sit on the same ground */
+    --kendo-color-app-surface:        var(--bs-body-bg);
+    --kendo-color-surface:            var(--bs-tertiary-bg, var(--bs-body-bg));
+    --kendo-color-surface-alt:        var(--bs-body-bg);
+    --kendo-color-on-app-surface:     var(--bs-body-color);
+    --kendo-color-base:               var(--bs-tertiary-bg, var(--bs-body-bg));
+    --kendo-color-on-base:            var(--bs-body-color);
+    --kendo-color-border:             var(--bs-border-color);
+    --kendo-color-border-alt:         var(--bs-border-color);
+
+    /* Type — one font stack across template and widgets */
+    --kendo-font-family:              var(--bs-body-font-family);
+    --kendo-font-size:                var(--bs-body-font-size);
+    --kendo-line-height:              var(--bs-body-line-height);
+
+    /* Radius — the template's controls are squarer than Kendo's default */
+    --kendo-border-radius-md:         var(--bs-border-radius, .375rem);
+}
+
+/* The Kendo body class must not repaint the page: the template owns the background. */
+body.k-body {
+    background-color: transparent;
+    color: var(--bs-body-color);
+    font-family: var(--bs-body-font-family);
+}
+
+/* Popups (dropdowns, pickers, context menus) render in a portal at the document root, so they
+   sit outside the template's stacking contexts. Keep them above the fixed header and drawers. */
+.k-animation-container,
+.k-popup { z-index: 1090; }
+
+/* ── Measured corrections ───────────────────────────────────────────────────
+   The variable mapping above gets the colours right, but two differences only
+   show up once a Telerik widget sits beside a Bootstrap one. Both were measured
+   off the /styleguide page rather than guessed. */
+
+/* 1. Input metrics. Kendo's inputs came out 39.6px tall at 14.8px type against
+      Bootstrap's 43.6px at 16px — a 4px step that reads as misalignment when a
+      date picker sits next to a text box in the same form row. Match Bootstrap's
+      padding and type so a mixed row lines up. */
+.k-input,
+.k-picker {
+    font-size: .875rem;                       /* tracks .form-control in app.css */
+    line-height: var(--bs-body-line-height);
+}
+
+.k-input .k-input-inner,
+.k-picker .k-input-inner {
+    /* Matches .form-control's padding in app.css. Measure both after changing either — the
+       first attempt used Bootstrap's stock .375rem and left Kendo 4px short of the template's
+       own overridden padding. */
+    padding-block: .25rem;
+    padding-inline: .75rem;
+}
+
+/* 2. Grid surface. .k-grid painted itself --bs-body-bg (#212529) while the panel
+      containing it is --bs-tertiary-bg (#272b30), so every grid read as a pasted-on
+      box. Inheriting the panel's ground is what makes it look built in. */
+.k-grid,
+.k-grid .k-grid-header,
+.k-grid .k-grid-footer,
+.k-grid .k-table-th { background-color: transparent; }
+
+/* Header row separates from the data by its rule, not by weight — the template sets its own
+   type weights and this should not override them. */
+.k-grid .k-table-th {
+    color: var(--bs-emphasis-color, var(--bs-body-color));
+    border-bottom-color: var(--bs-border-color);
+}
+
+/* Zebra striping keyed to the current theme, so it works in light and dark from
+   one rule instead of two. */
+.k-grid .k-table-alt-row {
+    background-color: color-mix(in srgb, var(--bs-body-color) 4%, transparent);
+}
+
+.k-grid td,
+.k-grid .k-table-td { border-color: var(--bs-border-color); }

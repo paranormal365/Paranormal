@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Telerik stays referenced, but only the widgets with no honest Bootstrap equivalent are
+         used from it (Grid, Scheduler, Editor, Map, date/time pickers, ColorPicker, ContextMenu).
+         Those are restyled to match the template via wwwroot/theme/telerik-night.css in the host.
+         Everything else is native Bootstrap markup or a component from Kit/. -->
+    <PackageReference Include="Telerik.UI.for.Blazor" Version="14.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ben.Data.Common\Ben.Data.Common.csproj" />
+    <ProjectReference Include="..\Ben.Service.Models\Ben.Service.Models.csproj" />
+    <ProjectReference Include="..\Ben.Web.Services\Ben.Web.Services.csproj" />
+    <ProjectReference Include="..\Ben.Video.Editor\Ben.Video.Editor.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ben.Web.Tests" />
+  </ItemGroup>
+
+</Project>

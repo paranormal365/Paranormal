@@ -1,0 +1,114 @@
+@* Reusable chat-style message thread for case client↔org dialogue. *@
+@using Ben.Data.Common.Enums
+@using Ben.Web.Services
+@inject IBenUserState UserState
+
+@* ── Thread display ──────────────────────────────────────────────────────────── *@
+@if (_messages is null)
+{
+    <BenLoaderOverlay Visible="true" Text="Loading messages…" />
+}
+else if (_messages.Count == 0)
+{
+    <div class="text-secondary small text-center py-3">
+        No messages yet.
+        @if (CurrentSide == CaseMessageSide.Client)
+        {
+            <span>Send a message to your investigation group below.</span>
+        }
+        else
+        {
+            <span>Send a message to the client below.</span>
+        }
+    </div>
+}
+else
+{
+    <div class="d-flex flex-column gap-2 mb-3" style="max-height:420px; overflow-y:auto;" @ref="_scrollRef">
+        @foreach (var msg in _messages)
+        {
+            var isOwn = msg.SenderSide == CurrentSide;
+            <div class="d-flex @(isOwn ? "justify-content-end" : "justify-content-start")">
+                <div class="rounded-3 px-3 py-2 @(isOwn ? "bg-primary text-white" : "bg-light border")"
+                     style="max-width:80%; word-break:break-word;">
+                    @if (!isOwn)
+                    {
+                        <div class="fw-semibold small mb-1">@msg.AuthorDisplayName</div>
+                    }
+                    <div>@msg.Body</div>
+                    <div class="@(isOwn ? "text-white-50" : "text-muted") mt-1" style="font-size:.7rem;">
+                        @msg.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d h:mm tt")
+                        @if (isOwn && CurrentSide == CaseMessageSide.Client && !msg.IsReadByOrg)
+                        {
+                            <span class="ms-1">· Unread</span>
+                        }
+                        @if (isOwn && CurrentSide == CaseMessageSide.Organization && !msg.IsReadByClient)
+                        {
+                            <span class="ms-1">· Unread</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@* ── Compose box ─────────────────────────────────────────────────────────────── *@
+<div class="d-flex gap-2 mt-2">
+    @* @oninput rather than @bind: Send is gated on this value, and binding on blur would leave
+       the button dead for anyone who types and clicks straight through. *@
+    <textarea class="form-control flex-grow-1" rows="2"
+              placeholder="@(CurrentSide == CaseMessageSide.Client ? "Message your investigation group…" : "Message the client…")"
+              aria-label="Message"
+              value="@_draft"
+              @oninput="@(e => _draft = e.Value?.ToString() ?? string.Empty)"></textarea>
+    <button type="button" class="btn btn-primary align-self-start"
+            disabled="@(_sending || string.IsNullOrWhiteSpace(_draft))"
+            @onclick="Send">
+        <BenIcon Name="mail" Class="me-1" />Send
+    </button>
+</div>
+@if (_error is not null)
+{
+    <div class="alert alert-danger mt-2 mb-0 py-2 small">@_error</div>
+}
+
+@code {
+    /// <summary>Which side the current viewer is on (determines bubble alignment and read markers).</summary>
+    [Parameter, EditorRequired] public CaseMessageSide CurrentSide { get; set; }
+
+    /// <summary>Async function to load messages.</summary>
+    [Parameter, EditorRequired] public Func<Task<IReadOnlyList<CaseMessageRecord>>> LoadMessages { get; set; } = null!;
+
+    /// <summary>Async function to post a new message and return the saved record.</summary>
+    [Parameter, EditorRequired] public Func<string, Task<CaseMessageRecord?>> PostMessage { get; set; } = null!;
+
+    private List<CaseMessageRecord>? _messages;
+    private string _draft = string.Empty;
+    private bool _sending;
+    private string? _error;
+    private ElementReference _scrollRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _messages = (await LoadMessages()).ToList(); }
+        catch { _error = "Failed to load messages."; _messages = []; }
+    }
+
+    private async Task Send()
+    {
+        if (_sending || string.IsNullOrWhiteSpace(_draft)) return;
+        _sending = true;
+        _error = null;
+        var body = _draft.Trim();
+        _draft = string.Empty;
+        try
+        {
+            var saved = await PostMessage(body);
+            if (saved is not null) _messages ??= [];
+            _messages?.Add(saved!);
+        }
+        catch { _error = "Failed to send message. Please try again."; }
+        finally { _sending = false; }
+    }
+}

@@ -1,0 +1,261 @@
+@inherits LayoutComponentBase
+
+@implements IDisposable
+
+@inject NavigationManager NavManager
+@inject IWebApiClient WebApiClient
+@inject IWebApiTokenStore TokenStore
+@inject IWebApiAuthService AuthService
+@inject IJSRuntime JS
+@inject ProtectedLocalStorage LocalStorage
+@inject EntraTokenHolder EntraTokenHolder
+@inject PersistentComponentState AppState
+
+@*
+    The template's app-wrap skeleton. Everything below the markup is carried over from the
+    original host's MainLayout unchanged — the auth bootstrap sequence is the single most
+    load-bearing thing in the app (it is what makes AuthReady meaningful for the 58 components
+    that await it), so the re-skin deliberately changes the chrome around it and nothing in it.
+*@
+
+<TelerikRootComponent>
+    <div class="app-wrap">
+
+        @* Auth flags are passed down rather than read from the token store inside each child.
+           MainLayout's own restore path calls StateHasChanged() without raising StateChanged
+           (raising it would immediately re-persist what was just read back), so a child that
+           only subscribed to that event would never learn it is now signed in — the header
+           would sit on "Sign In" while the sidebar showed the signed-in nav. Passing the flags
+           as parameters makes MainLayout's re-render propagate. *@
+        <BenHeader IsAuthenticated="@TokenStore.IsAuthenticated"
+                   OnSignOut="HandleLogout" />
+        <BenNav IsAuthenticated="@TokenStore.IsAuthenticated"
+                IsSuperAdmin="@TokenStore.IsSuperAdmin"
+                IsImpersonating="@TokenStore.IsImpersonating" />
+
+        <main class="app-body">
+            <div class="app-content">
+                <div class="content-wrapper">
+                    @Body
+                </div>
+            </div>
+            <BenFooter />
+        </main>
+
+        @* One toast host for the whole app; BenToastService is what pages talk to. *@
+        <BenToastHost />
+
+    </div>
+</TelerikRootComponent>
+
+<div id="blazor-error-ui">
+    An unhandled error has occurred.
+    <a href="" class="reload">Reload</a>
+    <a class="dismiss">🗙</a>
+</div>
+
+@code {
+    private const string AuthStateKey = "ben-auth-state";
+
+    protected override void OnInitialized()
+    {
+        TokenStore.StateChanged += HandleTokenStateChanged;
+
+        // Restore the Entra token persisted from the SSR HTTP scope into this circuit scope.
+        // EntraTokenPersister (App.razor) wrote this during the static pre-render.
+        if (AppState.TryTakeFromJson<SerializedEntraToken>("EntraToken", out var token) && token is not null)
+        {
+            EntraTokenHolder.AccessToken         = token.AccessToken;
+            EntraTokenHolder.Email               = token.Email;
+            EntraTokenHolder.EntraOid            = token.EntraOid;
+            EntraTokenHolder.IsEntraAuthenticated = token.IsEntraAuthenticated;
+        }
+
+        base.OnInitialized();
+    }
+
+    private void HandleTokenStateChanged()
+    {
+        // Persist new auth state and re-render on any token store change.
+        InvokeAsync(async () =>
+        {
+            await PersistAuthStateAsync();
+            StateHasChanged();
+        });
+    }
+
+    private void HandleLogout()
+    {
+        AuthService.Logout();
+        NavManager.NavigateTo("/login");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                await RestoreAuthStateAsync(); // restore from ProtectedLocalStorage
+
+                // If still not authenticated, check for an active Entra/OIDC session
+                if (!TokenStore.IsAuthenticated)
+                    await TryBridgeEntraAuthAsync();
+
+                try
+                {
+                    var tzId = await JS.InvokeAsync<string?>("benGetBrowserTimeZone");
+                    if (!string.IsNullOrWhiteSpace(tzId) && TokenStore is WebApiTokenStore concreteStore)
+                        concreteStore.BrowserTimeZone = TimeZoneInfo.FindSystemTimeZoneById(tzId);
+                }
+                catch { /* JS interop unavailable, or an IANA id .NET's ICU doesn't recognize — fall back to UTC */ }
+            }
+            finally
+            {
+                // Unblock any page-load guard awaiting TokenStore.AuthReady, whether or not
+                // restore succeeded — a guard that never gets signalled would hang forever.
+                TokenStore.SignalAuthReady();
+            }
+
+            await InvokeAsync(StateHasChanged);
+        }
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    /// <summary>
+    /// If the user authenticated via Microsoft Entra OIDC (cookie present),
+    /// store their Entra access token in WebApiTokenStore and call /api/me
+    /// to resolve identity — same as the local-login flow.
+    /// </summary>
+    private async Task TryBridgeEntraAuthAsync()
+    {
+        if (!EntraTokenHolder.IsEntraAuthenticated
+            || string.IsNullOrWhiteSpace(EntraTokenHolder.AccessToken))
+            return;
+
+        // If user already has a resolved local account (local login or prior Entra link),
+        // don't override their session.
+        if (TokenStore.UserId.HasValue)
+            return;
+
+        try
+        {
+            TokenStore.AccessToken    = EntraTokenHolder.AccessToken;
+            TokenStore.UserEmail      = EntraTokenHolder.Email;
+            TokenStore.IsEntraSession = true;
+
+            var me = await WebApiClient.GetAsync<EntraMeResult>("/api/me");
+
+            // Re-check: user may have logged in locally while we were awaiting.
+            if (TokenStore.UserId.HasValue)
+                return;
+
+            if (me is not null)
+            {
+                if (me.UserId == Guid.Empty)
+                {
+                    // No linked local account — clear partial state and redirect to link page.
+                    TokenStore.AccessToken    = null;
+                    TokenStore.UserEmail      = null;
+                    TokenStore.IsEntraSession = false;
+                    NavManager.NavigateTo("/entra/complete-profile");
+                    return;
+                }
+
+                TokenStore.UserId       = me.UserId;
+                TokenStore.IsSuperAdmin = me.IsSuperAdmin;
+                TokenStore.IsAdmin      = me.IsAdmin;
+                // Use the local account email (consistent regardless of which Entra identity was used)
+                if (!string.IsNullOrEmpty(me.Email))
+                    TokenStore.UserEmail = me.Email;
+            }
+            else
+            {
+                // API call failed — clear partial state so user can log in normally.
+                TokenStore.AccessToken    = null;
+                TokenStore.UserEmail      = null;
+                TokenStore.IsEntraSession = false;
+                return;
+            }
+
+            TokenStore.NotifyStateChanged();
+        }
+        catch { /* non-fatal — Entra token may be invalid or WebApi unreachable */ }
+    }
+
+    private sealed record EntraMeResult(Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin);
+
+    // ── Auth persistence ──────────────────────────────────────────────────────
+
+    private async Task PersistAuthStateAsync()
+    {
+        // Entra sessions are maintained by the OIDC cookie, not localStorage.
+        // Persisting an Entra access token would cause stale-token issues after expiry.
+        if (TokenStore.IsEntraSession) return;
+
+        try
+        {
+            if (TokenStore.IsAuthenticated)
+            {
+                await LocalStorage.SetAsync(AuthStateKey, new PersistedAuthState(
+                    TokenStore.AccessToken,
+                    TokenStore.RefreshToken,
+                    TokenStore.AccessTokenExpiresAtUtc?.ToUnixTimeMilliseconds(),
+                    TokenStore.UserEmail,
+                    TokenStore.UserId?.ToString(),
+                    TokenStore.IsSuperAdmin,
+                    TokenStore.IsAdmin
+                ));
+            }
+            else
+            {
+                await LocalStorage.DeleteAsync(AuthStateKey);
+            }
+        }
+        catch { /* JS interop can fail if circuit is disconnecting */ }
+    }
+
+    private async Task RestoreAuthStateAsync()
+    {
+        try
+        {
+            var result = await LocalStorage.GetAsync<PersistedAuthState>(AuthStateKey);
+            if (result.Success && result.Value is { AccessToken: not null } state)
+            {
+                TokenStore.AccessToken = state.AccessToken;
+                TokenStore.RefreshToken = state.RefreshToken;
+                TokenStore.AccessTokenExpiresAtUtc = state.ExpiresAtMs.HasValue
+                    ? DateTimeOffset.FromUnixTimeMilliseconds(state.ExpiresAtMs.Value)
+                    : null;
+                TokenStore.UserEmail = state.UserEmail;
+                TokenStore.UserId = Guid.TryParse(state.UserId, out var id) ? id : null;
+                TokenStore.IsSuperAdmin = state.IsSuperAdmin;
+                TokenStore.IsAdmin = state.IsAdmin;
+                // NotifyStateChanged would re-persist immediately — skip it here
+                // and just call StateHasChanged directly.
+                StateHasChanged();
+            }
+        }
+        catch { /* localStorage might be unavailable or tampered */ }
+    }
+
+    public void Dispose()
+    {
+        TokenStore.StateChanged -= HandleTokenStateChanged;
+    }
+
+    // ── Persisted auth state ──────────────────────────────────────────────────
+
+    private sealed record PersistedAuthState(
+        string? AccessToken,
+        string? RefreshToken,
+        long? ExpiresAtMs,
+        string? UserEmail,
+        string? UserId,
+        bool IsSuperAdmin,
+        // Defaulted so a session persisted before this field existed still deserializes rather
+        // than throwing the whole restore away and silently signing the user out.
+        bool IsAdmin = false
+    );
+
+}

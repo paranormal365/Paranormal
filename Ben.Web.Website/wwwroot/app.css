@@ -1,0 +1,155 @@
+/* App-specific styles layered on the template.
+   The template owns layout, spacing and colour — anything here is either brand or a gap the
+   template does not cover. Keep it small; if a rule fights smartapp.min.css, the template's
+   own class is almost always the better answer. */
+
+@import url('https://fonts.googleapis.com/css2?family=Irish+Grover&display=swap');
+
+/* ── Brand ──────────────────────────────────────────────────────────────── */
+.is-haunted-text {
+    font-family: 'Irish Grover', system-ui, sans-serif;
+    font-size: 1.05rem;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.is-haunted-text strong { font-weight: 400; opacity: .6; }
+.is-haunted-text em     { font-style: normal; }
+
+.ben-brand,
+.ben-brand:hover {
+    text-decoration: none;
+    color: inherit;
+    white-space: nowrap;
+    padding-left: .75rem;
+}
+
+/* App-shell height.
+
+   The template's .app-wrap grid is content-sized, so with a long sidebar the whole document
+   scrolls — header and all — instead of the sidebar scrolling inside a fixed shell. Pinning the
+   wrap to the viewport turns the sidebar and the content area into their own scroll regions.
+
+   The min-height:0 declarations are the load-bearing part: a flex/grid child defaults to
+   min-height:auto and refuses to shrink below its content, which is why overflow-y alone does
+   nothing here.
+
+   .custom-scroll got its scrollbar from smartSlimscroll.js in the template; this app does not
+   ship that script (it mutated DOM Blazor owns), so the nav scrolls natively instead. The
+   selector carries the .custom-scroll class purely to out-specify the template's own rule. */
+.app-wrap { height: 100vh; }
+
+.app-sidebar {
+    overflow: hidden;
+    min-height: 0;
+}
+
+.app-body { min-height: 0; }
+
+.app-sidebar .primary-nav.custom-scroll {
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+}
+
+/* Sign-in reads as one control: label inherits the icon's colour and sits well below the
+   body size, so it does not compete with the page's own headings. */
+.ben-signin-text {
+    font-size: .75rem;
+    line-height: 1;
+    color: inherit;
+}
+
+/* The click-away layer (.ben-dropdown-backdrop) and dropdown z-indexes live in the library's
+   kit stylesheet, since the kit components rely on them too. */
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.app-footer-link,
+.app-footer-link:hover { color: inherit; opacity: .85; }
+
+/* ── Blazor's error bar ─────────────────────────────────────────────────── */
+#blazor-error-ui {
+    background: var(--bs-warning-bg-subtle, #ffe69c);
+    color: var(--bs-warning-text-emphasis, #664d03);
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, .2);
+    display: none;
+    left: 0;
+    padding: .6rem 1.25rem .7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1080;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: .75rem;
+    top: .5rem;
+}
+
+/* ── Outline buttons in dark mode ────────────────────────────────────────────
+   Night's semantic colours are deep on purpose — they belong to the skin's character, and the
+   template uses them as solid fills behind white text. Bootstrap's .btn-outline-* variants paint
+   the same colour as text on the page background instead, where the darkest of them get hard to
+   read against the dark surface.
+
+   The nudge here is deliberately small: enough to lift the resting text off the background,
+   not enough to turn the brand colours pastel. Hover still fills with the true colour.
+   These sit below the 4.5:1 WCAG AA text threshold by design — the palette is the priority. */
+:root[data-bs-theme="dark"] .btn-outline-primary {
+    --bs-btn-color:        color-mix(in srgb, var(--bs-primary) 78%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-primary) 88%, #fff);
+}
+
+:root[data-bs-theme="dark"] .btn-outline-info {
+    --bs-btn-color:        color-mix(in srgb, var(--bs-info) 72%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-info) 85%, #fff);
+}
+
+:root[data-bs-theme="dark"] .btn-outline-danger {
+    --bs-btn-color:        color-mix(in srgb, var(--bs-danger) 85%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-danger) 92%, #fff);
+}
+
+:root[data-bs-theme="dark"] .btn-outline-success {
+    --bs-btn-color:        color-mix(in srgb, var(--bs-success) 88%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-success) 94%, #fff);
+}
+
+/* ── Button size ────────────────────────────────────────────────────────────
+   The template's default .btn matches .form-control's height (~43px), which is right for a button
+   sitting in a form row but heavy everywhere else — grid row actions, toolbars, card footers.
+   These metrics land a default button at ~31px while keeping the label readable. Explicit
+   btn-sm/btn-lg still work; they scale from here. */
+.btn {
+    --bs-btn-padding-y:  .25rem;
+    --bs-btn-padding-x:  .65rem;
+    --bs-btn-font-size:  .875rem;
+}
+
+.btn-lg {
+    --bs-btn-padding-y:  .5rem;
+    --bs-btn-padding-x:  1rem;
+    --bs-btn-font-size:  1rem;
+}
+
+/* ── Input size ─────────────────────────────────────────────────────────────
+   Kept deliberately in step with the .btn metrics above: an input and the button beside it in a
+   search row have to be the same height, and the template's stock pairing was ~43px for both.
+   These land both at ~31px. telerik-night.css carries the matching change for the Kendo widgets
+   that stay, so a date picker in a form row still lines up with its neighbours. */
+.form-control,
+.form-select {
+    padding-block: .25rem;
+    font-size: .875rem;
+}
+
+/* The hero's search pair reads as one control, so keep them identical there too. */
+.home-hero__search-input { font-size: .9375rem; }
+
+/* No override for .btn-system, the template's header control. It sets `padding: .3125rem` and
+   `line-height: var(--app-header-height)` directly rather than through Bootstrap's button
+   variables, so the .btn metrics above never reach it and it keeps the template's own sizing —
+   which is deliberately taller than the header's nominal height. Setting --bs-btn-padding-y on it
+   looks like it should help and does nothing at all; a direct `padding` declaration wins. */

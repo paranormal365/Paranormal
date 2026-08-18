@@ -29,7 +29,11 @@ Use the VS Code task **`start-full-stack`** (Terminal → Run Task), or:
 ```bash
 bash scripts/start-webapp-with-api.sh
 ```
-Wait until both the WebApi (port 5252) and WebApp (port 5078) are listening.
+Wait until both the WebApi (port 5252) and WebApp (port 5079) are listening.
+
+> The suite targets the original `Ben.Web.WebApp` on **:5079**. `Ben.Web.Website` now holds
+> :5078, but its page migration is still in progress — point `BEN_BASE_URL` at it only for the
+> routes that have landed.
 
 ### 2. Confirm dev seed data is enabled
 In `Ben.Data.WebApi/appsettings.Development.json`, verify:
@@ -103,7 +107,8 @@ All variables have safe defaults for local dev. Only override if your setup diff
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `BEN_BASE_URL` | `http://localhost:5078` | WebApp root URL |
+| `BEN_BASE_URL` | `http://localhost:5079` | Front-end root URL (original WebApp) |
+| `BEN_API_URL` | `http://localhost:5252` | WebApi root URL |
 | `BEN_SUPERADMIN_EMAIL` | `haveben@msn.com` | SuperAdmin login |
 | `BEN_SUPERADMIN_PASSWORD` | *(see appsettings)* | SuperAdmin password |
 | `BEN_USER_EMAIL` | `sarah.mitchell@benco.dev` | Regular user login |

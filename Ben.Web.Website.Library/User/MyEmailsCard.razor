@@ -1,0 +1,310 @@
+@namespace Ben.Web.Website.Library.User
+@inject IBenAdminClient AdminClient
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h6 class="card-title">Email addresses<HelpLink Slug="your-profile" Anchor="confirming-an-email-address" /></h6>
+                <p class="text-secondary small mb-0">
+                    Extra addresses people can reach you at. Your sign-in address is separate and
+                    is never listed here.
+                </p>
+            </div>
+            @if (!_showForm)
+            {
+                <button type="button" class="btn btn-primary" @onclick="BeginCreate"><BenIcon Name="plus" Class="me-1" />Add</button>
+            }
+        </div>
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger py-2 small mt-3 mb-0">@_error</div>
+        }
+
+        @if (_loading)
+        {
+            <div class="text-secondary small mt-3">Loading…</div>
+        }
+        else
+        {
+            @* ── Existing rows ─────────────────────────────────────────────── *@
+            @if (_rows.Count == 0 && !_showForm)
+            {
+                <p class="text-secondary small fst-italic mt-3 mb-0">No email addresses yet.</p>
+            }
+
+            @foreach (var row in _rows)
+            {
+                <div class="border-top pt-2 mt-2">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div class="flex-grow-1">
+                            <div>
+                                <span class="fw-semibold">@row.EmailAddress</span>
+                                <span class="badge bg-secondary ms-2">@TypeName(row.UserEmailTypeId)</span>
+                                @if (row.IsPrimary)
+                                {
+                                    <span class="badge bg-primary ms-1">Primary</span>
+                                }
+                                @if (row.IsValidated)
+                                {
+                                    <span class="badge bg-success ms-1">Confirmed</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning text-dark ms-1">Not confirmed</span>
+                                }
+                                @if (row.IsPublic)
+                                {
+                                    <span class="badge bg-info text-dark ms-1">Public</span>
+                                }
+                            </div>
+
+                            @if (!row.IsValidated)
+                            {
+                                <div class="mt-1">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => SendValidationAsync(row.Id))" disabled="@(!(_sendingFor != row.Id))"><BenIcon Name="mail" Class="me-1" />
+                                        @(_sendingFor == row.Id ? "Sending…" : "Send confirmation link")
+                                    </button>
+                                </div>
+                            }
+
+                            @* The link is shown whenever mail could not be sent — which is the
+                               normal case on a system with no SMTP configured. Hiding it would
+                               leave the user with a button that appears to do nothing. *@
+                            @if (_linkFor == row.Id && _lastLink is not null)
+                            {
+                                <div class="alert alert-info py-2 small mt-2 mb-0">
+                                    @if (_lastEmailSent)
+                                    {
+                                        <div class="mb-1">Sent. Check that inbox — the link also appears below.</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="mb-1">
+                                            This system cannot send mail yet, so nothing was emailed.
+                                            Open this link yourself to confirm the address:
+                                        </div>
+                                    }
+                                    <input class="form-control form-control-sm" readonly value="@_lastLink" />
+                                </div>
+                            }
+                        </div>
+
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-link text-decoration-none btn-sm" @onclick="@(() => BeginEdit(row))" title="Edit"><BenIcon Name="edit-2" /></button>
+                            <button type="button" class="btn btn-link text-decoration-none btn-sm" @onclick="@(() => _deleteTarget = row)" title="Delete"><BenIcon Name="trash-2" /></button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @* ── Add / edit form ───────────────────────────────────────────── *@
+            @if (_showForm)
+            {
+                <div class="border-top pt-3 mt-3">
+                    <div class="row g-2">
+                        <div class="col-sm-7">
+                            <label class="form-label small mb-1">Address</label>
+                            @* Plain input rather than TelerikTextBox: Telerik binds on blur, which
+                               loses the last keystroke when Save is clicked directly. *@
+                            <input class="form-control" type="email" maxlength="250"
+                                   placeholder="name@example.com" value="@_formAddress"
+                                   @oninput="@(e => _formAddress = e.Value?.ToString() ?? string.Empty)" />
+                        </div>
+                        <div class="col-sm-5">
+                            <label class="form-label small mb-1">Type</label>
+                            <select class="form-select" value="@_formTypeId"
+                                    @onchange="@(e => _formTypeId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : Guid.Empty)">
+                                @foreach (var t in _types)
+                                {
+                                    <option value="@t.Id" selected="@(t.Id == _formTypeId)">@t.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="email-primary"
+                                       checked="@_formIsPrimary"
+                                       @onchange="@(e => _formIsPrimary = (bool)(e.Value ?? false))" />
+                                <label class="form-check-label" for="email-primary">Primary email</label>
+                            </div>
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="email-public"
+                                       checked="@_formIsPublic" disabled="@(!CanPublishForm)"
+                                       @onchange="@(e => _formIsPublic = (bool)(e.Value ?? false))" />
+                                <label class="form-check-label" for="email-public">
+                                    Public
+                                    @if (!CanPublishForm)
+                                    {
+                                        <span class="text-secondary small d-block">
+                                            Confirm this address first — save it, then use
+                                            <em>Send confirmation link</em>.
+                                        </span>
+                                    }
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2 mt-3">
+                        <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(!(!_saving))">
+                            @(_saving ? "Saving…" : "Save")
+                        </button>
+                        <button type="button" class="btn btn-link text-decoration-none" @onclick="@(() => { _showForm = false; _error = null; })">Cancel</button>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@if (_deleteTarget is not null)
+{
+    <BenModal Visible="true" Title="Delete email address" Size="sm">
+    <ChildContent>
+            <p>Remove <strong>@_deleteTarget.EmailAddress</strong> from your profile?</p>
+            <div class="dialog-footer-actions d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-link text-decoration-none" @onclick="@(() => _deleteTarget = null)">Cancel</button>
+                <button type="button" class="btn btn-danger" @onclick="DeleteConfirmedAsync">Delete</button>
+            </div>
+        </ChildContent>
+</BenModal>
+}
+
+@code {
+    private List<MyEmailRecord> _rows = new();
+    private IReadOnlyList<UserEmailTypeRecord> _types = Array.Empty<UserEmailTypeRecord>();
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+
+    private bool  _showForm;
+    private Guid? _editId;
+    private string _formAddress = string.Empty;
+    private Guid  _formTypeId;
+    private bool  _formIsPrimary;
+    private bool  _formIsPublic;
+
+    // Only a row that is already confirmed can be published, and a new row never is. The server
+    // rejects the other cases too — this only keeps the checkbox from lying about it.
+    private bool CanPublishForm =>
+        _editId is not null && _rows.FirstOrDefault(r => r.Id == _editId)?.IsValidated == true;
+
+    private MyEmailRecord? _deleteTarget;
+
+    private Guid?   _sendingFor;
+    private Guid?   _linkFor;
+    private string? _lastLink;
+    private bool    _lastEmailSent;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _types = await AdminClient.GetUserEmailTypesAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _rows = await AdminClient.GetMyEmailsAsync();
+        _loading = false;
+    }
+
+    private string TypeName(Guid id) => _types.FirstOrDefault(t => t.Id == id)?.Name ?? "Other";
+
+    private void BeginCreate()
+    {
+        // Every row needs a type, so with none configured the form could only ever fail on save.
+        // Saying why beats a dropdown with nothing in it and a rejection the user can't explain.
+        if (_types.Count == 0)
+        {
+            _error = "No email types have been set up yet. Ask an administrator to add some before adding an address.";
+            return;
+        }
+
+        _editId = null;
+        _formAddress = string.Empty;
+        _formTypeId = _types.FirstOrDefault()?.Id ?? Guid.Empty;
+        _formIsPrimary = _rows.Count == 0;
+        _formIsPublic = false;
+        _error = null;
+        _showForm = true;
+    }
+
+    private void BeginEdit(MyEmailRecord row)
+    {
+        _editId = row.Id;
+        _formAddress = row.EmailAddress;
+        _formTypeId = row.UserEmailTypeId;
+        _formIsPrimary = row.IsPrimary;
+        _formIsPublic = row.IsPublic;
+        _error = null;
+        _showForm = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_formAddress))
+        {
+            _error = "Enter an email address.";
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+
+        var request = new UpsertMyEmailRequest(_formTypeId, _formAddress.Trim(), _formIsPrimary, _formIsPublic);
+        var result = _editId is null
+            ? await AdminClient.CreateMyEmailAsync(request)
+            : await AdminClient.UpdateMyEmailAsync(_editId.Value, request);
+
+        _saving = false;
+
+        if (result is null)
+        {
+            _error = "That could not be saved. Check the address and try again.";
+            return;
+        }
+
+        _showForm = false;
+        await LoadAsync();
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        var target = _deleteTarget;
+        _deleteTarget = null;
+        if (target is null) return;
+
+        if (!await AdminClient.DeleteMyEmailAsync(target.Id))
+        {
+            _error = "That could not be deleted.";
+            return;
+        }
+
+        if (_linkFor == target.Id) { _linkFor = null; _lastLink = null; }
+        await LoadAsync();
+    }
+
+    private async Task SendValidationAsync(Guid id)
+    {
+        _sendingFor = id;
+        _error = null;
+
+        var result = await AdminClient.SendMyEmailValidationAsync(id);
+
+        _sendingFor = null;
+
+        if (result is null)
+        {
+            _error = "No confirmation link could be issued just now. Wait a minute and try again.";
+            return;
+        }
+
+        _linkFor = id;
+        _lastLink = result.ValidationLink;
+        _lastEmailSent = result.EmailSent;
+        await LoadAsync();
+    }
+}

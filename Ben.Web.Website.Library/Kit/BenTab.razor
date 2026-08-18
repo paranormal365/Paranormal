@@ -1,0 +1,29 @@
+@implements IDisposable
+
+@code {
+    [CascadingParameter] private BenTabs? Parent { get; set; }
+
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+
+    /// <summary>Stable identifier, so a parent can select this tab by name rather than position.</summary>
+    [Parameter] public string? Id { get; set; }
+
+    /// <summary>Sprite icon name shown before the title.</summary>
+    [Parameter] public string? Icon { get; set; }
+
+    /// <summary>Count shown as a badge on the tab; omit or 0 for none.</summary>
+    [Parameter] public int? Badge { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (Parent is null)
+            throw new InvalidOperationException($"<BenTab Title=\"{Title}\"> must be inside a <BenTabs>.");
+        Parent.Register(this);
+    }
+
+    public void Dispose() => Parent?.Unregister(this);
+}

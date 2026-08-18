@@ -78,8 +78,10 @@ public class ErrorHandlingTests : BenTestBase
     [Test]
     public async Task ApiEndpoint_Returns401ForProtectedRoute()
     {
-        // Direct API call without auth should return 401/403, not a 500
-        var response = await Page.APIRequest.GetAsync($"{BaseUrl.Replace("5078", "5252")}/api/admin/app-users");
+        // Direct API call without auth should return 401/403, not a 500.
+        // ApiUrl rather than string-replacing a port out of BaseUrl: that only worked while the
+        // front end was on :5078, and silently called the front end instead of the API otherwise.
+        var response = await Page.APIRequest.GetAsync($"{ApiUrl}/api/admin/app-users");
         Assert.That(response.Status, Is.EqualTo(401).Or.EqualTo(403),
             "Protected API endpoint should return 401/403 without auth.");
     }

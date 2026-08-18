@@ -1,7 +1,7 @@
 using Ben.Data.Common.Enums;
 using Ben.Service.Models.Entities;
-using Ben.Web.Library.Services;
-using Ben.Web.WebApp.Services.WebApi;
+using Ben.Web.Services;
+using Ben.Web.Services.WebApi;
 using Moq;
 using Xunit;
 
