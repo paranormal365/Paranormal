@@ -19,6 +19,7 @@
     <ItemGroup>
         <ProjectReference Include="..\Ben.Data.Common\Ben.Data.Common.csproj" />
         <ProjectReference Include="..\Ben.Service.Models\Ben.Service.Models.csproj" />
+        <ProjectReference Include="..\Ben.Web.Services\Ben.Web.Services.csproj" />
         <ProjectReference Include="../Ben.Video.Editor/Ben.Video.Editor.csproj" />
     </ItemGroup>
 

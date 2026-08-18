@@ -1,4 +1,4 @@
-using Ben.Web.Library.Services;
+using Ben.Web.Services;
 using Xunit;
 
 namespace Ben.Web.Tests.Services;

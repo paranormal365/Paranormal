@@ -1,5 +1,5 @@
 using Ben.Service.Models.Entities;
-using Ben.Web.Library.Services;
+using Ben.Web.Services;
 using Microsoft.AspNetCore.Components;
 using Moq;
 using Xunit;

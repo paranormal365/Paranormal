@@ -1,7 +1,7 @@
 using Ben.Service.Models.Entities;
-using Ben.Web.Library.Services;
+using Ben.Web.Services;
 using Xunit;
-using static Ben.Web.Library.Services.NotificationBadge;
+using static Ben.Web.Services.NotificationBadge;
 
 namespace Ben.Web.Tests.Services;
 

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- NotificationState uses NavigationManager/LocationChangedEventArgs; the WebApi clients
+         use Microsoft.Extensions.Options. Neither needs the Razor SDK — this project holds no
+         components, only the UI-framework-agnostic service layer shared by every web host. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ben.Data.Common\Ben.Data.Common.csproj" />
+    <ProjectReference Include="..\Ben.Service.Models\Ben.Service.Models.csproj" />
+    <!-- VideoExportPublisher, BenMediaLibraryProvider and SidecarPairingReporter implement
+         Ben.Video.Editor service contracts. -->
+    <ProjectReference Include="..\Ben.Video.Editor\Ben.Video.Editor.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ben.Web.Tests" />
+  </ItemGroup>
+
+</Project>
