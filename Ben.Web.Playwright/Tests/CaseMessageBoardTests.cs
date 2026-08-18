@@ -152,27 +152,14 @@ public class CaseMessageBoardTests : BenTestBase
     public async Task OrgCaseDetail_MessagesTab_IsVisible()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        await Page.GotoAsync($"{BaseUrl}/organizations");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        // Navigate into TGH org
-        var tghLink = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
-        if (!await tghLink.IsVisibleAsync()) { Assert.Pass("TGH org not visible; seed data may differ."); return; }
-        await tghLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        // Go to Cases
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Main.GetByText("Cases", new() { Exact = true }))
-                            .First;
-        await Expect(casesLink).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await casesLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        // Find and open Daniel's case (look for "Park" in the title)
-        var caseItem = Page.GetByText("Park", new() { Exact = false }).First;
+        if (!await OpenOrganizationAsync("Tennessee Ghost Hunters"))
+        { Assert.Pass("TGH org not visible; seed data may differ."); return; }
+        // The Cases tab, waiting for the case list rather than assuming the click landed.
+        await OpenTabAsync("Cases", Main.GetByText("Park", new() { Exact = false }));
+        // Open Daniel's case; the case detail is identified by its own tab strip.
+        var caseItem = Main.GetByText("Park", new() { Exact = false }).First;
         await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await caseItem.ClickAsync();
+        await ClickUntilAsync(caseItem, Main.Locator(".nav-tabs .nav-link").Or(Main.GetByRole(AriaRole.Tab)));
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         // Messages tab should be present
@@ -186,23 +173,18 @@ public class CaseMessageBoardTests : BenTestBase
     public async Task OrgCaseDetail_MessagesTab_ShowsClientMessages()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        await Page.GotoAsync($"{BaseUrl}/organizations");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var tghLink = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
-        if (!await tghLink.IsVisibleAsync()) { Assert.Pass("TGH org not visible; seed data may differ."); return; }
-        await tghLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        if (!await OpenOrganizationAsync("Tennessee Ghost Hunters"))
+        { Assert.Pass("TGH org not visible; seed data may differ."); return; }
 
         var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
                             .Or(Main.GetByText("Cases", new() { Exact = true }))
                             .First;
         await casesLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var caseItem = Page.GetByText("Park", new() { Exact = false }).First;
+        // Open Daniel's case; the case detail is identified by its own tab strip.
+        var caseItem = Main.GetByText("Park", new() { Exact = false }).First;
         await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await caseItem.ClickAsync();
+        await ClickUntilAsync(caseItem, Main.Locator(".nav-tabs .nav-link").Or(Main.GetByRole(AriaRole.Tab)));
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         // Click Messages tab
@@ -221,23 +203,18 @@ public class CaseMessageBoardTests : BenTestBase
     public async Task OrgCaseDetail_MessagesTab_CanSendMessage()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        await Page.GotoAsync($"{BaseUrl}/organizations");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var tghLink = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
-        if (!await tghLink.IsVisibleAsync()) { Assert.Pass("TGH org not visible; seed data may differ."); return; }
-        await tghLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        if (!await OpenOrganizationAsync("Tennessee Ghost Hunters"))
+        { Assert.Pass("TGH org not visible; seed data may differ."); return; }
 
         var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
                             .Or(Main.GetByText("Cases", new() { Exact = true }))
                             .First;
         await casesLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var caseItem = Page.GetByText("Park", new() { Exact = false }).First;
+        // Open Daniel's case; the case detail is identified by its own tab strip.
+        var caseItem = Main.GetByText("Park", new() { Exact = false }).First;
         await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await caseItem.ClickAsync();
+        await ClickUntilAsync(caseItem, Main.Locator(".nav-tabs .nav-link").Or(Main.GetByRole(AriaRole.Tab)));
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         var messagesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Messages" })

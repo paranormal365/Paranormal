@@ -73,10 +73,10 @@ public class InvestigationReportTests : BenTestBase
                             .Or(Main.GetByText("Cases", new() { Exact = true })).First;
         await casesLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var caseItem = Page.GetByText("Park", new() { Exact = false }).First;
+        // Open Daniel's case; the case detail is identified by its own tab strip.
+        var caseItem = Main.GetByText("Park", new() { Exact = false }).First;
         await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await caseItem.ClickAsync();
+        await ClickUntilAsync(caseItem, Main.Locator(".nav-tabs .nav-link").Or(Main.GetByRole(AriaRole.Tab)));
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         // Reports tab should be present as the 6th tab
@@ -101,10 +101,10 @@ public class InvestigationReportTests : BenTestBase
                             .Or(Main.GetByText("Cases", new() { Exact = true })).First;
         await casesLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var caseItem = Page.GetByText("Park", new() { Exact = false }).First;
+        // Open Daniel's case; the case detail is identified by its own tab strip.
+        var caseItem = Main.GetByText("Park", new() { Exact = false }).First;
         await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await caseItem.ClickAsync();
+        await ClickUntilAsync(caseItem, Main.Locator(".nav-tabs .nav-link").Or(Main.GetByRole(AriaRole.Tab)));
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         var reportsTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Reports" })

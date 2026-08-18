@@ -78,6 +78,102 @@ public abstract class BenTestBase : PageTest
     }
 
     /// <summary>
+    /// Clicks <paramref name="target"/> until <paramref name="expected"/> appears, then returns.
+    /// <para>
+    /// Blazor Server attaches its event handlers when the circuit connects, which happens *after*
+    /// NetworkIdle. A click that lands in that window is silently dropped: nothing throws, the
+    /// page simply does not advance, and the next assertion fails somewhere unrelated — which is
+    /// what made a visible, uniquely-named case report as "not visible".
+    /// </para>
+    /// <para>
+    /// Retrying is more honest than sleeping: it costs nothing once the circuit is up, and it
+    /// states the actual requirement — the click has to have had its effect.
+    /// </para>
+    /// </summary>
+    protected async Task ClickUntilAsync(ILocator target, ILocator expected, int attempts = 4)
+    {
+        for (var attempt = 0; attempt < attempts; attempt++)
+        {
+            try
+            {
+                await target.ClickAsync(new() { Timeout = 5_000 });
+            }
+            catch (TimeoutException)
+            {
+                continue;   // covered by an overlay mid-render; try again
+            }
+
+            try
+            {
+                await expected.First.WaitForAsync(
+                    new() { State = WaitForSelectorState.Visible, Timeout = 4_000 });
+                return;
+            }
+            catch (TimeoutException)
+            {
+                // Click was dropped, or the page is still catching up.
+            }
+        }
+
+        // Out of attempts: assert so the failure names what was actually missing.
+        await Expect(expected.First).ToBeVisibleAsync(new() { Timeout = 5_000 });
+    }
+
+    /// <summary>
+    /// Opens an organisation from /organizations by name.
+    /// <para>
+    /// The org name is a plain grid cell on the new site, not a link — you get in through the row's
+    /// View control. Clicking the name text did nothing, which is why a whole cluster of case tests
+    /// failed several steps later, reporting a case they never navigated to as "not visible".
+    /// A link is still tried first, so this works against the original site too.
+    /// </para>
+    /// </summary>
+    protected async Task<bool> OpenOrganizationAsync(string orgName)
+    {
+        await Page.GotoAsync($"{BaseUrl}/organizations");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        var asLink = Page.GetByRole(AriaRole.Link, new() { Name = orgName, Exact = false });
+        var row = Page.Locator("tr", new() { HasTextString = orgName }).First;
+
+        ILocator opener;
+        if (await asLink.CountAsync() > 0)
+        {
+            opener = asLink.First;
+        }
+        else if (await row.CountAsync() > 0)
+        {
+            opener = row.GetByRole(AriaRole.Button, new() { Name = "View" })
+                        .Or(row.GetByRole(AriaRole.Link, new() { Name = "View" })).First;
+        }
+        else
+        {
+            return false;   // seed data differs; caller decides whether to skip
+        }
+
+        // The org hub is identified by its tab strip, which only the detail page renders.
+        await ClickUntilAsync(opener, Main.GetByRole(AriaRole.Tab).Or(Main.Locator(".nav-tabs .nav-link")));
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        return true;
+    }
+
+    /// <summary>
+    /// Switches to a tab on the organisation hub or a case, waiting for the click to take effect.
+    /// Accepts the new site's <c>role="tab"</c> buttons and the original's plain text tabs.
+    /// </summary>
+    protected async Task OpenTabAsync(string tabName, ILocator expected)
+    {
+        var tab = Main.GetByRole(AriaRole.Tab, new() { Name = tabName, Exact = true })
+                      .Or(Main.Locator(".nav-tabs .nav-link", new() { HasTextString = tabName }))
+                      .Or(Main.GetByText(tabName, new() { Exact = true }))
+                      .First;
+
+        await Expect(tab).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await ClickUntilAsync(tab, expected);
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+    }
+
+    /// <summary>
     /// The page's main content, excluding the chrome.
     /// <para>
     /// Tab and link lookups need this on the new site: its sidebar lists "My Cases",
