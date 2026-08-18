@@ -139,15 +139,19 @@
                 var orgSide = Combine(s.OrgMessages, s.CaseMessagesAsOrgMember);
 
                 main.Add(new NavItem("Notifications",     "bell",        "/notifications",
-                                     Combine(s.SystemMessages, s.PendingPermissionRequests)));
-                main.Add(new NavItem("My Cases",          "folder",      "/my-cases", s.CaseMessagesAsClient));
-                main.Add(new NavItem("My Investigations", "calendar",    "/my-investigations", s.InvestigationInvites));
+                                     Combine(s.SystemMessages, s.PendingPermissionRequests),
+                                     badgeNoun: "unread notifications"));
+                main.Add(new NavItem("My Cases",          "folder",      "/my-cases", s.CaseMessagesAsClient,
+                                     badgeNoun: "unread case messages"));
+                main.Add(new NavItem("My Investigations", "calendar",    "/my-investigations", s.InvestigationInvites,
+                                     badgeNoun: "investigation invitations"));
                 main.Add(new NavItem("My Requests",       "inbox",       "/my-requests"));
                 main.Add(new NavItem("My Videos",         "film",        "/my-videos"));
                 main.Add(new NavItem("My Equipment",      "tool",        "/my-equipment"));
                 main.Add(new NavItem("My Checkouts",      "calendar",    "/my-checkouts"));
                 main.Add(new NavItem("Gear Questions",    "help-circle", "/my-equipment/questions"));
-                main.Add(new NavItem("Organizations",     "globe",       "/organizations", orgSide));
+                main.Add(new NavItem("Organizations",     "globe",       "/organizations", orgSide,
+                                     badgeNoun: "unread group messages"));
                 main.Add(new NavItem("Upload Files",      "upload",      "/upload-files"));
                 main.Add(new NavItem("Media Library",     "image",       "/media-library"));
             }
@@ -247,8 +251,11 @@
                     <span class="nav-link-text">@item.Text</span>
                     @if (item.Count > 0)
                     {
+                        @* The visible glyph stays a bare number — there is no room for more — but
+                           the tooltip and the accessible name both say what it is counting. *@
                         <span class="badge badge-end @NotificationBadge.CssClass(item.Urgency)"
-                              title="@($"{item.Count} waiting")">@NotificationBadge.Text(item.Count)</span>
+                              title="@($"{item.Count} {item.BadgeNoun}")"
+                              aria-label="@($"{item.Count} {item.BadgeNoun}")">@NotificationBadge.Text(item.Count)</span>
                     }
                 </a>
             }
@@ -342,8 +349,19 @@
         /// <summary>How overdue those items are — drives the badge colour.</summary>
         public NotificationBadge.Urgency Urgency { get; }
 
+        /// <summary>
+        /// Plural noun for whatever the badge is counting, e.g. "unread case messages".
+        /// <para>
+        /// A bare number sitting directly after a nav label reads as a quantity of that label:
+        /// "Organizations 17" was taken to mean seventeen organizations, when it meant seventeen
+        /// unread messages and the page behind it lists three organizations. The badge has to name
+        /// its own units.
+        /// </para>
+        /// </summary>
+        public string BadgeNoun { get; }
+
         public NavItem(string text, string icon, string url = "", NotificationBucket? bucket = null,
-                       IReadOnlyList<NavItem>? children = null)
+                       IReadOnlyList<NavItem>? children = null, string badgeNoun = "waiting")
         {
             Text = text;
             Icon = icon;
@@ -351,6 +369,7 @@
             Children = children ?? Array.Empty<NavItem>();
             Count = bucket?.Count ?? 0;
             Urgency = bucket is null ? NotificationBadge.Urgency.None : NotificationBadge.Classify(bucket);
+            BadgeNoun = badgeNoun;
         }
     }
 }

@@ -174,6 +174,11 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+// A route that does not exist renders nothing at all otherwise — the Router's <NotFound> block
+// only covers client-side routing in a Blazor Web App, so a server-rendered miss returned an
+// empty 404 body. Re-executing into a real page is what makes a missing route look missing.
+app.UseStatusCodePagesWithReExecute("/not-found");
+
 app.UseHttpsRedirection();
 
 app.UseAuthentication();

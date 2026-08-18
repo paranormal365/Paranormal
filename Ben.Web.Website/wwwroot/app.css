@@ -307,3 +307,56 @@
     left: 50%;
     transform: translate(-50%, -50%);
 }
+
+/* ── Header dropdown menus (bell, profile, any BenDropdown in the bar) ───────
+   These have to be positioned by hand, and the reason is worth writing down.
+
+   Bootstrap 5.3 does not position a dropdown menu in CSS. `.dropdown-menu-end` only sets
+   `--bs-position: end`; the declarations that actually move the menu —
+
+       .dropdown-menu-end[data-bs-popper] { right: 0; left: auto }
+       .dropdown-menu[data-bs-popper]     { top: 100%; left: 0 }
+
+   — are gated on [data-bs-popper], an attribute Popper writes at runtime. The template covers
+   its own header menus with a parallel rule keyed on the toggle:
+
+       .btn-system[data-bs-toggle=dropdown] + .dropdown-menu { top: …; right: 2rem !important }
+
+   Both hooks are Bootstrap-JS-owned, and these dropdowns are deliberately not: data-bs-toggle
+   would hand the subtree to Bootstrap's plugin and anything interactive inside would stop
+   binding to Blazor. So neither rule ever matched, the menu kept `position: absolute` with no
+   offsets at all, and a 320px panel laid itself out from the button's left edge — off the right
+   side of the viewport, which is what widened the page and produced a horizontal scrollbar.
+
+   Anchoring the right edges instead makes it open leftward, into the page. */
+.app-header .dropdown > .dropdown-menu {
+    position: absolute;
+    /* Anchored to the toggle, not to the header. The template's rule says
+       `top: var(--app-header-height)` because there the containing block is the bar itself; here
+       Bootstrap makes .dropdown position:relative, so that same 5.5rem would drop the panel most
+       of a header-height below the 2rem button it belongs to. */
+    top: calc(100% + .35rem);
+    right: 0;
+    left: auto;
+    margin: 0;
+    /* Never let the panel become the thing that widens the page on a narrow viewport either. */
+    max-width: calc(100vw - 1rem);
+}
+
+/* The open/close motion is the template's own: scale .8 → 1 on a cubic-bezier whose third
+   control point overshoots 1, which is where the bounce comes from. The short upward offset is
+   the "drop in" — it travels down into place on the same curve, so the two read as one motion.
+
+   !important is not decoration here: the template sets `transform: … !important` on both halves
+   of this pair, so a plain declaration loses regardless of specificity. */
+.app-header .dropdown > .dropdown-menu.dropdown-menu-animated {
+    transform: scale(.8) translateY(-8px) !important;
+    transform-origin: top right;
+    transition: transform 270ms cubic-bezier(.34, 1.25, .3, 1),
+                opacity   180ms ease-out,
+                visibility 270ms;
+}
+
+.app-header .dropdown > .show + .dropdown-menu.dropdown-menu-animated {
+    transform: scale(1) translateY(0) !important;
+}
