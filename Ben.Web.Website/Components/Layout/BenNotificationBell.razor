@@ -29,6 +29,10 @@
 
         <div class="dropdown-menu dropdown-menu-end dropdown-menu-animated @(_open ? "show" : null)"
              style="min-width:320px;">
+            @* Contents only while open — a closed menu that still renders its rows leaves each one
+               in the DOM as an invisible match for any text lookup. *@
+            @if (_open)
+            {
             <div class="d-flex align-items-center justify-content-between px-3 py-2">
                 <strong>Notifications</strong>
                 <a href="/notifications" class="small" @onclick="Close">View all</a>
@@ -54,6 +58,7 @@
                         </button>
                     }
                 </div>
+            }
             }
         </div>
     </div>

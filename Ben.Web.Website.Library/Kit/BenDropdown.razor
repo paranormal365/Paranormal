@@ -18,9 +18,15 @@
 
     <div class="dropdown-menu @(AlignEnd ? "dropdown-menu-end" : null) dropdown-menu-animated @(_open ? "show" : null)"
          style="@(MinWidth is not null ? $"min-width:{MinWidth};" : null)">
-        <CascadingValue Value="this" IsFixed="true">
-            @ChildContent
-        </CascadingValue>
+        @* Only while open: a closed menu that still renders its items leaves every one of them
+           in the DOM as an invisible match for any text lookup. The wrapper stays so the
+           template's open/close animation still has something to animate. *@
+        @if (_open)
+        {
+            <CascadingValue Value="this" IsFixed="true">
+                @ChildContent
+            </CascadingValue>
+        }
     </div>
 </div>
 

@@ -32,14 +32,19 @@
         </button>
 
         <div class="dropdown-menu dropdown-menu-end dropdown-menu-animated @(_open ? "show" : null)">
-            <div class="notification-header rounded-top mb-2 p-3">
-                <div class="fs-lg text-truncate">@(_displayName ?? "Your account")</div>
-                <span class="text-truncate opacity-80 fs-sm">@UserState.UserEmail</span>
-            </div>
-            <div class="dropdown-divider m-0"></div>
-            <button type="button" class="dropdown-item" @onclick="GoToProfile">My Profile</button>
-            <div class="dropdown-divider m-0"></div>
-            <button type="button" class="dropdown-item text-danger" @onclick="SignOutAsync">Sign Out</button>
+            @* Contents only while open — a closed menu that still renders "My Profile" and
+               "Sign Out" leaves both in the DOM as invisible matches for any text lookup. *@
+            @if (_open)
+            {
+                <div class="notification-header rounded-top mb-2 p-3">
+                    <div class="fs-lg text-truncate">@(_displayName ?? "Your account")</div>
+                    <span class="text-truncate opacity-80 fs-sm">@UserState.UserEmail</span>
+                </div>
+                <div class="dropdown-divider m-0"></div>
+                <button type="button" class="dropdown-item" @onclick="GoToProfile">My Profile</button>
+                <div class="dropdown-divider m-0"></div>
+                <button type="button" class="dropdown-item text-danger" @onclick="SignOutAsync">Sign Out</button>
+            }
         </div>
     </div>
 
