@@ -35,7 +35,7 @@ unchanged — what changes is the widget layer and the page chrome.
 - [x] **Phase 0** — Template asset prep
 - [x] **Phase 1** — Extract `Ben.Web.Services`
 - [x] **Phase 2** — New projects + host shell
-- [ ] **Phase 3** — Component kit + Telerik Night restyle
+- [x] **Phase 3** — Component kit + Telerik Night restyle
 - [ ] **Phase 4** — Library migration waves A–J
 - [ ] **Phase 5** — Parity, guard tests, docs
 
