@@ -45,6 +45,18 @@ The score is always shown with the number of votes behind it, because **+4** fro
 **+4** from ninety are not the same claim. A score of **0** can mean the case is evenly split or
 that everyone was undecided — the counts beside it tell you which.
 
+## Finding what's near you
+
+The home page shows what's happening close to you — groups that serve your area, and public events
+you could attend. If your browser allows it, this uses your current location automatically; if not,
+type a city, address, or zip code instead. Either way, choose how far to look with the distance
+dropdown.
+
+Groups and events are shown differently on purpose. A group that has opted in to being found is
+shown exactly where it is — that is the whole point of being listed. An event's location is only
+ever approximate, because it is an invitation rather than a business address, and the exact place is
+not shown until you are actually attending.
+
 ## Getting an account
 
 You need an account to request an investigation or join a group. Accounts are free, and the

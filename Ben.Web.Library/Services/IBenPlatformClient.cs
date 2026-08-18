@@ -188,4 +188,19 @@ public interface IBenPlatformClient
 
     /// <summary>Removes the current user's vote. No-op if the user has not voted.</summary>
     Task<bool> RemoveMyVoteAsync(Guid fileId, CancellationToken token = default);
+
+    // ── Local discovery (item #88) ────────────────────────────────────────────
+
+    /// <summary>
+    /// What is near a point: organizations that opted into search, and upcoming public events.
+    /// </summary>
+    /// <remarks>
+    /// The two lists in the response are not redacted the same way — an organization is shown as
+    /// precisely as it chose to be found, an event only approximately — and that distinction is the
+    /// server's, not this client's, to make. See <c>SearchController.Nearby</c>.
+    /// </remarks>
+    /// <param name="query">Optional text filter, matched against organization and event names.</param>
+    Task<NearbyResults?> GetNearbyAsync(
+        double latitude, double longitude, double radiusMiles, string? query = null,
+        CancellationToken token = default);
 }

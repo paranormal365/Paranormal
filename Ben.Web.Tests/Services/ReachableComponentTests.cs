@@ -191,6 +191,28 @@ public sealed class ReachableComponentTests
             + "which the author, being logged in, would never have seen.");
     }
 
+    /// <summary>
+    /// The nearby-search endpoint that item #88 extended is actually called by a screen.
+    /// </summary>
+    /// <remarks>
+    /// <c>SearchController.Nearby</c> honoured every per-address privacy setting for a long time
+    /// and had no caller at all — the entire reason item #88 was "server side built, UI remains"
+    /// rather than "not started". Extending the server again without a screen calling it would
+    /// have repeated exactly that mistake.
+    /// </remarks>
+    [Fact]
+    public void Nearby_search_is_called_by_a_screen()
+    {
+        var callers = RazorSources()
+            .Where(f => File.ReadAllText(f).Contains("GetNearbyAsync", StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .ToList();
+
+        Assert.True(callers.Count > 0,
+            "Nothing calls IBenPlatformClient.GetNearbyAsync, so the nearby-search endpoint is "
+            + "server-only again — the same shape item #88 found and fixed once.");
+    }
+
     [Theory]
     [MemberData(nameof(LoadBearingSwitches))]
     public void A_load_bearing_switch_is_actually_switched_on_somewhere(

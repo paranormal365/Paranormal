@@ -4186,7 +4186,7 @@ up is worse for the organization than one who never signed up.
 
 ---
 
-## 88. Local discovery — "what's near me" across groups, events and places (server side built 2026-08-17; UI remains)
+## 88. Local discovery — "what's near me" across groups, events and places (built 2026-08-17)
 
 Ben: *"Like if a person wants to see what is local... group events or actually local groups etc."*
 
@@ -4285,6 +4285,24 @@ So plotting groups needs one of:
   the difference between a visitor leaving and widening the search.
 
 ---
+
+### ✅ UI built 2026-08-17
+
+`NearbyDiscovery.razor`, mounted on the home page between `HomeHero` and `PublicCaseDiscovery`. On
+load it asks the browser for the visitor's location; declining or lacking geolocation falls back to
+the same typed-place-name search `HomeHero` already offers (`SearchGeocodingAsync`), so the feature
+degrades rather than disappears. A distance dropdown (10/25/50/100 mi) re-queries on change.
+
+**Deliberately list-only, no map.** `PublicCaseDiscovery` already carries a Telerik Map plus its own
+colocated JS for marker clustering; duplicating that machinery for a first version was not worth the
+risk in an environment where Telerik rendering cannot be visually verified. A map is additive later
+— the two result lists this renders do not need to change shape to gain one.
+
+The privacy asymmetry the server enforces is rendered as-is, not re-decided: a group's card links
+straight to `/o/{org}`, an event's card says "approximate" and gives no address at all. Guarded by
+`ReachableComponentTests.Nearby_search_is_called_by_a_screen` — the whole reason this item existed
+was a fully-built, fully-correct endpoint with zero callers, and adding a UI without a test asserting
+the UI is real would have been the same mistake with better production values.
 
 ## 89. Readable URLs — the scheme, settled 2026-08-17 (closed 2026-08-17)
 

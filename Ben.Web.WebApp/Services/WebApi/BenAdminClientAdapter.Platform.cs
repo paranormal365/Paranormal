@@ -289,4 +289,20 @@ public sealed partial class BenAdminClientAdapter
         => _api.GetAnonymousAsync<PublicInvestigationDetail>(
                $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/investigations/{Uri.EscapeDataString(investigationSlug)}",
                token);
+
+    // ── Local discovery (item #88) ────────────────────────────────────────────
+
+    public Task<NearbyResults?> GetNearbyAsync(
+        double latitude, double longitude, double radiusMiles, string? query = null,
+        CancellationToken token = default)
+    {
+        var url = $"/api/public/search/nearby?lat={latitude.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+                + $"&lon={longitude.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+                + $"&radiusMiles={radiusMiles.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+
+        if (!string.IsNullOrWhiteSpace(query))
+            url += $"&query={Uri.EscapeDataString(query)}";
+
+        return _api.GetAnonymousAsync<NearbyResults>(url, token);
+    }
 }

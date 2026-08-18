@@ -1,5 +1,6 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -176,44 +177,3 @@ public sealed class SearchController : ControllerBase
     }
 }
 
-/// <summary>
-/// What is near a point, in two lists because the two obey different privacy rules.
-/// </summary>
-public sealed record NearbyResults(
-    IReadOnlyList<NearbyOrgResult> Organizations,
-    IReadOnlyList<NearbyEventResult> Events);
-
-/// <summary>
-/// One public event near the caller.
-/// </summary>
-/// <remarks>
-/// <see cref="Latitude"/> and <see cref="Longitude"/> are the centre of a grid cell several miles
-/// across, and <see cref="DistanceMiles"/> is measured to that same point — there is no field here
-/// carrying anything more precise, and an exact address deliberately has nowhere to live.
-/// </remarks>
-public sealed record NearbyEventResult(
-    Guid     EventId,
-    string   Title,
-    string?  UrlName,
-    string   OrgName,
-    string?  OrgUrlName,
-    DateTime StartDateTime,
-    string?  City,
-    string?  State,
-    decimal? Latitude,
-    decimal? Longitude,
-    double   DistanceMiles);
-
-public sealed record NearbyOrgResult(
-    Guid     OrgId,
-    string   OrgName,
-    string   OrgUrlName,
-    double   DistanceMiles,
-    OrganizationAddressVisibility  Visibility,
-    OrganizationAddressDisplayMode PublicDisplayMode,
-    decimal? Latitude,
-    decimal? Longitude,
-    double?  RegionRadiusMiles,
-    string?  StreetAddress1,
-    string?  City,
-    string?  State);
