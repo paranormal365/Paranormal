@@ -134,6 +134,19 @@
     --bs-btn-font-size:  1rem;
 }
 
+/* Bootstrap 5 lets button labels wrap. In a flex row the input takes the width and the button
+   gets what is left, so "Add" broke onto a second line under its own icon and the control grew to
+   55px. Short button labels should keep their line; a button that will not fit should shrink the
+   field beside it instead. */
+.btn {
+    white-space: nowrap;
+}
+
+/* And a button in a flex row holds its width rather than being squeezed by the field next to it. */
+.d-flex > .btn {
+    flex-shrink: 0;
+}
+
 /* ── Input size ─────────────────────────────────────────────────────────────
    Kept deliberately in step with the .btn metrics above: an input and the button beside it in a
    search row have to be the same height, and the template's stock pairing was ~43px for both.

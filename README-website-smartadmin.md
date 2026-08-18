@@ -544,3 +544,9 @@ were missing, and both are the same lesson as the mobile backdrop and the menu f
 That is three times now that rebuilding template markup "equivalently" cost a bug. The rule for the
 remaining work: **copy the template's class names and hooks verbatim, then change behaviour** —
 the class names are not decoration, they are the API.
+
+**Button labels wrapped under their own icons.** Bootstrap 5 allows button text to wrap, so in a
+flex row where the input takes the width, "Add" broke onto a second line beneath its `+` and the
+control grew to 55px. `.btn` keeps its label on one line now, and a button in a flex row no longer
+shrinks to make room for the field beside it. Worth noting this looked identical to the earlier
+`display:block` icon bug and was not: the icon was already inline, the button was simply too narrow.
