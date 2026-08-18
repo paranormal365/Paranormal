@@ -136,9 +136,13 @@
         {
             var sections = new List<Section>();
 
+            // Home stands alone so Administration can sit directly beneath it for an admin,
+            // ahead of the visitor-facing entries — an admin arrives to run the site, not to
+            // browse it, and the admin tools are what they are reaching for.
+            var home = new List<NavItem> { new NavItem("Home", "home", "/") };
+
             var main = new List<NavItem>
             {
-                new NavItem("Home", "home", "/"),
                 // The client's way in: the request wizard, where they give the address the case
                 // is about. Sits above the browse-style entries because it is the thing a first
                 // -time visitor actually came to do. Anonymous visitors see it too — the wizard
@@ -174,10 +178,12 @@
             // No Login entry here: the header carries a Sign In control on every page, and a
             // second one in the nav list is the same destination twice.
 
-            sections.Add(new Section(null, main));
+            sections.Add(new Section(null, home));
 
             if (IsSuperAdmin && !IsImpersonating)
                 sections.Add(new Section("Administration", AdminGroups));
+
+            sections.Add(new Section(null, main));
 
             return sections;
         }

@@ -1,32 +1,44 @@
 @*
     Confirmation prompt, on BenModal.
 
-    Deliberately keeps the same parameter names as the library's existing ConfirmDialog so the
-    call sites move across mechanically rather than being rewritten one by one.
+    The parameter surface deliberately mirrors the old library's ConfirmDialog — same names, same
+    defaults, including ones a fresh design would not choose (ConfirmText defaults to "Delete",
+    Width is a CSS length). That is the point: ~15 call sites hand-copied this boilerplate before
+    it was a component, and they should move across by renaming the tag, not by being rewritten.
+
+    Two additions for new code: Message, for the common case of a single line of prose, and
+    Destructive, which is the honest way to say "red" now that the Telerik theme constant is gone.
 *@
 
 <BenModal Visible="@Visible" VisibleChanged="@VisibleChanged"
-          Title="@Title" Size="sm" Static="@Static" Scrollable="false">
+          Title="@Title" Static="@Static" Scrollable="false"
+          Size="@SizeFromWidth" ShowCloseButton="@(!Busy)">
     <ChildContent>
         @if (ChildContent is not null)
         {
             @ChildContent
         }
-        else
+        else if (!string.IsNullOrWhiteSpace(Message))
         {
             <p class="mb-0">@Message</p>
         }
     </ChildContent>
     <FooterContent>
-        <button type="button" class="btn btn-outline-secondary" @onclick="CancelAsync" disabled="@Busy">
+        <button type="button" class="btn btn-outline-secondary" @onclick="Cancel" disabled="@Busy">
             @CancelText
         </button>
-        <button type="button" class="btn @ConfirmButtonClass" @onclick="ConfirmAsync" disabled="@Busy">
+        <button type="button" class="btn @ConfirmButtonClass"
+                @onclick="@(() => OnConfirm.InvokeAsync())"
+                disabled="@(Busy || !ConfirmEnabled)">
             @if (Busy)
             {
                 <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+                @BusyText
             }
-            @ConfirmText
+            else
+            {
+                @ConfirmText
+            }
         </button>
     </FooterContent>
 </BenModal>
@@ -35,37 +47,77 @@
     [Parameter] public bool Visible { get; set; }
     [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
 
-    [Parameter] public string Title { get; set; } = "Are you sure?";
+    [Parameter] public string Title { get; set; } = "Confirm";
+
+    /// <summary>Single line of prose. Ignored when ChildContent is supplied.</summary>
     [Parameter] public string? Message { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    [Parameter] public string ConfirmText { get; set; } = "Confirm";
+    [Parameter] public string ConfirmText { get; set; } = "Delete";
+    [Parameter] public string BusyText { get; set; } = "Working…";
     [Parameter] public string CancelText { get; set; } = "Cancel";
 
-    /// <summary>Renders the confirm button as destructive. Anything that deletes should set this.</summary>
-    [Parameter] public bool Destructive { get; set; }
-
-    /// <summary>Disables both buttons and spins the confirm one — set while the action runs so a
-    /// double-click cannot fire it twice.</summary>
+    /// <summary>Disables both buttons and spins the confirm one, so a double-click cannot fire the
+    /// action twice.</summary>
     [Parameter] public bool Busy { get; set; }
 
-    /// <summary>Backdrop and Escape are ignored by default here: dismissing a destructive prompt
-    /// by a stray click is worse than making the choice explicit.</summary>
+    /// <summary>Extra gate on the confirm button beyond <c>!Busy</c>, for pages with a condition
+    /// of their own ("cannot delete while X is still true").</summary>
+    [Parameter] public bool ConfirmEnabled { get; set; } = true;
+
+    /// <summary>Renders the confirm button red. Defaults true because the overwhelming majority of
+    /// these prompts guard a delete — matching the old component's "Delete" default.</summary>
+    [Parameter] public bool Destructive { get; set; } = true;
+
+    /// <summary>Carried over so old call sites compile unchanged. Telerik's theme-colour strings
+    /// ("error", "primary", …) still map to the right Bootstrap button; anything unrecognised
+    /// falls back to <see cref="Destructive"/>.</summary>
+    [Parameter] public string? ConfirmThemeColor { get; set; }
+
+    /// <summary>A CSS width, as the old component took. Mapped onto the nearest modal size rather
+    /// than applied literally, so dialogs stay consistent instead of each picking its own width.</summary>
+    [Parameter] public string Width { get; set; } = "400px";
+
+    /// <summary>Backdrop and Escape are ignored by default: dismissing a destructive prompt with a
+    /// stray click is worse than making the choice explicit.</summary>
     [Parameter] public bool Static { get; set; } = true;
 
-    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter, EditorRequired] public EventCallback OnConfirm { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
 
-    private string ConfirmButtonClass => Destructive ? "btn-danger" : "btn-primary";
-
-    private async Task ConfirmAsync()
+    private string ConfirmButtonClass => ConfirmThemeColor?.ToLowerInvariant() switch
     {
-        if (OnConfirm.HasDelegate) await OnConfirm.InvokeAsync();
+        "error"     => "btn-danger",
+        "warning"   => "btn-warning",
+        "success"   => "btn-success",
+        "primary"   => "btn-primary",
+        "secondary" => "btn-secondary",
+        _           => Destructive ? "btn-danger" : "btn-primary",
+    };
+
+    // Old call sites pass widths from roughly 320px to 900px. Bucketing keeps the dialogs looking
+    // like one family instead of a dozen bespoke widths.
+    private string? SizeFromWidth
+    {
+        get
+        {
+            if (!int.TryParse(new string(Width.TakeWhile(char.IsDigit).ToArray()), out var px))
+                return null;
+
+            return px switch
+            {
+                <= 380  => "sm",
+                <= 560  => null,      // Bootstrap's default
+                <= 800  => "lg",
+                _       => "xl",
+            };
+        }
     }
 
-    private async Task CancelAsync()
+    private async Task Cancel()
     {
-        if (VisibleChanged.HasDelegate) await VisibleChanged.InvokeAsync(false);
-        if (OnCancel.HasDelegate) await OnCancel.InvokeAsync();
+        Visible = false;
+        await VisibleChanged.InvokeAsync(false);
+        await OnCancel.InvokeAsync();
     }
 }

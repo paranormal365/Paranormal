@@ -36,7 +36,7 @@ unchanged — what changes is the widget layer and the page chrome.
 - [x] **Phase 1** — Extract `Ben.Web.Services`
 - [x] **Phase 2** — New projects + host shell
 - [x] **Phase 3** — Component kit + Telerik Night restyle
-- [ ] **Phase 4** — Library migration waves A–J
+- [ ] **Phase 4** — Library migration waves A–J *(Wave A done)*
 - [ ] **Phase 5** — Parity, guard tests, docs
 
 ### Phase 0 notes — the Night theme was broken upstream
@@ -217,3 +217,46 @@ input binding through close/reopen (the TelerikDialog failure does not reproduce
 normal modal while a static confirm ignores it, body scroll locks and unlocks, toasts auto-dismiss
 while errors persist, tab state survives switching, panels collapse, Telerik and Bootstrap inputs
 measure identically in light and dark, and no `delegateTarget` error after repeated navigation.
+
+## Phase 4 — library migration waves
+
+### Wave A — `Shared/`, `Help/`, `Support/`
+
+26 components ported. The real home page is live: `HomeHero`, `NearbyDiscovery` and
+`PublicCaseDiscovery` replace the Phase 2 placeholder. Routes now served: `/`, `/help`,
+`/help/{Slug}`, `/contact`, `/places/{id}`, `/support/{token}`.
+
+Telerik converted: 13 `TelerikButton`, 7 `TelerikTextBox`/`TextArea`, 7 `TelerikLoaderContainer`,
+1 each of `Window`, `Pager`, `ButtonGroup`, `DropDownList`. **Kept:** the two `TelerikMap`
+instances — the only Telerik left in this wave, and every remaining `k-*` element on the home page
+is one of the map's own controls.
+
+New kit component: **`BenPager`** (Bootstrap pagination, windowed page numbers). `BenConfirmDialog`
+was widened to mirror the old `ConfirmDialog`'s full parameter surface — same names and defaults,
+including ones a fresh design would not pick — so its remaining ~15 call sites move by renaming
+the tag rather than being rewritten.
+
+**Wave-order correction:** `AddressFieldsWithMap` is deferred, not ported. It needs
+`Manage/Maps/AddressMapPlayer` (planned for Wave G) but its consumers are in Waves B and C, so
+**`Manage/Maps/` has to move ahead of Wave B**. `OrgCard` was pulled forward from Wave C for the
+same reason — `NearbyDiscovery` cannot render without it — at a cost of 49 Telerik-free lines.
+
+Behaviour changes worth knowing:
+- The case popup on the public map was a *non-modal* resizable window floating over the map; as a
+  `BenModal` it is modal, so choosing another pin means dismissing the current one first. Taken
+  deliberately, to keep one dialog primitive that is known to hold its bindings.
+- Two conversions replaced `@bind` with `@oninput` (the hero search, the message composer). Both
+  gate a button on their value, and binding on blur leaves that button dead for anyone who types
+  and clicks straight through — the trap the original code documented against `TelerikTextBox`.
+
+**A real accessibility bug, found by measuring rather than looking.** Night's semantic colours are
+deep (`primary #37508a`, `info #66366c`) because the template uses them as solid fills behind white
+text. Bootstrap's `.btn-outline-*` variants invert that, painting the same colour as text on the
+page background. Measured on the home page: **info 1.57:1, primary 1.82:1, danger 2.97:1,
+success 4.25:1** — all under the 4.5:1 WCAG AA threshold, and the "Request an Investigation" call
+to action was the visible symptom. Resting foregrounds are now lightened in dark mode (and success
+darkened in light mode); **all four variants pass AA in both themes**, with hover still filling
+with the true brand colour. Fixed centrally, before the remaining waves add hundreds more.
+
+Also this wave: Administration now sits directly under Home for an admin, and the one forced
+`font-weight` in the Telerik sheet was removed — the template sets its own type weights.

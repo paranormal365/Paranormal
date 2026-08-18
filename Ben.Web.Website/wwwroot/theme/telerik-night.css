@@ -87,10 +87,9 @@ body.k-body {
 .k-grid .k-grid-footer,
 .k-grid .k-table-th { background-color: transparent; }
 
-/* Header row still needs to separate from the data, but by weight rather than a
-   different colour field. */
+/* Header row separates from the data by its rule, not by weight — the template sets its own
+   type weights and this should not override them. */
 .k-grid .k-table-th {
-    font-weight: 600;
     color: var(--bs-emphasis-color, var(--bs-body-color));
     border-bottom-color: var(--bs-border-color);
 }

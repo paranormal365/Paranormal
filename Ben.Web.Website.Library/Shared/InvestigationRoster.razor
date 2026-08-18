@@ -1,0 +1,436 @@
+@namespace Ben.Web.Website.Library.Shared
+@implements IAsyncDisposable
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@*
+   Who is on tonight's team and who has turned up.
+
+   Polls rather than pushes: no real-time infrastructure exists in this app, and adding SignalR for
+   a handful of chips that change a few times an evening would be a large piece of machinery to
+   maintain for a small effect. A timer every few seconds is ample and can be deleted in a line.
+*@
+
+<div class="card">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h6 class="card-title mb-1">Team<HelpLink Slug="working-a-case" Anchor="arriving-on-site" /></h6>
+                <p class="text-secondary small mb-0">
+                    @_arrivedCount of @_roster.Count arrived
+                </p>
+            </div>
+
+            @if (_myEntry is not null && _myEntry.DidAttend != true)
+            {
+                <button type="button" class="btn btn-primary"
+                        disabled="@_checkingIn"
+                        @onclick="@(() => _showCheckIn = true)">
+                    <BenIcon Name="map-pin" Class="me-1" />@(_checkingIn ? "Saving…" : "I've arrived")
+                </button>
+            }
+        </div>
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger py-2 small mt-3 mb-0">@_error</div>
+        }
+
+        @* ── Check-in ─────────────────────────────────────────────────────── *@
+        @if (_showCheckIn)
+        {
+            <div class="border rounded p-3 mt-3">
+                <label class="form-label small mb-1">When did you get there?</label>
+                @* Editable rather than assumed-now. Most sites have no signal, so checking in the
+                   next morning and correcting the time is the ordinary path, not an edge case. *@
+                <input type="datetime-local" class="form-control" style="max-width:260px;"
+                       value="@_statedArrival"
+                       @oninput="@(e => _statedArrival = e.Value?.ToString() ?? string.Empty)" />
+                <div class="form-text">Leave as-is if you are checking in now.</div>
+
+                <div class="d-flex gap-2 mt-2">
+                    <button type="button" class="btn btn-primary"
+                            disabled="@_checkingIn" @onclick="CheckInAsync">Check in</button>
+                    <button type="button" class="btn btn-link text-decoration-none"
+                            @onclick="@(() => _showCheckIn = false)">Cancel</button>
+                </div>
+            </div>
+        }
+
+        @* ── Roster ───────────────────────────────────────────────────────── *@
+        @if (_roster.Count == 0)
+        {
+            <p class="text-secondary small fst-italic mt-3 mb-0">Nobody has been added to this investigation yet.</p>
+        }
+        else
+        {
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                @foreach (var entry in _roster)
+                {
+                    @* Keyed: naming a lead reorders this list, and without a key Blazor reuses
+                       elements by position, so the badges would follow the slot rather than the
+                       person. *@
+                    <span @key="entry.AttendeeId"
+                          class="badge rounded-pill @ChipClass(entry) d-inline-flex align-items-center gap-1"
+                          style="font-size:.8rem;padding:.45rem .7rem;"
+                          title="@ChipTitle(entry)">
+                        @entry.DisplayName
+                        @if (entry.IsLead)
+                        {
+                            <span class="badge bg-light text-dark">Lead</span>
+                        }
+                        @if (entry.DateArrived is { } arrived)
+                        {
+                            <span class="opacity-75">@arrived.ToLocalTime().ToString("HH:mm")</span>
+                        }
+                    </span>
+                }
+            </div>
+
+            @* ── What people saw ──────────────────────────────────────────── *@
+            <div class="mt-4">
+                <h6 class="fw-semibold mb-1">
+                    What people saw<HelpLink Slug="working-a-case" Anchor="writing-up-what-you-saw" />
+                </h6>
+                <p class="text-secondary small">
+                    One account each, in their own words. Four people in a building at night see
+                    four different nights.
+                </p>
+
+                @if (_findings.Count == 0 && _myEntry is null)
+                {
+                    <p class="text-secondary small fst-italic mb-0">Nothing written up yet.</p>
+                }
+
+                @foreach (var finding in _findings.Where(f => f.AppUserId != UserState.UserId))
+                {
+                    <div class="border rounded p-3 mb-2">
+                        <div class="d-flex justify-content-between align-items-baseline">
+                            <span class="fw-semibold">@(finding.DisplayName ?? "Somebody")</span>
+                            <span class="text-secondary small">
+                                @finding.DateCreated.ToLocalTime().ToString("d MMM yyyy")
+                                @if (finding.DateUpdated is { } revised)
+                                {
+                                    @* Said out loud: a first draft and a revision a week later are
+                                       different claims, and a reader comparing accounts wants to
+                                       know which one they have. *@
+                                    <span title="@revised.ToLocalTime().ToString("d MMM yyyy, HH:mm")"> · revised</span>
+                                }
+                            </span>
+                        </div>
+                        <div class="mt-1" style="white-space:pre-wrap;">@finding.Narrative</div>
+                    </div>
+                }
+
+                @* Only people who were on the team have anything to file — the server refuses
+                   anyone else, so offering the box would be offering a rejection. *@
+                @if (_myEntry is not null)
+                {
+                    <div class="border rounded p-3 bg-body-tertiary">
+                        <div class="d-flex justify-content-between align-items-baseline mb-1">
+                            <span class="fw-semibold">Your account</span>
+                            @if (_myFinding is { } mine)
+                            {
+                                <span class="text-secondary small">
+                                    Filed @mine.DateCreated.ToLocalTime().ToString("d MMM yyyy")
+                                </span>
+                            }
+                        </div>
+
+                        @* Plain textarea: this gates the Save button, and Telerik binds on blur —
+                           somebody who types and clicks Save without leaving the box would be told
+                           it is empty while looking at their own words. *@
+                        <textarea class="form-control" rows="4" value="@_narrative"
+                                  placeholder="What did you see, hear, or measure? Anything that struck you as ordinary is worth saying too."
+                                  @oninput="@(e => _narrative = e.Value?.ToString() ?? string.Empty)"></textarea>
+
+                        <div class="d-flex gap-2 mt-2">
+                            <button type="button" class="btn btn-primary"
+                                    disabled="@(string.IsNullOrWhiteSpace(_narrative) || _savingFinding)"
+                                    @onclick="SaveMyFindingAsync">
+                                @(_savingFinding ? "Saving…" : _myFinding is null ? "File it" : "Save changes")
+                            </button>
+
+                            @if (_myFinding is not null)
+                            {
+                                <button type="button" class="btn btn-link text-decoration-none"
+                                        disabled="@_savingFinding"
+                                        @onclick="DeleteMyFindingAsync">Withdraw</button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @* Manage-gated: correcting somebody else's attendance is not a participant's job. *@
+            @if (CanManage)
+            {
+                <div class="table-responsive mt-3">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr><th>Who</th><th>Arrived</th><th class="text-center">Attended</th><th class="text-center">Lead</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var entry in _roster)
+                            {
+                                @* Keyed, and this row is why: the checkbox and the radio hold
+                                   their own DOM state, so an unkeyed reorder leaves the previous
+                                   lead's radio marked next to the new lead's name. Seen live —
+                                   the chips above said one person and the radio below said the
+                                   other. *@
+                                <tr @key="entry.AttendeeId">
+                                    <td>@entry.DisplayName</td>
+                                    <td class="text-nowrap">
+                                        @(entry.DateArrived?.ToLocalTime().ToString("d MMM, HH:mm") ?? "—")
+                                        @if (entry.DidAttend == true && !entry.SelfReported)
+                                        {
+                                            <span class="badge bg-secondary ms-1" title="Recorded by someone else, not by them">Recorded</span>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <input type="checkbox" class="form-check-input"
+                                               checked="@(entry.DidAttend == true)"
+                                               @onchange="@(e => OverrideAsync(entry, (bool)(e.Value ?? false)))" />
+                                    </td>
+                                    <td class="text-center">
+                                        @* A radio, not a checkbox: exactly one person leads a
+                                           visit, and the server clears the previous holder either
+                                           way. A checkbox would suggest several are allowed. *@
+                                        <input type="radio" class="form-check-input"
+                                               name="@($"lead-{InvestigationId}")"
+                                               checked="@entry.IsLead"
+                                               @onchange="@(() => SetLeadAsync(entry, true))" />
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="form-text mt-1">
+                    The lead can edit this investigation, and stops being able to when the lead
+                    changes.
+                    @if (_roster.FirstOrDefault(r => r.IsLead) is { } lead)
+                    {
+                        <a href="#" class="ms-1" @onclick:preventDefault
+                           @onclick="@(() => SetLeadAsync(lead, false))">Nobody leads this visit</a>
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter, EditorRequired] public Guid InvestigationId { get; set; }
+
+    /// <summary>The server's verdict, passed down. Not worked out here.</summary>
+    [Parameter] public bool CanManage { get; set; }
+
+    /// <summary>How often to re-read the roster. A few seconds is ample for a handful of chips.</summary>
+    [Parameter] public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(12);
+
+    private List<InvestigationRosterEntry> _roster = [];
+    private InvestigationRosterEntry? _myEntry;
+    private int _arrivedCount;
+
+    private List<InvestigationFindingRecord> _findings = [];
+    private InvestigationFindingRecord? _myFinding;
+    private string _narrative = string.Empty;
+    private bool _savingFinding;
+
+    private bool _showCheckIn;
+    private bool _checkingIn;
+    private string _statedArrival = string.Empty;
+    private string? _error;
+
+    private PeriodicTimer? _timer;
+    private CancellationTokenSource? _cts;
+    private Guid _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (InvestigationId == Guid.Empty || InvestigationId == _loadedFor) return;
+        _loadedFor = InvestigationId;
+        _statedArrival = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
+        await LoadAsync();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender || _timer is not null) return;
+        _cts = new CancellationTokenSource();
+        _timer = new PeriodicTimer(PollInterval);
+        _ = PollAsync(_cts.Token);
+    }
+
+    /// <summary>Re-reads the roster until the component goes away.</summary>
+    private async Task PollAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (await _timer!.WaitForNextTickAsync(ct))
+            {
+                await LoadAsync();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Ordinary teardown — the page was left. Nothing to report.
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _roster = (await AdminClient.GetInvestigationRosterAsync(OrgId, InvestigationId)).ToList();
+            _arrivedCount = _roster.Count(r => r.DidAttend == true);
+            _myEntry = _roster.FirstOrDefault(r => r.AppUserId == UserState.UserId);
+
+            _findings = (await AdminClient.GetInvestigationFindingsAsync(OrgId, InvestigationId)).ToList();
+            _myFinding = _findings.FirstOrDefault(f => f.AppUserId == UserState.UserId);
+
+            // Only seeded from the server when the box is untouched. Overwriting what somebody is
+            // halfway through typing, on a poll they did not ask for, would be its own small
+            // disaster.
+            if (!_savingFinding && string.IsNullOrWhiteSpace(_narrative))
+                _narrative = _myFinding?.Narrative ?? string.Empty;
+        }
+        catch
+        {
+            // A failed poll is not worth an error banner that appears and vanishes on its own —
+            // the previous roster stays on screen and the next tick tries again.
+        }
+    }
+
+    private async Task SaveMyFindingAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_narrative) || _savingFinding) return;
+
+        _savingFinding = true;
+        _error = null;
+
+        try
+        {
+            _myFinding = await AdminClient.SaveMyInvestigationFindingAsync(
+                OrgId, InvestigationId, _narrative);
+            await LoadAsync();
+        }
+        catch
+        {
+            _error = "That could not be saved just now.";
+        }
+
+        _savingFinding = false;
+    }
+
+    private async Task DeleteMyFindingAsync()
+    {
+        _savingFinding = true;
+        _error = null;
+
+        try
+        {
+            await AdminClient.DeleteMyInvestigationFindingAsync(OrgId, InvestigationId);
+            _myFinding = null;
+            _narrative = string.Empty;
+            await LoadAsync();
+        }
+        catch
+        {
+            _error = "That could not be withdrawn just now.";
+        }
+
+        _savingFinding = false;
+    }
+
+    private async Task SetLeadAsync(InvestigationRosterEntry entry, bool isLead)
+    {
+        _error = null;
+        try
+        {
+            // The whole roster comes back, because naming a lead also clears somebody else's row.
+            _roster = (await AdminClient.SetInvestigationLeadAsync(
+                OrgId, InvestigationId, entry.AttendeeId, isLead)).ToList();
+            _myEntry = _roster.FirstOrDefault(r => r.AppUserId == UserState.UserId);
+        }
+        catch
+        {
+            // Said out loud, unlike a failed poll: this was a deliberate action, and silently
+            // leaving the old lead in place would look like it worked.
+            _error = "That could not be saved just now.";
+            await LoadAsync();
+        }
+    }
+
+    private async Task CheckInAsync()
+    {
+        _checkingIn = true;
+        _error = null;
+
+        // Parsed as local time and sent as UTC, because the field is what the person is reading
+        // off their own watch.
+        DateTime? stated = DateTime.TryParse(_statedArrival, out var parsed)
+            ? parsed.ToUniversalTime()
+            : null;
+
+        var result = await AdminClient.CheckInToInvestigationAsync(OrgId, InvestigationId, stated);
+
+        _checkingIn = false;
+
+        if (result is null)
+        {
+            _error = "That could not be saved. Check the arrival time is not in the future.";
+            return;
+        }
+
+        _showCheckIn = false;
+        await LoadAsync();
+    }
+
+    private async Task OverrideAsync(InvestigationRosterEntry entry, bool didAttend)
+    {
+        _error = null;
+
+        var result = await AdminClient.OverrideInvestigationAttendanceAsync(
+            OrgId, InvestigationId, entry.AttendeeId, didAttend,
+            didAttend ? entry.DateArrived ?? DateTime.UtcNow : null);
+
+        if (result is null)
+        {
+            _error = "That could not be saved.";
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private static string ChipClass(InvestigationRosterEntry entry) => entry.DidAttend switch
+    {
+        true => "bg-success",
+        false => "bg-secondary",
+        // Not yet known reads as waiting, not as a problem — most of the evening is spent here.
+        _ => "bg-light text-dark border",
+    };
+
+    private static string ChipTitle(InvestigationRosterEntry entry)
+    {
+        if (entry.DidAttend == false) return "Marked as not attending";
+        if (entry.DidAttend != true) return $"Not arrived yet · {entry.Rsvp}";
+        return entry.SelfReported
+            ? "Checked in themselves"
+            : "Attendance recorded by someone else";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // Without this the timer keeps ticking against a dead circuit after navigation.
+        if (_cts is not null) await _cts.CancelAsync();
+        _timer?.Dispose();
+        _cts?.Dispose();
+    }
+}

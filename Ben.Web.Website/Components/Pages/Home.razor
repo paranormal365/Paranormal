@@ -4,21 +4,11 @@
 <PageTitle>@SiteOptions.Value.Name — @SiteOptions.Value.Tagline</PageTitle>
 
 @*
-    Placeholder hero. The real home page is three library components — HomeHero, NearbyDiscovery
-    and PublicCaseDiscovery — which arrive with Wave A (Shared/). This stands in until then so the
-    shell has a landing page to boot into; replace the block below with those three tags.
+    The landing page is three library components, same as the original host: the hero with its
+    location search, then what is near the visitor, then the public case map. All three are
+    anonymous-safe — they degrade to a browse or a prompt rather than requiring a sign-in.
 *@
 
-<div class="text-center py-5">
-    @* Explicit style, not a height attribute: the template sets img { height: auto }, which
-       wins over the attribute and lets this SVG expand to its container. *@
-    <img src="/static/images/is-haunted-logo.svg" alt="" class="mb-4" style="height:96px;width:auto;" />
-    <h1 class="display-6 is-haunted-text">@SiteOptions.Value.Name</h1>
-    <p class="text-muted">@SiteOptions.Value.Tagline</p>
-
-    <div class="alert alert-info d-inline-block mt-4 text-start" role="status">
-        <strong>Shell preview.</strong>
-        The discovery panels (<code>HomeHero</code>, <code>NearbyDiscovery</code>,
-        <code>PublicCaseDiscovery</code>) land with the Shared/ migration wave.
-    </div>
-</div>
+<HomeHero />
+<NearbyDiscovery />
+<PublicCaseDiscovery />

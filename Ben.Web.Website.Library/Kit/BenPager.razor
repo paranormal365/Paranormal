@@ -1,0 +1,91 @@
+@*
+    TelerikPager replacement, on Bootstrap's pagination markup.
+
+    Shows a window of page numbers around the current one rather than every page, so a list of a
+    few hundred results does not render a few hundred links.
+*@
+
+@if (TotalPages > 1)
+{
+    <nav aria-label="@AriaLabel">
+        <ul class="pagination mb-0">
+            <li class="page-item @(Page <= 1 ? "disabled" : null)">
+                <button type="button" class="page-link" @onclick="() => GoToAsync(Page - 1)"
+                        disabled="@(Page <= 1)" aria-label="Previous page">
+                    <BenIcon Name="chevron-left" />
+                </button>
+            </li>
+
+            @if (WindowStart > 1)
+            {
+                <li class="page-item">
+                    <button type="button" class="page-link" @onclick="() => GoToAsync(1)">1</button>
+                </li>
+                @if (WindowStart > 2)
+                {
+                    <li class="page-item disabled"><span class="page-link">…</span></li>
+                }
+            }
+
+            @for (var i = WindowStart; i <= WindowEnd; i++)
+            {
+                // Captured per iteration, or every button would navigate to the last page.
+                // Named pageNumber, not page: "@page" is the routing directive, and Razor parses
+                // it as one even mid-markup.
+                var pageNumber = i;
+                <li class="page-item @(pageNumber == Page ? "active" : null)">
+                    <button type="button" class="page-link" @onclick="() => GoToAsync(pageNumber)"
+                            aria-current="@(pageNumber == Page ? "page" : null)">@pageNumber</button>
+                </li>
+            }
+
+            @if (WindowEnd < TotalPages)
+            {
+                @if (WindowEnd < TotalPages - 1)
+                {
+                    <li class="page-item disabled"><span class="page-link">…</span></li>
+                }
+                <li class="page-item">
+                    <button type="button" class="page-link" @onclick="() => GoToAsync(TotalPages)">@TotalPages</button>
+                </li>
+            }
+
+            <li class="page-item @(Page >= TotalPages ? "disabled" : null)">
+                <button type="button" class="page-link" @onclick="() => GoToAsync(Page + 1)"
+                        disabled="@(Page >= TotalPages)" aria-label="Next page">
+                    <BenIcon Name="chevron-right" />
+                </button>
+            </li>
+        </ul>
+    </nav>
+}
+
+@code {
+    /// <summary>Total number of items, not pages.</summary>
+    [Parameter] public int Total { get; set; }
+
+    [Parameter] public int PageSize { get; set; } = 20;
+
+    /// <summary>Current page, 1-based — matching TelerikPager, so call sites port unchanged.</summary>
+    [Parameter] public int Page { get; set; } = 1;
+    [Parameter] public EventCallback<int> PageChanged { get; set; }
+
+    /// <summary>How many numbered links to show around the current page.</summary>
+    [Parameter] public int WindowSize { get; set; } = 5;
+
+    [Parameter] public string AriaLabel { get; set; } = "Pagination";
+
+    private int TotalPages => PageSize <= 0 ? 1 : (int)Math.Ceiling(Total / (double)PageSize);
+
+    private int WindowStart => Math.Max(1, Math.Min(Page - WindowSize / 2, TotalPages - WindowSize + 1));
+    private int WindowEnd   => Math.Min(TotalPages, WindowStart + WindowSize - 1);
+
+    private async Task GoToAsync(int page)
+    {
+        page = Math.Clamp(page, 1, TotalPages);
+        if (page == Page) return;
+
+        Page = page;
+        if (PageChanged.HasDelegate) await PageChanged.InvokeAsync(page);
+    }
+}
