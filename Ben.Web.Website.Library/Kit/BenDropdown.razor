@@ -50,7 +50,14 @@
 
     private bool _open;
 
-    protected override void OnParametersSet() => _open = Open;
+    protected override void OnParametersSet()
+    {
+        // Only take the caller's value when Open is actually bound. Copying it unconditionally
+        // meant an unbound (always-false) parameter slammed the menu shut on every re-render of
+        // the parent — invisible in the header, but a grid re-renders constantly, so the menu
+        // inside one could never stay open long enough to click.
+        if (OpenChanged.HasDelegate) _open = Open;
+    }
 
     private async Task Toggle()
     {

@@ -1,0 +1,509 @@
+@*
+  OrganizationFiles.razor  (/organizations/{OrgId:guid}/files)
+  ─────────────────────────────────────────────────────────────
+  Manages files owned by an organization.
+  • Members with Create permission can upload new files or share user files.
+  • When sharing a user file, members with Update permission are offered "Publish immediately".
+  • Members with Update permission can separately approve/revoke public access (Publish).
+  • Members with Delete permission can delete files; each deletion writes an audit log.
+  • The delete log tab is visible to members with Delete permission.
+*@
+
+@page "/organizations/{OrgId:guid}/files"
+@namespace Ben.Web.Website.Library.Organization
+@using Ben.Web.Website.Library.Shared
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject BenToastService Toasts
+@using Ben.Web.Website.Library.Manage.Media
+@using Ben.Web.Website.Library.Manage.Audio
+
+<div class="container-fluid py-3">
+    @if (_loading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <span class="spinner-border text-primary" role="status"></span>
+        </div>
+    }
+    else
+    {
+        @if (!EmbeddedMode)
+        {
+            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                <h4 class="mb-0">Files — @_orgName</h4>
+            </div>
+        }
+        <div class="d-flex gap-2 flex-wrap mb-3">
+                <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => _showUploadDialog = true)">⬆ Upload</button>
+                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _showCopyDialog = true)">📋 Share from User</button>
+                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _showDeleteLog = !_showDeleteLog)">
+                    🗒 @(_showDeleteLog ? "Hide" : "Show") Delete Log
+                </button>
+                <a href="/organizations" class="btn btn-sm btn-outline-secondary">← Organizations</a>
+            </div>
+
+        @if (_error is not null) { <div class="alert alert-danger">@_error</div> }
+
+        @* ── Files grid ──────────────────────────────────────────────────── *@
+        <TelerikGrid Data="@_files" Pageable="true" PageSize="20" Sortable="true" Class="mb-4">
+            <GridColumns>
+                <GridColumn Field="@nameof(OrganizationFileRecord.FileName)" Title="File Name" />
+                <GridColumn Field="@nameof(OrganizationFileRecord.FileTypeName)" Title="Type" Width="110px" />
+                <GridColumn Title="Size" Width="85px">
+                    <Template>@FormatSize(((OrganizationFileRecord)context).FileSize)</Template>
+                </GridColumn>
+                <GridColumn Title="Public" Width="100px">
+                    <Template>
+                        @{ var f = (OrganizationFileRecord)context; }
+                        @if (f.IsPublic)
+                        {
+                            <span class="badge bg-success">✓ Public</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Private</span>
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Approved by" Width="130px">
+                    <Template>
+                        @{ var fa = (OrganizationFileRecord)context; }
+                        @if (fa.DatePublished.HasValue)
+                        {
+                            <span class="small text-success" title="@fa.DatePublished.Value.ToViewerLocalTime(UserState).ToString("g")">
+                                @fa.PublishedByDisplayName<br/>
+                                <em class="text-secondary">@fa.DatePublished.Value.ToViewerLocalTime(UserState).ToString("d")</em>
+                            </span>
+                        }
+                        else { <span class="text-secondary small">—</span> }
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Source" Width="70px">
+                    <Template>
+                        @((OrganizationFileRecord)context).SourceUploadFileId.HasValue ? "📋 Copy" : "⬆ Upload"
+                    </Template>
+                </GridColumn>
+                <GridColumn Field="@nameof(OrganizationFileRecord.Description)" Title="Description" />
+                <GridCommandColumn Width="240px">
+                    <GridCommandButton OnClick="@(e => OpenPublish((OrganizationFileRecord)e.Items.First()))"
+                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
+                                       Size="@ThemeConstants.Button.Size.Small">
+                        @(((OrganizationFileRecord)context).IsPublic ? "Unpublish" : "Publish")
+                    </GridCommandButton>
+                    @{ var fc = (OrganizationFileRecord)context; }
+                    @if (fc.ContentType.StartsWith("image/"))
+                    {
+                        <GridCommandButton Icon="@SvgIcon.Pencil"
+                                           Size="@ThemeConstants.Button.Size.Small" Class="ms-1"
+                                           OnClick="@((GridCommandEventArgs e) => OpenImageEditor((OrganizationFileRecord)e.Items.First()))">
+                            Edit Image
+                        </GridCommandButton>
+                    }
+                    <GridCommandButton OnClick="@(e => OpenEdit((OrganizationFileRecord)e.Items.First()))"
+                                       Size="@ThemeConstants.Button.Size.Small" Class="ms-1">Edit</GridCommandButton>
+                    <GridCommandButton OnClick="@(e => ConfirmDelete((OrganizationFileRecord)e.Items.First()))"
+                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                       Size="@ThemeConstants.Button.Size.Small" Class="ms-1">Delete</GridCommandButton>
+                </GridCommandColumn>
+            </GridColumns>
+        </TelerikGrid>
+
+        @* ── Delete log (expandable) ─────────────────────────────────────── *@
+        @if (_showDeleteLog)
+        {
+            <div class="card border-secondary mb-4">
+                <div class="card-header small fw-semibold text-secondary text-uppercase">File Deletion Audit Log</div>
+                <div class="card-body p-0">
+                    @if (_deleteLogs.Count == 0)
+                    {
+                        <p class="text-secondary small p-3 mb-0">No files have been deleted yet.</p>
+                    }
+                    else
+                    {
+                        <TelerikGrid Data="@_deleteLogs" Pageable="true" PageSize="10">
+                            <GridColumns>
+                                <GridColumn Field="@nameof(OrganizationFileDeleteLogRecord.FileName)" Title="File" />
+                                <GridColumn Field="@nameof(OrganizationFileDeleteLogRecord.ContentType)" Title="Type" Width="110px" />
+                                <GridColumn Title="Size" Width="80px">
+                                    <Template>@FormatSize(((OrganizationFileDeleteLogRecord)context).FileSize)</Template>
+                                </GridColumn>
+                                <GridColumn Title="Was Public" Width="90px">
+                                    <Template>
+                                        @{ var dl = (OrganizationFileDeleteLogRecord)context; }
+                                        @(dl.WasPublic ? "✓ Yes" : "No")
+                                    </Template>
+                                </GridColumn>
+                                <GridColumn Title="Approved by" Width="120px">
+                                    <Template>
+                                        @{ var dla = (OrganizationFileDeleteLogRecord)context; }
+                                        @(dla.WasPublishedByDisplayName ?? "—")
+                                    </Template>
+                                </GridColumn>
+                                <GridColumn Field="@nameof(OrganizationFileDeleteLogRecord.DeletedByDisplayName)" Title="Deleted By" Width="130px" />
+                                <GridColumn Title="Deleted" Width="130px">
+                                    <Template>
+                                        @{ var log = (OrganizationFileDeleteLogRecord)context; }
+                                        @log.DateDeleted.ToViewerLocalTime(UserState).ToString("g")
+                                    </Template>
+                                </GridColumn>
+                            </GridColumns>
+                        </TelerikGrid>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@* ── Upload dialog ──────────────────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showUploadDialog" Title="Upload Organization File">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">File <span class="text-danger">*</span></label>
+                <InputFile OnChange="OnFileSelected" class="form-control" accept="*/*" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">File Type <span class="text-danger">*</span></label>
+                <TelerikDropDownList Data="@_fileTypes" @bind-Value="@_uploadTypeId"
+                                     TextField="@nameof(UploadFileTypeRecord.Name)"
+                                     ValueField="@nameof(UploadFileTypeRecord.Id)"
+                                     DefaultText="— select —" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Description</label>
+                <input type="text" class="form-control" @bind="@_uploadDescription" @bind:event="oninput" />
+            </div>
+            <div class="col-12 d-flex align-items-center gap-2">
+                <input type="checkbox" class="form-check-input" id="orgfile-pub" @bind="@_uploadIsPublic" />
+                <label for="orgfile-pub" class="form-label mb-0">Mark as Public immediately</label>
+            </div>
+        </div>
+        @if (_uploadError is not null) { <div class="alert alert-danger mt-3 mb-0 py-2 small">@_uploadError</div> }
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => { _showUploadDialog = false; _uploadError = null; })">Cancel</button>
+            <button type="button" class="btn btn-primary" @onclick="UploadAsync" disabled="@(!(!_uploading && _selectedFile is not null && _uploadTypeId != Guid.Empty))">@(_uploading ? "Uploading…" : "Upload")</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@* ── Share from user file dialog ────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showCopyDialog" Title="Share User File to Organization">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">User File ID (Guid)</label>
+                <input type="text" class="form-control" placeholder="Paste the UploadFile ID..." @bind="@_copySourceId" @bind:event="oninput" />
+                <small class="text-secondary">The file must be public or shared with this organization.</small>
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Description <span class="text-secondary small">(blank = keep original)</span></label>
+                <input type="text" class="form-control" @bind="@_copyDescription" @bind:event="oninput" />
+            </div>
+            <div class="col-12 p-2 rounded" style="background:var(--kendo-color-surface,#f5f5f5)">
+                <p class="small text-secondary mb-1">
+                    <strong>Note:</strong> Shared files are <em>private by default</em>.
+                    A member with publish permission must approve the file before it becomes public.
+                </p>
+                <div class="d-flex align-items-center gap-2">
+                    <input type="checkbox" class="form-check-input" id="orgcopy-pub" @bind="@_copyPublishNow" />
+                    <label for="orgcopy-pub" class="form-label mb-0 small">
+                        Publish immediately
+                        @if (!_copyCanPublish)
+                        {
+                            <span class="text-muted ms-1">(requires Publish permission)</span>
+                        }
+                    </label>
+                </div>
+            </div>
+        </div>
+        @if (_copyError is not null) { <div class="alert alert-danger mt-3 mb-0 py-2 small">@_copyError</div> }
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => { _showCopyDialog = false; _copyError = null; })">Cancel</button>
+            <button type="button" class="btn btn-primary" @onclick="CopyAsync" disabled="@(!(!_copying))">@(_copying ? "Sharing…" : "Share to Org")</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@* ── Publish / unpublish dialog ─────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showPublishDialog" Title="@(_publishTarget?.IsPublic == true ? "Unpublish File" : "Publish File")">
+    <ChildContent>
+        <p>
+            @if (_publishTarget?.IsPublic == true)
+            {
+                <text>Revoke public access for <strong>@_publishTarget?.FileName</strong>?
+                The file will no longer be visible to the public.</text>
+            }
+            else
+            {
+                <text>Make <strong>@_publishTarget?.FileName</strong> publicly accessible?
+                This will be logged with your name and the current date/time.</text>
+            }
+        </p>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => _showPublishDialog = false)" disabled="@(!(!_publishing))">Cancel</button>
+            <button type="button" class="btn @(_publishTarget?.IsPublic == true ? "btn-warning" : "btn-success")" @onclick="ConfirmPublishAsync" disabled="@(!(!_publishing))">
+                @(_publishing ? "Working…" : (_publishTarget?.IsPublic == true ? "Unpublish" : "Approve & Publish"))
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@* ── Edit metadata dialog ────────────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showEditDialog" Title="Edit File Metadata">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Description</label>
+                <input type="text" class="form-control" @bind="@_editDescription" @bind:event="oninput" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Sort Order</label>
+                <input type="number" class="form-control" min="0" max="100" step="1" @bind="@_editSortOrder" @bind:event="oninput" />
+            </div>
+        </div>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => _showEditDialog = false)" disabled="@(!(!_savingEdit))">Cancel</button>
+            <button type="button" class="btn btn-primary" @onclick="SaveEditAsync" disabled="@(!(!_savingEdit))">@(_savingEdit ? "Saving…" : "Save")</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@* ── Delete confirm ──────────────────────────────────────────────────────────── *@
+<BenConfirmDialog @bind-Visible="@_showDeleteDialog" Title="Delete File" Width="400px"
+               Busy="@_deleting" BusyText="Deleting…" OnConfirm="DeleteAsync">
+    <p>Delete <strong>@_pendingDelete?.FileName</strong>? (@FormatSize(_pendingDelete?.FileSize ?? 0))</p>
+    <p class="small text-secondary mb-0">This action is permanent. An audit record will be saved before deletion.</p>
+</BenConfirmDialog>
+
+@* Org file image editor — ImageUrl overrides the default UploadFile download URL *@
+<ImageEditorPlayer @ref="_imageEditor"
+                   UploadFileId="@Guid.Empty"
+                   ImageUrl="@_editImageUrl"
+                   FileName="@_editImageName" />
+
+@code {
+    [Parameter] public Guid OrgId        { get; set; }
+    [Parameter] public bool EmbeddedMode  { get; set; }
+
+    private bool   _loading = true;
+    private string? _error;
+    private string  _orgName = string.Empty;
+    private List<OrganizationFileRecord>          _files      = [];
+    private List<OrganizationFileDeleteLogRecord> _deleteLogs = [];
+    private IReadOnlyList<UploadFileTypeRecord>   _fileTypes  = [];
+    private bool _showDeleteLog;
+
+    // Image editor
+    private ImageEditorPlayer? _imageEditor;
+    private string? _editImageUrl;
+    private string? _editImageName;
+
+    private async Task OpenImageEditor(OrganizationFileRecord file)
+    {
+        _editImageUrl  = AdminClient.GetOrgFileDownloadUrl(OrgId, file.Id);
+        _editImageName = file.FileName;
+        StateHasChanged();
+        if (_imageEditor is not null)
+            await _imageEditor.OpenAsync();
+    }
+
+    // Upload
+    private bool _showUploadDialog;
+    private IBrowserFile? _selectedFile;
+    private Guid   _uploadTypeId;
+    private string _uploadDescription = string.Empty;
+    private bool   _uploadIsPublic;
+    private bool   _uploading;
+    private string? _uploadError;
+
+    // Copy/Share
+    private bool   _showCopyDialog;
+    private string _copySourceId    = string.Empty;
+    private string _copyDescription = string.Empty;
+    private bool   _copyPublishNow;
+    private bool   _copyCanPublish;   // determined by API response
+    private bool   _copying;
+    private string? _copyError;
+
+    // Publish
+    private bool _showPublishDialog;
+    private OrganizationFileRecord? _publishTarget;
+    private bool _publishing;
+
+    // Edit
+    private bool   _showEditDialog;
+    private OrganizationFileRecord? _editingFile;
+    private string _editDescription = string.Empty;
+    private int    _editSortOrder;
+    private bool   _savingEdit;
+
+    // Delete
+    private bool _showDeleteDialog;
+    private OrganizationFileRecord? _pendingDelete;
+    private bool _deleting;
+
+    protected override async Task OnParametersSetAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _files      = (await AdminClient.GetOrgFilesAsync(OrgId)).ToList();
+            _deleteLogs = (await AdminClient.GetOrgFileDeleteLogAsync(OrgId)).ToList();
+            _fileTypes  = await AdminClient.GetPublicFileTypesAsync();
+            var orgs    = await AdminClient.GetOrganizationsAsync();
+            _orgName    = orgs.FirstOrDefault(o => o.Id == OrgId)?.Name ?? OrgId.ToString();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs e) => _selectedFile = e.File;
+
+    private async Task UploadAsync()
+    {
+        if (_selectedFile is null || _uploadTypeId == Guid.Empty) return;
+        _uploading = true; _uploadError = null;
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            // No practical upload size limit for now — a future limit belongs at app-settings /
+            // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
+            content.Add(new StreamContent(_selectedFile.OpenReadStream(long.MaxValue)), "File", _selectedFile.Name);
+            content.Add(new StringContent(_uploadTypeId.ToString()), "UploadFileTypeId");
+            content.Add(new StringContent(_uploadDescription), "Description");
+            content.Add(new StringContent(_uploadIsPublic.ToString()), "IsPublic");
+            content.Add(new StringContent("0"), "SortOrder");
+            var result = await AdminClient.UploadOrgFileAsync(OrgId, content);
+            if (result is not null)
+            {
+                _showUploadDialog = false;
+                _selectedFile     = null;
+                _uploadDescription = string.Empty;
+                await ReloadAsync();
+                Toasts.Success("File uploaded.");
+            }
+            else { _uploadError = "Upload failed."; }
+        }
+        catch (Exception ex) { _uploadError = ex.Message; }
+        finally { _uploading = false; }
+    }
+
+    private async Task CopyAsync()
+    {
+        if (!Guid.TryParse(_copySourceId.Trim(), out var sourceId)) { _copyError = "Enter a valid GUID."; return; }
+        _copying = true; _copyError = null;
+        try
+        {
+            var result = await AdminClient.CopyFileFromUserAsync(OrgId, sourceId, _copyDescription, _copyPublishNow);
+            if (result is not null)
+            {
+                _copyCanPublish = result.CanPublishImmediately;
+                _showCopyDialog  = false;
+                _copySourceId    = string.Empty;
+                _copyDescription = string.Empty;
+                _copyPublishNow  = false;
+                await ReloadAsync();
+                var msg = result.PublishedImmediately ? "File shared and published." : "File shared (pending approval to publish).";
+                Toasts.Success(msg);
+            }
+            else { _copyError = "Share failed — ensure the file is public or shared with this organization."; }
+        }
+        catch (Exception ex) { _copyError = ex.Message; }
+        finally { _copying = false; }
+    }
+
+    private void OpenPublish(OrganizationFileRecord f) { _publishTarget = f; _showPublishDialog = true; }
+
+    private async Task ConfirmPublishAsync()
+    {
+        if (_publishTarget is null) return;
+        _publishing = true;
+        try
+        {
+            var newState = !_publishTarget.IsPublic;
+            var result   = await AdminClient.PublishOrgFileAsync(OrgId, _publishTarget.Id, newState);
+            _showPublishDialog = false;
+            if (result is not null)
+            {
+                await ReloadAsync();
+                var msg = newState ? $"✓ {result.FileName} is now public." : $"{result.FileName} set to private.";
+                Toasts.Success(msg);
+            }
+            else
+            {
+                Toasts.Error("Failed to update visibility. Please try again.");
+            }
+        }
+        finally { _publishing = false; }
+    }
+
+    private void OpenEdit(OrganizationFileRecord f)
+    {
+        _editingFile     = f;
+        _editDescription = f.Description ?? string.Empty;
+        _editSortOrder   = f.SortOrder;
+        _showEditDialog  = true;
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (_editingFile is null) return;
+        _savingEdit = true;
+        try
+        {
+            var result = await AdminClient.UpdateOrgFileAsync(OrgId, _editingFile.Id, _editDescription, _editSortOrder);
+            _showEditDialog = false;
+            if (result is not null)
+            {
+                await ReloadAsync();
+                Toasts.Success("Saved.");
+            }
+            else
+            {
+                Toasts.Error("Failed to save changes. Please try again.");
+            }
+        }
+        finally { _savingEdit = false; }
+    }
+
+    private void ConfirmDelete(OrganizationFileRecord f) { _pendingDelete = f; _showDeleteDialog = true; }
+
+    private async Task DeleteAsync()
+    {
+        if (_pendingDelete is null) return;
+        _deleting = true;
+        try
+        {
+            var ok = await AdminClient.DeleteOrgFileAsync(OrgId, _pendingDelete.Id);
+            _showDeleteDialog = false;
+            if (ok)
+            {
+                await ReloadAsync();
+                Toasts.Error("Deleted. Audit record saved.");
+            }
+            else
+            {
+                Toasts.Error("Failed to delete the file. Please try again.");
+            }
+        }
+        finally { _deleting = false; }
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024):F2} MB";
+    }
+}

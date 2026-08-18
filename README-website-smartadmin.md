@@ -349,3 +349,34 @@ now; the mapping only ever made sense for pixel widths.
 **Verified:** solution builds clean, 2430/2430 tests pass, `/admin/users/{id}` renders its eight
 tabs and switches between them with a kept grid showing live memberships, `/my-videos` renders with
 the toast host in place and no Telerik notification element left, and the console is clean.
+
+### Wave D — `Organization/` core and `Roles/`
+
+17 components. Routes added: `/find`, `/organizations`, `/organizations/create`,
+`/organizations/{id}/edit`, `/members`, `/files`, `/client-settings`,
+`/membership-questions`.
+
+**Converted:** 77 buttons, 20 text boxes, 13 windows → `BenModal`, 11 loaders, 10 check boxes,
+6 numeric inputs, 3 switches, 3 text areas, 2 notification hosts, a tab strip, a toggle-button
+permission grid and a split button. **Kept:** 9 grids, 8 templated dropdowns, a date picker, and
+one `TelerikSvgIcon` — that last one on purpose: a stored icon value prefixed `t:` *names* a
+Telerik icon, so the icon set is what the data means rather than a styling choice.
+
+**Deferred: `OrganizationView`** (the org hub). It embeds `CaseList` and `OrgCmsEditor`, so it
+lands with the CMS wave, the later of its two dependencies. `/organizations/{id}` 404s until then.
+
+**A real bug in `BenDropdown`, found only by using it.** `OnParametersSet` copied the `Open`
+parameter into internal state unconditionally, so an *unbound* `Open` — always false — slammed the
+menu shut on every re-render of the parent. Invisible in the header, where nothing re-renders
+often, but a Telerik grid re-renders constantly, so the split-button menu inside one could never
+stay open long enough to click. The component now owns its state unless a caller actually binds it.
+
+**And the same parser mistake for the fourth time.** The split-button conversion was hand-written
+rather than run through the scanner, and pulled its menu items out with `OnClick="([^"]*)"` — which
+truncates at the first nested quote, so every handler became
+`@(() => NavManager.NavigateTo($`. Rebuilt using the scanner. The rule has earned a name by now:
+**in Razor, never read an attribute with a regex.**
+
+**Verified:** solution builds clean, 2430/2430 tests pass, `/organizations` lists three groups with
+live counts and mm/dd/yyyy dates, and the rebuilt split button opens with all eight actions and
+closes on click-away.
