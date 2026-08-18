@@ -1,0 +1,821 @@
+@page "/organizations/{OrgId:guid}/calendar"
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@if (!EmbeddedMode) { <PageTitle>Calendar</PageTitle> }
+
+<div class="container-fluid py-3">
+    @if (!EmbeddedMode)
+    {
+        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+            <h3 class="mb-0">Organization Calendar</h3>
+        </div>
+    }
+
+    @if (_error is not null) { <div class="alert alert-danger mb-3">@_error</div> }
+
+    @if (_appointments is null)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading calendar…" />
+    }
+    else
+    {
+        @* TelerikScheduler with built-in edit form intercepted for custom fields *@
+        <TelerikScheduler Data="@_appointments"
+                          @bind-Date="@_schedulerDate"
+                          @bind-View="@_currentView"
+                          Height="700px"
+                          AllowCreate="true"
+                          AllowUpdate="true"
+                          AllowDelete="true"
+                          OnEdit="@OnSchedulerEdit"
+                          OnDelete="@OnSchedulerDelete">
+            @* Every appointment rendered identically was hiding real information. Event types have
+               carried ColorClass and IconClass since they were built and only the type-manager
+               screen ever read them — so the calendar, the one place the distinction matters, was
+               the one place it did not show. Public events get their own treatment on top, because
+               "strangers are coming to this one" is the thing an organizer most needs to see at a
+               glance. *@
+            <ItemTemplate>
+                @{ var appt = (OrgCalendarAppointment)context; }
+                <div class="cal-item @(appt.IsPublic ? "cal-item--public" : "") @appt.ColorClass">
+                    @if (appt.IsPublic)
+                    {
+                        <span class="cal-item__badge" title="Open to the public">◆</span>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(appt.IconClass))
+                    {
+                        <i class="@appt.IconClass cal-item__icon"></i>
+                    }
+                    <span class="cal-item__title">@appt.Title</span>
+                </div>
+            </ItemTemplate>
+
+            <SchedulerViews>
+                <SchedulerDayView StartTime="@_dayStart" EndTime="@_dayEnd" />
+                <SchedulerWeekView StartTime="@_dayStart" EndTime="@_dayEnd" />
+                <SchedulerMonthView />
+                <SchedulerMultiDayView NumberOfDays="3" StartTime="@_dayStart" EndTime="@_dayEnd" />
+            </SchedulerViews>
+        </TelerikScheduler>
+    }
+</div>
+
+@* ── Custom event edit dialog (intercepts OnEdit) ─────────────────────────── *@
+<BenModal @bind-Visible="@_showEventDialog" Title="@(_isNewEvent ? "New Event" : "Edit Event")" Size="lg">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" @bind="@_form.Title" @bind:event="oninput" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Start</label>
+                <TelerikDateTimePicker @bind-Value="@_form.Start" Width="100%" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">End</label>
+                <TelerikDateTimePicker @bind-Value="@_form.End" Width="100%" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Event Type</label>
+                <TelerikDropDownList Data="@_eventTypeOptions"
+                                     @bind-Value="@_form.EventTypeId"
+                                     TextField="@nameof(EventTypeOption.Label)"
+                                     ValueField="@nameof(EventTypeOption.Value)"
+                                     Width="100%" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Location (optional)</label>
+                <input type="text" class="form-control" placeholder="Room, landmark, or free text" @bind="@_form.Location" @bind:event="oninput" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Or one of our addresses (optional)</label>
+                @* Plain select — Telerik dropdowns have repeatedly failed to push their selection
+                   in this codebase. Stored as a reference, not copied text, so correcting the
+                   address corrects every event held there. *@
+                <select class="form-select"
+                        @onchange="@(e => _form.OrganizationAddressId =
+                            Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
+                    <option value="" selected="@(_form.OrganizationAddressId is null)">(None)</option>
+                    @foreach (var address in _addresses)
+                    {
+                        <option value="@address.Id" selected="@(address.Id == _form.OrganizationAddressId)">
+                            @address.StreetAddress1, @address.City @address.State
+                        </option>
+                    }
+                </select>
+                @if (_addresses.Count == 0)
+                {
+                    <div class="form-text">This group has no saved addresses yet.</div>
+                }
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Meeting link (optional)</label>
+                <input type="text" class="form-control" placeholder="Zoom, Teams, Meet — paste the join link" @bind="@_form.MeetingUrl" @bind:event="oninput" />
+                <div class="form-text">A bare address like zoom.us/j/123 is fine; https:// is added for you.</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Description (optional)</label>
+                @* Rich text, because the description is stored and displayed as HTML. Bound with
+                   @bind-Value:after rather than OnChange — OnChange on TelerikEditor threw an
+                   unhandled cast exception (item #58). *@
+                <TelerikEditor @bind-Value="@_form.Description" Height="160px" Tools="@_editorTools" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Repeats</label>
+                @* Plain select: the Telerik dropdown has repeatedly failed to push its selection
+                   in this codebase, and a repeat rule that silently keeps its default would
+                   create the wrong series without telling anybody. *@
+                <select class="form-select" @onchange="OnRecurrenceChoiceChanged">
+                    @foreach (var option in RecurrenceOptions())
+                    {
+                        <option value="@option.Key" selected="@(option.Key == _recurrenceChoice)">@option.Label</option>
+                    }
+                </select>
+
+                @if (_recurrenceChoice == RecurrenceCustom)
+                {
+                    <input type="text" class="form-control" placeholder="e.g. FREQ=WEEKLY;BYDAY=TU" @bind="@_form.RecurrenceRule" @bind:event="oninput" />
+                    <div class="form-text">iCal RFC5545 format, for a pattern the list doesn't cover.</div>
+                }
+                else if (!string.IsNullOrWhiteSpace(_form.RecurrenceRule))
+                {
+                    <div class="form-text font-monospace">@_form.RecurrenceRule</div>
+                }
+            </div>
+            @*
+                Invites only appear for a non-public event. A public event is open to the group by
+                definition, so an invitee list there would be a second, quieter permission model
+                sitting on top of the obvious one.
+
+                No role or task field: assigning work belongs to investigations, where it already
+                exists. A meeting invite is just an invite.
+            *@
+            @if (!_form.IsPublic)
+            {
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Invite (optional)</label>
+                    <div class="d-flex flex-wrap gap-2 p-2 border rounded" style="max-height:150px;overflow-y:auto;">
+                        @if (_members.Count == 0)
+                        {
+                            <span class="text-secondary small">No other members to invite yet.</span>
+                        }
+                        @foreach (var member in _members)
+                        {
+                            var memberId = member.Id;
+                            var isInvited = _form.InviteeIds.Contains(memberId);
+                            <div class="d-flex align-items-center gap-1 border rounded px-2 py-1"
+                                 style="cursor:pointer;font-size:0.82rem;"
+                                 @onclick="@(() => ToggleInvitee(memberId))">
+                                <TelerikCheckBox Value="@isInvited" Enabled="false" />
+                                @member.DisplayName
+                            </div>
+                        }
+                    </div>
+
+                    <div class="d-flex gap-2 align-items-center mt-2">
+                        <input class="form-control form-control-sm" style="max-width:280px;"
+                               placeholder="Invite someone else by email"
+                               value="@_inviteEmail"
+                               @oninput="@(e => _inviteEmail = e.Value?.ToString() ?? "")" />
+                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="AddEmailInvitee" disabled="@(!(!string.IsNullOrWhiteSpace(_inviteEmail)))">Add</button>
+                    </div>
+                    @if (_emailInvitees.Count > 0)
+                    {
+                        <div class="d-flex flex-wrap gap-1 mt-2">
+                            @foreach (var address in _emailInvitees)
+                            {
+                                var pending = address;
+                                <span class="badge bg-secondary d-inline-flex align-items-center gap-1">
+                                    @pending
+                                    <span style="cursor:pointer;" @onclick="@(() => _emailInvitees.Remove(pending))">&times;</span>
+                                </span>
+                            }
+                        </div>
+                    }
+                    @if (_inviteError is not null)
+                    {
+                        <div class="text-danger small mt-1">@_inviteError</div>
+                    }
+                    <div class="form-text">
+                        People outside this group are invited by email address — they need an
+                        account here for the invitation to reach them.
+                    </div>
+                </div>
+            }
+
+            <div class="col-12 d-flex gap-4">
+                <div class="d-flex align-items-center gap-2">
+                    <input type="checkbox" class="form-check-input" id="ev-allday" @bind="@_form.IsAllDay" />
+                    <label for="ev-allday" class="form-label mb-0">All Day</label>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <input type="checkbox" class="form-check-input" id="ev-public" @bind="@_form.IsPublic" />
+                    <label for="ev-public" class="form-label mb-0">Public</label>
+                </div>
+            </div>
+
+            @* Only shown once the event is public: these four settings mean nothing otherwise, and
+               a form that always showed them would make "public" look like a detail rather than the
+               decision it is. *@
+            @if (_form.IsPublic)
+            {
+                <div class="col-12">
+                    <div class="border rounded p-3">
+                        <div class="fw-semibold mb-1">Open to the public</div>
+                        <p class="text-secondary small">
+                            This appears on your public site and on the site-wide What's on list, and
+                            anyone with an account can say they're coming.
+                            <strong>Not for events at somebody's home</strong> — a public listing is a
+                            date and an address advertised to strangers, and a client didn't agree to
+                            that.
+                        </p>
+
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label class="form-label fw-semibold">Where (a place)</label>
+                                @if (_form.PlaceId is not null)
+                                {
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge bg-secondary">@(_selectedPlaceName ?? "Selected")</span>
+                                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="ClearPlace">Change</button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="d-flex gap-2">
+                                        <input class="form-control form-control-sm" style="max-width:320px;"
+                                               placeholder="Search places by name"
+                                               value="@_placeSearch"
+                                               @oninput="@(e => _placeSearch = e.Value?.ToString() ?? "")" />
+                                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="SearchPlacesAsync" disabled="@(!(!string.IsNullOrWhiteSpace(_placeSearch)))">Search</button>
+                                    </div>
+
+                                    @if (_placeCandidates.Count > 0)
+                                    {
+                                        <div class="list-group mt-2" style="max-height:180px;overflow-y:auto;">
+                                            @foreach (var candidate in _placeCandidates)
+                                            {
+                                                var chosen = candidate;
+                                                var isResidence = chosen.Kind == PlaceKind.PrivateResidence;
+                                                <button type="button"
+                                                        class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                                                        disabled="@isResidence"
+                                                        @onclick="@(() => SelectPlace(chosen))">
+                                                    <span>
+                                                        @(chosen.Name ?? "Unnamed")
+                                                        <span class="d-block text-secondary small">
+                                                            @chosen.StreetAddress1 @chosen.City @chosen.State
+                                                        </span>
+                                                    </span>
+                                                    @if (isResidence)
+                                                    {
+                                                        @* Disabled rather than hidden: somebody
+                                                           searching for it needs to know it was
+                                                           found and why it cannot be used. *@
+                                                        <span class="badge bg-warning text-dark">Private home</span>
+                                                    }
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                    else if (_placeSearched)
+                                    {
+                                        <div class="form-text">No places found by that name.</div>
+                                    }
+                                }
+                                <div class="form-text">
+                                    A place gives the event a map pin, and is how we know it isn't
+                                    somebody's home.
+                                </div>
+                            </div>
+
+                            <div class="col-12 d-flex align-items-start gap-2">
+                                <input type="checkbox" class="form-check-input" id="ev-hideloc" @bind="@_form.HideExactLocation" />
+                                <label for="ev-hideloc" class="form-label mb-0">
+                                    Hide the exact address until somebody says they're coming
+                                    <span class="d-block text-secondary small">
+                                        The town still shows, so people can tell whether it's near them.
+                                    </span>
+                                </label>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Places (optional)</label>
+                                <input type="number" class="form-control" min="1" max="100" step="1" @bind="@_form.AttendeeCapacity" @bind:event="oninput" />
+                                <div class="form-text">Leave empty for no limit.</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Sign-ups close (optional)</label>
+                                <TelerikDateTimePicker @bind-Value="@_form.RsvpClosesAt" Width="100%" />
+                                <div class="form-text">Leave empty to allow sign-ups until it starts.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+        @if (_dialogError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
+        }
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            @if (!_isNewEvent)
+            {
+                <button type="button" class="btn btn-danger" @onclick="DeleteFromDialog" disabled="@(!(!_isBusy))"><BenIcon Name="trash-2" Class="me-1" />Delete</button>
+            }
+            <button type="button" class="btn btn-secondary" @onclick="@(() => _showEventDialog = false)">Cancel</button>
+            <button type="button" class="btn btn-primary" @onclick="SaveEvent" disabled="@(!(!_isBusy && !string.IsNullOrWhiteSpace(_form.Title)))"><BenIcon Name="save" Class="me-1" />
+                @(_isBusy ? "Saving…" : "Save")
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    [Parameter] public Guid OrgId        { get; set; }
+    [Parameter] public bool EmbeddedMode  { get; set; }
+
+    private List<OrgCalendarAppointment>? _appointments;
+    private List<OrgCalendarEventRecord> _events = [];
+    private List<OrgCalendarEventTypeRecord> _eventTypes = [];
+
+    private SchedulerView _currentView = SchedulerView.Week;
+    private DateTime _schedulerDate   = DateTime.Today;
+    private DateTime _dayStart        = new DateTime(2000, 1, 1, 7, 0, 0);
+    private DateTime _dayEnd          = new DateTime(2000, 1, 1, 22, 0, 0);
+
+    private string? _error;
+    private bool _isBusy;
+    private bool _showEventDialog;
+    private bool _isNewEvent;
+    private OrgCalendarEventRecord? _editingEvent;
+    private string? _dialogError;
+    private EventFormModel _form = new();
+
+    private IReadOnlyList<OrganizationAddressRecord> _addresses = [];
+    private IReadOnlyList<OrgUserDirectoryItem> _members = [];
+    private readonly List<string> _emailInvitees = [];
+    private string _inviteEmail = "";
+    private string? _inviteError;
+
+    private static readonly List<Telerik.Blazor.Components.IEditorTool> _editorTools =
+    [
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.Bold(),
+            new Telerik.Blazor.Components.Editor.Italic(),
+            new Telerik.Blazor.Components.Editor.Underline()),
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.UnorderedList(),
+            new Telerik.Blazor.Components.Editor.OrderedList()),
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.CreateLink(),
+            new Telerik.Blazor.Components.Editor.Unlink()),
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.Undo(),
+            new Telerik.Blazor.Components.Editor.Redo()),
+    ];
+
+    // ── Recurrence presets ────────────────────────────────────────────────────
+    // Nobody knows RFC5545 by heart, so the field offers the handful of patterns people actually
+    // want and keeps the raw box for anything else. The rules are built from the event's own start
+    // date, so "every week" means the day the event actually starts.
+
+    private const string RecurrenceNone   = "none";
+    private const string RecurrenceCustom = "custom";
+
+    private string _recurrenceChoice = RecurrenceNone;
+
+    private record RecurrenceOption(string Key, string Label);
+
+    private IReadOnlyList<RecurrenceOption> RecurrenceOptions()
+    {
+        var start = _form.Start;
+        var dayName = start.DayOfWeek.ToString();
+
+        return
+        [
+            new(RecurrenceNone,  "Does not repeat"),
+            new("daily",         "Every day"),
+            new("weekdays",      "Every weekday (Mon\u2013Fri)"),
+            new("weekly",        $"Every week on {dayName}"),
+            new("biweekly",      $"Every 2 weeks on {dayName}"),
+            new("monthly",       $"Every month on day {start.Day}"),
+            new("yearly",        $"Every year on {start:d MMMM}"),
+            new(RecurrenceCustom, "Custom\u2026"),
+        ];
+    }
+
+    /// <summary>The RRULE a preset means for a given start date, or null for "does not repeat".</summary>
+    private static string? RecurrenceRuleFor(string choice, DateTime start) => choice switch
+    {
+        "daily"     => "FREQ=DAILY",
+        "weekdays"  => "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+        "weekly"    => $"FREQ=WEEKLY;BYDAY={IcalDay(start.DayOfWeek)}",
+        "biweekly"  => $"FREQ=WEEKLY;INTERVAL=2;BYDAY={IcalDay(start.DayOfWeek)}",
+        "monthly"   => $"FREQ=MONTHLY;BYMONTHDAY={start.Day}",
+        "yearly"    => $"FREQ=YEARLY;BYMONTH={start.Month};BYMONTHDAY={start.Day}",
+        _           => null,
+    };
+
+    private static string IcalDay(DayOfWeek day) => day switch
+    {
+        DayOfWeek.Monday    => "MO",
+        DayOfWeek.Tuesday   => "TU",
+        DayOfWeek.Wednesday => "WE",
+        DayOfWeek.Thursday  => "TH",
+        DayOfWeek.Friday    => "FR",
+        DayOfWeek.Saturday  => "SA",
+        _                   => "SU",
+    };
+
+    /// <summary>
+    /// Works out which preset an existing rule corresponds to, so reopening an event shows what it
+    /// actually does rather than dropping back to "Does not repeat".
+    /// </summary>
+    /// <remarks>
+    /// A rule that matches no preset resolves to Custom, which keeps the raw text visible and
+    /// editable — never silently rewritten to something simpler.
+    /// </remarks>
+    private static string RecurrenceChoiceFor(string? rule, DateTime start)
+    {
+        if (string.IsNullOrWhiteSpace(rule)) return RecurrenceNone;
+
+        foreach (var key in new[] { "daily", "weekdays", "weekly", "biweekly", "monthly", "yearly" })
+        {
+            if (string.Equals(RecurrenceRuleFor(key, start), rule.Trim(), StringComparison.OrdinalIgnoreCase))
+                return key;
+        }
+
+        return RecurrenceCustom;
+    }
+
+    /// <summary>
+    /// Adds the chosen members and email invitees to a saved event.
+    /// </summary>
+    /// <returns>The addresses that could not be invited, for reporting.</returns>
+    /// <remarks>
+    /// Only ever adds. Removing an attendee is a separate, deliberate act with its own endpoint —
+    /// silently un-inviting someone because a checkbox was cleared during an unrelated edit would
+    /// be an unpleasant surprise for them and invisible to whoever did it.
+    /// </remarks>
+    private async Task<List<string>> SendInvitesAsync(Guid eventId)
+    {
+        var failed = new List<string>();
+
+        var existing = (await AdminClient.GetCalendarEventAttendeesAsync(OrgId, eventId))
+            .Select(a => a.AppUserId)
+            .ToHashSet();
+
+        foreach (var memberId in _form.InviteeIds.Where(id => !existing.Contains(id)))
+        {
+            var added = await AdminClient.AddCalendarAttendeeAsync(
+                OrgId, eventId, new AddAttendeeRequest(memberId, null));
+
+            if (added is null)
+                failed.Add(_members.FirstOrDefault(m => m.Id == memberId)?.DisplayName ?? memberId.ToString());
+        }
+
+        foreach (var email in _emailInvitees)
+        {
+            var added = await AdminClient.AddCalendarAttendeeByEmailAsync(OrgId, eventId, email);
+            if (added is null) failed.Add(email);
+        }
+
+        _emailInvitees.Clear();
+        return failed;
+    }
+
+    private void ToggleInvitee(Guid memberId)
+    {
+        if (!_form.InviteeIds.Remove(memberId)) _form.InviteeIds.Add(memberId);
+    }
+
+    private void AddEmailInvitee()
+    {
+        var email = _inviteEmail.Trim();
+        _inviteError = null;
+
+        if (string.IsNullOrWhiteSpace(email)) return;
+
+        // Whether the address belongs to an account is settled by the server on save. Checking
+        // here would need an endpoint that answers "does this person exist?" on every keystroke,
+        // which is a user-directory oracle wearing a different hat.
+        if (!email.Contains('@') || email.Contains(' '))
+        {
+            _inviteError = "That doesn't look like an email address.";
+            return;
+        }
+
+        if (!_emailInvitees.Contains(email, StringComparer.OrdinalIgnoreCase))
+            _emailInvitees.Add(email);
+
+        _inviteEmail = "";
+    }
+
+    private void OnRecurrenceChoiceChanged(ChangeEventArgs e)
+    {
+        _recurrenceChoice = e.Value?.ToString() ?? RecurrenceNone;
+
+        // Custom keeps whatever is already typed; every other choice owns the rule outright.
+        // Empty string rather than null: the textbox is bound to this, and "no recurrence" is an
+        // empty box. Save turns empty back into null.
+        if (_recurrenceChoice != RecurrenceCustom)
+            _form.RecurrenceRule = RecurrenceRuleFor(_recurrenceChoice, _form.Start) ?? "";
+    }
+    private List<EventTypeOption> _eventTypeOptions = [new(null, "(No type)")];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        try
+        {
+            _eventTypes = (await AdminClient.GetCalendarEventTypesAsync(OrgId)).ToList();
+            _eventTypeOptions = [new(null, "(No type)"),
+                .. _eventTypes.Select(t => new EventTypeOption(t.Id, t.Name))];
+            // Loaded once with the calendar, not per dialog open — the list is short and rarely
+            // changes, and fetching it while a dialog is opening is a visible stutter.
+            _addresses = await AdminClient.GetOrgAddressesAsync(OrgId);
+            _members = await AdminClient.GetOrgUserDirectoryAsync(OrgId);
+            await LoadEventsAsync();
+        }
+        catch { _error = "Failed to load calendar."; }
+        StateHasChanged();
+    }
+
+    private async Task LoadEventsAsync()
+    {
+        _events = (await AdminClient.GetCalendarEventsAsync(OrgId)).ToList();
+        _appointments = _events.Select(ToAppointment).ToList();
+    }
+
+    private OrgCalendarAppointment ToAppointment(OrgCalendarEventRecord e) => new()
+    {
+        Id                   = e.Id,
+        Title                = e.Title,
+        Description          = e.Description,
+        Start                = e.StartDateTime.ToViewerLocalTime(UserState),
+        End                  = e.EndDateTime.ToViewerLocalTime(UserState),
+        IsAllDay             = e.IsAllDay,
+        RecurrenceRule       = e.RecurrenceRule,
+        RecurrenceExceptions = null,
+        RecurrenceId         = null,
+        IsPublic             = e.IsPublic,
+        ColorClass           = EventTypeStyle(e.EventTypeId).Color,
+        IconClass            = EventTypeStyle(e.EventTypeId).Icon,
+    };
+
+    /// <summary>
+    /// The colour and icon an event type carries, or nothing when it has none.
+    /// </summary>
+    /// <remarks>
+    /// Resolved from the types already loaded for the picker rather than per appointment — the same
+    /// answer for every event of a type, and a lookup per row on a busy month view is the N+1 shape
+    /// in a different costume.
+    /// </remarks>
+    private (string? Color, string? Icon) EventTypeStyle(Guid? eventTypeId)
+    {
+        if (eventTypeId is not Guid id) return (null, null);
+        var type = _eventTypes.FirstOrDefault(t => t.Id == id);
+        return (type?.ColorClass, type?.IconClass);
+    }
+
+    // ── Scheduler event handlers (correct API from docs) ──────────────────────
+
+    /// <summary>
+    /// Intercept OnEdit to cancel the built-in form and show our custom dialog.
+    /// Fires for both create (args.IsNew = true) and update (args.IsNew = false).
+    /// </summary>
+    private async Task OnSchedulerEdit(SchedulerEditEventArgs args)
+    {
+        args.IsCancelled = true; // prevent built-in edit form
+
+        _isNewEvent    = args.IsNew;
+        _editingEvent  = args.IsNew ? null : _events.FirstOrDefault(e => e.Id == (Guid)args.Item.GetType().GetProperty("Id")!.GetValue(args.Item)!);
+        _dialogError   = null;
+
+        if (args.IsNew)
+        {
+            _form = new EventFormModel
+            {
+                Start    = args.Start,
+                End      = args.Start.AddHours(1),
+                IsAllDay = args.IsAllDay,
+            };
+        }
+        else if (_editingEvent is not null)
+        {
+            _form = new EventFormModel
+            {
+                Title          = _editingEvent.Title,
+                Description    = _editingEvent.Description ?? "",
+                Location       = _editingEvent.Location ?? "",
+                Start          = _editingEvent.StartDateTime.ToViewerLocalTime(UserState),
+                End            = _editingEvent.EndDateTime.ToViewerLocalTime(UserState),
+                IsAllDay       = _editingEvent.IsAllDay,
+                IsPublic       = _editingEvent.IsPublic,
+                PlaceId           = _editingEvent.PlaceId,
+                HideExactLocation = _editingEvent.HideExactLocation,
+                AttendeeCapacity  = _editingEvent.AttendeeCapacity,
+                RsvpClosesAt      = _editingEvent.RsvpClosesAt,
+                EventTypeId    = _editingEvent.EventTypeId,
+                OrganizationAddressId = _editingEvent.OrganizationAddressId,
+                MeetingUrl     = _editingEvent.MeetingUrl ?? "",
+                RecurrenceRule = _editingEvent.RecurrenceRule ?? "",
+            };
+        }
+        else
+        {
+            _form = new EventFormModel { Start = UserState.NowInViewerTimeZone(), End = UserState.NowInViewerTimeZone().AddHours(1) };
+        }
+
+        // Derived after _form is built, so an existing event reopens showing the pattern it
+        // actually has rather than "Does not repeat".
+        _recurrenceChoice = RecurrenceChoiceFor(_form.RecurrenceRule, _form.Start);
+
+        _emailInvitees.Clear();
+        _inviteEmail = "";
+        _inviteError = null;
+        _form.InviteeIds = _editingEvent is null
+            ? []
+            : (await AdminClient.GetCalendarEventAttendeesAsync(OrgId, _editingEvent.Id))
+                .Select(a => a.AppUserId).ToHashSet();
+
+        _showEventDialog = true;
+    }
+
+    /// <summary>OnDelete fires when the user clicks the ✕ on an appointment.</summary>
+    private async Task OnSchedulerDelete(SchedulerDeleteEventArgs args)
+    {
+        var appt = args.Item as OrgCalendarAppointment;
+        if (appt is null) return;
+        try
+        {
+            await AdminClient.DeleteCalendarEventAsync(OrgId, appt.Id);
+            await LoadEventsAsync();
+        }
+        catch { _error = "Delete failed."; }
+    }
+
+    // ── Custom dialog save / delete ───────────────────────────────────────────
+
+    private async Task SaveEvent()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Title)) { _dialogError = "Title is required."; return; }
+        _isBusy = true; _dialogError = null;
+        try
+        {
+            var req = new UpsertCalendarEventRequest(
+                Title:          _form.Title.Trim(),
+                Description:    string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim(),
+                Location:       string.IsNullOrWhiteSpace(_form.Location) ? null : _form.Location.Trim(),
+                StartDateTime:  _form.Start.ToUtcFromViewerLocal(UserState),
+                EndDateTime:    _form.End.ToUtcFromViewerLocal(UserState),
+                IsAllDay:       _form.IsAllDay,
+                IsPublic:       _form.IsPublic,
+                EventTypeId:    _form.EventTypeId,
+                OrganizationAddressId: _form.OrganizationAddressId,
+                MeetingUrl:     _form.MeetingUrl,
+                CaseId:         _editingEvent?.CaseId,
+                RecurrenceRule: string.IsNullOrWhiteSpace(_form.RecurrenceRule) ? null : _form.RecurrenceRule.Trim(),
+                PlaceId:           _form.PlaceId,
+                HideExactLocation: _form.HideExactLocation,
+                AttendeeCapacity:  _form.AttendeeCapacity,
+                RsvpClosesAt:      _form.RsvpClosesAt?.ToUtcFromViewerLocal(UserState));
+
+            // Saved through the variant that keeps the server's refusal, because the public-event
+            // rules refuse with a sentence written to be read — "Save failed" would throw it away
+            // and leave an organizer with nothing to act on.
+            var (result, error) = await AdminClient.SaveCalendarEventAsync(
+                OrgId, _isNewEvent || _editingEvent is null ? null : _editingEvent.Id, req);
+
+            if (result is null)
+            {
+                _dialogError = error ?? "Save failed.";
+            }
+            else
+            {
+                // Invites are sent after the event exists, and their failures are reported without
+                // undoing the save — an event that saved but could not invite one person is a far
+                // better outcome than losing the event over a mistyped address.
+                var failed = await SendInvitesAsync(result.Id);
+
+                _showEventDialog = false;
+                await LoadEventsAsync();
+
+                if (failed.Count > 0)
+                    _error = $"Event saved, but these could not be invited: {string.Join(", ", failed)}.";
+            }
+        }
+        catch (Exception ex) { _dialogError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private async Task DeleteFromDialog()
+    {
+        if (_editingEvent is null) return;
+        _isBusy = true;
+        try
+        {
+            await AdminClient.DeleteCalendarEventAsync(OrgId, _editingEvent.Id);
+            _showEventDialog = false;
+            await LoadEventsAsync();
+        }
+        catch { _error = "Delete failed."; }
+        finally { _isBusy = false; }
+    }
+
+    // ── Appointment DTO — uses the exact default field names from Telerik docs ──
+
+    /// <summary>
+    /// Appointment model using Telerik Scheduler's default expected property names:
+    /// Id, Title, Description, Start, End, IsAllDay, RecurrenceRule, RecurrenceExceptions, RecurrenceId.
+    /// </summary>
+    private class OrgCalendarAppointment
+    {
+        public Guid            Id                   { get; set; }
+        public string          Title                { get; set; } = "";
+        public string?         Description          { get; set; }
+        public DateTime        Start                { get; set; }
+        public DateTime        End                  { get; set; }
+        public bool            IsAllDay             { get; set; }
+        public string?         RecurrenceRule       { get; set; }
+        public List<DateTime>? RecurrenceExceptions { get; set; }
+        public Guid?           RecurrenceId         { get; set; }
+
+        // Ours, not Telerik's — read only by the item template above.
+        public bool            IsPublic             { get; set; }
+        public string?         ColorClass           { get; set; }
+        public string?         IconClass            { get; set; }
+
+        public OrgCalendarAppointment() { Id = Guid.NewGuid(); }
+    }
+
+    private class EventFormModel
+    {
+        public string   Title          { get; set; } = "";
+        public string   Description    { get; set; } = "";
+        public string   Location       { get; set; } = "";
+        public DateTime Start          { get; set; } = DateTime.Now;
+        public DateTime End            { get; set; } = DateTime.Now.AddHours(1);
+        public bool     IsAllDay       { get; set; }
+        public bool     IsPublic       { get; set; }
+        public Guid?    PlaceId        { get; set; }
+        public bool     HideExactLocation { get; set; }
+        public int?     AttendeeCapacity  { get; set; }
+        public DateTime? RsvpClosesAt     { get; set; }
+        public Guid?    EventTypeId    { get; set; }
+        public Guid?    OrganizationAddressId { get; set; }
+        public string   MeetingUrl     { get; set; } = "";
+        public HashSet<Guid> InviteeIds { get; set; } = new();
+        public string   RecurrenceRule { get; set; } = "";
+    }
+
+    // ── Choosing a place for a public event ─────────────────────────────────
+
+    private string _placeSearch = "";
+    private bool _placeSearched;
+    private List<PlaceCandidate> _placeCandidates = [];
+    private string? _selectedPlaceName;
+
+    /// <summary>
+    /// Finds places by name, reusing the duplicate-detection search rather than adding a second one.
+    /// </summary>
+    /// <remarks>
+    /// Residences come back and are shown <b>disabled</b> rather than filtered out. Somebody
+    /// searching for a place they know exists needs to see that it was found and why it cannot be
+    /// used here — a search that silently returns nothing reads as a broken search.
+    /// </remarks>
+    private async Task SearchPlacesAsync()
+    {
+        _placeSearched = true;
+        _placeCandidates = [.. await AdminClient.FindPlaceCandidatesAsync(
+            street: null, city: null, state: null, zip: null,
+            name: _placeSearch.Trim(), latitude: null, longitude: null)];
+    }
+
+    private void SelectPlace(PlaceCandidate candidate)
+    {
+        _form.PlaceId      = candidate.Id;
+        _selectedPlaceName = candidate.Name ?? candidate.StreetAddress1 ?? "Selected place";
+        _placeCandidates   = [];
+        _placeSearch       = "";
+        _placeSearched     = false;
+    }
+
+    private void ClearPlace()
+    {
+        _form.PlaceId      = null;
+        _selectedPlaceName = null;
+    }
+
+    private record EventTypeOption(Guid? Value, string Label);
+}

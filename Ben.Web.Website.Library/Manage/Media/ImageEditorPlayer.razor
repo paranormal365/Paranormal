@@ -1,0 +1,398 @@
+@*
+  ImageEditorPlayer.razor
+  ────────────────────────
+  Full-featured image editor backed by Fabric.js v6 (CDN).
+  Phase A: adjustments, filters, basic drawing, rotate/flip, save/export.
+  Phase B: layers panel, anomaly highlight, grid overlay, timestamp stamp, ruler.
+*@
+
+@namespace Ben.Web.Website.Library.Manage.Media
+@implements IAsyncDisposable
+@inject IBenAdminClient AdminClient
+@inject IJSRuntime JS
+@inject BenToastService Toasts
+@using System.Text.Json
+
+@if (_show)
+{
+    <BenModal @bind-Visible="_show" Title="@($"Edit: {FileName}")" Size="sm">
+    <ChildContent>
+            <div class="d-flex h-100 gap-0" style="overflow:hidden;">
+
+                @* ── Left toolbar ──────────────────────────────────────────── *@
+                <div class="d-flex flex-column gap-1 p-2 border-end bg-body-secondary"
+                     style="width:56px; flex:0 0 56px; overflow-y:auto;">
+                    <button type="button" class="btn @(Fm("select") == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(()=>SetTool("select"))" title="Select"><BenIcon Name="navigation" /></button>
+                    <button type="button" class="btn @(Fm("pen") == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(()=>SetTool("pen"))" title="Pen"><BenIcon Name="edit-2" /></button>
+                    <button type="button" class="btn @(Fm("text") == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(()=>SetTool("text"))" title="Text"><BenIcon Name="globe" /></button>
+                    <button type="button" class="btn @(Fm("rect") == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(()=>SetTool("rect"))" title="Rectangle"><BenIcon Name="square" /></button>
+                    <button type="button" class="btn @(Fm("circle") == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(()=>SetTool("circle"))" title="Ellipse"><BenIcon Name="circle" /></button>
+                    <button type="button" class="btn @(Fm("arrow") == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(()=>SetTool("arrow"))" title="Arrow"><BenIcon Name="arrow-left" /></button>
+                    <button type="button" class="btn @(Fm("redact") == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(()=>SetTool("redact"))" title="Redact"><BenIcon Name="eye" /></button>
+                    <button type="button" class="btn @(Fm("measure") == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(()=>SetTool("measure"))" title="Ruler — click two points"><BenIcon Name="filter" /></button>
+                    <hr class="my-1" />
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="DeleteSelected" title="Delete selected"><BenIcon Name="trash-2" /></button>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="BringForward" title="Bring forward"><BenIcon Name="chevron-up" /></button>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="SendBackward" title="Send backward"><BenIcon Name="chevron-down" /></button>
+                    <hr class="my-1" />
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>RotateAsync(-90))" title="Rotate 90° CCW"><BenIcon Name="rotate-ccw" /></button>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>RotateAsync(90))" title="Rotate 90° CW"><BenIcon Name="rotate-cw" /></button>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>FlipAsync("h"))" title="Flip H"><BenIcon Name="columns" /></button>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>FlipAsync("v"))" title="Flip V"><BenIcon Name="align-justify" /></button>
+                </div>
+
+                @* ── Canvas ─────────────────────────────────────────────────── *@
+                <div id="@_containerId"
+                     style="flex:1 1 auto; min-width:0; overflow:hidden; background:#111;" />
+
+                @* ── Right panel ─────────────────────────────────────────────── *@
+                <div class="d-flex flex-column p-2 border-start bg-body-secondary"
+                     style="width:230px; flex:0 0 230px; overflow-y:auto; gap:0.4rem;">
+
+                    @* Adjustments *@
+                    <BenPanel Title="Adjustments" Collapsed="false" Class="mb-2">
+                            <div class="d-flex flex-column gap-1 pt-1">
+                                <label class="small">Brightness <span>@_brightness</span></label>
+                                <input type="range" class="form-range" min="-100" max="100" step="5" @bind="_brightness" @bind:event="oninput" @onchange="@ApplyAdjustments" />
+                                <label class="small">Contrast <span>@_contrast</span></label>
+                                <input type="range" class="form-range" min="-100" max="100" step="5" @bind="_contrast" @bind:event="oninput" @onchange="@ApplyAdjustments" />
+                                <label class="small">Saturation <span>@_saturation</span></label>
+                                <input type="range" class="form-range" min="-100" max="100" step="5" @bind="_saturation" @bind:event="oninput" @onchange="@ApplyAdjustments" />
+                                <label class="small">Blur <span>@_blur</span></label>
+                                <input type="range" class="form-range" min="0" max="10" step="1" @bind="_blur" @bind:event="oninput" @onchange="@ApplyAdjustments" />
+                            </div>
+                        </BenPanel>
+
+                    @* Filter presets *@
+                    <BenPanel Title="Filter" Collapsed="true" Class="mb-2">
+                            <div class="pt-1">
+                                <TelerikDropDownList Data="@_presets" @bind-Value="_preset"
+                                                     TextField="Label" ValueField="Value"
+                                                     OnChange="@(()=>ApplyPreset())" />
+                            </div>
+                        </BenPanel>
+
+                    @* Evidence tools *@
+                    <BenPanel Title="Evidence Tools" Collapsed="false" Class="mb-2">
+                            <div class="d-flex flex-column gap-2 pt-1">
+                                <div>
+                                    <strong class="small">Anomaly Highlight</strong>
+                                    <div class="d-flex gap-1 align-items-center mt-1">
+                                        <TelerikColorPicker @bind-Value="_anomalyColor" ShowPreview="true" />
+                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="AddAnomalyHighlight">Add</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <strong class="small">Grid Overlay</strong>
+                                    <div class="mt-1">
+                                        <button type="button" class="btn @(_gridOn ? "warning" : "base") btn-sm" @onclick="ToggleGrid">
+                                            @(_gridOn ? "Remove Grid" : "Add Grid")
+                                        </button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <strong class="small">Timestamp Stamp</strong>
+                                    <input type="text" class="form-control" placeholder="Text (leave blank for now)" @bind="_stampText" @bind:event="oninput" />
+                                    <div class="d-flex gap-1 mt-1 flex-wrap">
+                                        @foreach (var pos in new[] { ("tl","↖"), ("tr","↗"), ("bl","↙"), ("br","↘") })
+                                        {
+                                            var p = pos;
+                                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>AddTimestampStamp(p.Item1))" title="@p.Item1">@p.Item2</button>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </BenPanel>
+
+                    @* Drawing options (context-sensitive) *@
+                    @if (_tool is "pen" or "text" or "rect" or "circle" or "arrow")
+                    {
+                        <BenPanel Title="Tool Options" Collapsed="false" Class="mb-2">
+                                <div class="d-flex flex-column gap-1 pt-1">
+                                    <label class="small">Color</label>
+                                    <TelerikColorPicker @bind-Value="_drawColor" ShowPreview="true" />
+                                    @if (_tool is not "text")
+                                    {
+                                        <label class="small">Width @_drawWidth</label>
+                                        <input type="range" class="form-range" min="1" max="20" step="1" @bind="_drawWidth" @bind:event="oninput" />
+                                    }
+                                    @if (_tool is "text")
+                                    {
+                                        <label class="small">Font size @_fontSize</label>
+                                        <input type="range" class="form-range" min="10" max="72" step="2" @bind="_fontSize" @bind:event="oninput" />
+                                    }
+                                </div>
+                            </BenPanel>
+                    }
+
+                    @* Layers panel *@
+                    <BenPanel Collapsed="false" Class="mb-2"><HeaderContent><h2>@($"Layers ({_layers.Count})")</h2></HeaderContent><ChildContent>
+                            @if (_layers.Count == 0)
+                            {
+                                <p class="text-muted small mt-1 mb-0">No layers yet.</p>
+                            }
+                            else
+                            {
+                                <div class="d-flex flex-column gap-0 mt-1">
+                                    @foreach (var layer in _layers)
+                                    {
+                                        var l = layer;
+                                        <div class="d-flex align-items-center gap-1 py-1 border-bottom" style="font-size:0.73rem;">
+                                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>ToggleLayerVisible(l))"><BenIcon Name="@(l.Visible ? "eye" : "eye-off")" /></button>
+                                            <span class="text-truncate flex-grow-1" title="@l.Name">@l.Name</span>
+                                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>MoveLayerUp(l.Id))"><BenIcon Name="chevron-up" /></button>
+                                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>MoveLayerDown(l.Id))"><BenIcon Name="chevron-down" /></button>
+                                            <button type="button" class="btn btn-danger btn-sm" @onclick="@(()=>DeleteLayer(l.Id))"><BenIcon Name="trash-2" /></button>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-1 py-1">
+                                            <span class="small text-muted" style="width:40px;">@l.Opacity%</span>
+                                            <TelerikSlider Value="@l.Opacity" Min="0" Max="100" SmallStep="5" LargeStep="25"
+                                                           ValueChanged="@((int v) => SetLayerOpacity(l.Id, v))" />
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </ChildContent></BenPanel>
+
+                </div>
+            </div>
+        </ChildContent>
+</BenModal>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid UploadFileId { get; set; }
+    [Parameter] public string? FileName { get; set; }
+    /// <summary>Override the image source URL. When null the UploadFile download URL is used.</summary>
+    [Parameter] public string? ImageUrl { get; set; }
+    [Parameter] public EventCallback<UploadFileRecord> OnSaved { get; set; }
+
+    private string _containerId = $"img-editor-{Guid.NewGuid():N}";
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<ImageEditorPlayer>? _dotNetRef;
+
+    private bool _show;
+    private bool _isDirty;
+    private bool _saving;
+    private string _tool = "select";
+
+    // Adjustment state
+    private int _brightness, _contrast, _saturation, _blur;
+    private string _preset    = "none";
+    private string _drawColor = "#ff0000";
+    private int    _drawWidth = 3;
+    private int    _fontSize  = 24;
+
+    // Evidence tool state
+    private string _anomalyColor = "#ff6600";
+    private bool   _gridOn;
+    private string _stampText = string.Empty;
+
+    // Layers
+    private List<LayerItem> _layers = [];
+
+    private static readonly List<(string Value, string Label)> _presets =
+    [
+        ("none","None"), ("grayscale","Grayscale"), ("sepia","Sepia"),
+        ("invert","Invert"), ("highcontrast","High Contrast"),
+        ("nightvision","Night Vision"), ("heatmap","Heat Map"),
+    ];
+
+    // ── Public API ────────────────────────────────────────────────────────────
+
+    public async Task OpenAsync()
+    {
+        _show = true;
+        StateHasChanged();
+        await Task.Yield();
+        await InitEditorAsync();
+    }
+
+    private async Task InitEditorAsync()
+    {
+        _module    ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/image-editor.js");
+        _dotNetRef ??= DotNetObjectReference.Create(this);
+
+        // The UploadFile download endpoint is [Authorize]-protected, so Fabric.js's own
+        // fromURL() (a plain, unauthenticated browser image load) can never fetch it —
+        // fetch the bytes server-side over the authenticated HttpClient instead and hand
+        // the canvas a base64 data URL, matching UserMediaPreview/AudioFilePreview's pattern.
+        string? imageUrl = ImageUrl;
+        if (imageUrl is null)
+        {
+            var result = await AdminClient.GetFileDataAsync(UploadFileId);
+            if (result is not null)
+                imageUrl = $"data:{result.Value.ContentType};base64,{Convert.ToBase64String(result.Value.Data)}";
+        }
+        var editState = (string?)null;
+
+        await _module.InvokeVoidAsync("init", _containerId, imageUrl, editState, _dotNetRef);
+    }
+
+    // ── Tools ─────────────────────────────────────────────────────────────────
+
+    private async Task SetTool(string tool)
+    {
+        _tool = tool;
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("setDrawingMode", _containerId, tool,
+            new { color = _drawColor, width = _drawWidth, fontSize = _fontSize });
+    }
+
+    private string Fm(string tool) => _tool == tool ? "solid" : "flat";
+
+    // ── Adjustments ───────────────────────────────────────────────────────────
+
+    private async Task ApplyAdjustments()
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("applyAdjustments", _containerId,
+            new { brightness = _brightness, contrast = _contrast, saturation = _saturation, blur = _blur, hue = 0, noise = 0 });
+    }
+
+    private async Task ApplyPreset()
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("applyPreset", _containerId, _preset);
+    }
+
+    // ── Transform ─────────────────────────────────────────────────────────────
+
+    private async Task RotateAsync(int d)  { if (_module is not null) await _module.InvokeVoidAsync("rotate", _containerId, d); }
+    private async Task FlipAsync(string a) { if (_module is not null) await _module.InvokeVoidAsync("flip",   _containerId, a); }
+
+    private async Task DeleteSelected()
+    {
+        if (_module is not null) { await _module.InvokeVoidAsync("deleteSelected", _containerId); await RefreshLayersAsync(); }
+    }
+
+    private async Task BringForward() { if (_module is not null) await _module.InvokeVoidAsync("bringForward", _containerId); }
+    private async Task SendBackward() { if (_module is not null) await _module.InvokeVoidAsync("sendBackward", _containerId); }
+
+    // ── Evidence tools ────────────────────────────────────────────────────────
+
+    private async Task AddAnomalyHighlight()
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("addAnomalyHighlight", _containerId, new { color = _anomalyColor });
+        await RefreshLayersAsync();
+    }
+
+    private async Task ToggleGrid()
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("toggleGrid", _containerId,
+            new { cols = 10, rows = 10, color = "rgba(255,255,255,0.3)" });
+        _gridOn = !_gridOn;
+        await RefreshLayersAsync();
+    }
+
+    private async Task AddTimestampStamp(string position)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("addTimestampStamp", _containerId, _stampText, position);
+        await RefreshLayersAsync();
+    }
+
+    // ── Layers ────────────────────────────────────────────────────────────────
+
+    private async Task RefreshLayersAsync()
+    {
+        if (_module is null) return;
+        var json = await _module.InvokeAsync<string?>("getLayersJson", _containerId);
+        if (!string.IsNullOrEmpty(json))
+            _layers = JsonSerializer.Deserialize<List<LayerItem>>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+        StateHasChanged();
+    }
+
+    private async Task ToggleLayerVisible(LayerItem layer)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("setLayerVisible", _containerId, layer.Id, !layer.Visible);
+        await RefreshLayersAsync();
+    }
+
+    private async Task SetLayerOpacity(string id, int pct)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("setLayerOpacity", _containerId, id, pct);
+        await RefreshLayersAsync();
+    }
+
+    private async Task DeleteLayer(string id)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("deleteLayer", _containerId, id);
+        await RefreshLayersAsync();
+    }
+
+    private async Task MoveLayerUp(string id)   { if (_module is not null) { await _module.InvokeVoidAsync("moveLayerUp",   _containerId, id); await RefreshLayersAsync(); } }
+    private async Task MoveLayerDown(string id) { if (_module is not null) { await _module.InvokeVoidAsync("moveLayerDown", _containerId, id); await RefreshLayersAsync(); } }
+
+    // ── Save / Export ─────────────────────────────────────────────────────────
+
+    private async Task SaveEditStateAsync()
+    {
+        if (_module is null || _saving) return;
+        _saving = true; StateHasChanged();
+        try
+        {
+            var json   = await _module.InvokeAsync<string?>("getStateJson", _containerId);
+            var result = await AdminClient.SaveImageEditStateAsync(UploadFileId, json);
+            if (result is not null)
+            {
+                _isDirty = false;
+                Toasts.Success("Edit state saved.");
+                await OnSaved.InvokeAsync(result);
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task SaveAsNewVersionAsync()
+    {
+        if (_module is null || _saving) return;
+        _saving = true; StateHasChanged();
+        try
+        {
+            var dataUrl = await _module.InvokeAsync<string?>("exportToBase64", _containerId, "png", 0.92);
+            if (string.IsNullOrEmpty(dataUrl)) return;
+            var comma  = dataUrl.IndexOf(',');
+            var bytes  = Convert.FromBase64String(comma >= 0 ? dataUrl[(comma + 1)..] : dataUrl);
+            var result = await AdminClient.SaveImageAsNewVersionAsync(UploadFileId, bytes, "png");
+            if (result is not null)
+            {
+                _isDirty = false;
+                Toasts.Success("Saved as new version.");
+                await OnSaved.InvokeAsync(result);
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    // ── JS callback ───────────────────────────────────────────────────────────
+
+    [JSInvokable]
+    public void OnEditorChanged()
+    {
+        _isDirty = true;
+        _ = RefreshLayersAsync();
+    }
+
+    // ── Dispose ───────────────────────────────────────────────────────────────
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            await _module.InvokeVoidAsync("destroy", _containerId);
+            await _module.DisposeAsync();
+        }
+        _dotNetRef?.Dispose();
+    }
+
+    // ── Types ─────────────────────────────────────────────────────────────────
+
+    private sealed record LayerItem(string Id, string Name, bool Visible, int Opacity, string Type);
+}
