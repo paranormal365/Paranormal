@@ -28,6 +28,14 @@
 
 .dropdown .dropdown-menu.show { z-index: 1001; }
 
+/* The toggle sits above its own backdrop while the menu is open. Without this the click-away
+   layer covers the button that opened it, so clicking it again cannot close the menu — the
+   backdrop swallows the click. Found by the Playwright suite, where the click simply hung. */
+.ben-dropdown-open {
+    position: relative;
+    z-index: 1001;
+}
+
 /* ── BenModal ───────────────────────────────────────────────────────────── */
 /* Bootstrap's .modal is display:none until its JS adds inline styles; this component renders
    .d-block instead and needs the backdrop to sit beneath the dialog rather than over it. */

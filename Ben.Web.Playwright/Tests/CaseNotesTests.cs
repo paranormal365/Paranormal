@@ -79,9 +79,9 @@ public class CaseNotesTests : BenTestBase
         await Page.GetByRole(AriaRole.Button, new() { Name = "New Note" }).ClickAsync();
         await Page.WaitForTimeoutAsync(300);
 
-        var dialog = Page.Locator(".k-window");
+        var dialog = Page.Locator(".k-window, .modal.show");
         await Expect(dialog).ToBeVisibleAsync(new() { Timeout = 5_000 });
-        var titleText = await Page.Locator(".k-window-title, .k-window-titlebar").First.InnerTextAsync();
+        var titleText = await Page.Locator(".k-window, .modal.show-title, .k-window, .modal.show-titlebar, .modal.show .modal-title").First.InnerTextAsync();
         Assert.That(titleText, Does.Contain("Note").IgnoreCase);
     }
 

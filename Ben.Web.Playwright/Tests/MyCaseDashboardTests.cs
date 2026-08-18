@@ -167,7 +167,7 @@ public class MyCaseDashboardTests : BenTestBase
 
         await Page.GetByText("Log Occurrence").ClickAsync();
         // TelerikWindow should open
-        var window = Page.Locator(".k-window");
+        var window = Page.Locator(".k-window, .modal.show");
         await Expect(window).ToBeVisibleAsync(new() { Timeout = 5_000 });
         // Description textarea should be visible
         var desc = Page.Locator("[placeholder*='Describe' i]").First;
@@ -215,7 +215,7 @@ public class MyCaseDashboardTests : BenTestBase
         await saveBtn.ClickAsync();
 
         // Dialog should close after save
-        await Expect(Page.Locator(".k-window")).ToBeHiddenAsync(new() { Timeout = 8_000 });
+        await Expect(Page.Locator(".k-window, .modal.show")).ToBeHiddenAsync(new() { Timeout = 8_000 });
 
         // Occurrence should now appear for today's date
         var body = await Page.InnerTextAsync("body");

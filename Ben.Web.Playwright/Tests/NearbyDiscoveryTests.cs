@@ -105,7 +105,7 @@ public class NearbyDiscoveryTests : BenTestBase
         var visibleBefore = await walk.IsVisibleAsync();
 
         await Page.ClickAsync("#nearby-radius");
-        await Page.ClickAsync(".k-list-item:has-text('50'), li:has-text('50')");
+        await Page.ClickAsync(".k-list-item:has-text('50'), li:has-text('50'), option:has-text('50')");
         await Page.WaitForTimeoutAsync(3_000); // re-query round trip
 
         await Expect(walk.First).ToBeVisibleAsync(new() { Timeout = 10_000 });

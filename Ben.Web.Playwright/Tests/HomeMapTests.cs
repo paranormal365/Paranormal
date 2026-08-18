@@ -71,7 +71,7 @@ public class HomeMapTests : BenTestBase
         {
             await marker.ClickAsync();
             // TelerikWindow popup should appear
-            var popup = Page.Locator(".k-window");
+            var popup = Page.Locator(".k-window, .modal.show");
             await Expect(popup).ToBeVisibleAsync(new() { Timeout = 5_000 });
         }
         else
@@ -142,7 +142,7 @@ public class HomeMapTests : BenTestBase
         if (!await marker.IsVisibleAsync()) { Assert.Pass("No markers visible."); return; }
         await marker.ClickAsync();
         await Page.WaitForTimeoutAsync(500);
-        var titleBar = Page.Locator(".k-window-title, .k-window-titlebar").First;
+        var titleBar = Page.Locator(".k-window, .modal.show-title, .k-window, .modal.show-titlebar, .modal.show .modal-title").First;
         await Expect(titleBar).ToBeVisibleAsync(new() { Timeout = 5_000 });
         var titleText = await titleBar.InnerTextAsync();
         Assert.That(titleText, Is.Not.Empty, "TelerikWindow title should not be empty.");

@@ -147,8 +147,8 @@ are readable only by group Administrators and site administrators.
 
 ## The public catalog
 
-The **Equipment Catalog** is public — anyone can browse it, including visitors who are not signed
-in. It has two halves. *Makes & models* is reference data: what gear exists, by make and model.
+The equipment catalogue — **Equipment** in the menu — is public: anyone can browse it, including
+visitors who are not signed in. It has two halves. *Makes & models* is reference data: what gear exists, by make and model.
 *Gear people own* lists individual pieces whose owners chose to list them. Neither half ever
 carries who owns anything or any serial number.
 

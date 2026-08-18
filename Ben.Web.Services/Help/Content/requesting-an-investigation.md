@@ -15,8 +15,9 @@ activity".
 
 ## Choosing a group
 
-Use **Find a Group** to see groups working in your area. You can send the same request to more
-than one; each decides independently whether to take it on.
+**Request Investigation**, at the top of the menu, starts a request and is the quickest way in.
+To look at who is out there first, **Join a Group** lists the groups working in your area. You can
+send the same request to more than one; each decides independently whether to take it on.
 
 ## What happens next
 

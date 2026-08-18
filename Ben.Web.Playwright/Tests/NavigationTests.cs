@@ -54,7 +54,7 @@ public class NavigationTests : BenTestBase
         // Look for hamburger / menu toggle
         var menuBtn = Page.GetByRole(AriaRole.Button, new() { Name = "menu" })
                           .Or(Page.Locator("[aria-label*='menu' i]"))
-                          .Or(Page.Locator(".k-drawer-toggle, [class*='toggle']"))
+                          .Or(Page.Locator(".k-drawer-toggle, .mobile-menu-icon, .collapse-icon, [class*='toggle']"))
                           .First;
         if (await menuBtn.IsVisibleAsync())
         {

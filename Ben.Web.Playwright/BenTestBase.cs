@@ -37,14 +37,12 @@ public abstract class BenTestBase : PageTest
     /// <summary>
     /// Root URL of the front end under test. Override with the BEN_BASE_URL env var.
     /// <para>
-    /// Defaults to :5079 — the original <c>Ben.Web.WebApp</c>, which is where these tests' pages
-    /// still live. <c>Ben.Web.Website</c> took over :5078 (the port Entra has a redirect URI for),
-    /// but its migration from <c>Ben.Web.Library</c> is still in progress, so pointing the suite
-    /// there today would fail on routes that do not exist yet. Flip this default to :5078 once
-    /// the migration waves land.
+    /// Defaults to :5078 — <c>Ben.Web.Website</c>, now that every page has been ported to it.
+    /// The original <c>Ben.Web.WebApp</c> still runs on :5079; point <c>BEN_BASE_URL</c> there to
+    /// run the same suite against it.
     /// </para>
     /// </summary>
-    protected static string BaseUrl => Environment.GetEnvironmentVariable("BEN_BASE_URL") ?? "http://localhost:5079";
+    protected static string BaseUrl => Environment.GetEnvironmentVariable("BEN_BASE_URL") ?? "http://localhost:5078";
 
     /// <summary>Root URL of the WebApi. Override with the BEN_API_URL env var.</summary>
     protected static string ApiUrl => Environment.GetEnvironmentVariable("BEN_API_URL") ?? "http://localhost:5252";
@@ -64,9 +62,9 @@ public abstract class BenTestBase : PageTest
         await Page.GotoAsync($"{BaseUrl}/login");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // Fill email and password fields. The Telerik TextBox on Login.razor renders a plain
-        // <input> with no type/id and placeholder "you@example.com" (no "email" substring),
-        // so match that literal placeholder alongside the more generic fallbacks.
+        // Both sites are covered: the original's Telerik TextBox renders a plain <input> with no
+        // type or id and the placeholder "you@example.com", while the new one gives it
+        // id="login-email". The alternation matches either.
         await Page.FillAsync("input[type='email'], input[placeholder*='email' i], input[id*='email' i], input[placeholder='you@example.com']", email);
         await Page.FillAsync("input[type='password']", password);
         // Scoped to the login <form> — the nav bar/app bar also has unrelated
@@ -79,11 +77,55 @@ public abstract class BenTestBase : PageTest
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
     }
 
-    /// <summary>Logs out by navigating to / and clicking the Sign Out button.</summary>
+    /// <summary>
+    /// Opens the header's profile menu, which is where the new site keeps the signed-in email and
+    /// the Sign Out button. The original showed both directly in the app bar, so this is a no-op
+    /// there — it only clicks when the menu's contents are not already visible.
+    /// </summary>
+    protected async Task OpenProfileMenuAsync()
+    {
+        var signOut = Page.GetByText("Sign Out");
+        if (await signOut.IsVisibleAsync()) return;
+
+        var profile = Page.Locator("[aria-label='Open Profile Dropdown'], .user-menu > button").First;
+        if (!await profile.IsVisibleAsync()) return;
+
+        // The button is Blazor-interactive; clicking before the circuit is live does nothing, so
+        // retry rather than assuming the first click lands.
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            // Do not click a menu that is already open — that would close it again.
+            if (await profile.GetAttributeAsync("aria-expanded") == "true")
+            {
+                try
+                {
+                    await signOut.WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 3_000 });
+                    return;
+                }
+                catch (TimeoutException) { }
+            }
+
+            await profile.ClickAsync(new() { Timeout = 5_000 });
+            try
+            {
+                await signOut.WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 3_000 });
+                return;
+            }
+            catch (TimeoutException) { /* circuit not ready yet — try again */ }
+        }
+    }
+
+    /// <summary>
+    /// Logs out through the header. On the new site Sign Out lives inside the profile dropdown,
+    /// so the menu has to be opened first; on the original it is directly in the bar. Opening the
+    /// menu when it is already open would close it, so this only clicks when Sign Out is hidden.
+    /// </summary>
     protected async Task LogoutAsync()
     {
         await Page.GotoAsync(BaseUrl);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        await OpenProfileMenuAsync();
 
         var signOut = Page.GetByText("Sign Out");
         if (await signOut.IsVisibleAsync())

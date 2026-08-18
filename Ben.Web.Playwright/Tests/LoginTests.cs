@@ -18,7 +18,10 @@ public class LoginTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         await Expect(Page.Locator("input[type='password']")).ToBeVisibleAsync();
-        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Sign in" })).ToBeVisibleAsync();
+        // Exact, because the page also offers "Sign in with Microsoft" and a substring match
+        // resolves to both.
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Sign In", Exact = true }))
+            .ToBeVisibleAsync();
     }
 
     [Test]
@@ -36,7 +39,10 @@ public class LoginTests : BenTestBase
         await LoginAsync(UserEmail, UserPassword);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // The app bar typically shows the email or display name
+        // The signed-in email lives in the profile menu on the new site, and directly in the app
+        // bar on the original; opening is a no-op where it is already visible.
+        await OpenProfileMenuAsync();
+
         var emailText = Page.GetByText(UserEmail.Split('@')[0], new() { Exact = false });
         await Expect(emailText).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
@@ -47,6 +53,8 @@ public class LoginTests : BenTestBase
     {
         await LoginAsync(UserEmail, UserPassword);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        await OpenProfileMenuAsync();
 
         var signOut = Page.GetByText("Sign Out");
         await Expect(signOut).ToBeVisibleAsync(new() { Timeout = 8_000 });

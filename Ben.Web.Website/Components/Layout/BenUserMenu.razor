@@ -15,7 +15,7 @@
 {
     <div class="dropdown user-menu">
         <button type="button" title="@(UserState.UserEmail ?? "Account")"
-                class="btn-system bg-transparent d-flex flex-shrink-0 align-items-center justify-content-center"
+                class="btn-system bg-transparent d-flex flex-shrink-0 align-items-center justify-content-center @(_open ? "show ben-dropdown-open" : null)"
                 aria-label="Open Profile Dropdown" aria-expanded="@_open.ToString().ToLowerInvariant()"
                 @onclick="Toggle">
             @if (_avatarFileId is { } fileId)

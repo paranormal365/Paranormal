@@ -57,6 +57,23 @@ shown exactly where it is — that is the whole point of being listed. An event'
 ever approximate, because it is an invitation rather than a business address, and the exact place is
 not shown until you are actually attending.
 
+## Finding your way around
+
+Everything you can reach is in the **menu down the left**. It only ever lists what applies to you,
+so it grows once you sign in and grows again if you run a group.
+
+A few things there are worth knowing about:
+
+- **Filter** at the top of the menu narrows it as you type. Useful once the list is long.
+- The **arrow beside the site name** collapses the menu to icons and back, if you would rather give
+  the page the width.
+- Entries with a **chevron** open into a group rather than going somewhere — **Administration**
+  works this way, holding the site-wide tools grouped by what they are for.
+- A **number beside an entry** is work waiting for you. The colour deepens the longer it waits.
+
+Along the top right are the display controls: a **sun or moon** switches between light and dark,
+and the **arrows** expand the page to fill the screen. Both are remembered on this device.
+
 ## Getting an account
 
 You need an account to request an investigation or join a group. Accounts are free, and the

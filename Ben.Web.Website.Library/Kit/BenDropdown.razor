@@ -8,7 +8,7 @@
 *@
 
 <div class="dropdown @Class">
-    <button type="button" class="@ToggleClass @(NoArrow ? "no-arrow" : "dropdown-toggle")"
+    <button type="button" class="@ToggleClass @(NoArrow ? "no-arrow" : "dropdown-toggle") @(_open ? "show ben-dropdown-open" : null)"
             title="@Title" aria-label="@Title"
             aria-expanded="@_open.ToString().ToLowerInvariant()"
             disabled="@Disabled"
