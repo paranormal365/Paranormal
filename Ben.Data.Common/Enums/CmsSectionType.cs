@@ -33,5 +33,20 @@ public enum CmsSectionType
     EmbeddedInvestigations = 7,
 
     /// <summary>A selection of the group's own cases, resolved and redacted like <see cref="EmbeddedInvestigations"/>.</summary>
-    EmbeddedCases = 8
+    EmbeddedCases = 8,
+
+    /// <summary>
+    /// Photos and files chosen from one of the group's own cases — the case-bound slot item #80's
+    /// page templates were for.
+    /// </summary>
+    /// <remarks>
+    /// <para>Resolved like the two above, and for a sharper reason. The stored content holds a case
+    /// id and file ids; whether each of those files may still be shown is asked again on every
+    /// request, through <c>CaseMediaPublication</c>. A timeline entry pulled back from Public next
+    /// month takes its photo off this page without anybody remembering which pages used it.</para>
+    ///
+    /// <para>Copying the file into the section at fill-in time would have been far simpler and is
+    /// exactly wrong: it would make a published page immune to somebody changing their mind.</para>
+    /// </remarks>
+    CaseMedia = 9
 }

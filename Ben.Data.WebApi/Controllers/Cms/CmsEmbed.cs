@@ -31,7 +31,9 @@ public static class CmsEmbed
 {
     /// <summary>Section types whose stored content is replaced by a resolved projection.</summary>
     public static bool IsEmbed(CmsSectionType type)
-        => type is CmsSectionType.EmbeddedInvestigations or CmsSectionType.EmbeddedCases;
+        => type is CmsSectionType.EmbeddedInvestigations
+                or CmsSectionType.EmbeddedCases
+                or CmsSectionType.CaseMedia;
 
     // ── What the group stores ────────────────────────────────────────────────
 
@@ -69,6 +71,40 @@ public static class CmsEmbed
         /// rather than left for each caller to remember.
         /// </remarks>
         public IReadOnlyList<Guid> Ids { get; init; } = Ids ?? [];
+    }
+
+    /// <summary>
+    /// The authored side of a case-media section: one case, and which of its files to show.
+    /// </summary>
+    /// <param name="CaseId">
+    /// The case the files are drawn from. Empty means the author has not chosen one yet, and the
+    /// section resolves to nothing — a half-filled slot shows an empty page, not somebody's photos.
+    /// </param>
+    /// <param name="FileIds">
+    /// The files, in the order the author arranged them. Ones that are no longer publishable are
+    /// dropped on read rather than at save, which is the whole point of storing references.
+    /// </param>
+    /// <param name="ShowCaptions">
+    /// Whether to print the timeline entry each file came from beneath it. Off by default: the
+    /// entry title is the group's own working description and may say more than they intend on a
+    /// public page, so showing it is a choice rather than a consequence of picking a photo.
+    /// </param>
+    /// <remarks>
+    /// Deliberately <b>not</b> a variant of <see cref="Settings"/>. There is no
+    /// <c>IncludeNonPublic</c> here, and its absence is the design: for a case's own files there is
+    /// no acknowledgement that makes publishing an investigator's working file acceptable, because
+    /// nobody has ever said that file could be shown. The one route to publishing a case file stays
+    /// the one <see cref="CaseMediaPublication"/> describes — attach it to a public timeline entry —
+    /// and this section can offer no way around it.
+    /// </remarks>
+    public sealed record CaseMediaSettings(
+        Guid CaseId,
+        IReadOnlyList<Guid> FileIds,
+        bool ShowCaptions = false)
+    {
+        public static CaseMediaSettings Empty { get; } = new(Guid.Empty, []);
+
+        public IReadOnlyList<Guid> FileIds { get; init; } = FileIds ?? [];
     }
 
     /// <summary>
@@ -113,6 +149,24 @@ public static class CmsEmbed
     public static string WriteSettings(Settings settings)
         => JsonSerializer.Serialize(settings, Json);
 
+    /// <summary>Reads a case-media section's stored settings, failing closed like the above.</summary>
+    public static CaseMediaSettings ParseCaseMediaSettings(string? contentJson)
+    {
+        if (string.IsNullOrWhiteSpace(contentJson)) return CaseMediaSettings.Empty;
+
+        try
+        {
+            return JsonSerializer.Deserialize<CaseMediaSettings>(contentJson, Json) ?? CaseMediaSettings.Empty;
+        }
+        catch (JsonException)
+        {
+            return CaseMediaSettings.Empty;
+        }
+    }
+
+    public static string WriteCaseMediaSettings(CaseMediaSettings settings)
+        => JsonSerializer.Serialize(settings, Json);
+
     // ── What a visitor receives ──────────────────────────────────────────────
 
     /// <summary>
@@ -151,6 +205,28 @@ public static class CmsEmbed
         decimal? Longitude,
         bool LocationIsApproximate);
 
+    /// <summary>
+    /// One file from a case, as published on a group's own page.
+    /// </summary>
+    /// <param name="CaseId">
+    /// Carried so the renderer can build the URL that serves the bytes. The public media endpoint
+    /// is case-scoped on purpose — it asks "may this case publish this file", which is the only
+    /// question with a safe answer, and a bare file id could not have posed it.
+    /// </param>
+    /// <param name="UploadFileId">The file itself.</param>
+    /// <param name="Caption">
+    /// The timeline entry's title, and null unless the group asked for captions. Absent rather than
+    /// withheld, the same discipline as the records above.
+    /// </param>
+    /// <param name="When">When the entry happened, on the same switch as the caption.</param>
+    /// <param name="EntryType">What kind of entry it came from — evidence, a note, a visit.</param>
+    public sealed record PublishedCaseFile(
+        Guid CaseId,
+        Guid UploadFileId,
+        string? Caption,
+        DateTime? When,
+        CaseTimelineEntryType EntryType);
+
     // ── Resolution ───────────────────────────────────────────────────────────
 
     /// <summary>
@@ -169,6 +245,13 @@ public static class CmsEmbed
         BenDataContext db, Guid organizationId, CmsSectionType type, string? contentJson,
         CancellationToken ct)
     {
+        // Case media stores a different shape — one case and its files, not a list of records — so
+        // it branches before the shared parse rather than being bent into it. Reading it with the
+        // wrong parser would yield an empty selection and silently render nothing.
+        if (type == CmsSectionType.CaseMedia)
+            return JsonSerializer.Serialize(
+                await ResolveCaseMediaAsync(db, organizationId, ParseCaseMediaSettings(contentJson), ct), Json);
+
         var settings = ParseSettings(contentJson);
 
         if (settings.Ids.Count == 0)
@@ -247,5 +330,49 @@ public static class CmsEmbed
                     lat, lon,
                     LocationIsApproximate: true);
             })];
+    }
+
+    /// <summary>
+    /// Turns a case-media section's stored ids into the files a visitor may actually see.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Two independent gates, and both are re-asked here.</b> The case must belong to this
+    /// organization — a group may not decorate its page with another group's work, even work that
+    /// is public — and each file must still be publishable under
+    /// <see cref="CaseMediaPublication"/>. The picker in the editor offers only files that pass
+    /// both, but that is a convenience; a saved section carries ids, and ids can be edited.</para>
+    ///
+    /// <para><b>Silence, not a gap.</b> A file that no longer qualifies is dropped, not replaced
+    /// with a placeholder. "There was a photo here that you may not see" is itself a disclosure,
+    /// and the page reads as though it was always this length.</para>
+    ///
+    /// <para>Captions come from the same query that decides publishability, so a caption can never
+    /// describe a file the rule went on to drop.</para>
+    /// </remarks>
+    private static async Task<List<PublishedCaseFile>> ResolveCaseMediaAsync(
+        BenDataContext db, Guid organizationId, CaseMediaSettings settings, CancellationToken ct)
+    {
+        if (settings.CaseId == Guid.Empty || settings.FileIds.Count == 0) return [];
+
+        var ownsCase = await db.Cases.AsNoTracking()
+            .AnyAsync(c => c.Id == settings.CaseId && c.OrganizationId == organizationId, ct);
+
+        if (!ownsCase) return [];
+
+        // One query for the whole selection: a write-up with a dozen photos should not cost a dozen
+        // round trips, and this is the same list the picker was built from.
+        var publishable = (await CaseMediaPublication.PublishableAsync(db, settings.CaseId, ct))
+            .ToDictionary(f => f.UploadFileId);
+
+        return [.. settings.FileIds
+            .Distinct()
+            .Where(publishable.ContainsKey)
+            .Select(id => publishable[id])
+            .Select(f => new PublishedCaseFile(
+                settings.CaseId,
+                f.UploadFileId,
+                settings.ShowCaptions ? f.Context : null,
+                settings.ShowCaptions ? f.When : null,
+                f.EntryType))];
     }
 }

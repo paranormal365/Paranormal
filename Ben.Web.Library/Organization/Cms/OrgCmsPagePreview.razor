@@ -80,7 +80,7 @@ else
             @foreach (var section in _page.Page.Sections.OrderBy(s => s.SortOrder))
             {
                 <OrgPublicSection Section="section"
-                                  FileBaseUrl="@AdminClient.GetFileDownloadUrl(Guid.Empty).Replace(Guid.Empty.ToString(), "")" />
+                                  FileBaseUrl="@AdminClient.GetFileDownloadUrl(Guid.Empty).Replace(Guid.Empty.ToString(), "")" PublicMediaBaseUrl="@AdminClient.GetPublicCaseMediaBaseUrl()" />
             }
         }
     </div>

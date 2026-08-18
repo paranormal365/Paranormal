@@ -62,6 +62,17 @@ public interface IBenCmsClient
 
     /// <summary>The group's own cases, same shape and same purpose.</summary>
     Task<IReadOnlyList<EmbeddableRecord>> GetEmbeddableCasesAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>
+    /// The files of one case that may go on a public page — the case-media picker's options.
+    /// </summary>
+    /// <remarks>
+    /// Empty is the normal answer for a case with no public timeline entries, and the editor must
+    /// say why rather than showing an empty list: an author who picked the right case and sees
+    /// nothing will otherwise conclude the feature is broken.
+    /// </remarks>
+    Task<IReadOnlyList<PublishableCaseFile>> GetPublishableCaseMediaAsync(
+        Guid orgId, Guid caseId, CancellationToken token = default);
     Task<CmsTemplateRecord?> UpdateCmsTemplateAsync(Guid orgId, Guid templateId, SaveCmsTemplateRequest request, CancellationToken token = default);
     Task<bool> DeleteCmsTemplateAsync(Guid orgId, Guid templateId, CancellationToken token = default);
 }

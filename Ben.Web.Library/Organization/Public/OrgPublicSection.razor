@@ -49,6 +49,10 @@
             @RenderEmbeddedCases()
             break;
 
+        case CmsSectionType.CaseMedia:
+            @RenderCaseMedia()
+            break;
+
         default:
             <div class="text-muted small">Unknown section type.</div>
             break;
@@ -59,6 +63,17 @@
     [Parameter] public OrgPublicSectionItem? Section { get; set; }
     /// <summary>Base URL prefix for file downloads, e.g. "http://localhost:5252/api/upload-files/"</summary>
     [Parameter] public string FileBaseUrl { get; set; } = "";
+
+    /// <summary>
+    /// Base URL prefix for published case media, e.g. "http://localhost:5252/api/public/cases/".
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="FileBaseUrl"/> because it is a different endpoint answering a
+    /// different question — that one asks whether the caller may see a file, this one asks whether
+    /// a case has published it. Reusing the download URL here would have shown an authenticated
+    /// author a working gallery and every visitor a row of broken images.
+    /// </remarks>
+    [Parameter] public string PublicMediaBaseUrl { get; set; } = "";
 
     /// <summary>
     /// The group's own investigations, as the server chose to publish them.
@@ -135,6 +150,56 @@
                                 @RenderPlace(row)
                             </div>
                         </div>
+                    </div>
+                }
+            </div>
+        }
+    </text>;
+
+    /// <summary>
+    /// Photos chosen from one of the group's cases.
+    /// </summary>
+    /// <remarks>
+    /// <para>Draws whatever the server sent and asks no questions. Every file here has already been
+    /// re-checked against the publication rule this request; ones that no longer qualify are simply
+    /// not in the array. So an empty section is a real and expected state — a case unpublished last
+    /// week leaves the heading and nothing under it, rather than a row of broken frames.</para>
+    ///
+    /// <para>Images point at the public case-media endpoint, not the ordinary download URL. That is
+    /// what a visitor with no account can actually fetch, and it re-asks the same rule per byte
+    /// served — so a link copied out of this page stops working when the entry goes private.</para>
+    /// </remarks>
+    private RenderFragment RenderCaseMedia() => @<text>
+        @{
+            var files = ParseArray();
+        }
+        @if (files.Count > 0)
+        {
+            <div class="row g-3">
+                @foreach (var file in files)
+                {
+                    var caseId = Text(file, "caseId");
+                    var fileId = Text(file, "uploadFileId");
+                    var caption = Text(file, "caption");
+
+                    if (caseId is null || fileId is null) { continue; }
+
+                    <div class="col-6 col-md-4">
+                        <figure class="m-0">
+                            <img src="@($"{PublicMediaBaseUrl}{caseId}/media/{fileId}")"
+                                 alt="@(caption ?? "Photo from this case")"
+                                 class="img-fluid rounded" />
+                            @if (caption is { Length: > 0 })
+                            {
+                                <figcaption class="text-secondary small mt-1">
+                                    @caption
+                                    @if (Text(file, "when") is { Length: > 0 } when)
+                                    {
+                                        <span> — @FormatDate(when)</span>
+                                    }
+                                </figcaption>
+                            }
+                        </figure>
                     </div>
                 }
             </div>

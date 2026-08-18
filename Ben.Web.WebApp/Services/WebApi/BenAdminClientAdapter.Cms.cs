@@ -114,4 +114,9 @@ public sealed partial class BenAdminClientAdapter
         Guid orgId, CancellationToken token = default)
         => await _api.GetAsync<IReadOnlyList<EmbeddableRecord>>(
                $"/api/organizations/{orgId}/cms/embeddable/cases", token) ?? [];
+
+    public async Task<IReadOnlyList<PublishableCaseFile>> GetPublishableCaseMediaAsync(
+        Guid orgId, Guid caseId, CancellationToken token = default)
+        => await _api.GetAsync<IReadOnlyList<PublishableCaseFile>>(
+               $"/api/organizations/{orgId}/cms/embeddable/cases/{caseId}/media", token) ?? [];
 }

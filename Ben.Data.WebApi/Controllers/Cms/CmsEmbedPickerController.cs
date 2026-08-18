@@ -88,6 +88,37 @@ public sealed class CmsEmbedPickerController : OrgCmsControllerBase
 
         return Ok(rows);
     }
+
+    /// <summary>The files of one of the group's cases that may appear on a public page.</summary>
+    /// <remarks>
+    /// <para>Answers with <see cref="CaseMediaPublication"/> rather than a query of its own, so the
+    /// picker and the renderer cannot disagree about what is publishable. Offering the right
+    /// options and calling that the rule is the mistake this endpoint's siblings already avoid.</para>
+    ///
+    /// <para>An empty list is a real answer and a common one — a case whose timeline entries are all
+    /// internal has nothing to offer, and the editor says so in words rather than showing an empty
+    /// box. Ownership is checked here as well as at render: this endpoint reads another group's
+    /// case only to refuse it.</para>
+    /// </remarks>
+    [HttpGet("cases/{caseId:guid}/media")]
+    public async Task<ActionResult<IReadOnlyList<PublishableCaseFile>>> GetCaseMedia(
+        Guid orgId, Guid caseId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        if (!await IsCmsAuthorizedAsync(userId.Value, orgId, OrganizationSecurityTable.CmsSection,
+                                        OrganizationSecurityAction.Read, ct))
+            return NotFound();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+
+        var ownsCase = await db.Cases.AsNoTracking()
+            .AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct);
+        if (!ownsCase) return NotFound();
+
+        return Ok(await CaseMediaPublication.PublishableAsync(db, caseId, ct));
+    }
 }
 
 // EmbeddableRecord lives in Ben.Service.Models — the Blazor picker needs the same shape, and a
