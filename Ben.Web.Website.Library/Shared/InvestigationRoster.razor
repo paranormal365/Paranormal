@@ -82,7 +82,7 @@
                         }
                         @if (entry.DateArrived is { } arrived)
                         {
-                            <span class="opacity-75">@arrived.ToLocalTime().ToString("HH:mm")</span>
+                            <span class="opacity-75">@arrived.ToLocalTime().ToDisplayTime()</span>
                         }
                     </span>
                 }
@@ -109,13 +109,13 @@
                         <div class="d-flex justify-content-between align-items-baseline">
                             <span class="fw-semibold">@(finding.DisplayName ?? "Somebody")</span>
                             <span class="text-secondary small">
-                                @finding.DateCreated.ToLocalTime().ToString("d MMM yyyy")
+                                @finding.DateCreated.ToLocalTime().ToDisplayDate()
                                 @if (finding.DateUpdated is { } revised)
                                 {
                                     @* Said out loud: a first draft and a revision a week later are
                                        different claims, and a reader comparing accounts wants to
                                        know which one they have. *@
-                                    <span title="@revised.ToLocalTime().ToString("d MMM yyyy, HH:mm")"> · revised</span>
+                                    <span title="@revised.ToLocalTime().ToDisplayDateTime()"> · revised</span>
                                 }
                             </span>
                         </div>
@@ -133,7 +133,7 @@
                             @if (_myFinding is { } mine)
                             {
                                 <span class="text-secondary small">
-                                    Filed @mine.DateCreated.ToLocalTime().ToString("d MMM yyyy")
+                                    Filed @mine.DateCreated.ToLocalTime().ToDisplayDate()
                                 </span>
                             }
                         </div>
@@ -182,7 +182,7 @@
                                 <tr @key="entry.AttendeeId">
                                     <td>@entry.DisplayName</td>
                                     <td class="text-nowrap">
-                                        @(entry.DateArrived?.ToLocalTime().ToString("d MMM, HH:mm") ?? "—")
+                                        @(entry.DateArrived?.ToLocalTime().ToDisplayDateTime() ?? "—")
                                         @if (entry.DidAttend == true && !entry.SelfReported)
                                         {
                                             <span class="badge bg-secondary ms-1" title="Recorded by someone else, not by them">Recorded</span>

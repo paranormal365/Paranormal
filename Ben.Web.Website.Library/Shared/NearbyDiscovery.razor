@@ -100,7 +100,7 @@
                             <div class="card-body">
                                 <h6 class="card-title mb-1">@ev.Title</h6>
                                 <p class="card-text text-secondary mb-1" style="font-size:.85rem;">
-                                    @ev.StartDateTime.ToString("ddd, MMM d · h:mm tt")
+                                    @ev.StartDateTime.ToDisplayDateTime()
                                 </p>
                                 @if (!string.IsNullOrWhiteSpace(ev.City))
                                 {

@@ -49,7 +49,7 @@
                             </div>
                             <div class="text-end text-secondary small flex-shrink-0">
                                 <div>@m.AuthorDisplayName</div>
-                                <div>@m.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d")</div>
+                                <div>@m.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()</div>
                                 @if (m.ReplyCount > 0)
                                 {
                                     <div>@m.ReplyCount replies</div>

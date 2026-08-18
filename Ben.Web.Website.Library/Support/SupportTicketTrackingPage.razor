@@ -34,7 +34,7 @@
         </div>
         <p class="text-secondary small mb-4">
             Reference <span class="font-monospace">@_ticket.Reference</span>
-            · sent @_ticket.DateCreated.ToLocalTime().ToString("d MMM yyyy, HH:mm")
+            · sent @_ticket.DateCreated.ToLocalTime().ToDisplayDateTime()
         </p>
 
         <div class="card mb-3">
@@ -50,7 +50,7 @@
                 <div class="card-body">
                     <div class="text-secondary small mb-1">
                         @(reply.IsFromStaff ? (reply.AuthorDisplayName ?? "Support") : "You")
-                        · @reply.DateCreated.ToLocalTime().ToString("d MMM yyyy, HH:mm")
+                        · @reply.DateCreated.ToLocalTime().ToDisplayDateTime()
                     </div>
                     <div style="white-space:pre-wrap;">@reply.Body</div>
                 </div>

@@ -69,7 +69,7 @@
                     <GridColumn Title="Saved" Width="170px">
                         <Template>
                             @{ var proj = (VideoProjectRecord)context; }
-                            @proj.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+                            @proj.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
                         </Template>
                     </GridColumn>
                     <GridColumn Width="160px">

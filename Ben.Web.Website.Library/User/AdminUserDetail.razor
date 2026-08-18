@@ -213,7 +213,7 @@ else
                         <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.IsActive)" Title="Active" Width="70px" />
                         <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.DateCreated)" Title="Joined" Width="110px">
                             <Template>
-                                @(((OrganizationUserMembershipAdminRecord)context).DateCreated.ToViewerLocalTime(UserState).ToString("yyyy-MM-dd"))
+                                @(((OrganizationUserMembershipAdminRecord)context).DateCreated.ToViewerLocalTime(UserState).ToDisplayDate())
                             </Template>
                         </GridColumn>
                         <GridCommandColumn Width="80px">

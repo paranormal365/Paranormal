@@ -158,7 +158,7 @@
                                             {
                                                 <span class="badge bg-secondary me-1">Region</span>
                                             }
-                                            @note.DateCreated.ToString("yyyy-MM-dd HH:mm")
+                                            @note.DateCreated.ToDisplayDateTime()
                                             @if (note.IsPublic)
                                             {
                                                 <span class="badge bg-info ms-1">Public</span>
