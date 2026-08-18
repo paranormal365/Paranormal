@@ -4186,7 +4186,7 @@ up is worse for the organization than one who never signed up.
 
 ---
 
-## 88. Local discovery — "what's near me" across groups, events and places (partly built, scoped 2026-08-17)
+## 88. Local discovery — "what's near me" across groups, events and places (server side built 2026-08-17; UI remains)
 
 Ben: *"Like if a person wants to see what is local... group events or actually local groups etc."*
 
@@ -4230,6 +4230,35 @@ wrong in either direction breaks something:
 
 The temptation, having just built coordinate redaction, is to apply it everywhere. **Do not.** An
 organization that cannot be found has been broken, not protected.
+
+### ✅ Server side built 2026-08-17
+
+**The dead endpoint was extended, not replaced** — the decision this entry asked for. `SearchController.Nearby`
+already honoured `IsSearchable`, `SearchVisibility`, `SearchRadiusMiles` and each address's
+`PublicDisplayMode`; it now also returns **upcoming public events**, and answers with
+`NearbyResults(Organizations, Events)` — two lists precisely because the two obey different rules.
+
+- **Events reuse `PublicEventController.VisibleEvents`**, now `internal`, rather than restating the
+  predicate. An event hidden on the events pages cannot surface here, including one at a private
+  residence.
+- **The published distance is measured to the *snapped* point, not the real one.** A true distance
+  beside an approximate position hands back the position: query from three points and trilaterate.
+  Everything reported derives from the grid cell, so there is nothing to solve for. The cost is that
+  an event within a mile or two of the radius edge may fall on the wrong side, which does not matter
+  for browsing.
+- `NearbyEventResult` has **no field for a street address**, asserted by a test.
+- The asymmetry itself is tested: the group is asserted to appear at its *real* coordinates and the
+  event at *not* its real ones, in the same file, so a later uniform "redact everything" pass fails
+  loudly.
+
+> **Not "untested", just uncalled.** `SearchControllerTests` existed and covered the organizations
+> half all along; what never existed was a caller. Changing the response shape broke those seven
+> tests, which is exactly what they were for — they now unwrap `.Organizations`.
+
+**Still to do:** the visitor-facing screen — a distance dropdown, a list and a map. The server now
+answers the question; nothing asks it yet. Public *cases* are also not in the response (they are
+already discoverable via `PublicCaseDiscoveryController`, with coordinates approximated); folding
+them in is a third list obeying the same rule as events.
 
 ### The decision this forces
 
