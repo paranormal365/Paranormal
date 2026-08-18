@@ -320,7 +320,11 @@ public sealed class PublicEventController : BenControllerBase
     /// a row that became public some other way — a script, a migration, a bug — still never reaches
     /// anybody. Cheap, and the failure it guards against is the one nobody would notice.
     /// </remarks>
-    private static IQueryable<OrgCalendarEvent> VisibleEvents(BenDataContext db)
+    /// <summary>
+    /// The one definition of which events a visitor may see. Internal so the nearby search reuses
+    /// it rather than restating it — a second copy of this rule is the copy that drifts.
+    /// </summary>
+    internal static IQueryable<OrgCalendarEvent> VisibleEvents(BenDataContext db)
         => db.OrgCalendarEvents.AsNoTracking()
             .Where(e => e.IsPublic
                      && e.CaseId == null

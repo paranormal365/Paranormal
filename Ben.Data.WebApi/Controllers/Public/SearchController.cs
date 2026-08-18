@@ -15,11 +15,27 @@ public sealed class SearchController : ControllerBase
     public SearchController(IDbContextFactory<BenDataContext> db) => _db = db;
 
     /// <summary>
-    /// Find organizations with searchable addresses near a lat/lon point.
-    /// Respects IsSearchable, SearchVisibility, and SearchRadiusMiles per address.
+    /// What is around a point — the groups that serve it, and the public events near it.
     /// </summary>
+    /// <remarks>
+    /// <para>Backlog item #88. This endpoint already existed, already honoured every per-address
+    /// privacy setting, and <b>nothing called it</b>. Ben's "let people see what is local" is very
+    /// nearly a parameter that was built and never exposed, so it was extended rather than replaced —
+    /// writing a third nearby implementation was the one outcome to avoid.</para>
+    ///
+    /// <para><b>The two tiers do not share a privacy rule, and must not.</b> An organization that
+    /// ticked "searchable" is a business listing and appears exactly as precisely as it chose;
+    /// grid-snapping it would break the feature rather than protect anybody. A public event is an
+    /// invitation, and its location is approximate until somebody is actually attending.</para>
+    ///
+    /// <para><b>For events, the distance is measured to the snapped point, not the real one.</b>
+    /// Publishing a true distance alongside an approximate position would hand back the position: a
+    /// caller could query from three points and trilaterate. Everything reported here derives from
+    /// the grid cell, so there is nothing to solve for. The cost is that an event within a mile or
+    /// two of the radius edge may fall on the wrong side of it, which does not matter for browsing.</para>
+    /// </remarks>
     [HttpGet("nearby")]
-    public async Task<ActionResult<IReadOnlyList<NearbyOrgResult>>> Nearby(
+    public async Task<ActionResult<NearbyResults>> Nearby(
         [FromQuery] double lat,
         [FromQuery] double lon,
         [FromQuery] double radiusMiles = 25,
@@ -84,7 +100,68 @@ public sealed class SearchController : ControllerBase
                                        ? addr.State : null));
         }
 
-        return Ok(results.OrderBy(r => r.DistanceMiles).ToList());
+        var events = await NearbyEventsAsync(db, lat, lon, clampedRadius, query, ct);
+
+        return Ok(new NearbyResults(
+            [.. results.OrderBy(r => r.DistanceMiles)],
+            events));
+    }
+
+    /// <summary>
+    /// Upcoming public events whose approximate location falls within the radius.
+    /// </summary>
+    /// <remarks>
+    /// Visibility comes from <see cref="PublicEventController.VisibleEvents"/> — the same predicate
+    /// the events pages use, so an event hidden there cannot surface here. Only future events: a
+    /// discovery map exists to answer "what could I go to", and last year's walk is not that.
+    /// </remarks>
+    private static async Task<IReadOnlyList<NearbyEventResult>> NearbyEventsAsync(
+        BenDataContext db, double lat, double lon, double radiusMiles, string? query, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+
+        var candidates = await PublicEventController.VisibleEvents(db)
+            .Include(e => e.Organization)
+            .Include(e => e.Place)
+            .Include(e => e.OrganizationAddress)
+            .Where(e => e.StartDateTime >= now)
+            .ToListAsync(ct);
+
+        var results = new List<NearbyEventResult>();
+
+        foreach (var ev in candidates)
+        {
+            if (!string.IsNullOrWhiteSpace(query)
+                && !ev.Title.Contains(query, StringComparison.OrdinalIgnoreCase)
+                && !ev.Organization.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            // Snapped first, then measured. See the remarks on Nearby: the published distance must
+            // not be a more precise fact than the published position.
+            var (approxLat, approxLon) = PublicCoordinates.Approximate(
+                ev.Place?.Latitude ?? ev.OrganizationAddress?.Latitude,
+                ev.Place?.Longitude ?? ev.OrganizationAddress?.Longitude);
+
+            if (approxLat is null || approxLon is null) continue;
+
+            var dist = HaversineDistance(lat, lon, (double)approxLat.Value, (double)approxLon.Value);
+            if (dist > radiusMiles) continue;
+
+            results.Add(new NearbyEventResult(
+                EventId:       ev.Id,
+                Title:         ev.Title,
+                UrlName:       ev.UrlName,
+                OrgName:       ev.Organization.Name,
+                OrgUrlName:    ev.Organization.UrlName,
+                StartDateTime: ev.StartDateTime,
+                City:          ev.Place?.City ?? ev.OrganizationAddress?.City,
+                State:         ev.Place?.State ?? ev.OrganizationAddress?.State,
+                Latitude:      approxLat,
+                Longitude:     approxLon,
+                DistanceMiles: Math.Round(dist, 1)));
+        }
+
+        return [.. results.OrderBy(r => r.StartDateTime)];
     }
 
     private static double HaversineDistance(double lat1, double lon1, double lat2, double lon2)
@@ -98,6 +175,34 @@ public sealed class SearchController : ControllerBase
         return R * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
     }
 }
+
+/// <summary>
+/// What is near a point, in two lists because the two obey different privacy rules.
+/// </summary>
+public sealed record NearbyResults(
+    IReadOnlyList<NearbyOrgResult> Organizations,
+    IReadOnlyList<NearbyEventResult> Events);
+
+/// <summary>
+/// One public event near the caller.
+/// </summary>
+/// <remarks>
+/// <see cref="Latitude"/> and <see cref="Longitude"/> are the centre of a grid cell several miles
+/// across, and <see cref="DistanceMiles"/> is measured to that same point — there is no field here
+/// carrying anything more precise, and an exact address deliberately has nowhere to live.
+/// </remarks>
+public sealed record NearbyEventResult(
+    Guid     EventId,
+    string   Title,
+    string?  UrlName,
+    string   OrgName,
+    string?  OrgUrlName,
+    DateTime StartDateTime,
+    string?  City,
+    string?  State,
+    decimal? Latitude,
+    decimal? Longitude,
+    double   DistanceMiles);
 
 public sealed record NearbyOrgResult(
     Guid     OrgId,

@@ -3707,7 +3707,7 @@ controller test was verified by removing the wiring and watching it fail.
 
 ---
 
-## 82. Two P3 gaps left open: attendee findings, and the roster on case-less visits (found 2026-08-15)
+## 82. Two P3 gaps left open: attendee findings, and the roster on case-less visits (both closed 2026-08-15)
 
 Found auditing Area 9's permission phase after it shipped. Neither is a bug in what was built —
 both are places where something was built halfway and the missing half is a feature, not a fix.
@@ -3740,7 +3740,7 @@ Live-verified on "Cave return visit", a visit with no case: the team panel opens
 
 ---
 
-## 83. Explain and list available permissions to assign to roles individually in an organization (built 2026-08-17, pending click-test)
+## 83. Explain and list available permissions to assign to roles individually in an organization (closed 2026-08-17, pending click-test)
 
 Ben, raised mid-planning-session for item #55: *"Explain and list available permissions to assign
 to roles individually in an organization — each one has their own."*
