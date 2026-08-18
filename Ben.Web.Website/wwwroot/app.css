@@ -246,3 +246,17 @@
     margin-right: .75rem;
 }
 
+
+/* ── Sidebar type ───────────────────────────────────────────────────────────
+   The template sets the nav at 600 (semibold), which reads heavy down a long list. Regular for
+   the resting state, with the active item only one step up — enough to find your place without
+   the whole column shouting. */
+.app-sidebar .nav-menu .nav-link-text,
+.app-sidebar .nav-menu > li > a {
+    font-weight: 400;
+}
+
+.app-sidebar .nav-menu .nav-item.active > a,
+.app-sidebar .nav-menu .nav-item.active > a .nav-link-text {
+    font-weight: 500;
+}

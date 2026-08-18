@@ -416,3 +416,13 @@ What was actually wrong, in order:
    un-hiding it. The kit rule now excludes the template's own state pairs.
 5. **Sign In crushed into a 40px square** with its highlight off the words, because it carries a
    label and had been swept into the icon-only sizing.
+
+**Two chrome fixes after wave E:**
+
+- **Sidebar type** dropped from the template's 600 to 400, with the active item at 500 — semibold
+  down a long list reads heavy.
+- **The mobile menu was a one-way door.** Opening it worked; closing it was impossible without
+  picking a link, because the open sidebar is 288px wide from x:0 and covers the hamburger that
+  opened it. The template solves this with a backdrop in `_Sidebar.cshtml` that both dims the page
+  and toggles the menu closed — omitted when the sidebar was rebuilt as `BenNav`, and now restored.
+  Verified: tapping the backdrop closes the menu.

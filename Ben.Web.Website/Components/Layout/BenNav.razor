@@ -98,6 +98,12 @@
     }
 </aside>
 
+@* The template's own backdrop, from _Sidebar.cshtml. It does two jobs on small screens: dims the
+   page behind the open menu, and closes it when tapped. Without it the menu is a one-way door —
+   the open sidebar is 288px wide starting at x:0, which covers the hamburger that opened it, so
+   the only way out is to pick a link. CSS shows it only while .app-mobile-menu-open is set. *@
+<div class="backdrop" data-action="toggle-swap" data-toggleclass="app-mobile-menu-open"></div>
+
 @code {
     /// <summary>Passed down by MainLayout — see the note at its call site for why these are
     /// parameters rather than reads of the token store.</summary>
