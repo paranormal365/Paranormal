@@ -58,6 +58,38 @@ var layoutSettings = (function () {
     return s;
 })();
 
+/**
+ * Re-applies the stored theme and layout classes to <html>.
+ *
+ * Needed because Blazor's enhanced navigation patches the document element from the server's
+ * response, and the server never renders these classes — they are a client-side preference. So
+ * every navigation silently wiped `set-nav-minified` and friends: the sidebar stayed narrow
+ * (its width having been set before the wipe) while the labels un-faded and bled past its edge.
+ *
+ * Idempotent, so it is safe to call on every navigation.
+ */
+function benApplyLayoutSettings() {
+    try {
+        var raw = localStorage.getItem('layoutSettings');
+        var s = raw ? (JSON.parse(raw) || {}) : {};
+
+        if (s.theme === 'light' || s.theme === 'dark') {
+            htmlRoot.setAttribute('data-bs-theme', s.theme);
+        }
+
+        if (s.htmlRoot) {
+            var kept = String(s.htmlRoot)
+                .split(/[^\w-]+/)
+                .filter(function (c) { return /^set-/i.test(c); });
+            kept.forEach(function (c) {
+                if (!htmlRoot.classList.contains(c)) htmlRoot.classList.add(c);
+            });
+        }
+    } catch (e) { /* storage unavailable — the page still renders, just without the preference */ }
+}
+
+// App.razor registers this against Blazor's "enhancedload" once Blazor has loaded.
+
 function saveSettings() {
     try {
         layoutSettings.htmlRoot = String(htmlRoot.className)

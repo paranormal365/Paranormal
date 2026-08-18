@@ -21,10 +21,14 @@
 
     @* No logo here: the brand lives in the header, ahead of the sidebar toggle. *@
 
-    <div class="menu-filter">
-        <input type="text" class="form-control" placeholder="Filter menu"
-               aria-label="Filter menu" value="@_filter" @oninput="OnFilterInput" />
-    </div>
+    @* The template's own filter markup, class names and id included. Those are not decoration:
+       the minified-sidebar rule is `.app-menu-filter-container #searchInput { visibility: hidden }`,
+       so a differently-named wrapper leaves the box on screen when the sidebar shrinks to 70px. *@
+    <form class="app-menu-filter-container px-4" @onsubmit:preventDefault="true">
+        <input type="text" class="form-control" id="searchInput" placeholder="Filter"
+               autocomplete="off" aria-label="Filter menu"
+               value="@_filter" @oninput="OnFilterInput" />
+    </form>
 
     <nav class="primary-nav flex-grow-1 custom-scroll">
         <ul class="nav-menu">

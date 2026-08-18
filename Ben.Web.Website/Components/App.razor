@@ -69,6 +69,14 @@
     <script src="/_framework/blazor.web.js" autostart="false"></script>
     <script>
         document.addEventListener("DOMContentLoaded", function() {
+            // Enhanced navigation patches <html> from the server's response, which does not carry
+            // the reader's layout preference (minified nav, dark nav, fixed header) — those live
+            // in localStorage. Re-assert them after each navigation or they vanish on the first
+            // link click. Registered here rather than in ben-boot.js because Blazor only exists
+            // once this script has run.
+            Blazor.addEventListener("enhancedload", function () {
+                if (typeof benApplyLayoutSettings === "function") benApplyLayoutSettings();
+            });
             Blazor.start();
         });
 

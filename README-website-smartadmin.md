@@ -483,3 +483,18 @@ nav nests three `<ul>` deep and styles `.primary-nav ul ul ul`, so the depth cos
 Two changes made it work: the item markup is rendered **recursively** rather than as two fixed
 levels, and the auto-open check recurses too — landing on `/admin/users` opens Administration *and*
 the Users group beneath it, where a one-level check would have opened neither.
+
+**Minified sidebar: labels bled past the edge.** Reported as "Home text appears when you minimize",
+and the cause was not styling at all — **Blazor's enhanced navigation rewrites `<html>` from the
+server's response, and the layout classes are a client-side preference the server never renders.**
+So `set-nav-minified` survived exactly until the first link click, after which the sidebar stayed
+narrow (its width already applied) while the labels un-faded and spilled out of it.
+
+`ben-boot.js` now exposes `benApplyLayoutSettings()`, and `App.razor` re-asserts it on Blazor's
+`enhancedload` — registered there rather than in the script because `Blazor` only exists after
+`blazor.web.js` runs. This affects every layout toggle, not just minify: nav-dark and fixed-header
+were being lost on navigation too.
+
+Also fixed alongside it: the menu filter kept the wrong markup. The template hides it with
+`.app-menu-filter-container #searchInput`, so a differently-named wrapper left the box on screen at
+70px wide. It uses the template's own class and id now.
