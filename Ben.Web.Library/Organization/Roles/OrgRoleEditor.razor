@@ -83,6 +83,7 @@ else if (_role is not null)
                         <tr>
                             <td class="@(section.ParentTable is not null ? "ps-4" : "")">
                                 @section.DisplayName
+                                <div class="text-secondary small">@section.Description</div>
                             </td>
                             @foreach (var action in new[] { OrganizationSecurityAction.Create, OrganizationSecurityAction.Read, OrganizationSecurityAction.Update, OrganizationSecurityAction.Delete })
                             {
@@ -201,34 +202,57 @@ else if (_role is not null)
 
     private static readonly IReadOnlyList<PermissionSection> Sections =
     [
-        new("Organization Settings",   OrganizationSecurityTable.Organization,            null),
-        new("Org Settings (Map/Dir)",   OrganizationSecurityTable.OrganizationSettings,    OrganizationSecurityTable.Organization),
-        new("Addresses",               OrganizationSecurityTable.OrganizationAddress,     null),
-        new("Address Types",           OrganizationSecurityTable.OrganizationAddressType, OrganizationSecurityTable.OrganizationAddress),
-        new("Address: Member Access",  OrganizationSecurityTable.OrganizationAddressMemberAccess, OrganizationSecurityTable.OrganizationAddress),
-        new("Address: Search Settings",OrganizationSecurityTable.OrganizationAddressSearch,       OrganizationSecurityTable.OrganizationAddress),
-        new("Emails",                  OrganizationSecurityTable.OrganizationEmail,       null),
-        new("Email Types",             OrganizationSecurityTable.OrganizationEmailType,   OrganizationSecurityTable.OrganizationEmail),
-        new("Phones",                  OrganizationSecurityTable.OrganizationPhone,       null),
-        new("Phone Types",             OrganizationSecurityTable.OrganizationPhoneType,   OrganizationSecurityTable.OrganizationPhone),
-        new("Links",                   OrganizationSecurityTable.OrganizationLink,        null),
-        new("Link Types",              OrganizationSecurityTable.OrganizationLinkType,    OrganizationSecurityTable.OrganizationLink),
-        new("Notes",                   OrganizationSecurityTable.OrganizationNote,        null),
-        new("Note Types",              OrganizationSecurityTable.OrganizationNoteType,    OrganizationSecurityTable.OrganizationNote),
-        new("Pages (CMS)",             OrganizationSecurityTable.OrganizationPage,        null),
-        new("CMS Sections",            OrganizationSecurityTable.CmsSection,              OrganizationSecurityTable.OrganizationPage),
-        new("Member Groups",           OrganizationSecurityTable.OrgMemberGroup,          null),
-        new("Membership Applications", OrganizationSecurityTable.MembershipRequests,      null),
-        new("Files",                   OrganizationSecurityTable.OrganizationFiles,       null),
-        new("Investigations",          OrganizationSecurityTable.Investigation,           null),
-        new("Equipment",               OrganizationSecurityTable.Equipment,               null),
-        new("Equipment Checkouts",     OrganizationSecurityTable.EquipmentCheckout,       OrganizationSecurityTable.Equipment),
+        new("Organization Settings",   OrganizationSecurityTable.Organization,            null,
+            "Edit the organization's core profile — name, description, and general details."),
+        new("Org Settings (Map/Dir)",   OrganizationSecurityTable.OrganizationSettings,    OrganizationSecurityTable.Organization,
+            "Manage org-level display settings, such as whether the address map and directions link are shown."),
+        new("Addresses",               OrganizationSecurityTable.OrganizationAddress,     null,
+            "Manage the organization's street addresses."),
+        new("Address Types",           OrganizationSecurityTable.OrganizationAddressType, OrganizationSecurityTable.OrganizationAddress,
+            "Manage the labels available for addresses (e.g. \"Meeting Location\", \"Mailing\")."),
+        new("Address: Member Access",  OrganizationSecurityTable.OrganizationAddressMemberAccess, OrganizationSecurityTable.OrganizationAddress,
+            "Manage which specific members can see an address marked visible to Specific Members only."),
+        new("Address: Search Settings",OrganizationSecurityTable.OrganizationAddressSearch,       OrganizationSecurityTable.OrganizationAddress,
+            "Configure whether an address is searchable and its proximity search settings."),
+        new("Emails",                  OrganizationSecurityTable.OrganizationEmail,       null,
+            "Manage the organization's email addresses."),
+        new("Email Types",             OrganizationSecurityTable.OrganizationEmailType,   OrganizationSecurityTable.OrganizationEmail,
+            "Manage the labels available for email addresses (e.g. \"General\", \"Support\")."),
+        new("Phones",                  OrganizationSecurityTable.OrganizationPhone,       null,
+            "Manage the organization's phone numbers."),
+        new("Phone Types",             OrganizationSecurityTable.OrganizationPhoneType,   OrganizationSecurityTable.OrganizationPhone,
+            "Manage the labels available for phone numbers."),
+        new("Links",                   OrganizationSecurityTable.OrganizationLink,        null,
+            "Manage the organization's website and social links."),
+        new("Link Types",              OrganizationSecurityTable.OrganizationLinkType,    OrganizationSecurityTable.OrganizationLink,
+            "Manage the labels available for links (e.g. \"Website\", \"Facebook\")."),
+        new("Notes",                   OrganizationSecurityTable.OrganizationNote,        null,
+            "Manage internal notes kept about the organization."),
+        new("Note Types",              OrganizationSecurityTable.OrganizationNoteType,    OrganizationSecurityTable.OrganizationNote,
+            "Manage the labels available for notes."),
+        new("Pages (CMS)",             OrganizationSecurityTable.OrganizationPage,        null,
+            "Create and edit the organization's public CMS pages."),
+        new("CMS Sections",            OrganizationSecurityTable.CmsSection,              OrganizationSecurityTable.OrganizationPage,
+            "Edit the content sections within a CMS page."),
+        new("Member Groups",           OrganizationSecurityTable.OrgMemberGroup,          null,
+            "Manage member sub-groups within the organization."),
+        new("Membership Applications", OrganizationSecurityTable.MembershipRequests,      null,
+            "Review and respond to applications to join the organization."),
+        new("Files",                   OrganizationSecurityTable.OrganizationFiles,       null,
+            "Manage files the organization has uploaded."),
+        new("Investigations",          OrganizationSecurityTable.Investigation,           null,
+            "Schedule and edit the organization's investigations. Case managers, visit leads, and org owners/administrators can also edit their own regardless of this permission."),
+        new("Equipment",               OrganizationSecurityTable.Equipment,               null,
+            "Manage the organization's own equipment — adding and editing gear, its photos, and its service history. Covers the group's own property only; any active member can already view it."),
+        new("Equipment Checkouts",     OrganizationSecurityTable.EquipmentCheckout,       OrganizationSecurityTable.Equipment,
+            "Approve or deny checkout requests and hand equipment out and back in. Separate from Equipment so someone can run the loans desk without managing the catalog."),
     ];
 
     private sealed record PermissionSection(
         string DisplayName,
         OrganizationSecurityTable Table,
-        OrganizationSecurityTable? ParentTable);
+        OrganizationSecurityTable? ParentTable,
+        string Description);
 
     private OrganizationRoleRecord? _role;
     private IReadOnlyList<OrganizationRoleMembershipRecord> _members = [];
