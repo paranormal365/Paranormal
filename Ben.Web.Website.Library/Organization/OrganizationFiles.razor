@@ -70,9 +70,9 @@
                         @{ var fa = (OrganizationFileRecord)context; }
                         @if (fa.DatePublished.HasValue)
                         {
-                            <span class="small text-success" title="@fa.DatePublished.Value.ToViewerLocalTime(UserState).ToString("g")">
+                            <span class="small text-success" title="@fa.DatePublished.Value.ToViewerLocalTime(UserState).ToDisplayDateTime()">
                                 @fa.PublishedByDisplayName<br/>
-                                <em class="text-secondary">@fa.DatePublished.Value.ToViewerLocalTime(UserState).ToString("d")</em>
+                                <em class="text-secondary">@fa.DatePublished.Value.ToViewerLocalTime(UserState).ToDisplayDate()</em>
                             </span>
                         }
                         else { <span class="text-secondary small">—</span> }
@@ -143,7 +143,7 @@
                                 <GridColumn Title="Deleted" Width="130px">
                                     <Template>
                                         @{ var log = (OrganizationFileDeleteLogRecord)context; }
-                                        @log.DateDeleted.ToViewerLocalTime(UserState).ToString("g")
+                                        @log.DateDeleted.ToViewerLocalTime(UserState).ToDisplayDateTime()
                                     </Template>
                                 </GridColumn>
                             </GridColumns>

@@ -63,7 +63,7 @@
                 <GridColumn Field="@nameof(OrganizationListItemResponse.DateCreated)" Title="Created" Width="110px">
                     <Template>
                         @{ var item = (OrganizationListItemResponse)context; }
-                        @item.DateCreated.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")
+                        @item.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()
                     </Template>
                 </GridColumn>
                 @if (UserState.IsSuperAdmin)

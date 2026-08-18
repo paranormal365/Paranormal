@@ -1,0 +1,110 @@
+@page "/attending/{Token}"
+@namespace Ben.Web.Website.Library.Organization.Public
+@inject IBenAdminClient AdminClient
+
+<PageTitle>You're coming</PageTitle>
+
+@* The other end of the emailed link. Confirms the address, makes an account if there is not one,
+   and records that they are coming — all in one click, because the person on the other end of this
+   wanted to go to a ghost walk, not to sign up for a website. *@
+
+<div class="container py-5" style="max-width:640px;">
+
+    @if (_loading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <BenLoaderOverlay Visible="true" Text="Checking your link…" />
+        </div>
+    }
+    else if (_confirmed is not null)
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <h3 class="mb-3">You're coming</h3>
+                <p class="mb-1"><strong>@_confirmed.Title</strong></p>
+                <p class="text-secondary mb-4">
+                    @_confirmed.StartDateTime.ToLocalTime().ToDisplayDateTime()
+                    · @_confirmed.OrganizationName
+                </p>
+
+                @if (_confirmed.EventUrlName is string slug)
+                {
+                    <a class="btn btn-primary"
+                       href="@($"/o/{_confirmed.OrganizationUrlName}/events/{slug}")">
+                        See the details
+                    </a>
+                }
+
+                @* Said plainly, because somebody who typed an email into a box has just acquired an
+                   account and should hear it from us rather than discover it later. *@
+                <p class="text-secondary small mt-4 mb-0">
+                    We've made you an account with this email address so you can see what you're
+                    going to. You don't need a password — but you can set one any time from your
+                    profile if you'd like to sign in.
+                </p>
+            </div>
+        </div>
+    }
+    else if (_invite is not null)
+    {
+        <div class="card">
+            <div class="card-body py-5 text-center">
+                <h3 class="mb-3">Confirm you're coming</h3>
+                <p class="mb-1"><strong>@_invite.Title</strong></p>
+                <p class="text-secondary mb-4">
+                    @_invite.StartDateTime.ToLocalTime().ToDisplayDateTime()
+                    · @_invite.OrganizationName
+                </p>
+
+                @if (_error is not null)
+                {
+                    <div class="alert alert-danger">@_error</div>
+                }
+
+                @* A click rather than confirming on load: a link prefetched by a mail client or a
+                   scanner would otherwise sign somebody up without them ever seeing this page. *@
+                <button type="button" class="btn btn-primary" @onclick="ConfirmAsync" disabled="@(!(!_busy))">Yes, I'm coming</button>
+
+                <p class="text-secondary small mt-4 mb-0">Confirming as @_invite.Email.</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <h4 class="mb-2">That link doesn't work</h4>
+                <p class="text-secondary mb-3">
+                    It may have expired, or already been used — a confirmation link works once.
+                </p>
+                <a class="btn btn-outline-secondary" href="/events">See what else is on</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+
+    private EventAttendanceInviteInfo? _invite;
+    private EventAttendanceConfirmation? _confirmed;
+    private bool _loading = true, _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _invite  = await AdminClient.GetEventAttendanceInviteAsync(Token);
+        _loading = false;
+    }
+
+    private async Task ConfirmAsync()
+    {
+        _busy = true; _error = null;
+
+        _confirmed = await AdminClient.ConfirmEventAttendanceAsync(Token);
+        if (_confirmed is null)
+            _error = "That couldn't be confirmed — the event may have filled up or closed.";
+
+        _busy = false;
+    }
+}

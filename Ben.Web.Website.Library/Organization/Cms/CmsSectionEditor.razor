@@ -120,7 +120,7 @@ else if (SectionType is CmsSectionType.EmbeddedInvestigations or CmsSectionType.
                             <span class="fw-semibold">@choice.Title</span>
                             @if (choice.Date is { } d)
                             {
-                                <span class="text-secondary small"> — @d.ToString("d MMM yyyy")</span>
+                                <span class="text-secondary small"> — @d.ToDisplayDate()</span>
                             }
                             @if (!choice.IsAlreadyPublic)
                             {
@@ -276,7 +276,7 @@ else if (SectionType == CmsSectionType.CaseMedia)
                                         </div>
                                         @if (file.When is { } w)
                                         {
-                                            <div class="text-secondary" style="font-size:.75rem;">@w.ToString("d MMM yyyy")</div>
+                                            <div class="text-secondary" style="font-size:.75rem;">@w.ToDisplayDate()</div>
                                         }
                                     </label>
                                 </div>

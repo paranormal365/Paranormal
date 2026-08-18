@@ -26,10 +26,7 @@
     @if (_editingManually)
     {
         @* Manual edit mode — show textbox + Done + Clear *@
-        <TelerikTextBox Value="@_currentValue"
-                        ValueChanged="@OnTextChanged"
-                        PlaceHolder="e.g. bi bi-house, t:Home, fas fa-star"
-                        Width="200px" />
+        <input type="text" class="form-control" value="@_currentValue" @oninput="@(e => OnTextChanged(e.Value?.ToString() ?? string.Empty))" />
         <button type="button" class="btn btn-success btn-sm" @onclick="@(() => _editingManually = false)" title="Done"><BenIcon Name="check" /></button>
         <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@ClearAsync" title="Clear icon"><BenIcon Name="x" /></button>
     }

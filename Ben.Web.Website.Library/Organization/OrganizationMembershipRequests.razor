@@ -38,7 +38,7 @@
                     <GridColumn Title="Applied" Width="110px">
                         <Template>
                             @{ var applied = (OrganizationMembershipRequestRecord)context; }
-                            @applied.DateCreated.ToViewerLocalTime(UserState).ToString("d")
+                            @applied.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()
                         </Template>
                     </GridColumn>
                     <GridCommandColumn Width="260px">
@@ -76,7 +76,7 @@
                     <GridColumn Title="Date" Width="110px">
                         <Template>
                             @{ var responded = (OrganizationMembershipRequestRecord)context; }
-                            @responded.DateResponded?.ToViewerLocalTime(UserState).ToString("d")
+                            @responded.DateResponded?.ToViewerLocalTime(UserState).ToDisplayDate()
                         </Template>
                     </GridColumn>
                 </GridColumns>

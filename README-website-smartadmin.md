@@ -550,3 +550,28 @@ flex row where the input takes the width, "Add" broke onto a second line beneath
 control grew to 55px. `.btn` keeps its label on one line now, and a button in a flex row no longer
 shrinks to make room for the field beside it. Worth noting this looked identical to the earlier
 `display:block` icon bug and was not: the icon was already inline, the button was simply too narrow.
+
+### Wave I — `Organization/Public/` (the last wave)
+
+The public microsite: `/o/{UrlName}` and its pages, cases and events, plus `/events` and
+`/attending/{token}`. **`OrgCmsPagePreview` is un-deferred** — the CMS preview renders public
+sections, so it lands with them. Only 4 buttons and 8 loaders to convert; these pages were already
+plain Bootstrap.
+
+**Verified on the anonymous path**, which is the point of this wave: signed out, `/o/benco`,
+`/o/benco/cases`, the case detail and `/events` all return 200 and render real content — including
+a graceful "has not published a home page yet" for an org with no CMS page. The case detail shows
+its summary, community rating with "Sign in to vote", and timeline without a session.
+
+**Dates needed a third pass.** Each sweep only covered files that existed at the time, so this wave
+arrived with `"dddd d MMMM yyyy"`, `"MMM d, yyyy"` and the standard specifiers `"g"` and `"d"` —
+"Opened June 5, 2026" is what surfaced it. The final sweep matched on *shape* rather than a list of
+known formats, and now the only literal date formats left in the library are two
+`"yyyy-MM-ddTHH:mm"` — the value an `<input type="datetime-local">` requires.
+
+## Port complete
+
+All nine waves are in. **74 routes**, every page of `Ben.Web.Library` ported. Telerik is down from
+~1,340 tags to **~150**, all deliberate: 50 templated dropdowns, 36 grids, 23 date/time pickers,
+9 rich-text editors, 5 colour pickers, 4 maps, 4 context menus, the scheduler, and a handful of
+icons whose *data* names a Telerik icon.

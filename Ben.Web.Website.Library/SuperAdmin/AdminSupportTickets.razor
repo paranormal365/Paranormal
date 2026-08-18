@@ -83,7 +83,7 @@
                             </div>
                             <div class="text-secondary small">
                                 @ticket.FromName &lt;@ticket.FromEmail&gt;
-                                · @ticket.DateCreated.ToLocalTime().ToString("d MMM yyyy, HH:mm")
+                                · @ticket.DateCreated.ToLocalTime().ToDisplayDateTime()
                                 @if (ticket.ReplyCount > 0)
                                 {
                                     <span> · @ticket.ReplyCount @(ticket.ReplyCount == 1 ? "reply" : "replies")</span>
@@ -110,7 +110,7 @@
                                 <div class="card-body py-2">
                                     <div class="text-secondary small mb-1">
                                         @(reply.IsFromStaff ? (reply.AuthorDisplayName ?? "Staff") : ticket.FromName)
-                                        · @reply.DateCreated.ToLocalTime().ToString("d MMM, HH:mm")
+                                        · @reply.DateCreated.ToLocalTime().ToDisplayDateTime()
                                         @if (reply.IsInternalNote)
                                         {
                                             <span class="badge bg-warning text-dark ms-1">Internal note</span>
