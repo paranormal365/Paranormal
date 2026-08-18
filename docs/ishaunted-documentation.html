@@ -1,0 +1,1172 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>IsHaunted.com — Product Documentation</title>
+<style>
+@page { size: A4; margin: 20mm 18mm 18mm; }
+@page { @bottom-center { content: counter(page); } }
+
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  font-family: "Charter", "Iowan Old Style", Georgia, serif;
+  font-size: 10.5pt; line-height: 1.55; color: #1a1a1a; margin: 0;
+}
+h1, h2, h3, .doc-kicker, .toc-aud, .cover-meta, th {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+/* ── Cover ─────────────────────────────────────────────────────────── */
+.cover { height: 247mm; display: flex; flex-direction: column; page-break-after: always; }
+.cover-top { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.cover-rule { width: 54px; height: 4px; background: #6d28d9; margin-bottom: 26px; }
+.cover h1 { font-size: 40pt; line-height: 1.05; margin: 0 0 10px; letter-spacing: -0.02em; }
+.cover .lede { font-size: 14pt; color: #444; margin: 0 0 34px; max-width: 118mm; line-height: 1.45; }
+.cover-meta { font-size: 9.5pt; color: #666; letter-spacing: 0.04em; text-transform: uppercase; }
+.cover-meta div { margin-bottom: 5px; }
+.status {
+  border: 1px solid #d8d3ea; background: #f7f5fd; border-radius: 4px;
+  padding: 14px 18px; font-size: 9.5pt; line-height: 1.5; color: #332b52;
+}
+.status strong { display: block; margin-bottom: 4px; font-family: "Helvetica Neue", sans-serif; }
+
+/* ── Contents ──────────────────────────────────────────────────────── */
+.contents { page-break-after: always; }
+.contents h2 { font-size: 20pt; margin: 0 0 22px; }
+.toc { list-style: none; padding: 0; margin: 0; }
+.toc-section {
+  font-family: "Helvetica Neue", sans-serif; font-size: 8.5pt; font-weight: 700;
+  letter-spacing: 0.09em; text-transform: uppercase; color: #6d28d9;
+  margin: 22px 0 8px; padding-bottom: 5px; border-bottom: 1px solid #e6e2f2;
+}
+.toc-section:first-child { margin-top: 0; }
+/* The section header is uppercase; its nested list must not inherit that — the first
+   render turned every document title and summary into shouting. */
+.toc ul {
+  list-style: none; padding: 0; margin: 0;
+  text-transform: none; letter-spacing: normal; font-weight: 400; color: #1a1a1a;
+}
+.toc ul li { margin: 0 0 11px; }
+.toc a { text-decoration: none; color: #1a1a1a; display: flex; align-items: baseline; gap: 10px; }
+.toc-title { font-size: 11.5pt; font-weight: 600; font-family: "Helvetica Neue", sans-serif; }
+.toc-aud { font-size: 8pt; color: #888; margin-left: auto; white-space: nowrap; }
+.toc-summary { font-size: 9.5pt; color: #555; margin-top: 1px; }
+
+/* ── Documents ─────────────────────────────────────────────────────── */
+.doc { page-break-before: always; }
+.doc-head { border-bottom: 2px solid #1a1a1a; padding-bottom: 14px; margin-bottom: 22px; }
+.doc-kicker {
+  font-size: 8.5pt; font-weight: 700; letter-spacing: 0.09em;
+  text-transform: uppercase; color: #6d28d9; margin-bottom: 7px;
+}
+.doc h1 { font-size: 25pt; margin: 0 0 7px; letter-spacing: -0.015em; }
+.doc-summary { font-size: 11.5pt; color: #444; margin: 0 0 9px; }
+.doc-aud { font-size: 9pt; color: #777; }
+
+.doc h2 {
+  font-size: 13.5pt; margin: 26px 0 9px; padding-top: 3px;
+  page-break-after: avoid;
+}
+.doc h3 { font-size: 11.5pt; margin: 20px 0 7px; page-break-after: avoid; }
+p { margin: 0 0 11px; }
+ul, ol { margin: 0 0 12px; padding-left: 20px; }
+li { margin-bottom: 5px; }
+li > ul, li > ol { margin-top: 5px; }
+strong { font-weight: 700; }
+code {
+  font-family: "SF Mono", Menlo, monospace; font-size: 9pt;
+  background: #f2f0f7; padding: 1px 4px; border-radius: 3px;
+}
+blockquote {
+  margin: 0 0 12px; padding: 9px 15px; border-left: 3px solid #c4bce0;
+  background: #f9f8fc; color: #3d3550; font-style: italic;
+}
+blockquote p:last-child { margin-bottom: 0; }
+
+table {
+  width: 100%; border-collapse: collapse; margin: 0 0 14px;
+  font-size: 9.5pt; page-break-inside: avoid;
+}
+th {
+  text-align: left; padding: 7px 9px; background: #f2f0f7;
+  border-bottom: 1.5px solid #c4bce0; font-size: 8.5pt;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+td { padding: 7px 9px; border-bottom: 1px solid #e8e5ef; vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+
+/* Keep a heading with what follows it wherever the renderer allows. */
+h1, h2, h3 { break-after: avoid-page; }
+</style></head>
+<body>
+
+<div class="cover">
+  <div class="cover-top">
+    <div class="cover-rule"></div>
+    <h1>IsHaunted.com</h1>
+    <p class="lede">The complete product documentation — every screen, rule and safeguard,
+      written for the people who use it.</p>
+    <div class="cover-meta">
+      <div>Product Documentation</div>
+      <div>9 documents &middot; 6 sections</div>
+      <div>17 August 2026</div>
+    </div>
+  </div>
+  <div class="status">
+    <strong>About this document</strong>
+    This is the in-product help, reproduced in full and unaltered — the same text the
+    application serves to its users. It describes the software as built. It contains no
+    business, market or financial information, and no usage figures.
+  </div>
+</div>
+
+<div class="contents">
+  <h2>Contents</h2>
+  <ul class="toc"><li class="toc-section">Getting Started<ul><li><a href="#getting-started"><span class="toc-title">What IsHaunted.com Is</span><span class="toc-aud">Public — no account needed</span></a><div class="toc-summary">How the site works and who it is for.</div></li></ul></li><li class="toc-section">For Clients<ul><li><a href="#requesting-an-investigation"><span class="toc-title">Requesting an Investigation</span><span class="toc-aud">Public — no account needed</span></a><div class="toc-summary">How to ask a group to look into what you have experienced.</div></li><li><a href="#your-case"><span class="toc-title">Following Your Case</span><span class="toc-aud">Signed-in users</span></a><div class="toc-summary">The case page, logging occurrences, and who can see what.</div></li></ul></li><li class="toc-section">For Group Members<ul><li><a href="#working-a-case"><span class="toc-title">Working a Case</span><span class="toc-aud">Group members</span></a><div class="toc-summary">The case page from the investigator&#x27;s side — timeline, files, investigations.</div></li></ul></li><li class="toc-section">Your Account<ul><li><a href="#your-profile"><span class="toc-title">Your Profile and Photos</span><span class="toc-aud">Signed-in users</span></a><div class="toc-summary">Display name, contact details, public and private photos, and who can see them.</div></li><li><a href="#your-equipment"><span class="toc-title">Your Equipment</span><span class="toc-aud">Signed-in users</span></a><div class="toc-summary">Logging the gear you own, adding photos, and what stays private.</div></li><li><a href="#borrowing-equipment"><span class="toc-title">Borrowing Equipment</span><span class="toc-aud">Signed-in users</span></a><div class="toc-summary">Asking to borrow gear, handing it over, and getting it back.</div></li></ul></li><li class="toc-section">Group Administration<ul><li><a href="#organization-administration"><span class="toc-title">Administering a Group</span><span class="toc-aud">Group owners &amp; administrators</span></a><div class="toc-summary">Settings, members, requests, and the decisions only owners and administrators make.</div></li></ul></li><li class="toc-section">Site Administration<ul><li><a href="#site-administration"><span class="toc-title">Site Administration</span><span class="toc-aud">Platform administrators</span></a><div class="toc-summary">Sitewide settings, the clipart library, and the audit log.</div></li></ul></li></ul>
+</div>
+
+
+<section class="doc" id="getting-started">
+  <div class="doc-head">
+    <div class="doc-kicker">Getting Started</div>
+    <h1>What IsHaunted.com Is</h1>
+    <p class="doc-summary">How the site works and who it is for.</p>
+    <div class="doc-aud">Written for: <strong>Public — no account needed</strong></div>
+  </div>
+  <p>IsHaunted.com connects people who have experienced something unexplained at a property with
+paranormal investigation groups who can look into it.</p>
+<h2>The short version</h2>
+<p>A <strong>client</strong> describes what has been happening and asks one or more <strong>groups</strong> to take a look.
+A group that accepts opens a <strong>case</strong>. From there, the client and the investigators share a
+timeline of what happened and what was found, and the group schedules <strong>investigations</strong> — visits
+to the property.</p>
+<p>Nothing about a case is public unless the group publishes it, and even then the client's name is
+replaced by whatever name they chose.</p>
+<h2>Who does what</h2>
+<table>
+<thead>
+<tr>
+<th>You are</th>
+<th>You can</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A visitor</td>
+<td>Browse groups and any cases that have been published.</td>
+</tr>
+<tr>
+<td>A client</td>
+<td>Ask groups to investigate, log what happens, and follow the case.</td>
+</tr>
+<tr>
+<td>A group member</td>
+<td>Work cases, record findings, attend investigations.</td>
+</tr>
+<tr>
+<td>A group owner or administrator</td>
+<td>Configure the group, manage members, accept or decline requests.</td>
+</tr>
+</tbody>
+</table>
+<h2>Voting on a published case</h2>
+<p>Anyone with an account can vote on a published case, and on individual pieces of evidence within
+it. There are three answers: <strong>confirms</strong>, <strong>inconclusive</strong>, and <strong>disputes</strong>. You get one vote,
+and changing your mind replaces it rather than adding a second.</p>
+<p>Alongside the three counts you will see a single <strong>score</strong>. It is the votes added up, with confirms
+counting <strong>+1</strong>, disputes <strong>−1</strong>, and inconclusive <strong>0</strong> — so a green <strong>+4</strong> means the people who
+looked lean towards something being there, and a red <strong>−3</strong> means they lean the other way.</p>
+<p>An inconclusive vote is not a wasted one. It counts towards how many people looked while moving the
+score nowhere, which is exactly what "I've seen it and I genuinely can't say" should do.</p>
+<p>The score is always shown with the number of votes behind it, because <strong>+4</strong> from five people and
+<strong>+4</strong> from ninety are not the same claim. A score of <strong>0</strong> can mean the case is evenly split or
+that everyone was undecided — the counts beside it tell you which.</p>
+<h2>Getting an account</h2>
+<p>You need an account to request an investigation or join a group. Accounts are free, and the
+address you sign in with is never shown publicly.</p>
+<h2>Finding help</h2>
+<p>Every page that does something non-obvious has a small <strong>?</strong> beside it. That opens the relevant
+part of this documentation in a new tab, so you never lose what you were in the middle of.</p>
+<h2>Getting in touch</h2>
+<p><strong>Contact</strong>, in the footer, reaches the people who run the site — not a group. Use it for anything
+about the site itself: an account you cannot get into, something that looks broken, a question this
+documentation does not answer. To ask a group to investigate something, send a request instead;
+that is a different thing entirely and goes to the group, not to us.</p>
+<p>You do not need an account to write in. After you send the form you are given a <strong>tracking link</strong> —
+keep it. It is how you read the reply and see whether the message has been picked up, and it is the
+only way back to a message sent without an account. If you were signed in when you wrote, the
+message is attached to your account as well.</p>
+</section>
+<section class="doc" id="requesting-an-investigation">
+  <div class="doc-head">
+    <div class="doc-kicker">For Clients</div>
+    <h1>Requesting an Investigation</h1>
+    <p class="doc-summary">How to ask a group to look into what you have experienced.</p>
+    <div class="doc-aud">Written for: <strong>Public — no account needed</strong></div>
+  </div>
+  <h2>Before you start</h2>
+<p>You will be asked to describe what has happened. Write it as plainly as you can, in the order it
+happened. Investigators find dates, times and who was present far more useful than adjectives —
+"three knocks on the north wall, about 2am, twice last week" is worth more than "terrifying
+activity".</p>
+<h2>Choosing a group</h2>
+<p>Use <strong>Find a Group</strong> to see groups working in your area. You can send the same request to more
+than one; each decides independently whether to take it on.</p>
+<h2>What happens next</h2>
+<ol>
+<li>The group reviews your request. They may mark it as under review while they discuss it.</li>
+<li>If they accept, a <strong>case</strong> is opened and you get access to it under <strong>My Cases</strong>.</li>
+<li>If they decline, you are told, and you can send the request to a different group without
+   writing it again.</li>
+</ol>
+<h2>Your address</h2>
+<p>Groups need your address to reach you — that is the point of the request. It is never shown on
+public pages, and it is not shared with groups you did not ask.</p>
+</section>
+<section class="doc" id="your-case">
+  <div class="doc-head">
+    <div class="doc-kicker">For Clients</div>
+    <h1>Following Your Case</h1>
+    <p class="doc-summary">The case page, logging occurrences, and who can see what.</p>
+    <div class="doc-aud">Written for: <strong>Signed-in users</strong></div>
+  </div>
+  <h2>The case page</h2>
+<p><strong>My Cases</strong> lists every case you are part of, whether you opened it or were invited onto it by
+someone else. Opening one shows the calendar, everything logged so far, files, and your message
+thread with the investigators.</p>
+<h2>Logging an occurrence</h2>
+<p>Use <strong>Log Occurrence</strong> whenever something happens. Record it while it is fresh — the date and time
+matter more than polish. You can attach photos, audio, or video, and you can tag what kind of
+experience it was so investigators can group similar reports.</p>
+<p>Several people can report the same moment. That is expected, not a problem: the timeline shows
+entries that share a time together and labels them, because two independent accounts of one event
+are more useful than one.</p>
+<h2>Who sees what</h2>
+<table>
+<thead>
+<tr>
+<th>Marked</th>
+<th>Seen by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Internal</td>
+<td>The investigators only.</td>
+</tr>
+<tr>
+<td>Shared with you</td>
+<td>The investigators and you.</td>
+</tr>
+<tr>
+<td>Public</td>
+<td>Anyone, if the case is ever published.</td>
+</tr>
+</tbody>
+</table>
+<p>Your own reports are always visible to you and to the group working your case.</p>
+<h2>How you are named publicly</h2>
+<p>If a case is ever published, you choose the name shown — "A local family", "The homeowner", or
+anything you prefer. Set it on your case page under <strong>How You're Named Publicly</strong>.</p>
+<p>Your investigators always see your real name. They cannot work a case while blind to who reported
+it, so the alias applies to public pages and shared documents only.</p>
+</section>
+<section class="doc" id="working-a-case">
+  <div class="doc-head">
+    <div class="doc-kicker">For Group Members</div>
+    <h1>Working a Case</h1>
+    <p class="doc-summary">The case page from the investigator&#x27;s side — timeline, files, investigations.</p>
+    <div class="doc-aud">Written for: <strong>Group members</strong></div>
+  </div>
+  <h2>The case tabs</h2>
+<p><strong>Overview</strong> carries the original request exactly as the client submitted it, shown separately
+from the case description so the two never blur together as the case is edited.</p>
+<p><strong>Timeline</strong> is the working record. Every entry has a visibility: internal to the group, shared
+with the client, or public. Choose deliberately — "internal" means not shared onward, not hidden
+from its author.</p>
+<p><strong>Investigations</strong> covers scheduled visits, attendees and RSVPs, and each visit's binder.</p>
+<h2>Binders</h2>
+<p>A binder is the case timeline filtered to one investigation. Entries recorded during a visit stay
+on the main case timeline as well — that is the point of reusing it rather than keeping a separate
+store. Filter the timeline by investigation to see just that visit.</p>
+<h2>Instrument readings</h2>
+<p>Readings recorded during a visit go in as <strong>Instrument Reading</strong> entries. Record the value, its
+unit, and what the ambient baseline was — a reading without its baseline cannot be judged later.</p>
+<h2>Entries at the same time</h2>
+<p>Two people often record the same moment, and unrelated things sometimes coincide. Entries sharing
+an event time are shown together and labelled "1 of 2 at this time". The ordering is stable, so
+you can refer to an entry by position and have it still be there tomorrow.</p>
+<h2>The investigations map</h2>
+<p>The group's <strong>Investigations</strong> tab shows every visit the group has run, on one map and in two
+lists: what is coming up, and what has already happened. Case-bound visits and ones with no client
+case sit together, because they are the same kind of work.</p>
+<p>Visits at the same spot share a single marker with a count on it — the same place accumulating
+visits over the years is the normal case, not an oddity.</p>
+<p><strong>If something is missing from the map</strong>, look just beneath it. An investigation whose location
+could not be found on the map is listed there with the reason, rather than quietly leaving the map
+one pin short. Usually the address has a typo, and correcting it puts the pin back.</p>
+<p>The <strong>Edit</strong> button appears only on visits you are allowed to change. That is decided per
+investigation rather than by rank: the person who scheduled it, the case manager, whoever is
+leading that particular visit, group owners and administrators, and anyone the group has
+specifically granted the investigations permission.</p>
+<h2>Scheduling a visit with no case</h2>
+<p><strong>Schedule an investigation</strong> on the group's Investigations tab books a visit that belongs to no
+client case — a landmark, a public building, or the group's own outing. Everything else about it
+works the same way: it appears on the map, the team can check in, and the findings are shared under
+the same rules.</p>
+<p>Describe where it is, and the form will tell you if the system already knows the place:</p>
+<blockquote>
+<p>This place may already be on file.</p>
+</blockquote>
+<p><strong>Use this place</strong> attaches the visit to the existing record, which is what puts your visit on the
+same page as everyone else's work at that location. If it is genuinely somewhere new — a different
+flat in the same building, a different cabin on the same site — carry on typing and a new place is
+created. The suggestion is only ever offered; nothing is merged behind your back.</p>
+<p>A place is only suggested when the address matches <strong>and</strong> it is within about a tenth of a mile.
+Both have to agree, because an address alone cannot tell two flats apart and a map position alone
+would suggest the house next door.</p>
+<h2>Arriving on site</h2>
+<p>The investigation's <strong>Team</strong> panel shows who is expected and who has turned up. Open it from the
+attendees on a case's Investigations tab, or from <strong>Team</strong> on any row of the group's Investigations
+list — including visits with no case, which is the only way to check in to one of those. A name turns green
+once their attendance is recorded, and the time beside it is when they say they got there.</p>
+<p>Press <strong>I've arrived</strong> to check yourself in. The time is editable, and it is meant to be: most
+sites have no signal, so checking in the next morning and correcting the time to when you actually
+got there is the normal way to use it, not a workaround. Times in the future are refused — that is
+a typo rather than a memory.</p>
+<p>Whoever manages the investigation can also record attendance for somebody who forgot. Those two
+are kept distinct: the panel marks a row <strong>Recorded</strong> when somebody else entered it, so "checked in
+on site" and "ticked off afterwards" never look like the same thing.</p>
+<p>Attendance is what puts a visit on your own map under <strong>My Investigations</strong>.</p>
+<h2>Writing up what you saw</h2>
+<p>Everyone who was on the team files their own account, in the <strong>What people saw</strong> section of the
+investigation's Team panel. One each, in their own words.</p>
+<p>They are deliberately separate accounts rather than one shared write-up. Four people in a building
+at night see four different nights, and the places where two accounts disagree are usually the most
+useful part of the record — a single summary, written by whoever holds the edit right, loses them.</p>
+<p><strong>Only you can write yours, and only you can withdraw it.</strong> There is no override, unlike arrival,
+where somebody else can record that you turned up. Whether you were there is something another
+person can vouch for; what you experienced is not, and an account with your name on it that you did
+not write would be worse than no account at all.</p>
+<p>You can revise it afterwards — most people write up the next morning and correct it for days after.
+A revised account is marked as revised, so somebody comparing accounts knows whether they are
+reading what you said on the night or what you say now.</p>
+<p>Everyone in the group can read all the accounts. That is the point of keeping them.</p>
+<h2>Tagging what kind of experience it was</h2>
+<p>Timeline entries can be tagged with experience types — knocking, cold spots, shadow figures —
+grouped under categories. Tagging is what makes patterns findable later, across cases and across
+groups, so it is worth a moment even when the write-up already says it.</p>
+<p>If nothing in the list fits, group owners and administrators can <strong>add a type inline</strong>. It is usable
+immediately; nobody has to wait for approval to record tonight. Site administrators are told, and
+they confirm it or remove it afterwards.</p>
+<p>Two things happen quietly to keep that list from filling up with near-misses:</p>
+<ul>
+<li><strong>We ask before creating a type spelled very like an existing one.</strong> Pick the existing type if
+  that is what you meant, or say yours is different and we add it as typed. It is a question, not a
+  refusal.</li>
+<li><strong>A type you added disappears again if you untag the last entry using it</strong>, as long as no site
+  administrator has confirmed it yet. A word invented for one occurrence and then removed does not
+  outlive it. Confirmed types stay, and so do the ones we ship.</li>
+</ul>
+<h2>Leading a visit</h2>
+<p>The <strong>Lead</strong> column on the team list marks who is running this particular investigation. It is not
+a promotion: it applies to this visit only, and it lapses with it.</p>
+<p>The lead can edit the investigation — the schedule, the team, the details — for as long as they
+hold it, and can hand it to somebody else. Only people who can already change the investigation can
+name a lead, so it cannot be taken, only given.</p>
+<h2>Who can see the findings</h2>
+<p>Each investigation carries its own sharing setting, on the investigation's edit form.</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Who reads it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Just this group</td>
+<td>Only your own group. The default for anywhere somebody lives.</td>
+</tr>
+<tr>
+<td>Groups who have also investigated this place</td>
+<td>Any group with a visit recorded at the same place.</td>
+</tr>
+<tr>
+<td>Anyone</td>
+<td>Everybody, including visitors who are not signed in.</td>
+</tr>
+</tbody>
+</table>
+<p>The middle one is worth reading twice: the audience is <strong>whoever has investigated the place</strong>, and
+that list keeps growing. A group that goes there next year will be able to read what you shared
+this year. The form says so when you pick it.</p>
+<p>You do not have to share your own findings to read what others have shared. The point of the
+setting is that people comparing notes on the same building is useful, and requiring a contribution
+first would mostly deter the cautious.</p>
+<p>Investigations at a <strong>private residence cannot be made public</strong>. Publishing what happened inside
+somebody's home is theirs to agree to, and there is no way to ask them yet, so the option is
+withheld rather than offered without the consent behind it.</p>
+<h2>Place pages</h2>
+<p>Clicking the location on the Investigations tab opens that <strong>place</strong> — every visit recorded there,
+by every group, that you are allowed to see.</p>
+<p>The line at the top counts only what is visible to you. It never says how much is being withheld,
+because that would be its own way of telling you what you cannot see.</p>
+<p>Your own group's visits are listed separately from what other groups have shared, and only your own
+rows show their sharing setting: how another group chose to share something is their business.</p>
+<p>Place pages work for visitors too. Somebody who is not signed in sees only investigations that have
+been published, and nothing else.</p>
+</section>
+<section class="doc" id="your-profile">
+  <div class="doc-head">
+    <div class="doc-kicker">Your Account</div>
+    <h1>Your Profile and Photos</h1>
+    <p class="doc-summary">Display name, contact details, public and private photos, and who can see them.</p>
+    <div class="doc-aud">Written for: <strong>Signed-in users</strong></div>
+  </div>
+  <h2>Your profile</h2>
+<p><strong>My Profile</strong>, in the menu under your avatar, is where you set your display name and photos.
+Your sign-in address is not changed here and is never shown publicly.</p>
+<h2>Two photos</h2>
+<p>You can set two pictures, and they are treated very differently.</p>
+<ul>
+<li><strong>Public photo</strong> — anyone can see it, including visitors to published case pages.</li>
+<li><strong>Private photo</strong> — shown only to people you actually work with.</li>
+</ul>
+<h2>Who sees your private photo</h2>
+<table>
+<thead>
+<tr>
+<th>They are</th>
+<th>They see it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>You</td>
+<td>Always.</td>
+</tr>
+<tr>
+<td>Someone in a group with you</td>
+<td>Yes — colleagues see each other properly.</td>
+</tr>
+<tr>
+<td>A client of a case you are working</td>
+<td>Only if your group allows it <strong>and</strong> you opted in.</td>
+</tr>
+<tr>
+<td>Someone on the same case as you, as a client</td>
+<td>Yes.</td>
+</tr>
+<tr>
+<td>Anyone else</td>
+<td>No — they see your public photo, or your initials.</td>
+</tr>
+</tbody>
+</table>
+<p>The client rule needs both keys. Your group has to allow member photos to be shown to clients,
+<strong>and</strong> you have to switch it on for yourself. Either one alone shares nothing, and the profile
+page tells you when you have opted in but no group allows it yet.</p>
+<h2>Your contact information</h2>
+<p>Below the photos you can record as many email addresses, phone numbers, postal addresses and
+web links as you like. Each one is yours alone — nobody else can add to or edit your list, and
+an administrator changing their own copy of your record never touches these.</p>
+<p>Mark one email and one phone as <strong>Primary</strong> if you want a single obvious "reach me here". Marking
+a new one primary clears the old one automatically: it is a slot, not a checkbox you can tick
+twice.</p>
+<p>Addresses are looked up on a map as you type. If the lookup finds the place, the coordinates are
+stored with the address; if it does not, the address still saves — it simply has no pin.</p>
+<h2>What public means</h2>
+<p>Everything you add starts <strong>private</strong>. Private means only you and the people who administer the
+system can see it; it is never shown on a case page, in a group directory, or to anyone you work
+with.</p>
+<p>Ticking <strong>Public</strong> on one entry publishes that entry, and nothing else. A public email address is
+the one thing that lets somebody invite you to a calendar event by typing your address — that
+lookup deliberately ignores your sign-in address, so an unpublished account cannot be found by
+guessing.</p>
+<h2>Confirming an email address</h2>
+<p>An email address cannot be made public until you have confirmed it. That stops anyone typing a
+stranger's address into their own profile and then receiving that stranger's invitations.</p>
+<p>Press <strong>Send confirmation link</strong> next to the address. If the system is set up to send mail, the
+link arrives in that inbox. If it is not — which is normal on a test system — the page shows you
+the link instead so you can copy it.</p>
+<p>Opening the link shows the address, partly hidden, and a <strong>Confirm</strong> button. You do not have to
+be signed in, and you can open it on any device. The address is only confirmed when you press the
+button, so a mail scanner that follows links cannot confirm it for you.</p>
+<p>Links last seven days, and you can only ask for a new one once a minute. Asking for a new link
+retires the old one. If you later change the address text, the confirmation is cleared and the
+entry goes back to private — the new address has not been proven, only the old one had.</p>
+<h2>Your investigation map</h2>
+<p><strong>My Investigations</strong> keeps a map of where you have actually been, under <em>Where I've been</em>.</p>
+<p>It shows visits you <strong>attended</strong> — not ones you were invited to, and not ones you said yes to. A
+map of places you might have gone is not a record of where you have been, and only the second is
+worth keeping.</p>
+<p>That means it fills up slowly, and starts empty. Attendance is recorded after the visit, so a
+scheduled investigation appears in your list straight away but on the map only once someone has
+confirmed you were there.</p>
+</section>
+<section class="doc" id="your-equipment">
+  <div class="doc-head">
+    <div class="doc-kicker">Your Account</div>
+    <h1>Your Equipment</h1>
+    <p class="doc-summary">Logging the gear you own, adding photos, and what stays private.</p>
+    <div class="doc-aud">Written for: <strong>Signed-in users</strong></div>
+  </div>
+  <h2>Your equipment list</h2>
+<p><strong>My Equipment</strong>, in the main menu, is where you record the gear you own — recorders, cameras,
+meters, lights, anything you take on an investigation. Each piece gets a make and model from the
+shared catalog, a name you choose, and optionally a serial number, an acquisition date, notes and
+photos.</p>
+<p>Everything starts private to you. Listing a piece publicly, sharing it with a group, and offering
+it for loan are all separate choices you make piece by piece.</p>
+<p>Clicking a piece's name — anywhere it appears — opens its own page. That page shows each reader
+only what they are entitled to: you see its serial number and condition there, a member of a group
+you shared it with sees that it is yours and how to ask for it, and a passer-by from the public
+catalog sees the piece with no mention of you at all.</p>
+<h2>What stays private</h2>
+<p>Two things about a piece of equipment are <strong>never</strong> shown to anyone but you:</p>
+<ul>
+<li><strong>Who owns it, outside your groups.</strong> The public catalog never links your name to a piece — one
+  you chose to list appears without an owner. Inside a group you have shared with, your name does
+  appear beside your gear: that is the point of sharing, so members know whose kit is whose.</li>
+<li><strong>The serial number.</strong> This one stays private even later on, when you can share gear with a group
+  and lend it out. Somebody borrowing your recorder does not need its serial number, and neither
+  does the person approving the loan.</li>
+</ul>
+<p>Site administrators can see equipment records, as they can everywhere else in the application.</p>
+<h2>Adding a piece of equipment</h2>
+<p>Choose a category first — that narrows the makes and models to sensible ones. Then pick the make,
+then the model, then give it a name you will recognise in a list, like "my backup recorder".</p>
+<h2>When you don't know the make or model</h2>
+<p>Not everything has a manufacturer and a product name, and you should never have to invent one.</p>
+<ul>
+<li><strong>No brand at all</strong> — a homemade trigger device, an unbranded flashlight: choose the make
+  <strong>Generic / Unbranded</strong>. Every category has a generic model waiting under it.</li>
+<li><strong>A known brand with no particular model</strong> — an Eveready flashlight, say: choose the make
+  normally, then use <strong>I don't know the exact model</strong>. That adds a single shared "generic" entry
+  under that make, so everyone in the same position picks the same one instead of typing a dozen
+  different guesses.</li>
+</ul>
+<h2>When we ask "did you mean…?"</h2>
+<p>If you add a make spelled very like one already in the catalog — <strong>Sansung</strong> when <strong>Samsung</strong> is
+there — we stop and ask before creating it. The catalog is shared by everybody, and one mistyped
+manufacturer sitting beside the real one looks exactly as genuine as the real one to whoever comes
+next.</p>
+<p>You always have both answers:</p>
+<ul>
+<li><strong>Pick the suggested make</strong> if that is what you meant, and it is chosen for you.</li>
+<li><strong>Say yours is different</strong>, and we add it exactly as you typed it. Plenty of real makes are one
+  letter apart — Ring and Ping are two different companies — so this is a question, never a refusal.</li>
+</ul>
+<p>We only ask about makes an administrator has already confirmed, so you are never being pointed at
+somebody else's typo.</p>
+<h2>Linking to a make or model</h2>
+<p>Every make and model has a readable address — <code>/equipment/zoom/h1n</code> — so a link you paste into a
+message says what it points at. If you arrive by an older link, the address bar updates itself to
+the readable one.</p>
+<p>Correcting a name corrects its address too, so a make fixed from "Sansung" to "Samsung" no longer
+answers to the mistake. That means a catalog link shared before a correction may stop working; the
+catalog is shared vocabulary, and keeping the typo alive in the URL would be the worse trade.</p>
+<h2>Tidying up after yourself</h2>
+<p>A make or model you added is removed automatically when the last piece of equipment using it goes
+away, as long as no administrator has confirmed it yet. Type a make wrongly, delete the item, and
+the mistake leaves with it — you do not need to ask anyone to clear it up.</p>
+<p>Confirmed makes and models stay, whether or not anyone currently owns one. Those describe what
+exists in the world, not just what happens to be in the database this week.</p>
+<h2>Who can see a piece, and who can borrow it</h2>
+<p>These are two separate choices, set per piece of equipment, and both start switched off. Letting
+people know you own something is not the same as offering to lend it.</p>
+<p><strong>Who can see it.</strong> By default only you. Two ways to widen that, and they are independent:</p>
+<ul>
+<li><strong>Share it with a group</strong> — use the <strong>Share</strong> button on the piece and tick the groups that should
+  see it. They see the make, model, photos and what you call it, alongside your name. They never
+  see the serial number.</li>
+<li><strong>List it in the public catalog</strong> — shows the piece under <em>Gear people own</em>, visible to anyone,
+  signed in or not. Even then it never carries your name or its serial number.</li>
+</ul>
+<h2>Sharing with your groups</h2>
+<p>Sharing is per piece and per group, so you can put most of your kit in front of a group and keep
+one piece out of it. You can only share with groups you are actually a member of.</p>
+<p>If you have a lot of gear, the <strong>All my gear</strong> row at the top of My Equipment shares or unshares
+everything with one group at once. It still writes the same per-piece choices underneath, so you
+can immediately go and untick the one piece you would rather keep back.</p>
+<p>A share lasts as long as your membership. If you leave a group, your gear stops appearing to it
+straight away — the choice is remembered, so it applies again if you rejoin.</p>
+<p><strong>Who can borrow it.</strong> Three options, and you can pick any combination:</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Who can ask</th>
+<th>Recorded as</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Groups I've shared it with</td>
+<td>A group you've shared the piece with can borrow it for the group's own use</td>
+<td>Borrowed for that group, and optionally tied to an investigation</td>
+</tr>
+<tr>
+<td>People in my groups</td>
+<td>Someone you share a group with, borrowing as themselves</td>
+<td>A personal loan</td>
+</tr>
+<tr>
+<td>Anyone with an account</td>
+<td>Any signed-in user</td>
+<td>A personal loan</td>
+</tr>
+</tbody>
+</table>
+<p>Leave all three unticked and the piece is never borrowable, however many people can see it. You
+approve or deny every request either way, and you set how long the loan runs — or leave the due
+date empty if you are not worried about getting it back by a particular day.</p>
+<p>If you allow anyone to borrow a piece but do not list it publicly, the form will say so: people
+outside your groups have no way to find it, so the offer does nothing until you list it.</p>
+<h2>Retiring a piece</h2>
+<p>When you stop using something, <strong>retire</strong> it rather than deleting it. Retired gear disappears from
+borrowing and from the public catalog, but its loans and service history stay readable — and you
+can put it back in service whenever you like.</p>
+<p>Once a piece has been lent or serviced, deleting becomes unavailable for exactly that reason:
+removing it would take the record of what happened to it, including loans other people were part
+of, along with it.</p>
+<h2>What we keep about your photos</h2>
+<p>A photo carries more than the picture: most phones record where and when it was taken, and which
+device took it. When you upload one, that information is separated out and stored against the
+record, and the copy anybody sees has none of it — so a photo of gear at your home does not carry
+your address with it.</p>
+<p>Your original file is kept exactly as you sent it and never shown to anyone. The separated details
+are readable only by group Administrators and site administrators.</p>
+<h2>The public catalog</h2>
+<p>The <strong>Equipment Catalog</strong> is public — anyone can browse it, including visitors who are not signed
+in. It has two halves. <em>Makes &amp; models</em> is reference data: what gear exists, by make and model.
+<em>Gear people own</em> lists individual pieces whose owners chose to list them. Neither half ever
+carries who owns anything or any serial number.</p>
+<p>When you add a make or model that isn't listed yet, it goes into the catalog as a proposal. You can
+use it straight away on your own equipment. It appears in the public catalog once a site
+administrator approves it, which keeps the shared list from filling up with typos and duplicates.</p>
+<h2>Make and model pages</h2>
+<p>Every make and model has its own page, reached by clicking the make and model under any piece of
+gear. It gathers what everyone who owns one has contributed: how many are owned, how many are
+offered for borrowing, the manufacturer links people have added, and their photos.</p>
+<p>Everything on that page is anonymous. It never says whose photo is whose, or who owns how many.
+Where you see a photo you can click, that is because you are allowed to open that particular piece —
+its owner listed it publicly, shared it with a group you are in, or it is your own. Everyone else
+sees the same photo with no link behind it.</p>
+<h2>The manufacturer's page</h2>
+<p>Each piece of equipment can carry a link to the maker's own page for it. It is optional, and the
+links everyone adds for the same make and model are gathered on that model's page — so one person's
+research into a recorder's specifications saves the next person the search.</p>
+<h2>Photos</h2>
+<p>Each item can have as many photos as you like. The first one you add becomes the main photo — the
+one shown first — and you can promote any other photo to main, or remove any of them.</p>
+<p>Photos load when you open your equipment list, not as thumbnails in a long grid, so a list of many
+items stays quick.</p>
+<p><strong>Hide from the model page</strong> is set on each photo separately. A photo of the piece against a plain
+wall may be exactly what belongs on a make and model page, while the one taken in your living room
+is not — so the choice is per photo rather than all-or-nothing. Hiding a photo keeps it on the item
+itself; it only stops it appearing in the pooled set. Captions you write are shown publicly with the
+photo, so write them as something a stranger will read.</p>
+<h2>Questions and FAQs</h2>
+<p>Two related things, one public and one private.</p>
+<p><strong>Things worth knowing</strong> is the FAQ you write about your own piece — anything a borrower would want
+to know before asking for it. It appears on the item's page, and entries from publicly-listed items
+are also gathered on that make and model's page alongside other owners'. FAQ entries never say who
+wrote them, anywhere, including on your own item's page.</p>
+<p><strong>Questions</strong> are asked by someone thinking about borrowing. They arrive in <strong>Gear Questions</strong> in
+the main menu, where you can answer, or decline without answering, and afterwards publish a good
+answer into the FAQ.</p>
+<h3>The anonymity, exactly</h3>
+<p>A question is anonymous in <strong>both</strong> directions. You will not see who asked. They will not see who
+answered. The notice announcing a question says only that one arrived.</p>
+<p>This is deliberate: a question is how someone finds out whether a thing has a quirk they need to
+know about, and people do not ask that of a person whose answer might decide whether they get lent
+the gear at all.</p>
+<p>The anonymity covers questions and FAQs only. <strong>Borrowing is not anonymous</strong> — if that same person
+goes on to ask for the piece, you will each see who the other is, because you should know who is
+holding your recorder. A group's shared-gear list still names owners too.</p>
+<p>Publishing an answer to the FAQ <strong>copies</strong> the text rather than exposing the conversation. You can
+rewrite it first — what reads well as a reply to one person rarely reads well as a public answer —
+and the original thread is left as it was said. An answer can be published once.</p>
+<h2>Feedback and moderation</h2>
+<p>After a loan comes back, both sides can leave feedback about the other. Neither ever sees what was
+written about them — not on any page, and there is no notification, because telling someone feedback
+about them exists is most of the way to showing it to them. What lenders write is shown to future
+lenders deciding that person's next request; what borrowers write is shown, unattributed, to other
+borrowers considering asking. The full rules are in
+<a href="/help/borrowing-equipment#feedback-after-a-loan">Borrowing Equipment</a>.</p>
+<p>A group's <strong>Administrators and Owner</strong> can open <strong>Equipment feedback</strong> from the group's page. It
+lists everything left about the group's gear and its members' loans, naming both sides, and anything
+that crosses a line can be removed. That page exists so a complaint can be acted on — it is the one
+place in the app where feedback is attributed on both ends.</p>
+<h2>Who is looking</h2>
+<p>Each piece counts how many times its page has been opened and how many times someone followed its
+manufacturer link. Those numbers are shown to the Administrators and Owner of the group that owns
+the equipment, and to site administrators. Nobody else sees them — not other members, and not the
+individual owner of a personal piece.</p>
+<p>The counts are totals only. Nothing is recorded about who did the looking.</p>
+</section>
+<section class="doc" id="borrowing-equipment">
+  <div class="doc-head">
+    <div class="doc-kicker">Your Account</div>
+    <h1>Borrowing Equipment</h1>
+    <p class="doc-summary">Asking to borrow gear, handing it over, and getting it back.</p>
+    <div class="doc-aud">Written for: <strong>Signed-in users</strong></div>
+  </div>
+  <p>Equipment can be borrowed from two places: gear a group owns, and gear a member owns personally and
+has offered to lend. The steps are the same either way. What differs is who decides.</p>
+<h2>Who decides</h2>
+<table>
+<thead>
+<tr>
+<th>Whose gear</th>
+<th>Who approves</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The group's own</td>
+<td>Anyone with the group's <strong>Equipment Checkouts</strong> permission</td>
+</tr>
+<tr>
+<td>A member's own</td>
+<td>That member, always</td>
+</tr>
+</tbody>
+</table>
+<p>Nobody's group permission lets them lend out somebody else's personal equipment. If it is yours,
+the decision is yours.</p>
+<h2>Asking to borrow</h2>
+<p>Find the piece and choose <strong>Ask to borrow</strong>. Gear turns up in two places: your group's
+<strong>Equipment</strong> tab, and the public <strong>Equipment Catalog</strong> under <em>Gear people own</em>.</p>
+<p>If the owner lends the piece to more than one group you are in, you will be asked <strong>who you are
+borrowing it for</strong>. That choice matters: a loan taken out for a group is recorded against that
+group, and can be tied to a particular visit. A loan you take out personally is just yours.</p>
+<p>If the owner only lends the piece personally, there is nothing to choose and no group is recorded.</p>
+<p>You can add when you need it and a note about why. Neither is required, but a note is the difference
+between a request somebody can say yes to and one they have to ask about first.</p>
+<p>You can only have one open request per piece at a time. Asking twice is a duplicate, not a nudge.</p>
+<h2>Asking a question first</h2>
+<p>Every piece has its own page, reached by clicking its name. On it you will find <strong>Things worth
+knowing</strong> — an FAQ the owner has written — and an <strong>Ask a question</strong> button if there is something
+they have not covered.</p>
+<p>Questions are <strong>anonymous in both directions</strong>. Whoever looks after the piece sees your question but
+not your name, and their answer comes back without theirs. Ask whatever you actually need to know:
+this exists precisely so that finding out about a temperamental battery door does not cost you the
+loan.</p>
+<p>Anonymity stops at the question. If you go on to <strong>ask to borrow</strong>, that request carries your name,
+as it must — you are asking someone to hand you their equipment.</p>
+<p>Your questions and their answers are in <strong>Gear Questions</strong> in the main menu.</p>
+<h2>Being turned down</h2>
+<p>Whoever declines has to give a reason, and you will see it. A bare "no" tells you nothing about
+whether to ask again next week.</p>
+<p>A declined request is final — the row stays as a record of what was asked. If circumstances change,
+send a fresh request.</p>
+<h2>Handing over and getting back</h2>
+<p>Each side confirms the transfer coming toward them.</p>
+<ul>
+<li><strong>You confirm you have it.</strong> Once your request is approved, the loan is not "out" until you press
+  <strong>I've got it</strong>. The person with the equipment is the one who can truthfully say they have it.</li>
+<li><strong>The lender confirms it came back.</strong> When you return it, they press <strong>Got it back</strong>, optionally
+  noting the condition. This is deliberately not yours to do: a loan should not be closable by
+  asserting you returned something.</li>
+</ul>
+<p>Until you confirm the hand-off you can still <strong>cancel</strong> — plans change, and an approved request you
+never collected should not have to become a loan.</p>
+<h2>Due dates and overdue</h2>
+<p>Whoever approves can set a date it is due back, or leave it open if they are not worried.</p>
+<p>A loan is <strong>overdue</strong> once it is out and past that date. That is worked out fresh every time anyone
+looks, so it is never stale, and it shows as a red badge on <strong>My Checkouts</strong> and a count on your
+notification bell.</p>
+<h2>Photos of its condition</h2>
+<p>Either side can attach photos to a loan — as the gear goes out, and as it comes back. They sit side
+by side on the loan's <strong>Details</strong> view, which is the whole point: "was that scratch already there?"
+is much easier to answer with the two pictures next to each other than from memory.</p>
+<p>A hand-off photo can only be added once the loan is approved and before it is over, and a return
+photo only once the gear is actually out or just back. Photographing a hand-off that never happened
+would be recording a fact about nothing.</p>
+<p>Condition photos are private to the two sides of that loan. They never appear in the public catalog.</p>
+<h2>Asking for more time</h2>
+<p>If you need a piece for longer, open the loan's <strong>Details</strong> and ask to keep it until a later date.
+You can only ask while you actually have the gear, and only one request can be waiting at a time.</p>
+<p>Whoever lent it can grant or refuse. Granting moves the due date; refusing leaves the original date
+standing and needs a reason. Either way you get a notification, and the request and its answer stay
+on the loan — so "asked for another week, was given three days" is still readable later, rather than
+just a due date that quietly changed.</p>
+<h2>Feedback after a loan</h2>
+<p>Once a piece is back, both sides can leave feedback on the loan's page. It is optional, and you can
+leave a comment, a rating out of five, or both.</p>
+<p><strong>Neither side ever sees what was written about them.</strong> There is no notification either, because
+telling someone that feedback about them exists is most of the way to showing it to them. What each
+half is for:</p>
+<ul>
+<li><strong>What a lender writes about a borrower</strong> is shown to <em>future lenders</em> weighing that person's next
+  request — so somebody deciding whether to hand over an expensive recorder can see that the last
+  few lenders got it back on time and in one piece. It carries the lender's name, because an
+  unattributed warning is hard to weigh.</li>
+<li><strong>What a borrower writes about a lender</strong> is shown to <em>other borrowers</em> thinking of asking them,
+  <strong>without your name</strong>. The protection goes where there is more to lose.</li>
+</ul>
+<p>Borrowers can also review <strong>the equipment itself</strong>, separately. That one is public: it appears on
+the make and model's catalog page, still without your name, and helps somebody deciding whether the
+thing is worth buying or borrowing at all.</p>
+<p>Averages are never shown from fewer than three ratings, and always appear with their count beside
+them — one sour rating is one voice, not a verdict.</p>
+<p>A group's Administrators and Owner can see everything left about their group's gear and loans, and
+remove anything that crosses a line.</p>
+<h2>My Checkouts</h2>
+<p><strong>My Checkouts</strong> answers three questions in one place:</p>
+<ul>
+<li><strong>Borrowing</strong> — what you have out, and what you have asked for</li>
+<li><strong>Waiting on me</strong> — requests for your gear needing a decision, and your gear currently out with
+  somebody</li>
+</ul>
+<p>Groups with the <strong>Equipment Checkouts</strong> permission also get a queue of every loan of the group's
+gear, on the group's own Equipment tab.</p>
+</section>
+<section class="doc" id="organization-administration">
+  <div class="doc-head">
+    <div class="doc-kicker">Group Administration</div>
+    <h1>Administering a Group</h1>
+    <p class="doc-summary">Settings, members, requests, and the decisions only owners and administrators make.</p>
+    <div class="doc-aud">Written for: <strong>Group owners &amp; administrators</strong></div>
+  </div>
+  <p>Visible to owners and administrators of a group. Managers and members work cases but do not
+configure the group itself.</p>
+<h2>Group settings</h2>
+<p>The group's <strong>Edit</strong> screen holds its public identity — name, URL, contact details — and two
+switches worth understanding.</p>
+<p><strong>Accepting membership applications</strong> controls whether people can apply to join.</p>
+<h3>Your web address</h3>
+<p>Your group lives at <code>/o/your-address</code> — the link you put on a card, in a post, or in an email to a
+client. It can use lowercase letters, numbers and hyphens, like <code>ghost-squad</code>. Spaces, slashes and
+punctuation are refused, and a handful of words the site uses itself are reserved.</p>
+<p>No two groups can share an address, and <strong>you can change yours whenever you like</strong>. When you do:</p>
+<ul>
+<li><strong>The old address keeps working.</strong> Every link anyone has already shared still opens your pages —
+  visitors are simply moved along to the new address, so what they copy next is the current one.</li>
+<li><strong>The old address stays yours.</strong> No other group can take it later, even years on. Pointing
+  somebody's saved link at a different group would be worse than the link not working at all.</li>
+</ul>
+<p>So changing your address is safe. Changing it often is still worth avoiding, because the address is
+what people remember.</p>
+<p><strong>Let clients see members' private photos</strong> is one half of a two-key rule. Turning it on shares
+nothing by itself; it only permits members who have <em>also</em> opted in on their own profile. This is
+deliberate: a group cannot volunteer its members' faces, and a member cannot overrule a group that
+has decided its people stay unidentified to clients.</p>
+<h2>Members and roles</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Typically</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Owner</td>
+<td>Created the group. Full control.</td>
+</tr>
+<tr>
+<td>Administrator</td>
+<td>Configures the group and manages members.</td>
+</tr>
+<tr>
+<td>Manager</td>
+<td>Runs cases day to day.</td>
+</tr>
+<tr>
+<td>Member</td>
+<td>Works cases and attends investigations.</td>
+</tr>
+<tr>
+<td>Viewer</td>
+<td>Reads without changing anything.</td>
+</tr>
+</tbody>
+</table>
+<h2>The Investigations tab</h2>
+<p>Every visit the group has run, mapped and listed, including ones that belong to no client case.
+It is visible to every member, not only administrators — knowing where the group has worked is
+ordinary team knowledge, not an administrative secret.</p>
+<p><strong>Schedule an investigation</strong> books a visit with no case behind it. What the group finds there is
+shared under the same rules as any other investigation.</p>
+<h2>Who can change an investigation</h2>
+<p>Being a member is enough to <em>read</em> an investigation and to answer for yourself — your own RSVP and
+your own arrival. Changing the record itself is narrower. Any one of these is enough:</p>
+<ul>
+<li>whoever scheduled it</li>
+<li>the case manager, for a visit attached to a case</li>
+<li>whoever is leading that particular visit</li>
+<li>group owners and administrators</li>
+<li>anyone the group has granted the <strong>Investigation</strong> permission under <strong>Roles</strong></li>
+</ul>
+<p>That last one is the lever you have as an administrator. Grant a role the <em>Update</em> action on
+<strong>Investigation</strong>, give somebody that role, and they can edit any of the group's investigations
+without being made an administrator of everything else.</p>
+<p><strong>Leading a visit is not a rank.</strong> It is set per investigation, in the <strong>Lead</strong> column of the
+investigation's team list, and it ends with that visit. One person leads at a time — naming a lead
+takes it from whoever held it — and the current lead can hand it on, which is what happens when
+somebody leaves halfway through the night. Somebody senior enough to lead every visit is better
+served by the permission above; somebody leading one Saturday is better served by the lead flag,
+which stops mattering on Sunday.</p>
+<h2>Incoming requests</h2>
+<p>Client requests arrive under the group's <strong>Requests</strong>. Mark one as under review while you decide.
+Declining tells the client, and lets them send it elsewhere without rewriting it.</p>
+<h2>The group calendar</h2>
+<p>The group's <strong>Calendar</strong> holds meetings, training, anything with a time attached. Investigations
+are scheduled from the case they belong to, not here.</p>
+<p><strong>Where it happens.</strong> Type a free-text location, or pick one of the group's saved addresses. Prefer
+the saved address: it is stored as a reference rather than copied text, so correcting the address
+once corrects every event held there. A <strong>meeting link</strong> can sit alongside it — paste a Zoom, Teams
+or Meet join link, and a bare <code>zoom.us/j/123</code> is accepted as readily as the full URL.</p>
+<p><strong>Repeating events.</strong> The <strong>Repeats</strong> list covers the usual patterns — daily, weekly, monthly, and
+so on. <strong>Custom</strong> takes an iCal rule directly (<code>FREQ=WEEKLY;BYDAY=TU</code>) for a pattern the list does
+not cover.</p>
+<p><strong>Invites.</strong> A public event is open to the whole group by definition, so invites appear only on a
+non-public one. Tick members from the list, or type an email address to invite somebody outside the
+group. That lookup only finds addresses their owner has published <em>and confirmed</em> on their own
+profile — never the private address someone signs in with. If an address does not resolve, the
+person either has no account or has not published that address; ask them rather than guessing at
+another spelling.</p>
+<p>Invites are invitations, nothing more. Assigning work belongs to investigations, where it already
+exists.</p>
+<h2>Calendar event types</h2>
+<p>Under <strong>Settings</strong>, <em>Calendar Event Types</em> is the list the calendar's <strong>Type</strong> dropdown offers —
+Investigation, Meeting, Training, whatever the group actually does. A group with no types can
+still create events; the events simply have no type.</p>
+<p>Each type carries a name, an optional colour and icon, and a sort order that decides where it sits
+in the dropdown. Only owners and administrators can change the list.</p>
+<p>Clear <strong>Active</strong> to retire a type. It disappears from the dropdown for new events but stays on the
+events that already use it — which is almost always what you want. Deleting one removes it from
+those events too, leaving their date and title untouched.</p>
+<h2>The Equipment tab</h2>
+<p>Two lists, because a group deals with two kinds of gear.</p>
+<p><strong>The group's gear</strong> is equipment the group itself owns. Every member can see the list — what the
+group has is not a secret from the people who use it — but adding, editing and deleting it needs
+the <strong>Equipment</strong> permission, and so does seeing serial numbers.</p>
+<p>Each piece tracks who is holding it, when it was last serviced, whether it is currently faulty, and
+its photos.
+<strong>Held by</strong> can be set by hand: kit gets passed over in a car park without anyone opening the app,
+and the record should still be able to tell the truth. A holder has to be an active member.</p>
+<p><strong>History</strong> on a piece opens two things: the full account of everything that has happened to it —
+loans, requests for more time, service and faults, newest first — and the service log itself, where
+new entries are added.</p>
+<p>The service log part is what you write to. Anyone can read it; adding an entry needs the
+Equipment permission. The entry type does real work rather than just labelling the note:</p>
+<table>
+<thead>
+<tr>
+<th>Entry</th>
+<th>What it does to the item</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Serviced</td>
+<td>Moves its last-serviced date</td>
+</tr>
+<tr>
+<td>Fault reported</td>
+<td>Marks the piece faulty, and the note becomes the reason</td>
+</tr>
+<tr>
+<td>Fault fixed</td>
+<td>Clears the fault</td>
+</tr>
+</tbody>
+</table>
+<p>The entry and its consequence are saved together, so the log never disagrees with the piece it
+describes. Entries are kept — fixing a fault does not erase the report of it.</p>
+<p>Once a piece has any loan or service history, deleting it is refused and you are asked to
+<strong>retire</strong> it instead — the button sits in the item editor. Retired gear drops out of borrowing,
+out of the public catalog and out of the group list, while everything that happened to it stays
+readable. You can put it back in service the same way. Destroying a serial-numbered asset would
+take the account of what happened to it along too.</p>
+<p><strong>Members' shared gear</strong> is the second list: equipment members own personally and have chosen to
+show this group. It is read-only here — it belongs to its owner — and it needs no permission to
+read, because the sharing itself is the owner's decision, not the group's to gate. Serial numbers
+stay with owners even here.</p>
+<p>The <strong>Borrowing</strong> column says whether a piece can be borrowed at all, which is a separate choice
+from sharing it — a member can let the group know they own something without offering to lend it.
+Whether a particular piece is offered to the group or only lent personally is shown when you
+actually ask to borrow it, since that is the point at which the difference matters.</p>
+<p>A shared piece disappears from this tab if its owner leaves the group. Their sharing choice is
+kept, so it comes back if they rejoin.</p>
+<h2>The two equipment permissions</h2>
+<p>Under <strong>Roles</strong>, equipment has two entries, and the second sits underneath the first because it is
+narrower:</p>
+<ul>
+<li><strong>Equipment</strong> — manage what the group owns: add and edit gear, upload its photos, keep its
+  service log, set who is holding a piece, and see serial numbers. Read access to the list needs
+  nothing at all beyond membership.</li>
+<li><strong>Equipment Checkouts</strong> — run the loans desk: approve and deny borrowing requests, hand gear over
+  and receive it back. This is the "Equipment Management" job in item #55's own words.</li>
+</ul>
+<p>They are separate so a group can hand someone the loans desk without also handing them the catalog.
+Deciding what the group buys and owns, and lending out what it already has, are different jobs and
+often different people. Granting <strong>Equipment</strong> does not grant <strong>Equipment Checkouts</strong>.</p>
+<p>Neither permission has any say over a member's personal gear. A loan of somebody's own equipment is
+always approved by its owner.</p>
+<h2>Editing your public pages</h2>
+<p>Pages you build under <strong>CMS</strong> appear on your group's public site. Two things control what visitors
+see, and they are different.</p>
+<p><strong>Published</strong> decides whether the page exists for visitors at all. <strong>Drafts</strong> decide whether the
+edits you are making right now are visible while you make them.</p>
+<h3>Drafts</h3>
+<p>Editing a page that is <strong>not</strong> published changes it directly. Nobody can see it, so there is nothing
+to protect.</p>
+<p>Editing a page that <strong>is</strong> published works differently. Open it and you will be offered <strong>Work on a
+draft instead</strong>. Take it, and your changes go into a copy — the live page carries on exactly as it
+was until you press <strong>Publish changes</strong>. Until then, visitors see the old version, and you can
+<strong>Discard draft</strong> to throw the work away and leave the live page untouched.</p>
+<p>A page has one draft at a time. If a colleague has already started one, you will see a note saying
+so with a link to open it, rather than being handed a second copy nobody knows about.</p>
+<p>Publishing keeps the page's address and its permissions — the live page is updated in place, not
+replaced, so nothing linking to it breaks.</p>
+<h3>Page addresses</h3>
+<p>A page's address is the last part of its web address — <code>/o/your-group/about</code>. Keep it short and
+lowercase; it is what people paste to each other.</p>
+<p>A few words are used by the site itself — <strong>cases</strong> and <strong>events</strong> today, plus some held back for
+things coming later. A page can't use one, because it could never be opened: the site would show its
+own page at that address instead. If you try, you'll be told which word and offered a way round it —
+"our-cases" rather than "cases".</p>
+<p>If you have an older page marked <strong>Unreachable</strong> in the list, that is one made before this check
+existed. Rename it and it will start working.</p>
+<h3>Seeing a page before it goes live</h3>
+<p><strong>View as visitor</strong> on the editor opens the saved page exactly as the public renderer draws it,
+published or not. That is the honest check: the side-by-side panel next to the editor follows what
+you are typing, but it draws its own approximation in half a column, so a page can look right there
+and wrong in reality.</p>
+<p>The preview also tells you if the page is not in the menu yet, which is the usual reason a
+freshly-published page seems to have vanished.</p>
+<h2>Reusing a page layout</h2>
+<p>Built a write-up you want to do again? On the page's editing screen, <strong>Save as a layout</strong> keeps its
+sections — their types, titles and current wording — as a named layout, for example <em>Investigation
+Results</em>.</p>
+<p>Next time you add a page, pick that layout under <strong>Start from one of our layouts</strong> and the new page
+arrives with those sections ready to fill in.</p>
+<p>Two things worth knowing:</p>
+<ul>
+<li><strong>The layout belongs to the group</strong>, not to whoever saved it, so it stays when people come and go.</li>
+<li><strong>The copy is yours.</strong> Editing the layout later does not touch pages already made from it, and
+  editing one of those pages does not change the layout.</li>
+</ul>
+<p>Sections that point at a case or an investigation keep the <em>shape</em> but you will want to re-point the
+pickers — a layout reused for a different night should show that night's work.</p>
+<h2>Putting your cases and investigations on a page</h2>
+<p>Two section types — <strong>Our investigations</strong> and <strong>Our cases</strong> — let you show your own work on a
+public page. Pick which records to show, and answer two questions about each section.</p>
+<p><strong>Where it happened.</strong> You can show the rough area, or nothing at all. There is no option to publish
+the exact address, whichever way you set it: the point shown on the map is the centre of an area
+several miles across and cannot be traced back to a building. That is deliberate — a case is
+somebody's home, and a link outlives the page it was on.</p>
+<p><strong>Who it was for.</strong> Cases can show the client's chosen name. Only the alias the client picked, or
+the one your group set for them — a real name is never published here. If neither is set, the case
+appears with no name.</p>
+<p><strong>Work that is not public yet</strong> is flagged in the picker, and adding it asks you to confirm. Until
+you do, those records are left off the page entirely. Publishing a private investigation makes it
+readable by anyone who visits, including the person it is about.</p>
+<p>You can only show your own group's work. Everything is looked up fresh each time somebody views the
+page, so if a client later asks to be unnamed, they disappear from pages you published months ago —
+you do not have to remember which ones.</p>
+<h2>Public events</h2>
+<p>An event on your calendar can be opened to anybody. Tick <strong>Public</strong> and it appears on your group's
+public site, on the site-wide <strong>What's on</strong> list, and anyone with an account can say they are
+coming.</p>
+<p>This is the one part of the site that brings you people who have never heard of you. Somebody
+looking for a ghost walk near them finds your event, turns up, and meets the group — so the listing
+names you prominently and reads as an invitation rather than a record.</p>
+<h3>What can be made public</h3>
+<p>Events at <strong>landmarks, businesses, and your own addresses</strong>. Not events at a private residence, and
+not events attached to a case.</p>
+<p>That is deliberate and cannot be overridden. A public listing is a date and an address advertised to
+strangers, and a client did not agree to have people turn up at their home. If you want to publicise
+work you are doing on a case, create a separate event for a venue that is yours to publish.</p>
+<h3>Hiding the address until somebody is coming</h3>
+<p><strong>Hide exact location</strong> shows the town but not the street address. Whoever is coming sees the full
+address once they have said so; nobody else ever receives it, and the listing says as much up front
+so nobody feels tricked into signing up to find out where they are going.</p>
+<p>If somebody cancels, the address stops being shown to them.</p>
+<h3>Places and sign-ups</h3>
+<ul>
+<li><strong>Places</strong> caps how many people can come. Leave it empty for no limit.</li>
+<li><strong>Sign-ups close</strong> sets a cut-off. Leave it empty and people can sign up right up to the start.</li>
+<li>Somebody who cancels frees their place for somebody else.</li>
+</ul>
+<h3>The link you can share</h3>
+<p>A public event gets a readable web address — <code>/o/your-group/events/2026-08-24-ghost-walk</code> — made
+from its date and title the first time you publish it. That is the link to put on social media.</p>
+<p>It does not change afterwards, even if you rename the event. A link somebody has already shared
+should keep working.</p>
+<h3>People coming who don't have an account</h3>
+<p>Somebody who finds your event and has never been here before doesn't have to sign up for anything
+first. They give an email address, we send them a link, and clicking it is what actually confirms
+they're coming.</p>
+<p>The link matters: an address typed into a box proves nothing, and an event that hides its exact
+location until people are coming would be protecting nothing if anyone could type any address and be
+shown where you're meeting.</p>
+<p>Confirming makes them an account with no password. They can set one later if they want to sign in
+properly, but they don't have to — it exists so you have somebody you can reach, and so they can see
+what they've said they're going to.</p>
+<p>You'll see them in the attendee list like anybody else.</p>
+</section>
+<section class="doc" id="site-administration">
+  <div class="doc-head">
+    <div class="doc-kicker">Site Administration</div>
+    <h1>Site Administration</h1>
+    <p class="doc-summary">Sitewide settings, the clipart library, and the audit log.</p>
+    <div class="doc-aud">Written for: <strong>Platform administrators</strong></div>
+  </div>
+  <p>Visible to app administrators only.</p>
+<h2>Site settings</h2>
+<p><strong>Administration → Site Settings</strong> holds values that apply to the whole site. Nothing personal
+belongs here — settings about one person live on their profile, settings about one group live in
+that group's settings.</p>
+<p>Adding a new setting is a code change, not a database one: settings are declared in
+<code>SiteSettingKeys.Seed</code>, and the page renders whatever is declared.</p>
+<h2>The clipart library</h2>
+<p><strong>Administration → Clipart Library</strong> curates the shared artwork every group can use in the video
+editor. Upload the file first, then publish it here by its file id. The format is read from the
+file itself — SVG, PNG, WebP, AVIF, GIF or Lottie — and anything else is refused rather than
+published as something the editor cannot draw.</p>
+<p>Assets are <strong>retired</strong>, never deleted. Projects reference artwork by id, so removing one would
+break renders that already use it. A retired asset leaves the catalog and stays downloadable.</p>
+<h2>Keeping the shared vocabulary tidy</h2>
+<p>Two lists grow by proposal rather than by decree: the <strong>experience taxonomy</strong> and the <strong>equipment
+catalog</strong>. Groups add what they need on the night, and you confirm or clear up afterwards.</p>
+<p><strong>Confirming</strong> an entry marks it as reviewed. That matters beyond the badge: reviewed entries are
+the only ones offered as "did you mean" suggestions to the next person, and they stop being cleared
+away automatically. Confirming is how a word becomes shared vocabulary rather than one group's
+note.</p>
+<p><strong>Renaming</strong> does what it says — until the new name is already taken. Then you are shown the entry
+it collided with and offered a merge, because renaming onto an existing name means two things
+become one and somebody's records change meaning. That is too large to happen because a name was
+typed, so it is always a second, deliberate step.</p>
+<p><strong>Merging</strong> moves everything across and removes the duplicate. It cannot be undone. Two guards:</p>
+<ul>
+<li>You cannot merge a <strong>confirmed</strong> entry into an unconfirmed one. That is almost always the
+  direction reversed, and the result would be a list where the endorsed word vanished and the
+  mistake survived. Merge the other way, or confirm the target first.</li>
+<li>You cannot merge an experience type into a <strong>different category</strong>. Moving a tagging from Visual
+  to Auditory changes what somebody recorded about their own night, which is not a rename.</li>
+</ul>
+<p><strong>Deleting</strong> is only for an entry nothing uses. If it is tagged on something, you are told how many
+and refused — <strong>Reject</strong> is the action that removes a type together with its taggings, and it tells
+you how many it took with it.</p>
+<p>Most tidying happens without you. An unconfirmed entry that a group proposed disappears on its own
+once the last thing using it is gone.</p>
+<h2>Support tickets</h2>
+<p><strong>Administration → Support Tickets</strong> is the queue for the public contact form. A ticket arrives as
+<strong>New</strong>; replying to the sender marks it <strong>Answered</strong> and assigns it to you if nobody had it.</p>
+<p>The sender reads the thread through a private tracking link, whether or not they have an account —
+that is how a reply reaches someone who cannot sign in. <strong>Internal notes are never shown there.</strong>
+They are for staff talking among themselves, and adding one does not mark the ticket answered.</p>
+<p>Contact details shown beside the form — postal address, phone, email, when we reply — are site
+settings, so they are corrected on the Site Settings page rather than in a deploy.</p>
+<h2>Audit log</h2>
+<p><strong>Administration → Audit Log</strong> records every mutation with who made it. It is filtered and paged
+on the server, so date and user filters apply to the whole history rather than the page on screen.</p>
+</section>
+
+</body></html>
