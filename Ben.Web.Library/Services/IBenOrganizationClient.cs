@@ -106,6 +106,31 @@ public interface IBenOrganizationClient
     string GetFileDownloadUrl(Guid uploadFileId);
     string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId);
 
+    /// <summary>
+    /// Where a visitor fetches one published file of a case — the only anonymous route to a case's
+    /// media, gated per request by the publication rule.
+    /// </summary>
+    /// <remarks>
+    /// Used by the public renderer <b>and</b> by the editor's picker, deliberately. An author
+    /// choosing photos sees them through exactly the pipe a visitor will, so a file that would
+    /// arrive broken on the public page arrives broken in the editor too, while somebody is still
+    /// looking. The ordinary download URL would have shown the author a picture nobody else could
+    /// see.
+    /// </remarks>
+    string GetPublicCaseMediaUrl(Guid caseId, Guid uploadFileId);
+
+    /// <summary>
+    /// The prefix the public renderer appends <c>{caseId}/media/{fileId}</c> to.
+    /// </summary>
+    /// <remarks>
+    /// Its own method rather than the substring-of-a-built-URL trick the file-download base uses
+    /// beside it. That trick relies on replacing an empty GUID out of a formatted string, which is
+    /// unreadable at the call site and — with two GUIDs in this route — needs quotes that a Razor
+    /// attribute cannot carry. Asking the client for what it actually knows is shorter and cannot
+    /// be got subtly wrong.
+    /// </remarks>
+    string GetPublicCaseMediaBaseUrl();
+
     // ── Organization Address Map Config ───────────────────────────────────────
 
     /// <summary>Returns the map display config for an organization address, or null if not configured.</summary>

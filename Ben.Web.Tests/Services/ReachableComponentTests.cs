@@ -143,6 +143,54 @@ public sealed class ReachableComponentTests
             + "That is how this feature spent its first life: fully built in the API and unreachable.");
     }
 
+    /// <summary>
+    /// A case-media section can be authored, and what it publishes can actually be fetched.
+    /// </summary>
+    /// <remarks>
+    /// <para>Three halves rather than two, because this feature has an extra way to be silently
+    /// dead. The section type could be pickable with no editor behind it; the editor could exist
+    /// with nothing rendering the result; and — the one that nearly shipped — both could work while
+    /// the images pointed at an endpoint that refuses anonymous callers, so every visitor saw broken
+    /// frames and only the logged-in author saw a gallery.</para>
+    ///
+    /// <para>That last check is why the renderer is asserted to use the public media URL by name.
+    /// Pointing it at <c>GetFileDownloadUrl</c> instead would compile, pass every resolution test,
+    /// and look correct to whoever built it.</para>
+    /// </remarks>
+    [Fact]
+    public void Case_media_can_be_authored_rendered_and_fetched()
+    {
+        var sources = RazorSources()
+            .Select(f => (Name: Path.GetFileName(f), Text: File.ReadAllText(f)))
+            .ToList();
+
+        var authors = sources
+            .Where(f => f.Text.Contains("GetPublishableCaseMediaAsync", StringComparison.Ordinal))
+            .Select(f => f.Name).ToList();
+
+        var renderers = sources
+            .Where(f => f.Text.Contains("CmsSectionType.CaseMedia", StringComparison.Ordinal)
+                     && f.Text.Contains("PublicMediaBaseUrl", StringComparison.Ordinal))
+            .Select(f => f.Name).ToList();
+
+        var wiring = sources
+            .Where(f => f.Text.Contains("GetPublicCaseMediaBaseUrl", StringComparison.Ordinal))
+            .Select(f => f.Name).ToList();
+
+        Assert.True(authors.Count > 0,
+            "No screen fetches a case's publishable media, so a case-media section can be added to a "
+            + "page but never filled in.");
+
+        Assert.True(renderers.Count > 0,
+            "Nothing renders a CaseMedia section from the public media URL, so whatever an author "
+            + "picks is stored and never drawn.");
+
+        Assert.True(wiring.Count > 0,
+            "No page passes PublicMediaBaseUrl to the section renderer, so every published case "
+            + "photo resolves against an empty prefix and the gallery is a row of broken images — "
+            + "which the author, being logged in, would never have seen.");
+    }
+
     [Theory]
     [MemberData(nameof(LoadBearingSwitches))]
     public void A_load_bearing_switch_is_actually_switched_on_somewhere(

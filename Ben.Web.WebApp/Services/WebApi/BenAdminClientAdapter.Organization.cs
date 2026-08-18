@@ -204,6 +204,12 @@ public sealed partial class BenAdminClientAdapter
     public string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId)
         => $"{_webApiBaseUrl}/api/organizations/{orgId}/files/{orgFileId}/download";
 
+    public string GetPublicCaseMediaUrl(Guid caseId, Guid uploadFileId)
+        => $"{GetPublicCaseMediaBaseUrl()}{caseId}/media/{uploadFileId}";
+
+    public string GetPublicCaseMediaBaseUrl()
+        => $"{_webApiBaseUrl}/api/public/cases/";
+
     public Task<AddressMapConfigRecord?> GetOrgAddressMapConfigAsync(Guid orgId, Guid addressId, CancellationToken token = default)
         => _api.GetAsync<AddressMapConfigRecord>($"/api/organizations/{orgId}/addresses/{addressId}/map-config", token);
 

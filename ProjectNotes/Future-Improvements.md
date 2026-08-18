@@ -3310,7 +3310,7 @@ one setting per line or a settings page that renders a textarea. Worth deciding 
 
 ---
 
-## 80. CMS: preview, templates, publish-when-ready, and embedding cases/investigations safely (parts 1, 2a, 3 and 4 built 2026-08-17 — part 2b remains)
+## 80. CMS: preview, templates, publish-when-ready, and embedding cases/investigations safely ✅ Complete (all parts built 2026-08-17)
 
 Ben's request, five parts. The first three are ordinary CMS maturity. The fourth is where the real
 design work is, because it is the point where a group could publish somebody's home address.
@@ -3394,7 +3394,7 @@ update neither the editor nor the saved JSON, a trap this codebase has already h
   ship carries `<script>` or `<style>`, which is a different and much weaker guarantee than what an
   author may type into the same box.
 
-### 2b. Page templates — "Investigation Results" (not started, scoped 2026-08-17)
+### 2b. Page templates — "Investigation Results" ✅ built 2026-08-17 (both halves)
 
 > Ben, fourth clarification: *"They create templates like Investigation Results and it gives them a
 > page to fill in or chose from their media and records in the case to add to the template."* And:
@@ -3452,9 +3452,46 @@ So this half cost far less than the entry assumed:
 - UI both ways — **Save as a layout** on the page editor, and a layout picker when creating a page.
   A source-scan test asserts both halves exist, because either alone is useless.
 
-**Still to do for 2b:** the case-bound *slots* proper — a section type holding chosen photos from the
-case, resolved through `CaseMediaPublication` below. A layout today carries whatever the sections
-already hold; re-pointing them at a new case is manual.
+#### 2b, second half — the case-bound slot ✅ built 2026-08-17
+
+`CmsSectionType.CaseMedia`. The stored content is a case id, the chosen file ids in the author's
+order, and a caption switch; the public endpoint replaces it with a projection built by re-asking
+`CaseMediaPublication` on every request. Two independent gates, both re-checked at render: the case
+must belong to this group, and each file must still be publishable.
+
+- **Binding, not copying — proved, not asserted.** A test narrows a timeline entry's visibility
+  *after* the section is saved and asserts the photo leaves the page. Another unpublishes the case.
+  Neither edits the page. That was this entry's stated requirement and it is the one that would have
+  been quietly lost by the far simpler copy-at-fill-in-time design.
+- **No `IncludeNonPublic` escape hatch**, deliberately, and unlike part 4's embeds. For a record the
+  group owns, an acknowledgement is a real decision somebody can make. For an investigator's working
+  file, nobody has ever said it could be shown — so the one route stays the one the prerequisite
+  describes, and the section offers no way around it.
+- **Captions are off by default and absent from the payload when off.** The caption is the timeline
+  entry's own title — the group's working description — so it is withheld at the server rather than
+  hidden in the renderer.
+
+> **Found while building it, and it would have shipped broken:** *nothing could serve the bytes.*
+> The prerequisite decided which files may be published, but `/api/upload-files/{id}/download` gates
+> anonymous callers through `FileAudienceAccess.CanViewFileAsync`, which grants only files flagged
+> `IsPublic` or shared to a Public target. A photo on a Public timeline entry is neither. The rule
+> said publishable; the pipe said 401. Every visitor would have seen broken frames — and **the
+> author never would**, being logged in and therefore inside the audience union.
+>
+> `PublicCaseMediaController` (`/api/public/cases/{caseId}/media/{fileId}`) closes it by asking
+> `CaseMediaPublication.MayPublishAsync` per request, 404 either way so a refusal does not confirm
+> an id. The route carries the case because "may this file be published" is only answerable in the
+> context of one.
+>
+> **The cheap fix was the dangerous one.** Setting `IsPublic` on the file when an author picks it is
+> two lines. That flag is global and permanent: it would outlive the page, survive the entry being
+> pulled back to private, and grant the file to every other endpoint at once. Publishing a photo on
+> one page would have quietly handed it out everywhere, for good — the exact opposite of the
+> binding-not-copying discipline the rest of this item is built on.
+>
+> The reachability test guards all three halves, the third being that the renderer uses the public
+> media URL *by name*: pointing it at the ordinary download URL compiles, passes every resolution
+> test, and looks right to whoever built it.
 
 #### 2b prerequisite — which of a case's files may be published (✅ built 2026-08-17)
 

@@ -210,6 +210,123 @@ else if (SectionType is CmsSectionType.EmbeddedInvestigations or CmsSectionType.
         </div>
     }
 }
+else if (SectionType == CmsSectionType.CaseMedia)
+{
+    @* The case-bound slot. Two steps on purpose: choosing the case is a different decision from
+       choosing what to show from it, and collapsing them into one long list of every photo the
+       group owns is how somebody publishes the wrong case's file. *@
+    <div class="mb-3">
+        <label class="form-label fw-semibold">
+            Which case are these from?<HelpLink Slug="organization-administration"
+                                                Anchor="putting-a-cases-photos-on-a-page" />
+        </label>
+
+        @if (_embedLoading)
+        {
+            <div class="text-secondary small">Loading…</div>
+        }
+        else if (_embedChoices.Count == 0)
+        {
+            <div class="alert alert-light py-2 mb-0">Your group has no cases yet.</div>
+        }
+        else
+        {
+            <select class="form-select" value="@(_mediaCaseId == Guid.Empty ? "" : _mediaCaseId.ToString())"
+                    @onchange="@(e => OnMediaCaseChanged(e.Value?.ToString()))">
+                <option value="">— choose a case —</option>
+                @foreach (var choice in _embedChoices)
+                {
+                    <option value="@choice.Id">
+                        @choice.Title@(choice.IsAlreadyPublic ? "" : " (not public)")
+                    </option>
+                }
+            </select>
+        }
+    </div>
+
+    @if (_mediaCaseId != Guid.Empty)
+    {
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Which of its files should this show?</label>
+
+            @if (_mediaLoading)
+            {
+                <div class="text-secondary small">Loading…</div>
+            }
+            else if (_mediaChoices.Count == 0)
+            {
+                @* Empty is the normal answer, not a failure, and saying so is the whole point of
+                   this branch: an author who picked the right case and saw a blank box would
+                   reasonably conclude the feature was broken. *@
+                <div class="alert alert-info py-2 mb-0">
+                    <div class="fw-semibold mb-1">This case has no files that can be published.</div>
+                    <p class="small mb-0">
+                        A file can go on a public page only when it is attached to a timeline entry
+                        marked <em>Public</em>, on a case that is itself public. Files on the case's
+                        Files tab are never publishable. To use a photo here, add it to a public
+                        timeline entry on the case first.
+                    </p>
+                </div>
+            }
+            else
+            {
+                <div class="border rounded p-2" style="max-height:320px; overflow-y:auto;">
+                    <div class="row g-2">
+                        @foreach (var file in _mediaChoices)
+                        {
+                            var chosen = _mediaFileIds.Contains(file.UploadFileId);
+                            <div class="col-6 col-md-4">
+                                <div class="border rounded p-1 h-100 @(chosen ? "border-primary" : "")">
+                                    <label class="d-block m-0" style="cursor:pointer;">
+                                        <img src="@AdminClient.GetPublicCaseMediaUrl(_mediaCaseId, file.UploadFileId)"
+                                             alt="@(file.Context ?? "Case file")"
+                                             class="img-fluid rounded mb-1"
+                                             style="width:100%; height:90px; object-fit:cover;" />
+                                        <div class="form-check m-0">
+                                            <input class="form-check-input" type="checkbox" checked="@chosen"
+                                                   @onchange="@(e => ToggleMediaFile(file.UploadFileId, (bool?)e.Value == true))" />
+                                            <span class="small">@(file.Context ?? "Untitled entry")</span>
+                                        </div>
+                                        @if (file.When is { } w)
+                                        {
+                                            <div class="text-secondary" style="font-size:.75rem;">@w.ToString("d MMM yyyy")</div>
+                                        }
+                                    </label>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="form-text">
+                    Only files already attached to a public timeline entry appear here. If a photo is
+                    missing, it has not been made public on the case yet.
+                </div>
+            }
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Captions</label>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="media-captions"
+                       checked="@_mediaShowCaptions"
+                       @onchange="@(e => SetMediaShowCaptions((bool?)e.Value == true))" />
+                <label class="form-check-label" for="media-captions">
+                    Show which timeline entry each file came from
+                </label>
+            </div>
+            <div class="form-text">
+                Off by default. The entry title is your group's own working description of what
+                happened, and it may say more than you want on a public page.
+            </div>
+        </div>
+
+        <div class="alert alert-light py-2 small mb-0">
+            These files stay linked to the case rather than copied onto the page. If a timeline entry
+            is later made private, or the case is unpublished, the files disappear from here on their
+            own — you do not have to remember which pages used them.
+        </div>
+    }
+}
 else if (SectionType == CmsSectionType.ContactInfo)
 {
     <div class="row g-2 mt-1">
@@ -425,7 +542,10 @@ else
         if (OrgId is not { } orgId) return;
 
         _embedLoading = true;
-        _embedChoices = SectionType == CmsSectionType.EmbeddedCases
+        // CaseMedia lists cases too — it is a case-bound section. Left off this condition it would
+        // have silently offered investigations, and every id it saved would have resolved to
+        // nothing.
+        _embedChoices = SectionType is CmsSectionType.EmbeddedCases or CmsSectionType.CaseMedia
             ? [.. await AdminClient.GetEmbeddableCasesAsync(orgId)]
             : [.. await AdminClient.GetEmbeddableInvestigationsAsync(orgId)];
         _embedLoading = false;
@@ -469,6 +589,110 @@ else
         await WriteEmbedAsync();
     }
 
+    // ── Case media (item #80 part 2b, the case-bound slot) ───────────────────
+    // Reuses _embedChoices for the case list — it is the same question ("which of our cases") and
+    // a second endpoint answering it would be a second place for "is this ours" to drift.
+
+    private Guid _mediaCaseId;
+    private List<Guid> _mediaFileIds = [];
+    private bool _mediaShowCaptions;
+    private List<PublishableCaseFile> _mediaChoices = [];
+    private bool _mediaLoading;
+
+    /// <summary>Which case's media has been fetched, so switching back and forth does not refetch.</summary>
+    private Guid _mediaLoadedFor;
+
+    private async Task OnMediaCaseChanged(string? raw)
+    {
+        var caseId = Guid.TryParse(raw, out var g) ? g : Guid.Empty;
+        if (caseId == _mediaCaseId) return;
+
+        _mediaCaseId = caseId;
+
+        // A file id only means anything alongside the case it came from. Carrying the old selection
+        // across would hand the new case a list of ids it does not own — which the server would
+        // drop, leaving the author with an empty section and no explanation.
+        _mediaFileIds = [];
+
+        await LoadMediaChoicesAsync();
+        await WriteCaseMediaAsync();
+    }
+
+    private async Task LoadMediaChoicesAsync()
+    {
+        if (OrgId is not { } orgId || _mediaCaseId == Guid.Empty)
+        {
+            _mediaChoices = [];
+            _mediaLoadedFor = Guid.Empty;
+            return;
+        }
+
+        if (_mediaLoadedFor == _mediaCaseId) return;
+
+        _mediaLoading = true;
+        StateHasChanged();
+
+        _mediaChoices = [.. await AdminClient.GetPublishableCaseMediaAsync(orgId, _mediaCaseId)];
+        _mediaLoadedFor = _mediaCaseId;
+        _mediaLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task ToggleMediaFile(Guid uploadFileId, bool selected)
+    {
+        if (selected)
+        {
+            if (!_mediaFileIds.Contains(uploadFileId)) _mediaFileIds.Add(uploadFileId);
+        }
+        else
+        {
+            _mediaFileIds.Remove(uploadFileId);
+        }
+
+        await WriteCaseMediaAsync();
+    }
+
+    private async Task SetMediaShowCaptions(bool value)
+    {
+        _mediaShowCaptions = value;
+        await WriteCaseMediaAsync();
+    }
+
+    /// <summary>
+    /// The stored shape: one case, the chosen files in the author's order, and the caption switch.
+    /// </summary>
+    /// <remarks>
+    /// camelCase, matching <c>CmsEmbed.CaseMediaSettings</c>. This JSON is read by the server with
+    /// its own serializer, so the casing written here is the only thing that makes the two agree —
+    /// getting it wrong published an empty section once already, in part 4.
+    /// </remarks>
+    private async Task WriteCaseMediaAsync()
+    {
+        var json = new JsonObject
+        {
+            ["caseId"] = _mediaCaseId.ToString(),
+            ["fileIds"] = new JsonArray([.. _mediaFileIds.Select(id => JsonValue.Create(id.ToString()))]),
+            ["showCaptions"] = _mediaShowCaptions,
+        }.ToJsonString();
+
+        await ContentJsonChanged.InvokeAsync(json);
+    }
+
+    private void ParseCaseMedia(JsonElement root)
+    {
+        _mediaCaseId = root.TryGetProperty("caseId", out var c) && Guid.TryParse(c.GetString(), out var cg)
+            ? cg
+            : Guid.Empty;
+
+        _mediaFileIds = root.TryGetProperty("fileIds", out var ids) && ids.ValueKind == JsonValueKind.Array
+            ? [.. ids.EnumerateArray()
+                     .Select(e => Guid.TryParse(e.GetString(), out var g) ? g : Guid.Empty)
+                     .Where(g => g != Guid.Empty)]
+            : [];
+
+        _mediaShowCaptions = GetBool(root, "showCaptions", false);
+    }
+
     private async Task WriteEmbedAsync()
     {
         var json = new JsonObject
@@ -509,9 +733,18 @@ else
         ParseContentJson();
 
         if (SectionType is CmsSectionType.EmbeddedInvestigations or CmsSectionType.EmbeddedCases
+                        or CmsSectionType.CaseMedia
             && _embedChoices.Count == 0 && !_embedLoading)
         {
             await LoadEmbedChoicesAsync();
+        }
+
+        // A saved section arrives with a case already chosen, so its files must be fetched without
+        // anybody touching the dropdown — otherwise reopening the editor shows the right case and
+        // no ticked photos, and the next save would write the selection away.
+        if (SectionType == CmsSectionType.CaseMedia && _mediaCaseId != Guid.Empty && !_mediaLoading)
+        {
+            await LoadMediaChoicesAsync();
         }
 
         if (OrgId is not Guid orgId || _templatesLoadedFor == orgId) return;
@@ -543,6 +776,10 @@ else
             else if (SectionType is CmsSectionType.EmbeddedInvestigations or CmsSectionType.EmbeddedCases)
             {
                 ParseEmbed(root);
+            }
+            else if (SectionType == CmsSectionType.CaseMedia)
+            {
+                ParseCaseMedia(root);
             }
             else if (SectionType == CmsSectionType.ContactInfo)
             {

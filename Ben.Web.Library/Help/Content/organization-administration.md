@@ -273,6 +273,29 @@ You can only show your own group's work. Everything is looked up fresh each time
 page, so if a client later asks to be unnamed, they disappear from pages you published months ago —
 you do not have to remember which ones.
 
+## Putting a case's photos on a page
+
+**Photos from a case** shows pictures and files taken from one of your own cases. Choose the case,
+then tick the files you want.
+
+**Only some of a case's files can be published, and this is not a setting you can change here.** A
+file appears in the picker when it is attached to a timeline entry marked **Public**, on a case that
+is itself public. Files on the case's **Files** tab never appear, whatever they are.
+
+That is on purpose. There is exactly one way to publish a case file — put it on a public timeline
+entry — so there is one place to look when you want to know what is visible, and one place to change
+your mind. If a photo you want is missing from the picker, add it to a public timeline entry on the
+case first.
+
+**Captions** are off unless you turn them on. A caption is the timeline entry's title, which is your
+group's own working description of what happened — useful to you, and sometimes more than you would
+choose to say to a visitor.
+
+**The photos stay linked to the case rather than copied onto the page.** If somebody later makes that
+timeline entry private, or the case is unpublished, the photos come off every page that used them, by
+themselves. You do not have to remember which pages they were on. The same is true of the direct
+image links — a link copied out of the page stops working at the same moment.
+
 ## Public events
 
 An event on your calendar can be opened to anybody. Tick **Public** and it appears on your group's
