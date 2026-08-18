@@ -1,0 +1,95 @@
+@*
+  OrganizationMembers.razor
+  ─────────────────────────
+  Displays the member roster for an organization with role display and removal.
+  Route: /organizations/{OrgId:guid}/members
+*@
+
+@page "/organizations/{OrgId:guid}/members"
+@namespace Ben.Web.Website.Library.Organization
+@using Ben.Web.Website.Library.Shared
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+<div class="container-fluid py-3">
+
+    @if (_loading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <span class="spinner-border text-primary" role="status"></span>
+        </div>
+    }
+    else
+    {
+        @if (!EmbeddedMode)
+        {
+            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                <h4 class="mb-0">Members — @_orgName</h4>
+                <a href="/organizations" class="btn btn-sm btn-outline-secondary">← Organizations</a>
+            </div>
+        }
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        @* ── Active Members ────────────────────────────────────────────────── *@
+        <TelerikGrid Data="@_members"
+                     Pageable="true"
+                     PageSize="25"
+                     Sortable="true"
+                     Class="mb-4">
+            <GridColumns>
+                <GridColumn Field="@nameof(OrgMembershipItem.Role)" Title="Role" Width="120px">
+                    <Template>
+                        @{ var m = (OrgMembershipItem)context; }
+                        <span class="badge @RoleBadge(m.Role)">@m.Role</span>
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Member">
+                    <Template>
+                        @{ var m2 = (OrgMembershipItem)context; }
+                        <UserNameLink AppUserId="@m2.AppUserId" DisplayName="@m2.DisplayName" ShowAvatar="true" />
+                    </Template>
+                </GridColumn>
+                <GridColumn Field="@nameof(OrgMembershipItem.IsActive)" Title="Active" Width="80px" />
+            </GridColumns>
+        </TelerikGrid>
+
+        @* ── Membership Requests section (if accepting applications) ─────── *@
+        <OrganizationMembershipRequests OrgId="@OrgId" />
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId        { get; set; }
+    [Parameter] public bool EmbeddedMode  { get; set; }
+
+    private bool _loading = true;
+    private string? _error;
+    private string _orgName = string.Empty;
+    private IReadOnlyList<OrgMembershipItem> _members = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        try
+        {
+            _members  = await AdminClient.GetOrganizationMembersAsync(OrgId);
+            var orgs  = await AdminClient.GetOrganizationsAsync();
+            _orgName  = orgs.FirstOrDefault(o => o.Id == OrgId)?.Name ?? OrgId.ToString();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private static string RoleBadge(OrganizationMemberRole role) => role switch
+    {
+        OrganizationMemberRole.Owner         => "bg-danger",
+        OrganizationMemberRole.Administrator => "bg-warning text-dark",
+        OrganizationMemberRole.Manager       => "bg-primary",
+        OrganizationMemberRole.Member        => "bg-success",
+        _                                    => "bg-secondary",
+    };
+}

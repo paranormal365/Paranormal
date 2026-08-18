@@ -1,0 +1,274 @@
+@namespace Ben.Web.Website.Library.Organization
+
+@inject IBenAdminClient AdminClient
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* Event types are what the calendar's "Type" dropdown offers. Until this screen existed they
+   could only be created against the API directly, which is why an org could end up with a
+   calendar whose type list was empty. *@
+
+<div class="card mt-3">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h6 class="card-title">Calendar Event Types<HelpLink Slug="organization-administration" Anchor="calendar-event-types" /></h6>
+                <p class="text-secondary small mb-0">
+                    The choices in the <em>Type</em> dropdown when someone adds a calendar event.
+                </p>
+            </div>
+            @if (!_showForm)
+            {
+                <button type="button" class="btn btn-primary" @onclick="BeginCreate"><BenIcon Name="plus" Class="me-1" />Add Type</button>
+            }
+        </div>
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger py-2 small mt-3 mb-0">@_error</div>
+        }
+
+        @if (_loading)
+        {
+            <div class="text-secondary small mt-3">Loading…</div>
+        }
+        else
+        {
+            @if (_types.Count == 0 && !_showForm)
+            {
+                <p class="text-secondary small fst-italic mt-3 mb-0">
+                    No event types yet. Events can still be created without one.
+                </p>
+            }
+
+            @foreach (var type in _types)
+            {
+                <div class="border-top pt-2 mt-2 d-flex justify-content-between align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        @if (!string.IsNullOrWhiteSpace(type.IconClass))
+                        {
+                            @if (type.IconClass.StartsWith("t:"))
+                            {
+                                var ico = IconPickerDialog.ResolveTelerikIcon(type.IconClass);
+                                @* Kept Telerik: a stored "t:" value names a Telerik icon, so the icon set is
+                                   what the data means, not a styling choice. Sprite and Font Awesome
+                                   values take the branch below. *@
+                                @if (ico is not null) { <TelerikSvgIcon Icon="@ico" /> }
+                            }
+                            else
+                            {
+                                <i class="@type.IconClass @type.ColorClass"></i>
+                            }
+                        }
+                        <span class="fw-semibold @type.ColorClass">@type.Name</span>
+                        @if (!type.IsActive)
+                        {
+                            <span class="badge bg-secondary">Inactive</span>
+                        }
+                        <span class="text-secondary small">order @type.SortOrder</span>
+                    </div>
+                    <div class="d-flex gap-1 flex-shrink-0">
+                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => BeginEdit(type))" title="Edit"><BenIcon Name="edit-2" /></button>
+                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => _deleteTarget = type)" title="Delete"><BenIcon Name="trash-2" /></button>
+                    </div>
+                </div>
+            }
+
+            @if (_showForm)
+            {
+                <div class="border-top pt-3 mt-3">
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <label class="form-label small mb-1">Name</label>
+                            @* Plain input: Telerik text boxes commit on blur, which drops the last
+                               keystroke when Save is clicked straight from the field. *@
+                            <input class="form-control" maxlength="100" placeholder="e.g. Meeting"
+                                   value="@_formName"
+                                   @oninput="@(e => _formName = e.Value?.ToString() ?? string.Empty)" />
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small mb-1">Colour</label>
+                            <select class="form-select" value="@_formColorClass"
+                                    @onchange="@(e => _formColorClass = e.Value?.ToString() ?? string.Empty)">
+                                @foreach (var option in ColorOptions)
+                                {
+                                    <option value="@option.Value" selected="@(option.Value == _formColorClass)">@option.Label</option>
+                                }
+                            </select>
+                            <span class="small @_formColorClass">Preview</span>
+                        </div>
+                        <div class="col-sm-2">
+                            <label class="form-label small mb-1">Order</label>
+                            <input class="form-control" type="number" value="@_formSortOrder"
+                                   @oninput="@(e => _formSortOrder = int.TryParse(e.Value?.ToString(), out var n) ? n : 0)" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-1 d-block">Icon</label>
+                            <IconClassPicker @bind-Value="@_formIconClass" />
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="event-type-active"
+                                       checked="@_formIsActive"
+                                       @onchange="@(e => _formIsActive = (bool)(e.Value ?? false))" />
+                                <label class="form-check-label" for="event-type-active">
+                                    Active
+                                    <span class="d-block text-secondary small">
+                                        Inactive types stay on existing events but are not offered for new ones.
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2 mt-3">
+                        <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(!(!_saving))">
+                            @(_saving ? "Saving…" : "Save")
+                        </button>
+                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => { _showForm = false; _error = null; })">Cancel</button>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@if (_deleteTarget is not null)
+{
+    <BenModal Visible="true" Title="Delete event type">
+    <ChildContent>
+            <p class="mb-2">Delete <strong>@_deleteTarget.Name</strong>?</p>
+            <p class="text-secondary small">
+                Events already using it keep their date and title — they simply lose the type.
+                If you only want it out of the dropdown, edit it and clear <em>Active</em> instead.
+            </p>
+            <div class="dialog-footer-actions d-flex justify-content-end gap-2">
+                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => _deleteTarget = null)">Cancel</button>
+                <button type="button" class="btn btn-danger" @onclick="DeleteConfirmedAsync">Delete</button>
+            </div>
+        </ChildContent>
+</BenModal>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private sealed record ColorOption(string Value, string Label);
+
+    // Bootstrap text colours, matching how ColorClass is applied elsewhere (CaseTimeline,
+    // AdminExperienceTaxonomy) — the stored value is a CSS class, not a hex code.
+    private static readonly ColorOption[] ColorOptions =
+    [
+        new("",              "Default"),
+        new("text-primary",  "Blue"),
+        new("text-success",  "Green"),
+        new("text-danger",   "Red"),
+        new("text-warning",  "Amber"),
+        new("text-info",     "Teal"),
+        new("text-secondary","Grey"),
+        new("text-dark",     "Black"),
+    ];
+
+    private List<OrgCalendarEventTypeRecord> _types = new();
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+
+    private bool  _showForm;
+    private Guid? _editId;
+    private string  _formName       = string.Empty;
+    private string  _formColorClass = string.Empty;
+    private string? _formIconClass;
+    private int     _formSortOrder;
+    private bool    _formIsActive = true;
+
+    private OrgCalendarEventTypeRecord? _deleteTarget;
+
+    private Guid _loadedForOrg;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (OrgId == Guid.Empty || OrgId == _loadedForOrg) return;
+        _loadedForOrg = OrgId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _types = (await AdminClient.GetCalendarEventTypesAsync(OrgId)).ToList();
+        _loading = false;
+    }
+
+    private void BeginCreate()
+    {
+        _editId = null;
+        _formName = string.Empty;
+        _formColorClass = string.Empty;
+        _formIconClass = null;
+        _formSortOrder = _types.Count == 0 ? 0 : _types.Max(t => t.SortOrder) + 1;
+        _formIsActive = true;
+        _error = null;
+        _showForm = true;
+    }
+
+    private void BeginEdit(OrgCalendarEventTypeRecord type)
+    {
+        _editId = type.Id;
+        _formName = type.Name;
+        _formColorClass = type.ColorClass ?? string.Empty;
+        _formIconClass = type.IconClass;
+        _formSortOrder = type.SortOrder;
+        _formIsActive = type.IsActive;
+        _error = null;
+        _showForm = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_formName))
+        {
+            _error = "Give the type a name.";
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+
+        var request = new UpsertCalendarEventTypeRequest(
+            _formName.Trim(),
+            string.IsNullOrWhiteSpace(_formColorClass) ? null : _formColorClass,
+            string.IsNullOrWhiteSpace(_formIconClass) ? null : _formIconClass,
+            _formSortOrder,
+            _formIsActive);
+
+        var result = _editId is null
+            ? await AdminClient.CreateCalendarEventTypeAsync(OrgId, request)
+            : await AdminClient.UpdateCalendarEventTypeAsync(OrgId, _editId.Value, request);
+
+        _saving = false;
+
+        if (result is null)
+        {
+            _error = "That could not be saved. Only group owners and administrators can change event types.";
+            return;
+        }
+
+        _showForm = false;
+        await LoadAsync();
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        var target = _deleteTarget;
+        _deleteTarget = null;
+        if (target is null) return;
+
+        if (!await AdminClient.DeleteCalendarEventTypeAsync(OrgId, target.Id))
+        {
+            _error = "That could not be deleted. Only group owners and administrators can change event types.";
+            return;
+        }
+
+        await LoadAsync();
+    }
+}
