@@ -40,10 +40,18 @@
            older device, a visitor who declined the prompt. Falling silent here would look like the
            feature is broken; asking for a place name instead keeps it usable either way. *@
         <div class="d-flex gap-2 mb-3 flex-wrap">
-            <TelerikTextBox @bind-Value="_manualQuery"
-                            Placeholder="Enter your city, address, or zip code"
-                            Width="280px"
-                            OnChange="@(() => _manualError = null)" />
+            @* Plain input, not TelerikTextBox: Telerik text boxes commit on blur, so the button
+               beside them — whose Enabled depends on this field — stays disabled until focus
+               leaves. Somebody who types and clicks straight through finds a dead button. The same
+               reasoning already governs the equipment and timeline editors; a Playwright test
+               caught it here after the first version used TelerikTextBox and failed exactly that
+               way. *@
+            @* Stable id, because HomeHero above carries the identical placeholder — a
+               placeholder-based selector matches its box instead of this one. *@
+            <input id="nearby-location" class="form-control" style="max-width:280px;"
+                   placeholder="Enter your city, address, or zip code"
+                   value="@_manualQuery"
+                   @oninput="@(e => { _manualQuery = e.Value?.ToString() ?? string.Empty; _manualError = null; })" />
             <TelerikButton OnClick="SearchManualLocationAsync"
                            ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                            Enabled="@(!_searching && !string.IsNullOrWhiteSpace(_manualQuery))">
@@ -55,7 +63,13 @@
             <div class="alert alert-warning py-2">@_manualError</div>
         }
     }
-    else if (_searching)
+
+    @* A second, independent chain. It was originally one long if/else-if with the block above,
+       which meant the Denied branch shadowed every results branch: somebody who declined the
+       browser prompt, typed a place and searched got their data loaded and nothing rendered. The
+       manual box has to stay on screen anyway — it is how they search somewhere else — so the two
+       concerns cannot share a chain. Caught by a Playwright test, not by anything else. *@
+    @if (_searching)
     {
         <div class="d-flex justify-content-center py-4">
             <TelerikLoaderContainer Visible="true" Text="Looking nearby…" />

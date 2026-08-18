@@ -4323,6 +4323,32 @@ whose breakage only a running app would have revealed. Now covered, including th
 event is *still* snapped even though the organization's listing drawn from the very same address is
 shown precisely: same coordinates, two answers, decided by what the row means.
 
+### Playwright coverage — and the bug it found
+
+`NearbyDiscoveryTests` (category `Nearby`), run against the live stack, **7 passing**. Geolocation is
+granted and pinned to the Nashville seed point in one fixture; a second fixture withholds it to
+exercise the declined-permission path.
+
+**It found a real bug that nothing else could have.** The component was one long `if / else if`
+chain: `Asking` → `Denied` → `_searching` → results. So whenever geolocation was declined, the
+`Denied` branch matched and **shadowed every results branch** — a visitor who typed a place and
+searched had their data load correctly and saw nothing at all. Unit tests pass (the endpoint is
+right), the source scan passes (a screen does call it), and the feature is silently broken for
+everybody who says no to the browser prompt. Fixed by splitting into two independent chains, which
+is also correct behaviourally: the manual box has to stay on screen, since it is how somebody
+searches a different place.
+
+Two smaller things worth recording:
+- **`HomeHero` carries the identical placeholder text**, so a placeholder-based Playwright selector
+  fills *its* box and then clicks this panel's button — which stays correctly disabled. That looks
+  exactly like a component bug and is not one; it cost a wrong diagnosis before the id was added.
+- The manual input is a **plain `<input>` with `@oninput`**, not `TelerikTextBox`, matching the
+  convention already used in the equipment and timeline editors: a Telerik text box commits on blur,
+  so a button gated on its value stays disabled for anyone who types and clicks straight through.
+- `[SetUp]` waits for the panel, not just `NetworkIdle` — a Blazor Server circuit loads its data
+  after the network goes quiet, and the first run against a freshly restarted app failed on that
+  race while warm runs passed.
+
 ## 89. Readable URLs — the scheme, settled 2026-08-17 (closed 2026-08-17)
 
 Ben: *"we use the GUID for many of the IDs. That is not human readable... I was thinking we need
