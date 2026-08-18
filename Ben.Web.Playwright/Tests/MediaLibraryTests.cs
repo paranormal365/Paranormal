@@ -25,7 +25,7 @@ public class MediaLibraryTests : BenTestBase
     private async Task NavigateToMediaLibraryAsync()
     {
         await LoginAsync(UserEmail, UserPassword);
-        await Page.GetByRole(AriaRole.Menuitem, new() { Name = "Media Library", Exact = true }).ClickAsync();
+        await Page.GetByRole(AriaRole.Link, new() { Name = "Media Library", Exact = true }).Or(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Media Library", Exact = true })).First.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
     }
 
@@ -99,7 +99,7 @@ public class MediaLibraryTests : BenTestBase
     public async Task NavDrawer_MediaLibraryLinkNavigates()
     {
         await LoginAsync(UserEmail, UserPassword);
-        var link = Page.GetByRole(AriaRole.Menuitem, new() { Name = "Media Library", Exact = true });
+        var link = Page.GetByRole(AriaRole.Link, new() { Name = "Media Library", Exact = true }).Or(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Media Library", Exact = true })).First;
         await Expect(link).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await link.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
@@ -114,7 +114,7 @@ public class MediaLibraryTests : BenTestBase
         await LoginAsync(UserEmail, UserPassword); // Sarah — TGH org member
         // SPA nav-link click, not Page.GotoAsync — see the note above the standalone-page
         // tests: a hard navigation to an authenticated route currently mis-redirects here too.
-        await Page.GetByRole(AriaRole.Menuitem, new() { Name = "Organizations", Exact = true }).ClickAsync();
+        await Page.GetByRole(AriaRole.Link, new() { Name = "Organizations", Exact = true }).Or(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Organizations", Exact = true })).First.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         var tgh = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
