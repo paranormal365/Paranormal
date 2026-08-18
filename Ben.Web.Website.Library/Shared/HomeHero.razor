@@ -18,13 +18,13 @@
             @* Enter submits, which a plain button in a div would not do — the search box is the
                one control on this page most people will use, and typing an address then pressing
                Enter is the natural way to use it. *@
-            <input type="search" class="form-control form-control-lg home-hero__search-input"
+            <input type="search" class="form-control home-hero__search-input"
                    placeholder="Enter your city, address, or zip code"
                    aria-label="City, address, or zip code"
                    value="@_query"
                    @oninput="OnQueryInput"
                    @onkeydown="OnQueryKeyDown" />
-            <button type="button" class="btn btn-primary btn-lg"
+            <button type="button" class="btn btn-primary"
                     @onclick="SearchAsync"
                     disabled="@(_searching || string.IsNullOrWhiteSpace(_query))">
                 @if (_searching)

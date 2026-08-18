@@ -5,6 +5,9 @@
 
     [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
 
+    /// <summary>Stable identifier, so a parent can select this tab by name rather than position.</summary>
+    [Parameter] public string? Id { get; set; }
+
     /// <summary>Sprite icon name shown before the title.</summary>
     [Parameter] public string? Icon { get; set; }
 

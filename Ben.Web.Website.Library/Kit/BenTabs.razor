@@ -50,6 +50,14 @@
     [Parameter] public int ActiveIndex { get; set; }
     [Parameter] public EventCallback<int> ActiveIndexChanged { get; set; }
 
+    /// <summary>
+    /// Id of the visible tab, for call sites that address tabs by name rather than position —
+    /// which survives tabs being reordered or conditionally hidden, unlike an index.
+    /// Set <see cref="BenTab.Id"/> on each tab to use this.
+    /// </summary>
+    [Parameter] public string? ActiveId { get; set; }
+    [Parameter] public EventCallback<string> ActiveIdChanged { get; set; }
+
     /// <summary>"nav-tabs" (default) or "nav-pills".</summary>
     [Parameter] public string NavClass { get; set; } = "nav-tabs";
 
@@ -69,10 +77,24 @@
         StateHasChanged();
     }
 
+    protected override void OnParametersSet()
+    {
+        // An ActiveId from the caller wins over whatever index we were on, so the two stay
+        // consistent when a page drives the strip by id.
+        if (ActiveId is null) return;
+
+        var i = _tabs.FindIndex(t => t.Id == ActiveId);
+        if (i >= 0) ActiveIndex = i;
+    }
+
     private async Task ActivateAsync(int index)
     {
         if (index == ActiveIndex) return;
+
         ActiveIndex = index;
         if (ActiveIndexChanged.HasDelegate) await ActiveIndexChanged.InvokeAsync(index);
+
+        var id = _tabs.ElementAtOrDefault(index)?.Id;
+        if (id is not null && ActiveIdChanged.HasDelegate) await ActiveIdChanged.InvokeAsync(id);
     }
 }

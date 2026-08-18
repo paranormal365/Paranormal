@@ -89,42 +89,67 @@
 }
 
 /* ── Outline buttons in dark mode ────────────────────────────────────────────
-   Night's semantic colours are deep — primary #37508a, info #66366c — because the template uses
-   them as solid fills behind white text. Bootstrap's .btn-outline-* variants invert that, painting
-   the same colour as text on the page background, where they measure 1.6–3:1 against the dark
-   surface and are close to unreadable.
+   Night's semantic colours are deep on purpose — they belong to the skin's character, and the
+   template uses them as solid fills behind white text. Bootstrap's .btn-outline-* variants paint
+   the same colour as text on the page background instead, where the darkest of them get hard to
+   read against the dark surface.
 
-   Measured on the home page before this rule: outline-info 1.57, outline-primary 1.82,
-   outline-danger 2.97, outline-success 4.25 — all under the 4.5:1 WCAG AA threshold.
-
-   Lightening only the resting foreground fixes it. Hover still fills with the true brand colour,
-   so the button's identity is unchanged; light mode is untouched, where the dark colours are
-   already correct against white. */
+   The nudge here is deliberately small: enough to lift the resting text off the background,
+   not enough to turn the brand colours pastel. Hover still fills with the true colour.
+   These sit below the 4.5:1 WCAG AA text threshold by design — the palette is the priority. */
 :root[data-bs-theme="dark"] .btn-outline-primary {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-primary) 45%, #fff);
-    --bs-btn-border-color: color-mix(in srgb, var(--bs-primary) 60%, #fff);
+    --bs-btn-color:        color-mix(in srgb, var(--bs-primary) 78%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-primary) 88%, #fff);
 }
 
 :root[data-bs-theme="dark"] .btn-outline-info {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-info) 40%, #fff);
-    --bs-btn-border-color: color-mix(in srgb, var(--bs-info) 55%, #fff);
+    --bs-btn-color:        color-mix(in srgb, var(--bs-info) 72%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-info) 85%, #fff);
 }
 
 :root[data-bs-theme="dark"] .btn-outline-danger {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-danger) 55%, #fff);
-    --bs-btn-border-color: color-mix(in srgb, var(--bs-danger) 70%, #fff);
+    --bs-btn-color:        color-mix(in srgb, var(--bs-danger) 85%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-danger) 92%, #fff);
 }
 
 :root[data-bs-theme="dark"] .btn-outline-success {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-success) 60%, #fff);
-    --bs-btn-border-color: color-mix(in srgb, var(--bs-success) 75%, #fff);
+    --bs-btn-color:        color-mix(in srgb, var(--bs-success) 88%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-success) 94%, #fff);
 }
 
-/* Night's green is mid-tone (#489e48), which reads fine as a fill but only reaches 3.35:1 as text
-   on white — the one outline variant that fails in light mode. Darkening the resting foreground
-   brings it over AA without changing the filled hover state. */
-:root[data-bs-theme="light"] .btn-outline-success,
-:root:not([data-bs-theme="dark"]) .btn-outline-success {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-success) 75%, #000);
-    --bs-btn-border-color: color-mix(in srgb, var(--bs-success) 85%, #000);
+/* ── Button size ────────────────────────────────────────────────────────────
+   The template's default .btn matches .form-control's height (~43px), which is right for a button
+   sitting in a form row but heavy everywhere else — grid row actions, toolbars, card footers.
+   These metrics land a default button at ~31px while keeping the label readable. Explicit
+   btn-sm/btn-lg still work; they scale from here. */
+.btn {
+    --bs-btn-padding-y:  .25rem;
+    --bs-btn-padding-x:  .65rem;
+    --bs-btn-font-size:  .875rem;
 }
+
+.btn-lg {
+    --bs-btn-padding-y:  .5rem;
+    --bs-btn-padding-x:  1rem;
+    --bs-btn-font-size:  1rem;
+}
+
+/* ── Input size ─────────────────────────────────────────────────────────────
+   Kept deliberately in step with the .btn metrics above: an input and the button beside it in a
+   search row have to be the same height, and the template's stock pairing was ~43px for both.
+   These land both at ~31px. telerik-night.css carries the matching change for the Kendo widgets
+   that stay, so a date picker in a form row still lines up with its neighbours. */
+.form-control,
+.form-select {
+    padding-block: .25rem;
+    font-size: .875rem;
+}
+
+/* The hero's search pair reads as one control, so keep them identical there too. */
+.home-hero__search-input { font-size: .9375rem; }
+
+/* No override for .btn-system, the template's header control. It sets `padding: .3125rem` and
+   `line-height: var(--app-header-height)` directly rather than through Bootstrap's button
+   variables, so the .btn metrics above never reach it and it keeps the template's own sizing —
+   which is deliberately taller than the header's nominal height. Setting --bs-btn-padding-y on it
+   looks like it should help and does nothing at all; a direct `padding` declaration wins. */

@@ -260,3 +260,53 @@ with the true brand colour. Fixed centrally, before the remaining waves add hund
 
 Also this wave: Administration now sits directly under Home for an admin, and the one forced
 `font-weight` in the Telerik sheet was removed — the template sets its own type weights.
+
+### Wave B — `Manage/Maps/`, `User/`, `Messaging/`
+
+24 components ported. Routes added: `/profile`, `/notifications`, `/admin/users`,
+`/admin/users/create`, `/validate-email/{token}`, `/organizations/{id}/messages`.
+`AddressFieldsWithMap`, deferred in wave A, lands here with its map dependency.
+
+Not ported: `UserMenu` and `NotificationBell` already exist as host chrome (`BenUserMenu`,
+`BenNotificationBell`) — porting them would give the app two of each.
+
+**Converted:** 77 buttons, 26 text boxes, 18 check boxes, 12 windows → `BenModal`, 2 tab strips →
+`BenTabs`, plus sliders, numeric inputs and icons. **Kept:** 8 `TelerikGrid`, 8 templated
+`DropDownList`, 3 `DateTimePicker`, 3 `ColorPicker`, 2 `TelerikMap`, 1 `TelerikEditor`.
+`BenTabs` gained `ActiveId`, because `OrgMessages` addresses its tabs by name rather than index —
+which survives tabs being reordered or hidden.
+
+**Deferred: `AdminUserDetail`** (1,038 lines). It needs `Manage/Audio`, `Manage/Media` and
+`Manage/Icon` — essentially all of `Manage/`. Combined with wave A's finding, **`Manage/` is the
+real blocker and should be the next wave**, not wave G: it is a dependency of User, Organization
+and Client alike. `/admin/users/{id}` 404s until then.
+
+**Automating 77 button conversions took three attempts, and the first two silently corrupted
+markup.** Both failures were the same mistake — using a regex where Razor needs a parser:
+
+1. `/<TelerikButton.*?>/` ended the tag at the `>` inside a lambda (`@(() => Foo())`), truncating
+   attributes into the element's content.
+2. Matching attribute values as `"[^"]*"` truncated at the first nested C# string, so
+   `OnClick="@(() => Nav.NavigateTo("/admin/users"))"` broke apart.
+
+The third attempt reads tags with a small scanner that balances `@( … )` and skips string literals.
+Both original failure cases are now verified correct, and every `<button>` in the wave balances.
+The lesson is worth keeping: **a converted file that compiles is not evidence the conversion was
+right** — the first attempt's output compiled in most files and was still wrong.
+
+Sizing and colour, all from Ben's review:
+- **Night's palette restored.** The wave-A contrast fix lightened the outline buttons far too much
+  for a ghost-hunting theme. They now sit close to the originals (`#37508a → #6377a4`,
+  `#66366c → #916e95`) — a small lift for legibility rather than a repaint. These read 3.2–5.0:1,
+  below the 4.5:1 AA threshold for three of them; that is a deliberate trade in favour of the skin.
+- **Icons no longer break onto their own line.** The template's `.sa-icon` is `display:block`,
+  which suits standalone icons but made every converted icon button ~60px tall with the glyph
+  stranded above its label. Inline contexts are now corrected and icons scale with the label.
+- **Controls tightened** from the template's ~43px to ~32px, with `.form-control` and the kept
+  Kendo inputs moved in step so a date picker still lines up beside a text box.
+- `.btn-system`, the header control, is left alone: it sets `padding` and `line-height` directly
+  rather than through Bootstrap's variables, so an override via `--bs-btn-padding-y` is dead code.
+
+**Verified:** solution builds clean, 2430/2430 tests pass, `/profile` renders all four cards with
+live data and contains no Kendo markup beyond `k-body` on `<body>`, `/admin/users` loads six real
+users into a kept grid that now inherits its panel's surface, and header controls sit correctly.

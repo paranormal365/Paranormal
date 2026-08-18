@@ -66,16 +66,16 @@ body.k-body {
       padding and type so a mixed row lines up. */
 .k-input,
 .k-picker {
-    font-size: var(--bs-body-font-size);
+    font-size: .875rem;                       /* tracks .form-control in app.css */
     line-height: var(--bs-body-line-height);
 }
 
 .k-input .k-input-inner,
 .k-picker .k-input-inner {
-    /* 8px, not Bootstrap's stock .375rem: the template overrides .form-control's padding, and
-       matching the stock value left Kendo 4px short. 25.6px line-height + 8 + 8 + 2px borders
-       = the 43.6px a .form-control actually measures here. */
-    padding-block: .5rem;
+    /* Matches .form-control's padding in app.css. Measure both after changing either — the
+       first attempt used Bootstrap's stock .375rem and left Kendo 4px short of the template's
+       own overridden padding. */
+    padding-block: .25rem;
     padding-inline: .75rem;
 }
 
