@@ -4304,6 +4304,25 @@ straight to `/o/{org}`, an event's card says "approximate" and gives no address 
 was a fully-built, fully-correct endpoint with zero callers, and adding a UI without a test asserting
 the UI is real would have been the same mistake with better production values.
 
+**Dev seed data added, because the panel was correct and empty.** No seeded organization address set
+`IsSearchable` (it defaults to false) and nothing seeded an `OrgCalendarEvent` at all, so a fresh dev
+database rendered "Nothing found" — indistinguishable from broken. `SeedLocalDiscoveryAsync` now
+marks *one* group findable (not both: a panel where everything is findable cannot show that the flag
+is what does the work) and creates two public events.
+
+The two events are placed deliberately. Bell Witch Cave is **33.4 miles** from the Nashville seed
+point, so at the panel's default 25-mile radius it is out of range; the second event sits at the
+other group's own Nashville address. A fresh database therefore shows one event immediately, and
+widening the dropdown to 50 visibly adds the second — the control does something observable rather
+than being taken on trust.
+
+That second event also uses `OrganizationAddressId` with **no** `PlaceId`, which `VisibleEvents`
+permits and which the nearby projection falls back to for coordinates. **That fallback had no test**
+until the seed data started depending on it — a line of code nothing exercised, relied upon by data
+whose breakage only a running app would have revealed. Now covered, including the point that such an
+event is *still* snapped even though the organization's listing drawn from the very same address is
+shown precisely: same coordinates, two answers, decided by what the row means.
+
 ## 89. Readable URLs — the scheme, settled 2026-08-17 (closed 2026-08-17)
 
 Ben: *"we use the GUID for many of the IDs. That is not human readable... I was thinking we need

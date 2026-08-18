@@ -401,7 +401,98 @@ internal static class DevelopmentDataSeeder
         if (tgh is not null && nps is not null)
             await SeedSharedPlaceAsync(db, tgh, nps, owner, emma, sarah, now);
 
+        if (tgh is not null && nps is not null)
+            await SeedLocalDiscoveryAsync(db, tgh, nps, owner, emma, now);
+
         Console.WriteLine("[DevDataSeeder] Development seed data applied successfully.");
+    }
+
+    /// <summary>
+    /// Data for the home page's "What's Near You" panel — a findable group and public events.
+    /// </summary>
+    /// <remarks>
+    /// <para>Backlog item #88. Without this the panel is correct and empty: no seeded organization
+    /// address sets <c>IsSearchable</c> (it defaults to false), and nothing seeded an
+    /// <c>OrgCalendarEvent</c> at all. A feature that renders "Nothing found" on a fresh dev
+    /// database cannot be click-tested, and looks broken rather than unpopulated.</para>
+    ///
+    /// <para><b>The two halves are deliberately different, and that is the point of seeding both.</b>
+    /// The group's address is marked searchable and <c>FullAddressAndMap</c>, so it appears exactly
+    /// where it is — a group that opted in is a business listing. The events resolve through
+    /// <c>PublicCoordinates</c> and appear only approximately. Seeing both on one screen is the
+    /// cheapest way to notice if that asymmetry ever regresses into "redact everything".</para>
+    ///
+    /// <para>Events are placed at the seeded Bell Witch Cave, a <c>PlaceKind.PublicLocation</c>.
+    /// A private residence would be excluded by <c>PublicEventController.VisibleEvents</c>, so
+    /// seeding one there would produce an invisible event and a confusing afternoon.</para>
+    /// </remarks>
+    private static async Task SeedLocalDiscoveryAsync(
+        BenDataContext db, Organization tgh, Organization nps,
+        AppUser owner, AppUser emma, DateTime now)
+    {
+        // ── Make one group findable ──────────────────────────────────────────
+        // Only TGH, not both: a panel where every group is findable cannot show that the flag is
+        // what does the work.
+        var tghAddress = await db.OrganizationAddresses
+            .FirstOrDefaultAsync(a => a.OrganizationId == tgh.Id);
+
+        if (tghAddress is not null && !tghAddress.IsSearchable)
+        {
+            tghAddress.IsSearchable      = true;
+            tghAddress.SearchVisibility  = OrganizationAddressVisibility.Public;
+            tghAddress.PublicDisplayMode = OrganizationAddressDisplayMode.FullAddressAndMap;
+            tghAddress.SearchRadiusMiles = 50;
+            await db.SaveChangesAsync();
+            Console.WriteLine("[DevDataSeeder] Made Tennessee Ghost Hunters findable in nearby search.");
+        }
+
+        // ── Public events ────────────────────────────────────────────────────
+        var placeId = new Guid("40000001-0000-0000-0000-000000000001");
+        if (!await db.Places.AnyAsync(p => p.Id == placeId)) return;
+        if (await db.OrgCalendarEvents.AnyAsync(e => e.IsPublic)) return;
+
+        // Dated from "now" rather than fixed, so the panel — which shows upcoming events only —
+        // does not quietly empty out as the seed data ages.
+        var walk = new OrgCalendarEvent
+        {
+            Id = Guid.NewGuid(), OrganizationId = tgh.Id,
+            Title = "Bell Witch Cave — Public Night Walk",
+            Description = "<p>An open evening at the cave. Bring a torch; we supply the recorders.</p>",
+            PlaceId = placeId,
+            StartDateTime = now.AddDays(14).Date.AddHours(20),
+            EndDateTime   = now.AddDays(14).Date.AddHours(23),
+            IsPublic = true,
+            UrlName = $"{now.AddDays(14):yyyy-MM-dd}-bell-witch-cave-public-night-walk",
+            AttendeeCapacity = 20,
+            DateCreated = now, CreatedByAppUserId = owner.Id,
+        };
+
+        // A second event from the other group, at their own Nashville address rather than the cave.
+        // The distance matters: the cave is ~33 miles from Nashville, so at the panel's default
+        // 25-mile radius the walk alone is out of range. Seeding one event close and one far means
+        // a fresh dev database shows something immediately AND the distance dropdown visibly does
+        // something when widened — one event at 25 miles, two at 50.
+        var npsAddress = await db.OrganizationAddresses
+            .FirstOrDefaultAsync(a => a.OrganizationId == nps.Id);
+
+        var talk = new OrgCalendarEvent
+        {
+            Id = Guid.NewGuid(), OrganizationId = nps.Id,
+            Title = "Open Meeting — What We Found This Year",
+            Description = "<p>Our annual public review of the season's investigations. Anyone welcome.</p>",
+            // No PlaceId: an event may name an organization address instead, and VisibleEvents
+            // allows a null Place. The nearby projection falls back to the address for coordinates.
+            OrganizationAddressId = npsAddress?.Id,
+            StartDateTime = now.AddDays(28).Date.AddHours(19),
+            EndDateTime   = now.AddDays(28).Date.AddHours(21),
+            IsPublic = true,
+            UrlName = $"{now.AddDays(28):yyyy-MM-dd}-open-meeting-what-we-found-this-year",
+            DateCreated = now, CreatedByAppUserId = emma.Id,
+        };
+
+        db.OrgCalendarEvents.AddRange(walk, talk);
+        await db.SaveChangesAsync();
+        Console.WriteLine("[DevDataSeeder] Created two public events for local discovery.");
     }
 
     /// <summary>

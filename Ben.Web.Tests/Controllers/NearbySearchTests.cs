@@ -220,6 +220,74 @@ public sealed class NearbySearchTests
     public async Task A_query_matching_the_event_title_finds_it()
         => Assert.Single((await SearchAsync(await SeedAsync(), query: "ghost walk")).Events);
 
+    // ── Events located by an organization address rather than a Place ────────
+
+    /// <summary>
+    /// An event can name one of the group's own addresses instead of a shared Place, and the
+    /// nearby projection has to resolve coordinates from it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Not a hypothetical: <c>VisibleEvents</c> explicitly permits a null <c>Place</c>, and
+    /// the dev seeder now uses this exact shape for one of its two public events — an open meeting
+    /// held at the group's own address. Without a test, that fallback was a line of code nothing
+    /// exercised, relied on by seed data that only a running app would reveal as broken.</para>
+    ///
+    /// <para>The redaction rule does <b>not</b> soften here. An event at an address is still an
+    /// invitation, so it is snapped like any other — even though the organization's own listing,
+    /// drawn from the very same address, is shown precisely. Same coordinates, two different
+    /// answers, decided by what the row means rather than where the numbers came from.</para>
+    /// </remarks>
+    [Fact]
+    public async Task An_event_at_an_organization_address_is_found_and_still_approximate()
+    {
+        var factory = CreateFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization
+            {
+                Id = OrgId, Name = "Ghost Squad", UrlName = "ghost-squad",
+                DateCreated = DateTime.UtcNow,
+            });
+
+            var addressId = Guid.NewGuid();
+            db.OrganizationAddresses.Add(new OrganizationAddress
+            {
+                Id = addressId, OrganizationId = OrgId,
+                StreetAddress1 = "100 Broadway", City = "Nashville", State = "TN",
+                Latitude = EventLat, Longitude = EventLon,
+                IsSearchable = false,   // deliberately not a findable listing
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = UserId,
+            });
+
+            var start = DateTime.UtcNow.AddDays(10);
+            db.OrgCalendarEvents.Add(new OrgCalendarEvent
+            {
+                Id = Guid.NewGuid(), OrganizationId = OrgId,
+                Title = "Open Meeting", UrlName = "2026-09-01-open-meeting",
+                OrganizationAddressId = addressId,   // no PlaceId
+                StartDateTime = start, EndDateTime = start.AddHours(2),
+                IsPublic = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = UserId,
+            });
+
+            await db.SaveChangesAsync();
+        }
+
+        var results = await SearchAsync(factory);
+
+        var ev = Assert.Single(results.Events);
+        Assert.Equal("Open Meeting", ev.Title);
+        Assert.Equal("Nashville", ev.City);
+
+        // Still snapped, despite coming from an address rather than a Place.
+        Assert.NotNull(ev.Latitude);
+        Assert.NotEqual(EventLat, ev.Latitude);
+        Assert.NotEqual(EventLon, ev.Longitude);
+
+        // And the address was not marked searchable, so it is not also a group listing.
+        Assert.Empty(results.Organizations);
+    }
+
     private static double Haversine(double lat1, double lon1, double lat2, double lon2)
     {
         const double R = 3958.8;
