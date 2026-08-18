@@ -1,0 +1,56 @@
+/* Styles for the kit components, shipped with the library so a host gets them by referencing it.
+   Served at /_content/Ben.Web.Website.Library/Kit/BenKit.css.
+
+   Everything here is a gap the template does not already cover. If a rule here looks like it is
+   fighting smartapp.min.css, the template's own class is almost certainly the better answer. */
+
+/* ── BenLoaderOverlay ───────────────────────────────────────────────────── */
+.ben-loader-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* color-mix keeps the veil tied to the active theme's own surface, so it reads correctly in
+       both light and dark without a second rule. */
+    background: color-mix(in srgb, var(--bs-body-bg) 70%, transparent);
+    z-index: 5;
+}
+
+/* ── BenDropdown / header menus ─────────────────────────────────────────── */
+/* Click-away layer for the Blazor-owned dropdowns: under the menu, over everything else. */
+.ben-dropdown-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: transparent;
+}
+
+.dropdown .dropdown-menu.show { z-index: 1001; }
+
+/* ── BenModal ───────────────────────────────────────────────────────────── */
+/* Bootstrap's .modal is display:none until its JS adds inline styles; this component renders
+   .d-block instead and needs the backdrop to sit beneath the dialog rather than over it. */
+.modal.show.d-block { z-index: 1055; }
+.modal-backdrop.show { z-index: 1050; }
+
+/* ── BenPanel ───────────────────────────────────────────────────────────── */
+.panel-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 1040;
+    margin: 0;
+    border-radius: 0;
+    overflow: auto;
+}
+
+.btn-panel {
+    background: transparent;
+    border: 0;
+    padding: .25rem .4rem;
+    line-height: 1;
+    color: inherit;
+    opacity: .65;
+}
+
+.btn-panel:hover { opacity: 1; }

@@ -54,3 +54,52 @@ body.k-body {
    sit outside the template's stacking contexts. Keep them above the fixed header and drawers. */
 .k-animation-container,
 .k-popup { z-index: 1090; }
+
+/* ── Measured corrections ───────────────────────────────────────────────────
+   The variable mapping above gets the colours right, but two differences only
+   show up once a Telerik widget sits beside a Bootstrap one. Both were measured
+   off the /styleguide page rather than guessed. */
+
+/* 1. Input metrics. Kendo's inputs came out 39.6px tall at 14.8px type against
+      Bootstrap's 43.6px at 16px — a 4px step that reads as misalignment when a
+      date picker sits next to a text box in the same form row. Match Bootstrap's
+      padding and type so a mixed row lines up. */
+.k-input,
+.k-picker {
+    font-size: var(--bs-body-font-size);
+    line-height: var(--bs-body-line-height);
+}
+
+.k-input .k-input-inner,
+.k-picker .k-input-inner {
+    /* 8px, not Bootstrap's stock .375rem: the template overrides .form-control's padding, and
+       matching the stock value left Kendo 4px short. 25.6px line-height + 8 + 8 + 2px borders
+       = the 43.6px a .form-control actually measures here. */
+    padding-block: .5rem;
+    padding-inline: .75rem;
+}
+
+/* 2. Grid surface. .k-grid painted itself --bs-body-bg (#212529) while the panel
+      containing it is --bs-tertiary-bg (#272b30), so every grid read as a pasted-on
+      box. Inheriting the panel's ground is what makes it look built in. */
+.k-grid,
+.k-grid .k-grid-header,
+.k-grid .k-grid-footer,
+.k-grid .k-table-th { background-color: transparent; }
+
+/* Header row still needs to separate from the data, but by weight rather than a
+   different colour field. */
+.k-grid .k-table-th {
+    font-weight: 600;
+    color: var(--bs-emphasis-color, var(--bs-body-color));
+    border-bottom-color: var(--bs-border-color);
+}
+
+/* Zebra striping keyed to the current theme, so it works in light and dark from
+   one rule instead of two. */
+.k-grid .k-table-alt-row {
+    background-color: color-mix(in srgb, var(--bs-body-color) 4%, transparent);
+}
+
+.k-grid td,
+.k-grid .k-table-td { border-color: var(--bs-border-color); }

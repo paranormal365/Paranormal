@@ -167,3 +167,53 @@ the original app; flip it to :5078 as the migration waves land. Fixed along the 
 `ErrorHandlingTests` derived the API URL by string-replacing `"5078"` out of the base URL, which
 silently pointed at the front end for any other port. It now reads a `BEN_API_URL`/`ApiUrl` of
 its own.
+
+### Phase 3 notes — the component kit
+
+`Ben.Web.Website.Library/Kit/`: `BenModal` (+`BenModal.razor.js`), `BenConfirmDialog`, `BenPanel`,
+`BenPageHeader`, `BenTabs`/`BenTab`, `BenToastService`/`BenToastHost`, `BenDropdown`,
+`BenLoaderOverlay`, `BenIcon`, plus `wwwroot/kit/ben-kit.css`. `/styleguide` (Development only)
+renders all of it beside the kept Telerik widgets for side-by-side checking in both themes.
+
+**The invariant these share:** every one renders Bootstrap's *markup* while keeping open/active
+state in C#, and none opts into Bootstrap's JS plugins. The plugins move, re-parent and remove
+nodes; Blazor then patches a tree that no longer matches and input inside the subtree is silently
+dropped — the same failure that got `TelerikDialog` banned here, reached by a different route.
+`BenKitOwnsItsDomTests` enforces it by scanning for `data-bs-toggle`, and
+`NoTelerikDialogTests` now scans the new projects too.
+
+`BenPanel` deliberately does not remove itself on close — it raises `OnClose` and lets the parent
+decide, because a component that deletes its own markup cannot be brought back without the parent
+knowing. That is also why the template's `panel-close` handler could not simply be kept.
+
+**Telerik restyle** (`wwwroot/theme/telerik-night.css`): Kendo 14.x is CSS-variable-driven, so the
+sheet maps `--kendo-*` onto the template's own `--bs-*` tokens — one mapping serves light and dark,
+no Kendo SASS build. Two corrections were measured on `/styleguide` rather than guessed:
+
+- Telerik inputs came out **39.6px tall at 14.8px type** against Bootstrap's **43.6px at 16px** —
+  visible misalignment wherever a date picker sits beside a text box. The fix needed `.5rem`
+  padding, not Bootstrap's stock `.375rem`, because the template overrides `.form-control`.
+  Both now measure 43.6px in both themes.
+- `.k-grid` painted itself `--bs-body-bg` while the panel containing it uses `--bs-tertiary-bg`,
+  so every grid read as a pasted-on box. Grids now inherit the panel's ground.
+
+**Three fixes while verifying:**
+
+1. **Nothing should grab focus on load.** `FocusOnNavigate Selector="h1"` was focusing the page
+   heading on arrival, painting a ring as though a control had been activated. Removed — noted in
+   `Routes.razor` that the cost is screen-reader focus no longer moving to the heading on
+   client-side navigation.
+2. **`BenModal` never focused its first field.** The cause was `requestAnimationFrame`: a browser
+   does not paint a hidden tab, so the callback never ran at all. It is a real product bug, not a
+   test artifact — a modal opened in a background tab would stay unfocused forever. Now
+   `setTimeout`, which fires regardless of visibility.
+3. **The new guard test tripped on its own documentation** — `BenTabs`'s comment quotes
+   `data-bs-toggle="tab"` to explain why it is not used. It now strips Razor and HTML comments
+   before scanning, and was checked against a planted offender to confirm it still fails when it
+   should.
+
+**Verified:** solution builds clean, 2430/2430 tests pass, and on `/styleguide` — modal holds an
+input binding through close/reopen (the TelerikDialog failure does not reproduce), Escape closes a
+normal modal while a static confirm ignores it, body scroll locks and unlocks, toasts auto-dismiss
+while errors persist, tab state survives switching, panels collapse, Telerik and Bootstrap inputs
+measure identically in light and dark, and no `delegateTarget` error after repeated navigation.

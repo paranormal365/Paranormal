@@ -1,0 +1,125 @@
+@*
+    The template's panel, with its toolbar behaviour in C#.
+
+    In the template these toolbars were ~1,100 repeated button blocks driven by smartApp.js's
+    [data-action] dispatcher, whose panel handlers collapse the body, toggle a fullscreen class
+    and — for panel-close — remove the node outright. Removing a node Blazor rendered corrupts
+    its render tree, so all of it is component state here instead. Nothing in this file touches
+    the DOM directly.
+*@
+
+<div class="panel @(_collapsed ? "panel-collapsed" : null) @(_fullscreen ? "panel-fullscreen" : null) @Class"
+     id="@Id">
+
+    @if (!string.IsNullOrWhiteSpace(Title) || HeaderContent is not null || ShowToolbar)
+    {
+        <div class="panel-hdr">
+            @if (HeaderContent is not null)
+            {
+                @HeaderContent
+            }
+            else
+            {
+                <h2>
+                    @Title
+                    @if (!string.IsNullOrWhiteSpace(Subtitle))
+                    {
+                        <span class="fw-300"><i>@Subtitle</i></span>
+                    }
+                </h2>
+            }
+
+            @if (ShowToolbar)
+            {
+                <div class="panel-toolbar">
+                    @ToolbarContent
+                    @if (Collapsible)
+                    {
+                        <button type="button" class="btn btn-panel"
+                                title="@(_collapsed ? "Expand" : "Collapse")"
+                                aria-expanded="@((!_collapsed).ToString().ToLowerInvariant())"
+                                @onclick="ToggleCollapsed">
+                            <BenIcon Name="@(_collapsed ? "chevron-down" : "chevron-up")" />
+                        </button>
+                    }
+                    @if (Fullscreenable)
+                    {
+                        <button type="button" class="btn btn-panel"
+                                title="@(_fullscreen ? "Exit fullscreen" : "Fullscreen")"
+                                @onclick="ToggleFullscreen">
+                            <BenIcon Name="@(_fullscreen ? "minimize" : "maximize")" />
+                        </button>
+                    }
+                    @if (Closable)
+                    {
+                        <button type="button" class="btn btn-panel" title="Close" @onclick="CloseAsync">
+                            <BenIcon Name="x" />
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @if (!_collapsed)
+    {
+        <div class="panel-container">
+            <div class="panel-content @ContentClass">
+                @ChildContent
+            </div>
+            @if (FooterContent is not null)
+            {
+                <div class="panel-content border-faded border-start-0 border-end-0 border-bottom-0">
+                    @FooterContent
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Subtitle { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? HeaderContent { get; set; }
+    [Parameter] public RenderFragment? ToolbarContent { get; set; }
+    [Parameter] public RenderFragment? FooterContent { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? ContentClass { get; set; }
+
+    [Parameter] public bool Collapsible { get; set; } = true;
+    [Parameter] public bool Fullscreenable { get; set; }
+    [Parameter] public bool Closable { get; set; }
+
+    /// <summary>Starts collapsed. Two-way bindable via <c>@bind-Collapsed</c>.</summary>
+    [Parameter] public bool Collapsed { get; set; }
+    [Parameter] public EventCallback<bool> CollapsedChanged { get; set; }
+
+    /// <summary>Raised when the close button is used. The parent decides what "closed" means —
+    /// this component does not remove itself, because a component that deletes its own markup
+    /// cannot be brought back without the parent knowing.</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private bool _collapsed;
+    private bool _fullscreen;
+
+    private bool ShowToolbar => ToolbarContent is not null || Collapsible || Fullscreenable || Closable;
+
+    protected override void OnParametersSet() => _collapsed = Collapsed;
+
+    private async Task ToggleCollapsed()
+    {
+        _collapsed = !_collapsed;
+        if (CollapsedChanged.HasDelegate) await CollapsedChanged.InvokeAsync(_collapsed);
+    }
+
+    private void ToggleFullscreen() => _fullscreen = !_fullscreen;
+
+    private async Task CloseAsync()
+    {
+        if (OnClose.HasDelegate) await OnClose.InvokeAsync();
+    }
+}

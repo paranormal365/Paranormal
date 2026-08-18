@@ -60,18 +60,8 @@
     color: inherit;
 }
 
-/* ── Click-away layer for the Blazor-owned dropdowns ────────────────────── */
-/* The bell and user menu manage their own open state, so they need their own dismiss layer.
-   Sits under the menu but over everything else. */
-.ben-dropdown-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    background: transparent;
-}
-
-.notification-bell .dropdown-menu,
-.user-menu .dropdown-menu { z-index: 1001; }
+/* The click-away layer (.ben-dropdown-backdrop) and dropdown z-indexes live in the library's
+   kit stylesheet, since the kit components rely on them too. */
 
 /* ── Footer ─────────────────────────────────────────────────────────────── */
 .app-footer-link,

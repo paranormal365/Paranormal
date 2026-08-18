@@ -1,0 +1,71 @@
+@*
+    Confirmation prompt, on BenModal.
+
+    Deliberately keeps the same parameter names as the library's existing ConfirmDialog so the
+    call sites move across mechanically rather than being rewritten one by one.
+*@
+
+<BenModal Visible="@Visible" VisibleChanged="@VisibleChanged"
+          Title="@Title" Size="sm" Static="@Static" Scrollable="false">
+    <ChildContent>
+        @if (ChildContent is not null)
+        {
+            @ChildContent
+        }
+        else
+        {
+            <p class="mb-0">@Message</p>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="CancelAsync" disabled="@Busy">
+            @CancelText
+        </button>
+        <button type="button" class="btn @ConfirmButtonClass" @onclick="ConfirmAsync" disabled="@Busy">
+            @if (Busy)
+            {
+                <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+            }
+            @ConfirmText
+        </button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    [Parameter] public string Title { get; set; } = "Are you sure?";
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public string ConfirmText { get; set; } = "Confirm";
+    [Parameter] public string CancelText { get; set; } = "Cancel";
+
+    /// <summary>Renders the confirm button as destructive. Anything that deletes should set this.</summary>
+    [Parameter] public bool Destructive { get; set; }
+
+    /// <summary>Disables both buttons and spins the confirm one — set while the action runs so a
+    /// double-click cannot fire it twice.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>Backdrop and Escape are ignored by default here: dismissing a destructive prompt
+    /// by a stray click is worse than making the choice explicit.</summary>
+    [Parameter] public bool Static { get; set; } = true;
+
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string ConfirmButtonClass => Destructive ? "btn-danger" : "btn-primary";
+
+    private async Task ConfirmAsync()
+    {
+        if (OnConfirm.HasDelegate) await OnConfirm.InvokeAsync();
+    }
+
+    private async Task CancelAsync()
+    {
+        if (VisibleChanged.HasDelegate) await VisibleChanged.InvokeAsync(false);
+        if (OnCancel.HasDelegate) await OnCancel.InvokeAsync();
+    }
+}

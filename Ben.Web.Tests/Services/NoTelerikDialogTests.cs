@@ -33,7 +33,8 @@ public sealed class NoTelerikDialogTests
         var offenders = new List<string>();
         var scanned = 0;
 
-        var files = new[] { "Ben.Web.Library", "Ben.Web.WebApp" }
+        var files = new[] { "Ben.Web.Library", "Ben.Web.WebApp",
+                            "Ben.Web.Website", "Ben.Web.Website.Library" }
             .Select(p => Path.Combine(root!.FullName, p))
             .Where(Directory.Exists)
             .SelectMany(p => Directory.EnumerateFiles(p, "*.razor", SearchOption.AllDirectories))

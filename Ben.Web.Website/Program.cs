@@ -93,6 +93,10 @@ builder.Services.AddScoped<NotificationState>();
 // across sessions — see AvatarCache.
 builder.Services.AddScoped<AvatarCache>();
 
+// Toast queue rendered by BenToastHost in the layout. Scoped for the same reason as the two
+// above: a toast raised for one session must never surface in another.
+builder.Services.AddScoped<Ben.Web.Website.Library.Kit.BenToastService>();
+
 // Help documents are embedded, immutable between deployments and identical for every reader, so
 // one parse for the whole process is right. Who may *see* which document is per-circuit, and lives
 // in the resolver instead.
