@@ -153,3 +153,110 @@
    variables, so the .btn metrics above never reach it and it keeps the template's own sizing —
    which is deliberately taller than the header's nominal height. Setting --bs-btn-padding-y on it
    looks like it should help and does nothing at all; a direct `padding` declaration wins. */
+
+/* ── Header controls ────────────────────────────────────────────────────────
+   Measured against the template running at :5266, not eyeballed.
+
+   The one thing Razor changes: the template's .btn-system contains nothing but an <svg>, so its
+   `line-height: var(--app-header-height)` never applies to the box. Razor emits comment markers
+   and whitespace inside the button, which creates an inline formatting context — and there the
+   88px line-height *does* apply, making the buttons 98px tall inside an 88px header. Zeroing the
+   line-height removes that stray inline box.
+
+   The rest is sizing the controls as one set: the chevron toggle beside the wordmark and the icon
+   buttons on the right share a footprint, so the bar reads as one row rather than four sizes. */
+.app-header {
+    gap: .25rem;
+}
+
+.app-header .btn-system,
+.app-header .collapse-icon,
+.app-header .mobile-menu-icon,
+.app-header .dropdown > .btn {
+    line-height: 0;
+}
+
+/* Icon-only controls: one square footprint, contents centred. Responsive visibility stays with
+   the template's own .d-none/.d-lg-* utilities — an earlier version forced `display` here with
+   !important and made the mobile menu button and the desktop chevron appear at the same time. */
+.app-header .btn-system:not(.ben-signin),
+.app-header .collapse-icon,
+.app-header .mobile-menu-icon,
+.app-header > .dropdown > .btn {
+    width: 2rem;
+    min-width: 2rem;
+    height: 2rem;
+    padding: 0;
+    margin-block: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+@media (min-width: 992px) {
+    .app-header .btn-system:not(.ben-signin),
+    .app-header .collapse-icon,
+    .app-header > .dropdown > .btn {
+        display: inline-flex !important;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .app-header .mobile-menu-icon {
+        display: inline-flex !important;
+    }
+}
+
+.app-header .btn-system > .sa-icon,
+.app-header .collapse-icon > .sa-icon,
+.app-header .mobile-menu-icon > .sa-icon,
+.app-header .dropdown > .btn > .sa-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    margin: 0;
+}
+
+/* The chevron is a raw inline SVG with no .sa-icon class and a 9px left margin from the template,
+   which reads as off-centre once the button is a centred box. Sized on its own 5:8 ratio. */
+.app-header .collapse-icon > svg {
+    height: 1rem;
+    width: auto;
+    margin: 0;
+}
+
+.app-header .user-menu > .btn > img {
+    width: 2rem;
+    height: 2rem;
+    object-fit: cover;
+}
+
+/* Sign In carries a label, so it keeps a text line-height and sizes to its content rather than
+   being forced into the square footprint above. */
+.app-header .ben-signin {
+    display: inline-flex;
+    align-items: center;
+    width: auto;
+    min-width: 0;
+    height: 2rem;
+    line-height: 1.2;
+    padding: 0 .6rem;
+    gap: .35rem;
+}
+
+.app-header .ben-brand {
+    margin-right: .75rem;
+}
+
+
+/* ── Sidebar type ───────────────────────────────────────────────────────────
+   The template sets the nav at 600 (semibold), which reads heavy down a long list. Regular for
+   the resting state, with the active item only one step up — enough to find your place without
+   the whole column shouting. */
+.app-sidebar .nav-menu .nav-link-text,
+.app-sidebar .nav-menu > li > a {
+    font-weight: 400;
+}
+
+.app-sidebar .nav-menu .nav-item.active > a,
+.app-sidebar .nav-menu .nav-item.active > a .nav-link-text {
+    font-weight: 500;
+}

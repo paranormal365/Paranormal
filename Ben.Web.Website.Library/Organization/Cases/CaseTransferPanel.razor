@@ -1,0 +1,245 @@
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@* Case transfer history and propose/respond workflow — used in CaseDetail.razor *@
+
+<div>
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <span class="fw-semibold">Case Transfers</span>
+        @if (_canPropose)
+        {
+            <button type="button" class="btn btn-primary btn-sm" @onclick="OpenPropose"><BenIcon Name="rotate-ccw" Class="me-1" />Propose Transfer</button>
+        }
+    </div>
+
+    @if (_error is not null) { <div class="alert alert-danger">@_error</div> }
+
+    @if (_transfers is null)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+    }
+    else if (_transfers.Count == 0)
+    {
+        <p class="text-secondary">No transfers on record for this case.</p>
+    }
+    else
+    {
+        <div class="d-flex flex-column gap-3">
+            @foreach (var t in _transfers.OrderByDescending(x => x.DateProposed))
+            {
+                var transfer = t;
+                <div class="card @(transfer.Status == CaseTransferStatus.Pending ? "border-warning" : "")">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start justify-content-between gap-2 flex-wrap">
+                            <div>
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="badge @StatusBadge(transfer.Status)">@StatusLabel(transfer.Status)</span>
+                                    <span class="small text-secondary">@transfer.DateProposed.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")</span>
+                                </div>
+                                <div class="small">
+                                    <span class="fw-semibold">@(transfer.FromOrganizationName ?? "This org")</span>
+                                    <span class="text-secondary mx-1">→</span>
+                                    <span class="fw-semibold">@(transfer.ToOrganizationName ?? "Unknown")</span>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(transfer.TransferReason))
+                                {
+                                    <p class="text-secondary small mt-1 mb-0">@transfer.TransferReason</p>
+                                }
+                                @if (transfer.Status == CaseTransferStatus.Rejected && !string.IsNullOrWhiteSpace(transfer.RejectionReason))
+                                {
+                                    <p class="text-danger small mt-1 mb-0">Rejected: @transfer.RejectionReason</p>
+                                }
+                            </div>
+
+                            @* Accept/Reject for pending incoming transfers *@
+                            @if (transfer.Status == CaseTransferStatus.Pending && transfer.ToOrganizationId == OrgId)
+                            {
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-success btn-sm" @onclick="@(() => OpenRespond(transfer, true))" disabled="@(!(!_isBusy))"><BenIcon Name="check" Class="me-1" />Accept</button>
+                                    <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => OpenRespond(transfer, false))" disabled="@(!(!_isBusy))"><BenIcon Name="x" Class="me-1" />Reject</button>
+                                </div>
+                            }
+                            @* Cancel button for outgoing pending transfers *@
+                            @if (transfer.Status == CaseTransferStatus.Pending && transfer.FromOrganizationId == OrgId)
+                            {
+                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => CancelTransfer(transfer))" disabled="@(!(!_isBusy))"><BenIcon Name="x" Class="me-1" />Cancel Transfer</button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@* ── Propose transfer dialog ───────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showProposeDialog" Title="Propose Case Transfer">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Transfer to organization <span class="text-danger">*</span></label>
+                <TelerikDropDownList Data="@_otherOrgs"
+                                     @bind-Value="@_proposeToOrgId"
+                                     TextField="@nameof(OrgOption.Name)"
+                                     ValueField="@nameof(OrgOption.Id)"
+                                     DefaultText="— select organization —"
+                                     Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Reason (optional)</label>
+                <textarea class="form-control" rows="3" placeholder="Explain why the case is being transferred…" @bind="@_proposeReason"></textarea>
+            </div>
+        </div>
+        @if (_dialogError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
+        }
+    </ChildContent>
+</BenModal>
+
+@* ── Respond dialog ────────────────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showRespondDialog" Title="@(_respondAccept ? "Accept Transfer" : "Reject Transfer")">
+    <ChildContent>
+        @if (!_respondAccept)
+        {
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Reason for rejection (optional)</label>
+                <textarea class="form-control" rows="3" placeholder="Explain why this transfer is being rejected…" @bind="@_rejectReason"></textarea>
+            </div>
+        }
+        else
+        {
+            <p class="text-secondary">Accept this case transfer from <strong>@_respondTransfer?.FromOrganizationName</strong>?</p>
+        }
+        @if (_dialogError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
+        }
+    </ChildContent>
+</BenModal>
+
+@code {
+    [Parameter] public Guid OrgId  { get; set; }
+    [Parameter] public Guid CaseId { get; set; }
+
+    private List<CaseTransferLogRecord>? _transfers;
+    private List<OrgOption> _otherOrgs = [];
+    private string? _error;
+    private string? _dialogError;
+    private bool _isBusy;
+
+    // Propose dialog
+    private bool _showProposeDialog;
+    private Guid _proposeToOrgId;
+    private string _proposeReason = "";
+
+    // Respond dialog
+    private bool _showRespondDialog;
+    private bool _respondAccept;
+    private CaseTransferLogRecord? _respondTransfer;
+    private string _rejectReason = "";
+
+    // Can propose if no pending outgoing transfer exists
+    private bool _canPropose =>
+        _transfers is not null &&
+        !_transfers.Any(t => t.Status == CaseTransferStatus.Pending && t.FromOrganizationId == OrgId);
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _transfers = (await AdminClient.GetCaseTransfersAsync(OrgId, CaseId)).ToList();
+            var allOrgs = await AdminClient.GetOrganizationsAsync();
+            _otherOrgs = allOrgs
+                .Where(o => o.Id != OrgId)
+                .Select(o => new OrgOption(o.Id, o.Name))
+                .ToList();
+        }
+        catch { _error = "Failed to load transfers."; }
+    }
+
+    private void OpenPropose()
+    {
+        _proposeToOrgId = Guid.Empty;
+        _proposeReason  = "";
+        _dialogError    = null;
+        _showProposeDialog = true;
+    }
+
+    private async Task ProposeTransfer()
+    {
+        if (_proposeToOrgId == Guid.Empty) { _dialogError = "Select a destination organization."; return; }
+        _isBusy = true; _dialogError = null;
+        try
+        {
+            var result = await AdminClient.ProposeCaseTransferAsync(OrgId, CaseId, _proposeToOrgId,
+                string.IsNullOrWhiteSpace(_proposeReason) ? null : _proposeReason.Trim());
+            if (result is null) { _dialogError = "Proposal failed."; }
+            else { _showProposeDialog = false; await LoadAsync(); }
+        }
+        catch (Exception ex) { _dialogError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private void OpenRespond(CaseTransferLogRecord transfer, bool accept)
+    {
+        _respondTransfer = transfer;
+        _respondAccept   = accept;
+        _rejectReason    = "";
+        _dialogError     = null;
+        _showRespondDialog = true;
+    }
+
+    private async Task RespondToTransfer()
+    {
+        if (_respondTransfer is null) return;
+        _isBusy = true; _dialogError = null;
+        try
+        {
+            var result = await AdminClient.RespondCaseTransferAsync(OrgId, CaseId, _respondTransfer.Id,
+                _respondAccept,
+                !_respondAccept && !string.IsNullOrWhiteSpace(_rejectReason) ? _rejectReason.Trim() : null);
+            if (result is null) { _dialogError = "Response failed."; }
+            else { _showRespondDialog = false; await LoadAsync(); }
+        }
+        catch (Exception ex) { _dialogError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private async Task CancelTransfer(CaseTransferLogRecord transfer)
+    {
+        _isBusy = true;
+        try
+        {
+            await AdminClient.CancelCaseTransferAsync(OrgId, CaseId, transfer.Id);
+            await LoadAsync();
+        }
+        catch { _error = "Failed to cancel transfer."; }
+        finally { _isBusy = false; }
+    }
+
+    private static string StatusLabel(CaseTransferStatus s) => s switch
+    {
+        CaseTransferStatus.Pending   => "Pending",
+        CaseTransferStatus.Accepted  => "Accepted",
+        CaseTransferStatus.Rejected  => "Rejected",
+        CaseTransferStatus.Cancelled => "Cancelled",
+        _                            => s.ToString(),
+    };
+
+    private static string StatusBadge(CaseTransferStatus s) => s switch
+    {
+        CaseTransferStatus.Pending   => "bg-warning text-dark",
+        CaseTransferStatus.Accepted  => "bg-success",
+        CaseTransferStatus.Rejected  => "bg-danger",
+        CaseTransferStatus.Cancelled => "bg-secondary",
+        _                            => "bg-secondary",
+    };
+
+    private record OrgOption(Guid Id, string Name);
+}
