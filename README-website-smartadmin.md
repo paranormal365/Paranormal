@@ -447,3 +447,30 @@ first two; and the last `ConfirmDialog` call sites were renamed to `BenConfirmDi
 waves arrived with `"MMMM d, yyyy"`, `"MMM d, yyyy"` and friends — "Opened August 11, 2026" on
 `/my-cases` is what surfaced it. 32 files normalised onto the shared helpers; the only literal date
 format left in the library is `ToString("D")` on a **Guid**, which is not a date at all.
+
+### Wave G — `Organization/Cms/`
+
+The CMS authoring area: `OrgCmsEditor` (1,161 lines), `OrgCmsPageEdit` (1,084), `CmsSectionEditor`
+(835), plus snippets and the file thumbnail. **`OrganizationView` is un-deferred** — the org hub
+now renders all 13 of its tabs, including the embedded case list and CMS editor that kept it
+waiting two waves. Routes added: `/organizations/{id}` and the two CMS routes.
+
+**Converted:** 49 buttons, 10 check boxes, 11 windows → `BenModal`, 9 text boxes, 3 numeric inputs,
+2 dropdown buttons → `BenDropdown`, tab strips. **Kept:** 7 templated dropdowns, 5 grids, and both
+rich-text editors — the CMS is exactly the place where a real editor earns its keep.
+
+**Deferred: `OrgCmsPagePreview`** — it renders public sections, so it belongs with the microsite.
+
+**Two conversion bugs, both caught by the compiler rather than by reading:**
+
+1. **A `@foreach` was flattened.** The dropdown-button converter extracted a single item as a
+   template and dropped the loop generating them, along with the `var chosen = snippet;` that made
+   the closure correct. Rewritten to keep the items markup *verbatim* and only swap the wrapper
+   tags — loops, locals and all.
+2. **An inline lambda was called as if it were a method.** `ValueChanged="@((string v) => { … })"`
+   became `lambda(arg)`, which is not valid C#. The converter now binds the lambda's parameter to
+   the DOM value and inlines its body. A related case needed `.InvokeAsync(…)`, because
+   `ContentJsonChanged` is an `EventCallback` parameter, not a method.
+
+**Verified:** solution builds clean, 2430/2430 tests pass, `/organizations/{id}` renders 13 tabs
+with its Cases and CMS tabs both live, and the CMS editor lists real pages in a kept grid.

@@ -1,0 +1,1023 @@
+@page "/organizations/{OrgId:guid}/cms/pages/{PageId:guid}"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@using System.Text.Json
+@using System.Text.Json.Nodes
+@using Ben.Data.Common.Enums
+
+<PageTitle>@(_page?.PageTitle ?? "Edit Page") — CMS</PageTitle>
+
+<div class="container-fluid px-3">
+
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cms"))"><BenIcon Name="arrow-left" Class="me-1" />
+                Back to CMS
+            </button>
+            <h3 class="d-inline-block ms-3 mb-0">@(_page?.PageTitle ?? "Edit Page")</h3>
+        </div>
+        <div class="col-auto d-flex gap-2">
+            @* Two different things, so they are named differently. The side-by-side panel follows
+               what you are typing but draws its own approximation of each section in half a column.
+               "View as visitor" opens the real public renderer on the saved page — which is what
+               tells you whether it is actually ready to publish. *@
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="TogglePreview"><BenIcon Name="eye" Class="me-1" />
+                @(_showPreview ? "Hide side-by-side" : "Side-by-side")
+            </button>
+            <a class="btn btn-outline-primary"
+               href="@($"/organizations/{OrgId}/cms/pages/{PageId}/preview")"
+               target="_blank" rel="noopener"
+               title="Opens the saved page in the public renderer, published or not">
+                View as visitor
+            </a>
+            @* Saving the arrangement, not the page. A group that has built a write-up layout once
+               should be able to start the next one from it. *@
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => _savingLayout = true)" disabled="@(!(_sections.Count > 0))"><BenIcon Name="save" Class="me-1" />
+                Save as a layout
+            </button>
+        </div>
+    </div>
+
+    @* Small, single-purpose, and not about authoring — so a window is right here, unlike the
+       section editor below. *@
+    <BenModal Visible="@_savingLayout" Title="Save this page's layout">
+    <ChildContent>
+            @if (_layoutError is not null)
+            {
+                <div class="alert alert-danger py-2">@_layoutError</div>
+            }
+
+            <label class="form-label fw-semibold">Name it</label>
+            <input class="form-control mb-2" maxlength="200" value="@_layoutName"
+                   placeholder="e.g. Investigation Results"
+                   @oninput="@(e => _layoutName = e.Value?.ToString() ?? string.Empty)" />
+
+            <label class="form-label fw-semibold">What is it for? (optional)</label>
+            <input class="form-control" maxlength="500" value="@_layoutDescription"
+                   @oninput="@(e => _layoutDescription = e.Value?.ToString() ?? string.Empty)" />
+
+            <div class="form-text mt-2">
+                Saves this page's <strong>@_sections.Count</strong>
+                @(_sections.Count == 1 ? "section" : "sections") — their types, titles and current
+                content — as a layout the whole group can start a new page from. This page is not
+                changed, and later edits to the layout will not change it.
+            </div>
+
+            <div class="dialog-footer-actions">
+                <span class="dialog-footer-spacer"></span>
+                <button type="button" class="btn btn-secondary" @onclick="@(() => _savingLayout = false)" disabled="@(!(!_layoutBusy))">Cancel</button>
+                <button type="button" class="btn btn-primary" @onclick="SaveLayoutAsync" disabled="@(!(!_layoutBusy && !string.IsNullOrWhiteSpace(_layoutName)))">Save</button>
+            </div>
+        </ChildContent>
+</BenModal>
+
+    @* ── Editing a section ─────────────────────────────────────────────────
+       In the body of the page, at full width, never in a window. Writing a page needs the room —
+       a 720px modal was the whole editing surface for the one task on this screen that most
+       deserves space. Small formatting (bold, a link) still belongs in the toolbar; building the
+       thing does not belong in a box. *@
+    @if (_showSectionEditor)
+    {
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>@(_editingSection is null ? "New section" : "Edit section")</strong>
+                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="CloseSectionDialog"><BenIcon Name="x" Class="me-1" />Close</button>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    @if (_editingSection is null)
+                    {
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Section type <span class="text-danger">*</span></label>
+                            <TelerikDropDownList Data="@_sectionTypeOptions"
+                                                 @bind-Value="@_sectionForm.SectionType"
+                                                 ValueField="@nameof(SectionTypeOption.Value)"
+                                                 TextField="@nameof(SectionTypeOption.Label)"
+                                                 Width="100%" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Section type</label>
+                            <p class="mb-0"><strong>@_sectionForm.SectionType</strong></p>
+                        </div>
+                    }
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Section title (optional)</label>
+                        <input type="text" class="form-control" placeholder="Optional heading above this section" @bind="@_sectionForm.Title" @bind:event="oninput" />
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end gap-2 pb-2">
+                        <input type="checkbox" class="form-check-input" id="sec-active" @bind="@_sectionForm.IsActive" />
+                        <label for="sec-active" class="form-label mb-0">Visible</label>
+                    </div>
+                </div>
+
+                <CmsSectionEditor SectionType="@_sectionForm.SectionType"
+                                  OrgId="@OrgId"
+                                  @bind-ContentJson="@_sectionForm.ContentJson" />
+
+                @if (_sectionError is not null)
+                {
+                    <div class="alert alert-danger mt-3 mb-0">@_sectionError</div>
+                }
+
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseSectionDialog" disabled="@(!(!_isBusy))">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveSection" disabled="@(!(!_isBusy))"><BenIcon Name="save" Class="me-1" />
+                        @(_isBusy ? "Saving…" : "Save section")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_errorMessage is not null)
+    {
+        <div class="alert alert-danger mb-3">@_errorMessage</div>
+    }
+    @if (_successMessage is not null)
+    {
+        <div class="alert alert-success mb-3">@_successMessage</div>
+    }
+
+    @* Drafts. A published page is not edited directly — changes go to a draft and become live when
+       somebody says so. An unpublished page has no draft and needs none: nobody can see it. *@
+    @if (_draft is not null && _draft.NeedsDraft)
+    {
+        @if (_draft.DraftPageId == PageId)
+        {
+            <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2 mb-3">
+                <strong>Draft.</strong>
+                <span>The live page is unchanged until you publish this.</span>
+                <span class="ms-auto d-flex gap-2">
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="PublishDraftAsync" disabled="@(!(!_draftBusy))">Publish changes</button>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _confirmDiscard = true)" disabled="@(!(!_draftBusy))">Discard draft</button>
+                </span>
+            </div>
+        }
+        else if (_draft.DraftPageId is Guid openDraftId)
+        {
+            <div class="alert alert-info d-flex flex-wrap align-items-center gap-2 mb-3">
+                <strong>There is an unpublished draft of this page.</strong>
+                <span>Editing here changes the live page straight away.</span>
+                <span class="ms-auto">
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cms/pages/{openDraftId}"))">
+                        Open the draft
+                    </button>
+                </span>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info d-flex flex-wrap align-items-center gap-2 mb-3">
+                <strong>This page is live.</strong>
+                <span>Anything you change here is visible to visitors immediately.</span>
+                <span class="ms-auto">
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="StartDraftAsync" disabled="@(!(!_draftBusy))">Work on a draft instead</button>
+                </span>
+            </div>
+        }
+    }
+
+    @if (_page is null)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading page…" />
+    }
+    else
+    {
+        <div class="row">
+
+            @* ── Main editing column ───────────────────────────────────────── *@
+            @* The side-by-side panel steps aside while a section is being written: the editor
+               needs the width more than the preview does. *@
+            <div class="@(_showPreview && !_showSectionEditor ? "col-md-6" : "col-12")">
+
+                @* Page metadata card *@
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>Page Settings</strong>
+                        <button type="button" class="btn btn-primary btn-sm" @onclick="SavePageMetadata" disabled="@(!(!_isBusy))"><BenIcon Name="save" Class="me-1" />
+                            @(_isBusy ? "Saving…" : "Save Settings")
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-8">
+                                <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" @bind="@_metaForm.PageTitle" @bind:event="oninput" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Sort Order</label>
+                                <input type="number" class="form-control" min="0" max="100" step="1" @bind="@_metaForm.SortOrder" @bind:event="oninput" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">URL Slug <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" @bind="@_metaForm.UrlName" @bind:event="oninput" />
+                            </div>
+                            <div class="col-md-6 d-flex align-items-center gap-2">
+                                <input type="checkbox" class="form-check-input" id="meta-published" @bind="@_metaForm.IsPublished" />
+                                <label for="meta-published" class="form-label mb-0">Published</label>
+                            </div>
+                            <div class="col-md-6 d-flex align-items-center gap-2">
+                                <input type="checkbox" class="form-check-input" id="meta-public" @bind="@_metaForm.IsPublic" />
+                                <label for="meta-public" class="form-label mb-0">Visible to public</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* Page summary / intro HTML *@
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>Summary / Intro</strong>
+                        <button type="button" class="btn btn-primary btn-sm" @onclick="SavePageMetadata" disabled="@(!(!_isBusy))"><BenIcon Name="save" Class="me-1" />
+                            Save
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <TelerikEditor @bind-Value="@_metaForm.PageHtml"
+                                       Height="200px" />
+                    </div>
+                </div>
+
+                @* Sections list *@
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>Sections (@(_sections.Count))</strong>
+                        <button type="button" class="btn btn-primary btn-sm" @onclick="OpenNewSectionDialog"><BenIcon Name="plus" Class="me-1" />
+                            Add Section
+                        </button>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (_sections.Count == 0)
+                        {
+                            <p class="p-3 text-secondary mb-0">No sections yet. Click "Add Section" to get started.</p>
+                        }
+                        else
+                        {
+                            @for (int i = 0; i < _sections.Count; i++)
+                            {
+                                var idx = i;
+                                var s = _sections[i];
+                                <div class="border-bottom p-3 d-flex align-items-start gap-2">
+                                    <div class="flex-shrink-0 d-flex flex-column gap-1">
+                                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => MoveSection(idx, -1))" disabled="@(!(idx > 0))"><BenIcon Name="arrow-up" /></button>
+                                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => MoveSection(idx, 1))" disabled="@(!(idx < _sections.Count - 1))"><BenIcon Name="arrow-down" /></button>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center gap-2 mb-1">
+                                            <span class="badge bg-secondary">@s.SectionType</span>
+                                            @if (!string.IsNullOrWhiteSpace(s.Title))
+                                            {
+                                                <strong>@s.Title</strong>
+                                            }
+                                            @if (!s.IsActive)
+                                            {
+                                                <span class="badge bg-warning text-dark">Hidden</span>
+                                            }
+                                        </div>
+                                        <div class="text-secondary small text-truncate" style="max-width:400px">
+                                            @SectionPreviewText(s)
+                                        </div>
+                                    </div>
+                                    <div class="flex-shrink-0 d-flex gap-1">
+                                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEditSectionDialog(s))"><BenIcon Name="edit-2" /></button>
+                                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => RequestDeleteSection(s))"><BenIcon Name="trash-2" /></button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+
+                @* Permissions card *@
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>Permissions (@(_permissions.Count))</strong>
+                        <button type="button" class="btn btn-primary btn-sm" @onclick="OpenAddPermissionDialog"><BenIcon Name="plus" Class="me-1" />
+                            Add Permission
+                        </button>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (_permissions.Count == 0)
+                        {
+                            <p class="p-3 mb-0 text-secondary small">No explicit permissions. Page visibility is controlled by the <em>Public</em> flag above.</p>
+                        }
+                        else
+                        {
+                            <TelerikGrid Data="@_permissions" TItem="PermissionRow" Pageable="false">
+                                <GridColumns>
+                                    <GridColumn Field="@nameof(PermissionRow.GranteeName)" Title="Grantee" />
+                                    <GridColumn Field="@nameof(PermissionRow.GranteeType)" Title="Type" Width="80px" />
+                                    <GridColumn Title="View" Width="65px">
+                                        <Template>
+                                            @if (((PermissionRow)context).Actions.HasFlag(CmsPageAction.View))
+                                            { <BenIcon Name="check" /> }
+                                        </Template>
+                                    </GridColumn>
+                                    <GridColumn Title="Edit" Width="65px">
+                                        <Template>
+                                            @if (((PermissionRow)context).Actions.HasFlag(CmsPageAction.Edit))
+                                            { <BenIcon Name="check" /> }
+                                        </Template>
+                                    </GridColumn>
+                                    <GridColumn Title="Delete" Width="70px">
+                                        <Template>
+                                            @if (((PermissionRow)context).Actions.HasFlag(CmsPageAction.Delete))
+                                            { <BenIcon Name="check" /> }
+                                        </Template>
+                                    </GridColumn>
+                                    <GridCommandColumn Width="130px">
+                                        <GridCommandButton Command="Edit"
+                                                           Icon="@SvgIcon.Pencil"
+                                                           OnClick="@((GridCommandEventArgs e) => OpenEditPermissionDialog((PermissionRow)e.Items.First()))">
+                                            Edit
+                                        </GridCommandButton>
+                                        <GridCommandButton Command="Delete"
+                                                           Icon="@SvgIcon.Trash"
+                                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                                           OnClick="@((GridCommandEventArgs e) => DeletePermissionAsync((PermissionRow)e.Items.First()))">
+                                        </GridCommandButton>
+                                    </GridCommandColumn>
+                                </GridColumns>
+                            </TelerikGrid>
+                        }
+                    </div>
+                </div>
+
+            </div>
+
+            @* ── Inline preview column ─────────────────────────────────────── *@
+            @if (_showPreview && !_showSectionEditor)
+            {
+                <div class="col-md-6">
+                    <div class="card sticky-top" style="top:1rem;max-height:85vh;overflow-y:auto;">
+                        <div class="card-header"><strong>Live Preview</strong></div>
+                        <div class="card-body cms-preview">
+                            <h2>@_metaForm.PageTitle</h2>
+                            @if (!string.IsNullOrWhiteSpace(_metaForm.PageHtml))
+                            {
+                                <div class="mb-4">@((MarkupString)_metaForm.PageHtml)</div>
+                            }
+                            @foreach (var sec in _sections.Where(s => s.IsActive).OrderBy(s => s.SortOrder))
+                            {
+                                <div class="mb-4">
+                                    @if (!string.IsNullOrWhiteSpace(sec.Title))
+                                    {
+                                        <h4>@sec.Title</h4>
+                                    }
+                                    @RenderSectionPreview(sec)
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+
+        </div>
+    }
+</div>
+
+@* Discarding a draft throws away work with no way back, so it asks first — the same treatment
+   every other destructive action in this app gets. *@
+<BenConfirmDialog Visible="@_confirmDiscard"
+                                      VisibleChanged="@(v => _confirmDiscard = v)"
+                                      Title="Discard this draft?"
+                                      ConfirmText="Discard"
+                                      Busy="@_draftBusy"
+                                      OnConfirm="DiscardDraftAsync">
+    <p class="mb-0">
+        Everything changed in this draft is lost, and the live page stays exactly as it is now.
+        This cannot be undone.
+    </p>
+</BenConfirmDialog>
+
+@* ── Delete section confirmation ──────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showDeleteSectionDialog" Title="Delete Section">
+    <ChildContent>
+        <p>Remove this section from the page?</p>
+        @if (_pendingDeleteSection is not null && !string.IsNullOrWhiteSpace(_pendingDeleteSection.Title))
+        {
+            <p class="text-secondary"><strong>@_pendingDeleteSection.Title</strong></p>
+        }
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <button type="button" class="btn btn-secondary" @onclick="@(() => { _showDeleteSectionDialog = false; _pendingDeleteSection = null; })">Cancel</button>
+            <button type="button" class="btn btn-danger" @onclick="ConfirmDeleteSection" disabled="@(!(!_isBusy))">
+                @(_isBusy ? "Deleting…" : "Delete")
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@* ── Add/Edit Permission dialog ───────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showPermissionDialog" Title="@(_editingPerm is null ? "Add Permission" : "Edit Permission")">
+    <ChildContent>
+        @if (_editingPerm is null)
+        {
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Grant to</label>
+                <TelerikDropDownList Data="@_permGranteeOptions"
+                                     @bind-Value="@_permGranteeType"
+                                     TextField="@nameof(GranteeTypeOption.Label)"
+                                     ValueField="@nameof(GranteeTypeOption.Value)"
+                                     Width="100%" />
+            </div>
+            @if (_permGranteeType == "user")
+            {
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">User</label>
+                    <TelerikDropDownList Data="@_orgMemberOptions"
+                                         @bind-Value="@_permUserId"
+                                         TextField="@nameof(OrgMemberPermOption.DisplayName)"
+                                         ValueField="@nameof(OrgMemberPermOption.AppUserId)"
+                                         DefaultText="— Select user —"
+                                         Width="100%" />
+                </div>
+            }
+            else
+            {
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Group</label>
+                    <TelerikDropDownList Data="@_groupOptions"
+                                         @bind-Value="@_permGroupId"
+                                         TextField="@nameof(GroupPermOption.Name)"
+                                         ValueField="@nameof(GroupPermOption.Id)"
+                                         DefaultText="— Select group —"
+                                         Width="100%" />
+                </div>
+            }
+        }
+        else
+        {
+            <p class="text-secondary small mb-3">Editing permissions for <strong>@_editingPerm.GranteeName</strong>.</p>
+        }
+        <div class="d-flex gap-4">
+            <div class="d-flex align-items-center gap-2">
+                <input type="checkbox" class="form-check-input" id="perm-view" @bind="@_permView" />
+                <label for="perm-view">View</label>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <input type="checkbox" class="form-check-input" id="perm-edit" @bind="@_permEdit" />
+                <label for="perm-edit">Edit</label>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <input type="checkbox" class="form-check-input" id="perm-delete" @bind="@_permDelete" />
+                <label for="perm-delete">Delete</label>
+            </div>
+        </div>
+        @if (_permDialogError is not null)
+        { <div class="alert alert-danger py-2 mt-2">@_permDialogError</div> }
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <button type="button" class="btn btn-primary" @onclick="SavePermissionAsync">Save</button>
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => _showPermissionDialog = false)">Cancel</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    [Parameter] public Guid OrgId  { get; set; }
+    [Parameter] public Guid PageId { get; set; }
+
+    private CmsPageDetail? _page;
+    private List<CmsSectionRecord> _sections = [];
+    private string? _errorMessage;
+    private string? _successMessage;
+    private bool _isBusy;
+    private bool _showPreview;
+
+    // Metadata form
+    private MetaFormModel _metaForm = new();
+
+    // Section dialog
+    private bool _showSectionEditor;
+    private string? _sectionError;
+    private CmsSectionRecord? _editingSection;
+    private SectionFormModel _sectionForm = new();
+
+    // Delete section
+    private bool _showDeleteSectionDialog;
+    private CmsSectionRecord? _pendingDeleteSection;
+
+    // Permissions
+    private List<PermissionRow> _permissions = [];
+    private bool _showPermissionDialog;
+    private PermissionRow? _editingPerm;
+    private string _permGranteeType = "user";
+    private Guid _permUserId;
+    private Guid _permGroupId;
+    private bool _permView;
+    private bool _permEdit;
+    private bool _permDelete;
+    private string? _permDialogError;
+    private IReadOnlyList<OrgMemberPermOption> _orgMemberOptions = [];
+    private IReadOnlyList<GroupPermOption> _groupOptions = [];
+    private static readonly List<GranteeTypeOption> _permGranteeOptions =
+    [
+        new("User",  "user"),
+        new("Group", "group"),
+    ];
+    // Raw permission records for reference when editing
+    private List<CmsPagePermissionRecord> _permissionRecords = [];
+
+    private static readonly List<SectionTypeOption> _sectionTypeOptions = Enum.GetValues<CmsSectionType>()
+        .Select(t => new SectionTypeOption(t, SectionTypeLabel(t)))
+        .ToList();
+
+    /// <summary>
+    /// What each section type is called in the menu.
+    /// </summary>
+    /// <remarks>
+    /// The list is built from the enum so a new type cannot be added and forgotten, but the raw
+    /// names read like code — "EmbeddedInvestigations" is not something to put in front of somebody
+    /// choosing what to add to their page. Unlisted values fall back to the enum name, so the menu
+    /// still works before somebody gets round to naming a new one.
+    /// </remarks>
+    private static string SectionTypeLabel(CmsSectionType type) => type switch
+    {
+        CmsSectionType.RichText               => "Text",
+        CmsSectionType.ImageBanner            => "Image or banner",
+        CmsSectionType.FileGallery            => "File gallery",
+        CmsSectionType.ContactInfo            => "Contact details",
+        CmsSectionType.MemberRoster           => "Our members",
+        CmsSectionType.CustomHtml             => "Custom HTML",
+        CmsSectionType.EmbeddedInvestigations => "Our investigations",
+        CmsSectionType.EmbeddedCases          => "Our cases",
+        CmsSectionType.CaseMedia              => "Photos from a case",
+        _                                     => type.ToString(),
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated)
+            NavManager.NavigateTo("/login");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadPageAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadPageAsync()
+    {
+        _page = await AdminClient.GetCmsPageAsync(OrgId, PageId);
+        if (_page is null) { _errorMessage = "Page not found."; return; }
+
+        await LoadDraftStateAsync();
+
+        _sections = [.. _page.Sections.OrderBy(s => s.SortOrder)];
+        _metaForm = new MetaFormModel
+        {
+            PageTitle   = _page.PageTitle,
+            UrlName     = _page.UrlName,
+            PageHtml    = _page.PageHtml,
+            IsPublished = _page.IsPublished,
+            IsPublic    = _page.IsPublic,
+            SortOrder   = _page.SortOrder
+        };
+
+        // Load permissions + supporting data in parallel
+        var permsTask  = AdminClient.GetPagePermissionsAsync(OrgId, PageId);
+        var groupsTask = AdminClient.GetGroupsAsync(OrgId);
+        var membersTask= AdminClient.GetOrganizationMembersAsync(OrgId);
+        var usersTask  = AdminClient.GetOrgUserDirectoryAsync(OrgId);
+        await Task.WhenAll(permsTask, groupsTask, membersTask, usersTask);
+
+        _permissionRecords = [..permsTask.Result];
+        var groups  = groupsTask.Result;
+        var members = membersTask.Result;
+        var users   = usersTask.Result;
+
+        _groupOptions = groups.Select(g => new GroupPermOption(g.Id, g.Name)).ToList();
+        _orgMemberOptions = members
+            .Where(m => m.IsActive)
+            .Select(m =>
+            {
+                var u = users.FirstOrDefault(x => x.Id == m.AppUserId);
+                return new OrgMemberPermOption(m.AppUserId, u?.DisplayName ?? m.AppUserId.ToString());
+            })
+            .OrderBy(o => o.DisplayName)
+            .ToList();
+
+        _permissions = _permissionRecords.Select(p =>
+        {
+            if (p.AppUserId.HasValue)
+            {
+                var u = users.FirstOrDefault(x => x.Id == p.AppUserId.Value);
+                return new PermissionRow(p.Id, p.AppUserId.Value, null, "User",
+                    u?.DisplayName ?? p.AppUserId.Value.ToString(), p.Actions);
+            }
+            else
+            {
+                var g = groups.FirstOrDefault(x => x.Id == p.OrgMemberGroupId!.Value);
+                return new PermissionRow(p.Id, null, p.OrgMemberGroupId, "Group",
+                    g?.Name ?? p.OrgMemberGroupId!.Value.ToString(), p.Actions);
+            }
+        }).ToList();
+    }
+
+    // ── Permission methods ────────────────────────────────────────────────────
+
+    private void OpenAddPermissionDialog()
+    {
+        _editingPerm = null;
+        _permGranteeType = "user";
+        _permUserId = Guid.Empty;
+        _permGroupId = Guid.Empty;
+        _permView = _permEdit = _permDelete = false;
+        _permDialogError = null;
+        _showPermissionDialog = true;
+    }
+
+    private void OpenEditPermissionDialog(PermissionRow row)
+    {
+        _editingPerm = row;
+        _permView   = row.Actions.HasFlag(CmsPageAction.View);
+        _permEdit   = row.Actions.HasFlag(CmsPageAction.Edit);
+        _permDelete = row.Actions.HasFlag(CmsPageAction.Delete);
+        _permDialogError = null;
+        _showPermissionDialog = true;
+    }
+
+    private async Task SavePermissionAsync()
+    {
+        var actions = CmsPageAction.None;
+        if (_permView)   actions |= CmsPageAction.View;
+        if (_permEdit)   actions |= CmsPageAction.Edit;
+        if (_permDelete) actions |= CmsPageAction.Delete;
+
+        if (actions == CmsPageAction.None) { _permDialogError = "Select at least one action."; return; }
+        _permDialogError = null;
+
+        if (_editingPerm is null)
+        {
+            // Create
+            if (_permGranteeType == "user" && _permUserId == Guid.Empty)
+            { _permDialogError = "Select a user."; return; }
+            if (_permGranteeType == "group" && _permGroupId == Guid.Empty)
+            { _permDialogError = "Select a group."; return; }
+
+            var req = new PagePermissionCreateRequest(
+                _permGranteeType == "user"  ? _permUserId  : null,
+                _permGranteeType == "group" ? _permGroupId : null,
+                actions);
+
+            var created = await AdminClient.CreatePagePermissionAsync(OrgId, PageId, req);
+            if (created is null) { _permDialogError = "Failed to create permission."; return; }
+        }
+        else
+        {
+            // Update
+            var updated = await AdminClient.UpdatePagePermissionAsync(OrgId, PageId, _editingPerm.Id, actions);
+            if (updated is null) { _permDialogError = "Failed to update permission."; return; }
+        }
+
+        _showPermissionDialog = false;
+        await LoadPageAsync();
+        StateHasChanged();
+    }
+
+    private async Task DeletePermissionAsync(PermissionRow row)
+    {
+        await AdminClient.DeletePagePermissionAsync(OrgId, PageId, row.Id);
+        await LoadPageAsync();
+        StateHasChanged();
+    }
+
+    // ── Metadata ──────────────────────────────────────────────────────────────
+
+    private async Task SavePageMetadata()
+    {
+        if (string.IsNullOrWhiteSpace(_metaForm.PageTitle) || string.IsNullOrWhiteSpace(_metaForm.UrlName))
+        {
+            _errorMessage = "Title and URL Slug are required.";
+            return;
+        }
+        _isBusy = true;
+        var result = await AdminClient.UpdateCmsPageAsync(OrgId, PageId, new CmsUpdatePageRequest(
+            _metaForm.PageTitle.Trim(),
+            _metaForm.UrlName.Trim().ToLowerInvariant(),
+            _metaForm.PageHtml,
+            _metaForm.IsPublished,
+            _metaForm.IsPublic,
+            _page?.ParentPageId,
+            _metaForm.SortOrder));
+
+        _isBusy = false;
+        if (result is not null) { _successMessage = "Page settings saved."; _page = result; }
+        else _errorMessage = "Failed to save page settings.";
+    }
+
+    // ── Preview ───────────────────────────────────────────────────────────────
+
+    private void TogglePreview() => _showPreview = !_showPreview;
+
+    // ── Saving this page's arrangement as a reusable layout ──────────────────
+
+    private bool _savingLayout, _layoutBusy;
+    private string _layoutName = "", _layoutDescription = "";
+    private string? _layoutError;
+
+    /// <summary>
+    /// Saves the page's sections as a group-owned page template.
+    /// </summary>
+    /// <remarks>
+    /// <para>Stores each section's type, title and <b>current content</b>. Storing the content is
+    /// the point — a layout whose sections arrived empty would save nobody any work, and the parts
+    /// worth keeping are exactly the standing headings and boilerplate somebody already wrote.</para>
+    ///
+    /// <para>Bound sections travel as their references, which is correct: an embed holds ids, and a
+    /// layout reused on a different case is expected to have its pickers re-pointed. The server
+    /// re-checks ownership of every referenced record when the page is read, so a layout cannot
+    /// carry another group's investigation into a new page.</para>
+    /// </remarks>
+    private async Task SaveLayoutAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_layoutName) || _sections.Count == 0) return;
+
+        _layoutBusy = true;
+        _layoutError = null;
+
+        var layout = _sections
+            .OrderBy(x => x.SortOrder)
+            .Select((x, index) => new CmsTemplateSectionRecord(
+                x.SectionType, x.Title, x.ContentJson, index))
+            .ToList();
+
+        var saved = await AdminClient.SaveCmsTemplateAsync(OrgId, new SaveCmsTemplateRequest(
+            _layoutName.Trim(),
+            string.IsNullOrWhiteSpace(_layoutDescription) ? null : _layoutDescription.Trim(),
+            CmsTemplateScope.Page,
+            // Meaningless for a page template; the entity says so. Sent as the default rather than
+            // left to whatever the request record happens to initialise.
+            CmsSectionType.RichText,
+            JsonSerializer.Serialize(layout)));
+
+        _layoutBusy = false;
+
+        if (saved is null)
+        {
+            _layoutError = "That couldn't be saved. The group may already have a layout with that name.";
+            return;
+        }
+
+        _savingLayout = false;
+        _layoutName = _layoutDescription = "";
+    }
+
+    private RenderFragment RenderSectionPreview(CmsSectionRecord section)
+    {
+        return builder =>
+        {
+            if (section.SectionType is CmsSectionType.RichText or CmsSectionType.CustomHtml)
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(section.ContentJson);
+                    if (doc.RootElement.TryGetProperty("html", out var el))
+                    {
+                        builder.AddMarkupContent(0, el.GetString() ?? string.Empty);
+                        return;
+                    }
+                }
+                catch (JsonException)
+            {
+                // A section whose stored JSON won't parse renders as empty rather than taking the
+                // page down with it — this runs on the read path, where throwing would replace a
+                // mostly-good page with an error. The editor is where a broken section is reported
+                // (see CmsSectionEditor); here the job is to keep rendering.
+            }
+            }
+            builder.AddMarkupContent(0, $"<em class='text-secondary'>[{section.SectionType}]</em>");
+        };
+    }
+
+    private static string SectionPreviewText(CmsSectionRecord s)
+    {
+        if (s.SectionType is CmsSectionType.RichText or CmsSectionType.CustomHtml)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(s.ContentJson);
+                if (doc.RootElement.TryGetProperty("html", out var el))
+                {
+                    var raw = el.GetString() ?? "";
+                    return System.Text.RegularExpressions.Regex.Replace(raw, "<[^>]+>", " ").Trim();
+                }
+            }
+            catch (JsonException)
+            {
+                // A section whose stored JSON won't parse renders as empty rather than taking the
+                // page down with it — this runs on the read path, where throwing would replace a
+                // mostly-good page with an error. The editor is where a broken section is reported
+                // (see CmsSectionEditor); here the job is to keep rendering.
+            }
+        }
+        return s.ContentJson.Length > 80 ? s.ContentJson[..80] + "…" : s.ContentJson;
+    }
+
+    // ── Section CRUD ──────────────────────────────────────────────────────────
+
+    private void OpenNewSectionDialog()
+    {
+        _editingSection  = null;
+        _sectionError    = null;
+        _sectionForm     = new SectionFormModel { SortOrder = _sections.Count + 1 };
+        _showSectionEditor = true;
+    }
+
+    private void OpenEditSectionDialog(CmsSectionRecord s)
+    {
+        _editingSection = s;
+        _sectionError   = null;
+        _sectionForm    = new SectionFormModel
+        {
+            SectionType = s.SectionType,
+            Title       = s.Title,
+            ContentJson = s.ContentJson,
+            IsActive    = s.IsActive,
+            SortOrder   = s.SortOrder
+        };
+        _showSectionEditor = true;
+    }
+
+    private void CloseSectionDialog()
+    {
+        _showSectionEditor = false;
+        _editingSection    = null;
+        _sectionError      = null;
+    }
+
+    private async Task SaveSection()
+    {
+        _isBusy = true;
+        _sectionError = null;
+
+        if (_editingSection is null)
+        {
+            var result = await AdminClient.CreateCmsSectionAsync(OrgId, PageId, new CmsCreateSectionRequest(
+                _sectionForm.SectionType, _sectionForm.Title?.Trim(),
+                _sectionForm.ContentJson, _sections.Count + 1, _sectionForm.IsActive));
+
+            if (result is null) _sectionError = "Failed to create section.";
+            else
+            {
+                _sections.Add(result);
+                _showSectionEditor = false;
+                _successMessage = "Section added.";
+            }
+        }
+        else
+        {
+            var result = await AdminClient.UpdateCmsSectionAsync(OrgId, PageId, _editingSection.Id,
+                new CmsUpdateSectionRequest(_sectionForm.Title?.Trim(), _sectionForm.ContentJson, _sectionForm.IsActive));
+
+            if (result is null) _sectionError = "Failed to update section.";
+            else
+            {
+                var idx = _sections.FindIndex(s => s.Id == _editingSection.Id);
+                if (idx >= 0) _sections[idx] = result;
+                _showSectionEditor = false;
+                _successMessage = "Section updated.";
+            }
+        }
+
+        _isBusy = false;
+    }
+
+    private async Task MoveSection(int idx, int direction)
+    {
+        var newIdx = idx + direction;
+        if (newIdx < 0 || newIdx >= _sections.Count) return;
+
+        (_sections[idx], _sections[newIdx]) = (_sections[newIdx], _sections[idx]);
+
+        var orderedIds = _sections.Select(s => s.Id).ToList();
+        await AdminClient.ReorderCmsSectionsAsync(OrgId, PageId, orderedIds);
+
+        // Update local sort order numbers
+        for (int i = 0; i < _sections.Count; i++)
+        {
+            var s = _sections[i];
+            _sections[i] = s with { SortOrder = i + 1 };
+        }
+    }
+
+    private void RequestDeleteSection(CmsSectionRecord s)
+    {
+        _pendingDeleteSection  = s;
+        _showDeleteSectionDialog = true;
+    }
+
+    private async Task ConfirmDeleteSection()
+    {
+        if (_pendingDeleteSection is null) return;
+        _isBusy = true;
+        var ok = await AdminClient.DeleteCmsSectionAsync(OrgId, PageId, _pendingDeleteSection.Id);
+        _isBusy = false;
+        _showDeleteSectionDialog = false;
+
+        if (ok) { _sections.RemoveAll(s => s.Id == _pendingDeleteSection.Id); _successMessage = "Section removed."; }
+        else _errorMessage = "Failed to remove section.";
+        _pendingDeleteSection = null;
+    }
+
+    // ── Form models ───────────────────────────────────────────────────────────
+
+    private sealed class MetaFormModel
+    {
+        public string PageTitle  { get; set; } = "";
+        public string UrlName    { get; set; } = "";
+        public string? PageHtml  { get; set; }
+        public bool IsPublished  { get; set; }
+        public bool IsPublic     { get; set; }
+        public int SortOrder     { get; set; } = 1;
+    }
+
+    private sealed class SectionFormModel
+    {
+        public CmsSectionType SectionType { get; set; } = CmsSectionType.RichText;
+        public string? Title    { get; set; }
+        public string ContentJson { get; set; } = "{}";
+        public bool IsActive   { get; set; } = true;
+        public int SortOrder   { get; set; } = 1;
+    }
+
+    private sealed record SectionTypeOption(CmsSectionType Value, string Label);
+
+    private sealed record PermissionRow(Guid Id, Guid? AppUserId, Guid? GroupId, string GranteeType, string GranteeName, CmsPageAction Actions);
+    private sealed record OrgMemberPermOption(Guid AppUserId, string DisplayName);
+    private sealed record GroupPermOption(Guid Id, string Name);
+    private sealed record GranteeTypeOption(string Label, string Value);
+
+    // ── Drafts (item #80, part 3) ───────────────────────────────────────────
+
+    private CmsDraftStateResponse? _draft;
+    private bool _draftBusy;
+    private bool _confirmDiscard;
+
+    private async Task LoadDraftStateAsync()
+        => _draft = await AdminClient.GetCmsDraftStateAsync(OrgId, PageId);
+
+    private async Task StartDraftAsync()
+    {
+        _draftBusy = true;
+        _errorMessage = null;
+
+        var state = await AdminClient.StartCmsDraftAsync(OrgId, PageId);
+        _draftBusy = false;
+
+        if (state?.DraftPageId is not Guid draftId)
+        {
+            _errorMessage = "That draft couldn't be started.";
+            return;
+        }
+
+        // Route to the draft: from here the editor edits an ordinary page row, so nothing else in
+        // this screen needs to know drafts exist.
+        NavManager.NavigateTo($"/organizations/{OrgId}/cms/pages/{draftId}");
+    }
+
+    private async Task PublishDraftAsync()
+    {
+        if (_draft is null) return;
+        _draftBusy = true;
+        _errorMessage = null;
+
+        var published = await AdminClient.PublishCmsDraftAsync(OrgId, _draft.LivePageId);
+        _draftBusy = false;
+
+        if (!published)
+        {
+            _errorMessage = "Those changes couldn't be published.";
+            return;
+        }
+
+        // The draft row is gone now, so staying on its id would be a dead page.
+        NavManager.NavigateTo($"/organizations/{OrgId}/cms/pages/{_draft.LivePageId}");
+    }
+
+    private async Task DiscardDraftAsync()
+    {
+        if (_draft is null) return;
+        _confirmDiscard = false;
+        _draftBusy = true;
+
+        var discarded = await AdminClient.DiscardCmsDraftAsync(OrgId, _draft.LivePageId);
+        _draftBusy = false;
+
+        if (!discarded) { _errorMessage = "That draft couldn't be discarded."; return; }
+        NavManager.NavigateTo($"/organizations/{OrgId}/cms/pages/{_draft.LivePageId}");
+    }
+}

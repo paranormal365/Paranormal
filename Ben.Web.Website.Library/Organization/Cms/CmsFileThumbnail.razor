@@ -1,0 +1,47 @@
+@* Lazy-loads and renders a file as a base64 data-URL image thumbnail. *@
+
+@inject IBenAdminClient AdminClient
+
+@if (_loading)
+{
+    <div style="width:@Width;height:@Height;display:flex;align-items:center;justify-content:center;">
+        <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
+    </div>
+}
+else if (_dataUrl is not null)
+{
+    <img src="@_dataUrl"
+         style="width:@Width;height:@Height;object-fit:cover;border-radius:4px;"
+         alt="@Alt" />
+}
+else
+{
+    <div style="width:@Width;height:@Height;display:flex;align-items:center;justify-content:center;background:#f0f0f0;border-radius:4px;">
+        <span class="text-secondary" style="font-size:0.7rem;">No preview</span>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid FileId { get; set; }
+    [Parameter] public string Width { get; set; } = "100px";
+    [Parameter] public string Height { get; set; } = "75px";
+    [Parameter] public string? Alt { get; set; }
+
+    private string? _dataUrl;
+    private bool _loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (FileId == Guid.Empty) { _loading = false; return; }
+
+        _loading = true;
+        _dataUrl = null;
+        StateHasChanged();
+
+        var result = await AdminClient.GetFileDataAsync(FileId);
+        if (result is not null)
+            _dataUrl = $"data:{result.Value.ContentType};base64,{Convert.ToBase64String(result.Value.Data)}";
+
+        _loading = false;
+    }
+}
