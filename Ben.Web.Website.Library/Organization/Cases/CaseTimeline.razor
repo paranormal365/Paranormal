@@ -1,0 +1,694 @@
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Shared
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@using Ben.Web.Website.Library.Manage.Media
+
+<div>
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <span class="fw-semibold">Timeline Entries (@(_entries?.Count ?? 0))</span>
+        <button type="button" class="btn btn-primary btn-sm" @onclick="OpenAddDialog"><BenIcon Name="plus" Class="me-1" />Add Entry</button>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_entries is null)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading timeline…" />
+    }
+    else if (_entries.Count == 0)
+    {
+        <p class="text-secondary">No entries yet. Add the first timeline entry above.</p>
+    }
+    else
+    {
+        @* ── Entry type filter chips ────────────────────────────────────── *@
+        <div class="d-flex gap-2 flex-wrap mb-3">
+            @foreach (var type in _typeFilters)
+            {
+                var t = type;
+                var isActive = _typeFilter == t;
+                <button type="button" class="btn @((isActive ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Outline) == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _typeFilter = t)">
+                    @(t is null ? "All" : EntryTypeLabel(t.Value))
+                </button>
+            }
+        </div>
+
+        @* ── Investigation filter ───────────────────────────────────────────
+           Entries recorded during a visit stay on the case timeline (that's the
+           point of reusing it), so this narrows the timeline to one binder
+           without hiding those entries from the case history. *@
+        @if (_investigations.Count > 0)
+        {
+            <div class="d-flex gap-2 flex-wrap mb-3 align-items-center">
+                <span class="small text-secondary">Investigation</span>
+                <button type="button" class="btn @((_investigationFilter is null ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Outline) == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _investigationFilter = null)">Any</button>
+                @foreach (var investigation in _investigations)
+                {
+                    var inv = investigation;
+                    var active = _investigationFilter == inv.Id;
+                    <button type="button" class="btn @((active ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Outline) == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _investigationFilter = inv.Id)">@inv.Title</button>
+                }
+            </div>
+        }
+
+        <div class="timeline d-flex flex-column gap-3">
+            @foreach (var row in RenderedRows())
+            {
+                var e = row.Entry;
+                var moment = row.Moment;
+                <div class="card @(e.Visibility == CaseTimelineVisibility.OrgOnly ? "border-0 bg-light" : "")">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start justify-content-between gap-2">
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                                    <span class="badge @EntryTypeBadgeClass(e.EntryType)">
+                                        @EntryTypeLabel(e.EntryType)
+                                    </span>
+                                    @* Says who can see it, not just "private" — with three tiers
+                                       an investigator needs to know which audience an entry reaches. *@
+                                    <span class="badge @VisibilityBadgeClass(e.Visibility)"
+                                          title="@VisibilityHint(e.Visibility)">@VisibilityLabel(e.Visibility)</span>
+                                    @if (e.EventDateTime.HasValue)
+                                    {
+                                        <small class="text-secondary">
+                                            @e.EventDateTime.Value.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+                                        </small>
+                                    }
+                                    @if (moment is { } mm)
+                                    {
+                                        <span class="badge bg-secondary-subtle text-secondary-emphasis fw-normal"
+                                              title="@($"{mm.Total} entries are logged at this exact time — they may be separate accounts of one event, or unrelated events that coincided.")">
+                                            @mm.Position of @mm.Total at this time
+                                        </span>
+                                    }
+                                    @if (!string.IsNullOrEmpty(e.AuthorDisplayName))
+                                    {
+                                        <small class="text-secondary">— @e.AuthorDisplayName</small>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrEmpty(e.Title))
+                                {
+                                    <strong>@e.Title</strong>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(e.Body))
+                                {
+                                    <div class="mt-1 small">@((MarkupString)e.Body)</div>
+                                }
+                                @if (e.ExperienceTypeIds.Count > 0)
+                                {
+                                    <div class="mt-1 d-flex gap-1 flex-wrap">
+                                        @foreach (var typeId in e.ExperienceTypeIds)
+                                        {
+                                            <span class="badge bg-light text-dark border" style="font-size:0.7rem;">
+                                                @(_expTypeNames.GetValueOrDefault(typeId, typeId.ToString()[..8]))
+                                            </span>
+                                        }
+                                    </div>
+                                }
+                                @if (e.Files.Count > 0)
+                                {
+                                    <div class="mt-1 d-flex gap-1 flex-wrap">
+                                        @foreach (var f in e.Files)
+                                        {
+                                            var icon = f.ContentType.StartsWith("image/") ? "image"
+                                                     : f.ContentType.StartsWith("video/") ? "play"
+                                                     : "file";
+                                            <span class="badge bg-secondary d-flex align-items-center gap-1" title="@f.FileName (@(f.FileSize / 1024) KB)">
+                                                <BenIcon Name="@icon" />
+                                                <span style="max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@f.FileName</span>
+                                                @if (f.ContentType.StartsWith("image/"))
+                                                {
+                                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Clear == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenImageEditor(f.FileId, f.FileName))" title="Edit image"><BenIcon Name="edit-2" /></button>
+                                                }
+                                            </span>
+                                        }
+                                    </div>
+                                    @* Vote detail panel — expanded per evidence file *@
+                                    @if (e.EntryType == CaseTimelineEntryType.Evidence)
+                                    {
+                                        @foreach (var f in e.Files)
+                                        {
+                                            var fid = f.FileId;
+                                            <details class="mt-2">
+                                                <summary class="text-secondary small" style="cursor:pointer;">
+                                                    Vote details — @f.FileName
+                                                </summary>
+                                                <div class="mt-1 ms-2">
+                                                    <EvidenceVoteDetailPanel UploadFileId="@fid" />
+                                                </div>
+                                            </details>
+                                        }
+                                    }
+                                }
+                            </div>
+                            <div class="d-flex gap-1 flex-shrink-0">
+                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEditDialog(e))" title="Edit"><BenIcon Name="edit-2" /></button>
+                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => ConfirmDelete(e))" title="Delete"><BenIcon Name="trash-2" /></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@* ── Add / Edit entry dialog ──────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showDialog" Title="@(_editEntry is null ? "Add Timeline Entry" : "Edit Timeline Entry")" Size="lg">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Type</label>
+                <TelerikDropDownList Data="@_entryTypeOptions"
+                                     @bind-Value="@_form.EntryType"
+                                     TextField="@nameof(EntryTypeOption.Label)"
+                                     ValueField="@nameof(EntryTypeOption.Value)"
+                                     Width="100%" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Event Date/Time (optional)</label>
+                <TelerikDateTimePicker @bind-Value="@_form.EventDateTime" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Title (optional)</label>
+                <input type="text" class="form-control" placeholder="Brief summary of the event" @bind="@_form.Title" @bind:event="oninput" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Description</label>
+                <TelerikEditor @bind-Value="@_form.Body" Height="180px"
+                               Tools="@_editorTools" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Experience Types (optional)</label>
+                <div class="d-flex flex-wrap gap-2 p-2 border rounded" style="max-height:160px;overflow-y:auto;">
+                    @foreach (var cat in _taxonomy)
+                    {
+                        <div class="w-100 fw-semibold text-secondary small @cat.Category.ColorClass">
+                            @cat.Category.Name
+                        </div>
+                        @foreach (var t in cat.Types)
+                        {
+                            var typeId = t.Id;
+                            var isSelected = _form.ExperienceTypeIds.Contains(typeId);
+                            <div class="d-flex align-items-center gap-1 border rounded px-2 py-1"
+                                 style="cursor:pointer;font-size:0.82rem;"
+                                 @onclick="@(() => ToggleType(typeId))">
+                                <input type="checkbox" class="form-check-input" checked="@isSelected" disabled />
+                                @t.Name
+                            </div>
+                        }
+
+                        @* Nothing in the list fits? Add it. The new type is usable straight away —
+                           an investigator recording tonight's occurrence cannot wait on approval. *@
+                        var catId = cat.Category.Id;
+                        @if (_addingTypeForCategoryId == catId)
+                        {
+                            <div class="d-flex align-items-center gap-1">
+                                @* Plain input, deliberately: Telerik text boxes push their value on
+                                   blur, and this one is submitted by a button click. *@
+                                <input class="form-control form-control-sm" style="width:180px;"
+                                       placeholder="New type name"
+                                       maxlength="100"
+                                       value="@_newTypeName"
+                                       @oninput="@(e => _newTypeName = e.Value?.ToString() ?? "")" />
+                                <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => AddTypeAsync(catId))" disabled="@(!(!_addingType && !string.IsNullOrWhiteSpace(_newTypeName)))">Add</button>
+                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="CancelAddType">Cancel</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="d-flex align-items-center gap-1 border border-dashed rounded px-2 py-1 text-secondary"
+                                 style="cursor:pointer;font-size:0.82rem;"
+                                 @onclick="@(() => StartAddType(catId))">+ Add type</div>
+                        }
+                    }
+                </div>
+                @* A name that looks like a mistyping of one already here. Shown as a choice rather
+                   than a refusal: the existing words are one click each, and "mine is different"
+                   creates it anyway. Being unable to get past this would be worse than no check. *@
+                @if (_didYouMean is not null)
+                {
+                    <div class="alert alert-warning py-2 px-3 mt-2 mb-0 small">
+                        <div class="mb-2">
+                            <strong>@_didYouMean.ProposedName</strong> is close to
+                            @(_didYouMean.DidYouMean.Count == 1 ? "a type" : "types")
+                            already in this category. Did you mean:
+                        </div>
+                        <div class="d-flex flex-wrap gap-1 mb-2">
+                            @foreach (var suggestion in _didYouMean.DidYouMean)
+                            {
+                                <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => UseSuggestedTypeAsync(suggestion))">@suggestion</button>
+                            }
+                        </div>
+                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="ConfirmDistinctTypeAsync" disabled="@(!(!_addingType))">
+                            No, "@_didYouMean.ProposedName" is different — add it
+                        </button>
+                    </div>
+                }
+                @if (_addTypeError is not null)
+                {
+                    <div class="text-danger small mt-1">@_addTypeError</div>
+                }
+                <div class="form-text">
+                    A type you add is available immediately and is flagged for site administrators
+                    to review.
+                </div>
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Who can see this</label>
+                @* A plain select, deliberately. The Telerik dropdown did not push its selection
+                   in either binding form, and a visibility control that silently keeps its default
+                   is a privacy bug — an investigator would believe they'd shared something with the
+                   client, or worse, published it. *@
+                <select class="form-select" 
+                        @onchange="@(e => _form.Visibility = (CaseTimelineVisibility)int.Parse(e.Value?.ToString() ?? "0"))">
+                    @foreach (var opt in _visibilityOptions)
+                    {
+                        <option value="@((int)opt.Value)" selected="@(opt.Value == _form.Visibility)">@opt.Label</option>
+                    }
+                </select>
+                <div class="form-text">@VisibilityHint(_form.Visibility)</div>
+            </div>
+        </div>
+        @if (_dialogError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
+        }
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <button type="button" class="btn btn-secondary" @onclick="CloseDialog">Cancel</button>
+            <button type="button" class="btn btn-primary" @onclick="SaveEntry" disabled="@(!(!_isBusy))"><BenIcon Name="save" Class="me-1" />
+                @(_isBusy ? "Saving…" : "Save")
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@* ── Delete confirm ───────────────────────────────────────────────────────── *@
+<BenConfirmDialog @bind-Visible="@_showDeleteConfirm" Title="Delete Entry" Width="380px"
+               Busy="@_isBusy" BusyText="Deleting…" OnConfirm="ExecuteDelete">
+    <p>Delete this timeline entry? This cannot be undone.</p>
+</BenConfirmDialog>
+
+@* Image editor — opened when user clicks the pencil icon on an image file *@
+<ImageEditorPlayer @ref="_imageEditor"
+                   UploadFileId="@_editImageFileId"
+                   FileName="@_editImageFileName" />
+
+@code {
+    [Parameter] public Guid OrgId  { get; set; }
+    [Parameter] public Guid CaseId { get; set; }
+
+    private List<CaseTimelineEntryRecord>? _entries;
+    private string? _error;
+    private bool _isBusy;
+    private CaseTimelineEntryType? _typeFilter;
+
+    // Taxonomy for experience type picker
+    private List<ExperienceCategoryWithTypesResponse> _taxonomy = [];
+    private Dictionary<Guid, string> _expTypeNames = new();
+
+    // Inline "add a missing type" state
+    private Guid? _addingTypeForCategoryId;
+    private string _newTypeName = "";
+    private bool _addingType;
+    private string? _addTypeError;
+    private ProbableDuplicateResponse? _didYouMean;
+
+    // Dialog state
+    private bool _showDialog;
+    private bool _showDeleteConfirm;
+    private CaseTimelineEntryRecord? _editEntry;
+    private CaseTimelineEntryRecord? _pendingDelete;
+    private string? _dialogError;
+    private EntryFormModel _form = new();
+
+    // Image editor state
+    private ImageEditorPlayer? _imageEditor;
+    private Guid _editImageFileId;
+    private string? _editImageFileName;
+
+    private async Task OpenImageEditor(Guid fileId, string? fileName)
+    {
+        _editImageFileId   = fileId;
+        _editImageFileName = fileName;
+        StateHasChanged();
+        if (_imageEditor is not null)
+            await _imageEditor.OpenAsync();
+    }
+
+    private static readonly CaseTimelineEntryType?[] _typeFilters =
+        [null, CaseTimelineEntryType.ClientReport, CaseTimelineEntryType.InvestigatorNote,
+         CaseTimelineEntryType.Evidence, CaseTimelineEntryType.ResearchNote];
+
+    private static readonly List<EntryTypeOption> _entryTypeOptions = Enum
+        .GetValues<CaseTimelineEntryType>()
+        .Select(t => new EntryTypeOption(t, EntryTypeLabel(t)))
+        .ToList();
+
+    private static readonly List<Telerik.Blazor.Components.IEditorTool> _editorTools =
+    [
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.Bold(),
+            new Telerik.Blazor.Components.Editor.Italic(),
+            new Telerik.Blazor.Components.Editor.Underline()),
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.UnorderedList(),
+            new Telerik.Blazor.Components.Editor.OrderedList()),
+        new Telerik.Blazor.Components.Editor.EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.Undo(),
+            new Telerik.Blazor.Components.Editor.Redo()),
+    ];
+
+    private IEnumerable<CaseTimelineEntryRecord> FilteredEntries
+    {
+        get
+        {
+            var q = _entries!.AsEnumerable();
+            if (_typeFilter is { } t)           q = q.Where(e => e.EntryType == t);
+            if (_investigationFilter is { } inv) q = q.Where(e => e.InvestigationId == inv);
+            return q;
+        }
+    }
+
+    /// <summary>
+    /// The filtered entries in render order, each paired with its position among any entries
+    /// sharing its event time. Built in one pass so the annotation can't disagree with the
+    /// list it describes.
+    /// </summary>
+    private List<(CaseTimelineEntryRecord Entry, (int Position, int Total)? Moment)> RenderedRows()
+    {
+        var ordered = FilteredEntries.ToList();
+        var moments = BuildMomentGroups(ordered);
+        return ordered
+            .Select(e => (e, moments.TryGetValue(e.Id, out var m)
+                ? m
+                : default((int Position, int Total)?)))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Marks the entries that claim the same event time as at least one other entry, as
+    /// "position of total" within that moment. Several people can report one event, and
+    /// unrelated events can land on the same minute — a reader who assumes one entry per
+    /// moment would treat the second account as a duplicate, or miss it entirely.
+    /// Deliberately neutral about *why* they coincide; that's the investigator's call.
+    /// </summary>
+    /// <remarks>
+    /// Entries with no event time are skipped: they claim no moment, so they share none.
+    /// Relies on <paramref name="ordered"/> already being sorted, so positions read in the
+    /// same order they appear on screen.
+    /// </remarks>
+    private static Dictionary<Guid, (int Position, int Total)> BuildMomentGroups(
+        IReadOnlyList<CaseTimelineEntryRecord> ordered)
+    {
+        var map = new Dictionary<Guid, (int, int)>();
+        foreach (var g in ordered.Where(e => e.EventDateTime.HasValue)
+                                 .GroupBy(e => e.EventDateTime!.Value))
+        {
+            var members = g.ToList();
+            if (members.Count < 2) continue;
+            for (var i = 0; i < members.Count; i++)
+                map[members[i].Id] = (i + 1, members.Count);
+        }
+        return map;
+    }
+
+    private Guid? _investigationFilter;
+    private List<InvestigationRecord> _investigations = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+        _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).ToList();
+        _expTypeNames = _taxonomy
+            .SelectMany(c => c.Types)
+            .ToDictionary(t => t.Id, t => t.Name);
+    }
+
+    private async Task LoadAsync()
+    {
+        try { _entries = (await AdminClient.GetCaseTimelineAsync(OrgId, CaseId)).ToList(); }
+        catch { _error = "Failed to load timeline."; }
+
+        // Only needed to label the filter chips. Failing here shouldn't break the timeline — the
+        // chips just don't appear.
+        try { _investigations = (await AdminClient.GetInvestigationsAsync(OrgId, CaseId)).ToList(); }
+        catch { _investigations = []; }
+    }
+
+    private void OpenAddDialog()
+    {
+        _editEntry = null;
+        _form      = new();
+        _dialogError = null;
+        _showDialog  = true;
+    }
+
+    private void OpenEditDialog(CaseTimelineEntryRecord entry)
+    {
+        _editEntry   = entry;
+        _form        = new EntryFormModel
+        {
+            EntryType          = entry.EntryType,
+            EventDateTime      = entry.EventDateTime,
+            Title              = entry.Title ?? "",
+            Body               = entry.Body ?? "",
+            Visibility         = entry.Visibility,
+            ExperienceTypeIds  = entry.ExperienceTypeIds.ToHashSet(),
+        };
+        _dialogError = null;
+        _showDialog  = true;
+    }
+
+    private void CloseDialog() => _showDialog = false;
+
+    private void StartAddType(Guid categoryId)
+    {
+        _addingTypeForCategoryId = categoryId;
+        _newTypeName = "";
+        _addTypeError = null;
+        _didYouMean = null;
+    }
+
+    private void CancelAddType()
+    {
+        _addingTypeForCategoryId = null;
+        _newTypeName = "";
+        _addTypeError = null;
+        _didYouMean = null;
+    }
+
+    /// <summary>
+    /// Adds a type the taxonomy is missing, then selects it on the entry being written.
+    /// </summary>
+    /// <remarks>
+    /// <para>Selecting it is the point — someone typed the name because they wanted to tag this
+    /// entry with it, so making them find and click it afterwards would be a pointless second step.
+    /// The server returns the existing type when the name is already taken, so a near-duplicate
+    /// selects what is already there instead of creating a twin.</para>
+    ///
+    /// <para>A name that merely <i>looks like</i> an existing one comes back as suggestions rather
+    /// than as a type. That is a question, not a refusal, and the answer has to be reachable both
+    /// ways — see <see cref="UseSuggestedTypeAsync"/> and <see cref="ConfirmDistinctTypeAsync"/>.
+    /// </para>
+    /// </remarks>
+    private async Task AddTypeAsync(Guid categoryId, bool confirmDistinct = false)
+    {
+        var name = _newTypeName.Trim();
+        if (string.IsNullOrWhiteSpace(name)) return;
+
+        _addingType = true;
+        _addTypeError = null;
+        _didYouMean = null;
+        try
+        {
+            var proposal = await AdminClient.AddOrgExperienceTypeAsync(
+                OrgId, new AddOrgExperienceTypeRequest(categoryId, name, null, confirmDistinct));
+
+            if (proposal.DidYouMean is not null)
+            {
+                _didYouMean = proposal.DidYouMean;
+                return;
+            }
+
+            if (proposal.Created is null)
+            {
+                _addTypeError = "Could not add that type. Only group owners and administrators can.";
+                return;
+            }
+
+            await ReloadTaxonomyAsync();
+            _form.ExperienceTypeIds.Add(proposal.Created.Id);
+            CancelAddType();
+        }
+        catch
+        {
+            _addTypeError = "Could not add that type.";
+        }
+        finally
+        {
+            _addingType = false;
+        }
+    }
+
+    /// <summary>
+    /// Takes one of the suggested existing types instead of the name that was typed.
+    /// </summary>
+    /// <remarks>
+    /// Posting the suggested name rather than looking up its id: the server's exact-match path
+    /// returns the existing row for a name already taken, so this lands on the same type without a
+    /// second concept of "which one did they mean" living out here.
+    /// </remarks>
+    private async Task UseSuggestedTypeAsync(string name)
+    {
+        var categoryId = _addingTypeForCategoryId;
+        if (categoryId is null) return;
+
+        _newTypeName = name;
+        await AddTypeAsync(categoryId.Value);
+    }
+
+    /// <summary>Says the typed name really is a different thing, and creates it.</summary>
+    private async Task ConfirmDistinctTypeAsync()
+    {
+        var categoryId = _addingTypeForCategoryId;
+        if (categoryId is null) return;
+
+        await AddTypeAsync(categoryId.Value, confirmDistinct: true);
+    }
+
+    private async Task ReloadTaxonomyAsync()
+    {
+        _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).ToList();
+        _expTypeNames = _taxonomy
+            .SelectMany(c => c.Types)
+            .ToDictionary(t => t.Id, t => t.Name);
+    }
+
+    private void ToggleType(Guid typeId)
+    {
+        if (!_form.ExperienceTypeIds.Remove(typeId))
+            _form.ExperienceTypeIds.Add(typeId);
+    }
+
+    private async Task SaveEntry()
+    {
+        _isBusy = true; _dialogError = null;
+        try
+        {
+            var req = new UpsertTimelineEntryRequest(
+                EntryType:         _form.EntryType,
+                EventDateTime:     _form.EventDateTime,
+                Title:             string.IsNullOrWhiteSpace(_form.Title) ? null : _form.Title.Trim(),
+                Body:              string.IsNullOrWhiteSpace(_form.Body) ? null : _form.Body.Trim(),
+                Visibility:        _form.Visibility,
+                ExperienceTypeIds: _form.ExperienceTypeIds.ToList());
+
+            CaseTimelineEntryRecord? result;
+            if (_editEntry is null)
+                result = await AdminClient.AddCaseTimelineEntryAsync(OrgId, CaseId, req);
+            else
+                result = await AdminClient.UpdateCaseTimelineEntryAsync(OrgId, CaseId, _editEntry.Id, req);
+
+            if (result is null) { _dialogError = "Save failed."; }
+            else { CloseDialog(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _dialogError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private void ConfirmDelete(CaseTimelineEntryRecord entry)
+    {
+        _pendingDelete     = entry;
+        _showDeleteConfirm = true;
+    }
+
+    private async Task ExecuteDelete()
+    {
+        if (_pendingDelete is null) return;
+        _isBusy = true;
+        try
+        {
+            await AdminClient.DeleteCaseTimelineEntryAsync(OrgId, CaseId, _pendingDelete.Id);
+            _showDeleteConfirm = false;
+            await LoadAsync();
+        }
+        catch { _error = "Delete failed."; }
+        finally { _isBusy = false; }
+    }
+
+    internal static string EntryTypeLabel(CaseTimelineEntryType t) => t switch
+    {
+        CaseTimelineEntryType.ClientReport     => "Client Report",
+        CaseTimelineEntryType.InvestigatorNote => "Investigator Note",
+        CaseTimelineEntryType.Evidence         => "Evidence",
+        CaseTimelineEntryType.ResearchNote     => "Research",
+        _                                      => t.ToString(),
+    };
+
+    // ── Visibility (C2) ───────────────────────────────────────────────────────
+    // Three tiers replace a checkbox that could only mean "public or not", which forced a choice
+    // between telling the client nothing and telling the whole internet.
+
+    private sealed record VisibilityOption(string Label, CaseTimelineVisibility Value);
+
+    private static readonly List<VisibilityOption> _visibilityOptions =
+    [
+        new("Investigators only", CaseTimelineVisibility.OrgOnly),
+        new("Client can see",     CaseTimelineVisibility.Client),
+        new("Public",             CaseTimelineVisibility.Public),
+    ];
+
+    private static string VisibilityLabel(CaseTimelineVisibility v) => v switch
+    {
+        CaseTimelineVisibility.Public => "Public",
+        CaseTimelineVisibility.Client => "Client",
+        _                             => "Internal",
+    };
+
+    private static string VisibilityBadgeClass(CaseTimelineVisibility v) => v switch
+    {
+        CaseTimelineVisibility.Public => "bg-info text-dark",
+        CaseTimelineVisibility.Client => "bg-primary",
+        _                             => "bg-secondary",
+    };
+
+    private static string VisibilityHint(CaseTimelineVisibility v) => v switch
+    {
+        CaseTimelineVisibility.Public =>
+            "Anyone can read this, including on the public case page.",
+        CaseTimelineVisibility.Client =>
+            "Your team and the case's client. Not shown publicly.",
+        _ =>
+            "Only your team. The client won't see this.",
+    };
+
+    private static string EntryTypeBadgeClass(CaseTimelineEntryType t) => t switch
+    {
+        CaseTimelineEntryType.ClientReport     => "bg-warning text-dark",
+        CaseTimelineEntryType.InvestigatorNote => "bg-primary",
+        CaseTimelineEntryType.Evidence         => "bg-danger",
+        CaseTimelineEntryType.ResearchNote     => "bg-success",
+        _                                      => "bg-secondary",
+    };
+
+    private class EntryFormModel
+    {
+        public CaseTimelineEntryType EntryType     { get; set; } = CaseTimelineEntryType.InvestigatorNote;
+        public DateTime?             EventDateTime { get; set; }
+        public string                Title         { get; set; } = "";
+        public string                Body          { get; set; } = "";
+        public CaseTimelineVisibility Visibility   { get; set; } = CaseTimelineVisibility.OrgOnly;
+        public HashSet<Guid>         ExperienceTypeIds { get; set; } = new();
+    }
+
+    private record EntryTypeOption(CaseTimelineEntryType Value, string Label);
+}

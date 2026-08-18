@@ -61,7 +61,13 @@
    control renders at ~60px tall instead of ~38px with the glyph stranded above the text.
 
    Only inline contexts are corrected; standalone .sa-icon keeps the template's behaviour. */
-.btn > .sa-icon,
+/* The :not() guards matter. The template pairs two icons in one control and shows whichever
+   suits the current state — .sa-mode-light/.sa-mode-dark on the theme toggle,
+   .sa-fullscreen-on/.sa-fullscreen-off on the fullscreen button — hiding the other with
+   `.app-header .sa-mode-light { display: none }`. That rule has the same specificity as this one,
+   and this file loads later, so without the guards this quietly un-hides it and the theme toggle
+   shows a sun and a moon at once. */
+.btn > .sa-icon:not([class*="sa-mode-"]):not([class*="sa-fullscreen-"]),
 .nav-link > .sa-icon,
 .dropdown-item > .sa-icon,
 .page-link > .sa-icon,

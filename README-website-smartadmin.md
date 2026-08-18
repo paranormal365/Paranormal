@@ -380,3 +380,39 @@ truncates at the first nested quote, so every handler became
 **Verified:** solution builds clean, 2430/2430 tests pass, `/organizations` lists three groups with
 live counts and mm/dd/yyyy dates, and the rebuilt split button opens with all eight actions and
 closes on click-away.
+
+### Wave E — `Organization/Cases/` (+ `Media/` pulled forward)
+
+17 case components plus the 4-file `Media/` area, pulled forward because `CaseFiles` needs
+`MediaLibraryGrid`. Routes added: `/organizations/{id}/cases`, `/cases/new`, `/cases/{id}`,
+`/cases/{id}/audio-mix`, `/cases/{id}/video-editor`, `/pending-requests`.
+
+**Converted:** 93 buttons (plus 12 more once the converter learned literal attribute values like
+`Size="sm"` and `FillMode="outline"`), 20 text boxes, 16 windows → `BenModal`, 11 text areas,
+2 id-addressed tab strips, and the notification hosts. **Kept:** 7 templated dropdowns, 6 date
+pickers, 2 grids, 2 rich-text editors, 2 date pickers.
+
+`OrganizationView` stays deferred: `CaseList` has landed, but it still embeds `OrgCmsEditor`.
+
+### Header chrome — measured against the template, not guessed
+
+A round of header fixes that took several attempts, and the lesson is the one Ben named: **compare
+against the template's own rendering rather than eyeballing it.** Running the template at :5266 and
+measuring the same elements settled in one step what three rounds of guessing had not.
+
+What was actually wrong, in order:
+
+1. **Controls at four different heights** (29, 35, 98, 42px), two of them hanging above an 88px
+   header. Root cause: the template's `.btn-system` contains *nothing but an `<svg>`*, so its
+   `line-height: var(--app-header-height)` never applies to the box. Razor emits comment markers
+   and whitespace inside the button, which creates an inline formatting context — and there that
+   88px line-height *does* apply. `line-height: 0` removes the stray inline box.
+2. **No gap at all** between controls: every one measured `margin: 0` with no gap on the row.
+3. **Both toggles beside the wordmark at once.** Self-inflicted: `display: inline-flex !important`
+   beat the template's `.d-none`/`.d-lg-none` utilities as well as the one it was aimed at. The
+   override is now scoped to the breakpoint each utility already intends.
+4. **A sun and a moon together in light mode.** Also self-inflicted: the kit's inline-icon rule had
+   the same specificity as `.app-header .sa-mode-light { display: none }` and loaded later, quietly
+   un-hiding it. The kit rule now excludes the template's own state pairs.
+5. **Sign In crushed into a 40px square** with its highlight off the words, because it carries a
+   label and had been swept into the icon-only sizing.

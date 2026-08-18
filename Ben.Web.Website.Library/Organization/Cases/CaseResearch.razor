@@ -1,0 +1,194 @@
+@using Ben.Data.Common.Enums
+@using Ben.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IJSRuntime JS
+
+@if (_loading) { <BenLoaderOverlay Visible="true" Text="Loading research…" /> }
+else
+{
+    @* ── Toolbar ─────────────────────────────────────────────────────────────── *@
+    <div class="d-flex gap-2 flex-wrap mb-3">
+        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenDialog(CaseResearchType.Note))"><BenIcon Name="plus" Class="me-1" />Note</button>
+        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenDialog(CaseResearchType.Link))"><BenIcon Name="link" Class="me-1" />Link</button>
+        <InputFile OnChange="OnFileSelected" accept="*" style="display:none;" id="research-file-upload" />
+        <label for="research-file-upload" class="k-button k-button-sm k-button-outline k-button-outline-base" style="cursor:pointer;">
+            <BenIcon Name="upload" /> File
+        </label>
+        @if (_uploading) { <span class="spinner-border spinner-border-sm" role="status" aria-label="Loading"></span> }
+    </div>
+
+    @if (_error is not null) { <div class="alert alert-danger py-2 small mb-3">@_error</div> }
+
+    @if (_entries.Count == 0)
+    {
+        <div class="text-secondary text-center py-4 small">
+            No research entries yet. Add notes, URLs, or documents to document the location's history and context.
+        </div>
+    }
+
+    @* ── Entry list ──────────────────────────────────────────────────────────── *@
+    <div class="d-flex flex-column gap-2">
+        @foreach (var entry in _entries.OrderBy(e => e.SortOrder))
+        {
+            var e = entry;
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-start justify-content-between gap-2">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="badge @TypeBadge(e.ResearchType)">@e.ResearchType</span>
+                                <span class="fw-semibold small">@e.Title</span>
+                            </div>
+
+                            @if (e.ResearchType == CaseResearchType.Link && !string.IsNullOrEmpty(e.Url))
+                            {
+                                <a href="@e.Url" target="_blank" rel="noopener noreferrer" class="small">@e.Url</a>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(e.Body))
+                            {
+                                <div class="small text-secondary mt-1">@((MarkupString)e.Body)</div>
+                            }
+                            @if (e.File is not null)
+                            {
+                                <div class="small text-secondary mt-1 d-flex align-items-center gap-1">
+                                    <BenIcon Name="file" />
+                                    @e.File.FileName
+                                    <span class="text-muted">([@(e.File.FileSize / 1024) KB])</span>
+                                </div>
+                            }
+                            <div class="text-muted mt-1" style="font-size:.7rem;">
+                                Added @e.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+                            </div>
+                        </div>
+                        <div class="d-flex gap-1 flex-shrink-0">
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenEdit(e))"><BenIcon Name="edit-2" /></button>
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => DeleteEntry(e.Id))"><BenIcon Name="trash-2" /></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@* ── Add / Edit dialog ───────────────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showDialog" Title="@(_editId == Guid.Empty ? $"Add {_dialogType}" : $"Edit {_dialogType}")">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" @bind="@_formTitle" @bind:event="oninput" />
+            </div>
+            @if (_dialogType == CaseResearchType.Link)
+            {
+                <div class="col-12">
+                    <label class="form-label fw-semibold">URL</label>
+                    <input type="text" class="form-control" placeholder="https://…" @bind="@_formUrl" @bind:event="oninput" />
+                </div>
+            }
+            <div class="col-12">
+                <label class="form-label fw-semibold">@(_dialogType == CaseResearchType.Note ? "Content" : "Description")</label>
+                <textarea class="form-control" rows="5" @bind="@_formBody"></textarea>
+            </div>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter, EditorRequired] public Guid CaseId { get; set; }
+
+    private List<CaseResearchEntryDto> _entries = [];
+    private bool _loading = true;
+    private bool _saving;
+    private bool _uploading;
+    private string? _error;
+
+    private bool _showDialog;
+    private Guid _editId;
+    private CaseResearchType _dialogType;
+    private string _formTitle = "";
+    private string _formBody  = "";
+    private string _formUrl   = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _entries = (await AdminClient.GetCaseResearchAsync(OrgId, CaseId)).ToList(); }
+        catch { _error = "Failed to load research entries."; }
+        _loading = false;
+    }
+
+    private void OpenDialog(CaseResearchType type)
+    {
+        _editId = Guid.Empty; _dialogType = type;
+        _formTitle = ""; _formBody = ""; _formUrl = "";
+        _showDialog = true;
+    }
+
+    private void OpenEdit(CaseResearchEntryDto e)
+    {
+        _editId = e.Id; _dialogType = e.ResearchType;
+        _formTitle = e.Title; _formBody = e.Body ?? ""; _formUrl = e.Url ?? "";
+        _showDialog = true;
+    }
+
+    private async Task SaveEntry()
+    {
+        _saving = true;
+        var req = new UpsertResearchRequest(_dialogType, _formTitle, _formBody, _formUrl);
+        try
+        {
+            CaseResearchEntryDto? result;
+            if (_editId == Guid.Empty)
+                result = await AdminClient.AddCaseResearchAsync(OrgId, CaseId, req);
+            else
+                result = await AdminClient.UpdateCaseResearchAsync(OrgId, CaseId, _editId, req);
+
+            if (result is not null)
+            {
+                if (_editId == Guid.Empty) _entries.Add(result);
+                else { var idx = _entries.FindIndex(e => e.Id == _editId); if (idx >= 0) _entries[idx] = result; }
+                _showDialog = false;
+            }
+        }
+        catch { _error = "Failed to save entry."; }
+        finally { _saving = false; StateHasChanged(); }
+    }
+
+    private async Task DeleteEntry(Guid entryId)
+    {
+        await AdminClient.DeleteCaseResearchAsync(OrgId, CaseId, entryId);
+        _entries.RemoveAll(e => e.Id == entryId);
+        StateHasChanged();
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _uploading = true; _error = null;
+        StateHasChanged();
+        try
+        {
+            foreach (var f in e.GetMultipleFiles(5))
+            {
+                // No practical upload size limit for now — a future limit belongs at app-settings /
+                // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
+                using var stream = f.OpenReadStream(maxAllowedSize: long.MaxValue);
+                var result = await AdminClient.UploadCaseResearchFileAsync(
+                    OrgId, CaseId, f.Name, null, stream, f.Name, f.ContentType);
+                if (result is not null) _entries.Add(result);
+            }
+        }
+        catch { _error = "Failed to upload research file."; }
+        finally { _uploading = false; StateHasChanged(); }
+    }
+
+    private static string TypeBadge(CaseResearchType t) => t switch
+    {
+        CaseResearchType.Link => "bg-primary",
+        CaseResearchType.File => "bg-secondary",
+        _                     => "bg-info text-dark",
+    };
+}

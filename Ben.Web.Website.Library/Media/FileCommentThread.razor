@@ -1,0 +1,195 @@
+@namespace Ben.Web.Website.Library.Media
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Shared
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@*
+  Reusable comment thread for an UploadFile (item #6 phase 2). Self-contained — loads/posts/edits/
+  deletes via IBenAdminClient directly, mirroring EvidenceVoteWidget rather than CaseMessageThread's
+  delegate-injection pattern, since there's only ever one file's worth of comments to manage here.
+  Posting is server-gated (owner or an enabled+matching audience); a 403 surfaces as a plain message
+  rather than hiding the compose box, since a client-side prediction of "can I post" would have to
+  duplicate FileAudienceAccess's full membership logic just to stay in sync.
+*@
+
+<div class="d-flex flex-column gap-2">
+    @if (_comments is null)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading comments…" />
+    }
+    else if (_comments.Count == 0)
+    {
+        <div class="text-secondary small text-center py-2">No comments yet.</div>
+    }
+    else
+    {
+        <div class="d-flex flex-column gap-2" style="max-height:360px; overflow-y:auto;">
+            @foreach (var comment in _comments)
+            {
+                var c = comment;
+                var isOwnComment = c.AuthorAppUserId == UserState.UserId;
+                <div class="border rounded p-2">
+                    <div class="d-flex align-items-center justify-content-between gap-2">
+                        <div class="d-flex align-items-center gap-2 small">
+                            <span class="fw-semibold">
+                                <UserNameLink AppUserId="@c.AuthorAppUserId" DisplayName="@c.AuthorDisplayName" ShowAvatar="true" AvatarSize="24" />
+                            </span>
+                            <span class="badge text-bg-light border">@AudienceLabel(c)</span>
+                            <span class="text-muted" style="font-size:.7rem;">
+                                @c.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy h:mm tt")
+                                @if (c.DateUpdated.HasValue) { <text> (edited)</text> }
+                            </span>
+                        </div>
+                        @if (isOwnComment || CanModerate)
+                        {
+                            <div class="d-flex gap-1">
+                                @if (isOwnComment && _editingId != c.Id)
+                                {
+                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => BeginEdit(c))"><BenIcon Name="edit-2" /></button>
+                                }
+                                <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => Delete(c.Id))" disabled="@(!(!_busy))"><BenIcon Name="trash-2" /></button>
+                            </div>
+                        }
+                    </div>
+                    @if (_editingId == c.Id)
+                    {
+                        <div class="d-flex gap-2 mt-2">
+                            <textarea class="form-control" rows="2" @bind="@_editDraft"></textarea>
+                            <div class="d-flex flex-column gap-1">
+                                <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => SaveEdit(c.Id))" disabled="@(!(!_busy && !string.IsNullOrWhiteSpace(_editDraft)))">Save</button>
+                                <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelEdit">Cancel</button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mt-1" style="white-space:pre-wrap;">@c.Text</div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @if (UserState.IsAuthenticated)
+    {
+        <div class="d-flex gap-2 mt-1">
+            <textarea class="form-control" rows="2" placeholder="Add a comment…" @bind="@_draft"></textarea>
+            <button type="button" class="btn btn-primary" @onclick="Post" disabled="@(!(!_busy && !string.IsNullOrWhiteSpace(_draft)))"><BenIcon Name="message-square" Class="me-1" />
+                Post
+            </button>
+        </div>
+    }
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger mt-1 mb-0 py-2 small">@_error</div>
+    }
+</div>
+
+@code {
+    /// <summary>The file this thread belongs to.</summary>
+    [Parameter, EditorRequired] public Guid FileId { get; set; }
+
+    /// <summary>True when the current viewer owns the file — allows deleting any comment, not just their own.</summary>
+    [Parameter] public bool CanModerate { get; set; }
+
+    private List<UploadFileCommentRecord>? _comments;
+    private string _draft = string.Empty;
+    private Guid? _editingId;
+    private string _editDraft = string.Empty;
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_comments is not null) return;
+        try { _comments = (await AdminClient.GetFileCommentsAsync(FileId)).OrderBy(c => c.DateCreated).ToList(); }
+        catch { _error = "Failed to load comments."; _comments = []; }
+    }
+
+    private async Task Post()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_draft)) return;
+        _busy = true;
+        _error = null;
+        var text = _draft.Trim();
+        try
+        {
+            var saved = await AdminClient.CreateFileCommentAsync(FileId, new CreateFileCommentRequest(text));
+            if (saved is null)
+            {
+                _error = "You don't have permission to comment on this file.";
+            }
+            else
+            {
+                _comments ??= [];
+                _comments.Add(saved);
+                _draft = string.Empty;
+            }
+        }
+        catch { _error = "Failed to post comment. Please try again."; }
+        finally { _busy = false; }
+    }
+
+    private void BeginEdit(UploadFileCommentRecord c)
+    {
+        _editingId = c.Id;
+        _editDraft = c.Text;
+    }
+
+    private void CancelEdit()
+    {
+        _editingId = null;
+        _editDraft = string.Empty;
+    }
+
+    private async Task SaveEdit(Guid commentId)
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_editDraft)) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var updated = await AdminClient.UpdateFileCommentAsync(FileId, commentId, new UpdateFileCommentRequest(_editDraft.Trim()));
+            if (updated is null)
+            {
+                _error = "Failed to save comment.";
+            }
+            else
+            {
+                var idx = _comments!.FindIndex(c => c.Id == commentId);
+                if (idx >= 0) _comments[idx] = updated;
+                CancelEdit();
+            }
+        }
+        catch { _error = "Failed to save comment. Please try again."; }
+        finally { _busy = false; }
+    }
+
+    private async Task Delete(Guid commentId)
+    {
+        if (_busy) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            if (await AdminClient.DeleteFileCommentAsync(FileId, commentId))
+                _comments!.RemoveAll(c => c.Id == commentId);
+            else
+                _error = "Failed to delete comment.";
+        }
+        catch { _error = "Failed to delete comment. Please try again."; }
+        finally { _busy = false; }
+    }
+
+    private static string AudienceLabel(UploadFileCommentRecord c) => c switch
+    {
+        { IsOwner: true }                 => "Owner",
+        { IsInvestigationTeamMember: true } => "Investigation Team",
+        { IsClient: true }                => "Client",
+        { IsOrganizationMember: true }    => "Organization",
+        { IsPublicCommenter: true }       => "Public",
+        _                                 => "Member",
+    };
+}
