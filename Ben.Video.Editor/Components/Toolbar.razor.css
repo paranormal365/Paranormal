@@ -211,7 +211,10 @@
     width: 1.35rem;
     height: 1.35rem;
     background-color: var(--bv-text-muted);
-    -webkit-mask: url('../img/ghost.svg') center / contain no-repeat;
-    mask: url('../img/ghost.svg') center / contain no-repeat;
+    /* Absolute, not relative. Scoped component CSS is bundled to the library's root, so a
+       relative '../img/…' resolves to _content/img/… — one segment short of the assembly's own
+       folder — and the mask silently fails to a plain grey block. */
+    -webkit-mask: url('/_content/Ben.Video.Editor/img/ghost.svg') center / contain no-repeat;
+    mask: url('/_content/Ben.Video.Editor/img/ghost.svg') center / contain no-repeat;
     opacity: .85;
 }

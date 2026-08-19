@@ -20,10 +20,10 @@
           if (theme !== 'light' && theme !== 'dark') theme = localStorage.getItem('ben-theme');
         } catch (e) { /* storage blocked — fall through to the OS preference */ }
 
-        if (theme !== 'light' && theme !== 'dark') {
-          theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-            ? 'dark' : 'light';
-        }
+        // Dark by default, by preference: an editor is looked at for hours against video, and a
+        // bright chrome around a dark picture is the wrong way round. The OS preference is not
+        // consulted — someone who wants light picks it once with the toggle and it sticks.
+        if (theme !== 'light' && theme !== 'dark') theme = 'dark';
         document.documentElement.setAttribute('data-bs-theme', theme);
       })();
 
