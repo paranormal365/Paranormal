@@ -78,11 +78,7 @@
             {
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Channel</label>
-                    <TelerikDropDownList Data="@_channelOptions"
-                                         @bind-Value="@_composeChannel"
-                                         TextField="@nameof(ChannelOption.Label)"
-                                         ValueField="@nameof(ChannelOption.Value)"
-                                         Width="100%" />
+                    <BenSelect Data="@_channelOptions" @bind-Value="@_composeChannel" TextField="@nameof(ChannelOption.Label)" ValueField="@nameof(ChannelOption.Value)" Width="100%" />
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Subject (optional)</label>

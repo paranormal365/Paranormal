@@ -165,10 +165,7 @@
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">File Type <span class="text-danger">*</span></label>
-                <TelerikDropDownList Data="@_fileTypes" @bind-Value="@_uploadTypeId"
-                                     TextField="@nameof(UploadFileTypeRecord.Name)"
-                                     ValueField="@nameof(UploadFileTypeRecord.Id)"
-                                     DefaultText="— select —" Width="100%" />
+                <BenSelect Data="@_fileTypes" @bind-Value="@_uploadTypeId" TextField="@nameof(UploadFileTypeRecord.Name)" ValueField="@nameof(UploadFileTypeRecord.Id)" DefaultText="— select —" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Description</label>

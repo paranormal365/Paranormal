@@ -151,11 +151,7 @@ else if (_role is not null)
                 <div class="d-flex gap-2 align-items-end">
                     <div>
                         <label class="form-label">Add Member</label>
-                        <TelerikDropDownList Data="@_availableMembers"
-                                            @bind-Value="_selectedMembershipId"
-                                            TextField="@nameof(OrgMembershipItem.MembershipId)"
-                                            ValueField="@nameof(OrgMembershipItem.MembershipId)"
-                                            Width="260px">
+                        <TelerikDropDownList Data="@_availableMembers" @bind-Value="_selectedMembershipId" TextField="@nameof(OrgMembershipItem.MembershipId)" ValueField="@nameof(OrgMembershipItem.MembershipId)" Width="260px">
                             <ItemTemplate>
                                 @{
                                     var item = (OrgMembershipItem)context;

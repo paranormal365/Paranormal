@@ -24,19 +24,11 @@
             <div class="row g-2 align-items-end">
                 <div class="col-sm-3">
                     <label class="form-label small mb-1">Entity Type</label>
-                    <TelerikDropDownList Data="@_entityTypeOptions"
-                                        @bind-Value="@_filterEntityType"
-                                        DefaultText="All types"
-                                        Width="100%" />
+                    <BenSelect Data="@_entityTypeOptions" @bind-Value="@_filterEntityType" DefaultText="All types" Width="100%" />
                 </div>
                 <div class="col-sm-2">
                     <label class="form-label small mb-1">Action</label>
-                    <TelerikDropDownList Data="@_actionOptions"
-                                        @bind-Value="@_filterAction"
-                                        TextField="Label"
-                                        ValueField="Value"
-                                        DefaultText="All actions"
-                                        Width="100%" />
+                    <BenSelect Data="@_actionOptions" @bind-Value="@_filterAction" TextField="Label" ValueField="Value" DefaultText="All actions" Width="100%" />
                 </div>
                 <div class="col-sm-3">
                     <label class="form-label small mb-1">User</label>
@@ -44,6 +36,9 @@
                        component with the same nullable-value / non-nullable-ValueField shape and
                        bind correctly, whereas the ComboBox equivalent silently dropped the
                        selection and snapped back to its placeholder. *@
+                    @* Stays Telerik: this filters a list of every user on the platform, and it is the type-to-filter
+                       behaviour that makes that usable. The template ships no searchable-select plugin, and a
+                       native <select> has no equivalent — scrolling hundreds of names is not the same control. *@
                     <TelerikDropDownList Data="@_allUsers"
                                          @bind-Value="@_filterUserId"
                                          TextField="@nameof(UserSearchResult.Display)"
@@ -55,11 +50,11 @@
                 </div>
                 <div class="col-sm-2">
                     <label class="form-label small mb-1">From</label>
-                    <TelerikDatePicker @bind-Value="@_filterDateFrom" Width="100%" />
+                    <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_filterDateFrom" Width="100%" />
                 </div>
                 <div class="col-sm-2">
                     <label class="form-label small mb-1">To</label>
-                    <TelerikDatePicker @bind-Value="@_filterDateTo" Width="100%" />
+                    <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_filterDateTo" Width="100%" />
                 </div>
             </div>
             <div class="row g-2 mt-1">

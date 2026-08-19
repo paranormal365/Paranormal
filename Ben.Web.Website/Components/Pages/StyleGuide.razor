@@ -120,10 +120,10 @@ else
             </p>
 
             <label class="form-label">TelerikDatePicker</label>
-            <TelerikDatePicker @bind-Value="_date" Width="100%" />
+            <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="_date" Width="100%" />
 
             <label class="form-label mt-3">TelerikDropDownList (templated)</label>
-            <TelerikDropDownList Data="@_options" @bind-Value="_option" Width="100%" />
+            <BenSelect Data="@_options" @bind-Value="_option" Width="100%" />
 
             <label class="form-label mt-3">TelerikGrid</label>
             <TelerikGrid Data="@_rows" Pageable="true" Sortable="true" PageSize="4" Height="260px">

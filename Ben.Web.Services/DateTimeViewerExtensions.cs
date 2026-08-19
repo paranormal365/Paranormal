@@ -39,20 +39,45 @@ public static class DateTimeViewerExtensions
     // whatever timezone handling it already had, so this changes appearance only. Pair them with
     // ToViewerLocalTime when the source is UTC.
 
-    /// <summary>A date on its own: <c>08/04/2026</c>.</summary>
-    public static string ToDisplayDate(this DateTime local) =>
-        local.ToString("MM/dd/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+    /// <summary>Day-first numeric date, used by every grid column and date control.</summary>
+    public const string DatePattern = "dd/MM/yyyy";
 
-    /// <summary>A date and time: <c>08/04/2026 09:30:00 PM</c>.</summary>
+    /// <summary>Numeric date with a 12-hour clock and seconds.</summary>
+    public const string DateTimePattern = "dd/MM/yyyy hh:mm:ss tt";
+
+    /// <summary>Numeric date and time without seconds, where seconds carry no meaning.</summary>
+    public const string DateTimeNoSecondsPattern = "dd/MM/yyyy hh:mm tt";
+
+    /// <summary>Written-out date for prose: <c>August 4, 2026</c>.</summary>
+    public const string LongDatePattern = "MMMM d, yyyy";
+
+    /// <summary>Time on its own, 12-hour with seconds.</summary>
+    public const string TimePattern = "hh:mm:ss tt";
+
+    /// <summary>A date on its own: <c>04/08/2026</c>. Day first.</summary>
+    public static string ToDisplayDate(this DateTime local) =>
+        local.ToString(DatePattern, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A date and time: <c>04/08/2026 09:30:00 PM</c>.</summary>
     public static string ToDisplayDateTime(this DateTime local) =>
-        local.ToString("MM/dd/yyyy hh:mm:ss tt", System.Globalization.CultureInfo.InvariantCulture);
+        local.ToString(DateTimePattern, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The same date written out: <c>August 4, 2026</c>. For prose and cards — anywhere the date
+    /// is being read rather than scanned down a column. Grids and date controls stay numeric, so a
+    /// column of dates still lines up and compares at a glance.
+    /// </summary>
+    public static string ToDisplayDateLong(this DateTime local) =>
+        local.ToString(LongDatePattern, System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>A time on its own: <c>09:30:00 PM</c>.</summary>
     public static string ToDisplayTime(this DateTime local) =>
-        local.ToString("hh:mm:ss tt", System.Globalization.CultureInfo.InvariantCulture);
+        local.ToString(TimePattern, System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>Nullable overloads, so call sites keep their own placeholder for "not set".</summary>
     public static string? ToDisplayDate(this DateTime? local) => local?.ToDisplayDate();
 
     public static string? ToDisplayDateTime(this DateTime? local) => local?.ToDisplayDateTime();
+
+    public static string? ToDisplayDateLong(this DateTime? local) => local?.ToDisplayDateLong();
 }

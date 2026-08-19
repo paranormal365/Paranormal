@@ -149,12 +149,7 @@ else
 
                     <div class="col-12 col-md-6">
                         <label class="form-label fw-semibold small">Marker Icon</label>
-                        <TelerikDropDownList Data="@AddressMapIconRegistry.All"
-                                             Value="@(_form.MarkerIconKey ?? "map-marker-target")"
-                                             ValueChanged="@((string k) => UpdateForm(_form with { MarkerIconKey = k == "map-marker-target" ? null : k }))"
-                                             TextField="@nameof(MapMarkerIconOption.Label)"
-                                             ValueField="@nameof(MapMarkerIconOption.Key)"
-                                             Width="100%">
+                        <TelerikDropDownList Data="@AddressMapIconRegistry.All" Value="@(_form.MarkerIconKey ?? "map-marker-target")" ValueChanged="@((string k) => UpdateForm(_form with { MarkerIconKey = k == "map-marker-target" ? null : k }))" TextField="@nameof(MapMarkerIconOption.Label)" ValueField="@nameof(MapMarkerIconOption.Key)" Width="100%">
                             <ItemTemplate>
                                 @{ var opt = (MapMarkerIconOption)context; }
                                 <span class="d-flex align-items-center gap-2">

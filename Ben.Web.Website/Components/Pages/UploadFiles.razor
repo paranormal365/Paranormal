@@ -32,12 +32,7 @@
             <div class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label">File Type</label>
-                    <TelerikDropDownList Data="@_fileTypes"
-                                         Value="@_newUpload.FileTypeId"
-                                         ValueChanged="@((Guid id) => { _newUpload.FileTypeId = id; _uploadError = GetExtensionError(_selectedFile); })"
-                                         TextField="@nameof(UploadFileTypeRecord.Name)"
-                                         ValueField="@nameof(UploadFileTypeRecord.Id)"
-                                         Width="100%" />
+                    <BenSelect Data="@_fileTypes" Value="@_newUpload.FileTypeId" ValueChanged="@((Guid id) => { _newUpload.FileTypeId = id; _uploadError = GetExtensionError(_selectedFile); })" TextField="@nameof(UploadFileTypeRecord.Name)" ValueField="@nameof(UploadFileTypeRecord.Id)" Width="100%" />
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Description</label>
@@ -207,19 +202,11 @@
             <p class="text-secondary mb-3">Sharing: <strong>@_sharingFile.FileName</strong></p>
             <div class="mb-3">
                 <label class="form-label">Organization</label>
-                <TelerikDropDownList Data="@_myOrgs"
-                                     @bind-Value="@_shareOrgId"
-                                     TextField="@nameof(OrganizationSummaryResponse.Name)"
-                                     ValueField="@nameof(OrganizationSummaryResponse.OrganizationId)"
-                                     Width="100%" />
+                <BenSelect Data="@_myOrgs" @bind-Value="@_shareOrgId" TextField="@nameof(OrganizationSummaryResponse.Name)" ValueField="@nameof(OrganizationSummaryResponse.OrganizationId)" Width="100%" />
             </div>
             <div class="mb-3">
                 <label class="form-label">Visibility</label>
-                <TelerikDropDownList Data="@_visibilityOptions"
-                                     @bind-Value="@_shareVisibility"
-                                     TextField="Label"
-                                     ValueField="Value"
-                                     Width="100%" />
+                <BenSelect Data="@_visibilityOptions" @bind-Value="@_shareVisibility" TextField="Label" ValueField="Value" Width="100%" />
             </div>
         }
             <div class="dialog-footer-actions">

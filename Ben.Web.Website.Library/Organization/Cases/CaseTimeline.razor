@@ -165,15 +165,11 @@
         <div class="row g-3">
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Type</label>
-                <TelerikDropDownList Data="@_entryTypeOptions"
-                                     @bind-Value="@_form.EntryType"
-                                     TextField="@nameof(EntryTypeOption.Label)"
-                                     ValueField="@nameof(EntryTypeOption.Value)"
-                                     Width="100%" />
+                <BenSelect Data="@_entryTypeOptions" @bind-Value="@_form.EntryType" TextField="@nameof(EntryTypeOption.Label)" ValueField="@nameof(EntryTypeOption.Value)" Width="100%" />
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Event Date/Time (optional)</label>
-                <TelerikDateTimePicker @bind-Value="@_form.EventDateTime" Width="100%" />
+                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.EventDateTime" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Title (optional)</label>

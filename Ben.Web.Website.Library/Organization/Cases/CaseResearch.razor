@@ -91,7 +91,7 @@ else
             }
             <div class="col-12">
                 <label class="form-label fw-semibold">@(_dialogType == CaseResearchType.Note ? "Content" : "Description")</label>
-                <textarea class="form-control" rows="5" @bind="@_formBody"></textarea>
+                <textarea class="form-control" rows="5" @bind="@_formBody" @bind:event="oninput"></textarea>
             </div>
         </div>
     </ChildContent>

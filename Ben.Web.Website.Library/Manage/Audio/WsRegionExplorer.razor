@@ -105,12 +105,7 @@
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label form-label-sm mb-1">File type</label>
-                                <TelerikDropDownList Data="@_fileTypes"
-                                                     @bind-Value="@_clipFileTypeId"
-                                                     TextField="@nameof(UploadFileTypeRecord.Name)"
-                                                     ValueField="@nameof(UploadFileTypeRecord.Id)"
-                                                     DefaultText="— select —"
-                                                     Width="100%" />
+                                <BenSelect Data="@_fileTypes" @bind-Value="@_clipFileTypeId" TextField="@nameof(UploadFileTypeRecord.Name)" ValueField="@nameof(UploadFileTypeRecord.Id)" DefaultText="— select —" Width="100%" />
                             </div>
                             <div class="col-auto d-flex align-items-center gap-2">
                                 <input type="checkbox" class="form-check-input" id="clip-pub" @bind="@_clipIsPublic" />

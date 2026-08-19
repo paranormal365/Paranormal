@@ -15,29 +15,17 @@
 
         <div class="mb-2">
             <label class="form-label fw-semibold">Category</label>
-            <TelerikDropDownList Data="@_categories" TItem="EquipmentCategoryRecord" TValue="Guid?"
-                                 Value="@_categoryId" ValueChanged="@((Guid? v) => OnCategoryChangedAsync(v))"
-                                 TextField="@nameof(EquipmentCategoryRecord.Name)"
-                                 ValueField="@nameof(EquipmentCategoryRecord.Id)"
-                                 DefaultText="Choose a category…" Width="100%" />
+            <BenSelect Data="@_categories" Value="@_categoryId" ValueChanged="@((Guid? v) => OnCategoryChangedAsync(v))" TextField="@nameof(EquipmentCategoryRecord.Name)" ValueField="@nameof(EquipmentCategoryRecord.Id)" DefaultText="Choose a category…" Width="100%" />
         </div>
 
         <div class="mb-2">
             <label class="form-label fw-semibold">Make</label>
-            <TelerikDropDownList Data="@_brands" TItem="EquipmentBrandRecord" TValue="Guid?"
-                                 Value="@_brandId" ValueChanged="@((Guid? v) => OnBrandChangedAsync(v))"
-                                 TextField="@nameof(EquipmentBrandRecord.Name)"
-                                 ValueField="@nameof(EquipmentBrandRecord.Id)"
-                                 DefaultText="Choose a make…" Width="100%" Enabled="@(_categoryId is not null)" />
+            <BenSelect Data="@_brands" Value="@_brandId" ValueChanged="@((Guid? v) => OnBrandChangedAsync(v))" TextField="@nameof(EquipmentBrandRecord.Name)" ValueField="@nameof(EquipmentBrandRecord.Id)" DefaultText="Choose a make…" Width="100%" Enabled="@(_categoryId is not null)" />
         </div>
 
         <div class="mb-2">
             <label class="form-label fw-semibold">Model</label>
-            <TelerikDropDownList Data="@_models" TItem="EquipmentModelRecord" TValue="Guid?"
-                                 Value="@_modelId" ValueChanged="@((Guid? v) => _modelId = v)"
-                                 TextField="@nameof(EquipmentModelRecord.Name)"
-                                 ValueField="@nameof(EquipmentModelRecord.Id)"
-                                 DefaultText="Choose a model…" Width="100%" Enabled="@(_brandId is not null)" />
+            <BenSelect Data="@_models" Value="@_modelId" ValueChanged="@((Guid? v) => _modelId = v)" TextField="@nameof(EquipmentModelRecord.Name)" ValueField="@nameof(EquipmentModelRecord.Id)" DefaultText="Choose a model…" Width="100%" Enabled="@(_brandId is not null)" />
         </div>
 
         @* Plain inputs: Telerik text boxes commit on blur, which drops the last keystroke when
@@ -57,7 +45,7 @@
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Acquired</label>
-                <TelerikDatePicker @bind-Value="@_acquisitionDate" Width="100%" />
+                <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_acquisitionDate" Width="100%" />
             </div>
         </div>
 

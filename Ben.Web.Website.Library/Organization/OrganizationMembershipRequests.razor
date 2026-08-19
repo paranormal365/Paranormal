@@ -124,7 +124,7 @@
             When the deadline passes, votes are tallied: majority Approve → Accepted, otherwise → Denied.
         </p>
         <label class="form-label fw-semibold">Vote Deadline <span class="text-danger">*</span></label>
-        <TelerikDateTimePicker @bind-Value="@_voteDeadline" Width="100%" Min="@UserState.NowInViewerTimeZone().AddHours(1)" />
+        <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_voteDeadline" Width="100%" Min="@UserState.NowInViewerTimeZone().AddHours(1)" />
         @if (_voteDialogError is not null)
         {
             <div class="text-danger small mt-2">@_voteDialogError</div>

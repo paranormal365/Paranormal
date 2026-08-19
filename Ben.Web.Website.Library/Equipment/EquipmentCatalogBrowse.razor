@@ -27,11 +27,7 @@
                    @onkeyup="@(async e => { if (e.Key == "Enter") await LoadAsync(); })" />
         </div>
         <div class="col-md-4">
-            <TelerikDropDownList Data="@_categories" TItem="EquipmentCategoryRecord" TValue="Guid?"
-                                 Value="@_categoryId" ValueChanged="@((Guid? v) => OnCategoryChangedAsync(v))"
-                                 TextField="@nameof(EquipmentCategoryRecord.Name)"
-                                 ValueField="@nameof(EquipmentCategoryRecord.Id)"
-                                 DefaultText="All categories" Width="100%" />
+            <BenSelect Data="@_categories" Value="@_categoryId" ValueChanged="@((Guid? v) => OnCategoryChangedAsync(v))" TextField="@nameof(EquipmentCategoryRecord.Name)" ValueField="@nameof(EquipmentCategoryRecord.Id)" DefaultText="All categories" Width="100%" />
         </div>
         <div class="col-md-3">
             <button type="button" class="btn btn-primary" @onclick="LoadAsync" disabled="@(!(!_loading))">Search</button>

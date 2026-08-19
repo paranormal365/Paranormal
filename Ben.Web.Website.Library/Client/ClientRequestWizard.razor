@@ -125,11 +125,7 @@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Gender</label>
-                        <TelerikDropDownList Data="@_genderOptions"
-                                             @bind-Value="@_gender"
-                                             TextField="@nameof(GenderOption.Label)"
-                                             ValueField="@nameof(GenderOption.Value)"
-                                             Width="100%" />
+                        <BenSelect Data="@_genderOptions" @bind-Value="@_gender" TextField="@nameof(GenderOption.Label)" ValueField="@nameof(GenderOption.Value)" Width="100%" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Birth Year (optional)</label>

@@ -38,11 +38,7 @@ else
                     @* Address type *@
                     <div class="col-12">
                         <label class="form-label fw-semibold">Type <span class="text-danger">*</span></label>
-                        <TelerikDropDownList Data="@_addressTypes"
-                                             @bind-Value="@_formAddressTypeId"
-                                             TextField="@nameof(AddressTypeOption.Name)"
-                                             ValueField="@nameof(AddressTypeOption.Id)"
-                                             Width="100%" />
+                        <BenSelect Data="@_addressTypes" @bind-Value="@_formAddressTypeId" TextField="@nameof(AddressTypeOption.Name)" ValueField="@nameof(AddressTypeOption.Id)" Width="100%" />
                     </div>
 
                     @* Street address, City/State/Zip, Country, map preview, and
@@ -54,8 +50,7 @@ else
                     @* Visibility & display (replaces old IsPublic) *@
                     <div class="col-12">
                         <label class="form-label fw-semibold">Who can see this address</label>
-                        <TelerikDropDownList Data="@_visibilityOptions" @bind-Value="@_formVisibility"
-                                             TextField="Label" ValueField="Value" Width="100%" />
+                        <BenSelect Data="@_visibilityOptions" @bind-Value="@_formVisibility" TextField="Label" ValueField="Value" Width="100%" />
                     </div>
                     @if (_formVisibility == OrganizationAddressVisibility.SpecificMembers && _editId.HasValue)
                     {
@@ -75,11 +70,7 @@ else
                                 else { <span class="text-muted small fst-italic">No members added yet.</span> }
                             </div>
                             <div class="d-flex gap-2 mt-2">
-                                <TelerikDropDownList Data="@_orgMembers"
-                                                     @bind-Value="@_selectedMembershipId"
-                                                     TextField="Display" ValueField="MembershipId"
-                                                     DefaultText="Select a member…"
-                                                     Width="100%" />
+                                <BenSelect Data="@_orgMembers" @bind-Value="@_selectedMembershipId" TextField="Display" ValueField="MembershipId" DefaultText="Select a member…" Width="100%" />
                                 <button type="button" class="btn btn-primary" @onclick="@AddMemberAccessAsync" disabled="@(!(_selectedMembershipId != Guid.Empty))"><BenIcon Name="plus" Class="me-1" />
                                     Add
                                 </button>
@@ -88,13 +79,11 @@ else
                     }
                     <div class="col-sm-6">
                         <label class="form-label">Public display</label>
-                        <TelerikDropDownList Data="@_displayModeOptions" @bind-Value="@_formPublicDisplayMode"
-                                             TextField="Label" ValueField="Value" Width="100%" />
+                        <BenSelect Data="@_displayModeOptions" @bind-Value="@_formPublicDisplayMode" TextField="Label" ValueField="Value" Width="100%" />
                     </div>
                     <div class="col-sm-6">
                         <label class="form-label">Member display</label>
-                        <TelerikDropDownList Data="@_displayModeOptions" @bind-Value="@_formMemberDisplayMode"
-                                             TextField="Label" ValueField="Value" Width="100%" />
+                        <BenSelect Data="@_displayModeOptions" @bind-Value="@_formMemberDisplayMode" TextField="Label" ValueField="Value" Width="100%" />
                     </div>
                     <div class="col-12 d-flex align-items-center gap-2">
                         <input type="checkbox" class="form-check-input" id="addr-search" @bind="@_formIsSearchable" />
@@ -104,8 +93,7 @@ else
                     {
                         <div class="col-sm-6">
                             <label class="form-label">Search visibility</label>
-                            <TelerikDropDownList Data="@_searchVisibilityOptions" @bind-Value="@_formSearchVisibility"
-                                                 TextField="Label" ValueField="Value" Width="100%" />
+                            <BenSelect Data="@_searchVisibilityOptions" @bind-Value="@_formSearchVisibility" TextField="Label" ValueField="Value" Width="100%" />
                         </div>
                         <div class="col-sm-6">
                             <label class="form-label">Max search distance (miles)</label>

@@ -81,12 +81,7 @@
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Transfer to organization <span class="text-danger">*</span></label>
-                <TelerikDropDownList Data="@_otherOrgs"
-                                     @bind-Value="@_proposeToOrgId"
-                                     TextField="@nameof(OrgOption.Name)"
-                                     ValueField="@nameof(OrgOption.Id)"
-                                     DefaultText="— select organization —"
-                                     Width="100%" />
+                <BenSelect Data="@_otherOrgs" @bind-Value="@_proposeToOrgId" TextField="@nameof(OrgOption.Name)" ValueField="@nameof(OrgOption.Id)" DefaultText="— select organization —" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Reason (optional)</label>

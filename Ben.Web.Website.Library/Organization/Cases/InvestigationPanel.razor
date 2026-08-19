@@ -240,12 +240,7 @@
                                         <div class="d-flex gap-2 align-items-end flex-wrap">
                                             <div>
                                                 <label class="form-label mb-1" style="font-size:.8rem;">Add member</label>
-                                                <TelerikDropDownList Data="@AvailableMembers(i.Id)"
-                                                                     @bind-Value="@_newAttendeeUserId"
-                                                                     TextField="@nameof(MemberOption.Label)"
-                                                                     ValueField="@nameof(MemberOption.UserId)"
-                                                                     DefaultText="— select —"
-                                                                     Width="180px" />
+                                                <BenSelect Data="@AvailableMembers(i.Id)" @bind-Value="@_newAttendeeUserId" TextField="@nameof(MemberOption.Label)" ValueField="@nameof(MemberOption.UserId)" DefaultText="— select —" Width="180px" />
                                             </div>
                                             <div>
                                                 <label class="form-label mb-1" style="font-size:.8rem;">Role (optional)</label>
@@ -285,11 +280,11 @@
                 <textarea class="form-control" rows="3" placeholder="What areas will be investigated? What equipment will be used?" @bind="@_form.Description"></textarea>
             </div>            <div class="col-md-6">
                 <label class="form-label fw-semibold">Scheduled Date & Time</label>
-                <TelerikDateTimePicker @bind-Value="@_form.ScheduledDateTime" Width="100%" />
+                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.ScheduledDateTime" Width="100%" />
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">End Time (optional)</label>
-                <TelerikDateTimePicker @bind-Value="@_form.EndDateTime" Width="100%" />
+                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.EndDateTime" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Location within property (optional)</label>
@@ -297,11 +292,7 @@
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Status</label>
-                <TelerikDropDownList Data="@_statusOptions"
-                                     @bind-Value="@_form.Status"
-                                     TextField="@nameof(StatusOption.Label)"
-                                     ValueField="@nameof(StatusOption.Value)"
-                                     Width="100%" />
+                <BenSelect Data="@_statusOptions" @bind-Value="@_form.Status" TextField="@nameof(StatusOption.Label)" ValueField="@nameof(StatusOption.Value)" Width="100%" />
             </div>
             @if (_editInv is not null)
             {
@@ -311,7 +302,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Evidence Due Date (optional)</label>
-                    <TelerikDateTimePicker @bind-Value="@_form.EvidenceDueDate" Width="100%" />
+                    <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.EvidenceDueDate" Width="100%" />
                     <div class="form-text">After this date, no new evidence may be submitted for this investigation.</div>
                 </div>
             }

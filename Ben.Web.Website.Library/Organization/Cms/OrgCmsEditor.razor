@@ -262,12 +262,7 @@
                    either duplicate them or silently replace what somebody wrote. *@
                 <div class="col-12">
                     <label class="form-label fw-semibold">Start from one of our layouts</label>
-                    <TelerikDropDownList Data="@_pageTemplates"
-                                         @bind-Value="@_pageForm.FromTemplateId"
-                                         ValueField="@nameof(CmsTemplateRecord.Id)"
-                                         TextField="@nameof(CmsTemplateRecord.Name)"
-                                         DefaultText="— Start with a blank page —"
-                                         Width="100%" />
+                    <BenSelect Data="@_pageTemplates" @bind-Value="@_pageForm.FromTemplateId" ValueField="@nameof(CmsTemplateRecord.Id)" TextField="@nameof(CmsTemplateRecord.Name)" DefaultText="— Start with a blank page —" Width="100%" />
                     <div class="form-text">
                         Copies that layout's sections onto the new page, ready to fill in. The copy is
                         yours — editing the layout later leaves this page alone.
@@ -280,12 +275,7 @@
             </div>
             <div class="col-6">
                 <label class="form-label fw-semibold">Parent Page</label>
-                <TelerikDropDownList Data="@_parentPageOptions"
-                                     @bind-Value="@_pageForm.ParentPageId"
-                                     ValueField="@nameof(PageOption.Id)"
-                                     TextField="@nameof(PageOption.Title)"
-                                     DefaultText="— None (top level) —"
-                                     Width="100%" />
+                <BenSelect Data="@_parentPageOptions" @bind-Value="@_pageForm.ParentPageId" ValueField="@nameof(PageOption.Id)" TextField="@nameof(PageOption.Title)" DefaultText="— None (top level) —" Width="100%" />
             </div>
             <div class="col-6 d-flex align-items-center gap-2">
                 <input type="checkbox" class="form-check-input" id="pg-public" @bind="@_pageForm.IsPublic" />
@@ -521,12 +511,7 @@
             <div class="mt-3 d-flex gap-2 align-items-end">
                 <div class="flex-grow-1">
                     <label class="form-label fw-semibold mb-1">Add member</label>
-                    <TelerikDropDownList Data="@_availableOrgMembers"
-                                         @bind-Value="@_addMemberMembershipId"
-                                         TextField="@nameof(OrgMemberOption.DisplayName)"
-                                         ValueField="@nameof(OrgMemberOption.MembershipId)"
-                                         DefaultText="— Select org member —"
-                                         Width="100%" />
+                    <BenSelect Data="@_availableOrgMembers" @bind-Value="@_addMemberMembershipId" TextField="@nameof(OrgMemberOption.DisplayName)" ValueField="@nameof(OrgMemberOption.MembershipId)" DefaultText="— Select org member —" Width="100%" />
                 </div>
                 <button type="button" class="btn btn-primary" @onclick="AddMemberAsync" disabled="@(!(_addMemberMembershipId != Guid.Empty))"><BenIcon Name="plus" Class="me-1" />
                     Add

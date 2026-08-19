@@ -486,7 +486,7 @@
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Date & Time</label>
-                <TelerikDateTimePicker @bind-Value="@_form.EventDateTime" Width="100%" />
+                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.EventDateTime" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Brief Title (optional)</label>
@@ -494,7 +494,7 @@
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Description <span class="text-danger">*</span></label>
-                <textarea class="form-control" rows="5" placeholder="Describe what happened in detail…" @bind="@_form.Body"></textarea>
+                <textarea class="form-control" rows="5" placeholder="Describe what happened in detail…" @bind="@_form.Body" @bind:event="oninput"></textarea>
             </div>
             @if (_taxonomy.Count > 0)
             {
@@ -678,7 +678,7 @@
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Your Preferred Date & Time</label>
-                <TelerikDateTimePicker @bind-Value="@_counterDateTime" Width="100%" />
+                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_counterDateTime" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Notes (optional)</label>

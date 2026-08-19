@@ -71,17 +71,13 @@
             {
                 <div class="mb-2">
                     <label class="form-label fw-semibold">For a particular visit? <span class="text-secondary fw-normal">(optional)</span></label>
-                    <TelerikDropDownList Data="@_investigations" TItem="OrgInvestigationOption" TValue="Guid?"
-                                         Value="@_investigationId" ValueChanged="@((Guid? v) => _investigationId = v)"
-                                         TextField="@nameof(OrgInvestigationOption.Title)"
-                                         ValueField="@nameof(OrgInvestigationOption.Id)"
-                                         DefaultText="Not for a specific visit" Width="100%" />
+                    <BenSelect Data="@_investigations" Value="@_investigationId" ValueChanged="@((Guid? v) => _investigationId = v)" TextField="@nameof(OrgInvestigationOption.Title)" ValueField="@nameof(OrgInvestigationOption.Id)" DefaultText="Not for a specific visit" Width="100%" />
                 </div>
             }
 
             <div class="mb-2">
                 <label class="form-label fw-semibold">When do you need it? <span class="text-secondary fw-normal">(optional)</span></label>
-                <TelerikDatePicker @bind-Value="@_neededFrom" Width="100%" />
+                <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_neededFrom" Width="100%" />
             </div>
 
             <div class="mb-2">

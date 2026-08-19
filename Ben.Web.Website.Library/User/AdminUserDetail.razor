@@ -69,15 +69,15 @@ else
                     <div class="col-12 mt-2"><p class="text-secondary small mb-1">Audit Fields</p></div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Date Created</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.DateCreated" Format="yyyy-MM-dd HH:mm" Width="100%" />
+                        <TelerikDateTimePicker @bind-Value="@_edit.DateCreated" Format="dd/MM/yyyy hh:mm tt" Width="100%" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Date Updated</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.DateUpdated" Format="yyyy-MM-dd HH:mm" Width="100%" />
+                        <TelerikDateTimePicker @bind-Value="@_edit.DateUpdated" Format="dd/MM/yyyy hh:mm tt" Width="100%" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Lockout End</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.LockoutEnd" Format="yyyy-MM-dd HH:mm" Width="100%" />
+                        <TelerikDateTimePicker @bind-Value="@_edit.LockoutEnd" Format="dd/MM/yyyy hh:mm tt" Width="100%" />
                     </div>
                     <div class="col-md-3">
                         <label class="form-label fw-semibold">Access Failed Count</label>
@@ -280,10 +280,7 @@ else
                 <div class="col-12">
                     <label class="form-label fw-semibold">Type</label>
                     <div class="d-flex gap-2">
-                        <TelerikDropDownList Data="@_addressTypes" @bind-Value="@_addr.TypeId"
-                                             ValueField="@nameof(UserAddressTypeRecord.Id)"
-                                             TextField="@nameof(UserAddressTypeRecord.Name)"
-                                             Width="100%" />
+                        <BenSelect Data="@_addressTypes" @bind-Value="@_addr.TypeId" ValueField="@nameof(UserAddressTypeRecord.Id)" TextField="@nameof(UserAddressTypeRecord.Name)" Width="100%" />
                         <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenAddTypeDialog("address"))"><BenIcon Name="plus" Class="me-1" />New</button>
                     </div>
                 </div>
@@ -302,10 +299,7 @@ else
                 <div class="col-12">
                     <label class="form-label fw-semibold">Type</label>
                     <div class="d-flex gap-2">
-                        <TelerikDropDownList Data="@_emailTypes" @bind-Value="@_eml.TypeId"
-                                             ValueField="@nameof(UserEmailTypeRecord.Id)"
-                                             TextField="@nameof(UserEmailTypeRecord.Name)"
-                                             Width="100%" />
+                        <BenSelect Data="@_emailTypes" @bind-Value="@_eml.TypeId" ValueField="@nameof(UserEmailTypeRecord.Id)" TextField="@nameof(UserEmailTypeRecord.Name)" Width="100%" />
                         <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenAddTypeDialog("email"))"><BenIcon Name="plus" Class="me-1" />New</button>
                     </div>
                 </div>
@@ -329,10 +323,7 @@ else
                 <div class="col-12">
                     <label class="form-label fw-semibold">Type</label>
                     <div class="d-flex gap-2">
-                        <TelerikDropDownList Data="@_phoneTypes" @bind-Value="@_phn.TypeId"
-                                             ValueField="@nameof(UserPhoneTypeRecord.Id)"
-                                             TextField="@nameof(UserPhoneTypeRecord.Name)"
-                                             Width="100%" />
+                        <BenSelect Data="@_phoneTypes" @bind-Value="@_phn.TypeId" ValueField="@nameof(UserPhoneTypeRecord.Id)" TextField="@nameof(UserPhoneTypeRecord.Name)" Width="100%" />
                         <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenAddTypeDialog("phone"))"><BenIcon Name="plus" Class="me-1" />New</button>
                     </div>
                 </div>
@@ -364,10 +355,7 @@ else
                 <div class="col-12">
                     <label class="form-label fw-semibold">Type</label>
                     <div class="d-flex gap-2">
-                        <TelerikDropDownList Data="@_linkTypes" @bind-Value="@_lnk.TypeId"
-                                             ValueField="@nameof(UserLinkTypeRecord.Id)"
-                                             TextField="@nameof(UserLinkTypeRecord.Name)"
-                                             Width="100%" />
+                        <BenSelect Data="@_linkTypes" @bind-Value="@_lnk.TypeId" ValueField="@nameof(UserLinkTypeRecord.Id)" TextField="@nameof(UserLinkTypeRecord.Name)" Width="100%" />
                         <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenAddTypeDialog("link"))"><BenIcon Name="plus" Class="me-1" />New</button>
                     </div>
                 </div>
@@ -395,10 +383,7 @@ else
                 <div class="col-12">
                     <label class="form-label fw-semibold">Type</label>
                     <div class="d-flex gap-2">
-                        <TelerikDropDownList Data="@_noteTypes" @bind-Value="@_nte.TypeId"
-                                             ValueField="@nameof(UserNoteTypeRecord.Id)"
-                                             TextField="@nameof(UserNoteTypeRecord.Name)"
-                                             Width="100%" />
+                        <BenSelect Data="@_noteTypes" @bind-Value="@_nte.TypeId" ValueField="@nameof(UserNoteTypeRecord.Id)" TextField="@nameof(UserNoteTypeRecord.Name)" Width="100%" />
                         <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenAddTypeDialog("note"))"><BenIcon Name="plus" Class="me-1" />New</button>
                     </div>
                 </div>
@@ -481,12 +466,7 @@ else
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">File Type <span class="text-danger">*</span></label>
-                <TelerikDropDownList Data="@_uploadFileTypes"
-                                     @bind-Value="@_uploadFileTypeId"
-                                     ValueField="@nameof(UploadFileTypeRecord.Id)"
-                                     TextField="@nameof(UploadFileTypeRecord.Name)"
-                                     Width="100%"
-                                     DefaultText="— select —" />
+                <BenSelect Data="@_uploadFileTypes" @bind-Value="@_uploadFileTypeId" ValueField="@nameof(UploadFileTypeRecord.Id)" TextField="@nameof(UploadFileTypeRecord.Name)" Width="100%" DefaultText="— select —" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">File <span class="text-danger">*</span></label>

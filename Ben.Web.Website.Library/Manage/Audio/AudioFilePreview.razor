@@ -90,22 +90,9 @@ else
                         @* Spectrogram resolution — only shown when spectrogram is active *@
                         @if (_spectrogramEnabled)
                         {
-                            <TelerikDropDownList Data="@_resolutionOptions"
-                                                 Value="@_spectrogramFftSamples"
-                                                 ValueChanged="@((int v) => _ = OnSpectrogramResolutionChangedAsync(v))"
-                                                 TextField="@nameof(SpectrogramResolutionOption.Label)"
-                                                 ValueField="@nameof(SpectrogramResolutionOption.Value)"
-                                                 Width="155px"
-                                                 Size="@ThemeConstants.DropDownList.Size.Small"
-                                                 Enabled="@_modalReady" />
+                            <BenSelect Class="form-select-sm" Data="@_resolutionOptions" Value="@_spectrogramFftSamples" ValueChanged="@((int v) => _ = OnSpectrogramResolutionChangedAsync(v))" TextField="@nameof(SpectrogramResolutionOption.Label)" ValueField="@nameof(SpectrogramResolutionOption.Value)" Width="155px" Enabled="@_modalReady" />
                             @* Colormap selector *@
-                            <TelerikDropDownList Data="@_colormapOptions"
-                                                 @bind-Value="_colormap"
-                                                 TextField="Label" ValueField="Value"
-                                                 Width="115px"
-                                                 Size="@ThemeConstants.DropDownList.Size.Small"
-                                                 Enabled="@_modalReady"
-                                                 OnChange="@(()=>_ = OnColormapChangedAsync())" />
+                            <BenSelect Class="form-select-sm" Data="@_colormapOptions" @bind-Value="_colormap" TextField="Label" ValueField="Value" Width="115px" Enabled="@_modalReady" OnChange="@((string? value) => { _ = OnColormapChangedAsync(); })" />
                             @* Mel-scale toggle *@
                             <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="ToggleMelScaleAsync" disabled="@(!(_modalReady))">
                                 🎵 Mel Scale
@@ -268,11 +255,7 @@ else
                         <div class="mt-2 pt-2 border-top d-flex align-items-center gap-2 flex-wrap">
                             <span class="small fw-semibold">Detect</span>
                             @* Nothing scans on its own — a scan only happens when this is clicked. *@
-                            <TelerikDropDownList Data="@_sensitivityOptions"
-                                                 Value="@_scanSensitivity"
-                                                 ValueChanged="@((EvpSensitivity s) => ApplySensitivityPreset(s))"
-                                                 Width="110px"
-                                                 Enabled="@(!_scanning)" />
+                            <BenSelect Class="form-select-sm" Data="@_sensitivityOptions" Value="@_scanSensitivity" ValueChanged="@((EvpSensitivity s) => ApplySensitivityPreset(s))" Width="110px" Enabled="@(!_scanning)" />
                             <button type="button" class="btn btn-primary btn-sm" @onclick="RunScanAsync" disabled="@(!(!_scanning))">
                                 @(_scanning ? "Scanning…" : "Scan for EVP")
                             </button>
@@ -607,9 +590,7 @@ else
         </div>
         <div class="mb-2">
             <label class="form-label fw-semibold">Confidence</label>
-            <TelerikDropDownList Data="@_confidenceOptions"
-                                 @bind-Value="_markerConfidence"
-                                 Width="100%" />
+            <BenSelect Class="form-select-sm" Data="@_confidenceOptions" @bind-Value="_markerConfidence" Width="100%" />
         </div>
         <div class="mb-2">
             <label class="form-label fw-semibold">Note</label>
@@ -646,7 +627,7 @@ else
             </div>
             <div class="mb-2">
                 <label class="form-label fw-semibold">Confidence</label>
-                <TelerikDropDownList Data="@_confidenceOptions" @bind-Value="_confirmConfidence" Width="100%" />
+                <BenSelect Class="form-select-sm" Data="@_confidenceOptions" @bind-Value="_confirmConfidence" Width="100%" />
             </div>
             <div class="mb-2">
                 <label class="form-label fw-semibold">Note</label>
@@ -727,12 +708,7 @@ else
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">File Type <span class="text-danger">*</span></label>
-                <TelerikDropDownList Data="@_fileTypes"
-                                     @bind-Value="@_saveClipTypeId"
-                                     TextField="@nameof(UploadFileTypeRecord.Name)"
-                                     ValueField="@nameof(UploadFileTypeRecord.Id)"
-                                     DefaultText="— select —"
-                                     Width="100%" />
+                <BenSelect Class="form-select-sm" Data="@_fileTypes" @bind-Value="@_saveClipTypeId" TextField="@nameof(UploadFileTypeRecord.Name)" ValueField="@nameof(UploadFileTypeRecord.Id)" DefaultText="— select —" Width="100%" />
             </div>
             <div class="col-12 d-flex align-items-center gap-2">
                 <input type="checkbox" class="form-check-input" id="clip-pub-afp" @bind="@_saveClipIsPublic" />

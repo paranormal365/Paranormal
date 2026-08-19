@@ -92,11 +92,7 @@
                     {
                         <div class="col-md-4">
                             <label class="form-label fw-semibold">Section type <span class="text-danger">*</span></label>
-                            <TelerikDropDownList Data="@_sectionTypeOptions"
-                                                 @bind-Value="@_sectionForm.SectionType"
-                                                 ValueField="@nameof(SectionTypeOption.Value)"
-                                                 TextField="@nameof(SectionTypeOption.Label)"
-                                                 Width="100%" />
+                            <BenSelect Data="@_sectionTypeOptions" @bind-Value="@_sectionForm.SectionType" ValueField="@nameof(SectionTypeOption.Value)" TextField="@nameof(SectionTypeOption.Label)" Width="100%" />
                         </div>
                     }
                     else
@@ -422,34 +418,20 @@
         {
             <div class="mb-3">
                 <label class="form-label fw-semibold">Grant to</label>
-                <TelerikDropDownList Data="@_permGranteeOptions"
-                                     @bind-Value="@_permGranteeType"
-                                     TextField="@nameof(GranteeTypeOption.Label)"
-                                     ValueField="@nameof(GranteeTypeOption.Value)"
-                                     Width="100%" />
+                <BenSelect Data="@_permGranteeOptions" @bind-Value="@_permGranteeType" TextField="@nameof(GranteeTypeOption.Label)" ValueField="@nameof(GranteeTypeOption.Value)" Width="100%" />
             </div>
             @if (_permGranteeType == "user")
             {
                 <div class="mb-3">
                     <label class="form-label fw-semibold">User</label>
-                    <TelerikDropDownList Data="@_orgMemberOptions"
-                                         @bind-Value="@_permUserId"
-                                         TextField="@nameof(OrgMemberPermOption.DisplayName)"
-                                         ValueField="@nameof(OrgMemberPermOption.AppUserId)"
-                                         DefaultText="— Select user —"
-                                         Width="100%" />
+                    <BenSelect Data="@_orgMemberOptions" @bind-Value="@_permUserId" TextField="@nameof(OrgMemberPermOption.DisplayName)" ValueField="@nameof(OrgMemberPermOption.AppUserId)" DefaultText="— Select user —" Width="100%" />
                 </div>
             }
             else
             {
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Group</label>
-                    <TelerikDropDownList Data="@_groupOptions"
-                                         @bind-Value="@_permGroupId"
-                                         TextField="@nameof(GroupPermOption.Name)"
-                                         ValueField="@nameof(GroupPermOption.Id)"
-                                         DefaultText="— Select group —"
-                                         Width="100%" />
+                    <BenSelect Data="@_groupOptions" @bind-Value="@_permGroupId" TextField="@nameof(GroupPermOption.Name)" ValueField="@nameof(GroupPermOption.Id)" DefaultText="— Select group —" Width="100%" />
                 </div>
             }
         }

@@ -52,15 +52,14 @@
                     <div class="row g-2 align-items-end">
                         <div class="col-md-4">
                             <label class="form-label small fw-semibold mb-1">What happened</label>
-                            <TelerikDropDownList Data="@_entryTypes" TItem="EquipmentServiceLogType" TValue="EquipmentServiceLogType"
-                                                 @bind-Value="@_entryType" Width="100%">
+                            <TelerikDropDownList Data="@_entryTypes" @bind-Value="@_entryType" Width="100%">
                                 <ItemTemplate>@Describe((EquipmentServiceLogType)context)</ItemTemplate>
                                 <ValueTemplate>@Describe((EquipmentServiceLogType)context)</ValueTemplate>
                             </TelerikDropDownList>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small fw-semibold mb-1">When</label>
-                            <TelerikDatePicker @bind-Value="@_entryDate" Width="100%" />
+                            <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_entryDate" Width="100%" />
                         </div>
                         <div class="col-md-5">
                             <label class="form-label small fw-semibold mb-1">Note</label>

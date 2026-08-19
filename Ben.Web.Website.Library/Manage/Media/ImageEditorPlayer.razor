@@ -66,9 +66,7 @@
                     @* Filter presets *@
                     <BenPanel Title="Filter" Collapsed="true" Class="mb-2">
                             <div class="pt-1">
-                                <TelerikDropDownList Data="@_presets" @bind-Value="_preset"
-                                                     TextField="Label" ValueField="Value"
-                                                     OnChange="@(()=>ApplyPreset())" />
+                                <BenSelect Data="@_presets" @bind-Value="_preset" TextField="Label" ValueField="Value" OnChange="@((string? _) => ApplyPreset())" />
                             </div>
                         </BenPanel>
 

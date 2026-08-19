@@ -92,7 +92,7 @@
                                     <div class="row g-2 align-items-end mb-2">
                                         <div class="col-7">
                                             <label class="form-label small fw-semibold mb-1">Due back (optional)</label>
-                                            <TelerikDatePicker Value="@GetDue(loan.Id)"
+                                            <TelerikDatePicker Format="dd/MM/yyyy" Value="@GetDue(loan.Id)"
                                                                ValueChanged="@((DateTime? v) => _dueDates[loan.Id] = v)"
                                                                Width="100%" />
                                         </div>

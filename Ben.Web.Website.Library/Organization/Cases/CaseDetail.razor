@@ -276,11 +276,7 @@
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Status</label>
-                <TelerikDropDownList Data="@_statusOptions"
-                                     @bind-Value="@_editStatus"
-                                     TextField="@nameof(StatusOption.Label)"
-                                     ValueField="@nameof(StatusOption.Value)"
-                                     Width="100%" />
+                <BenSelect Data="@_statusOptions" @bind-Value="@_editStatus" TextField="@nameof(StatusOption.Label)" ValueField="@nameof(StatusOption.Value)" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Description (optional HTML summary)</label>
@@ -297,12 +293,7 @@
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Case Manager</label>
-                <TelerikDropDownList Data="@_memberOptions"
-                                     @bind-Value="@_editCaseManagerId"
-                                     TextField="@nameof(MemberOption.Label)"
-                                     ValueField="@nameof(MemberOption.Id)"
-                                     DefaultText="— Unassigned —"
-                                     Width="100%" />
+                <BenSelect Data="@_memberOptions" @bind-Value="@_editCaseManagerId" TextField="@nameof(MemberOption.Label)" ValueField="@nameof(MemberOption.Id)" DefaultText="— Unassigned —" Width="100%" />
             </div>
         </div>
         @if (_editError is not null)

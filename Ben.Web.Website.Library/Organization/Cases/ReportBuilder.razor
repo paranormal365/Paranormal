@@ -89,7 +89,7 @@ else
             </div>
             <div class="col-md-6">
                 <label class="form-label small fw-semibold">Expected Delivery Date</label>
-                <TelerikDatePicker @bind-Value="@_form.ExpectedDeliveryDate" Width="100%" />
+                <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_form.ExpectedDeliveryDate" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label small fw-semibold">Executive Summary</label>
@@ -154,7 +154,7 @@ else
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Expected Delivery Date</label>
-                <TelerikDatePicker @bind-Value="@_newDeliveryDate" Width="100%" />
+                <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_newDeliveryDate" Width="100%" />
             </div>
         </div>
     </ChildContent>
@@ -175,11 +175,7 @@ else
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Type</label>
-                <TelerikDropDownList @bind-Value="@_sectionType"
-                                     Data="@_sectionTypeOptions"
-                                     TextField="@nameof(SectionTypeOption.Label)"
-                                     ValueField="@nameof(SectionTypeOption.Value)"
-                                     Width="100%" />
+                <BenSelect @bind-Value="@_sectionType" Data="@_sectionTypeOptions" TextField="@nameof(SectionTypeOption.Label)" ValueField="@nameof(SectionTypeOption.Value)" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Body (optional)</label>

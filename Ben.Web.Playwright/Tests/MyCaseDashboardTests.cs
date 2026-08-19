@@ -221,10 +221,10 @@ public class MyCaseDashboardTests : BenTestBase
         // Dialog should close after save
         await Expect(Page.Locator(".k-window, .modal.show")).ToBeHiddenAsync(new() { Timeout = 8_000 });
 
-        // Occurrence should now appear for today's date
-        var body = await Page.InnerTextAsync("body");
-        Assert.That(body, Does.Contain("knocking").Or.Contain("Playwright"),
-            "Logged occurrence should appear in the occurrence list.");
+        // Poll rather than read once: the handler closes the dialog and *then* reloads the list, so
+        // the moment the dialog hides is before the new occurrence exists on screen.
+        await Expect(Main.GetByText("knocking", new() { Exact = false }).First)
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
     [Test]
@@ -291,7 +291,10 @@ public class MyCaseDashboardTests : BenTestBase
                                  @"/my-requests/[0-9a-f\-]+");
         await WaitUntilLoadedAsync();
 
-        var viewCasesBtn = Page.GetByText("View My Cases", new() { Exact = false });
+        // "View My Case →" when the request has a linked case, "View My Cases →" when it does not.
+        // The plural-only match missed the very state this test is about — an assigned request is
+        // exactly the one that has a case.
+        var viewCasesBtn = Main.GetByText("View My Case", new() { Exact = false }).First;
         await Expect(viewCasesBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 }
