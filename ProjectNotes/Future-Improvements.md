@@ -4664,17 +4664,16 @@ is the client side. Keep the content-type filter as-is.
 
 ---
 
-## 92. Home map renders into a sliver (raised 2026-08-19, not yet diagnosed)
+## 92. Home map renders into a sliver (CLOSED 2026-08-19)
 
 Reported with a screenshot: on the home page, the "Public Investigations" map draws its tiles into
 a narrow strip down the left of its container and leaves the rest black. The zoom and recentre
 controls sit inside the strip, so the map believes it is that width.
 
-**Most likely cause, unverified.** Leaflet measures its container once, when it initialises. If it
-initialises while the container has not been laid out yet — or the container's width changes
-afterwards (sidebar collapse, a stylesheet arriving late, the theme swap) — the map keeps the old
-size until something calls `invalidateSize()`. The symptom matches that exactly: correct tiles,
-wrong viewport.
+**The guess in this entry was wrong twice over**, and is kept because the shape of the mistake is
+worth remembering: it named Leaflet and `invalidateSize()`, and these maps are Telerik's. The
+reasoning about *when* — measured once at mount, never re-measured — was right; the library was
+not. Diagnosing from a symptom's resemblance to a library you have used before will do that.
 
 **Where to look.** The home map component and its JS interop, plus anything that resizes the page
 after first render. Worth checking whether it reproduces on a hard reload versus a soft navigation,
@@ -4688,6 +4687,24 @@ and gets a full-width map — so it likely depends on window size or on the side
 the current template, and the new layout owns the page's widths and the collapsible sidebar. A map
 that measured itself correctly under the old chrome would fail exactly this way under new chrome
 that sizes its container later or differently.
+
+### What it was (fixed in 8798656)
+
+Both public maps re-measured themselves by reaching for a global `kendo` object —
+`kendo.widgetInstance(el).resize(true)`, behind a `typeof kendo !== 'undefined'` guard. Telerik UI
+for Blazor ships no jQuery and defines no such global, so the guard was false every time and every
+call did nothing. The map kept whatever width it measured at mount: load narrow, widen, and the
+tiles stayed in a strip.
+
+Both components now hold a `TelerikMap` ref and call `Refresh()`; the JS keeps only the debounced
+resize event. The same dead path drove `setMapCenter`, so recentring the home map on a searched
+location had quietly done nothing since it was written.
+
+Re-checked live 2026-08-19 after the toolbar work, since the entry had been left open: tiles cover
+100% of the map box at 1280, at 1600, at 1024 on a fresh load, after collapsing the sidebar, and in
+dark mode. Worth knowing for the next map bug — a screenshot taken too early shows a blank white
+map, because Kendo creates each tile with `visibility: hidden` and reveals it on load. That is not
+a defect, and it briefly looked like one here.
 
 ---
 
