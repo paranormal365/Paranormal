@@ -46,9 +46,12 @@ public class ClientRequestTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/my-requests/new");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        // Step 1 is the address/location entry
-        await Expect(Page.Locator("input[placeholder*='address' i], input[placeholder*='street' i], input[placeholder*='city' i]").First)
+        // Step 1 is the address/location entry. By label, not by placeholder: the placeholders are
+        // worked examples ("123 Main St"), so matching on the word "address" or "city" found
+        // nothing even though the fields were right there.
+        await Expect(Page.GetByLabel("Street Address", new() { Exact = false }).First)
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await Expect(Page.GetByLabel("City", new() { Exact = false }).First).ToBeVisibleAsync();
     }
 
     [Test]

@@ -19,18 +19,14 @@ public class RequestStatusProgressionTests : BenTestBase
     private async Task NavigateToRequestsTabAsync()
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
-        await Page.GotoAsync($"{BaseUrl}/organizations");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var viewLink = Page.GetByRole(AriaRole.Link, new() { Name = "View" })
-                           .Or(Page.GetByRole(AriaRole.Button, new() { Name = "View" }))
-                           .First;
-        await Expect(viewLink).ToBeVisibleAsync(new() { Timeout = 10_000 });
-        await viewLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var requestsTab = Page.GetByText("Requests", new() { Exact = true });
-        await Expect(requestsTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await requestsTab.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        if (!await OpenOrganizationAsync("BenCo"))
+            Assert.Ignore("BenCo not in the seed data.");
+
+        // Both clicks are retried: they are Blazor-driven, and an unscoped GetByText("Requests")
+        // would also match the sidebar's "My Requests" entry, which navigates away from the org.
+        await OpenTabAsync("Requests", Main.GetByText("Submitted", new() { Exact = false })
+                                           .Or(Main.GetByText("Viewed", new() { Exact = false }))
+                                           .Or(Main.GetByText("No pending", new() { Exact = false })));
     }
 
     [Test]
@@ -207,8 +203,7 @@ public class RequestStatusProgressionTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-requests/[0-9a-f\\-]+");
 
         // Only test if there are occurrences in the list
         var editBtn = Page.GetByTitle("Edit").Or(Page.GetByRole(AriaRole.Button).Filter(new() { HasText = "" }).First).First;

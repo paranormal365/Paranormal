@@ -19,16 +19,33 @@ public class CaseMessageBoardTests : BenTestBase
 
     // ── Helper ────────────────────────────────────────────────────────────────
 
-    /// <summary>Logs in as Daniel, navigates to his first case, returns when detail page has loaded.</summary>
+    /// <summary>
+    /// Logs in as Daniel and opens the case that carries the seeded conversation.
+    /// <para>
+    /// Deliberately not "the first card". Daniel has four cases now — the others arrived from
+    /// later seeding and from these tests' own sends — and the seeded conversation is on the
+    /// oldest, which sorts last. Taking the first card opened a case with no messages, so the
+    /// panel rendered correctly and empty and the assertions read as though the feature was
+    /// broken.
+    /// </para>
+    /// <para>
+    /// The seeded case is the only one with a case manager assigned, and the card shows that, so
+    /// it is both a stable identifier and a visible one.
+    /// </para>
+    /// </summary>
     private async Task NavigateToClientCaseDetail()
     {
         await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var card = Page.Locator(".card").First;
+
+        var card = Page.Locator(".card").Filter(new() { HasTextString = "Case Manager:" }).First;
+        if (await card.CountAsync() == 0)
+            Assert.Ignore("No managed case in the seed data; the seeded conversation lives on one.");
+
         await Expect(card).ToBeVisibleAsync(new() { Timeout = 10_000 });
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // The card navigates via NavigationManager, so a click before the circuit is live is lost.
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
     }
 
     // ── Client-side: panel rendering ─────────────────────────────────────────
@@ -152,15 +169,8 @@ public class CaseMessageBoardTests : BenTestBase
     public async Task OrgCaseDetail_MessagesTab_IsVisible()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        if (!await OpenOrganizationAsync("Tennessee Ghost Hunters"))
-        { Assert.Pass("TGH org not visible; seed data may differ."); return; }
-        // The Cases tab, waiting for the case list rather than assuming the click landed.
-        await OpenTabAsync("Cases", Main.GetByText("Park", new() { Exact = false }));
-        // Open Daniel's case; the case detail is identified by its own tab strip.
-        var caseItem = Main.GetByText("Park", new() { Exact = false }).First;
-        await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await ClickUntilAsync(caseItem, Main.Locator(".nav-tabs .nav-link").Or(Main.GetByRole(AriaRole.Tab)));
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        { Assert.Pass("TGH case not in the seed data."); return; }
 
         // Messages tab should be present
         var messagesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Messages" })
@@ -173,26 +183,12 @@ public class CaseMessageBoardTests : BenTestBase
     public async Task OrgCaseDetail_MessagesTab_ShowsClientMessages()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        if (!await OpenOrganizationAsync("Tennessee Ghost Hunters"))
-        { Assert.Pass("TGH org not visible; seed data may differ."); return; }
-
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Main.GetByText("Cases", new() { Exact = true }))
-                            .First;
-        await casesLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        // Open Daniel's case; the case detail is identified by its own tab strip.
-        var caseItem = Main.GetByText("Park", new() { Exact = false }).First;
-        await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await ClickUntilAsync(caseItem, Main.Locator(".nav-tabs .nav-link").Or(Main.GetByRole(AriaRole.Tab)));
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        { Assert.Pass("TGH case not in the seed data."); return; }
 
         // Click Messages tab
-        var messagesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Messages" })
-                              .Or(Main.GetByText("Messages", new() { Exact = true }))
-                              .First;
-        await messagesTab.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await OpenTabAsync("Messages", Main.GetByText("Messages with", new() { Exact = false })
+                                           .Or(Main.GetByPlaceholder("Message", new() { Exact = false })));
 
         // Daniel's reply should be visible to the org
         var clientMsg = Page.GetByText("activity has been a bit more frequent", new() { Exact = false });
@@ -203,25 +199,11 @@ public class CaseMessageBoardTests : BenTestBase
     public async Task OrgCaseDetail_MessagesTab_CanSendMessage()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        if (!await OpenOrganizationAsync("Tennessee Ghost Hunters"))
-        { Assert.Pass("TGH org not visible; seed data may differ."); return; }
+        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        { Assert.Pass("TGH case not in the seed data."); return; }
 
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Main.GetByText("Cases", new() { Exact = true }))
-                            .First;
-        await casesLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        // Open Daniel's case; the case detail is identified by its own tab strip.
-        var caseItem = Main.GetByText("Park", new() { Exact = false }).First;
-        await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await ClickUntilAsync(caseItem, Main.Locator(".nav-tabs .nav-link").Or(Main.GetByRole(AriaRole.Tab)));
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var messagesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Messages" })
-                              .Or(Main.GetByText("Messages", new() { Exact = true }))
-                              .First;
-        await messagesTab.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await OpenTabAsync("Messages", Main.GetByText("Messages with", new() { Exact = false })
+                                           .Or(Main.GetByPlaceholder("Message", new() { Exact = false })));
 
         var uniqueText = $"Org reply from Playwright {Guid.NewGuid():N}";
         var textArea   = Page.GetByPlaceholder("Message the client", new() { Exact = false });

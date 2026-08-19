@@ -52,9 +52,15 @@ public class UploadFilesTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/upload-files");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // The upload form is collapsed until "Upload New File" is pressed, so the File Type control
+        // does not exist on arrival. The test asserted on it without opening the panel, which is
+        // why it reported the control missing on a page that renders it perfectly well.
+        var openPanel = Page.GetByRole(AriaRole.Button, new() { Name = "Upload New File" });
+        await ClickUntilAsync(openPanel, Main.GetByText("New Upload", new() { Exact = false }));
+
         // File type select — Telerik renders as a custom dropdown
-        var fileTypeEl = Page.GetByText("File Type", new() { Exact = false })
-                             .Or(Page.Locator("[aria-label*='file type' i]"))
+        var fileTypeEl = Main.GetByText("File Type", new() { Exact = false })
+                             .Or(Main.Locator("[aria-label*='file type' i]"))
                              .First;
         await Expect(fileTypeEl).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }

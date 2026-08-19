@@ -14,19 +14,20 @@ public class MediaLibraryTests : BenTestBase
 {
     // ── Standalone page ───────────────────────────────────────────────────────
     //
-    // NOTE: these navigate via the in-app nav drawer link (SPA navigation within the
-    // already-connected Blazor circuit) rather than Page.GotoAsync(".../media-library")
-    // directly. A direct hard navigation to any authenticated page in this app currently
-    // redirects to the Login content while the nav bar still shows the authenticated user
-    // — reproduced the same way on the pre-existing /upload-files page, so it's a
-    // pre-existing, app-wide auth-timing issue unrelated to this feature, not something
-    // introduced here. SPA nav-link navigation is what actually works today.
+    // These go through the sidebar link rather than a direct GotoAsync, which is what the page
+    // is actually reached by. The link click is retried: it is an ordinary Blazor navigation and
+    // a click that lands before the circuit connects is silently dropped, which left the browser
+    // sitting on the page it was already on. That read as "the media library rendered the home
+    // page", and the earlier note here blamed an app-wide auth-timing bug on hard navigation —
+    // it was a dropped click, and hard navigation to this page works (see the parity tests).
 
     private async Task NavigateToMediaLibraryAsync()
     {
         await LoginAsync(UserEmail, UserPassword);
-        await Page.GetByRole(AriaRole.Link, new() { Name = "Media Library", Exact = true }).Or(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Media Library", Exact = true })).First.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        var link = Page.GetByRole(AriaRole.Link, new() { Name = "Media Library", Exact = true })
+                       .Or(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Media Library", Exact = true }))
+                       .First;
+        await ClickUntilUrlAsync(link, "/media-library");
     }
 
     [Test]

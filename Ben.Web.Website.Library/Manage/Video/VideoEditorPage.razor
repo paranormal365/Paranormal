@@ -7,15 +7,33 @@
 
 <PageTitle>Video Editor</PageTitle>
 
-@if (!UserState.IsAuthenticated)
+@* Auth state is not known during prerender, and this page used to read IsAuthenticated straight
+   away — so arriving here signed in showed "You must be signed in" and stayed that way, because
+   nothing re-rendered when auth resolved. Wait for AuthReady first, the same as every other
+   auth-gated page. *@
+@if (!_authResolved)
+{
+    <p class="text-muted">Loading…</p>
+}
+else if (!UserState.IsAuthenticated)
 {
     <p class="text-muted">You must be signed in to use the video editor.</p>
-    return;
+}
+else
+{
+    <VideoEditor OnPublishExport="OnPublishExportAsync" />
 }
 
-<VideoEditor OnPublishExport="OnPublishExportAsync" />
-
 @code {
+    /// <summary>False until AuthReady has been awaited; see the guard above.</summary>
+    private bool _authResolved;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        _authResolved = true;
+    }
+
     /// <summary>Server project id from an earlier publish this session, so a second export in the
     /// same session updates that project rather than creating another row.</summary>
     private Guid? _publishedProjectId;

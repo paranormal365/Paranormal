@@ -30,7 +30,9 @@ public class OrganizationTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/organizations");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page.GetByText("BenCo", new() { Exact = false }))
+        // .First: the grid shows the name ("BenCo") and the URL name ("benco") in adjacent cells,
+        // and a case-insensitive loose match hits both, which is a strict-mode violation.
+        await Expect(Page.GetByText("BenCo", new() { Exact = false }).First)
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
@@ -57,8 +59,8 @@ public class OrganizationTests : BenTestBase
                            .Or(Page.GetByRole(AriaRole.Button, new() { Name = "View" }))
                            .First;
         await Expect(viewLink).ToBeVisibleAsync(new() { Timeout = 10_000 });
-        await viewLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // Grid command button → NavigationManager: dropped if the circuit is not live yet.
+        await ClickUntilUrlAsync(viewLink, @"/organizations/[0-9a-f\-]+");
         Assert.That(Page.Url, Does.Contain("/organizations/"), "Expected navigation to org detail page.");
     }
 

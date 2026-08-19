@@ -62,8 +62,9 @@ public class AdminTests : BenTestBase
                            .Or(Page.GetByRole(AriaRole.Button, new() { Name = "Detail" }))
                            .First;
         await Expect(viewLink).ToBeVisibleAsync(new() { Timeout = 10_000 });
-        await viewLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // View is a Telerik GridCommandButton calling NavigationManager — pure Blazor, so a click
+        // before the circuit connects does nothing at all.
+        await ClickUntilUrlAsync(viewLink, @"/admin/users/[0-9a-f\-]+");
         Assert.That(Page.Url, Does.Match(@"/admin/users/[0-9a-f\-]+"), "Expected navigation to user detail.");
     }
 
@@ -76,9 +77,12 @@ public class AdminTests : BenTestBase
                            .Or(Page.GetByRole(AriaRole.Button, new() { Name = "View" }))
                            .Or(Page.GetByRole(AriaRole.Button, new() { Name = "Detail" }))
                            .First;
-        await viewLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var profileTab = Page.GetByText("Profile", new() { Exact = false });
+        await ClickUntilUrlAsync(viewLink, @"/admin/users/[0-9a-f\-]+");
+        // Not GetByText("Profile"): that also matches the "Save Profile" button on the same page,
+        // and two matches is a strict-mode violation rather than a pass.
+        var profileTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Profile", Exact = true })
+                             .Or(Page.Locator(".nav-tabs .nav-link", new() { HasTextString = "Profile" }))
+                             .First;
         await Expect(profileTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 

@@ -70,24 +70,24 @@
                 </p>
                 <div class="row g-3">
                     <div class="col-12">
-                        <label class="form-label fw-semibold">Street Address <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" placeholder="123 Main St" @bind="@_streetAddress1" @bind:event="oninput" />
+                        <label class="form-label fw-semibold" for="req-street1">Street Address <span class="text-danger">*</span></label>
+                        <input type="text" id="req-street1" class="form-control" placeholder="123 Main St" @bind="@_streetAddress1" @bind:event="oninput" />
                     </div>
                     <div class="col-12">
-                        <label class="form-label fw-semibold">Apt / Unit (optional)</label>
-                        <input type="text" class="form-control" placeholder="Apt 4B" @bind="@_streetAddress2" @bind:event="oninput" />
+                        <label class="form-label fw-semibold" for="req-street2">Apt / Unit (optional)</label>
+                        <input type="text" id="req-street2" class="form-control" placeholder="Apt 4B" @bind="@_streetAddress2" @bind:event="oninput" />
                     </div>
                     <div class="col-md-5">
-                        <label class="form-label fw-semibold">City <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" @bind="@_city" @bind:event="oninput" />
+                        <label class="form-label fw-semibold" for="req-city">City <span class="text-danger">*</span></label>
+                        <input type="text" id="req-city" class="form-control" @bind="@_city" @bind:event="oninput" />
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label fw-semibold">State <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" placeholder="TN" @bind="@_state" @bind:event="oninput" />
+                        <label class="form-label fw-semibold" for="req-state">State <span class="text-danger">*</span></label>
+                        <input type="text" id="req-state" class="form-control" placeholder="TN" @bind="@_state" @bind:event="oninput" />
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label fw-semibold">ZIP Code <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" placeholder="37201" @bind="@_zipCode" @bind:event="oninput" />
+                        <label class="form-label fw-semibold" for="req-zip">ZIP Code <span class="text-danger">*</span></label>
+                        <input type="text" id="req-zip" class="form-control" placeholder="37201" @bind="@_zipCode" @bind:event="oninput" />
                     </div>
                     <div class="col-12">
                         <button type="button" class="btn btn-secondary" @onclick="GeocodeAddress" disabled="@(!(!_isBusy && CanGeocode))"><BenIcon Name="map-pin" Class="me-1" />

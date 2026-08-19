@@ -66,12 +66,12 @@ public class ClientRequestNavTests : BenTestBase
         await LoginAsync(UserEmail, UserPassword);
         await Page.GotoAsync($"{BaseUrl}/my-requests/new");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        // Street address field
-        await Expect(Page.Locator("input[placeholder*='123 Main' i], input[placeholder*='Street' i]").First)
+        // Addressed by label — the inputs now carry ids their labels point at, so this asserts the
+        // fields themselves rather than the presence of some text on the page.
+        await Expect(Page.GetByLabel("Street Address", new() { Exact = false }).First)
             .ToBeVisibleAsync(new() { Timeout = 8_000 });
-        // City, State, ZIP
-        await Expect(Page.GetByText("City", new() { Exact = true })).ToBeVisibleAsync();
-        await Expect(Page.GetByText("ZIP Code", new() { Exact = true })).ToBeVisibleAsync();
+        await Expect(Page.GetByLabel("City", new() { Exact = false }).First).ToBeVisibleAsync();
+        await Expect(Page.GetByLabel("ZIP Code", new() { Exact = false }).First).ToBeVisibleAsync();
     }
 
     [Test]
@@ -99,7 +99,8 @@ public class ClientRequestNavTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/my-requests/new");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         // Fill step 1 without verifying (no geocode)
-        await Page.Locator("input").Nth(0).FillAsync("123 Test St");
+        // By label, not by DOM order: the sidebar menu filter is the first input on the page.
+        await Page.GetByLabel("Street Address", new() { Exact = false }).First.FillAsync("123 Test St");
         await Page.Locator("input[placeholder*='37' i], input").Nth(3).FillAsync("Nashville");
         // Navigate to step 4 manually via API — too complex for E2E; just confirm step 1 UI
         var body = await Page.InnerTextAsync("body");
@@ -112,9 +113,13 @@ public class ClientRequestNavTests : BenTestBase
         await LoginAsync(UserEmail, UserPassword);
         await Page.GotoAsync($"{BaseUrl}/my-requests/new");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        // Step labels appear in the progress bar
-        await Expect(Page.GetByText("Location", new() { Exact = false })).ToBeVisibleAsync(new() { Timeout = 5_000 });
-        await Expect(Page.GetByText("Find Organizations", new() { Exact = false })).ToBeVisibleAsync();
+        // The step labels live in the progress bar. A loose text match is ambiguous — "Location"
+        // also appears in the "Step 1 — Your Location" card header, and two matches is a strict-mode
+        // violation, not a pass. Assert on the progress bar's own labels.
+        await Expect(Page.GetByText("Location", new() { Exact = true }).First)
+            .ToBeVisibleAsync(new() { Timeout = 5_000 });
+        await Expect(Page.GetByText("Find Organizations", new() { Exact = true }).First)
+            .ToBeVisibleAsync();
     }
 
     // ── Request detail ────────────────────────────────────────────────────────
@@ -131,8 +136,7 @@ public class ClientRequestNavTests : BenTestBase
             Assert.Pass("No requests in list — skipping detail navigation test.");
             return;
         }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-requests/[0-9a-f\\-]+");
         Assert.That(Page.Url, Does.Match(@"/my-requests/[0-9a-f\-]+"),
             "Expected navigation to request detail URL.");
     }
@@ -145,8 +149,7 @@ public class ClientRequestNavTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No requests."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-requests/[0-9a-f\\-]+");
         var body = await Page.InnerTextAsync("body");
         Assert.That(body, Does.Contain("Address").Or.Contain("City"),
             "Expected address information on request detail.");
@@ -163,8 +166,7 @@ public class ClientRequestNavTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No requests."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-requests/[0-9a-f\\-]+");
         var body = await Page.InnerTextAsync("body");
         Assert.That(body, Does.Not.Contain("An unhandled error has occurred"));
         // If "Submitted To" section is present (for submitted requests), verify it renders correctly

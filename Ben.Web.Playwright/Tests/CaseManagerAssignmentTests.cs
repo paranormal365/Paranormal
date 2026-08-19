@@ -16,23 +16,8 @@ public class CaseManagerAssignmentTests : BenTestBase
     private async Task NavigateToTghCaseDetail()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        await Page.GotoAsync($"{BaseUrl}/organizations");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var tgh = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
-        if (!await tgh.IsVisibleAsync()) { Assert.Pass("TGH org not visible; seed data may differ."); return; }
-        await tgh.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Main.GetByText("Cases", new() { Exact = true })).First;
-        await casesLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        // Open Daniel's case; the case detail is identified by its own tab strip.
-        var caseItem = Main.GetByText("Park", new() { Exact = false }).First;
-        await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await ClickUntilAsync(caseItem, Main.Locator(".nav-tabs .nav-link").Or(Main.GetByRole(AriaRole.Tab)));
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+            Assert.Pass("TGH case not in the seed data; nothing to assert against.");
     }
 
     // ── CaseList: manager column ───────────────────────────────────────────────
@@ -41,18 +26,10 @@ public class CaseManagerAssignmentTests : BenTestBase
     public async Task CaseList_ShowsManagerOrUnassigned()
     {
         await LoginAsync(UserEmail, UserPassword);
-        await Page.GotoAsync($"{BaseUrl}/organizations");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var tgh = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
-        if (!await tgh.IsVisibleAsync()) { Assert.Pass("TGH org not visible."); return; }
-        await tgh.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Main.GetByText("Cases", new() { Exact = true })).First;
-        await casesLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        if (!await OpenOrganizationAsync("Tennessee Ghost Hunters"))
+            Assert.Pass("TGH org not in the seed data.");
+        await OpenTabAsync("Cases", Main.GetByText("Manager:", new() { Exact = false })
+                                        .Or(Main.GetByText("No cases", new() { Exact = false })));
 
         // Each case card should show either a manager name or 'Unassigned'
         var managerLabels = Page.GetByText("Manager:", new() { Exact = false });

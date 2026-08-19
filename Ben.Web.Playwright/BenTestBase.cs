@@ -1,5 +1,7 @@
 using Microsoft.Playwright;
 using Microsoft.Playwright.NUnit;
+using NUnit.Framework;
+using System.Text.RegularExpressions;
 
 namespace Ben.Web.Playwright;
 
@@ -67,13 +69,44 @@ public abstract class BenTestBase : PageTest
         // id="login-email". The alternation matches either.
         await Page.FillAsync("input[type='email'], input[placeholder*='email' i], input[id*='email' i], input[placeholder='you@example.com']", email);
         await Page.FillAsync("input[type='password']", password);
-        // Scoped to the login <form> — the nav bar/app bar also has unrelated
-        // button[type='submit'] elements (icon toggle, and Sign Out when already
-        // authenticated), and an unscoped selector matches the first of those instead.
-        await Page.ClickAsync("form button[type='submit']");
 
-        // Wait for the redirect away from /login (successful auth)
-        await Page.WaitForURLAsync(url => !url.Contains("/login"), new() { Timeout = 10_000 });
+        // Submitting is retried for the same reason every other click here is: Blazor Server
+        // attaches its handlers when the circuit connects, which happens *after* NetworkIdle, and
+        // a click that lands in that window is silently dropped — the form just sits there. That
+        // surfaced as "waiting for navigation" timeouts in tests that had nothing to do with
+        // login, because the sign-in they depended on had quietly not happened.
+        //
+        // Scoped to the login <form>: the app bar also carries button[type='submit'] elements
+        // (the icon toggle, and Sign Out when already authenticated), and an unscoped selector
+        // matches one of those instead.
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                await Page.ClickAsync("form button[type='submit']", new() { Timeout = 5_000 });
+            }
+            catch (TimeoutException)
+            {
+                continue;   // form still rendering
+            }
+
+            try
+            {
+                await Page.WaitForURLAsync(url => !url.Contains("/login"), new() { Timeout = 8_000 });
+                await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+                return;
+            }
+            catch (TimeoutException)
+            {
+                // Dropped click, or bad credentials. Re-fill in case the re-render cleared the
+                // fields, then try again; the assert below reports honestly if it never takes.
+                await Page.FillAsync("input[type='email'], input[placeholder*='email' i], input[id*='email' i], input[placeholder='you@example.com']", email);
+                await Page.FillAsync("input[type='password']", password);
+            }
+        }
+
+        Assert.That(Page.Url, Does.Not.Contain("/login"),
+            $"sign-in as {email} never left the login page");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
     }
 
@@ -117,6 +150,43 @@ public abstract class BenTestBase : PageTest
 
         // Out of attempts: assert so the failure names what was actually missing.
         await Expect(expected.First).ToBeVisibleAsync(new() { Timeout = 5_000 });
+    }
+
+    /// <summary>
+    /// Clicks <paramref name="target"/> until the URL matches <paramref name="urlPattern"/>.
+    /// <para>
+    /// The counterpart to <see cref="ClickUntilAsync"/> for a control whose only visible effect is
+    /// navigation — a Telerik GridCommandButton that calls NavigationManager, for instance. There
+    /// is no element to wait for, so waiting on the address is the honest expectation.
+    /// </para>
+    /// </summary>
+    protected async Task ClickUntilUrlAsync(ILocator target, string urlPattern, int attempts = 4)
+    {
+        for (var attempt = 0; attempt < attempts; attempt++)
+        {
+            try
+            {
+                await target.ClickAsync(new() { Timeout = 5_000 });
+            }
+            catch (TimeoutException)
+            {
+                continue;
+            }
+
+            try
+            {
+                await Page.WaitForURLAsync(new Regex(urlPattern), new() { Timeout = 4_000 });
+                await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+                return;
+            }
+            catch (TimeoutException)
+            {
+                // Click dropped before the circuit was live; try again.
+            }
+        }
+
+        Assert.That(Page.Url, Does.Match(urlPattern),
+            $"clicking never navigated to something matching {urlPattern}");
     }
 
     /// <summary>
@@ -171,6 +241,65 @@ public abstract class BenTestBase : PageTest
         await Expect(tab).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await ClickUntilAsync(tab, expected);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+    }
+
+    /// <summary>
+    /// Clicks whichever of <paramref name="candidates"/> is actually on top at its own centre.
+    /// Returns false when every one of them is covered.
+    /// <para>
+    /// Map pins overlap: at the default zoom two of them sit close enough that the first in DOM
+    /// order is underneath the second, and clicking it is intercepted until the timeout. Forcing
+    /// the click would paper over that — a pin a person cannot click is a real problem — so this
+    /// picks one that is genuinely reachable and leaves the overlap visible for what it is.
+    /// </para>
+    /// </summary>
+    protected async Task<bool> ClickTopmostAsync(ILocator candidates)
+    {
+        var count = await candidates.CountAsync();
+        for (var i = 0; i < count; i++)
+        {
+            var candidate = candidates.Nth(i);
+            if (!await candidate.IsVisibleAsync()) continue;
+
+            var onTop = await candidate.EvaluateAsync<bool>(@"el => {
+                const r = el.getBoundingClientRect();
+                const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                return !!hit && (hit === el || el.contains(hit) || hit.contains(el));
+            }");
+            if (!onTop) continue;
+
+            await candidate.ClickAsync(new() { Timeout = 5_000 });
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Opens a case from an organisation: /organizations → the org → its Cases tab → the case.
+    /// Returns false when the seed data does not contain them, so a caller can skip rather than
+    /// fail.
+    /// <para>
+    /// Several fixtures grew their own copy of this walk, written against the original site, and
+    /// each copy carried the same two faults: it clicked the organisation's *name* (a plain grid
+    /// cell here, not a link) and then an unscoped "Cases" link, which resolves to the sidebar's
+    /// own entry and navigates away. Those tests ended up on My Cases and reported the case they
+    /// never opened as "not visible".
+    /// </para>
+    /// </summary>
+    protected async Task<bool> OpenOrgCaseAsync(string orgName, string caseText)
+    {
+        if (!await OpenOrganizationAsync(orgName)) return false;
+
+        await OpenTabAsync("Cases", Main.GetByText(caseText, new() { Exact = false })
+                                        .Or(Main.GetByText("No cases", new() { Exact = false })));
+
+        var caseItem = Main.GetByText(caseText, new() { Exact = false }).First;
+        if (await caseItem.CountAsync() == 0) return false;
+
+        // The case detail is identified by its own tab strip.
+        await ClickUntilAsync(caseItem, Main.Locator(".nav-tabs .nav-link").Or(Main.GetByRole(AriaRole.Tab)));
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        return true;
     }
 
     /// <summary>

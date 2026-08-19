@@ -24,10 +24,11 @@ public class InvestigationReportTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/my-cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var card = Page.Locator(".card").First;
-        if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // The managed case, not the first card: Daniel has several cases now and the seeded
+        // report belongs to the one with a case manager, which sorts last.
+        var card = Page.Locator(".card").Filter(new() { HasTextString = "Case Manager:" }).First;
+        if (await card.CountAsync() == 0) { Assert.Pass("No managed case seeded."); return; }
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
 
         // Reports card should appear since we have a seeded published report
         var reportTitle = Page.GetByText("Initial Assessment — Park Residence", new() { Exact = false });
@@ -41,10 +42,11 @@ public class InvestigationReportTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/my-cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var card = Page.Locator(".card").First;
-        if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // The managed case, not the first card: Daniel has several cases now and the seeded
+        // report belongs to the one with a case manager, which sorts last.
+        var card = Page.Locator(".card").Filter(new() { HasTextString = "Case Manager:" }).First;
+        if (await card.CountAsync() == 0) { Assert.Pass("No managed case seeded."); return; }
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
 
         // Wait for the reports section to render
         await Expect(Page.GetByText("Initial Assessment — Park Residence", new() { Exact = false }))
@@ -61,23 +63,8 @@ public class InvestigationReportTests : BenTestBase
     public async Task OrgCaseDetail_ReportsTab_IsVisible()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        await Page.GotoAsync($"{BaseUrl}/organizations");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var tgh = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
-        if (!await tgh.IsVisibleAsync()) { Assert.Pass("TGH org not visible."); return; }
-        await tgh.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Main.GetByText("Cases", new() { Exact = true })).First;
-        await casesLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        // Open Daniel's case; the case detail is identified by its own tab strip.
-        var caseItem = Main.GetByText("Park", new() { Exact = false }).First;
-        await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await ClickUntilAsync(caseItem, Main.Locator(".nav-tabs .nav-link").Or(Main.GetByRole(AriaRole.Tab)));
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        { Assert.Pass("TGH case not in the seed data."); return; }
 
         // Reports tab should be present as the 6th tab
         var reportsTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Reports" })
@@ -89,23 +76,8 @@ public class InvestigationReportTests : BenTestBase
     public async Task OrgCaseDetail_ReportsTab_ShowsSeededPublishedReport()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        await Page.GotoAsync($"{BaseUrl}/organizations");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var tgh = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
-        if (!await tgh.IsVisibleAsync()) { Assert.Pass("TGH org not visible."); return; }
-        await tgh.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Main.GetByText("Cases", new() { Exact = true })).First;
-        await casesLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        // Open Daniel's case; the case detail is identified by its own tab strip.
-        var caseItem = Main.GetByText("Park", new() { Exact = false }).First;
-        await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await ClickUntilAsync(caseItem, Main.Locator(".nav-tabs .nav-link").Or(Main.GetByRole(AriaRole.Tab)));
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        { Assert.Pass("TGH case not in the seed data."); return; }
 
         var reportsTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Reports" })
                              .Or(Page.GetByText("Reports", new() { Exact = true })).First;

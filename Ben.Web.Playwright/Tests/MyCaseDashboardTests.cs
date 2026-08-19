@@ -98,8 +98,7 @@ public class MyCaseDashboardTests : BenTestBase
             Assert.Pass("No cases in list — DevelopmentDataSeeder may not have run.");
             return;
         }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\\-]+");
         Assert.That(Page.Url, Does.Match(@"/my-cases/[0-9a-f\-]+"),
             "Expected navigation to case detail URL.");
     }
@@ -114,8 +113,7 @@ public class MyCaseDashboardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\\-]+");
 
         // Calendar should be visible
         var calendar = Page.Locator("[class*='k-calendar']").First;
@@ -130,8 +128,7 @@ public class MyCaseDashboardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\\-]+");
 
         // Should show "Park Residence" or the case reference
         var body = await Page.InnerTextAsync("body");
@@ -147,8 +144,7 @@ public class MyCaseDashboardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\\-]+");
 
         var logBtn = Page.GetByText("Log Occurrence", new() { Exact = false });
         await Expect(logBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });
@@ -162,8 +158,7 @@ public class MyCaseDashboardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\\-]+");
 
         await Page.GetByText("Log Occurrence").ClickAsync();
         // TelerikWindow should open
@@ -182,8 +177,7 @@ public class MyCaseDashboardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\\-]+");
 
         await Page.GetByText("Log Occurrence").ClickAsync();
         await Page.WaitForTimeoutAsync(400);
@@ -201,8 +195,7 @@ public class MyCaseDashboardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\\-]+");
 
         await Page.GetByText("Log Occurrence").ClickAsync();
         await Page.WaitForTimeoutAsync(400);
@@ -231,8 +224,7 @@ public class MyCaseDashboardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\\-]+");
 
         // Seeder creates "Initial Site Assessment" investigation for Daniel's case
         var body = await Page.InnerTextAsync("body");
@@ -252,8 +244,7 @@ public class MyCaseDashboardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\\-]+");
 
         var backLink = Page.GetByRole(AriaRole.Link, new() { Name = "← My Cases" })
                           .Or(Page.GetByText("← My Cases"));

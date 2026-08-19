@@ -104,8 +104,10 @@ public class NearbyDiscoveryTests : BenTestBase
         var walk = Page.GetByText("Public Night Walk", new() { Exact = false });
         var visibleBefore = await walk.IsVisibleAsync();
 
-        await Page.ClickAsync("#nearby-radius");
-        await Page.ClickAsync(".k-list-item:has-text('50'), li:has-text('50'), option:has-text('50')");
+        // A native <select> here, where the original had a Telerik dropdown list. An <option>
+        // cannot be clicked — the browser never makes it an independently hittable box — so the
+        // old click waited out its full timeout on an element Playwright could see but not press.
+        await Page.SelectOptionAsync("#nearby-radius", "50");
         await Page.WaitForTimeoutAsync(3_000); // re-query round trip
 
         await Expect(walk.First).ToBeVisibleAsync(new() { Timeout = 10_000 });
