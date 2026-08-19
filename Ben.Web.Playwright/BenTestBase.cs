@@ -342,10 +342,13 @@ public abstract class BenTestBase : PageTest
         var row = Main.Locator(".card").Filter(new() { HasTextString = caseText }).First;
         if (await row.CountAsync() == 0) return false;
 
-        var opener = row.GetByRole(AriaRole.Button, new() { Name = "Open" })
-                        .Or(row.GetByRole(AriaRole.Link, new() { Name = "Open" }))
-                        .Or(row)     // the original site made the whole card clickable
-                        .First;
+        // Not `.Or(row).First`: Or() resolves in DOM order, and the card contains the button, so
+        // the card always won and the click landed on dead space. Pick the button when there is
+        // one, and only fall back to the card — which the original site made clickable — when
+        // there is not.
+        var openButton = row.GetByRole(AriaRole.Button, new() { Name = "Open" })
+                            .Or(row.GetByRole(AriaRole.Link, new() { Name = "Open" }));
+        var opener = await openButton.CountAsync() > 0 ? openButton.First : row;
 
         // Waiting on the URL, not on a tab strip: the organisation hub has tabs of its own, so
         // "a tab strip is visible" was already true before the click and the helper returned

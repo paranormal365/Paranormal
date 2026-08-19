@@ -28,16 +28,19 @@ public class MediaLibraryTests : BenTestBase
                        .Or(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Media Library", Exact = true }))
                        .First;
         await ClickUntilUrlAsync(link, "/media-library");
+        await WaitUntilLoadedAsync();
     }
 
     [Test]
     public async Task Page_RendersWithoutError()
     {
         await NavigateToMediaLibraryAsync();
+        await Expect(Main.GetByText("Everything you own", new() { Exact = false }))
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
+
         var body = await Page.InnerTextAsync("body");
         Assert.That(body, Is.Not.Empty);
         Assert.That(body, Does.Not.Contain("An unhandled error has occurred"));
-        Assert.That(body, Does.Contain("Everything you own"));
     }
 
     [Test]
@@ -107,8 +110,12 @@ public class MediaLibraryTests : BenTestBase
         // Retried: an unretried click here left the browser on the page it started from, which
         // read as the media library rendering the home page's content.
         await ClickUntilUrlAsync(link, "/media-library");
-        var body = await Page.InnerTextAsync("body");
-        Assert.That(body, Does.Contain("Everything you own"));
+        // Expect, not a single InnerText read: Blazor changes the address before the new page has
+        // rendered, so reading once caught the home page's text and reported the media library as
+        // missing its own copy. Verified against the running app — both soft and hard navigation
+        // to /media-library render correctly; only the test was early.
+        await Expect(Main.GetByText("Everything you own", new() { Exact = false }))
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
     // ── "Attach from Library" picker embedding on the case Files tab ────────────

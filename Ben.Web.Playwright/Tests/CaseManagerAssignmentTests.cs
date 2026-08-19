@@ -74,7 +74,9 @@ public class CaseManagerAssignmentTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         // 'Case Manager' label should appear in the dialog
-        var label = Page.GetByText("Case Manager", new() { Exact = false });
+        // Exact, and the label specifically: a loose match also picks up the case header's
+        // "Case Manager: Sarah Mitchell", and two matches is a strict-mode violation.
+        var label = Page.Locator("label", new() { HasTextString = "Case Manager" }).First;
         await Expect(label).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 
@@ -90,7 +92,9 @@ public class CaseManagerAssignmentTests : BenTestBase
         // Wait for the dropdown to populate with org members (loaded lazily)
         await Page.WaitForTimeoutAsync(800);
 
-        var label = Page.GetByText("Case Manager", new() { Exact = false });
+        // Exact, and the label specifically: a loose match also picks up the case header's
+        // "Case Manager: Sarah Mitchell", and two matches is a strict-mode violation.
+        var label = Page.Locator("label", new() { HasTextString = "Case Manager" }).First;
         await Expect(label).ToBeVisibleAsync(new() { Timeout = 8_000 });
 
         // The dropdown should be present and interactable

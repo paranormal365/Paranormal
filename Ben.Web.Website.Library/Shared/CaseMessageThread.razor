@@ -89,10 +89,29 @@ else
     private string? _error;
     private ElementReference _scrollRef;
 
+    /// <summary>
+    /// Bumped whenever the local list is changed by something other than the initial load. A load
+    /// that started before that change is stale by the time it returns, and applying it would drop
+    /// the newer message — which is exactly what happened when a message was sent while the thread
+    /// was still loading: it posted and saved, then vanished from the screen when the load landed.
+    /// </summary>
+    private int _revision;
+
     protected override async Task OnInitializedAsync()
     {
-        try { _messages = (await LoadMessages()).ToList(); }
-        catch { _error = "Failed to load messages."; _messages = []; }
+        var revision = _revision;
+        try
+        {
+            var loaded = (await LoadMessages()).ToList();
+            if (revision != _revision) return;   // superseded by a send
+            _messages = loaded;
+        }
+        catch
+        {
+            if (revision != _revision) return;
+            _error = "Failed to load messages.";
+            _messages = [];
+        }
     }
 
     private async Task Send()
@@ -105,10 +124,25 @@ else
         try
         {
             var saved = await PostMessage(body);
-            if (saved is not null) _messages ??= [];
-            _messages?.Add(saved!);
+            if (saved is null)
+            {
+                // Nothing came back, so there is nothing to show. Say so rather than appending a
+                // null, which the previous guard allowed through: it tested `saved` before
+                // creating the list but not before adding to it.
+                _error = "Failed to send message. Please try again.";
+                _draft = body;
+                return;
+            }
+
+            _messages ??= [];
+            _messages.Add(saved);
+            _revision++;   // any load still in flight is now stale
         }
-        catch { _error = "Failed to send message. Please try again."; }
+        catch
+        {
+            _error = "Failed to send message. Please try again.";
+            _draft = body;   // don't lose what they typed
+        }
         finally { _sending = false; }
     }
 }

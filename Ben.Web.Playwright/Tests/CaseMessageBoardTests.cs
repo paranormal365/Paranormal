@@ -216,6 +216,11 @@ public class CaseMessageBoardTests : BenTestBase
         var uniqueText = $"Org reply from Playwright {Guid.NewGuid():N}";
         var textArea   = Page.GetByPlaceholder("Message the client", new() { Exact = false });
         await Expect(textArea).ToBeVisibleAsync(new() { Timeout = 8_000 });
+
+        // Let the thread finish loading before sending into it. Sending mid-load used to lose the
+        // message on screen; the component now survives that, but the test should still exercise
+        // the ordinary path rather than depend on the fix for its own timing.
+        await WaitUntilLoadedAsync();
         await textArea.FillAsync(uniqueText);
 
         await Page.GetByRole(AriaRole.Button, new() { Name = "Send" }).ClickAsync();
