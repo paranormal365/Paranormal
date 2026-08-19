@@ -92,14 +92,26 @@ public class EquipmentTests : BenTestBase
             "options => options.map(o => o.value).filter(v => v !== '')");
         Assert.That(categories, Is.Not.Empty, "no equipment categories in the taxonomy");
 
+        // Walks makes as well as categories. The make list is not filtered by category — only the
+        // model list is — so a make can be perfectly valid and still have no model in the category
+        // chosen above it. Trying only the first make per category passed for as long as
+        // "Generic / Unbranded" was the only make, because it has a model in every category; the
+        // first real makes in the seed data broke that assumption immediately.
         var reached = false;
         foreach (var category in categories)
         {
             await selects.Nth(0).SelectOptionAsync(category);
-            if (!await PickFirstRealOptionAsync(selects.Nth(1))) continue;   // no makes here
-            if (!await PickFirstRealOptionAsync(selects.Nth(2))) continue;   // no models here
-            reached = true;
-            break;
+
+            var makes = await OptionValuesAsync(selects.Nth(1));
+            foreach (var make in makes)
+            {
+                await selects.Nth(1).SelectOptionAsync(make);
+                if (!await PickFirstRealOptionAsync(selects.Nth(2))) continue;   // no models here
+                reached = true;
+                break;
+            }
+
+            if (reached) break;
         }
 
         Assert.That(reached, Is.True,
@@ -163,12 +175,18 @@ public class EquipmentTests : BenTestBase
     /// list has nothing but the placeholder, so the caller can skip rather than fail on absent
     /// taxonomy data.
     /// </summary>
-    private async Task<bool> PickFirstRealOptionAsync(ILocator select)
+    /// <summary>The real (non-placeholder) option values of a select, once it is enabled.</summary>
+    private async Task<string[]> OptionValuesAsync(ILocator select)
     {
         await Expect(select).ToBeEnabledAsync(new() { Timeout = 8_000 });
 
-        var values = await select.Locator("option").EvaluateAllAsync<string[]>(
+        return await select.Locator("option").EvaluateAllAsync<string[]>(
             "options => options.map(o => o.value).filter(v => v !== '')");
+    }
+
+    private async Task<bool> PickFirstRealOptionAsync(ILocator select)
+    {
+        var values = await OptionValuesAsync(select);
         if (values.Length == 0) return false;
 
         await select.SelectOptionAsync(values[0]);
