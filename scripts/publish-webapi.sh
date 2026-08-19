@@ -55,10 +55,13 @@ dotnet publish "$ROOT/Ben.Data.WebApi" -c Release -r win-x64 --self-contained fa
 # and AppBaseUrl — every one of which turns a feature off silently rather than loudly.
 python3 "$ROOT/scripts/uat-webapi-config.py" \
     "$ROOT/Ben.Data.WebApi/appsettings.Development.json" \
-    "$OUT/appsettings.Production.json" \
+    "$OUT/appsettings.json" \
     "$SQL_CONN" "$FILE_ROOT" "https://ishaunted.com"
 
-rm -f "$OUT/appsettings.Development.json"
+# Both environment-specific files go. Development points at a laptop; Production is no longer
+# written at all, since the settings now live in the base file that loads regardless of what
+# ASPNETCORE_ENVIRONMENT says on the server.
+rm -f "$OUT/appsettings.Development.json" "$OUT/appsettings.Production.json"
 
 # Startup logging. A .NET app that dies before its own logger exists reports HTTP 500.30 and
 # nothing else — the exception goes to stdout, which IIS discards unless this is on. The log

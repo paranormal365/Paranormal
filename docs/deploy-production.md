@@ -73,6 +73,18 @@ setting is right for it.
 The generated `web.config` files use `inheritInChildApplications="false"`, so the root's handler
 does not leak down into the children.
 
+## Why the settings are in appsettings.json, not appsettings.Production.json
+
+An environment-specific settings file loads only when `ASPNETCORE_ENVIRONMENT` matches its name,
+and a copy-deployed package has no say in what that variable says on the far end. The API's upload
+root was in `appsettings.Production.json` and the server started with an environment that did not
+load it — so it fell back to the empty string in the base file and refused to start with
+"FileStorage:RootPath is not configured", for a setting that was sitting right there in the
+package, correctly spelled, and simply never read.
+
+The publish scripts now merge into `appsettings.json`, which loads whatever the environment says,
+and ship no environment-specific file at all.
+
 ## Secrets
 
 The SMTP password is **not** in any file in this repository and must not be. Set it on the server
