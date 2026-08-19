@@ -4852,3 +4852,20 @@ before choosing, since the template ships more patterns than we have adopted.
 
 **Check first** whether the vendored Night skin's palette reaches the Apex variables the way it
 reaches Kendo's; if not, the same bridge trick used for the video editor applies.
+
+---
+
+## 99. Profile page — adopt the template's layout (raised 2026-08-19)
+
+Ben likes the SmartAdmin profile demo and wants our profile page to read like it:
+<https://getwebora.com/smartadmin/demo/profile.html>
+
+The catch is that ours carries considerably more than the demo does — two photos with their
+two-key consent, contact details with their own visibility rules, email confirmation, addresses,
+phones, links, and the investigation map. So this is a layout adoption, not a page swap: take the
+demo's structure (the header band with the avatar and identity, the tabbed/carded body, the
+consistent section rhythm) and fit our sections into it, rather than dropping our controls into a
+page built for fewer of them.
+
+Worth deciding up front which sections are prominent — most people come to this page to change one
+thing — and whether the investigation map belongs on the profile at all or behind its own tab.

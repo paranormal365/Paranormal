@@ -60,23 +60,38 @@ body.k-body {
    show up once a Telerik widget sits beside a Bootstrap one. Both were measured
    off the /styleguide page rather than guessed. */
 
-/* 1. Input metrics. Kendo's inputs came out 39.6px tall at 14.8px type against
-      Bootstrap's 43.6px at 16px — a 4px step that reads as misalignment when a
-      date picker sits next to a text box in the same form row. Match Bootstrap's
-      padding and type so a mixed row lines up. */
+/* 1. Input metrics, measured against the template's own .form-control rather than guessed.
+      Re-measured 2026-08-19 on /styleguide, in the dark theme, because the earlier correction
+      had drifted from what the template actually does:
+
+          .form-control   14px type, 24px line-height, 4px/18px padding, 1px border → 34px tall
+          .k-input        14px type, 22.4px line-height, 4px/12px padding           → 37.7px tall
+
+      A 4px height step and a 6px text inset are both plainly visible the moment a date picker
+      sits beside a text box in the same row, which is exactly where these controls are used. */
 .k-input,
 .k-picker {
-    font-size: .875rem;                       /* tracks .form-control in app.css */
-    line-height: var(--bs-body-line-height);
+    font-size: .875rem;                       /* 14px — tracks .form-control */
+    line-height: 1.5rem;                      /* 24px — the template's, not Kendo's 1.6em */
+    min-height: 2.125rem;                     /* 34px — same box as .form-control */
 }
 
 .k-input .k-input-inner,
 .k-picker .k-input-inner {
-    /* Matches .form-control's padding in app.css. Measure both after changing either — the
-       first attempt used Bootstrap's stock .375rem and left Kendo 4px short of the template's
-       own overridden padding. */
-    padding-block: .25rem;
-    padding-inline: .75rem;
+    /* The wrapper carries the border and the inner carries the padding, so these are the numbers
+       that decide where the text sits. 18px matches the template; Kendo's own 12px left the text
+       visibly further left than in a Bootstrap field beside it. */
+    padding-block: .25rem;                    /* 4px */
+    padding-inline: 1.125rem;                 /* 18px */
+    line-height: 1.5rem;                      /* 24px */
+}
+
+/* The button a picker hangs off its right-hand end (calendar, clock, colour swatch) has to sit in
+   the same 34px box, or the control grows to fit the button instead. */
+.k-picker .k-input-button,
+.k-input .k-input-button {
+    min-height: 2rem;                         /* 32px — the box minus its two borders */
+    padding-block: 0;
 }
 
 /* 2. Grid surface. .k-grid painted itself --bs-body-bg (#212529) while the panel
