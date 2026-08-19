@@ -52,25 +52,25 @@
         @* ── Edit form ────────────────────────────────────────────────────── *@
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" @bind="@_editName" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="organizationview-name-854f">Name <span class="text-danger">*</span></label>
+                <input id="organizationview-name-854f" type="text" class="form-control" @bind="@_editName" @bind:event="oninput" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">URL Name <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" @bind="@_editUrlName" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="organizationview-url-name-f048">URL Name <span class="text-danger">*</span></label>
+                <input id="organizationview-url-name-f048" type="text" class="form-control" @bind="@_editUrlName" @bind:event="oninput" />
                 <div class="form-text">URL-safe slug (lowercase, letters, numbers, hyphens). Must be unique.</div>
             </div>
             <div class="col-md-6">
-                <label class="form-label fw-semibold">Public Phone</label>
-                <input type="text" class="form-control" placeholder="e.g. (615) 555-0100" @bind="@_editPublicPhone" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="organizationview-public-phone-99c6">Public Phone</label>
+                <input id="organizationview-public-phone-99c6" type="text" class="form-control" placeholder="e.g. (615) 555-0100" @bind="@_editPublicPhone" @bind:event="oninput" />
             </div>
             <div class="col-md-6">
-                <label class="form-label fw-semibold">Public Email</label>
-                <input type="text" class="form-control" placeholder="contact@example.com" @bind="@_editPublicEmail" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="organizationview-public-email-9d01">Public Email</label>
+                <input id="organizationview-public-email-9d01" type="text" class="form-control" placeholder="contact@example.com" @bind="@_editPublicEmail" @bind:event="oninput" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Website</label>
-                <input type="text" class="form-control" placeholder="https://example.com" @bind="@_editPublicWebsite" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="organizationview-website-fb04">Website</label>
+                <input id="organizationview-website-fb04" type="text" class="form-control" placeholder="https://example.com" @bind="@_editPublicWebsite" @bind:event="oninput" />
             </div>
             <div class="col-12 d-flex align-items-center gap-2">
                 <input type="checkbox" class="form-check-input" id="edit-accepting-apps" @bind="@_editIsAcceptingApplications" />

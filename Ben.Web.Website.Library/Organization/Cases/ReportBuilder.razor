@@ -84,20 +84,20 @@ else
         <div class="card-header fw-semibold">Report Details</div>
         <div class="card-body row g-2">
             <div class="col-12">
-                <label class="form-label small fw-semibold">Title</label>
-                <input type="text" class="form-control" @bind="@_form.Title" @bind:event="oninput" />
+                <label class="form-label small fw-semibold" for="reportbuilder-title-2aa2">Title</label>
+                <input id="reportbuilder-title-2aa2" type="text" class="form-control" @bind="@_form.Title" @bind:event="oninput" />
             </div>
             <div class="col-md-6">
                 <label class="form-label small fw-semibold">Expected Delivery Date</label>
                 <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_form.ExpectedDeliveryDate" Width="100%" />
             </div>
             <div class="col-12">
-                <label class="form-label small fw-semibold">Executive Summary</label>
-                <textarea class="form-control" rows="4" @bind="@_form.Summary"></textarea>
+                <label class="form-label small fw-semibold" for="reportbuilder-executive-summary-66bf">Executive Summary</label>
+                <textarea id="reportbuilder-executive-summary-66bf" class="form-control" rows="4" @bind="@_form.Summary"></textarea>
             </div>
             <div class="col-12">
-                <label class="form-label small fw-semibold">Conclusion / Determination</label>
-                <textarea class="form-control" rows="4" @bind="@_form.Conclusion"></textarea>
+                <label class="form-label small fw-semibold" for="reportbuilder-conclusion-determination-d0d0">Conclusion / Determination</label>
+                <textarea id="reportbuilder-conclusion-determination-d0d0" class="form-control" rows="4" @bind="@_form.Conclusion"></textarea>
             </div>
             <div class="col-12 text-end">
                 <button type="button" class="btn btn-secondary" @onclick="SaveReport" disabled="@(!(!_saving && !string.IsNullOrWhiteSpace(_form.Title)))">
@@ -149,8 +149,8 @@ else
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" placeholder="e.g. BenCo Investigation Report — Park Residence" @bind="@_newTitle" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="reportbuilder-title-af64">Title <span class="text-danger">*</span></label>
+                <input id="reportbuilder-title-af64" type="text" class="form-control" placeholder="e.g. BenCo Investigation Report — Park Residence" @bind="@_newTitle" @bind:event="oninput" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Expected Delivery Date</label>
@@ -170,16 +170,16 @@ else
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Title</label>
-                <input type="text" class="form-control" @bind="@_sectionTitle" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="reportbuilder-title-cf7b">Title</label>
+                <input id="reportbuilder-title-cf7b" type="text" class="form-control" @bind="@_sectionTitle" @bind:event="oninput" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Type</label>
                 <BenSelect @bind-Value="@_sectionType" Data="@_sectionTypeOptions" TextField="@nameof(SectionTypeOption.Label)" ValueField="@nameof(SectionTypeOption.Value)" Width="100%" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Body (optional)</label>
-                <textarea class="form-control" rows="4" @bind="@_sectionBody"></textarea>
+                <label class="form-label fw-semibold" for="reportbuilder-body-optional-abf8">Body (optional)</label>
+                <textarea id="reportbuilder-body-optional-abf8" class="form-control" rows="4" @bind="@_sectionBody"></textarea>
             </div>
         </div>
     </ChildContent>

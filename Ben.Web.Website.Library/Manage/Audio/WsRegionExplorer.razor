@@ -100,8 +100,8 @@
                         }
                         <div class="row g-2 align-items-end">
                             <div class="col-md-5">
-                                <label class="form-label form-label-sm mb-1">File name / label</label>
-                                <input type="text" class="form-control" placeholder="Optional — auto-generated if blank" @bind="@_clipLabel" @bind:event="oninput" />
+                                <label class="form-label form-label-sm mb-1" for="wsregionexplorer-file-name-label-2f2a">File name / label</label>
+                                <input id="wsregionexplorer-file-name-label-2f2a" type="text" class="form-control" placeholder="Optional — auto-generated if blank" @bind="@_clipLabel" @bind:event="oninput" />
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label form-label-sm mb-1">File type</label>
@@ -234,8 +234,8 @@
 @* ── Edit label dialog ──────────────────────────────────────────────────── *@
 <BenModal @bind-Visible="@_showEditLabelDialog" Title="Edit Region Label" Size="sm">
     <ChildContent>
-        <label class="form-label fw-semibold">Label</label>
-        <input type="text" class="form-control" @bind="@_editLabelText" @bind:event="oninput" />
+        <label class="form-label fw-semibold" for="wsregionexplorer-label-5788">Label</label>
+        <input id="wsregionexplorer-label-5788" type="text" class="form-control" @bind="@_editLabelText" @bind:event="oninput" />
             <div class="dialog-footer-actions">
             <span class="dialog-footer-spacer"></span>
 

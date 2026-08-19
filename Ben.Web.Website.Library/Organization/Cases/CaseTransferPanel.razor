@@ -84,8 +84,8 @@
                 <BenSelect Data="@_otherOrgs" @bind-Value="@_proposeToOrgId" TextField="@nameof(OrgOption.Name)" ValueField="@nameof(OrgOption.Id)" DefaultText="— select organization —" Width="100%" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Reason (optional)</label>
-                <textarea class="form-control" rows="3" placeholder="Explain why the case is being transferred…" @bind="@_proposeReason"></textarea>
+                <label class="form-label fw-semibold" for="casetransferpanel-reason-optional-abb3">Reason (optional)</label>
+                <textarea id="casetransferpanel-reason-optional-abb3" class="form-control" rows="3" placeholder="Explain why the case is being transferred…" @bind="@_proposeReason"></textarea>
             </div>
         </div>
         @if (_dialogError is not null)
@@ -108,8 +108,8 @@
         @if (!_respondAccept)
         {
             <div class="mb-3">
-                <label class="form-label fw-semibold">Reason for rejection (optional)</label>
-                <textarea class="form-control" rows="3" placeholder="Explain why this transfer is being rejected…" @bind="@_rejectReason"></textarea>
+                <label class="form-label fw-semibold" for="casetransferpanel-reason-for-rejection-optional-32a0">Reason for rejection (optional)</label>
+                <textarea id="casetransferpanel-reason-for-rejection-optional-32a0" class="form-control" rows="3" placeholder="Explain why this transfer is being rejected…" @bind="@_rejectReason"></textarea>
             </div>
         }
         else

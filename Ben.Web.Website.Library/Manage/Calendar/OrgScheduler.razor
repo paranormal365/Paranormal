@@ -69,8 +69,8 @@
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" @bind="@_form.Title" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="orgscheduler-title-d7a1">Title <span class="text-danger">*</span></label>
+                <input id="orgscheduler-title-d7a1" type="text" class="form-control" @bind="@_form.Title" @bind:event="oninput" />
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Start</label>
@@ -85,15 +85,15 @@
                 <BenSelect Data="@_eventTypeOptions" @bind-Value="@_form.EventTypeId" TextField="@nameof(EventTypeOption.Label)" ValueField="@nameof(EventTypeOption.Value)" Width="100%" />
             </div>
             <div class="col-md-6">
-                <label class="form-label fw-semibold">Location (optional)</label>
-                <input type="text" class="form-control" placeholder="Room, landmark, or free text" @bind="@_form.Location" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="orgscheduler-location-optional-8e4f">Location (optional)</label>
+                <input id="orgscheduler-location-optional-8e4f" type="text" class="form-control" placeholder="Room, landmark, or free text" @bind="@_form.Location" @bind:event="oninput" />
             </div>
             <div class="col-md-6">
-                <label class="form-label fw-semibold">Or one of our addresses (optional)</label>
+                <label class="form-label fw-semibold" for="orgscheduler-or-one-of-our-2054">Or one of our addresses (optional)</label>
                 @* Plain select — Telerik dropdowns have repeatedly failed to push their selection
                    in this codebase. Stored as a reference, not copied text, so correcting the
                    address corrects every event held there. *@
-                <select class="form-select"
+                <select id="orgscheduler-or-one-of-our-2054" class="form-select"
                         @onchange="@(e => _form.OrganizationAddressId =
                             Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
                     <option value="" selected="@(_form.OrganizationAddressId is null)">(None)</option>
@@ -110,8 +110,8 @@
                 }
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Meeting link (optional)</label>
-                <input type="text" class="form-control" placeholder="Zoom, Teams, Meet — paste the join link" @bind="@_form.MeetingUrl" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="orgscheduler-meeting-link-optional-a1d9">Meeting link (optional)</label>
+                <input id="orgscheduler-meeting-link-optional-a1d9" type="text" class="form-control" placeholder="Zoom, Teams, Meet — paste the join link" @bind="@_form.MeetingUrl" @bind:event="oninput" />
                 <div class="form-text">A bare address like zoom.us/j/123 is fine; https:// is added for you.</div>
             </div>
             <div class="col-12">
@@ -122,11 +122,11 @@
                 <TelerikEditor @bind-Value="@_form.Description" Height="160px" Tools="@_editorTools" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Repeats</label>
+                <label class="form-label fw-semibold" for="orgscheduler-repeats-6f10">Repeats</label>
                 @* Plain select: the Telerik dropdown has repeatedly failed to push its selection
                    in this codebase, and a repeat rule that silently keeps its default would
                    create the wrong series without telling anybody. *@
-                <select class="form-select" @onchange="OnRecurrenceChoiceChanged">
+                <select id="orgscheduler-repeats-6f10" class="form-select" @onchange="OnRecurrenceChoiceChanged">
                     @foreach (var option in RecurrenceOptions())
                     {
                         <option value="@option.Key" selected="@(option.Key == _recurrenceChoice)">@option.Label</option>
@@ -301,8 +301,8 @@
                             </div>
 
                             <div class="col-md-6">
-                                <label class="form-label fw-semibold">Places (optional)</label>
-                                <input type="number" class="form-control" min="1" max="100" step="1" @bind="@_form.AttendeeCapacity" @bind:event="oninput" />
+                                <label class="form-label fw-semibold" for="orgscheduler-places-optional-0730">Places (optional)</label>
+                                <input id="orgscheduler-places-optional-0730" type="number" class="form-control" min="1" max="100" step="1" @bind="@_form.AttendeeCapacity" @bind:event="oninput" />
                                 <div class="form-text">Leave empty for no limit.</div>
                             </div>
 

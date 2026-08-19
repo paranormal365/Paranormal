@@ -172,8 +172,8 @@
                 <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.EventDateTime" Width="100%" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Title (optional)</label>
-                <input type="text" class="form-control" placeholder="Brief summary of the event" @bind="@_form.Title" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="casetimeline-title-optional-5b26">Title (optional)</label>
+                <input id="casetimeline-title-optional-5b26" type="text" class="form-control" placeholder="Brief summary of the event" @bind="@_form.Title" @bind:event="oninput" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Description</label>
@@ -257,12 +257,12 @@
                 </div>
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Who can see this</label>
+                <label class="form-label fw-semibold" for="casetimeline-who-can-see-this-4780">Who can see this</label>
                 @* A plain select, deliberately. The Telerik dropdown did not push its selection
                    in either binding form, and a visibility control that silently keeps its default
                    is a privacy bug — an investigator would believe they'd shared something with the
                    client, or worse, published it. *@
-                <select class="form-select" 
+                <select id="casetimeline-who-can-see-this-4780" class="form-select" 
                         @onchange="@(e => _form.Visibility = (CaseTimelineVisibility)int.Parse(e.Value?.ToString() ?? "0"))">
                     @foreach (var opt in _visibilityOptions)
                     {

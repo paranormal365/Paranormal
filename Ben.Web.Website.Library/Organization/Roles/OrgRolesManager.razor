@@ -31,16 +31,16 @@ else
                 <h6 class="card-title">New Role</h6>
                 <div class="row g-2">
                     <div class="col-sm-6">
-                        <label class="form-label">Name <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" @bind="_createName" @bind:event="oninput" />
+                        <label class="form-label" for="orgrolesmanager-name-32a3">Name <span class="text-danger">*</span></label>
+                        <input id="orgrolesmanager-name-32a3" type="text" class="form-control" @bind="_createName" @bind:event="oninput" />
                     </div>
                     <div class="col-sm-6">
-                        <label class="form-label">Description</label>
-                        <input type="text" class="form-control" @bind="_createDescription" @bind:event="oninput" />
+                        <label class="form-label" for="orgrolesmanager-description-a64a">Description</label>
+                        <input id="orgrolesmanager-description-a64a" type="text" class="form-control" @bind="_createDescription" @bind:event="oninput" />
                     </div>
                     <div class="col-sm-3">
-                        <label class="form-label">Sort Order</label>
-                        <input type="number" class="form-control" min="0" max="100" step="1" @bind="_createSortOrder" @bind:event="oninput" />
+                        <label class="form-label" for="orgrolesmanager-sort-order-940e">Sort Order</label>
+                        <input id="orgrolesmanager-sort-order-940e" type="number" class="form-control" min="0" max="100" step="1" @bind="_createSortOrder" @bind:event="oninput" />
                     </div>
                     <div class="col-sm-3 d-flex align-items-end">
                         <label class="form-label me-2">Active</label>

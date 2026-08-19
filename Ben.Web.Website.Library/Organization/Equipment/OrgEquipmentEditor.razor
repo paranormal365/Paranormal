@@ -31,15 +31,15 @@
         @* Plain inputs: Telerik text boxes commit on blur, which drops the last keystroke when
            Save is clicked straight from the field — and Save is gated on this one. *@
         <div class="mb-2">
-            <label class="form-label fw-semibold">What the group calls it</label>
-            <input class="form-control" maxlength="200" value="@_displayName"
+            <label class="form-label fw-semibold" for="orgequipmenteditor-what-the-group-calls-d894">What the group calls it</label>
+            <input id="orgequipmenteditor-what-the-group-calls-d894" class="form-control" maxlength="200" value="@_displayName"
                    @oninput="@(e => _displayName = e.Value?.ToString() ?? string.Empty)" />
         </div>
 
         <div class="row g-2 mb-2">
             <div class="col-md-6">
-                <label class="form-label fw-semibold">Serial number</label>
-                <input class="form-control" maxlength="100" value="@_serialNumber"
+                <label class="form-label fw-semibold" for="orgequipmenteditor-serial-number-5121">Serial number</label>
+                <input id="orgequipmenteditor-serial-number-5121" class="form-control" maxlength="100" value="@_serialNumber"
                        @oninput="@(e => _serialNumber = e.Value?.ToString() ?? string.Empty)" />
                 <span class="text-secondary small">Only visible to people who can manage equipment.</span>
             </div>
@@ -50,14 +50,14 @@
         </div>
 
         <div class="mb-2">
-            <label class="form-label fw-semibold">Notes</label>
-            <textarea class="form-control" rows="2" maxlength="2000" value="@_notes"
+            <label class="form-label fw-semibold" for="orgequipmenteditor-notes-44c2">Notes</label>
+            <textarea id="orgequipmenteditor-notes-44c2" class="form-control" rows="2" maxlength="2000" value="@_notes"
                       @oninput="@(e => _notes = e.Value?.ToString() ?? string.Empty)"></textarea>
         </div>
 
         <div class="mb-2">
-            <label class="form-label fw-semibold">Manufacturer's page</label>
-            <input class="form-control" maxlength="500" placeholder="https://…" value="@_websiteUrl"
+            <label class="form-label fw-semibold" for="orgequipmenteditor-manufacturer-s-page-5dba">Manufacturer's page</label>
+            <input id="orgequipmenteditor-manufacturer-s-page-5dba" class="form-control" maxlength="500" placeholder="https://…" value="@_websiteUrl"
                    @oninput="@(e => _websiteUrl = e.Value?.ToString() ?? string.Empty)" />
             <div class="form-text">
                 Optional. Gathered with everyone else's links on this make and model's catalog page.

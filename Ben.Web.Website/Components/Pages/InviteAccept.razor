@@ -64,20 +64,20 @@
                     <DataAnnotationsValidator />
 
                     <div class="mb-3">
-                        <label class="form-label">Your Name</label>
-                        <input type="text" class="form-control" placeholder="Jane Doe" @bind="@_model.DisplayName" @bind:event="oninput" />
+                        <label class="form-label" for="inviteaccept-your-name-a392">Your Name</label>
+                        <input id="inviteaccept-your-name-a392" type="text" class="form-control" placeholder="Jane Doe" @bind="@_model.DisplayName" @bind:event="oninput" />
                         <ValidationMessage For="@(() => _model.DisplayName)" class="text-danger small" />
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Password</label>
-                        <input type="text" class="form-control" placeholder="••••••••" @bind="@_model.Password" @bind:event="oninput" />
+                        <label class="form-label" for="inviteaccept-password-87da">Password</label>
+                        <input id="inviteaccept-password-87da" type="text" class="form-control" placeholder="••••••••" @bind="@_model.Password" @bind:event="oninput" />
                         <ValidationMessage For="@(() => _model.Password)" class="text-danger small" />
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Confirm Password</label>
-                        <input type="text" class="form-control" placeholder="••••••••" @bind="@_model.ConfirmPassword" @bind:event="oninput" />
+                        <label class="form-label" for="inviteaccept-confirm-password-d259">Confirm Password</label>
+                        <input id="inviteaccept-confirm-password-d259" type="text" class="form-control" placeholder="••••••••" @bind="@_model.ConfirmPassword" @bind:event="oninput" />
                         <ValidationMessage For="@(() => _model.ConfirmPassword)" class="text-danger small" />
                     </div>
 

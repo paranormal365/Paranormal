@@ -288,11 +288,11 @@ else
                                 </div>
 
                                 <div class="mb-2">
-                                    <label class="small d-block">
+                                    <label class="small d-block" for="audiofilepreview-tolerance-how-far-above-0bad">
                                         Tolerance — how far above the background a sound must rise:
                                         <strong>@_scanOptions.ThresholdDb.ToString("0.0") dB</strong>
                                     </label>
-                                    <input type="range" class="form-range"
+                                    <input id="audiofilepreview-tolerance-how-far-above-0bad" type="range" class="form-range"
                                            min="@EvpDetectionOptions.ThresholdRange.Min"
                                            max="@EvpDetectionOptions.ThresholdRange.Max"
                                            step="0.5"
@@ -547,8 +547,8 @@ else
 @* ── Region label edit dialog ────────────────────────────────── *@
 <BenModal @bind-Visible="@_showEditLabelDialog" Title="Edit Region Label" Size="sm">
     <ChildContent>
-        <label class="form-label fw-semibold">Label</label>
-        <input type="text" class="form-control" @bind="@_editLabelText" @bind:event="oninput" />
+        <label class="form-label fw-semibold" for="audiofilepreview-label-10d4">Label</label>
+        <input id="audiofilepreview-label-10d4" type="text" class="form-control" @bind="@_editLabelText" @bind:event="oninput" />
             <div class="dialog-footer-actions">
             <span class="dialog-footer-spacer"></span>
 
@@ -570,7 +570,7 @@ else
                     <text> – @FormatTime(_markerEndSeconds) <span class="text-secondary">(@((_markerEndSeconds - _markerTimeSeconds).ToString("0.0"))s)</span></text>
                 }
             </div>
-            <label class="d-flex align-items-center gap-2 mt-1 small">
+            <label class="d-flex align-items-center gap-2 mt-1 small" for="audiofilepreview-togglemarkerspan-bool-e-value-dc5d">
                 <input type="checkbox" checked="@_markerIsSpan"
                        @onchange="@(e => ToggleMarkerSpan((bool?)e.Value ?? false))" />
                 Mark a stretch of audio rather than an instant
@@ -579,22 +579,22 @@ else
             {
                 <div class="d-flex align-items-center gap-2 mt-1">
                     <span class="small text-secondary">Ends at</span>
-                    <input type="number" class="form-control" min="0" max="100" step="0.1" style="max-width:110px;" @bind="@_markerEndSeconds" @bind:event="oninput" />
+                    <input id="audiofilepreview-togglemarkerspan-bool-e-value-dc5d" type="number" class="form-control" min="0" max="100" step="0.1" style="max-width:110px;" @bind="@_markerEndSeconds" @bind:event="oninput" />
                     <span class="small text-secondary">s</span>
                 </div>
             }
         </div>
         <div class="mb-2">
-            <label class="form-label fw-semibold">Label</label>
-            <input type="text" class="form-control" placeholder="e.g. Whispered name?" @bind="@_markerLabel" @bind:event="oninput" />
+            <label class="form-label fw-semibold" for="audiofilepreview-label-2807">Label</label>
+            <input id="audiofilepreview-label-2807" type="text" class="form-control" placeholder="e.g. Whispered name?" @bind="@_markerLabel" @bind:event="oninput" />
         </div>
         <div class="mb-2">
             <label class="form-label fw-semibold">Confidence</label>
             <BenSelect Class="form-select-sm" Data="@_confidenceOptions" @bind-Value="_markerConfidence" Width="100%" />
         </div>
         <div class="mb-2">
-            <label class="form-label fw-semibold">Note</label>
-            <textarea class="form-control" rows="3" @bind="@_markerNote"></textarea>
+            <label class="form-label fw-semibold" for="audiofilepreview-note-79d2">Note</label>
+            <textarea id="audiofilepreview-note-79d2" class="form-control" rows="3" @bind="@_markerNote"></textarea>
         </div>
             <div class="dialog-footer-actions">
             <span class="dialog-footer-spacer"></span>
@@ -615,12 +615,12 @@ else
                 · detector score @cc.DetectionScore?.ToString("0")
             </div>
             <div class="mb-2">
-                <label class="form-label fw-semibold">What did you hear?</label>
+                <label class="form-label fw-semibold" for="audiofilepreview-what-did-you-hear-83cf">What did you hear?</label>
                 @* A plain input bound on oninput, not a TelerikTextBox. Telerik's textbox only
                    pushes its value on change/blur, which deadlocked this dialog: the Keep button
                    is gated on the label, so the only thing left to click was disabled, focus never
                    left the field, and the label never bound. *@
-                <input type="text" class="form-control form-control-sm"
+                <input id="audiofilepreview-what-did-you-hear-83cf" type="text" class="form-control form-control-sm"
                        placeholder="e.g. Whispered name?"
                        value="@_confirmLabel"
                        @oninput="@(e => _confirmLabel = e.Value?.ToString() ?? string.Empty)" />
@@ -630,8 +630,8 @@ else
                 <BenSelect Class="form-select-sm" Data="@_confidenceOptions" @bind-Value="_confirmConfidence" Width="100%" />
             </div>
             <div class="mb-2">
-                <label class="form-label fw-semibold">Note</label>
-                <textarea class="form-control" rows="2" @bind="@_confirmNote"></textarea>
+                <label class="form-label fw-semibold" for="audiofilepreview-note-795d">Note</label>
+                <textarea id="audiofilepreview-note-795d" class="form-control" rows="2" @bind="@_confirmNote"></textarea>
             </div>
             @if (_confirmError is not null)
             {
@@ -703,8 +703,8 @@ else
                 </div>
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Label / Description</label>
-                <input type="text" class="form-control" placeholder="Optional — auto-generated if blank" @bind="@_saveClipLabel" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="audiofilepreview-label-description-7e59">Label / Description</label>
+                <input id="audiofilepreview-label-description-7e59" type="text" class="form-control" placeholder="Optional — auto-generated if blank" @bind="@_saveClipLabel" @bind:event="oninput" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">File Type <span class="text-danger">*</span></label>

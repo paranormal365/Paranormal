@@ -107,24 +107,24 @@
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" @bind="@_catForm.Name" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="adminexperiencetaxonomy-name-5f70">Name <span class="text-danger">*</span></label>
+                <input id="adminexperiencetaxonomy-name-5f70" type="text" class="form-control" @bind="@_catForm.Name" @bind:event="oninput" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Description</label>
-                <textarea class="form-control" rows="2" @bind="@_catForm.Description"></textarea>
+                <label class="form-label fw-semibold" for="adminexperiencetaxonomy-description-665f">Description</label>
+                <textarea id="adminexperiencetaxonomy-description-665f" class="form-control" rows="2" @bind="@_catForm.Description"></textarea>
             </div>
             <div class="col-6">
-                <label class="form-label fw-semibold">Icon Class</label>
-                <input type="text" class="form-control" placeholder="e.g. bi bi-ear" @bind="@_catForm.IconClass" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="adminexperiencetaxonomy-icon-class-9751">Icon Class</label>
+                <input id="adminexperiencetaxonomy-icon-class-9751" type="text" class="form-control" placeholder="e.g. bi bi-ear" @bind="@_catForm.IconClass" @bind:event="oninput" />
             </div>
             <div class="col-6">
-                <label class="form-label fw-semibold">Color Class</label>
-                <input type="text" class="form-control" placeholder="e.g. text-warning" @bind="@_catForm.ColorClass" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="adminexperiencetaxonomy-color-class-1d91">Color Class</label>
+                <input id="adminexperiencetaxonomy-color-class-1d91" type="text" class="form-control" placeholder="e.g. text-warning" @bind="@_catForm.ColorClass" @bind:event="oninput" />
             </div>
             <div class="col-6">
-                <label class="form-label fw-semibold">Sort Order</label>
-                <input type="number" class="form-control" min="0" max="100" step="1" @bind="@_catForm.SortOrder" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="adminexperiencetaxonomy-sort-order-c0de">Sort Order</label>
+                <input id="adminexperiencetaxonomy-sort-order-c0de" type="number" class="form-control" min="0" max="100" step="1" @bind="@_catForm.SortOrder" @bind:event="oninput" />
             </div>
             <div class="col-6 d-flex align-items-center gap-2 pt-4">
                 <input type="checkbox" class="form-check-input" id="cat-active" @bind="@_catForm.IsActive" />
@@ -151,20 +151,20 @@
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" @bind="@_typeForm.Name" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="adminexperiencetaxonomy-name-456b">Name <span class="text-danger">*</span></label>
+                <input id="adminexperiencetaxonomy-name-456b" type="text" class="form-control" @bind="@_typeForm.Name" @bind:event="oninput" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Description</label>
-                <textarea class="form-control" rows="2" @bind="@_typeForm.Description"></textarea>
+                <label class="form-label fw-semibold" for="adminexperiencetaxonomy-description-7b68">Description</label>
+                <textarea id="adminexperiencetaxonomy-description-7b68" class="form-control" rows="2" @bind="@_typeForm.Description"></textarea>
             </div>
             <div class="col-8">
-                <label class="form-label fw-semibold">Icon Class</label>
-                <input type="text" class="form-control" placeholder="e.g. bi bi-soundwave" @bind="@_typeForm.IconClass" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="adminexperiencetaxonomy-icon-class-daed">Icon Class</label>
+                <input id="adminexperiencetaxonomy-icon-class-daed" type="text" class="form-control" placeholder="e.g. bi bi-soundwave" @bind="@_typeForm.IconClass" @bind:event="oninput" />
             </div>
             <div class="col-4">
-                <label class="form-label fw-semibold">Sort Order</label>
-                <input type="number" class="form-control" min="0" max="100" step="1" @bind="@_typeForm.SortOrder" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="adminexperiencetaxonomy-sort-order-4dc5">Sort Order</label>
+                <input id="adminexperiencetaxonomy-sort-order-4dc5" type="number" class="form-control" min="0" max="100" step="1" @bind="@_typeForm.SortOrder" @bind:event="oninput" />
             </div>
             <div class="col-12 d-flex align-items-center gap-2">
                 <input type="checkbox" class="form-check-input" id="type-active" @bind="@_typeForm.IsActive" />

@@ -67,12 +67,12 @@ else
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Title <span class="text-secondary fw-normal small">(optional)</span></label>
-                <input type="text" class="form-control" placeholder="e.g. Client background check" @bind="@_formTitle" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="casenotes-title-optional-f955">Title <span class="text-secondary fw-normal small">(optional)</span></label>
+                <input id="casenotes-title-optional-f955" type="text" class="form-control" placeholder="e.g. Client background check" @bind="@_formTitle" @bind:event="oninput" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Body <span class="text-danger">*</span></label>
-                <textarea class="form-control" rows="6" placeholder="Internal note details…" @bind="@_formBody" @bind:event="oninput"></textarea>
+                <label class="form-label fw-semibold" for="casenotes-body-bc4b">Body <span class="text-danger">*</span></label>
+                <textarea id="casenotes-body-bc4b" class="form-control" rows="6" placeholder="Internal note details…" @bind="@_formBody" @bind:event="oninput"></textarea>
             </div>
             <div class="col-12 d-flex align-items-center gap-2">
                 <input type="checkbox" class="form-check-input" id="note-pin" @bind="@_formPinned" />

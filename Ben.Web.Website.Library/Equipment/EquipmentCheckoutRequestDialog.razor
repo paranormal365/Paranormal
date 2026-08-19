@@ -81,8 +81,8 @@
             </div>
 
             <div class="mb-2">
-                <label class="form-label fw-semibold">Anything to add? <span class="text-secondary fw-normal">(optional)</span></label>
-                <textarea class="form-control" rows="2" maxlength="1000" value="@_notes"
+                <label class="form-label fw-semibold" for="equipmentcheckoutrequestdialog-anything-to-add-optional-4285">Anything to add? <span class="text-secondary fw-normal">(optional)</span></label>
+                <textarea id="equipmentcheckoutrequestdialog-anything-to-add-optional-4285" class="form-control" rows="2" maxlength="1000" value="@_notes"
                           @oninput="@(e => _notes = e.Value?.ToString() ?? string.Empty)"></textarea>
             </div>
         }

@@ -97,11 +97,11 @@
                                 @* Editable before publishing: what reads well as a reply to one
                                    person rarely reads well as a public answer. *@
                                 <div class="border rounded p-2 mt-2">
-                                    <label class="form-label fw-semibold small mb-1">Question, as others will read it</label>
-                                    <input class="form-control form-control-sm mb-2" maxlength="500" value="@_promoteQuestion"
+                                    <label class="form-label fw-semibold small mb-1" for="myequipmentquestions-question-as-others-will-71e9">Question, as others will read it</label>
+                                    <input id="myequipmentquestions-question-as-others-will-71e9" class="form-control form-control-sm mb-2" maxlength="500" value="@_promoteQuestion"
                                            @oninput="@(e => _promoteQuestion = e.Value?.ToString() ?? string.Empty)" />
-                                    <label class="form-label fw-semibold small mb-1">Answer</label>
-                                    <textarea class="form-control form-control-sm mb-2" rows="3" maxlength="4000"
+                                    <label class="form-label fw-semibold small mb-1" for="myequipmentquestions-answer-ef8c">Answer</label>
+                                    <textarea id="myequipmentquestions-answer-ef8c" class="form-control form-control-sm mb-2" rows="3" maxlength="4000"
                                               value="@_promoteAnswer"
                                               @oninput="@(e => _promoteAnswer = e.Value?.ToString() ?? string.Empty)"></textarea>
                                     <div class="d-flex gap-2 justify-content-end">

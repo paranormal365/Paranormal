@@ -29,8 +29,8 @@
     @* ── Filters ──────────────────────────────────────────────────────────── *@
     <div class="row g-2 mb-3 align-items-end">
         <div class="col-auto">
-            <label class="form-label small mb-1">Status</label>
-            <select class="form-select form-select-sm" @onchange="OnStatusChanged">
+            <label class="form-label small mb-1" for="adminsupporttickets-status-31c8">Status</label>
+            <select id="adminsupporttickets-status-31c8" class="form-select form-select-sm" @onchange="OnStatusChanged">
                 <option value="" selected="@(_status is null)">All</option>
                 @foreach (var s in Enum.GetValues<SupportTicketStatus>())
                 {
@@ -39,8 +39,8 @@
             </select>
         </div>
         <div class="col-auto">
-            <label class="form-label small mb-1">Topic</label>
-            <select class="form-select form-select-sm" @onchange="OnTopicChanged">
+            <label class="form-label small mb-1" for="adminsupporttickets-topic-d559">Topic</label>
+            <select id="adminsupporttickets-topic-d559" class="form-select form-select-sm" @onchange="OnTopicChanged">
                 <option value="" selected="@(_topic is null)">All</option>
                 @foreach (var t in Enum.GetValues<SupportTicketTopic>())
                 {
@@ -49,8 +49,8 @@
             </select>
         </div>
         <div class="col-12 col-md-4">
-            <label class="form-label small mb-1">Search</label>
-            <input class="form-control form-control-sm" placeholder="Reference, subject, name or email"
+            <label class="form-label small mb-1" for="adminsupporttickets-search-ee3d">Search</label>
+            <input id="adminsupporttickets-search-ee3d" class="form-control form-control-sm" placeholder="Reference, subject, name or email"
                    value="@_search"
                    @oninput="@(e => _search = e.Value?.ToString() ?? "")" />
         </div>

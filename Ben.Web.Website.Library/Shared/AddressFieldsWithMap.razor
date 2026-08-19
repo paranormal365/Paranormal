@@ -31,33 +31,33 @@
                         @oninput="@(e => SetField(e.Value?.ToString() ?? string.Empty, s => s.StreetAddress1 = e.Value?.ToString() ?? string.Empty))" />
     </div>
     <div class="col-12">
-        <label class="form-label">Street Address 2</label>
-        <input type="text" class="form-control"
+        <label class="form-label" for="addressfieldswithmap-street-address-2-3083">Street Address 2</label>
+        <input id="addressfieldswithmap-street-address-2-3083" type="text" class="form-control"
                         value="@State.StreetAddress2"
                         placeholder="Apt, suite, unit, building…"
                         @oninput="@(e => SetField(e.Value?.ToString() ?? string.Empty, s => s.StreetAddress2 = e.Value?.ToString() ?? string.Empty))" />
     </div>
     <div class="col-sm-5">
-        <label class="form-label fw-semibold">City <span class="text-danger">*</span></label>
-        <input type="text" class="form-control"
+        <label class="form-label fw-semibold" for="addressfieldswithmap-city-a301">City <span class="text-danger">*</span></label>
+        <input id="addressfieldswithmap-city-a301" type="text" class="form-control"
                         value="@State.City"
                         @oninput="@(e => SetField(e.Value?.ToString() ?? string.Empty, s => s.City = e.Value?.ToString() ?? string.Empty))" />
     </div>
     <div class="col-sm-3">
-        <label class="form-label fw-semibold">State <span class="text-danger">*</span></label>
-        <input type="text" class="form-control"
+        <label class="form-label fw-semibold" for="addressfieldswithmap-state-c126">State <span class="text-danger">*</span></label>
+        <input id="addressfieldswithmap-state-c126" type="text" class="form-control"
                         value="@State.State"
                         @oninput="@(e => SetField(e.Value?.ToString() ?? string.Empty, s => s.State = e.Value?.ToString() ?? string.Empty))" />
     </div>
     <div class="col-sm-4">
-        <label class="form-label fw-semibold">ZIP <span class="text-danger">*</span></label>
-        <input type="text" class="form-control"
+        <label class="form-label fw-semibold" for="addressfieldswithmap-zip-5af9">ZIP <span class="text-danger">*</span></label>
+        <input id="addressfieldswithmap-zip-5af9" type="text" class="form-control"
                         value="@State.ZipCode"
                         @oninput="@(e => SetField(e.Value?.ToString() ?? string.Empty, s => s.ZipCode = e.Value?.ToString() ?? string.Empty))" />
     </div>
     <div class="col-12">
-        <label class="form-label fw-semibold">Country <span class="text-danger">*</span></label>
-        <input type="text" class="form-control"
+        <label class="form-label fw-semibold" for="addressfieldswithmap-country-401a">Country <span class="text-danger">*</span></label>
+        <input id="addressfieldswithmap-country-401a" type="text" class="form-control"
                         value="@State.Country"
                         @oninput="@(e => SetField(e.Value?.ToString() ?? string.Empty, s => s.Country = e.Value?.ToString() ?? string.Empty))" />
     </div>

@@ -79,19 +79,19 @@ else
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" @bind="@_formTitle" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="caseresearch-title-fa1c">Title <span class="text-danger">*</span></label>
+                <input id="caseresearch-title-fa1c" type="text" class="form-control" @bind="@_formTitle" @bind:event="oninput" />
             </div>
             @if (_dialogType == CaseResearchType.Link)
             {
                 <div class="col-12">
-                    <label class="form-label fw-semibold">URL</label>
-                    <input type="text" class="form-control" placeholder="https://…" @bind="@_formUrl" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="caseresearch-url-963d">URL</label>
+                    <input id="caseresearch-url-963d" type="text" class="form-control" placeholder="https://…" @bind="@_formUrl" @bind:event="oninput" />
                 </div>
             }
             <div class="col-12">
-                <label class="form-label fw-semibold">@(_dialogType == CaseResearchType.Note ? "Content" : "Description")</label>
-                <textarea class="form-control" rows="5" @bind="@_formBody" @bind:event="oninput"></textarea>
+                <label class="form-label fw-semibold" for="caseresearch-field-a931">@(_dialogType == CaseResearchType.Note ? "Content" : "Description")</label>
+                <textarea id="caseresearch-field-a931" class="form-control" rows="5" @bind="@_formBody" @bind:event="oninput"></textarea>
             </div>
         </div>
     </ChildContent>

@@ -24,23 +24,23 @@
 
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Title</label>
+                <label class="form-label fw-semibold" for="newinvestigationwindow-title-48f3">Title</label>
                 @* Plain input: this gates the Save button, and Telerik's binds on blur — a person
                    who types and clicks Save without leaving the field would be told the title is
                    missing while looking straight at it. *@
-                <input class="form-control" value="@_title" @oninput="@(e => _title = e.Value?.ToString() ?? "")"
+                <input id="newinvestigationwindow-title-48f3" class="form-control" value="@_title" @oninput="@(e => _title = e.Value?.ToString() ?? "")"
                        placeholder="Night investigation" />
             </div>
 
             <div class="col-md-6">
-                <label class="form-label fw-semibold">When</label>
-                <input type="datetime-local" class="form-control" value="@_whenText"
+                <label class="form-label fw-semibold" for="newinvestigationwindow-when-60b5">When</label>
+                <input id="newinvestigationwindow-when-60b5" type="datetime-local" class="form-control" value="@_whenText"
                        @oninput="@(e => _whenText = e.Value?.ToString() ?? "")" />
             </div>
 
             <div class="col-md-6">
-                <label class="form-label fw-semibold">Kind of place</label>
-                <select class="form-select" value="@_kind"
+                <label class="form-label fw-semibold" for="newinvestigationwindow-kind-of-place-a45d">Kind of place</label>
+                <select id="newinvestigationwindow-kind-of-place-a45d" class="form-select" value="@_kind"
                         @onchange="@(e => OnKindChanged(e.Value?.ToString()))">
                     <option value="@PlaceKind.PublicLocation" selected="@(_kind == PlaceKind.PublicLocation)">
                         Public location
@@ -52,8 +52,8 @@
             </div>
 
             <div class="col-12">
-                <label class="form-label fw-semibold">Description</label>
-                <textarea class="form-control" rows="2" value="@_description"
+                <label class="form-label fw-semibold" for="newinvestigationwindow-description-e4f1">Description</label>
+                <textarea id="newinvestigationwindow-description-e4f1" class="form-control" rows="2" value="@_description"
                           @oninput="@(e => _description = e.Value?.ToString() ?? "")"
                           placeholder="What is being investigated, and with what equipment?"></textarea>
             </div>
@@ -87,30 +87,30 @@
         {
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">Name <span class="text-secondary small">(a landmark or building)</span></label>
-                    <input class="form-control" value="@_name"
+                    <label class="form-label" for="newinvestigationwindow-name-a-landmark-or-27ff">Name <span class="text-secondary small">(a landmark or building)</span></label>
+                    <input id="newinvestigationwindow-name-a-landmark-or-27ff" class="form-control" value="@_name"
                            @oninput="@(e => OnPlaceFieldChanged(() => _name = e.Value?.ToString() ?? ""))"
                            placeholder="Bell Witch Cave" />
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Street address</label>
-                    <input class="form-control" value="@_street"
+                    <label class="form-label" for="newinvestigationwindow-street-address-8dce">Street address</label>
+                    <input id="newinvestigationwindow-street-address-8dce" class="form-control" value="@_street"
                            @oninput="@(e => OnPlaceFieldChanged(() => _street = e.Value?.ToString() ?? ""))"
                            placeholder="4512 Belmont Blvd" />
                 </div>
                 <div class="col-md-5">
-                    <label class="form-label">City</label>
-                    <input class="form-control" value="@_city"
+                    <label class="form-label" for="newinvestigationwindow-city-94c7">City</label>
+                    <input id="newinvestigationwindow-city-94c7" class="form-control" value="@_city"
                            @oninput="@(e => OnPlaceFieldChanged(() => _city = e.Value?.ToString() ?? ""))" />
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">State</label>
-                    <input class="form-control" value="@_state"
+                    <label class="form-label" for="newinvestigationwindow-state-871f">State</label>
+                    <input id="newinvestigationwindow-state-871f" class="form-control" value="@_state"
                            @oninput="@(e => OnPlaceFieldChanged(() => _state = e.Value?.ToString() ?? ""))" />
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Postcode</label>
-                    <input class="form-control" value="@_zip"
+                    <label class="form-label" for="newinvestigationwindow-postcode-9c56">Postcode</label>
+                    <input id="newinvestigationwindow-postcode-9c56" class="form-control" value="@_zip"
                            @oninput="@(e => OnPlaceFieldChanged(() => _zip = e.Value?.ToString() ?? ""))" />
                 </div>
             </div>
@@ -161,12 +161,12 @@
         <hr class="my-3" />
 
         @* ── Sharing ──────────────────────────────────────────────────────────── *@
-        <label class="form-label fw-semibold">
+        <label class="form-label fw-semibold" for="newinvestigationwindow-who-can-see-the-fea9">
             Who can see the findings<HelpLink Slug="working-a-case" Anchor="who-can-see-the-findings" />
         </label>
         @* Plain select for the same reason as the case-bound form: a dropdown that dropped its
            selection here would silently leave a wider scope in place. *@
-        <select class="form-select" style="max-width:420px;" value="@_visibility"
+        <select id="newinvestigationwindow-who-can-see-the-fea9" class="form-select" style="max-width:420px;" value="@_visibility"
                 @onchange="@(e => _visibility = Enum.TryParse<InvestigationVisibility>(e.Value?.ToString(), out var v) ? v : _visibility)">
             <option value="@InvestigationVisibility.GroupOnly"
                     selected="@(_visibility == InvestigationVisibility.GroupOnly)">

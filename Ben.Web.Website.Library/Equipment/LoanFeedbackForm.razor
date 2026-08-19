@@ -20,10 +20,10 @@
                 <div class="alert alert-danger py-2">@_error</div>
             }
 
-            <label class="form-label fw-semibold small mb-1">
+            <label class="form-label fw-semibold small mb-1" for="loanfeedbackform-field-1f87">
                 @(_state.AsRole == EquipmentFeedbackRole.Lender ? "About the borrower" : "About the lender")
             </label>
-            <textarea class="form-control form-control-sm mb-2" rows="3" maxlength="2000" value="@_comment"
+            <textarea id="loanfeedbackform-field-1f87" class="form-control form-control-sm mb-2" rows="3" maxlength="2000" value="@_comment"
                       @oninput="@(e => _comment = e.Value?.ToString() ?? string.Empty)"></textarea>
 
             <label class="form-label fw-semibold small mb-1">Rating (optional)</label>
@@ -42,8 +42,8 @@
             @* Borrower only: a lender reviewing their own gear would be an advertisement. *@
             @if (_state.AsRole == EquipmentFeedbackRole.Borrower)
             {
-                <label class="form-label fw-semibold small mb-1">About the equipment itself (optional)</label>
-                <textarea class="form-control form-control-sm mb-2" rows="3" maxlength="2000" value="@_productComment"
+                <label class="form-label fw-semibold small mb-1" for="loanfeedbackform-about-the-equipment-itself-4aa9">About the equipment itself (optional)</label>
+                <textarea id="loanfeedbackform-about-the-equipment-itself-4aa9" class="form-control form-control-sm mb-2" rows="3" maxlength="2000" value="@_productComment"
                           @oninput="@(e => _productComment = e.Value?.ToString() ?? string.Empty)"></textarea>
                 <div class="form-text mb-2">
                     This one is public — it appears on the make and model's catalog page, without your name.

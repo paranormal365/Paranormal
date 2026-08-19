@@ -104,8 +104,8 @@
                     You can update the title and assign a case manager later.
                 </p>
                 <div class="mb-3">
-                    <label class="form-label fw-semibold">Case Title <span class="text-secondary fw-normal">(optional)</span></label>
-                    <input type="text" class="form-control" placeholder="Auto-generated from client name and city if blank" @bind="@_acceptTitle" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="orgpendingrequests-case-title-optional-280c">Case Title <span class="text-secondary fw-normal">(optional)</span></label>
+                    <input id="orgpendingrequests-case-title-optional-280c" type="text" class="form-control" placeholder="Auto-generated from client name and city if blank" @bind="@_acceptTitle" @bind:event="oninput" />
                 </div>
                 @if (_actionError is not null)
                 {

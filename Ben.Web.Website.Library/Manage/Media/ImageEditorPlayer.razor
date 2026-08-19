@@ -52,14 +52,14 @@
                     @* Adjustments *@
                     <BenPanel Title="Adjustments" Collapsed="false" Class="mb-2">
                             <div class="d-flex flex-column gap-1 pt-1">
-                                <label class="small">Brightness <span>@_brightness</span></label>
-                                <input type="range" class="form-range" min="-100" max="100" step="5" @bind="_brightness" @bind:event="oninput" @onchange="@ApplyAdjustments" />
-                                <label class="small">Contrast <span>@_contrast</span></label>
-                                <input type="range" class="form-range" min="-100" max="100" step="5" @bind="_contrast" @bind:event="oninput" @onchange="@ApplyAdjustments" />
-                                <label class="small">Saturation <span>@_saturation</span></label>
-                                <input type="range" class="form-range" min="-100" max="100" step="5" @bind="_saturation" @bind:event="oninput" @onchange="@ApplyAdjustments" />
-                                <label class="small">Blur <span>@_blur</span></label>
-                                <input type="range" class="form-range" min="0" max="10" step="1" @bind="_blur" @bind:event="oninput" @onchange="@ApplyAdjustments" />
+                                <label class="small" for="imageeditorplayer-brightness-238c">Brightness <span>@_brightness</span></label>
+                                <input id="imageeditorplayer-brightness-238c" type="range" class="form-range" min="-100" max="100" step="5" @bind="_brightness" @bind:event="oninput" @onchange="@ApplyAdjustments" />
+                                <label class="small" for="imageeditorplayer-contrast-8472">Contrast <span>@_contrast</span></label>
+                                <input id="imageeditorplayer-contrast-8472" type="range" class="form-range" min="-100" max="100" step="5" @bind="_contrast" @bind:event="oninput" @onchange="@ApplyAdjustments" />
+                                <label class="small" for="imageeditorplayer-saturation-a39c">Saturation <span>@_saturation</span></label>
+                                <input id="imageeditorplayer-saturation-a39c" type="range" class="form-range" min="-100" max="100" step="5" @bind="_saturation" @bind:event="oninput" @onchange="@ApplyAdjustments" />
+                                <label class="small" for="imageeditorplayer-blur-fc1c">Blur <span>@_blur</span></label>
+                                <input id="imageeditorplayer-blur-fc1c" type="range" class="form-range" min="0" max="10" step="1" @bind="_blur" @bind:event="oninput" @onchange="@ApplyAdjustments" />
                             </div>
                         </BenPanel>
 
@@ -111,13 +111,13 @@
                                     <BenColorPicker @bind-Value="_drawColor" />
                                     @if (_tool is not "text")
                                     {
-                                        <label class="small">Width @_drawWidth</label>
-                                        <input type="range" class="form-range" min="1" max="20" step="1" @bind="_drawWidth" @bind:event="oninput" />
+                                        <label class="small" for="imageeditorplayer-width-6d61">Width @_drawWidth</label>
+                                        <input id="imageeditorplayer-width-6d61" type="range" class="form-range" min="1" max="20" step="1" @bind="_drawWidth" @bind:event="oninput" />
                                     }
                                     @if (_tool is "text")
                                     {
-                                        <label class="small">Font size @_fontSize</label>
-                                        <input type="range" class="form-range" min="10" max="72" step="2" @bind="_fontSize" @bind:event="oninput" />
+                                        <label class="small" for="imageeditorplayer-font-size-c8f7">Font size @_fontSize</label>
+                                        <input id="imageeditorplayer-font-size-c8f7" type="range" class="form-range" min="10" max="72" step="2" @bind="_fontSize" @bind:event="oninput" />
                                     }
                                 </div>
                             </BenPanel>

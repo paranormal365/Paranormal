@@ -78,16 +78,16 @@
                 <div class="border-top pt-3 mt-3">
                     <div class="row g-3">
                         <div class="col-sm-6">
-                            <label class="form-label small mb-1">Name</label>
+                            <label class="form-label small mb-1" for="orgcalendareventtypesmanager-name-5ed1">Name</label>
                             @* Plain input: Telerik text boxes commit on blur, which drops the last
                                keystroke when Save is clicked straight from the field. *@
-                            <input class="form-control" maxlength="100" placeholder="e.g. Meeting"
+                            <input id="orgcalendareventtypesmanager-name-5ed1" class="form-control" maxlength="100" placeholder="e.g. Meeting"
                                    value="@_formName"
                                    @oninput="@(e => _formName = e.Value?.ToString() ?? string.Empty)" />
                         </div>
                         <div class="col-sm-4">
-                            <label class="form-label small mb-1">Colour</label>
-                            <select class="form-select" value="@_formColorClass"
+                            <label class="form-label small mb-1" for="orgcalendareventtypesmanager-colour-2ebf">Colour</label>
+                            <select id="orgcalendareventtypesmanager-colour-2ebf" class="form-select" value="@_formColorClass"
                                     @onchange="@(e => _formColorClass = e.Value?.ToString() ?? string.Empty)">
                                 @foreach (var option in ColorOptions)
                                 {
@@ -97,8 +97,8 @@
                             <span class="small @_formColorClass">Preview</span>
                         </div>
                         <div class="col-sm-2">
-                            <label class="form-label small mb-1">Order</label>
-                            <input class="form-control" type="number" value="@_formSortOrder"
+                            <label class="form-label small mb-1" for="orgcalendareventtypesmanager-order-c57e">Order</label>
+                            <input id="orgcalendareventtypesmanager-order-c57e" class="form-control" type="number" value="@_formSortOrder"
                                    @oninput="@(e => _formSortOrder = int.TryParse(e.Value?.ToString(), out var n) ? n : 0)" />
                         </div>
                         <div class="col-12">

@@ -69,13 +69,13 @@
         </div>
 
         <div class="mb-3">
-            <label class="form-label fw-semibold">Model</label>
+            <label class="form-label fw-semibold" for="myequipmentitemeditor-model-f471">Model</label>
             <BenSelect Data="@_models" Value="@_modelId" ValueChanged="@((Guid? v) => _modelId = v)" TextField="@nameof(EquipmentModelRecord.Name)" ValueField="@nameof(EquipmentModelRecord.Id)" Enabled="@(_brandId is not null)" DefaultText="Choose a model…" Width="100%" />
 
             @if (_brandId is not null)
             {
                 <div class="d-flex gap-2 mt-2">
-                    <input class="form-control form-control-sm" placeholder="Or add a model that isn't listed"
+                    <input id="myequipmentitemeditor-model-f471" class="form-control form-control-sm" placeholder="Or add a model that isn't listed"
                            value="@_newModelName"
                            @oninput="@(e => _newModelName = e.Value?.ToString() ?? string.Empty)" />
                     <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => AddModelAsync(_newModelName))" disabled="@(!(!_busy && !string.IsNullOrWhiteSpace(_newModelName)))">Add</button>
@@ -95,16 +95,16 @@
         </div>
 
         <div class="mb-3">
-            <label class="form-label fw-semibold">What do you call it?</label>
-            <input class="form-control" maxlength="200" placeholder="e.g. My backup recorder"
+            <label class="form-label fw-semibold" for="myequipmentitemeditor-what-do-you-call-4353">What do you call it?</label>
+            <input id="myequipmentitemeditor-what-do-you-call-4353" class="form-control" maxlength="200" placeholder="e.g. My backup recorder"
                    value="@_displayName"
                    @oninput="@(e => _displayName = e.Value?.ToString() ?? string.Empty)" />
         </div>
 
         <div class="row">
             <div class="col-md-6 mb-3">
-                <label class="form-label fw-semibold">Serial number</label>
-                <input class="form-control" maxlength="100" value="@_serialNumber"
+                <label class="form-label fw-semibold" for="myequipmentitemeditor-serial-number-525c">Serial number</label>
+                <input id="myequipmentitemeditor-serial-number-525c" class="form-control" maxlength="100" value="@_serialNumber"
                        @oninput="@(e => _serialNumber = e.Value?.ToString() ?? string.Empty)" />
                 <div class="form-text">Only ever shown to you.</div>
             </div>
@@ -115,14 +115,14 @@
         </div>
 
         <div class="mb-3">
-            <label class="form-label fw-semibold">Notes</label>
-            <textarea class="form-control" rows="2" maxlength="2000" value="@_notes"
+            <label class="form-label fw-semibold" for="myequipmentitemeditor-notes-cbb3">Notes</label>
+            <textarea id="myequipmentitemeditor-notes-cbb3" class="form-control" rows="2" maxlength="2000" value="@_notes"
                       @oninput="@(e => _notes = e.Value?.ToString() ?? string.Empty)"></textarea>
         </div>
 
         <div class="mb-3">
-            <label class="form-label fw-semibold">Manufacturer's page</label>
-            <input class="form-control" maxlength="500" placeholder="https://…" value="@_websiteUrl"
+            <label class="form-label fw-semibold" for="myequipmentitemeditor-manufacturer-s-page-0f9b">Manufacturer's page</label>
+            <input id="myequipmentitemeditor-manufacturer-s-page-0f9b" class="form-control" maxlength="500" placeholder="https://…" value="@_websiteUrl"
                    @oninput="@(e => _websiteUrl = e.Value?.ToString() ?? string.Empty)" />
             <div class="form-text">
                 Optional. Links added by everyone who owns this make and model are gathered on its

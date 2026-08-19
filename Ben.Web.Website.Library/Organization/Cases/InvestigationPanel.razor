@@ -244,8 +244,8 @@
                                                 <BenSelect Data="@AvailableMembers(i.Id)" @bind-Value="@_newAttendeeUserId" TextField="@nameof(MemberOption.Label)" ValueField="@nameof(MemberOption.UserId)" DefaultText="— select —" Width="180px" />
                                             </div>
                                             <div>
-                                                <label class="form-label mb-1" style="font-size:.8rem;">Role (optional)</label>
-                                                <input type="text" class="form-control" placeholder="Lead Investigator" style="max-width:160px;" @bind="@_newAttendeeRole" @bind:event="oninput" />
+                                                <label class="form-label mb-1" style="font-size:.8rem;" for="investigationpanel-role-optional-3abb">Role (optional)</label>
+                                                <input id="investigationpanel-role-optional-3abb" type="text" class="form-control" placeholder="Lead Investigator" style="max-width:160px;" @bind="@_newAttendeeRole" @bind:event="oninput" />
                                             </div>
                                             <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => AddAttendee(i))" disabled="@(!(_newAttendeeUserId != Guid.Empty && !_attendeeBusy))"><BenIcon Name="plus" Class="me-1" />
                                                 Add
@@ -274,11 +274,11 @@
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" placeholder="Night Investigation #1" @bind="@_form.Title" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="investigationpanel-title-092d">Title <span class="text-danger">*</span></label>
+                <input id="investigationpanel-title-092d" type="text" class="form-control" placeholder="Night Investigation #1" @bind="@_form.Title" @bind:event="oninput" />
             </div>            <div class="col-12">
-                <label class="form-label fw-semibold">Investigation Plan / Description</label>
-                <textarea class="form-control" rows="3" placeholder="What areas will be investigated? What equipment will be used?" @bind="@_form.Description"></textarea>
+                <label class="form-label fw-semibold" for="investigationpanel-investigation-plan-description-32cb">Investigation Plan / Description</label>
+                <textarea id="investigationpanel-investigation-plan-description-32cb" class="form-control" rows="3" placeholder="What areas will be investigated? What equipment will be used?" @bind="@_form.Description"></textarea>
             </div>            <div class="col-md-6">
                 <label class="form-label fw-semibold">Scheduled Date & Time</label>
                 <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.ScheduledDateTime" Width="100%" />
@@ -288,8 +288,8 @@
                 <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.EndDateTime" Width="100%" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Location within property (optional)</label>
-                <input type="text" class="form-control" placeholder="e.g. Basement, Attic" @bind="@_form.Location" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="investigationpanel-location-within-property-optional-0b20">Location within property (optional)</label>
+                <input id="investigationpanel-location-within-property-optional-0b20" type="text" class="form-control" placeholder="e.g. Basement, Attic" @bind="@_form.Location" @bind:event="oninput" />
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Status</label>
@@ -298,8 +298,8 @@
             @if (_editInv is not null)
             {
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Post-Investigation Notes</label>
-                    <textarea class="form-control" rows="4" placeholder="Summary of findings…" @bind="@_form.Notes"></textarea>
+                    <label class="form-label fw-semibold" for="investigationpanel-post-investigation-notes-59ce">Post-Investigation Notes</label>
+                    <textarea id="investigationpanel-post-investigation-notes-59ce" class="form-control" rows="4" placeholder="Summary of findings…" @bind="@_form.Notes"></textarea>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Evidence Due Date (optional)</label>
@@ -309,13 +309,13 @@
             }
 
             <div class="col-12">
-                <label class="form-label fw-semibold">
+                <label class="form-label fw-semibold" for="investigationpanel-who-can-see-the-e9a5">
                     Who can see the findings<HelpLink Slug="working-a-case" Anchor="who-can-see-the-findings" />
                 </label>
                 @* Plain select: a Telerik dropdown that drops its selection would silently leave
                    the previous sharing scope in place, and this is the one field where quietly
                    keeping the old value could publish something. *@
-                <select class="form-select" style="max-width:420px;" value="@_form.Visibility"
+                <select id="investigationpanel-who-can-see-the-e9a5" class="form-select" style="max-width:420px;" value="@_form.Visibility"
                         @onchange="@(e => _form.Visibility = Enum.TryParse<InvestigationVisibility>(e.Value?.ToString(), out var v) ? v : _form.Visibility)">
                     <option value="@InvestigationVisibility.GroupOnly"
                             selected="@(_form.Visibility == InvestigationVisibility.GroupOnly)">

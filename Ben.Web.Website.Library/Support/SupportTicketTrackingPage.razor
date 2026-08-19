@@ -68,12 +68,12 @@
         {
             <div class="card">
                 <div class="card-body">
-                    <label class="form-label fw-semibold">Add to this conversation</label>
+                    <label class="form-label fw-semibold" for="supporttickettrackingpage-add-to-this-conversation-669c">Add to this conversation</label>
                     @if (_error is not null)
                     {
                         <div class="alert alert-danger">@_error</div>
                     }
-                    <textarea class="form-control mb-2" rows="4" maxlength="8000"
+                    <textarea id="supporttickettrackingpage-add-to-this-conversation-669c" class="form-control mb-2" rows="4" maxlength="8000"
                               value="@_reply"
                               @oninput="@(e => _reply = e.Value?.ToString() ?? "")"></textarea>
                     <button type="button" class="btn btn-primary"

@@ -28,16 +28,16 @@ else if (_role is not null)
             <h6 class="card-title">Role Details</h6>
             <div class="row g-3">
                 <div class="col-sm-6">
-                    <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" @bind="_editName" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="orgroleeditor-name-07d6">Name <span class="text-danger">*</span></label>
+                    <input id="orgroleeditor-name-07d6" type="text" class="form-control" @bind="_editName" @bind:event="oninput" />
                 </div>
                 <div class="col-sm-6">
-                    <label class="form-label fw-semibold">Description</label>
-                    <textarea class="form-control" rows="2" @bind="_editDescription"></textarea>
+                    <label class="form-label fw-semibold" for="orgroleeditor-description-d462">Description</label>
+                    <textarea id="orgroleeditor-description-d462" class="form-control" rows="2" @bind="_editDescription"></textarea>
                 </div>
                 <div class="col-sm-3">
-                    <label class="form-label fw-semibold">Sort Order</label>
-                    <input type="number" class="form-control" min="0" max="100" step="1" @bind="_editSortOrder" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="orgroleeditor-sort-order-c8fb">Sort Order</label>
+                    <input id="orgroleeditor-sort-order-c8fb" type="number" class="form-control" min="0" max="100" step="1" @bind="_editSortOrder" @bind:event="oninput" />
                 </div>
                 <div class="col-sm-3 d-flex flex-column">
                     <label class="form-label fw-semibold">Active</label>

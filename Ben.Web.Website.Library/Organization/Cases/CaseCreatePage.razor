@@ -21,13 +21,13 @@
         <div class="card-body">
             <div class="row g-3">
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Case Title <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" placeholder="e.g. Smith, Nashville TN" @bind="@_form.Title" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="casecreatepage-case-title-b1b1">Case Title <span class="text-danger">*</span></label>
+                    <input id="casecreatepage-case-title-b1b1" type="text" class="form-control" placeholder="e.g. Smith, Nashville TN" @bind="@_form.Title" @bind:event="oninput" />
                     <div class="form-text">A brief label identifying this case.</div>
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Description</label>
-                    <textarea class="form-control" rows="4" placeholder="Summarise the reported activity or reason for opening the case…" @bind="@_form.Description"></textarea>
+                    <label class="form-label fw-semibold" for="casecreatepage-description-483a">Description</label>
+                    <textarea id="casecreatepage-description-483a" class="form-control" rows="4" placeholder="Summarise the reported activity or reason for opening the case…" @bind="@_form.Description"></textarea>
                 </div>
 
                 <div class="col-12">
@@ -36,24 +36,24 @@
                 </div>
 
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Street Address <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" placeholder="123 Main St" @bind="@_form.StreetAddress1" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="casecreatepage-street-address-5b76">Street Address <span class="text-danger">*</span></label>
+                    <input id="casecreatepage-street-address-5b76" type="text" class="form-control" placeholder="123 Main St" @bind="@_form.StreetAddress1" @bind:event="oninput" />
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Unit / Apt (optional)</label>
-                    <input type="text" class="form-control" placeholder="Apt 4B" @bind="@_form.StreetAddress2" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="casecreatepage-unit-apt-optional-61d0">Unit / Apt (optional)</label>
+                    <input id="casecreatepage-unit-apt-optional-61d0" type="text" class="form-control" placeholder="Apt 4B" @bind="@_form.StreetAddress2" @bind:event="oninput" />
                 </div>
                 <div class="col-md-5">
-                    <label class="form-label fw-semibold">City <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" @bind="@_form.City" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="casecreatepage-city-4662">City <span class="text-danger">*</span></label>
+                    <input id="casecreatepage-city-4662" type="text" class="form-control" @bind="@_form.City" @bind:event="oninput" />
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label fw-semibold">State <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" placeholder="TN" @bind="@_form.State" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="casecreatepage-state-7b45">State <span class="text-danger">*</span></label>
+                    <input id="casecreatepage-state-7b45" type="text" class="form-control" placeholder="TN" @bind="@_form.State" @bind:event="oninput" />
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label fw-semibold">ZIP Code <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" @bind="@_form.ZipCode" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="casecreatepage-zip-code-ba79">ZIP Code <span class="text-danger">*</span></label>
+                    <input id="casecreatepage-zip-code-ba79" type="text" class="form-control" @bind="@_form.ZipCode" @bind:event="oninput" />
                 </div>
             </div>
         </div>

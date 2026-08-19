@@ -243,17 +243,17 @@
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" @bind="@_pageForm.PageTitle" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="orgcmseditor-title-5a77">Title <span class="text-danger">*</span></label>
+                <input id="orgcmseditor-title-5a77" type="text" class="form-control" @bind="@_pageForm.PageTitle" @bind:event="oninput" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">URL Slug <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" @bind="@_pageForm.UrlName" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="orgcmseditor-url-slug-d5ae">URL Slug <span class="text-danger">*</span></label>
+                <input id="orgcmseditor-url-slug-d5ae" type="text" class="form-control" @bind="@_pageForm.UrlName" @bind:event="oninput" />
                 <div class="form-text">Lowercase, hyphens only (e.g. <code>about-us</code>).</div>
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Summary / Intro HTML</label>
-                <input type="text" class="form-control" @bind="@_pageForm.PageHtml" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="orgcmseditor-summary-intro-html-a301">Summary / Intro HTML</label>
+                <input id="orgcmseditor-summary-intro-html-a301" type="text" class="form-control" @bind="@_pageForm.PageHtml" @bind:event="oninput" />
                 <div class="form-text">Short intro shown above sections. Full editing available in Sections.</div>
             </div>
             @if (_editingPage is null && _pageTemplates.Count > 0)
@@ -270,8 +270,8 @@
                 </div>
             }
             <div class="col-6">
-                <label class="form-label fw-semibold">Sort Order</label>
-                <input type="number" class="form-control" min="0" max="100" step="1" @bind="@_pageForm.SortOrder" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="orgcmseditor-sort-order-c4e7">Sort Order</label>
+                <input id="orgcmseditor-sort-order-c4e7" type="number" class="form-control" min="0" max="100" step="1" @bind="@_pageForm.SortOrder" @bind:event="oninput" />
             </div>
             <div class="col-6">
                 <label class="form-label fw-semibold">Parent Page</label>
@@ -382,8 +382,8 @@
         <hr class="my-3" />
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Alt Text</label>
-                <input type="text" class="form-control" placeholder="Logo alt text (for accessibility)" @bind="@_logoAltText" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="orgcmseditor-alt-text-1e06">Alt Text</label>
+                <input id="orgcmseditor-alt-text-1e06" type="text" class="form-control" placeholder="Logo alt text (for accessibility)" @bind="@_logoAltText" @bind:event="oninput" />
             </div>
             <div class="col-6 d-flex align-items-center gap-2">
                 <input type="checkbox" class="form-check-input" id="logo-active" @bind="@_logoIsActive" />
@@ -440,16 +440,16 @@
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" @bind="@_groupForm.Name" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="orgcmseditor-name-73e2">Name <span class="text-danger">*</span></label>
+                <input id="orgcmseditor-name-73e2" type="text" class="form-control" @bind="@_groupForm.Name" @bind:event="oninput" />
             </div>
             <div class="col-12">
-                <label class="form-label">Description</label>
-                <input type="text" class="form-control" @bind="@_groupForm.Description" @bind:event="oninput" />
+                <label class="form-label" for="orgcmseditor-description-4fc8">Description</label>
+                <input id="orgcmseditor-description-4fc8" type="text" class="form-control" @bind="@_groupForm.Description" @bind:event="oninput" />
             </div>
             <div class="col-md-4">
-                <label class="form-label">Sort Order</label>
-                <input type="number" class="form-control" min="0" max="100" step="1" @bind="@_groupForm.SortOrder" @bind:event="oninput" />
+                <label class="form-label" for="orgcmseditor-sort-order-a4c1">Sort Order</label>
+                <input id="orgcmseditor-sort-order-a4c1" type="number" class="form-control" min="0" max="100" step="1" @bind="@_groupForm.SortOrder" @bind:event="oninput" />
             </div>
             <div class="col-md-8 d-flex align-items-end gap-2">
                 <input type="checkbox" class="form-check-input" id="grp-active" @bind="@_groupForm.IsActive" />

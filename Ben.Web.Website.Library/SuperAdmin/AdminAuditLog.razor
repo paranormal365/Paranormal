@@ -183,9 +183,9 @@
             </div>
 
             <div class="mb-3">
-                <label class="form-label fw-semibold">Recipients</label>
+                <label class="form-label fw-semibold" for="adminauditlog-recipients-cafc">Recipients</label>
                 <div class="d-flex gap-2 mb-2">
-                    <input type="text" class="form-control" placeholder="Search users…" @bind="@_userSearchQuery" @bind:event="oninput" />
+                    <input id="adminauditlog-recipients-cafc" type="text" class="form-control" placeholder="Search users…" @bind="@_userSearchQuery" @bind:event="oninput" />
                 </div>
                 @if (_userSearchResults.Any())
                 {
@@ -215,12 +215,12 @@
             </div>
 
             <div class="mb-3">
-                <label class="form-label fw-semibold">Subject</label>
-                <input type="text" class="form-control" @bind="@_mailSubject" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="adminauditlog-subject-b648">Subject</label>
+                <input id="adminauditlog-subject-b648" type="text" class="form-control" @bind="@_mailSubject" @bind:event="oninput" />
             </div>
             <div class="mb-3">
-                <label class="form-label fw-semibold">Body</label>
-                <textarea class="form-control" rows="6" @bind="@_mailBody"></textarea>
+                <label class="form-label fw-semibold" for="adminauditlog-body-63f4">Body</label>
+                <textarea id="adminauditlog-body-63f4" class="form-control" rows="6" @bind="@_mailBody"></textarea>
             </div>
 
             @if (_mailError is not null)

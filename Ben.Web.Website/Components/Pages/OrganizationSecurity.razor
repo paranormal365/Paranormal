@@ -15,12 +15,12 @@
         <div class="col-md-6">
             <h4>Register Organization</h4>
             <div class="mb-2">
-                <label>Name</label>
-                <input class="form-control" @bind="newOrganizationName" />
+                <label for="organizationsecurity-name-7dea">Name</label>
+                <input id="organizationsecurity-name-7dea" class="form-control" @bind="newOrganizationName" />
             </div>
             <div class="mb-2">
-                <label>Url Name</label>
-                <input class="form-control" @bind="newOrganizationUrlName" />
+                <label for="organizationsecurity-url-name-dda4">Url Name</label>
+                <input id="organizationsecurity-url-name-dda4" class="form-control" @bind="newOrganizationUrlName" />
             </div>
             <button class="btn btn-primary" @onclick="RegisterOrganizationAsync">Register</button>
         </div>
@@ -46,8 +46,8 @@
         <div class="col-md-6">
             <h4>Check My Access</h4>
             <div class="mb-2">
-                <label>Table</label>
-                <select class="form-select" @bind="selectedTable">
+                <label for="organizationsecurity-table-50c9">Table</label>
+                <select id="organizationsecurity-table-50c9" class="form-select" @bind="selectedTable">
                     @foreach (var table in tableOptions)
                     {
                         <option value="@table">@table</option>
@@ -55,8 +55,8 @@
                 </select>
             </div>
             <div class="mb-2">
-                <label>Action</label>
-                <select class="form-select" @bind="selectedAction">
+                <label for="organizationsecurity-action-d74a">Action</label>
+                <select id="organizationsecurity-action-d74a" class="form-select" @bind="selectedAction">
                     @foreach (var action in actionOptions)
                     {
                         <option value="@action">@action</option>
@@ -90,8 +90,8 @@
         <div class="col-md-6">
             <h4>User Search</h4>
             <div class="mb-2">
-                <label>Search users in scope</label>
-                <input class="form-control" @bind="userSearchText" @bind:event="oninput" placeholder="Name, email, or username" />
+                <label for="organizationsecurity-search-users-in-scope-b69f">Search users in scope</label>
+                <input id="organizationsecurity-search-users-in-scope-b69f" class="form-control" @bind="userSearchText" @bind:event="oninput" placeholder="Name, email, or username" />
             </div>
             <button class="btn btn-outline-info mb-2" @onclick="SearchUsersAsync">Search</button>
             <select class="form-select" @bind="selectedTargetUserIdString">
@@ -109,8 +109,8 @@
             <h4>Update Membership</h4>
             <div class="mb-2 text-muted">Uses selected user from User Search.</div>
             <div class="mb-2">
-                <label>Role</label>
-                <select class="form-select" @bind="membershipRole">
+                <label for="organizationsecurity-role-3f90">Role</label>
+                <select id="organizationsecurity-role-3f90" class="form-select" @bind="membershipRole">
                     @foreach (var role in Enum.GetValues<OrganizationMemberRole>())
                     {
                         <option value="@role">@role</option>
@@ -128,8 +128,8 @@
             <h4>Set Grant</h4>
             <div class="mb-2 text-muted">Uses selected user from User Search.</div>
             <div class="mb-2">
-                <label>Table</label>
-                <select class="form-select" @bind="grantTable">
+                <label for="organizationsecurity-table-a399">Table</label>
+                <select id="organizationsecurity-table-a399" class="form-select" @bind="grantTable">
                     @foreach (var table in tableOptions)
                     {
                         <option value="@table">@table</option>
@@ -171,8 +171,8 @@
             <h4>Check Access For User</h4>
             <div class="mb-2 text-muted">Uses selected user from User Search.</div>
             <div class="mb-2">
-                <label>Table</label>
-                <select class="form-select" @bind="checkTable">
+                <label for="organizationsecurity-table-df54">Table</label>
+                <select id="organizationsecurity-table-df54" class="form-select" @bind="checkTable">
                     @foreach (var table in tableOptions)
                     {
                         <option value="@table">@table</option>
@@ -180,8 +180,8 @@
                 </select>
             </div>
             <div class="mb-2">
-                <label>Action</label>
-                <select class="form-select" @bind="checkAction">
+                <label for="organizationsecurity-action-7b49">Action</label>
+                <select id="organizationsecurity-action-7b49" class="form-select" @bind="checkAction">
                     @foreach (var action in actionOptions)
                     {
                         <option value="@action">@action</option>

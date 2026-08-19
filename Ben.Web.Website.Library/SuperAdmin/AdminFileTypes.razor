@@ -92,13 +92,13 @@
         <EditForm Model="_typeForm" OnValidSubmit="SaveType">
             <DataAnnotationsValidator />
             <div class="mb-3">
-                <label class="form-label">Name <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" @bind="_typeForm.Name" @bind:event="oninput" />
+                <label class="form-label" for="adminfiletypes-name-c245">Name <span class="text-danger">*</span></label>
+                <input id="adminfiletypes-name-c245" type="text" class="form-control" @bind="_typeForm.Name" @bind:event="oninput" />
                 <ValidationMessage For="@(() => _typeForm.Name)" />
             </div>
             <div class="mb-3">
-                <label class="form-label">Description</label>
-                <textarea class="form-control" rows="3" @bind="_typeForm.Description"></textarea>
+                <label class="form-label" for="adminfiletypes-description-33f5">Description</label>
+                <textarea id="adminfiletypes-description-33f5" class="form-control" rows="3" @bind="_typeForm.Description"></textarea>
             </div>
             <div class="row mb-3">
                 <div class="col">
@@ -106,14 +106,14 @@
                     <IconClassPicker @bind-Value="_typeForm.IconClass" />
                 </div>
                 <div class="col">
-                    <label class="form-label">Color CSS class</label>
-                    <input type="text" class="form-control" @bind="_typeForm.ColorClass" @bind:event="oninput" />
+                    <label class="form-label" for="adminfiletypes-color-css-class-1cc4">Color CSS class</label>
+                    <input id="adminfiletypes-color-css-class-1cc4" type="text" class="form-control" @bind="_typeForm.ColorClass" @bind:event="oninput" />
                 </div>
             </div>
             <div class="row mb-3">
                 <div class="col-auto">
-                    <label class="form-label">Sort order</label>
-                    <input type="number" class="form-control" min="0" max="100" step="1" style="max-width:90px;" @bind="_typeForm.SortOrder" @bind:event="oninput" />
+                    <label class="form-label" for="adminfiletypes-sort-order-4167">Sort order</label>
+                    <input id="adminfiletypes-sort-order-4167" type="number" class="form-control" min="0" max="100" step="1" style="max-width:90px;" @bind="_typeForm.SortOrder" @bind:event="oninput" />
                 </div>
                 <div class="col-auto d-flex align-items-end gap-3 pb-1">
                     <label>

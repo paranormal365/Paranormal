@@ -50,13 +50,13 @@
                 <div class="alert alert-danger py-2">@_layoutError</div>
             }
 
-            <label class="form-label fw-semibold">Name it</label>
-            <input class="form-control mb-2" maxlength="200" value="@_layoutName"
+            <label class="form-label fw-semibold" for="orgcmspageedit-name-it-cd3e">Name it</label>
+            <input id="orgcmspageedit-name-it-cd3e" class="form-control mb-2" maxlength="200" value="@_layoutName"
                    placeholder="e.g. Investigation Results"
                    @oninput="@(e => _layoutName = e.Value?.ToString() ?? string.Empty)" />
 
-            <label class="form-label fw-semibold">What is it for? (optional)</label>
-            <input class="form-control" maxlength="500" value="@_layoutDescription"
+            <label class="form-label fw-semibold" for="orgcmspageedit-what-is-it-for-abf2">What is it for? (optional)</label>
+            <input id="orgcmspageedit-what-is-it-for-abf2" class="form-control" maxlength="500" value="@_layoutDescription"
                    @oninput="@(e => _layoutDescription = e.Value?.ToString() ?? string.Empty)" />
 
             <div class="form-text mt-2">
@@ -103,8 +103,8 @@
                         </div>
                     }
                     <div class="col-md-6">
-                        <label class="form-label fw-semibold">Section title (optional)</label>
-                        <input type="text" class="form-control" placeholder="Optional heading above this section" @bind="@_sectionForm.Title" @bind:event="oninput" />
+                        <label class="form-label fw-semibold" for="orgcmspageedit-section-title-optional-13b4">Section title (optional)</label>
+                        <input id="orgcmspageedit-section-title-optional-13b4" type="text" class="form-control" placeholder="Optional heading above this section" @bind="@_sectionForm.Title" @bind:event="oninput" />
                     </div>
                     <div class="col-md-2 d-flex align-items-end gap-2 pb-2">
                         <input type="checkbox" class="form-check-input" id="sec-active" @bind="@_sectionForm.IsActive" />
@@ -203,16 +203,16 @@
                     <div class="card-body">
                         <div class="row g-3">
                             <div class="col-md-8">
-                                <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" @bind="@_metaForm.PageTitle" @bind:event="oninput" />
+                                <label class="form-label fw-semibold" for="orgcmspageedit-title-947a">Title <span class="text-danger">*</span></label>
+                                <input id="orgcmspageedit-title-947a" type="text" class="form-control" @bind="@_metaForm.PageTitle" @bind:event="oninput" />
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label fw-semibold">Sort Order</label>
-                                <input type="number" class="form-control" min="0" max="100" step="1" @bind="@_metaForm.SortOrder" @bind:event="oninput" />
+                                <label class="form-label fw-semibold" for="orgcmspageedit-sort-order-d872">Sort Order</label>
+                                <input id="orgcmspageedit-sort-order-d872" type="number" class="form-control" min="0" max="100" step="1" @bind="@_metaForm.SortOrder" @bind:event="oninput" />
                             </div>
                             <div class="col-12">
-                                <label class="form-label fw-semibold">URL Slug <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" @bind="@_metaForm.UrlName" @bind:event="oninput" />
+                                <label class="form-label fw-semibold" for="orgcmspageedit-url-slug-8cc6">URL Slug <span class="text-danger">*</span></label>
+                                <input id="orgcmspageedit-url-slug-8cc6" type="text" class="form-control" @bind="@_metaForm.UrlName" @bind:event="oninput" />
                             </div>
                             <div class="col-md-6 d-flex align-items-center gap-2">
                                 <input type="checkbox" class="form-check-input" id="meta-published" @bind="@_metaForm.IsPublished" />

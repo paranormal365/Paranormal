@@ -149,24 +149,24 @@
 <BenModal @bind-Visible="@_categoryEditorVisible" Title="@(_editingCategory is null ? "New category" : "Edit category")">
     <ChildContent>
         <div class="mb-3">
-            <label class="form-label fw-semibold">Name</label>
-            <input class="form-control" maxlength="100" value="@_catName"
+            <label class="form-label fw-semibold" for="adminequipmenttaxonomy-name-03f7">Name</label>
+            <input id="adminequipmenttaxonomy-name-03f7" class="form-control" maxlength="100" value="@_catName"
                    @oninput="@(e => _catName = e.Value?.ToString() ?? string.Empty)" />
         </div>
         <div class="mb-3">
-            <label class="form-label fw-semibold">Description</label>
-            <input class="form-control" maxlength="500" value="@_catDescription"
+            <label class="form-label fw-semibold" for="adminequipmenttaxonomy-description-668a">Description</label>
+            <input id="adminequipmenttaxonomy-description-668a" class="form-control" maxlength="500" value="@_catDescription"
                    @oninput="@(e => _catDescription = e.Value?.ToString() ?? string.Empty)" />
         </div>
         <div class="row">
             <div class="col-6 mb-3">
-                <label class="form-label fw-semibold">Icon class</label>
-                <input class="form-control" maxlength="100" value="@_catIconClass"
+                <label class="form-label fw-semibold" for="adminequipmenttaxonomy-icon-class-a1c4">Icon class</label>
+                <input id="adminequipmenttaxonomy-icon-class-a1c4" class="form-control" maxlength="100" value="@_catIconClass"
                        @oninput="@(e => _catIconClass = e.Value?.ToString() ?? string.Empty)" />
             </div>
             <div class="col-3 mb-3">
-                <label class="form-label fw-semibold">Order</label>
-                <input type="number" class="form-control" min="0" max="100" step="1" @bind="@_catSortOrder" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="adminequipmenttaxonomy-order-a78d">Order</label>
+                <input id="adminequipmenttaxonomy-order-a78d" type="number" class="form-control" min="0" max="100" step="1" @bind="@_catSortOrder" @bind:event="oninput" />
             </div>
             <div class="col-3 mb-3 d-flex align-items-end">
                 <label class="d-flex align-items-center gap-2 mb-2">

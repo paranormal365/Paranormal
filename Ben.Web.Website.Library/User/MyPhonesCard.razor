@@ -65,20 +65,20 @@
                 <div class="border-top pt-3 mt-3">
                     <div class="row g-2">
                         <div class="col-sm-5">
-                            <label class="form-label small mb-1">Number</label>
-                            <input class="form-control" maxlength="50" placeholder="(555) 555-0123"
+                            <label class="form-label small mb-1" for="myphonescard-number-ab37">Number</label>
+                            <input id="myphonescard-number-ab37" class="form-control" maxlength="50" placeholder="(555) 555-0123"
                                    value="@_formNumber"
                                    @oninput="@(e => _formNumber = e.Value?.ToString() ?? string.Empty)" />
                         </div>
                         <div class="col-sm-3">
-                            <label class="form-label small mb-1">Country</label>
-                            <input class="form-control" maxlength="10" placeholder="US"
+                            <label class="form-label small mb-1" for="myphonescard-country-180e">Country</label>
+                            <input id="myphonescard-country-180e" class="form-control" maxlength="10" placeholder="US"
                                    value="@_formCountry"
                                    @oninput="@(e => _formCountry = e.Value?.ToString() ?? string.Empty)" />
                         </div>
                         <div class="col-sm-4">
-                            <label class="form-label small mb-1">Type</label>
-                            <select class="form-select" value="@_formTypeId"
+                            <label class="form-label small mb-1" for="myphonescard-type-09c5">Type</label>
+                            <select id="myphonescard-type-09c5" class="form-select" value="@_formTypeId"
                                     @onchange="@(e => _formTypeId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : Guid.Empty)">
                                 @foreach (var t in _types)
                                 {

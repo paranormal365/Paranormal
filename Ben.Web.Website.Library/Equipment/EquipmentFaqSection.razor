@@ -57,13 +57,13 @@
         @if (_composing)
         {
             <div class="border rounded p-2 mt-3">
-                <label class="form-label fw-semibold small mb-1">Question</label>
-                <input class="form-control form-control-sm mb-2" maxlength="500" value="@_question"
+                <label class="form-label fw-semibold small mb-1" for="equipmentfaqsection-question-7efc">Question</label>
+                <input id="equipmentfaqsection-question-7efc" class="form-control form-control-sm mb-2" maxlength="500" value="@_question"
                        placeholder="e.g. Does it come with a windscreen?"
                        @oninput="@(e => _question = e.Value?.ToString() ?? string.Empty)" />
 
-                <label class="form-label fw-semibold small mb-1">Answer</label>
-                <textarea class="form-control form-control-sm mb-2" rows="3" maxlength="4000" value="@_answer"
+                <label class="form-label fw-semibold small mb-1" for="equipmentfaqsection-answer-614a">Answer</label>
+                <textarea id="equipmentfaqsection-answer-614a" class="form-control form-control-sm mb-2" rows="3" maxlength="4000" value="@_answer"
                           @oninput="@(e => _answer = e.Value?.ToString() ?? string.Empty)"></textarea>
 
                 <div class="d-flex gap-2 justify-content-end">

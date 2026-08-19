@@ -32,28 +32,28 @@
     <div class="row g-3">
 
         <div class="col-md-6">
-            <label class="form-label fw-semibold">Display Name</label>
-            <input type="text" class="form-control" placeholder="e.g. Jane Smith" @bind="@_form.DisplayName" @bind:event="oninput" />
+            <label class="form-label fw-semibold" for="adminusercreate-display-name-4286">Display Name</label>
+            <input id="adminusercreate-display-name-4286" type="text" class="form-control" placeholder="e.g. Jane Smith" @bind="@_form.DisplayName" @bind:event="oninput" />
         </div>
 
         <div class="col-md-6">
-            <label class="form-label fw-semibold">Username <span class="text-secondary fw-normal">(defaults to email)</span></label>
-            <input type="text" class="form-control" placeholder="Leave blank to use email" @bind="@_form.UserName" @bind:event="oninput" />
+            <label class="form-label fw-semibold" for="adminusercreate-username-defaults-to-email-0b90">Username <span class="text-secondary fw-normal">(defaults to email)</span></label>
+            <input id="adminusercreate-username-defaults-to-email-0b90" type="text" class="form-control" placeholder="Leave blank to use email" @bind="@_form.UserName" @bind:event="oninput" />
         </div>
 
         <div class="col-12">
-            <label class="form-label fw-semibold">Email <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" placeholder="user@example.com" @bind="@_form.Email" @bind:event="oninput" />
+            <label class="form-label fw-semibold" for="adminusercreate-email-0463">Email <span class="text-danger">*</span></label>
+            <input id="adminusercreate-email-0463" type="text" class="form-control" placeholder="user@example.com" @bind="@_form.Email" @bind:event="oninput" />
         </div>
 
         <div class="col-md-6">
-            <label class="form-label fw-semibold">Password <span class="text-danger">*</span></label>
-            <input type="password" class="form-control" @bind="@_form.Password" placeholder="••••••••" />
+            <label class="form-label fw-semibold" for="adminusercreate-password-2989">Password <span class="text-danger">*</span></label>
+            <input id="adminusercreate-password-2989" type="password" class="form-control" @bind="@_form.Password" placeholder="••••••••" />
         </div>
 
         <div class="col-md-6">
-            <label class="form-label fw-semibold">Confirm Password <span class="text-danger">*</span></label>
-            <input type="password" class="form-control" @bind="@_form.ConfirmPassword" placeholder="••••••••" />
+            <label class="form-label fw-semibold" for="adminusercreate-confirm-password-f173">Confirm Password <span class="text-danger">*</span></label>
+            <input id="adminusercreate-confirm-password-f173" type="password" class="form-control" @bind="@_form.ConfirmPassword" placeholder="••••••••" />
         </div>
 
         <div class="col-12 d-flex flex-wrap gap-4 mt-1">

@@ -35,8 +35,8 @@
                     <BenSelect Data="@_fileTypes" Value="@_newUpload.FileTypeId" ValueChanged="@((Guid id) => { _newUpload.FileTypeId = id; _uploadError = GetExtensionError(_selectedFile); })" TextField="@nameof(UploadFileTypeRecord.Name)" ValueField="@nameof(UploadFileTypeRecord.Id)" Width="100%" />
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Description</label>
-                    <input type="text" class="form-control" @bind="@_newUpload.Description" @bind:event="oninput" />
+                    <label class="form-label" for="uploadfiles-description-f23a">Description</label>
+                    <input id="uploadfiles-description-f23a" type="text" class="form-control" @bind="@_newUpload.Description" @bind:event="oninput" />
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
                     <input type="checkbox" class="form-check-input" id="chkPublic" @bind="@_newUpload.IsPublic" />

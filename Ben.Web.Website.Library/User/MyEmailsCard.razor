@@ -105,16 +105,16 @@
                 <div class="border-top pt-3 mt-3">
                     <div class="row g-2">
                         <div class="col-sm-7">
-                            <label class="form-label small mb-1">Address</label>
+                            <label class="form-label small mb-1" for="myemailscard-address-f9a1">Address</label>
                             @* Plain input rather than TelerikTextBox: Telerik binds on blur, which
                                loses the last keystroke when Save is clicked directly. *@
-                            <input class="form-control" type="email" maxlength="250"
+                            <input id="myemailscard-address-f9a1" class="form-control" type="email" maxlength="250"
                                    placeholder="name@example.com" value="@_formAddress"
                                    @oninput="@(e => _formAddress = e.Value?.ToString() ?? string.Empty)" />
                         </div>
                         <div class="col-sm-5">
-                            <label class="form-label small mb-1">Type</label>
-                            <select class="form-select" value="@_formTypeId"
+                            <label class="form-label small mb-1" for="myemailscard-type-0191">Type</label>
+                            <select id="myemailscard-type-0191" class="form-select" value="@_formTypeId"
                                     @onchange="@(e => _formTypeId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : Guid.Empty)">
                                 @foreach (var t in _types)
                                 {

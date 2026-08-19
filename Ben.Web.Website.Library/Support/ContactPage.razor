@@ -50,25 +50,25 @@
                         }
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Your name</label>
+                            <label class="form-label fw-semibold" for="contactpage-your-name-2e62">Your name</label>
                             @* Plain inputs throughout: Telerik text boxes bind on blur in this
                                codebase, which loses the last field edited when Send is clicked. *@
-                            <input class="form-control" maxlength="120"
+                            <input id="contactpage-your-name-2e62" class="form-control" maxlength="120"
                                    value="@_name"
                                    @oninput="@(e => _name = e.Value?.ToString() ?? "")" />
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Your email</label>
-                            <input class="form-control" type="email" maxlength="256"
+                            <label class="form-label fw-semibold" for="contactpage-your-email-1ae6">Your email</label>
+                            <input id="contactpage-your-email-1ae6" class="form-control" type="email" maxlength="256"
                                    value="@_email"
                                    @oninput="@(e => _email = e.Value?.ToString() ?? "")" />
                             <div class="form-text">So we can reply. We don't use it for anything else.</div>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">What's this about?</label>
-                            <select class="form-select"
+                            <label class="form-label fw-semibold" for="contactpage-what-s-this-about-35fe">What's this about?</label>
+                            <select id="contactpage-what-s-this-about-35fe" class="form-select"
                                     @onchange="@(e => _topic = (SupportTicketTopic)int.Parse(e.Value?.ToString() ?? "0"))">
                                 @foreach (var option in _topics)
                                 {
@@ -78,15 +78,15 @@
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Subject</label>
-                            <input class="form-control" maxlength="200"
+                            <label class="form-label fw-semibold" for="contactpage-subject-287e">Subject</label>
+                            <input id="contactpage-subject-287e" class="form-control" maxlength="200"
                                    value="@_subject"
                                    @oninput="@(e => _subject = e.Value?.ToString() ?? "")" />
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Message</label>
-                            <textarea class="form-control" rows="7" maxlength="8000"
+                            <label class="form-label fw-semibold" for="contactpage-message-0df0">Message</label>
+                            <textarea id="contactpage-message-0df0" class="form-control" rows="7" maxlength="8000"
                                       value="@_body"
                                       @oninput="@(e => _body = e.Value?.ToString() ?? "")"></textarea>
                         </div>
@@ -97,8 +97,8 @@
                             to fill. Anything in it means the submission wasn't typed by a human.
                         *@
                         <div class="contact-hp" aria-hidden="true">
-                            <label>Website</label>
-                            <input tabindex="-1" autocomplete="off"
+                            <label for="contactpage-website-2a91">Website</label>
+                            <input id="contactpage-website-2a91" tabindex="-1" autocomplete="off"
                                    value="@_website"
                                    @oninput="@(e => _website = e.Value?.ToString() ?? "")" />
                         </div>

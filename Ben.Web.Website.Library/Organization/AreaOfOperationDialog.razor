@@ -7,12 +7,12 @@
         <div class="p-2">
             <div class="row g-3">
                 <div class="col-12">
-                    <label class="form-label fw-semibold">
+                    <label class="form-label fw-semibold" for="areaofoperationdialog-center-location-use-a-af4a">
                         Center Location
                         <span class="text-secondary fw-normal small ms-1">— use a city or town center, not a personal address</span>
                     </label>
                     <div class="input-group">
-                        <input type="text" class="form-control" placeholder="e.g. Nashville, TN"
+                        <input id="areaofoperationdialog-center-location-use-a-af4a" type="text" class="form-control" placeholder="e.g. Nashville, TN"
                                value="@_locationQuery"
                                @oninput="@(e => OnLocationQueryChanged(e.Value?.ToString() ?? string.Empty))" />
                         <button type="button" class="btn btn-secondary" @onclick="GeocodeLookup" disabled="@(!(!_isBusy && !string.IsNullOrWhiteSpace(_locationQuery)))">
@@ -31,13 +31,13 @@
                     }
                 </div>
                 <div class="col-8">
-                    <label class="form-label fw-semibold">Radius (miles)</label>
-                    <input type="range" class="form-range" min="5m" max="200m" step="5m" @bind="@_radiusMiles" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="areaofoperationdialog-radius-miles-1288">Radius (miles)</label>
+                    <input id="areaofoperationdialog-radius-miles-1288" type="range" class="form-range" min="5m" max="200m" step="5m" @bind="@_radiusMiles" @bind:event="oninput" />
                     <div class="text-secondary small mt-1">@_radiusMiles miles</div>
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Public Display Label</label>
-                    <input type="text" class="form-control" placeholder="e.g. Within 30 miles of Nashville, TN" @bind="@_displayLabel" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="areaofoperationdialog-public-display-label-a05f">Public Display Label</label>
+                    <input id="areaofoperationdialog-public-display-label-a05f" type="text" class="form-control" placeholder="e.g. Within 30 miles of Nashville, TN" @bind="@_displayLabel" @bind:event="oninput" />
                     <div class="form-text">This is what clients see — do not include your exact address.</div>
                 </div>
             </div>

@@ -112,24 +112,24 @@
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" @bind="@_form.Name" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="adminlookuptypes-name-9790">Name <span class="text-danger">*</span></label>
+                <input id="adminlookuptypes-name-9790" type="text" class="form-control" @bind="@_form.Name" @bind:event="oninput" />
             </div>
             <div class="col-12">
-                <label class="form-label">Description</label>
-                <input type="text" class="form-control" @bind="@_form.Description" @bind:event="oninput" />
+                <label class="form-label" for="adminlookuptypes-description-e1cf">Description</label>
+                <input id="adminlookuptypes-description-e1cf" type="text" class="form-control" @bind="@_form.Description" @bind:event="oninput" />
             </div>
             <div class="col-md-6">
                 <label class="form-label">Icon <span class="text-secondary small">(optional)</span></label>
                 <IconClassPicker @bind-Value="@_form.IconClass" />
             </div>
             <div class="col-md-6">
-                <label class="form-label">Color Class</label>
-                <input type="text" class="form-control" @bind="@_form.ColorClass" @bind:event="oninput" />
+                <label class="form-label" for="adminlookuptypes-color-class-089f">Color Class</label>
+                <input id="adminlookuptypes-color-class-089f" type="text" class="form-control" @bind="@_form.ColorClass" @bind:event="oninput" />
             </div>
             <div class="col-md-4">
-                <label class="form-label">Sort Order</label>
-                <input type="number" class="form-control" min="0" max="100" step="1" @bind="@_form.SortOrder" @bind:event="oninput" />
+                <label class="form-label" for="adminlookuptypes-sort-order-f8cb">Sort Order</label>
+                <input id="adminlookuptypes-sort-order-f8cb" type="number" class="form-control" min="0" max="100" step="1" @bind="@_form.SortOrder" @bind:event="oninput" />
             </div>
             <div class="col-md-4 d-flex align-items-end gap-2">
                 <input type="checkbox" class="form-check-input" id="chkActive" @bind="@_form.IsActive" />

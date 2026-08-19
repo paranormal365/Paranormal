@@ -271,8 +271,8 @@
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Case Label <span class="text-secondary fw-normal small">(surname, city state)</span></label>
-                <input type="text" class="form-control" @bind="@_editTitle" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="casedetail-case-label-surname-city-0146">Case Label <span class="text-secondary fw-normal small">(surname, city state)</span></label>
+                <input id="casedetail-case-label-surname-city-0146" type="text" class="form-control" @bind="@_editTitle" @bind:event="oninput" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Status</label>
@@ -283,8 +283,8 @@
                 <TelerikEditor @bind-Value="@_editDescription" Height="200px" />
             </div>
             <div class="col-md-8">
-                <label class="form-label fw-semibold">Public Pseudonym</label>
-                <input type="text" class="form-control" placeholder="e.g. The Henderson Family" @bind="@_editPseudonym" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="casedetail-public-pseudonym-88c6">Public Pseudonym</label>
+                <input id="casedetail-public-pseudonym-88c6" type="text" class="form-control" placeholder="e.g. The Henderson Family" @bind="@_editPseudonym" @bind:event="oninput" />
                 <div class="form-text">Shown on public pages instead of real client name.</div>
             </div>
             <div class="col-md-4 d-flex align-items-center gap-2 pt-4">

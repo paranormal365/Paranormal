@@ -62,8 +62,8 @@
                             <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_entryDate" Width="100%" />
                         </div>
                         <div class="col-md-5">
-                            <label class="form-label small fw-semibold mb-1">Note</label>
-                            <input class="form-control" maxlength="2000" value="@_notes"
+                            <label class="form-label small fw-semibold mb-1" for="orgequipmentservicelog-note-3fd9">Note</label>
+                            <input id="orgequipmentservicelog-note-3fd9" class="form-control" maxlength="2000" value="@_notes"
                                    @oninput="@(e => _notes = e.Value?.ToString() ?? string.Empty)" />
                         </div>
                     </div>

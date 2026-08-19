@@ -41,10 +41,10 @@
         @if (_showCheckIn)
         {
             <div class="border rounded p-3 mt-3">
-                <label class="form-label small mb-1">When did you get there?</label>
+                <label class="form-label small mb-1" for="investigationroster-when-did-you-get-ab36">When did you get there?</label>
                 @* Editable rather than assumed-now. Most sites have no signal, so checking in the
                    next morning and correcting the time is the ordinary path, not an edge case. *@
-                <input type="datetime-local" class="form-control" style="max-width:260px;"
+                <input id="investigationroster-when-did-you-get-ab36" type="datetime-local" class="form-control" style="max-width:260px;"
                        value="@_statedArrival"
                        @oninput="@(e => _statedArrival = e.Value?.ToString() ?? string.Empty)" />
                 <div class="form-text">Leave as-is if you are checking in now.</div>

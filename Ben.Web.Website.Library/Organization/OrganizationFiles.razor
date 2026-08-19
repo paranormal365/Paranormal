@@ -168,8 +168,8 @@
                 <BenSelect Data="@_fileTypes" @bind-Value="@_uploadTypeId" TextField="@nameof(UploadFileTypeRecord.Name)" ValueField="@nameof(UploadFileTypeRecord.Id)" DefaultText="— select —" Width="100%" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Description</label>
-                <input type="text" class="form-control" @bind="@_uploadDescription" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="organizationfiles-description-fc8b">Description</label>
+                <input id="organizationfiles-description-fc8b" type="text" class="form-control" @bind="@_uploadDescription" @bind:event="oninput" />
             </div>
             <div class="col-12 d-flex align-items-center gap-2">
                 <input type="checkbox" class="form-check-input" id="orgfile-pub" @bind="@_uploadIsPublic" />
@@ -191,13 +191,13 @@
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">User File ID (Guid)</label>
-                <input type="text" class="form-control" placeholder="Paste the UploadFile ID..." @bind="@_copySourceId" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="organizationfiles-user-file-id-guid-e00a">User File ID (Guid)</label>
+                <input id="organizationfiles-user-file-id-guid-e00a" type="text" class="form-control" placeholder="Paste the UploadFile ID..." @bind="@_copySourceId" @bind:event="oninput" />
                 <small class="text-secondary">The file must be public or shared with this organization.</small>
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Description <span class="text-secondary small">(blank = keep original)</span></label>
-                <input type="text" class="form-control" @bind="@_copyDescription" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="organizationfiles-description-blank-keep-original-55d2">Description <span class="text-secondary small">(blank = keep original)</span></label>
+                <input id="organizationfiles-description-blank-keep-original-55d2" type="text" class="form-control" @bind="@_copyDescription" @bind:event="oninput" />
             </div>
             <div class="col-12 p-2 rounded" style="background:var(--kendo-color-surface,#f5f5f5)">
                 <p class="small text-secondary mb-1">
@@ -257,12 +257,12 @@
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Description</label>
-                <input type="text" class="form-control" @bind="@_editDescription" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="organizationfiles-description-7c21">Description</label>
+                <input id="organizationfiles-description-7c21" type="text" class="form-control" @bind="@_editDescription" @bind:event="oninput" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Sort Order</label>
-                <input type="number" class="form-control" min="0" max="100" step="1" @bind="@_editSortOrder" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="organizationfiles-sort-order-0af2">Sort Order</label>
+                <input id="organizationfiles-sort-order-0af2" type="number" class="form-control" min="0" max="100" step="1" @bind="@_editSortOrder" @bind:event="oninput" />
             </div>
         </div>
             <div class="dialog-footer-actions">

@@ -489,12 +489,12 @@
                 <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.EventDateTime" Width="100%" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Brief Title (optional)</label>
-                <input type="text" class="form-control" placeholder="e.g. Knocking sounds in basement" @bind="@_form.Title" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="mycasedetail-brief-title-optional-e44e">Brief Title (optional)</label>
+                <input id="mycasedetail-brief-title-optional-e44e" type="text" class="form-control" placeholder="e.g. Knocking sounds in basement" @bind="@_form.Title" @bind:event="oninput" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Description <span class="text-danger">*</span></label>
-                <textarea class="form-control" rows="5" placeholder="Describe what happened in detail…" @bind="@_form.Body" @bind:event="oninput"></textarea>
+                <label class="form-label fw-semibold" for="mycasedetail-description-df0a">Description <span class="text-danger">*</span></label>
+                <textarea id="mycasedetail-description-df0a" class="form-control" rows="5" placeholder="Describe what happened in detail…" @bind="@_form.Body" @bind:event="oninput"></textarea>
             </div>
             @if (_taxonomy.Count > 0)
             {
@@ -555,8 +555,8 @@
         {
             <div class="row g-3">
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Email address of person to add</label>
-                    <input type="text" class="form-control" placeholder="person@example.com" @bind="@_addCoClientEmail" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="mycasedetail-email-address-of-person-baf6">Email address of person to add</label>
+                    <input id="mycasedetail-email-address-of-person-baf6" type="text" class="form-control" placeholder="person@example.com" @bind="@_addCoClientEmail" @bind:event="oninput" />
                     <div class="form-text">If they don't have an account yet, we'll send them an invite to create one.</div>
                     @if (!string.IsNullOrWhiteSpace(_addCoClientEmail) && !IsValidEmailFormat(_addCoClientEmail))
                     {
@@ -615,12 +615,12 @@
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Name</label>
-                <input type="text" class="form-control" placeholder="Full name" @bind="@_newPersonName" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="mycasedetail-name-d0a4">Name</label>
+                <input id="mycasedetail-name-d0a4" type="text" class="form-control" placeholder="Full name" @bind="@_newPersonName" @bind:event="oninput" />
             </div>
             <div class="col-6">
-                <label class="form-label fw-semibold">Age (optional)</label>
-                <input type="number" class="form-control" min="0" max="120" step="1" @bind="@_newPersonAge" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="mycasedetail-age-optional-e00c">Age (optional)</label>
+                <input id="mycasedetail-age-optional-e00c" type="number" class="form-control" min="0" max="120" step="1" @bind="@_newPersonAge" @bind:event="oninput" />
             </div>
             <div class="col-6 d-flex align-items-end">
                 <div class="form-check">
@@ -629,12 +629,12 @@
                 </div>
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Relationship (optional)</label>
-                <input type="text" class="form-control" placeholder="e.g. spouse, neighbor, tenant" @bind="@_newPersonRelationship" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="mycasedetail-relationship-optional-8370">Relationship (optional)</label>
+                <input id="mycasedetail-relationship-optional-8370" type="text" class="form-control" placeholder="e.g. spouse, neighbor, tenant" @bind="@_newPersonRelationship" @bind:event="oninput" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Notes (optional)</label>
-                <textarea class="form-control" rows="2" @bind="@_newPersonNotes"></textarea>
+                <label class="form-label fw-semibold" for="mycasedetail-notes-optional-fd4e">Notes (optional)</label>
+                <textarea id="mycasedetail-notes-optional-fd4e" class="form-control" rows="2" @bind="@_newPersonNotes"></textarea>
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Photo (optional)</label>
@@ -681,8 +681,8 @@
                 <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_counterDateTime" Width="100%" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Notes (optional)</label>
-                <textarea class="form-control" rows="3" placeholder="e.g. I am free weekends only." @bind="@_counterNotes"></textarea>
+                <label class="form-label fw-semibold" for="mycasedetail-notes-optional-70d8">Notes (optional)</label>
+                <textarea id="mycasedetail-notes-optional-70d8" class="form-control" rows="3" placeholder="e.g. I am free weekends only." @bind="@_counterNotes"></textarea>
             </div>
         </div>
     </ChildContent>

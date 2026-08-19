@@ -62,12 +62,12 @@
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Question Text <span class="text-danger">*</span></label>
-                <textarea class="form-control" rows="3" placeholder="e.g. Why do you want to join our organization?" @bind="@_form.QuestionText"></textarea>
+                <label class="form-label fw-semibold" for="organizationmembershipquestions-question-text-856d">Question Text <span class="text-danger">*</span></label>
+                <textarea id="organizationmembershipquestions-question-text-856d" class="form-control" rows="3" placeholder="e.g. Why do you want to join our organization?" @bind="@_form.QuestionText"></textarea>
             </div>
             <div class="col-6">
-                <label class="form-label fw-semibold">Sort Order</label>
-                <input type="number" class="form-control" min="1" max="100" step="1" @bind="@_form.SortOrder" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="organizationmembershipquestions-sort-order-3f8f">Sort Order</label>
+                <input id="organizationmembershipquestions-sort-order-3f8f" type="number" class="form-control" min="1" max="100" step="1" @bind="@_form.SortOrder" @bind:event="oninput" />
             </div>
             <div class="col-6 d-flex flex-column gap-2 pt-4">
                 <div class="d-flex align-items-center gap-2">

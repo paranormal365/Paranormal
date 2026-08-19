@@ -128,8 +128,8 @@
                         <BenSelect Data="@_genderOptions" @bind-Value="@_gender" TextField="@nameof(GenderOption.Label)" ValueField="@nameof(GenderOption.Value)" Width="100%" />
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-semibold">Birth Year (optional)</label>
-                        <input type="number" class="form-control" min="1900" max="@(UserState.NowInViewerTimeZone().Year)" step="1" @bind="@_birthYear" @bind:event="oninput" />
+                        <label class="form-label fw-semibold" for="clientrequestwizard-birth-year-optional-fa78">Birth Year (optional)</label>
+                        <input id="clientrequestwizard-birth-year-optional-fa78" type="number" class="form-control" min="1900" max="@(UserState.NowInViewerTimeZone().Year)" step="1" @bind="@_birthYear" @bind:event="oninput" />
                         <div class="form-text">Leave blank if you prefer not to share.</div>
                     </div>
                 </div>

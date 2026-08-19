@@ -24,22 +24,22 @@
         <div class="card-body">
             <div class="row g-2">
                 <div class="col-12 col-md-5">
-                    <label class="form-label small fw-semibold">Upload file id</label>
-                    <input class="form-control form-control-sm" placeholder="GUID of the uploaded file"
+                    <label class="form-label small fw-semibold" for="adminvideoassets-upload-file-id-ace6">Upload file id</label>
+                    <input id="adminvideoassets-upload-file-id-ace6" class="form-control form-control-sm" placeholder="GUID of the uploaded file"
                            value="@_newFileId"
                            @oninput="@(e => _newFileId = e.Value?.ToString() ?? string.Empty)" />
                 </div>
                 <div class="col-12 col-md-4">
-                    <label class="form-label small fw-semibold">Name</label>
-                    <input class="form-control form-control-sm" placeholder="e.g. Right Arrow"
+                    <label class="form-label small fw-semibold" for="adminvideoassets-name-0e6a">Name</label>
+                    <input id="adminvideoassets-name-0e6a" class="form-control form-control-sm" placeholder="e.g. Right Arrow"
                            value="@_newName"
                            @oninput="@(e => _newName = e.Value?.ToString() ?? string.Empty)" />
                 </div>
                 <div class="col-6 col-md-3">
-                    <label class="form-label small fw-semibold">Kind</label>
+                    <label class="form-label small fw-semibold" for="adminvideoassets-kind-9d4b">Kind</label>
                     @* Plain select — Telerik dropdowns have repeatedly failed to push their
                        selection to the bound field in this codebase. *@
-                    <select class="form-select form-select-sm"
+                    <select id="adminvideoassets-kind-9d4b" class="form-select form-select-sm"
                             value="@((int)_newType)"
                             @onchange="@(e => _newType = (VideoAssetType)int.Parse(e.Value?.ToString() ?? "0"))">
                         @foreach (var t in Enum.GetValues<VideoAssetType>())
@@ -49,14 +49,14 @@
                     </select>
                 </div>
                 <div class="col-6 col-md-4">
-                    <label class="form-label small fw-semibold">Category</label>
-                    <input class="form-control form-control-sm" placeholder="e.g. Arrows"
+                    <label class="form-label small fw-semibold" for="adminvideoassets-category-9679">Category</label>
+                    <input id="adminvideoassets-category-9679" class="form-control form-control-sm" placeholder="e.g. Arrows"
                            value="@_newCategory"
                            @oninput="@(e => _newCategory = e.Value?.ToString() ?? string.Empty)" />
                 </div>
                 <div class="col-12 col-md-5">
-                    <label class="form-label small fw-semibold">Tags</label>
-                    <input class="form-control form-control-sm" placeholder="comma,separated,tags"
+                    <label class="form-label small fw-semibold" for="adminvideoassets-tags-7a8b">Tags</label>
+                    <input id="adminvideoassets-tags-7a8b" class="form-control form-control-sm" placeholder="comma,separated,tags"
                            value="@_newTags"
                            @oninput="@(e => _newTags = e.Value?.ToString() ?? string.Empty)" />
                 </div>

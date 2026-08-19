@@ -193,10 +193,10 @@ else
                                                 ValueChanged="@((string c) => UpdateForm(_form with { RegionFillColor = c }))" />
                         </div>
                         <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold small">
+                            <label class="form-label fw-semibold small" for="addressmapplayer-fill-opacity-tostring-f0-b300">
                                 Fill Opacity: <strong>@((_form.RegionFillOpacity * 100).ToString("F0"))%</strong>
                             </label>
-                            <input type="range" class="form-range" min="0.0" max="1.0" step="0.05"
+                            <input id="addressmapplayer-fill-opacity-tostring-f0-b300" type="range" class="form-range" min="0.0" max="1.0" step="0.05"
                                    value="@_form.RegionFillOpacity"
                                    @oninput="@(e => UpdateForm(_form with { RegionFillOpacity = Math.Round(AsDouble(e.Value, _form.RegionFillOpacity), 2) }))" />
                         </div>
@@ -208,10 +208,10 @@ else
                                                 ValueChanged="@((string c) => UpdateForm(_form with { RegionStrokeColor = c }))" />
                         </div>
                         <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold small">
+                            <label class="form-label fw-semibold small" for="addressmapplayer-border-width-regionstrokewidth-px-fc6c">
                                 Border Width: <strong>@_form.RegionStrokeWidth px</strong>
                             </label>
-                            <input type="range" class="form-range" min="0.0" max="8.0" step="0.5"
+                            <input id="addressmapplayer-border-width-regionstrokewidth-px-fc6c" type="range" class="form-range" min="0.0" max="8.0" step="0.5"
                                    value="@_form.RegionStrokeWidth"
                                    @oninput="@(e => UpdateForm(_form with { RegionStrokeWidth = Math.Round(AsDouble(e.Value, _form.RegionStrokeWidth), 1) }))" />
                         </div>

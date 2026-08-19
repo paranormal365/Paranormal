@@ -74,8 +74,8 @@
                         <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_requestedDate" Width="100%" />
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small fw-semibold mb-1">Why (optional)</label>
-                        <input class="form-control form-control-sm" maxlength="1000" value="@_requestNotes"
+                        <label class="form-label small fw-semibold mb-1" for="equipmentcheckoutdetail-why-optional-e5e7">Why (optional)</label>
+                        <input id="equipmentcheckoutdetail-why-optional-e5e7" class="form-control form-control-sm" maxlength="1000" value="@_requestNotes"
                                @oninput="@(e => _requestNotes = e.Value?.ToString() ?? string.Empty)" />
                     </div>
                     <div class="col-md-2">

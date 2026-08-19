@@ -68,8 +68,8 @@ else
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Message to Client (optional)</label>
-                <textarea class="form-control" rows="2" placeholder="e.g. We have three dates available. Please choose one or suggest another." @bind="@_proposeNotes"></textarea>
+                <label class="form-label fw-semibold" for="schedulingproposalpanel-message-to-client-optional-66d6">Message to Client (optional)</label>
+                <textarea id="schedulingproposalpanel-message-to-client-optional-66d6" class="form-control" rows="2" placeholder="e.g. We have three dates available. Please choose one or suggest another." @bind="@_proposeNotes"></textarea>
             </div>
             <div class="col-12 fw-semibold small">Proposed Date/Time Options</div>
             @for (var i = 0; i < _slots.Count; i++)

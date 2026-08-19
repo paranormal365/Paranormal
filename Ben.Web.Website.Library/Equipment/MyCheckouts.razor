@@ -98,8 +98,8 @@
                                         </div>
                                     </div>
                                     <div class="mb-2">
-                                        <label class="form-label small fw-semibold mb-1">Reason (required to decline)</label>
-                                        <input class="form-control form-control-sm" maxlength="1000"
+                                        <label class="form-label small fw-semibold mb-1" for="mycheckouts-reason-required-to-decline-bd0c">Reason (required to decline)</label>
+                                        <input id="mycheckouts-reason-required-to-decline-bd0c" class="form-control form-control-sm" maxlength="1000"
                                                value="@GetNote(loan.Id)"
                                                @oninput="@(e => _reviewNotes[loan.Id] = e.Value?.ToString() ?? string.Empty)" />
                                     </div>
@@ -111,8 +111,8 @@
                                 else if (loan.Flags.CanReceiveReturn)
                                 {
                                     <div class="mb-2">
-                                        <label class="form-label small fw-semibold mb-1">Condition on return (optional)</label>
-                                        <input class="form-control form-control-sm" maxlength="2000"
+                                        <label class="form-label small fw-semibold mb-1" for="mycheckouts-condition-on-return-optional-a06a">Condition on return (optional)</label>
+                                        <input id="mycheckouts-condition-on-return-optional-a06a" class="form-control form-control-sm" maxlength="2000"
                                                value="@GetNote(loan.Id)"
                                                @oninput="@(e => _reviewNotes[loan.Id] = e.Value?.ToString() ?? string.Empty)" />
                                     </div>

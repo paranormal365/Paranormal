@@ -29,8 +29,8 @@
                 who the other is.
             </div>
 
-            <label class="form-label fw-semibold">Your question</label>
-            <textarea class="form-control" rows="4" maxlength="2000" value="@_text"
+            <label class="form-label fw-semibold" for="askownerdialog-your-question-30e1">Your question</label>
+            <textarea id="askownerdialog-your-question-30e1" class="form-control" rows="4" maxlength="2000" value="@_text"
                       placeholder="e.g. Does it take AA batteries, or is it rechargeable only?"
                       @oninput="@(e => _text = e.Value?.ToString() ?? string.Empty)"></textarea>
         }

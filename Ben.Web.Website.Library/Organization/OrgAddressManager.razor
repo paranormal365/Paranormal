@@ -96,13 +96,13 @@ else
                             <BenSelect Data="@_searchVisibilityOptions" @bind-Value="@_formSearchVisibility" TextField="Label" ValueField="Value" Width="100%" />
                         </div>
                         <div class="col-sm-6">
-                            <label class="form-label">Max search distance (miles)</label>
-                            <input type="number" class="form-control" min="0.1" max="100" step="1" @bind="@_formSearchRadiusMiles" @bind:event="oninput" />
+                            <label class="form-label" for="orgaddressmanager-max-search-distance-miles-9d20">Max search distance (miles)</label>
+                            <input id="orgaddressmanager-max-search-distance-miles-9d20" type="number" class="form-control" min="0.1" max="100" step="1" @bind="@_formSearchRadiusMiles" @bind:event="oninput" />
                         </div>
                     }
                     <div class="col-sm-6">
-                        <label class="form-label">Sort Order</label>
-                        <input type="number" class="form-control" min="0" max="100" step="1" @bind="@_formSortOrder" @bind:event="oninput" />
+                        <label class="form-label" for="orgaddressmanager-sort-order-600d">Sort Order</label>
+                        <input id="orgaddressmanager-sort-order-600d" type="number" class="form-control" min="0" max="100" step="1" @bind="@_formSortOrder" @bind:event="oninput" />
                     </div>
 
                     @* Buttons *@

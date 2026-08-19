@@ -46,20 +46,20 @@ else
             <BenTab Title="Profile">
                 <div class="row g-3 mt-1" style="max-width:760px">
                     <div class="col-md-6">
-                        <label class="form-label fw-semibold">Display Name</label>
-                        <input type="text" class="form-control" @bind="@_edit.DisplayName" @bind:event="oninput" />
+                        <label class="form-label fw-semibold" for="adminuserdetail-display-name-830c">Display Name</label>
+                        <input id="adminuserdetail-display-name-830c" type="text" class="form-control" @bind="@_edit.DisplayName" @bind:event="oninput" />
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-semibold">Username</label>
-                        <input type="text" class="form-control" @bind="@_edit.UserName" @bind:event="oninput" />
+                        <label class="form-label fw-semibold" for="adminuserdetail-username-be2f">Username</label>
+                        <input id="adminuserdetail-username-be2f" type="text" class="form-control" @bind="@_edit.UserName" @bind:event="oninput" />
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-semibold">Email</label>
-                        <input type="text" class="form-control" @bind="@_edit.Email" @bind:event="oninput" />
+                        <label class="form-label fw-semibold" for="adminuserdetail-email-1efa">Email</label>
+                        <input id="adminuserdetail-email-1efa" type="text" class="form-control" @bind="@_edit.Email" @bind:event="oninput" />
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-semibold">Phone</label>
-                        <input type="text" class="form-control" @bind="@_edit.PhoneNumber" @bind:event="oninput" />
+                        <label class="form-label fw-semibold" for="adminuserdetail-phone-410c">Phone</label>
+                        <input id="adminuserdetail-phone-410c" type="text" class="form-control" @bind="@_edit.PhoneNumber" @bind:event="oninput" />
                     </div>
                     <div class="col-12 d-flex flex-wrap gap-4 mt-1">
                         <label class="d-flex align-items-center gap-2"><input type="checkbox" class="form-check-input" @bind="@_edit.IsEmailConfirmed" /> Email Confirmed</label>
@@ -304,8 +304,8 @@ else
                     </div>
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Email Address <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" @bind="@_eml.EmailAddress" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="adminuserdetail-email-address-d159">Email Address <span class="text-danger">*</span></label>
+                    <input id="adminuserdetail-email-address-d159" type="text" class="form-control" @bind="@_eml.EmailAddress" @bind:event="oninput" />
                 </div>
                 <div class="col-md-6 d-flex align-items-center gap-2">
                     <input type="checkbox" class="form-check-input" id="eml-pri" @bind="@_eml.IsPrimary" />
@@ -328,12 +328,12 @@ else
                     </div>
                 </div>
                 <div class="col-md-8">
-                    <label class="form-label fw-semibold">Phone Number <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" @bind="@_phn.PhoneNumber" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="adminuserdetail-phone-number-2d1e">Phone Number <span class="text-danger">*</span></label>
+                    <input id="adminuserdetail-phone-number-2d1e" type="text" class="form-control" @bind="@_phn.PhoneNumber" @bind:event="oninput" />
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label fw-semibold">Country Code</label>
-                    <input type="text" class="form-control" placeholder="+1" @bind="@_phn.PhoneCountry" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="adminuserdetail-country-code-3dcc">Country Code</label>
+                    <input id="adminuserdetail-country-code-3dcc" type="text" class="form-control" placeholder="+1" @bind="@_phn.PhoneCountry" @bind:event="oninput" />
                 </div>
                 <div class="col-md-4 d-flex align-items-center gap-2">
                     <input type="checkbox" class="form-check-input" id="phn-pri" @bind="@_phn.IsPrimary" />
@@ -360,12 +360,12 @@ else
                     </div>
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-semibold">URL <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" placeholder="https://..." @bind="@_lnk.LinkUrl" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="adminuserdetail-url-91df">URL <span class="text-danger">*</span></label>
+                    <input id="adminuserdetail-url-91df" type="text" class="form-control" placeholder="https://..." @bind="@_lnk.LinkUrl" @bind:event="oninput" />
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Display Label</label>
-                    <input type="text" class="form-control" @bind="@_lnk.DisplayText" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="adminuserdetail-display-label-f242">Display Label</label>
+                    <input id="adminuserdetail-display-label-f242" type="text" class="form-control" @bind="@_lnk.DisplayText" @bind:event="oninput" />
                 </div>
                 <div class="col-md-6 d-flex align-items-center gap-2">
                     <input type="checkbox" class="form-check-input" id="lnk-pub" @bind="@_lnk.IsPublic" />
@@ -388,12 +388,12 @@ else
                     </div>
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Subject</label>
-                    <input type="text" class="form-control" @bind="@_nte.NoteSubject" @bind:event="oninput" />
+                    <label class="form-label fw-semibold" for="adminuserdetail-subject-0255">Subject</label>
+                    <input id="adminuserdetail-subject-0255" type="text" class="form-control" @bind="@_nte.NoteSubject" @bind:event="oninput" />
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Body <span class="text-danger">*</span></label>
-                    <textarea class="form-control" rows="4" @bind="_nte.NoteBody"></textarea>
+                    <label class="form-label fw-semibold" for="adminuserdetail-body-70e8">Body <span class="text-danger">*</span></label>
+                    <textarea id="adminuserdetail-body-70e8" class="form-control" rows="4" @bind="_nte.NoteBody"></textarea>
                 </div>
                 <div class="col-md-6 d-flex align-items-center gap-2">
                     <input type="checkbox" class="form-check-input" id="nte-pub" @bind="@_nte.IsPublic" />
@@ -419,12 +419,12 @@ else
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" @bind="@_newTypeName" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="adminuserdetail-name-54c3">Name <span class="text-danger">*</span></label>
+                <input id="adminuserdetail-name-54c3" type="text" class="form-control" @bind="@_newTypeName" @bind:event="oninput" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Description</label>
-                <input type="text" class="form-control" @bind="@_newTypeDescription" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="adminuserdetail-description-7eb8">Description</label>
+                <input id="adminuserdetail-description-7eb8" type="text" class="form-control" @bind="@_newTypeDescription" @bind:event="oninput" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Icon</label>
@@ -433,12 +433,12 @@ else
             </div>
             @* Color Class *@
             <div class="col-12">
-                <label class="form-label fw-semibold">Color Class <span class="text-secondary small">(CSS class, optional)</span></label>
-                <input type="text" class="form-control" placeholder="e.g. text-primary or text-danger" @bind="@_newTypeColorClass" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="adminuserdetail-color-class-css-class-1499">Color Class <span class="text-secondary small">(CSS class, optional)</span></label>
+                <input id="adminuserdetail-color-class-css-class-1499" type="text" class="form-control" placeholder="e.g. text-primary or text-danger" @bind="@_newTypeColorClass" @bind:event="oninput" />
             </div>
             <div class="col-md-4">
-                <label class="form-label fw-semibold">Sort Order</label>
-                <input type="number" class="form-control" min="0" @bind="_newTypeSortOrder" />
+                <label class="form-label fw-semibold" for="adminuserdetail-sort-order-02f0">Sort Order</label>
+                <input id="adminuserdetail-sort-order-02f0" type="number" class="form-control" min="0" @bind="_newTypeSortOrder" />
             </div>
             <div class="col-md-4 d-flex align-items-center gap-2 pt-4">
                 <input type="checkbox" class="form-check-input" id="newtype-act" @bind="@_newTypeIsActive" />
@@ -477,8 +477,8 @@ else
                 }
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Description</label>
-                <input type="text" class="form-control" @bind="@_uploadDescription" @bind:event="oninput" />
+                <label class="form-label fw-semibold" for="adminuserdetail-description-00f4">Description</label>
+                <input id="adminuserdetail-description-00f4" type="text" class="form-control" @bind="@_uploadDescription" @bind:event="oninput" />
             </div>
             <div class="col-12 d-flex align-items-center gap-2">
                 <input type="checkbox" class="form-check-input" id="upl-pub" @bind="@_uploadIsPublic" />
