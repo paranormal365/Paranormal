@@ -129,6 +129,33 @@ public class EquipmentTests : BenTestBase
             Assert.That(detail, Does.Not.Contain("Page not found"));
             Assert.That(detail, Does.Not.Contain("An unhandled error has occurred"));
         }
+
+        await DeleteGearAsync(name);
+    }
+
+    /// <summary>
+    /// Removes gear this fixture created.
+    /// </summary>
+    /// <remarks>
+    /// These run against shared dev data, and without this every run left another "Playwright
+    /// recorder …" in Sarah's equipment for good. A test that quietly accumulates rows makes the
+    /// data it depends on less and less like the data a person would have.
+    /// </remarks>
+    private async Task DeleteGearAsync(string name)
+    {
+        await Page.GotoAsync($"{BaseUrl}/my-equipment");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await WaitUntilLoadedAsync();
+
+        var row = Main.Locator(".card").Filter(new() { HasTextString = name }).First;
+        if (await row.CountAsync() == 0) return;
+
+        var confirm = Page.Locator(".modal.show");
+        await ClickUntilAsync(row.GetByRole(AriaRole.Button, new() { Name = "Delete" }).First, confirm);
+        await confirm.GetByRole(AriaRole.Button, new() { Name = "Delete", Exact = true }).First.ClickAsync();
+
+        await Expect(Main.GetByText(name, new() { Exact = false })).ToHaveCountAsync(0,
+            new() { Timeout = 15_000 });
     }
 
     /// <summary>

@@ -120,6 +120,7 @@ public class CmsAuthoringTests : BenTestBase
         finally
         {
             await visitor.CloseAsync();
+            await DeletePageAsync(title);
         }
     }
 
@@ -166,6 +167,51 @@ public class CmsAuthoringTests : BenTestBase
         finally
         {
             await visitor.CloseAsync();
+            await DeletePageAsync(title);
         }
+    }
+
+    /// <summary>
+    /// Removes a page this fixture created.
+    /// </summary>
+    /// <remarks>
+    /// These run against shared dev data and each run writes a real page. Without this the
+    /// organisation's page list fills with "Playwright page …" entries, and the data the rest of
+    /// the suite reads stops resembling anything a person would have.
+    /// </remarks>
+    private async Task DeletePageAsync(string title)
+    {
+        try
+        {
+            await DeletePageCoreAsync(title);
+        }
+        catch (Exception ex)
+        {
+            // Best effort. Tidying up is not what these tests are about, and a cleanup that throws
+            // would either redden a passing test or bury the real failure underneath it.
+            TestContext.Out.WriteLine($"could not remove the test page \"{title}\": {ex.Message.Split('\n')[0]}");
+        }
+    }
+
+    private async Task DeletePageCoreAsync(string title)
+    {
+        await Page.GotoAsync($"{BaseUrl}/organizations/{_orgId}/cms");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await WaitUntilLoadedAsync();
+
+        var row = Main.Locator("tr", new() { HasTextString = title }).First;
+        if (await row.CountAsync() == 0) return;
+
+        var confirm = Page.Locator(".modal.show");
+        var deleteButton = row.Locator("button.btn-danger, button.btn-outline-danger").First;
+        if (await deleteButton.CountAsync() == 0) return;
+
+        await ClickUntilAsync(deleteButton, confirm);
+        await confirm.GetByRole(AriaRole.Button, new() { Name = "Delete", Exact = true }).First.ClickAsync();
+
+        // Waiting on the row, not on the text: the page reports what it deleted, so the title is
+        // still on screen afterwards and asserting its absence would fail on a successful delete.
+        await Expect(Main.Locator("tr", new() { HasTextString = title }))
+            .ToHaveCountAsync(0, new() { Timeout = 15_000 });
     }
 }
