@@ -393,3 +393,41 @@ html[data-bs-theme="dark"] {
 .set-nav-dark:not([data-bs-theme="dark"]) {
     --app-nav-bg: color-mix(in srgb, var(--primary-900) 55%, var(--secondary-800) 45%);
 }
+
+/* ── Brand block ─────────────────────────────────────────────────────────────
+   The template puts its logo in the header, in a block exactly the sidebar's width
+   (`.app-header .app-logo { width: var(--menu-width) }`) and painted the navigation's colour, so
+   the two read as one column with the brand sitting on top of the sidebar. Ours was a
+   content-width link on the header's white, which is the difference Ben spotted.
+
+   We keep our own element rather than the template's .app-logo class: that class is shaped around
+   the template's own SVG-plus-backdrop markup and a fixed prefix badge, and our wordmark does not
+   fit its internals. Only the box is borrowed — width, ground and the collapse transition.
+
+   The width follows the sidebar's own variables, so minifying the nav takes the brand with it. */
+@media (min-width: 992px) {
+    .app-header .ben-brand {
+        width: var(--menu-width);
+        align-self: stretch;
+        margin-right: 0;
+        padding-inline: 1.25rem;
+        background-color: var(--app-nav-bg);
+        color: #fff;
+        overflow: hidden;
+        will-change: width;
+        transition: width 470ms cubic-bezier(.34, 1.25, .3, 1);
+    }
+
+    /* Minified nav: the block shrinks with it, leaving the mark and hiding the wordmark. */
+    .set-nav-minified:not(.set-nav-collapsed) .app-header .ben-brand {
+        width: var(--menu-width-minified);
+        padding-inline: .75rem;
+    }
+
+    /* !important is not decoration: the wordmark carries Bootstrap's own .d-sm-inline utility,
+       which is declared !important, so a plain rule loses and the text is merely clipped by the
+       narrower block — showing "Is" rather than disappearing. */
+    .set-nav-minified:not(.set-nav-collapsed) .app-header .ben-brand .is-haunted-text {
+        display: none !important;
+    }
+}
