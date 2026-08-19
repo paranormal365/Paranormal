@@ -135,3 +135,16 @@
 .k-animation-container:has(.k-toolbar-popup) {
     z-index: 11600 !important;
 }
+
+/* ── Library-relative asset URLs ─────────────────────────────────────────────
+   A url() in CSS resolves against the stylesheet's own address, and this file is always served
+   from _content/Ben.Video.Editor/css/ — under the site host, under the WASM host, and under any
+   sub-path deployment. That makes it the one place in the library where a relative asset path is
+   both correct and portable, so assets that scoped component CSS needs are declared here and
+   consumed through the variable.
+
+   Scoped CSS cannot do this itself: it is bundled into the *app's* stylesheet, whose depth
+   differs per host, so neither a relative nor a root-absolute path is right in both. */
+:root {
+    --bv-ghost-mask: url('../img/ghost.svg');
+}

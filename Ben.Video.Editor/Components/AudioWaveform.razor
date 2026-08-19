@@ -58,7 +58,7 @@
 </div>
 
 @code {
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/waveformInterop.js";
+    private const string ModulePath = "js/waveformInterop.js";
 
     // ── Parameters ────────────────────────────────────────────────────────────
 
@@ -150,7 +150,7 @@
 
         try
         {
-            _module  ??= await JS.InvokeAsync<IJSObjectReference>("import", ModulePath);
+            _module  ??= await JS.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
             _selfRef ??= DotNetObjectReference.Create(this);
 
             // Height=0 means "let CSS control the size"; pass the string "auto" to WaveSurfer

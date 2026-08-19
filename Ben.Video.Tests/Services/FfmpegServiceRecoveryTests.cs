@@ -43,7 +43,7 @@ public sealed class FfmpegServiceRecoveryTests
 
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
         {
-            if (identifier == "import" && args?[0] is string path)
+            if (identifier == "benImportEditorModule" && args?[0] is string path)
             {
                 if (path.Contains("ffmpegInterop")) return ValueTask.FromResult((TValue)(object)FfmpegModule);
                 if (path.Contains("opfsInterop")) return ValueTask.FromResult((TValue)(object)OpfsModule);
@@ -234,7 +234,7 @@ public sealed class FfmpegServiceRecoveryTests
     {
         public GatedFakeModule Module { get; } = new();
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
-            => identifier == "import"
+            => identifier == "benImportEditorModule"
                 ? ValueTask.FromResult((TValue)(object)Module)
                 : throw new NotSupportedException(identifier);
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken ct, object?[]? args)

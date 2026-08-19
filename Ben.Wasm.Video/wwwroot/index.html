@@ -41,25 +41,23 @@
       }
     </script>
     <link rel="icon" type="image/png" href="favicon.png" />
-    <!-- RCL scoped CSS — must be linked here so it resolves from / not from the current route -->
-    <link href="_content/Ben.Video.Editor/Ben.Video.Editor.bundle.scp.css" rel="stylesheet" />
-    <!-- Intercept Blazor-injected <link> tags that use relative _content/ paths.
-         On sub-routes like /editor the relative path resolves to /editor/_content/...
-         instead of /_content/... — this observer fixes it before the browser requests it.
-         (Carried over from Ben.Video.App, where this bit on every sub-route.) -->
-    <script>
-      (function () {
-        const fix = node => {
-          if (node.nodeType !== 1 || node.tagName !== 'LINK') return;
-          const href = node.getAttribute('href') || '';
-          if (href && !href.startsWith('/') && !href.startsWith('http') && href.includes('_content/')) {
-            node.setAttribute('href', '/' + href);
-          }
-        };
-        const observer = new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(fix)));
-        observer.observe(document.head, { childList: true });
-      })();
-    </script>
+    <!-- Scoped component CSS, through this app's own bundle rather than the library's.
+         Ben.Wasm.Video.styles.css is a one-line @import of the RCL bundle, and publish fingerprints
+         that bundle (Ben.Video.Editor.57vsoqoxwu.bundle.scp.css) while leaving this file's name
+         alone — so this is the stable address, and the import inside it always names the current
+         build. Linking the RCL bundle directly, as this did, worked in development and 404'd in
+         every published build: the browser hands back a stylesheet object with zero rules for a
+         404, so nothing errored and the editor simply rendered with no component styling at all. -->
+    <link href="Ben.Wasm.Video.styles.css" rel="stylesheet" />
+    <!-- An observer used to live here that rewrote every relative _content/… href to a
+         root-absolute /_content/… one, to survive sub-routes like /editor. It was solving a
+         problem <base href> already solves: a relative URL resolves against the base, not against
+         the current route, so the plain relative paths below are correct on every route.
+
+         It has been removed because it was actively wrong for the deployed editor. Production
+         serves the app from https://ishaunted.com/editor/, and rewriting to the site root sent
+         the Kendo theme, both Ben.Video stylesheets and every injected link to an address one
+         directory above where they are published — a 404 each, and an unstyled editor. -->
     <script type="importmap"></script>
     <!-- Kendo's Bootstrap flavour, the same starting point the site uses, so both hosts are
          correcting the same baseline. Meridian was here before and is a *light* theme, which is
@@ -80,6 +78,7 @@
     <!-- Telerik Blazor JS — served from local NuGet package (avoids CDN latency/availability) -->
     <script src="_content/Telerik.UI.for.Blazor/js/telerik-blazor.js"></script>
     <!-- ffmpeg.wasm — served locally so the worker chunk (814.ffmpeg.js) is same-origin -->
+    <script src="_content/Ben.Video.Editor/js/moduleLoader.js"></script>
     <script src="_content/Ben.Video.Editor/js/ffmpeg.umd.js"></script>
 </head>
 

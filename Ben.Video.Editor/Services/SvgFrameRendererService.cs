@@ -21,7 +21,7 @@ public sealed class SvgFrameRendererService : IAsyncDisposable
     private readonly IJSRuntime _js;
     private IJSObjectReference? _module;
 
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/svgFrameRenderer.js";
+    private const string ModulePath = "js/svgFrameRenderer.js";
 
     public SvgFrameRendererService(IJSRuntime js)
     {
@@ -73,7 +73,7 @@ public sealed class SvgFrameRendererService : IAsyncDisposable
 
     private async ValueTask<IJSObjectReference> GetModuleAsync()
     {
-        _module ??= await _js.InvokeAsync<IJSObjectReference>("import", ModulePath);
+        _module ??= await _js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
         return _module;
     }
 

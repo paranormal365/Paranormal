@@ -26,7 +26,7 @@ public sealed class GoogleFontServiceTests
     public async Task EnsureLoadedAsync_GoogleFont_AttemptsJSCall()
     {
         var svc = new GoogleFontService(new NoOpJSRuntime());
-        // NoOpJSRuntime's "import" call returns a null IJSObjectReference, so actually trying to
+        // NoOpJSRuntime's module-import call returns a null IJSObjectReference, so actually trying to
         // invoke ensureFontLoaded on it throws (InvokeVoidAsync's own null-argument guard) — proof
         // the Google Font branch was taken, unlike the system-font case above.
         await Assert.ThrowsAsync<ArgumentNullException>(() => svc.EnsureLoadedAsync("Roboto"));

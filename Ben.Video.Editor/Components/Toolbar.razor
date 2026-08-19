@@ -312,7 +312,7 @@
 
     private async Task<IJSObjectReference> DomAsync() =>
         _dom ??= await JS.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/js/domInterop.js");
+            "benImportEditorModule", "js/domInterop.js");
 
     [Parameter] public bool HasClips            { get; set; }
     [Parameter] public bool ShowMultiTrack      { get; set; }

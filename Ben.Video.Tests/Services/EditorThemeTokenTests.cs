@@ -52,6 +52,21 @@ public sealed class EditorThemeTokenTests
         "--bv-wf-progress",     // per-waveform playback position
     ];
 
+    /// <summary>
+    /// Tokens that carry an asset URL rather than a colour, and so have no palette to follow.
+    /// </summary>
+    /// <remarks>
+    /// These exist because a url() in CSS resolves against the stylesheet's own address, and the
+    /// library's scoped component CSS is bundled into the *app's* stylesheet — at a depth that
+    /// differs per host. ben-video-theme.css is always served from the library's own folder, so it
+    /// is the one file where a relative asset path is correct everywhere, and component CSS reaches
+    /// the asset through the token.
+    /// </remarks>
+    private static readonly string[] AssetTokens =
+    [
+        "--bv-ghost-mask",      // the ghost mark, masked so it takes the theme's colour
+    ];
+
     [Fact]
     public void Every_referenced_editor_token_is_defined()
     {
@@ -92,6 +107,8 @@ public sealed class EditorThemeTokenTests
         {
             var name = m.Groups[1].Value;
             var value = m.Groups[2].Value;
+
+            if (AssetTokens.Contains(name, StringComparer.Ordinal)) continue;
 
             if (!value.Contains("--bs-", StringComparison.Ordinal)
                 && !value.Contains("--bv-", StringComparison.Ordinal))

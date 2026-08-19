@@ -484,7 +484,7 @@
 
     private async Task<IJSObjectReference> DomAsync() =>
         _dom ??= await JS.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/js/domInterop.js");
+            "benImportEditorModule", "js/domInterop.js");
     private TransferProgressState? _transfer;
     private string?       _timelinePreviewUrl;
     private double        _timelinePreviewDuration;
@@ -618,7 +618,7 @@
             if (EffectiveOptions.ProjectPersistence)
                 await Projects.RestoreLastActiveAsync();
 
-            _fullscreenModule = await JS.InvokeAsync<IJSObjectReference>("import", FullscreenModulePath);
+            _fullscreenModule = await JS.InvokeAsync<IJSObjectReference>("benImportEditorModule", FullscreenModulePath);
             _fullscreenSelfRef = DotNetObjectReference.Create(this);
             await _fullscreenModule.InvokeVoidAsync("addChangeListener", _fullscreenSelfRef);
 
@@ -669,7 +669,7 @@
 
     // ── Fullscreen toggle ────────────────────────────────────────────────────────
 
-    private const string FullscreenModulePath = "/_content/Ben.Video.Editor/js/fullscreenInterop.js";
+    private const string FullscreenModulePath = "js/fullscreenInterop.js";
     private IJSObjectReference?              _fullscreenModule;
     private DotNetObjectReference<VideoEditor>? _fullscreenSelfRef;
     private ElementReference                 _editorRoot;
@@ -677,7 +677,7 @@
 
     // ── Preview popout ───────────────────────────────────────────────────────────
 
-    private const string ViewportModulePath = "/_content/Ben.Video.Editor/js/viewportInterop.js";
+    private const string ViewportModulePath = "js/viewportInterop.js";
     private IJSObjectReference? _viewportModule;
 
     private bool   _isPoppedOut;
@@ -698,7 +698,7 @@
 
     private async Task OpenPopoutAsync()
     {
-        _viewportModule ??= await JS.InvokeAsync<IJSObjectReference>("import", ViewportModulePath);
+        _viewportModule ??= await JS.InvokeAsync<IJSObjectReference>("benImportEditorModule", ViewportModulePath);
         var viewport = await _viewportModule.InvokeAsync<ViewportSize>("getViewportSize");
 
         var aspect = ExportRes.Height > 0 ? (double)ExportRes.Width / ExportRes.Height : 16.0 / 9.0;
@@ -836,7 +836,7 @@
 
     private async Task OpenFullQualityWindowAsync()
     {
-        _viewportModule ??= await JS.InvokeAsync<IJSObjectReference>("import", ViewportModulePath);
+        _viewportModule ??= await JS.InvokeAsync<IJSObjectReference>("benImportEditorModule", ViewportModulePath);
         var viewport = await _viewportModule.InvokeAsync<ViewportSize>("getViewportSize");
         var aspect = ExportRes.Height > 0 ? (double)ExportRes.Width / ExportRes.Height : 16.0 / 9.0;
 

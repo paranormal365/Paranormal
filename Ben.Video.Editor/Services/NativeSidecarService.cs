@@ -29,7 +29,7 @@ public sealed class NativeSidecarService(
     IJSRuntime js,
     ISidecarPairingReporter? pairingReporter = null) : IAsyncDisposable
 {
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/sidecarInterop.js";
+    private const string ModulePath = "js/sidecarInterop.js";
     private IJSObjectReference? _module;
 
     /// <summary>Per-port budget for the discovery scan. Short on purpose: with nothing installed
@@ -301,7 +301,7 @@ public sealed class NativeSidecarService(
     private async Task EnsureModuleAsync()
     {
         if (_module is not null) return;
-        try { _module = await js.InvokeAsync<IJSObjectReference>("import", ModulePath); }
+        try { _module = await js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath); }
         catch { /* stays null — every caller already treats that as "unavailable" */ }
     }
 

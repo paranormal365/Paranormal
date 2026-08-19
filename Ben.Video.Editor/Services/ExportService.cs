@@ -42,7 +42,7 @@ public sealed class ExportService : IAsyncDisposable
 
     private async Task<IJSObjectReference> DomAsync() =>
         _dom ??= await _js.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/js/domInterop.js");
+            "benImportEditorModule", "js/domInterop.js");
     private readonly SidecarExportAssembler _nativeExportAssembler;
     private readonly ErrorLogService       _errorLog;
 

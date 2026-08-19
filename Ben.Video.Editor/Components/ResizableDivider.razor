@@ -18,7 +18,7 @@
     {
         if (!firstRender) return;
         _module  = await JS.InvokeAsync<IJSObjectReference>(
-            "import", "./_content/Ben.Video.Editor/Components/ResizableDivider.razor.js");
+            "benImportEditorModule", "Components/ResizableDivider.razor.js");
         _selfRef = DotNetObjectReference.Create(this);
         await _module.InvokeVoidAsync("initDivider", _el, _selfRef, Direction);
     }

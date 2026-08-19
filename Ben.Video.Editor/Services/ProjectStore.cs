@@ -43,7 +43,7 @@ public sealed class ProjectStore : IAsyncDisposable
 
     private async Task<IJSObjectReference> StorageAsync() =>
         _storage ??= await _js.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/js/storageInterop.js");
+            "benImportEditorModule", "js/storageInterop.js");
 
     private const string IndexKey   = "bv-proj-index";
     private const string EntryPrefix = "bv-proj-";

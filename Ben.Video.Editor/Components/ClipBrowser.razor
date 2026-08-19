@@ -226,11 +226,11 @@
 
     private async Task<IJSObjectReference> DomAsync() =>
         _dom ??= await JS.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/js/domInterop.js");
+            "benImportEditorModule", "js/domInterop.js");
 
     private async Task<IJSObjectReference> StorageAsync() =>
         _storage ??= await JS.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/js/storageInterop.js");
+            "benImportEditorModule", "js/storageInterop.js");
 
 
     // The grids below (VideoClipGrid/AudioClipGrid/ImageClipGrid/LibraryFileGrid) are built with raw
@@ -1408,7 +1408,7 @@
         try
         {
             _dragBridgeModule = await JS.InvokeAsync<IJSObjectReference>(
-                "import", "/_content/Ben.Video.Editor/js/clipDragBridge.js");
+                "benImportEditorModule", "js/clipDragBridge.js");
             _dragSourceRef = DotNetObjectReference.Create(this);
             await _dragBridgeModule.InvokeVoidAsync("registerDragSource", _dragSourceRef);
         }

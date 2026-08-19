@@ -17,7 +17,7 @@ public sealed class RichTextRunParserService : IAsyncDisposable
     private readonly IJSRuntime _js;
     private IJSObjectReference? _module;
 
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/richTextRunsInterop.js";
+    private const string ModulePath = "js/richTextRunsInterop.js";
 
     public RichTextRunParserService(IJSRuntime js)
     {
@@ -46,7 +46,7 @@ public sealed class RichTextRunParserService : IAsyncDisposable
 
     private async ValueTask<IJSObjectReference> GetModuleAsync()
     {
-        _module ??= await _js.InvokeAsync<IJSObjectReference>("import", ModulePath);
+        _module ??= await _js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
         return _module;
     }
 

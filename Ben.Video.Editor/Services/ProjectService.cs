@@ -57,7 +57,7 @@ public sealed class ProjectService
     private async ValueTask<IJSObjectReference> GetModuleAsync()
     {
         _module ??= await _js.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/js/ffmpegInterop.js");
+            "benImportEditorModule", "js/ffmpegInterop.js");
         return _module;
     }
 

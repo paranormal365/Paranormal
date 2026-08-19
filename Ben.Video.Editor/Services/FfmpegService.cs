@@ -9,7 +9,7 @@ namespace Ben.Video.Editor.Services;
 /// </summary>
 public sealed class FfmpegService : IAsyncDisposable
 {
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/ffmpegInterop.js";
+    private const string ModulePath = "js/ffmpegInterop.js";
 
     private readonly IJSRuntime _js;
     private readonly ErrorLogService _errorLog;
@@ -133,7 +133,7 @@ public sealed class FfmpegService : IAsyncDisposable
                 SetState(FfmpegState.LoadingCore);
                 _logTail.Clear();
 
-                _module ??= await _js.InvokeAsync<IJSObjectReference>("import", ModulePath);
+                _module ??= await _js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
                 _selfRef ??= DotNetObjectReference.Create(this);
 
                 var multiThread = await _module.InvokeAsync<bool>("isMultiThreadSupported");
