@@ -211,13 +211,17 @@
     width: 1.35rem;
     height: 1.35rem;
     background-color: var(--bv-text-muted);
-    /* Through a variable, not a literal URL. Scoped component CSS is bundled into the app's own
-       stylesheet, and that file sits at a different depth in each host — so no single relative
-       path works, and a root-absolute one breaks the moment the app is served from a sub-path.
-       --bv-ghost-mask is declared in ben-video-theme.css, which is always served from this
-       library's folder. */
-    -webkit-mask: var(--bv-ghost-mask) center / contain no-repeat;
-    mask: var(--bv-ghost-mask) center / contain no-repeat;
+    /* Relative, and relative to the *bundle* rather than to this file. Scoped component CSS is
+       collected into _content/Ben.Video.Editor/Ben.Video.Editor.<hash>.bundle.scp.css — in both
+       hosts, since the site's own stylesheet only @imports that bundle and an imported sheet
+       resolves its URLs against itself. So the base here is the library's folder, and the asset
+       sits at img/ghost.svg inside it.
+
+       Not '../img/…': that lands on _content/img/…, one segment short, which is a 404 and a mask
+       that silently paints nothing. Not '/_content/…' either — that is correct only when the app
+       is served from the root of its origin, and the deployed editor is not. */
+    -webkit-mask: url('img/ghost.svg') center / contain no-repeat;
+    mask: url('img/ghost.svg') center / contain no-repeat;
     opacity: .85;
 }
 

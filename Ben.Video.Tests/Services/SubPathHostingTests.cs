@@ -78,6 +78,61 @@ public sealed class SubPathHostingTests
     }
 
     [Fact]
+    public void Every_Asset_Url_In_Component_Css_Resolves_Inside_The_Library()
+    {
+        // Scoped component CSS is collected into _content/Ben.Video.Editor/…bundle.scp.css, and a
+        // url() resolves against the stylesheet it ends up in — so the base is the library's own
+        // folder, in both hosts. Two ways to get this wrong, and production found the second:
+        //
+        //   /_content/Ben.Video.Editor/img/ghost.svg  — correct only at an origin root
+        //   ../img/ghost.svg                          — lands on _content/img/…, one segment short
+        //
+        // Either way the asset 404s and the rule using it renders nothing, in silence: a missing
+        // mask image paints an empty box, and no error reaches the console.
+        var componentCss = Directory.EnumerateFiles(
+            Path.Combine(EditorRoot().FullName, "Components"), "*.css");
+
+        var wwwroot = Path.Combine(EditorRoot().FullName, "wwwroot");
+        var offenders = new List<string>();
+
+        foreach (var file in componentCss)
+        {
+            foreach (Match m in Regex.Matches(File.ReadAllText(file), @"url\(\s*['""]?([^'"")]+)['""]?\s*\)"))
+            {
+                var url = m.Groups[1].Value.Trim();
+
+                // data: URIs carry their own bytes, and an absolute http(s) URL is somebody else's
+                // server — neither resolves against the bundle.
+                if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
+                 || url.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                 || url.StartsWith("#", StringComparison.Ordinal))
+                    continue;
+
+                var where = Path.GetFileName(file);
+
+                if (url.StartsWith("/", StringComparison.Ordinal))
+                {
+                    offenders.Add($"{where}: {url} — anchored to the origin root, so it breaks under a sub-path");
+                    continue;
+                }
+
+                if (url.StartsWith("../", StringComparison.Ordinal))
+                {
+                    offenders.Add($"{where}: {url} — climbs out of the library's folder, which is where the bundle sits");
+                    continue;
+                }
+
+                if (!File.Exists(Path.Combine(wwwroot, url.Replace('/', Path.DirectorySeparatorChar))))
+                    offenders.Add($"{where}: {url} — no such file under the library's wwwroot");
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "These asset URLs will not resolve from the scoped-CSS bundle:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    [Fact]
     public void The_Loader_Script_Exists_And_Defines_The_Function_Callers_Use()
     {
         var loader = Path.Combine(EditorRoot().FullName, "wwwroot", "js", "moduleLoader.js");
