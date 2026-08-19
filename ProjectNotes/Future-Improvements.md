@@ -4850,6 +4850,11 @@ Ben's reference for the full set of template functionality:
 <https://getwebora.com/smartadmin/demo/dashboard-project-management.html> — worth walking through
 before choosing, since the template ships more patterns than we have adopted.
 
+**Peity** is the other half, and Ben flagged it separately: tiny inline charts — sparklines, mini
+bars, mini pies — for places too small for a real chart. Think a row in a list, a stat tile, a
+count beside a heading. Apex for the panel, Peity for the cell; picking one for both jobs is how
+dashboards end up with either unreadable thumbnails or oversized decorations.
+
 **Check first** whether the vendored Night skin's palette reaches the Apex variables the way it
 reaches Kendo's; if not, the same bridge trick used for the video editor applies.
 

@@ -50,10 +50,19 @@ var layoutSettings = (function () {
 
     // Layout modifier classes. Only `set-*` survives the filter, so a tampered value cannot
     // inject arbitrary classes onto the document element.
+    var kept = [];
     if (s.htmlRoot) {
-        var kept = String(s.htmlRoot).split(/[^\w-]+/).filter(function (c) { return /^set-/i.test(c); });
-        if (kept.length) htmlRoot.className = (htmlRoot.className + ' ' + kept.join(' ')).trim();
+        kept = String(s.htmlRoot).split(/[^\w-]+/).filter(function (c) { return /^set-/i.test(c); });
     }
+
+    // Note for whoever wonders why our sidebar differs from the template's demos: they ship
+    // `set-nav-dark`, whose rules apply only in light mode
+    // (`.set-nav-dark:not([data-bs-theme=dark])`) and paint a deep --primary-900 sidebar against
+    // a light page. We deliberately do not default it on — the plain sidebar is the look Ben
+    // chose. The class still works if it is ever stored here, so turning it on is a one-line
+    // change rather than a rebuild.
+
+    if (kept.length) htmlRoot.className = (htmlRoot.className + ' ' + kept.join(' ')).trim();
 
     return s;
 })();

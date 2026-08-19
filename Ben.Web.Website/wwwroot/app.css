@@ -360,3 +360,24 @@
 .app-header .dropdown > .show + .dropdown-menu.dropdown-menu-animated {
     transform: scale(1) translateY(0) !important;
 }
+
+/* ── The page's own ground ───────────────────────────────────────────────────
+   Nothing painted a background. Not html, not body — telerik-night.css deliberately makes
+   body.k-body transparent so the template owns the ground — and not the template's own wrappers,
+   which are transparent too. The page was therefore showing the *browser's* canvas.
+
+   That is invisible until the two disagree. On a machine whose OS prefers dark, the site in its
+   light theme rendered dark-grey text (#505050) on the browser's near-black canvas: measured
+   here with prefers-color-scheme: dark, data-bs-theme="light", and html's background computing
+   to rgba(0,0,0,0). It looks fine on a light-preference machine, which is why it survived.
+
+   color-scheme is the other half: it decides what the browser paints for scrollbars, form
+   controls and the caret. Left at "normal" those follow the OS rather than the chosen theme. */
+html {
+    background-color: var(--bs-body-bg);
+    color-scheme: light;
+}
+
+html[data-bs-theme="dark"] {
+    color-scheme: dark;
+}
