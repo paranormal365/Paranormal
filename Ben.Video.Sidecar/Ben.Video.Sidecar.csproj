@@ -34,6 +34,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The Web SDK's default Content globs include **/*.json and **/*.config from anywhere in
+         the project, and this project has an installer/ directory that holds BUILT PACKAGES. So a
+         publish swept the previously-built macOS .app's runtimeconfig.json, deps.json and its own
+         copy of ffmpeg-manifest.json into the new package — a macOS app's fragments shipping
+         inside a Windows download, and growing with whatever was last built. installer/ is build
+         tooling and build output; none of it belongs in the product. -->
+    <Content Remove="installer/**" />
+    <None Remove="installer/**" />
+
     <!-- ffmpeg-manifest.json is already auto-included as Content by the SDK's default item globs
          (EnableDefaultContentItems) — Update (not Include) just adds the copy-to-output
          instruction without re-declaring the item and tripping NETSDK1022. -->
