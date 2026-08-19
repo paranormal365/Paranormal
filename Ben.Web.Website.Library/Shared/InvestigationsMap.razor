@@ -18,7 +18,7 @@
        to wait for it rather than the other way round. *@
     @if (_ready)
     {
-        <TelerikMap Center="@_center" Zoom="@_zoom" Height="@Height">
+        <TelerikMap @ref="_mapRef" Center="@_center" Zoom="@_zoom" Height="@Height">
             <MapLayers>
                 <MapLayer Type="@MapLayersType.Tile"
                           Attribution="© OpenStreetMap contributors"
@@ -40,6 +40,22 @@
 </div>
 
 @code {
+
+    /// <summary>
+    /// The map's own handle. The redraw used to be attempted through a global <c>kendo</c>
+    /// object, which Telerik UI for Blazor does not define — so every call was a no-op and the
+    /// map kept whatever width it measured when it mounted.
+    /// </summary>
+    private TelerikMap? _mapRef;
+
+    /// <summary>Re-measures the map after its container changes size.</summary>
+    [JSInvokable]
+    public Task OnContainerResized()
+    {
+        _mapRef?.Refresh();
+        return Task.CompletedTask;
+    }
+
     /// <summary>The investigations to plot. Ones without coordinates are ignored here — see the remarks.</summary>
     /// <remarks>
     /// Silently dropping unplaceable rows would make the map disagree with the list beside it, so
@@ -98,7 +114,7 @@
         if (!_resized && _markers.Count > 0 && _module is not null)
         {
             _resized = true;
-            await _module.InvokeVoidAsync("resizeMap", _containerId);
+            _mapRef?.Refresh();
         }
     }
 

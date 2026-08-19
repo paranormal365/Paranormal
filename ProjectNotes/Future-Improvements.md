@@ -4826,3 +4826,29 @@ content has nothing to sit above once it crosses that boundary.
 Worth checking against the template migration generally: the old Telerik-based chrome and the
 current template do not necessarily agree about which layer the expanded sidebar belongs to, and
 this is the first page where a full-viewport component sits beside it.
+
+---
+
+## 98. Charts — the template already styles ApexCharts, we just never shipped it (raised 2026-08-19)
+
+Ben likes the look of the ApexCharts in the SmartAdmin demos and asked whether they come with the
+template. They effectively do: `smartapp.min.css` carries **190 `.apexcharts-*` rules** — the whole
+theming layer, tooltips, legends, grid lines, the lot — so a chart dropped in would already match
+the site. What is missing is only the library: `wwwroot/plugins/` holds `bootstrap` and `waves` and
+nothing else, and no page references ApexCharts.
+
+So this is not "build a charting story from scratch"; it is "add the script and use it".
+
+**Where charts would actually earn their place**, rather than decorating a page:
+
+- a group's own dashboard — cases opened/closed over time, investigations per month, equipment out
+  on loan;
+- the site administration screens, which currently report counts as bare numbers;
+- a case's evidence over time, which is the one chart a client would care about.
+
+Ben's reference for the full set of template functionality:
+<https://getwebora.com/smartadmin/demo/dashboard-project-management.html> — worth walking through
+before choosing, since the template ships more patterns than we have adopted.
+
+**Check first** whether the vendored Night skin's palette reaches the Apex variables the way it
+reaches Kendo's; if not, the same bridge trick used for the video editor applies.

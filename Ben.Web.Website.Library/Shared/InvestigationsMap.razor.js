@@ -62,25 +62,17 @@ function investigationMapMarkerClick(containerId, index) {
 
 // ── Widget lookup, scoped to one component ───────────────────────────────────
 
-function widgetFor(containerId) {
-    const host = document.getElementById(containerId)
-    if (!host) return null
-    const mapEl = host.querySelector('[data-role="map"]')
-    if (!mapEl) return null
-    return (typeof kendo !== 'undefined' && kendo.widgetInstance)
-        ? kendo.widgetInstance(mapEl)
-        : null
-}
-
 /**
- * Forces the map to re-measure and redraw.
+ * Asks the component to re-measure its map.
  *
- * Kendo caches its container width at mount time and never re-measures on its own, so a map first
- * mounted inside a hidden or not-yet-laid-out container renders tiles at the wrong width forever.
- * Blazor calls this once the real container exists, and the resize listener keeps it honest after.
+ * The map caches its container width when it mounts and never re-measures on its own, so one
+ * mounted inside a not-yet-laid-out container draws tiles at the wrong width forever. This used
+ * to try to fix that by reaching for kendo.widgetInstance() — but Telerik UI for Blazor defines
+ * no global `kendo`, so the guard was false every time and nothing happened. The redraw belongs
+ * to the component (TelerikMap.Refresh()); this only carries the event.
  */
 export function resizeMap(containerId) {
-    widgetFor(containerId)?.resize(true)
+    _instances.get(containerId)?.invokeMethodAsync('OnContainerResized')
 }
 
 export function setMapCenter(containerId, lat, lon, zoom) {

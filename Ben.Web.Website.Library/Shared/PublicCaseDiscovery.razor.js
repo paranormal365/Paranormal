@@ -73,38 +73,25 @@ export function tryGetUserLocation(dotnetRef) {
 
 // ── Center update ─────────────────────────────────────────────────────────────
 
-/**
- * Drives the Kendo map widget to the new center+zoom using its own JS API.
- * This forces tile layer reload, which Blazor re-render alone does not guarantee.
- */
-export function setMapCenter(lat, lon, zoom) {
-    const mapEl = document.querySelector('[data-role="map"]')
-    if (!mapEl) return
-    const map = typeof kendo !== 'undefined' && kendo.widgetInstance
-        ? kendo.widgetInstance(mapEl)
-        : null
-    if (!map) return
-    map.center([lat, lon])
-    map.zoom(zoom)
-}
+// setMapCenter lived here. It drove the widget through a global `kendo` object that Telerik UI
+// for Blazor does not define, so it never ran; the component now sets Center/Zoom and calls
+// TelerikMap.Refresh() itself.
 
 // ── Resize ───────────────────────────────────────────────────────────────────
 
 /**
- * Forces Kendo Map to re-measure its container and redraw tiles.
- * Needed because the map is first mounted while its container is inside a
- * conditionally-hidden loading state; Kendo caches the container's width at
- * mount time and never re-measures on its own, so it can end up rendering
- * tiles at whatever (narrower) width the container happened to have then.
+ * Asks the component to re-measure its map.
+ *
+ * This used to reach for kendo.widgetInstance(mapEl) and call map.resize() directly — but
+ * Telerik UI for Blazor ships no jQuery and defines no global `kendo`, so the guard
+ * `typeof kendo !== 'undefined'` was false every single time and this function returned
+ * without doing anything. The map therefore kept whatever width it measured at mount:
+ * widen the window and the tiles stayed in a narrow strip with empty space beside them.
+ *
+ * The redraw belongs to the component (TelerikMap.Refresh()), so this only carries the event.
  */
 export function resizeMap() {
-    const mapEl = document.querySelector('[data-role="map"]')
-    if (!mapEl) return
-    const map = typeof kendo !== 'undefined' && kendo.widgetInstance
-        ? kendo.widgetInstance(mapEl)
-        : null
-    if (!map) return
-    map.resize(true)
+    _dotnetRef?.invokeMethodAsync('OnContainerResized')
 }
 
 // ── Init / dispose ────────────────────────────────────────────────────────────
