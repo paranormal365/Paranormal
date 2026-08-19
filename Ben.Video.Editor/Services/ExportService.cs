@@ -440,6 +440,7 @@ public sealed class ExportService : IAsyncDisposable
                 var volumeFilter = ExportArgBuilders.BuildVolumeAutomationFilter(clip, effectiveDuration);
                 var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(clip.AppliedEffects, _effectRegistry, effectiveDuration, clip.Speed);
                 var args = BuildTrimArgs(clip.MemFsName, segName, start, end, clip.Speed, s, volumeFilter, clip.Effects, clip.MuteAudio,
+                    sourceHasAudio: clip.HasAudio,
                     extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf);
                 await _ffmpeg.ExecAsync(args, job.CancellationToken);
             }
@@ -498,7 +499,8 @@ public sealed class ExportService : IAsyncDisposable
             await _ffmpeg.ExecAsync(ExportArgBuilders.BuildTrimArgs(
                 fromClip.MemFsName, fromSeg, fromStart, fromEnd, fromClip.Speed, s,
                 fromVol, fromClip.Effects, fromClip.MuteAudio,
-                outputWidth: xvw, outputHeight: xvh), job.CancellationToken);
+                outputWidth: xvw, outputHeight: xvh,
+                sourceHasAudio: fromClip.HasAudio), job.CancellationToken);
 
             var toStart = toClip.StartTrim;
             var toEnd   = toClip.EndTrim > toClip.StartTrim ? toClip.EndTrim : toClip.Duration;
@@ -506,7 +508,8 @@ public sealed class ExportService : IAsyncDisposable
             await _ffmpeg.ExecAsync(ExportArgBuilders.BuildTrimArgs(
                 toClip.MemFsName, toSeg, toStart, toEnd, toClip.Speed, s,
                 toVol, toClip.Effects, toClip.MuteAudio,
-                outputWidth: xvw, outputHeight: xvh), job.CancellationToken);
+                outputWidth: xvw, outputHeight: xvh,
+                sourceHasAudio: toClip.HasAudio), job.CancellationToken);
 
             var mergedName = $"xmerged_{transition.Id:N}.mp4";
             tempFiles.Add(mergedName);
@@ -1413,7 +1416,8 @@ public sealed class ExportService : IAsyncDisposable
 
                 var trimArgs = ExportArgBuilders.BuildTrimArgs(
                     clip.MemFsName, segName, start, end, clip.Speed, s,
-                    volFilter, clip.Effects, outputWidth: lvw, outputHeight: lvh);
+                    volFilter, clip.Effects, outputWidth: lvw, outputHeight: lvh,
+                    sourceHasAudio: clip.HasAudio);
                 await _ffmpeg.ExecAsync(trimArgs, job.CancellationToken);
                 layerSegs.Add(segName);
             }
@@ -1455,12 +1459,12 @@ public sealed class ExportService : IAsyncDisposable
     private static string[] BuildTrimArgs(
         string input, string output, double start, double end, double speed, ExportSettings s,
         string? audioVolumeFilter = null, ClipEffects? effects = null, bool muteAudio = false,
-        string? extraVf = null)
+        string? extraVf = null, bool sourceHasAudio = true)
     {
         var (vw, vh) = ParseResolution(s.Resolution);
         return ExportArgBuilders.BuildTrimArgs(
             input, output, start, end, speed, s, audioVolumeFilter, effects, muteAudio, extraVf,
-            outputWidth: vw, outputHeight: vh);
+            outputWidth: vw, outputHeight: vh, sourceHasAudio: sourceHasAudio);
     }
 
     private static string BuildXfadeFilterComplex(

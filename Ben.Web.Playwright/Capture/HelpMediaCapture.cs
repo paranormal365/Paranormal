@@ -94,7 +94,11 @@ public sealed class HelpMediaCapture : BenTestBase
         _console.Clear();
         Page.Console += (_, msg) =>
         {
-            if (msg.Type is "error" or "warning") _console.Add($"[{msg.Type}] {msg.Text}");
+            // Everything, not just errors. ffmpeg reports through console.log — including the
+            // command it is about to run and its own stderr — so filtering to errors threw away
+            // the only record of what a stalled render was actually doing.
+            _console.Add($"[{msg.Type}] {msg.Text}");
+            if (_console.Count > 400) _console.RemoveAt(0);
         };
         Page.PageError += (_, err) => _console.Add($"[pageerror] {err}");
     }
@@ -604,6 +608,24 @@ public sealed class HelpMediaCapture : BenTestBase
         await ReportEditorStateAsync(whatFailed);
     }
 
+    /// <summary>
+    /// The console lines around the first <c>Aborted()</c>.
+    /// </summary>
+    /// <remarks>
+    /// Once the wasm module aborts, every later command aborts too, so the tail of the log is all
+    /// collateral and says nothing about the cause. The command immediately before the first abort
+    /// is the one that killed it.
+    /// </remarks>
+    private List<string> FirstAbortWindow()
+    {
+        var ffmpeg = _console.Where(c => c.Contains("ffmpeg")).ToList();
+        var first = ffmpeg.FindIndex(c => c.Contains("Aborted()"));
+        if (first < 0) return ["(no abort recorded)"];
+
+        var from = Math.Max(0, first - 5);
+        return ffmpeg.GetRange(from, Math.Min(8, ffmpeg.Count - from));
+    }
+
     /// <summary>Fails with what the editor was actually showing, including its console output.</summary>
     private async Task ReportEditorStateAsync(string what)
     {
@@ -619,7 +641,8 @@ public sealed class HelpMediaCapture : BenTestBase
                     + $"  window buttons: {string.Join(" | ", buttons.Select(b => b.Trim()).Where(b => b.Length > 0))}\n"
                     + $"  ffmpeg status: {status}\n"
                     + $"  browser panel errors: {string.Join(" | ", errors)}\n"
-                    + $"  console: {string.Join("\n            ", _console.TakeLast(12))}\n"
+                    + $"  around the first abort:\n            "
+                    + string.Join("\n            ", FirstAbortWindow()) + "\n"
                     + $"  editor text: {editor.Replace("\n", " / ")}");
     }
 
@@ -632,6 +655,44 @@ public sealed class HelpMediaCapture : BenTestBase
         await Expect(card).ToBeVisibleAsync(new() { Timeout = 15_000 });
         await card.GetByTitle("Add to timeline").First.ClickAsync();
         await Page.WaitForTimeoutAsync(1_200);
+    }
+
+    [Test]
+    [Description("TEMPORARY probe for item 94 — full ffmpeg console output around the stall.")]
+    public async Task Probe_StallConsole()
+    {
+        var all = new List<string>();
+        Page.Console += (_, m) => all.Add($"[{m.Type}] {m.Text}");
+
+        await LoginAsync(UserEmail, UserPassword);
+        await GoAsync("/my-videos");
+        await Expect(Page.Locator(".bv-editor")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Page.WaitForTimeoutAsync(1_500);
+
+        await InitializeFfmpegAsync();
+        await ImportFromServerAsync("porch-camera");
+        await ImportFromServerAsync("hallway-camera");
+
+        var status = Page.Locator(".bv-toolbar__status").First;
+        for (var i = 0; i < 10 && !(await status.InnerTextAsync()).Contains("Ready"); i++)
+            await Page.WaitForTimeoutAsync(2_000);
+
+        var mark = all.Count;
+        TestContext.Out.WriteLine($"=== state before selecting: {(await status.InnerTextAsync()).Trim()} ===");
+
+        await Page.Locator(".bv-clip-chip").First.ClickAsync();
+
+        for (var i = 0; i < 12; i++)
+        {
+            await Page.WaitForTimeoutAsync(5_000);
+            var s = (await status.InnerTextAsync()).Trim();
+            if (s.Contains("Ready")) { TestContext.Out.WriteLine($"recovered after {(i + 1) * 5}s"); break; }
+        }
+
+        TestContext.Out.WriteLine($"=== state after: {(await status.InnerTextAsync()).Trim()} ===");
+        TestContext.Out.WriteLine("=== console after selecting a clip ===");
+        foreach (var line in all.Skip(mark).TakeLast(60))
+            TestContext.Out.WriteLine("  " + line);
     }
 
     // ── Group members ─────────────────────────────────────────────────────────

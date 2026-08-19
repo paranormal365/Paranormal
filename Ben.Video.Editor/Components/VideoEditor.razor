@@ -1538,7 +1538,8 @@
                 var args = ExportArgBuilders.BuildTrimArgs(
                     vid.MemFsName!, segName, start, end, vid.Speed, previewSettings,
                     volumeFilter, vid.Effects, vid.MuteAudio,
-                    extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf);
+                    extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf,
+                    sourceHasAudio: vid.HasAudio);
                 await Ffmpeg.ExecAsync(args);
                 // Item #59-#65 flakiness investigation, phase 146 — size unknown (produced by an
                 // ffmpeg exec, not a C#-side byte array), so this is a 0-byte lower-bound entry

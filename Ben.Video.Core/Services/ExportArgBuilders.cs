@@ -148,7 +148,8 @@ internal static class ExportArgBuilders
     internal static string[] BuildTrimArgs(
         string input, string output, double start, double end, double speed, ExportSettings s,
         string? audioVolumeFilter = null, ClipEffects? effects = null, bool muteAudio = false,
-        string? extraVf = null, int outputWidth = 0, int outputHeight = 0)
+        string? extraVf = null, int outputWidth = 0, int outputHeight = 0,
+        bool sourceHasAudio = true)
     {
         var args = new List<string>
         {
@@ -212,7 +213,11 @@ internal static class ExportArgBuilders
 
         args.AddRange(["-pix_fmt", s.PixelFormat]);
 
-        if (s.IncludeAudio && !muteAudio)
+        // A source with no audio stream is a third case, and treating it as "has audio" is fatal
+        // rather than cosmetic: "-filter:a volume=…" against a stream that is not there aborts the
+        // whole command. In ffmpeg.wasm that abort is what leaves a preview render apparently
+        // frozen. Selecting a clip on the timeline runs exactly this builder.
+        if (s.IncludeAudio && !muteAudio && sourceHasAudio)
         {
             // Build composite audio filter chain: [atempo chain] + [volume automation]
             // atempo is limited to [0.5, 2.0] per filter instance.

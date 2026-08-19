@@ -2076,6 +2076,38 @@ public sealed class ExportArgBuildersTests
         Assert.DoesNotContain("(H*", filter);
     }
 
+    [Fact]
+    public void BuildTrimArgs_SourceWithoutAudio_EmitsAnRatherThanAudioFilters()
+    {
+        // Backlog item 94, the second half. This builder runs on the *preview* path — selecting a
+        // clip on the timeline issues exactly this command — and on export. Against a source with
+        // no audio stream it emitted "-filter:a volume=…" and "-c:a aac", and ffmpeg.wasm answered
+        // with Aborted(), captured from the browser console:
+        //
+        //   [ffmpeg-exec] -i …mp4 -ss 0.000 -to 6.000 -c:v libx264 … -filter:a volume=1.000000 -c:a aac …
+        //   [ffmpeg-cmd]  Aborted()
+        var s = new ExportSettings { IncludeAudio = true };
+        var args = ExportArgBuilders.BuildTrimArgs(
+            "in.mp4", "out.mp4", 0, 6, 1.0, s,
+            audioVolumeFilter: "volume=1.000000", muteAudio: false, sourceHasAudio: false);
+
+        Assert.Contains("-an", args);
+        Assert.DoesNotContain("-filter:a", args);
+        Assert.DoesNotContain("-c:a", args);
+    }
+
+    [Fact]
+    public void BuildTrimArgs_SourceWithAudio_KeepsItsFiltersAndCodec()
+    {
+        var s = new ExportSettings { IncludeAudio = true };
+        var args = ExportArgBuilders.BuildTrimArgs(
+            "in.mp4", "out.mp4", 0, 6, 1.0, s, audioVolumeFilter: "volume=1.000000");
+
+        AssertSubsequence(args, ["-filter:a", "volume=1.000000"]);
+        Assert.Contains("-c:a", args);
+        Assert.DoesNotContain("-an", args);
+    }
+
     // ── BuildBackgroundRenderVideoArgs / BuildBackgroundRenderImageArgs — item #36 phase C.
     // These always emit an audio stream (real or synthetic-silent) so background-rendered
     // segments share a consistent stream layout and can be stream-copy concatenated. ─────────
