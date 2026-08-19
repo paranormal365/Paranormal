@@ -15,6 +15,22 @@ h1, h2, h3, .doc-kicker, .toc-aud, .cover-meta, th {
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
+/* ── Screenshots ───────────────────────────────────────────────────── */
+/* Captured at 2x on a 1440px viewport, so an unconstrained image prints far wider than the page.
+   The border matters in print as much as on screen: these are dark screenshots on white paper,
+   and without an edge they bleed into the margin. */
+.doc img {
+  display: block; max-width: 100%; height: auto;
+  margin: 10px 0 4px; border: 1px solid #d5d1e0; border-radius: 3px;
+  /* A screenshot split across a page break is unreadable in a printed manual. */
+  page-break-inside: avoid;
+}
+/* The italic line an author puts under an image is its caption. */
+.doc img + em, .doc p > img + em {
+  display: block; margin-bottom: 14px; font-style: normal;
+  font-size: 9pt; color: #666;
+}
+
 /* ── Cover ─────────────────────────────────────────────────────────── */
 .cover { height: 247mm; display: flex; flex-direction: column; page-break-after: always; }
 .cover-top { flex: 1; display: flex; flex-direction: column; justify-content: center; }
@@ -135,6 +151,8 @@ h1, h2, h3 { break-after: avoid-page; }
   <p>IsHaunted.com connects people who have experienced something unexplained at a property with
 paranormal investigation groups who can look into it.</p>
 <h2>The short version</h2>
+<p><img alt="The IsHaunted.com home page" src="../Ben.Web.Website/wwwroot/help/media/getting-started/home.png" />
+<em>The home page: search for groups near you, and browse the cases groups have published.</em></p>
 <p>A <strong>client</strong> describes what has been happening and asks one or more <strong>groups</strong> to take a look.
 A group that accepts opens a <strong>case</strong>. From there, the client and the investigators share a
 timeline of what happened and what was found, and the group schedules <strong>investigations</strong> — visits
@@ -181,6 +199,8 @@ score nowhere, which is exactly what "I've seen it and I genuinely can't say" sh
 <strong>+4</strong> from ninety are not the same claim. A score of <strong>0</strong> can mean the case is evenly split or
 that everyone was undecided — the counts beside it tell you which.</p>
 <h2>Finding what's near you</h2>
+<p><img alt="The Find Groups page listing nearby groups" src="../Ben.Web.Website/wwwroot/help/media/getting-started/find-groups.png" />
+<em>Browse Groups lists every group, closest first once you have given it a place to measure from.</em></p>
 <p>The home page shows what's happening close to you — groups that serve your area, and public events
 you could attend. If your browser allows it, this uses your current location automatically; if not,
 type a city, address, or zip code instead. Either way, choose how far to look with the distance
@@ -207,6 +227,8 @@ and the <strong>arrows</strong> expand the page to fill the screen. Both are rem
 <p>You need an account to request an investigation or join a group. Accounts are free, and the
 address you sign in with is never shown publicly.</p>
 <h2>Finding help</h2>
+<p><img alt="The help index, grouped into sections" src="../Ben.Web.Website/wwwroot/help/media/getting-started/help-index.png" />
+<em>The help index. You only see the topics that apply to your account.</em></p>
 <p>Every page that does something non-obvious has a small <strong>?</strong> beside it. That opens the relevant
 part of this documentation in a new tab, so you never lose what you were in the middle of.</p>
 <h2>Getting in touch</h2>
@@ -227,6 +249,8 @@ message is attached to your account as well.</p>
     <div class="doc-aud">Written for: <strong>Public — no account needed</strong></div>
   </div>
   <h2>Before you start</h2>
+<p><img alt="The new request form" src="../Ben.Web.Website/wwwroot/help/media/requesting-an-investigation/new-request.png" />
+<em>Describing what has been happening. Nothing is sent to a group until you choose one.</em></p>
 <p>You will be asked to describe what has happened. Write it as plainly as you can, in the order it
 happened. Investigators find dates, times and who was present far more useful than adjectives —
 "three knocks on the north wall, about 2am, twice last week" is worth more than "terrifying
@@ -236,6 +260,8 @@ activity".</p>
 To look at who is out there first, <strong>Join a Group</strong> lists the groups working in your area. You can
 send the same request to more than one; each decides independently whether to take it on.</p>
 <h2>What happens next</h2>
+<p><img alt="The My Requests list showing a request and its status" src="../Ben.Web.Website/wwwroot/help/media/requesting-an-investigation/my-requests.png" />
+<em>My Requests tracks where each request stands with each group you sent it to.</em></p>
 <ol>
 <li>The group reviews your request. They may mark it as under review while they discuss it.</li>
 <li>If they accept, a <strong>case</strong> is opened and you get access to it under <strong>My Cases</strong>.</li>
@@ -254,6 +280,8 @@ public pages, and it is not shared with groups you did not ask.</p>
     <div class="doc-aud">Written for: <strong>Signed-in users</strong></div>
   </div>
   <h2>The case page</h2>
+<p><img alt="The client view of a case" src="../Ben.Web.Website/wwwroot/help/media/your-case/my-cases.png" />
+<em>My Cases lists the cases a group has opened for you.</em></p>
 <p><strong>My Cases</strong> lists every case you are part of, whether you opened it or were invited onto it by
 someone else. Opening one shows the calendar, everything logged so far, files, and your message
 thread with the investigators.</p>
@@ -301,7 +329,14 @@ it, so the alias applies to public pages and shared documents only.</p>
     <p class="doc-summary">The case page from the investigator&#x27;s side — timeline, files, investigations.</p>
     <div class="doc-aud">Written for: <strong>Group members</strong></div>
   </div>
-  <h2>The case tabs</h2>
+  <p>Every case belongs to a group, and the group's own page is where its cases are listed.</p>
+<p><img alt="A group's page, with its cases listed" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/org-hub.png" />
+<em>Open a group from Organizations, then its Cases tab, to reach any case it is working.</em></p>
+<h2>The case tabs</h2>
+<p><img alt="A case with its tabs" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/case-detail.png" />
+<em>A case opens on Overview. Every other part of the case is a tab along the top.</em></p>
+<p><img alt="Clicking through a case's tabs" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/case-tabs.gif" />
+<em>Timeline, Investigations, Files and Reports, each on the same case.</em></p>
 <p><strong>Overview</strong> carries the original request exactly as the client submitted it, shown separately
 from the case description so the two never blur together as the case is edited.</p>
 <p><strong>Timeline</strong> is the working record. Every entry has a visibility: internal to the group, shared
@@ -448,6 +483,8 @@ been published, and nothing else.</p>
     <div class="doc-aud">Written for: <strong>Signed-in users</strong></div>
   </div>
   <h2>Your profile</h2>
+<p><img alt="The profile page" src="../Ben.Web.Website/wwwroot/help/media/your-profile/profile.png" />
+<em>Your profile. Everything here is yours to change, and most of it is private by default.</em></p>
 <p><strong>My Profile</strong>, in the menu under your avatar, is where you set your display name and photos.
 Your sign-in address is not changed here and is never shown publicly.</p>
 <h2>Two photos</h2>
@@ -536,6 +573,8 @@ confirmed you were there.</p>
     <div class="doc-aud">Written for: <strong>Signed-in users</strong></div>
   </div>
   <h2>Your equipment list</h2>
+<p><img alt="A personal equipment list" src="../Ben.Web.Website/wwwroot/help/media/your-equipment/my-equipment.png" />
+<em>My Equipment: everything you own, whether or not anyone else can see or borrow it.</em></p>
 <p><strong>My Equipment</strong>, in the main menu, is where you record the gear you own — recorders, cameras,
 meters, lights, anything you take on an investigation. Each piece gets a make and model from the
 shared catalog, a name you choose, and optionally a serial number, an acquisition date, notes and
@@ -662,6 +701,8 @@ your address with it.</p>
 <p>Your original file is kept exactly as you sent it and never shown to anyone. The separated details
 are readable only by group Administrators and site administrators.</p>
 <h2>The public catalog</h2>
+<p><img alt="The public equipment catalog" src="../Ben.Web.Website/wwwroot/help/media/your-equipment/catalog.png" />
+<em>The catalog lists makes and models, and — on its second tab — the gear people have chosen to list. It never names an owner.</em></p>
 <p>The equipment catalogue — <strong>Equipment</strong> in the menu — is public: anyone can browse it, including
 visitors who are not signed in. It has two halves. <em>Makes &amp; models</em> is reference data: what gear exists, by make and model.
 <em>Gear people own</em> lists individual pieces whose owners chose to list them. Neither half ever
@@ -840,6 +881,8 @@ them — one sour rating is one voice, not a verdict.</p>
 <p>A group's Administrators and Owner can see everything left about their group's gear and loans, and
 remove anything that crosses a line.</p>
 <h2>My Checkouts</h2>
+<p><img alt="The My Checkouts screen, showing gear out on loan and a request waiting on a decision" src="../Ben.Web.Website/wwwroot/help/media/borrowing-equipment/my-checkouts.png" />
+<em>Both directions in one place: what you have out, and what someone has asked you for.</em></p>
 <p><strong>My Checkouts</strong> answers three questions in one place:</p>
 <ul>
 <li><strong>Borrowing</strong> — what you have out, and what you have asked for</li>
@@ -880,6 +923,8 @@ nothing by itself; it only permits members who have <em>also</em> opted in on th
 deliberate: a group cannot volunteer its members' faces, and a member cannot overrule a group that
 has decided its people stay unidentified to clients.</p>
 <h2>Members and roles</h2>
+<p><img alt="The group's members list" src="../Ben.Web.Services/Help/Media/organization-administration/members.png" />
+<em>Members and their roles. Roles decide what each person may do inside the group.</em></p>
 <table>
 <thead>
 <tr>
@@ -939,6 +984,8 @@ which stops mattering on Sunday.</p>
 <p>Client requests arrive under the group's <strong>Requests</strong>. Mark one as under review while you decide.
 Declining tells the client, and lets them send it elsewhere without rewriting it.</p>
 <h2>The group calendar</h2>
+<p><img alt="The group calendar" src="../Ben.Web.Services/Help/Media/organization-administration/calendar.png" />
+<em>The calendar carries investigations and the group's own events.</em></p>
 <p>The group's <strong>Calendar</strong> holds meetings, training, anything with a time attached. Investigations
 are scheduled from the case they belong to, not here.</p>
 <p><strong>Where it happens.</strong> Type a free-text location, or pick one of the group's saved addresses. Prefer
@@ -1034,6 +1081,8 @@ often different people. Granting <strong>Equipment</strong> does not grant <stro
 <p>Neither permission has any say over a member's personal gear. A loan of somebody's own equipment is
 always approved by its owner.</p>
 <h2>Editing your public pages</h2>
+<p><img alt="The CMS page list" src="../Ben.Web.Services/Help/Media/organization-administration/cms.png" />
+<em>Your public pages. A page is not visible to anyone until you publish it.</em></p>
 <p>Pages you build under <strong>CMS</strong> appear on your group's public site. Two things control what visitors
 see, and they are different.</p>
 <p><strong>Published</strong> decides whether the page exists for visitors at all. <strong>Drafts</strong> decide whether the
@@ -1162,6 +1211,8 @@ what they've said they're going to.</p>
   </div>
   <p>Visible to app administrators only.</p>
 <h2>Site settings</h2>
+<p><img alt="The site settings screen" src="../Ben.Web.Services/Help/Media/site-administration/site-settings.png" />
+<em>Site settings apply to every group and every visitor.</em></p>
 <p><strong>Administration → Site Settings</strong> holds values that apply to the whole site. Nothing personal
 belongs here — settings about one person live on their profile, settings about one group live in
 that group's settings.</p>
@@ -1175,6 +1226,8 @@ published as something the editor cannot draw.</p>
 <p>Assets are <strong>retired</strong>, never deleted. Projects reference artwork by id, so removing one would
 break renders that already use it. A retired asset leaves the catalog and stays downloadable.</p>
 <h2>Keeping the shared vocabulary tidy</h2>
+<p><img alt="The equipment taxonomy screen" src="../Ben.Web.Services/Help/Media/site-administration/equipment-taxonomy.png" />
+<em>Makes and models members have proposed, waiting to be approved, merged or renamed.</em></p>
 <p>Two lists grow by proposal rather than by decree: the <strong>experience taxonomy</strong> and the <strong>equipment
 catalog</strong>. Groups add what they need on the night, and you confirm or clear up afterwards.</p>
 <p><strong>Confirming</strong> an entry marks it as reviewed. That matters beyond the badge: reviewed entries are
@@ -1199,6 +1252,8 @@ you how many it took with it.</p>
 <p>Most tidying happens without you. An unconfirmed entry that a group proposed disappears on its own
 once the last thing using it is gone.</p>
 <h2>Support tickets</h2>
+<p><img alt="The support ticket queue" src="../Ben.Web.Services/Help/Media/site-administration/support-tickets.png" />
+<em>Every message sent through the contact form arrives here.</em></p>
 <p><strong>Administration → Support Tickets</strong> is the queue for the public contact form. A ticket arrives as
 <strong>New</strong>; replying to the sender marks it <strong>Answered</strong> and assigns it to you if nobody had it.</p>
 <p>The sender reads the thread through a private tracking link, whether or not they have an account —
@@ -1207,6 +1262,8 @@ They are for staff talking among themselves, and adding one does not mark the ti
 <p>Contact details shown beside the form — postal address, phone, email, when we reply — are site
 settings, so they are corrected on the Site Settings page rather than in a deploy.</p>
 <h2>Audit log</h2>
+<p><img alt="The audit log with its filters" src="../Ben.Web.Services/Help/Media/site-administration/audit-log.png" />
+<em>The audit log records who changed what, and when. Filter it by entity, action, person or date.</em></p>
 <p><strong>Administration → Audit Log</strong> records every mutation with who made it. It is filtered and paged
 on the server, so date and user filters apply to the whole history rather than the page on screen.</p>
 </section>

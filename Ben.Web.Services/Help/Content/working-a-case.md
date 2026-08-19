@@ -6,7 +6,18 @@ audience: OrganizationMember
 order: 40
 ---
 
+Every case belongs to a group, and the group's own page is where its cases are listed.
+
+![A group's page, with its cases listed](/help/media/working-a-case/org-hub.png)
+*Open a group from Organizations, then its Cases tab, to reach any case it is working.*
+
 ## The case tabs
+
+![A case with its tabs](/help/media/working-a-case/case-detail.png)
+*A case opens on Overview. Every other part of the case is a tab along the top.*
+
+![Clicking through a case's tabs](/help/media/working-a-case/case-tabs.gif)
+*Timeline, Investigations, Files and Reports, each on the same case.*
 
 **Overview** carries the original request exactly as the client submitted it, shown separately
 from the case description so the two never blur together as the case is edited.

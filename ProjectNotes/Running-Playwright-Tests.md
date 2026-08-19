@@ -86,11 +86,35 @@ Available categories:
 | `MyCases` | Client case list and detail |
 | `Voting` | Evidence vote widget |
 | `ErrorHandling` | 404, invalid guids, Telerik parameter errors |
+| `Capture` | **Writes files.** Re-captures the help screenshots and recordings — see below |
 
 ### A single test by name
 ```bash
 dotnet test Ben.Web.Playwright -p:IsTestProject=true --no-build --filter "FullyQualifiedName~LoginPage_HasRequiredFields"
 ```
+
+---
+
+## Re-capturing the help screenshots
+
+The `Capture` category is not a test of the app — it drives the site to produce the screenshots and
+GIFs the help documents embed, and it **writes into the working tree**. It is skipped unless
+`BEN_CAPTURE=1` is set, so an ordinary run cannot leave files behind:
+
+```bash
+BEN_CAPTURE=1 dotnet test Ben.Web.Playwright -p:IsTestProject=true --no-build --filter TestCategory=Capture
+```
+
+Notes on what it does, because each one was a bug first:
+
+- **Dark mode** is seeded into localStorage by an init script, so the first paint is already dark.
+- **The operator's own profile photo is masked** in every shot and recording. Whoever captures
+  these is signed in as a real administrator.
+- **Recordings never film the sign-in page.** Sign-in happens on a non-recorded context, and the
+  recorded one resumes that session — the Development login form arrives pre-filled.
+- **A shot of an empty screen fails the capture.** Each one names text it must contain.
+
+Afterwards, rebuild the PDF so the manual matches (see `docs/README.md`).
 
 ---
 

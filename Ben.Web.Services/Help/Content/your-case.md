@@ -8,6 +8,9 @@ order: 30
 
 ## The case page
 
+![The client view of a case](/help/media/your-case/my-cases.png)
+*My Cases lists the cases a group has opened for you.*
+
 **My Cases** lists every case you are part of, whether you opened it or were invited onto it by
 someone else. Opening one shows the calendar, everything logged so far, files, and your message
 thread with the investigators.

@@ -4,7 +4,7 @@
 Content comes verbatim from Ben.Web.Services/Help/Content — the same files the in-app help
 serves. Nothing is paraphrased, so the document cannot drift from what the product says.
 """
-import re, pathlib, datetime, html
+import re, os, pathlib, datetime, html
 import markdown
 
 # Derived from this file's own location rather than hard-coded, so the build follows the repo
@@ -60,15 +60,54 @@ docs = sorted(
 if not docs:
     raise SystemExit(f"No help documents found under {CONTENT} — has the content folder moved?")
 
+# ── Screenshots ───────────────────────────────────────────────────────────────
+# The documents reference their screenshots two ways, by audience: a public document points at
+# /help/media/… under the site's wwwroot, and an administrator document uses the help-media:
+# scheme, whose files are embedded in Ben.Web.Services and never served. Chrome renders this HTML
+# from docs/, so both become paths relative to that folder — printing keeps the pixels, and the
+# HTML stays small enough to open in an editor.
+PUBLIC_MEDIA   = ROOT / "Ben.Web.Website/wwwroot/help/media"
+EMBEDDED_MEDIA = ROOT / "Ben.Web.Services/Help/Media"
+OUT_DIR        = pathlib.Path(__file__).parent
+
+missing_media = []
+
+
+def resolve_media(body, slug):
+    def public(m):
+        rel = m.group(1)
+        path = PUBLIC_MEDIA / rel
+        if not path.exists():
+            missing_media.append(f"{slug} → {path}")
+        return f"]({os.path.relpath(path, OUT_DIR)})"
+
+    def embedded(m):
+        rel = m.group(1)
+        path = EMBEDDED_MEDIA / rel
+        if not path.exists():
+            missing_media.append(f"{slug} → {path}")
+        return f"]({os.path.relpath(path, OUT_DIR)})"
+
+    body = re.sub(r"\]\(/help/media/([^)]+)\)", public, body)
+    body = re.sub(r"\]\(help-media:([^)]+)\)", embedded, body)
+    return body
+
+
 md = markdown.Markdown(extensions=["tables", "sane_lists"])
 
 sections = []
 for d in docs:
     md.reset()
-    d["html"] = md.convert(d["body"])
+    d["html"] = md.convert(resolve_media(d["body"], d["slug"]))
     if not sections or sections[-1][0] != d["section"]:
         sections.append((d["section"], []))
     sections[-1][1].append(d)
+
+if missing_media:
+    raise SystemExit(
+        "Help documents reference screenshots that are not on disk:\n  "
+        + "\n  ".join(missing_media)
+        + "\nRe-capture them with BEN_CAPTURE=1 (see HelpMediaCapture).")
 
 today = datetime.date.today().strftime("%-d %B %Y")
 
@@ -111,6 +150,22 @@ body {
 }
 h1, h2, h3, .doc-kicker, .toc-aud, .cover-meta, th {
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+/* ── Screenshots ───────────────────────────────────────────────────── */
+/* Captured at 2x on a 1440px viewport, so an unconstrained image prints far wider than the page.
+   The border matters in print as much as on screen: these are dark screenshots on white paper,
+   and without an edge they bleed into the margin. */
+.doc img {
+  display: block; max-width: 100%; height: auto;
+  margin: 10px 0 4px; border: 1px solid #d5d1e0; border-radius: 3px;
+  /* A screenshot split across a page break is unreadable in a printed manual. */
+  page-break-inside: avoid;
+}
+/* The italic line an author puts under an image is its caption. */
+.doc img + em, .doc p > img + em {
+  display: block; margin-bottom: 14px; font-style: normal;
+  font-size: 9pt; color: #666;
 }
 
 /* ── Cover ─────────────────────────────────────────────────────────── */

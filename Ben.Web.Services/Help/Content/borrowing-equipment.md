@@ -133,6 +133,9 @@ remove anything that crosses a line.
 
 ## My Checkouts
 
+![The My Checkouts screen, showing gear out on loan and a request waiting on a decision](/help/media/borrowing-equipment/my-checkouts.png)
+*Both directions in one place: what you have out, and what someone has asked you for.*
+
 **My Checkouts** answers three questions in one place:
 
 - **Borrowing** — what you have out, and what you have asked for

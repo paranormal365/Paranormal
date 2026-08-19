@@ -10,6 +10,9 @@ Visible to app administrators only.
 
 ## Site settings
 
+![The site settings screen](help-media:site-administration/site-settings.png)
+*Site settings apply to every group and every visitor.*
+
 **Administration → Site Settings** holds values that apply to the whole site. Nothing personal
 belongs here — settings about one person live on their profile, settings about one group live in
 that group's settings.
@@ -28,6 +31,9 @@ Assets are **retired**, never deleted. Projects reference artwork by id, so remo
 break renders that already use it. A retired asset leaves the catalog and stays downloadable.
 
 ## Keeping the shared vocabulary tidy
+
+![The equipment taxonomy screen](help-media:site-administration/equipment-taxonomy.png)
+*Makes and models members have proposed, waiting to be approved, merged or renamed.*
 
 Two lists grow by proposal rather than by decree: the **experience taxonomy** and the **equipment
 catalog**. Groups add what they need on the night, and you confirm or clear up afterwards.
@@ -59,6 +65,9 @@ once the last thing using it is gone.
 
 ## Support tickets
 
+![The support ticket queue](help-media:site-administration/support-tickets.png)
+*Every message sent through the contact form arrives here.*
+
 **Administration → Support Tickets** is the queue for the public contact form. A ticket arrives as
 **New**; replying to the sender marks it **Answered** and assigns it to you if nobody had it.
 
@@ -70,6 +79,9 @@ Contact details shown beside the form — postal address, phone, email, when we 
 settings, so they are corrected on the Site Settings page rather than in a deploy.
 
 ## Audit log
+
+![The audit log with its filters](help-media:site-administration/audit-log.png)
+*The audit log records who changed what, and when. Filter it by entity, action, person or date.*
 
 **Administration → Audit Log** records every mutation with who made it. It is filtered and paged
 on the server, so date and user filters apply to the whole history rather than the page on screen.

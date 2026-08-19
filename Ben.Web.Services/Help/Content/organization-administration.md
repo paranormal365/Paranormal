@@ -39,6 +39,9 @@ has decided its people stay unidentified to clients.
 
 ## Members and roles
 
+![The group's members list](help-media:organization-administration/members.png)
+*Members and their roles. Roles decide what each person may do inside the group.*
+
 | Role | Typically |
 |---|---|
 | Owner | Created the group. Full control. |
@@ -84,6 +87,9 @@ Client requests arrive under the group's **Requests**. Mark one as under review 
 Declining tells the client, and lets them send it elsewhere without rewriting it.
 
 ## The group calendar
+
+![The group calendar](help-media:organization-administration/calendar.png)
+*The calendar carries investigations and the group's own events.*
 
 The group's **Calendar** holds meetings, training, anything with a time attached. Investigations
 are scheduled from the case they belong to, not here.
@@ -187,6 +193,9 @@ Neither permission has any say over a member's personal gear. A loan of somebody
 always approved by its owner.
 
 ## Editing your public pages
+
+![The CMS page list](help-media:organization-administration/cms.png)
+*Your public pages. A page is not visible to anyone until you publish it.*
 
 Pages you build under **CMS** appear on your group's public site. Two things control what visitors
 see, and they are different.

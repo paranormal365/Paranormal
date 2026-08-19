@@ -8,6 +8,9 @@ order: 50
 
 ## Your profile
 
+![The profile page](/help/media/your-profile/profile.png)
+*Your profile. Everything here is yours to change, and most of it is private by default.*
+
 **My Profile**, in the menu under your avatar, is where you set your display name and photos.
 Your sign-in address is not changed here and is never shown publicly.
 

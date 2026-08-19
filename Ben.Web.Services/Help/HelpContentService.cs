@@ -1,5 +1,7 @@
 using Ben.Data.Common.Enums;
+using System.Collections.Concurrent;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Markdig;
 
 namespace Ben.Web.Services.Help;
@@ -67,7 +69,104 @@ public sealed class HelpContentService
     }
 
     /// <summary>Renders a document's markdown to HTML.</summary>
-    public string ToHtml(HelpDocument document) => Markdown.ToHtml(document.Markdown, _pipeline);
+    /// <remarks>
+    /// Screenshots for the administrator documents are embedded in this assembly and inlined here
+    /// as data URIs — see <see cref="InlineEmbeddedMedia"/>. Every other document's screenshots are
+    /// ordinary static files under the site's wwwroot and pass through untouched.
+    /// </remarks>
+    public string ToHtml(HelpDocument document)
+        => Markdown.ToHtml(InlineEmbeddedMedia(document.Markdown), _pipeline);
+
+    // ── Embedded media ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Matches an image whose target uses the <c>help-media:</c> scheme, e.g.
+    /// <c>![The audit log](help-media:site-administration/audit-log.png)</c>.
+    /// </summary>
+    private static readonly Regex EmbeddedImage = new(
+        @"!\[(?<alt>[^\]]*)\]\(help-media:(?<path>[A-Za-z0-9][A-Za-z0-9._/-]*)\)",
+        RegexOptions.Compiled);
+
+    // Documents cannot change without a redeploy, so a screenshot's base64 form is computed once
+    // rather than on every page view. Without this, opening an administration document re-encoded
+    // a megabyte of PNG each time.
+    private static readonly ConcurrentDictionary<string, string?> DataUriCache = new();
+
+    /// <summary>
+    /// Replaces <c>help-media:</c> image targets with data URIs read from this assembly's embedded
+    /// resources.
+    /// </summary>
+    /// <remarks>
+    /// <para>Data URIs rather than an image endpoint because a plain <c>&lt;img&gt;</c> sends no
+    /// bearer token: an endpoint that applied the document's own audience gate would refuse
+    /// exactly the readers allowed to see the picture. Inlining also means an administration
+    /// screenshot has no URL to guess, which is the same reason the text is embedded.</para>
+    ///
+    /// <para>A reference with no matching resource degrades to the alt text in italics. A broken
+    /// image icon in a help document is worse than a caption, and <c>HelpMediaReferenceTests</c>
+    /// fails the build for a missing file, so this path only runs if that guard is bypassed.</para>
+    /// </remarks>
+    internal static string InlineEmbeddedMedia(string markdown)
+        => EmbeddedImage.Replace(markdown, match =>
+        {
+            var alt  = match.Groups["alt"].Value;
+            var path = match.Groups["path"].Value;
+
+            // No traversal: the path becomes a resource name, and ".." in one would only ever be
+            // a mistake or an attempt at one.
+            if (path.Contains("..", StringComparison.Ordinal))
+                return $"*{alt}*";
+
+            var uri = DataUriCache.GetOrAdd(path, BuildDataUri);
+            return uri is null ? $"*{alt}*" : $"![{alt}]({uri})";
+        });
+
+    /// <summary>Reads one embedded screenshot and returns it as a data URI, or null if absent.</summary>
+    private static string? BuildDataUri(string path)
+    {
+        var assembly = typeof(HelpContentService).Assembly;
+
+        using var stream = assembly.GetManifestResourceStream(ResourceNameFor(path));
+        if (stream is null) return null;
+
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+
+        var mime = path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) ? "image/gif" : "image/png";
+        return $"data:{mime};base64,{Convert.ToBase64String(buffer.ToArray())}";
+    }
+
+    /// <summary>The manifest resource name for a <c>slug/file.png</c> reference.</summary>
+    /// <remarks>
+    /// MSBuild builds a resource name by turning path separators into dots — but it also replaces
+    /// characters that cannot appear in an identifier within each *directory* segment, so
+    /// <c>Help/Media/site-administration/audit-log.png</c> embeds as
+    /// <c>…Help.Media.site_administration.audit-log.png</c>: the folder's hyphen becomes an
+    /// underscore and the file name's does not. Reconstructing the name without that asymmetry
+    /// reported every screenshot as missing, which is what the guard test caught.
+    /// </remarks>
+    private static string ResourceNameFor(string path)
+    {
+        var prefix = typeof(HelpContentService).Assembly.GetName().Name + ".Help.Media.";
+
+        var split = path.LastIndexOf('/');
+        if (split < 0) return prefix + path;
+
+        var folders = path[..split].Replace('-', '_').Replace('/', '.');
+        var file = path[(split + 1)..];
+        return $"{prefix}{folders}.{file}";
+    }
+
+    /// <summary>
+    /// Whether this assembly carries the screenshot a document references, e.g.
+    /// <c>site-administration/audit-log.png</c>. Used by the guard test that pairs references
+    /// against the files that back them.
+    /// </summary>
+    internal static bool EmbeddedMediaExists(string path)
+        => !path.Contains("..", StringComparison.Ordinal)
+           && typeof(HelpContentService).Assembly
+                  .GetManifestResourceNames()
+                  .Contains(ResourceNameFor(path), StringComparer.Ordinal);
 
     /// <summary>
     /// The headings inside a document, for its on-page contents list. Level-2 headings only —

@@ -8,6 +8,9 @@ order: 55
 
 ## Your equipment list
 
+![A personal equipment list](/help/media/your-equipment/my-equipment.png)
+*My Equipment: everything you own, whether or not anyone else can see or borrow it.*
+
 **My Equipment**, in the main menu, is where you record the gear you own — recorders, cameras,
 meters, lights, anything you take on an investigation. Each piece gets a make and model from the
 shared catalog, a name you choose, and optionally a serial number, an acquisition date, notes and
@@ -146,6 +149,9 @@ Your original file is kept exactly as you sent it and never shown to anyone. The
 are readable only by group Administrators and site administrators.
 
 ## The public catalog
+
+![The public equipment catalog](/help/media/your-equipment/catalog.png)
+*The catalog lists makes and models, and — on its second tab — the gear people have chosen to list. It never names an owner.*
 
 The equipment catalogue — **Equipment** in the menu — is public: anyone can browse it, including
 visitors who are not signed in. It has two halves. *Makes & models* is reference data: what gear exists, by make and model.

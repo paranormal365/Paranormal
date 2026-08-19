@@ -113,3 +113,32 @@ label > .sa-icon,
     max-height: 320px;
     overflow-y: auto;
 }
+
+/* ── Help document screenshots ───────────────────────────────────────────────
+   The help body is rendered markdown, so these elements carry no classes of their own and have to
+   be reached by tag. Screenshots are captured at 2× device scale, so an unconstrained <img> would
+   render at twice its intended width — the max-width is what makes it sharp rather than huge.
+
+   A border matters more here than it looks: the screenshots are captured in dark mode, and a dark
+   screenshot on a dark card has no edge at all without one. */
+.help-body img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 1.25rem 0 0.5rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+    /* The shots are wide-screen captures; without this a tall page reduces them to a strip. */
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+
+/* Markdown has no <figcaption>, so a caption is the italic line an author puts under the image.
+   Styling it as small and secondary is what stops it reading as body prose. */
+.help-body img + em,
+.help-body p > img + em {
+    display: block;
+    margin-bottom: 1.5rem;
+    font-size: 0.875rem;
+    font-style: normal;
+    color: var(--bs-secondary-color);
+}

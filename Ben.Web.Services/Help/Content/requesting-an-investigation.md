@@ -8,6 +8,9 @@ order: 20
 
 ## Before you start
 
+![The new request form](/help/media/requesting-an-investigation/new-request.png)
+*Describing what has been happening. Nothing is sent to a group until you choose one.*
+
 You will be asked to describe what has happened. Write it as plainly as you can, in the order it
 happened. Investigators find dates, times and who was present far more useful than adjectives —
 "three knocks on the north wall, about 2am, twice last week" is worth more than "terrifying
@@ -20,6 +23,9 @@ To look at who is out there first, **Join a Group** lists the groups working in 
 send the same request to more than one; each decides independently whether to take it on.
 
 ## What happens next
+
+![The My Requests list showing a request and its status](/help/media/requesting-an-investigation/my-requests.png)
+*My Requests tracks where each request stands with each group you sent it to.*
 
 1. The group reviews your request. They may mark it as under review while they discuss it.
 2. If they accept, a **case** is opened and you get access to it under **My Cases**.

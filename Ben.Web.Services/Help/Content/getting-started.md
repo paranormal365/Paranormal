@@ -11,6 +11,9 @@ paranormal investigation groups who can look into it.
 
 ## The short version
 
+![The IsHaunted.com home page](/help/media/getting-started/home.png)
+*The home page: search for groups near you, and browse the cases groups have published.*
+
 A **client** describes what has been happening and asks one or more **groups** to take a look.
 A group that accepts opens a **case**. From there, the client and the investigators share a
 timeline of what happened and what was found, and the group schedules **investigations** — visits
@@ -47,6 +50,9 @@ that everyone was undecided — the counts beside it tell you which.
 
 ## Finding what's near you
 
+![The Find Groups page listing nearby groups](/help/media/getting-started/find-groups.png)
+*Browse Groups lists every group, closest first once you have given it a place to measure from.*
+
 The home page shows what's happening close to you — groups that serve your area, and public events
 you could attend. If your browser allows it, this uses your current location automatically; if not,
 type a city, address, or zip code instead. Either way, choose how far to look with the distance
@@ -80,6 +86,9 @@ You need an account to request an investigation or join a group. Accounts are fr
 address you sign in with is never shown publicly.
 
 ## Finding help
+
+![The help index, grouped into sections](/help/media/getting-started/help-index.png)
+*The help index. You only see the topics that apply to your account.*
 
 Every page that does something non-obvious has a small **?** beside it. That opens the relevant
 part of this documentation in a new tab, so you never lose what you were in the middle of.
