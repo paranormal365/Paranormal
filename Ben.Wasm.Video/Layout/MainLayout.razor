@@ -4,6 +4,12 @@
    requires one. TelerikRootComponent is the mandatory Telerik popup/dialog anchor. *@
 <TelerikRootComponent>
     <main class="bwv-main">
+        @* Standalone only. Reached through the site, the editor follows the theme chosen in the
+           site header; on its own there is no header to choose from, so the toggle lives here.
+           A literal onclick rather than @@onclick: this is host chrome, and it should work before
+           and regardless of the Blazor circuit. *@
+        <button type="button" class="bwv-theme-toggle" onclick="benToggleTheme()"
+                title="Switch between light and dark" aria-label="Switch between light and dark"></button>
         @Body
     </main>
 </TelerikRootComponent>

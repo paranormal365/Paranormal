@@ -26,6 +26,19 @@
         }
         document.documentElement.setAttribute('data-bs-theme', theme);
       })();
+
+      /* Flips the theme and writes it back under the template's own keys, so the choice carries
+         to the site and back. Plain global rather than JS interop: the button is host chrome and
+         needs no Blazor round-trip to paint. */
+      function benToggleTheme() {
+        var root = document.documentElement;
+        var next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-bs-theme', next);
+        try {
+          localStorage.setItem('layoutSettings', JSON.stringify({ theme: next }));
+          localStorage.setItem('ben-theme', next);
+        } catch (e) { /* storage blocked — the choice lasts for this page only */ }
+      }
     </script>
     <link rel="icon" type="image/png" href="favicon.png" />
     <!-- RCL scoped CSS — must be linked here so it resolves from / not from the current route -->

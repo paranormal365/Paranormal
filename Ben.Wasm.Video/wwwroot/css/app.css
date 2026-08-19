@@ -206,3 +206,31 @@ code {
 .bwv-login__error { color: var(--bs-danger); }
 .bwv-login__ok    { color: var(--bs-success); }
 .bwv-login__ok a  { color: var(--bs-link-color); }
+
+/* Theme toggle (standalone host only). Sits in the strip of empty toolbar to the right of the
+   editor's own controls. The glyph is chosen by CSS off the root attribute, the same way the
+   template's two-icon switcher works, so no re-render is involved in flipping it. */
+.bwv-theme-toggle {
+    position: fixed;
+    top: .45rem;
+    right: .6rem;
+    z-index: 20;
+    width: 1.9rem;
+    height: 1.9rem;
+    padding: 0;
+    line-height: 1;
+    font-size: .95rem;
+    color: var(--bs-secondary-color);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--bs-border-radius);
+    cursor: pointer;
+}
+
+.bwv-theme-toggle:hover {
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color);
+}
+
+.bwv-theme-toggle::before { content: "\263D"; }                       /* moon: switch to dark */
+:root[data-bs-theme="dark"] .bwv-theme-toggle::before { content: "\2600"; }  /* sun: back to light */
