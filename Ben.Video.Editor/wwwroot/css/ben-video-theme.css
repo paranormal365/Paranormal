@@ -118,3 +118,20 @@
     background-color: var(--bv-surface-1);
     color: var(--bv-text);
 }
+
+/* ── The toolbar's overflow menu must outrank the floating panels ────────────
+   Kendo puts popups at 10002 and windows at 11500, so the Media & Properties window — docked to
+   the right, directly under the "…" button at the right end of the bar — painted over the menu
+   that button opens. Hit-testing each item landed on the window's title bar and tab strip
+   instead: the menu was not merely half-hidden, it was unclickable, and at narrow widths it is
+   the editor's only route to Preview, Export, Undo and Redo.
+
+   A menu the user just opened should win over a panel that was already sitting there; it closes
+   on the next outside click either way. 11600 clears the window layer with room to spare — an
+   earlier attempt at 10050 looked reasonable and changed nothing, because the number to beat is
+   the window's 11500 rather than the 10003 the panel happened to be showing at the time. The
+   container's z-index is written inline by Telerik, so !important is what it takes to overrule
+   it. */
+.k-animation-container:has(.k-toolbar-popup) {
+    z-index: 11600 !important;
+}

@@ -54,18 +54,29 @@
         </ToolBarButton>
 
         <!-- Undo -->
+        @* These three carry a label as well as an icon. They are the only buttons here without
+           Overflow="Never", so they are the ones that can collapse into the "…" menu — and a menu
+           of unlabelled icons makes people guess. The label is hidden while the button is in the
+           bar (see .bv-icon-only in the stylesheet) and shows in the menu, which renders in a
+           popup outside the toolbar. *@
         <ToolBarButton OnClick="OnUndoClicked"
                        Enabled="@CanUndo"
                        Icon="@SvgIcon.Undo"
                        FillMode="@ThemeConstants.Button.FillMode.Flat"
-                       Title="@(UndoDescription is not null ? $"Undo: {UndoDescription}" : "Nothing to undo")" />
+                       Class="bv-icon-only"
+                       Title="@(UndoDescription is not null ? $"Undo: {UndoDescription}" : "Nothing to undo")">
+            Undo
+        </ToolBarButton>
 
         <!-- Redo -->
         <ToolBarButton OnClick="OnRedoClicked"
                        Enabled="@CanRedo"
                        Icon="@SvgIcon.Redo"
                        FillMode="@ThemeConstants.Button.FillMode.Flat"
-                       Title="@(RedoDescription is not null ? $"Redo: {RedoDescription}" : "Nothing to redo")" />
+                       Class="bv-icon-only"
+                       Title="@(RedoDescription is not null ? $"Redo: {RedoDescription}" : "Nothing to redo")">
+            Redo
+        </ToolBarButton>
 
         <!-- File menu — replaces the old Save / Open / Project buttons -->
         <ToolBarTemplateItem>
@@ -124,7 +135,10 @@
                            Enabled="@(HasClips)"
                            ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
                            Icon="@SvgIcon.Cloud"
-                           Title="Save to server" />
+                           Class="bv-icon-only"
+                           Title="Save to server">
+                Save to server
+            </ToolBarButton>
         }
 
         <ToolBarSpacer />

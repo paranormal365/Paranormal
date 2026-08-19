@@ -4691,7 +4691,7 @@ that sizes its container later or differently.
 
 ---
 
-## 93. Editor toolbar — overflow items need labels, and undo/redo need checking (raised 2026-08-19)
+## 93. Editor toolbar — overflow items need labels, and undo/redo need checking (CLOSED 2026-08-19)
 
 Reported against the WASM host, but the toolbar is shared, so both apply to the site too.
 
@@ -4706,6 +4706,34 @@ their tooltips say "Nothing to undo" / "Nothing to redo" — so the first thing 
 whether they stay disabled *after* an edit. If they do, that is a real defect in the undo stack's
 wiring; if they don't, the defect is that a disabled control gives no hint why, which the tooltip
 only fixes for people who hover.
+
+### What it turned out to be
+
+**Undo and redo were never broken.** Measured before and after an edit: with an empty project the
+button reports `Nothing to undo` and disabled; after adding a marker it reports
+`Undo: Add marker "0:00.0"` and enabled. The undo stack was wired correctly the whole time. What
+was true is the second half of the report — a disabled control explains itself only to whoever
+hovers it, and in a dropdown nobody hovers.
+
+**Labels.** Only three buttons could ever reach the "…" menu: Undo, Redo and Save to server. Every
+other icon button in the bar sets `Overflow="Never"` and stays put, and `ToolBarTemplateItem`
+behaves as `Never` regardless. Those three now carry child content, which the menu renders as the
+row's text; a scoped rule hides that text while the button is in the bar, so the bar is unchanged.
+The rule needs `::deep` — the span holding the text is Telerik's, so it never receives this
+component's isolation attribute and a plain descendant selector matches nothing at all.
+
+**And the reason nobody had complained the menu was useless.** It was covered. Kendo puts popups at
+z-index 10002 and windows at 11500, and the Media & Properties window docks to the right, directly
+beneath the "…" button. Hit-testing the menu's four items returned the window's title bar and tab
+strip: not a cosmetic overlap but an unclickable menu, and at narrow widths it is the only route to
+Preview, Export, Undo and Redo. The popup is now raised above the window layer. An earlier attempt
+at 10050 looked plausible and changed nothing, because the number to beat was never the 10003 the
+panel happened to be reporting at the time.
+
+Verified end to end at 900px: added a marker, opened the menu, clicked **Undo** in it, and the
+state went to `Nothing to undo` / `Redo: Add marker "0:00.0"`. Two guards added in
+`ToolbarOverflowLabelTests` — one fails if a button that can overflow has no label, one fails if the
+popup is not raised past 11500 — both confirmed to fail against the unfixed code.
 
 ## 94. Background render stalls at "Processing… 0%" after an overlay is added (CLOSED 2026-08-19)
 

@@ -218,3 +218,20 @@
     mask: url('/_content/Ben.Video.Editor/img/ghost.svg') center / contain no-repeat;
     opacity: .85;
 }
+
+/* ── Icon-only in the bar, labelled in the menu ──────────────────────────────
+   Undo, Redo and Save to server are the only toolbar buttons that may collapse into the "…" menu
+   — every other icon button sets Overflow="Never" and stays put. In the menu they rendered as
+   bare icons, which is a list of guesses; a tooltip does not help there, because a menu is read
+   rather than hovered.
+
+   They now carry a label, hidden here and shown in the menu: the overflow popup renders outside
+   this toolbar — in a container appended to the body — so a rule anchored to the bar cannot
+   reach it, and the menu keeps its copy of the label.
+
+   ::deep is required. The span holding the text is rendered by Telerik, not by this file, so it
+   never receives this component's isolation attribute and an ordinary descendant selector
+   silently matches nothing. */
+.bv-toolbar ::deep .bv-icon-only .k-button-text {
+    display: none;
+}
