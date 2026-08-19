@@ -39,9 +39,9 @@ public abstract class BenTestBase : PageTest
     /// <summary>
     /// Root URL of the front end under test. Override with the BEN_BASE_URL env var.
     /// <para>
-    /// Defaults to :5078 — <c>Ben.Web.Website</c>, now that every page has been ported to it.
-    /// The original <c>Ben.Web.WebApp</c> still runs on :5079; point <c>BEN_BASE_URL</c> there to
-    /// run the same suite against it.
+    /// Defaults to :5078 — <c>Ben.Web.Website</c>, which is now the only front end. The original
+    /// <c>Ben.Web.WebApp</c> was removed once the port was complete; it is still readable at the
+    /// <c>pre-old-site-removal</c> tag if a behaviour ever needs comparing against it.
     /// </para>
     /// </summary>
     protected static string BaseUrl => Environment.GetEnvironmentVariable("BEN_BASE_URL") ?? "http://localhost:5078";

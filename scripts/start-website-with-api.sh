@@ -6,7 +6,7 @@ set -euo pipefail
 #
 # :5078 matters specifically: it is the redirect URI registered with Entra
 # (http://localhost:5078/signin-oidc) and an allow-listed CORS origin on the API, so Microsoft
-# sign-in works here without touching the app registration. The original Ben.Web.WebApp now runs
+# sign-in works here without touching the app registration. The original Ben.Web.WebApp (removed 2026-08-19, see the pre-old-site-removal tag) ran
 # on :5079 via start-webapp-with-api.sh; both can run at once.
 #
 # All the actual startup logic lives in the sibling script — this only chooses the project and URL.

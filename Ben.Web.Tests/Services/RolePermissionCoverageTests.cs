@@ -32,7 +32,7 @@ public sealed class RolePermissionCoverageTests
 
     private static string RoleEditorSource()
         => File.ReadAllText(Path.Combine(
-            RepoRoot().FullName, "Ben.Web.Library", "Organization", "Roles", "OrgRoleEditor.razor"));
+            RepoRoot().FullName, "Ben.Web.Website.Library", "Organization", "Roles", "OrgRoleEditor.razor"));
 
     /// <summary>
     /// Values an organization role is not meant to grant.

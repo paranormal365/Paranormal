@@ -7,7 +7,7 @@ namespace Ben.Web.Tests;
 /// <summary>
 /// Tests for CaseReport entity, enums, and the shared PDF generator.
 /// Record types (CaseReportSummary etc.) are defined in both Ben.Data.WebApi
-/// and Ben.Web.Library global namespaces — ambiguous in tests; tested via enums and entity instead.
+/// and Ben.Web.Website.Library global namespaces — ambiguous in tests; tested via enums and entity instead.
 /// </summary>
 public class CaseReportTests
 {

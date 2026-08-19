@@ -32,7 +32,7 @@ public sealed class ReachableComponentTests
     }
 
     private static IEnumerable<string> RazorSources()
-        => new[] { "Ben.Web.Library", "Ben.Web.WebApp" }
+        => new[] { "Ben.Web.Website.Library", "Ben.Web.Website" }
             .Select(p => Path.Combine(RepoRoot().FullName, p))
             .Where(Directory.Exists)
             .SelectMany(d => Directory.EnumerateFiles(d, "*.razor", SearchOption.AllDirectories))
