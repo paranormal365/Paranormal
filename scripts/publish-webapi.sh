@@ -19,6 +19,7 @@ set -euo pipefail
 
 SQL_CONN="${1:-}"
 FILE_ROOT="${2:-}"
+STDOUT_LOG="${3:-0}"     # pass 1 during bring-up to capture startup exceptions
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="$ROOT/artifacts/webapi"
 
@@ -48,38 +49,32 @@ dotnet publish "$ROOT/Ben.Data.WebApi" -c Release -r win-x64 --self-contained fa
 [ -f "$OUT/Ben.Data.WebApi.dll" ] || { echo "publish produced no Ben.Data.WebApi.dll" >&2; exit 1; }
 [ -f "$OUT/web.config" ]          || { echo "publish produced no web.config — IIS cannot host this" >&2; exit 1; }
 
-python3 - "$OUT/appsettings.Production.json" "$SQL_CONN" "$FILE_ROOT" <<'PY'
-import json, sys
-path, sql, root = sys.argv[1], sys.argv[2], sys.argv[3]
-
-cfg = {
-    "ConnectionStrings": {"BenDbConnectionString": sql},
-    # Serilog's sink reads its own connection string from its own Args, so pointing the app at a
-    # database is not enough — this is a second place the same value has to appear.
-    "Serilog": {"WriteTo": [{"Name": "MSSqlServer", "Args": {
-        "connectionString": sql, "tableName": "Logs", "autoCreateSqlTable": True,
-        "restrictedToMinimumLevel": "Error",
-    }}]},
-}
-
-if root:
-    cfg["FileStorage"] = {"RootPath": root}
-
-open(path, "w", encoding="utf-8").write(json.dumps(cfg, indent=2) + "\n")
-print(f"  wrote {path.split('/')[-1]}")
-PY
+# UAT, not production: this server is a persistent environment Ben develops against, so it
+# wants the settings he actually runs with. The first cut of this script wrote a minimal
+# production config and stripped the Telerik licence, the Geocodio key, the Entra registration
+# and AppBaseUrl — every one of which turns a feature off silently rather than loudly.
+python3 "$ROOT/scripts/uat-webapi-config.py" \
+    "$ROOT/Ben.Data.WebApi/appsettings.Development.json" \
+    "$OUT/appsettings.Production.json" \
+    "$SQL_CONN" "$FILE_ROOT" "https://ishaunted.com"
 
 rm -f "$OUT/appsettings.Development.json"
 
+# Startup logging. A .NET app that dies before its own logger exists reports HTTP 500.30 and
+# nothing else — the exception goes to stdout, which IIS discards unless this is on. The log
+# directory has to exist too: the module does not create it, and a missing folder silently
+# disables the log you just switched on. Off by default because it grows without bound; worth
+# having during bring-up, when the only question is why the thing will not start.
+if [ "$STDOUT_LOG" = "1" ]; then
+    mkdir -p "$OUT/logs"
+    sed -i "" 's/stdoutLogEnabled="false"/stdoutLogEnabled="true"/' "$OUT/web.config"
+    grep -q 'stdoutLogEnabled="true"' "$OUT/web.config" \
+        || { echo "failed to enable stdout logging in web.config" >&2; exit 1; }
+    echo "  startup logging ON -> logs\\stdout*.log (turn it off once the site is up)"
+fi
+
 echo
 echo "Checks:"
-python3 -c "
-import json
-c = json.load(open('$OUT/appsettings.Production.json'))
-print('  connection string set :', bool(c['ConnectionStrings']['BenDbConnectionString']))
-print('  file storage root     :', c.get('FileStorage', {}).get('RootPath') or '(unset)')
-print('  smtp password present :', 'Smtp' in c, '(must be false — it belongs in an env var)')
-"
 echo "  web.config present (AspNetCoreModuleV2)"
 echo "  $(du -sh "$OUT" | cut -f1) total"
 echo
