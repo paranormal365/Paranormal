@@ -4869,3 +4869,23 @@ page built for fewer of them.
 
 Worth deciding up front which sections are prominent — most people come to this page to change one
 thing — and whether the investigation map belongs on the profile at all or behind its own tab.
+
+---
+
+## 100. Internal messages — adopt the template's mail layout (raised 2026-08-19)
+
+Ben likes the SmartAdmin system-mail demo for our internal messaging:
+<https://getwebora.com/smartadmin/demo/systemmail.html>
+
+Three surfaces could share it, and they should look like one thing rather than three:
+
+- the **case message board** (client ↔ group), today a plain list;
+- **platform messages** from site administrators;
+- the **notifications** page, which is closer to a feed but shares the read/unread rhythm.
+
+The demo's useful parts are the list/detail split, the unread treatment, and the sender block —
+all of which we already have data for. What it does not cover is who may see a given message, which
+is the part our version cannot borrow: case messages carry visibility rules and platform messages
+carry an audience, so the layout has to leave room to say so on each row.
+
+Sequence this after item 99 — they are the same kind of work and share the card and header idioms.
