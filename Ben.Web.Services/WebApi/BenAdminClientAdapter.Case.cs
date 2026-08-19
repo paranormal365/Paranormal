@@ -60,13 +60,19 @@ public sealed partial class BenAdminClientAdapter
     // ── Case votes ────────────────────────────────────────────────────────────
 
     public Task<CaseVoteSummary?> GetCaseVoteSummaryAsync(Guid caseId, CancellationToken token = default)
-        => _api.GetAnonymousAsync<CaseVoteSummary>($"/api/public/cases/{caseId}/votes", token);
+        // GetAsync, not GetAnonymousAsync: this endpoint is [AllowAnonymous] but fills in the
+        // viewer's own answer when a token is present, and sending none meant that field came
+        // back empty for everyone. The token is attached only when there is one, so a genuine
+        // visitor is unaffected.
+        => _api.GetAsync<CaseVoteSummary>($"/api/public/cases/{caseId}/votes", token);
 
     public async Task<IReadOnlyList<CaseVoteSummary>> GetCaseVoteSummariesAsync(IEnumerable<Guid> caseIds, CancellationToken token = default)
     {
         var qs = string.Join("&", caseIds.Select(id => $"caseIds={id}"));
         if (string.IsNullOrEmpty(qs)) return [];
-        var result = await _api.GetAnonymousAsync<IReadOnlyList<CaseVoteSummary>>(
+        // Same reason as the single-case summary above: these carry the viewer's own vote, which
+        // is what marks a card as already voted on in a list.
+        var result = await _api.GetAsync<IReadOnlyList<CaseVoteSummary>>(
             $"/api/public/cases/vote-summaries?{qs}", token);
         return result ?? [];
     }

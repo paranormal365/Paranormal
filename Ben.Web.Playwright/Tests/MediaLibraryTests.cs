@@ -123,30 +123,15 @@ public class MediaLibraryTests : BenTestBase
     private async Task NavigateToTghCaseFilesTab()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah — TGH org member
-        // SPA nav-link click, not Page.GotoAsync — see the note above the standalone-page
-        // tests: a hard navigation to an authenticated route currently mis-redirects here too.
-        await Page.GetByRole(AriaRole.Link, new() { Name = "Organizations", Exact = true }).Or(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Organizations", Exact = true })).First.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var tgh = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
-        if (!await tgh.IsVisibleAsync()) { Assert.Pass("TGH org not visible; seed data may differ."); return; }
-        await tgh.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // The shared walk. This had its own copy, written against the original site: it clicked
+        // the organisation's name (a grid cell here, not a link) after an unretried nav click, so
+        // it was really operating on whatever page it had failed to leave.
+        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+            Assert.Ignore("TGH case not in the seed data.");
 
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Main.GetByText("Cases", new() { Exact = true })).First;
-        await casesLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var caseItem = Page.GetByText("Park", new() { Exact = false }).First;
-        await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await caseItem.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var filesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Files", Exact = true })
-                           .Or(Main.GetByText("Files", new() { Exact = true })).First;
-        await filesTab.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await OpenTabAsync("Files", Main.GetByRole(AriaRole.Button, new() { Name = "Attach from Library", Exact = false })
+                                        .Or(Main.GetByText("No files", new() { Exact = false })));
     }
 
     [Test]

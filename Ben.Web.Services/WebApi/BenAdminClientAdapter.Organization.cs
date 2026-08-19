@@ -170,9 +170,12 @@ public sealed partial class BenAdminClientAdapter
         return result ?? [];
     }
 
-    // Anonymous: a visitor who has never signed in is the whole audience for this.
+    // Readable by a visitor who has never signed in — but the response also carries the viewer's
+    // own RSVP and whether they organise the event, and fetching it anonymously meant a signed-in
+    // visitor never saw either. GetAsync attaches a token only when there is one, so the anonymous
+    // case is unchanged.
     public Task<PublicEventRecord?> GetPublicEventAsync(string orgUrlName, string eventSlug, CancellationToken token = default)
-        => _api.GetAnonymousAsync<PublicEventRecord>(
+        => _api.GetAsync<PublicEventRecord>(
                $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/events/{Uri.EscapeDataString(eventSlug)}", token);
 
     public async Task<IReadOnlyList<PublicEventListItem>> GetMyPublicEventsAsync(CancellationToken token = default)
