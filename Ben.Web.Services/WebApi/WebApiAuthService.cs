@@ -13,11 +13,22 @@ public sealed class WebApiAuthService : IWebApiAuthService
         _tokenStore = tokenStore;
     }
 
+    /// <inheritdoc />
+    public LoginFailure? LastLoginFailure { get; private set; }
+
     public async Task<bool> LoginAsync(string email, string password, CancellationToken token = default)
     {
-        var response = await _identityClient.LoginAsync(email, password, token);
+        var attempt = await _identityClient.TryLoginAsync(email, password, token);
+        var response = attempt.Token;
         if (response is null || string.IsNullOrWhiteSpace(response.AccessToken))
+        {
+            LastLoginFailure = attempt.WasRateLimited
+                ? LoginFailure.RateLimited
+                : LoginFailure.InvalidCredentials;
             return false;
+        }
+
+        LastLoginFailure = null;
 
         ApplyTokenResponse(response);
         _tokenStore.UserEmail = email;

@@ -67,8 +67,7 @@ public abstract class BenTestBase : PageTest
         // Both sites are covered: the original's Telerik TextBox renders a plain <input> with no
         // type or id and the placeholder "you@example.com", while the new one gives it
         // id="login-email". The alternation matches either.
-        await Page.FillAsync("input[type='email'], input[placeholder*='email' i], input[id*='email' i], input[placeholder='you@example.com']", email);
-        await Page.FillAsync("input[type='password']", password);
+        await FillCredentialsAsync(email, password);
 
         // Submitting is retried for the same reason every other click here is: Blazor Server
         // attaches its handlers when the circuit connects, which happens *after* NetworkIdle, and
@@ -79,7 +78,7 @@ public abstract class BenTestBase : PageTest
         // Scoped to the login <form>: the app bar also carries button[type='submit'] elements
         // (the icon toggle, and Sign Out when already authenticated), and an unscoped selector
         // matches one of those instead.
-        for (var attempt = 0; attempt < 3; attempt++)
+        for (var attempt = 0; attempt < 5; attempt++)
         {
             try
             {
@@ -98,6 +97,16 @@ public abstract class BenTestBase : PageTest
             }
             catch (TimeoutException)
             {
+                // The API rate-limits sign-in: a fixed one-minute window per client. A suite this
+                // size, retrying, is exactly the traffic that limiter exists to refuse — so back
+                // off and let the window roll rather than spending the retries inside it. This is
+                // the suite adapting to a real protection, not the protection being wrong.
+                if (await Page.GetByText("Too many sign-in attempts", new() { Exact = false })
+                              .CountAsync() > 0)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(20));
+                }
+
                 // Dropped click, bad credentials, or a navigation still in flight from a sign-out
                 // that had not finished — that last one moves the page out from under the form
                 // mid-fill. Go back to a known state rather than assuming the form is still there,
@@ -109,8 +118,7 @@ public abstract class BenTestBase : PageTest
                     if (!Page.Url.Contains("/login")) return;   // already signed in as this user
                 }
 
-                await Page.FillAsync("input[type='email'], input[placeholder*='email' i], input[id*='email' i], input[placeholder='you@example.com']", email);
-                await Page.FillAsync("input[type='password']", password);
+                await FillCredentialsAsync(email, password);
             }
         }
 
@@ -129,6 +137,35 @@ public abstract class BenTestBase : PageTest
         Assert.That(Page.Url, Does.Not.Contain("/login"),
             $"sign-in as {email} never left the login page. Page reported: {shown}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+    }
+
+    private const string EmailSelector =
+        "input[type='email'], input[placeholder*='email' i], input[id*='email' i], input[placeholder='you@example.com']";
+
+    /// <summary>
+    /// Types the credentials and confirms the fields actually hold them before returning.
+    /// <para>
+    /// Filling two Blazor-bound inputs back to back is not reliable: the first field's value
+    /// change re-renders the component, and that render can land while the second field is being
+    /// set, wiping it. The form then submits an empty password and the server answers "Invalid
+    /// email or password" — with credentials that are perfectly good, which is what made this look
+    /// like an account problem rather than a typing one.
+    /// </para>
+    /// </summary>
+    private async Task FillCredentialsAsync(string email, string password)
+    {
+        var emailBox    = Page.Locator(EmailSelector).First;
+        var passwordBox = Page.Locator("input[type='password']").First;
+
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            await emailBox.FillAsync(email);
+            await passwordBox.FillAsync(password);
+
+            if (await emailBox.InputValueAsync() == email
+             && await passwordBox.InputValueAsync() == password)
+                return;
+        }
     }
 
     /// <summary>

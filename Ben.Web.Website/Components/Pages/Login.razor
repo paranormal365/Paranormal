@@ -123,7 +123,12 @@
         }
         else
         {
-            _errorMessage = "Invalid email or password.";
+            // Not always the password. The API rate-limits sign-in attempts, and reporting that
+            // refusal as "Invalid email or password" sends someone off to reset a password that
+            // was never wrong.
+            _errorMessage = AuthService.LastLoginFailure == LoginFailure.RateLimited
+                ? "Too many sign-in attempts. Please wait a minute and try again."
+                : "Invalid email or password.";
             _isLoading = false;
         }
     }

@@ -12,6 +12,9 @@ public sealed class WebApiIdentityClient : IWebApiIdentityClient
     }
 
     public async Task<WebApiTokenResponse?> LoginAsync(string email, string password, CancellationToken token = default)
+        => (await TryLoginAsync(email, password, token)).Token;
+
+    public async Task<LoginAttempt> TryLoginAsync(string email, string password, CancellationToken token = default)
     {
         using var response = await _httpClient.PostAsJsonAsync(
             "/login",
@@ -20,10 +23,12 @@ public sealed class WebApiIdentityClient : IWebApiIdentityClient
 
         if (!response.IsSuccessStatusCode)
         {
-            return null;
+            return new LoginAttempt(null, (int)response.StatusCode);
         }
 
-        return await response.Content.ReadFromJsonAsync<WebApiTokenResponse>(cancellationToken: token);
+        return new LoginAttempt(
+            await response.Content.ReadFromJsonAsync<WebApiTokenResponse>(cancellationToken: token),
+            (int)response.StatusCode);
     }
 
     public async Task<WebApiTokenResponse?> RefreshAsync(string refreshToken, CancellationToken token = default)
