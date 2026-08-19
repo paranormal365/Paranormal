@@ -421,14 +421,17 @@ public sealed class HelpMediaCapture : BenTestBase
         // finish, which is a defect in its own right and not something to wait on here.
         await WaitForReadyWithTrailAsync(240);
 
+        // DOM click: the media panel floats over the right-hand end of the toolbar, so a real
+        // pointer click on a button beneath it is intercepted.
         await Page.GetByTitle("Render the final video locally in the browser (ffmpeg.wasm), then save or upload")
-                  .First.ClickAsync();
+                  .First.EvaluateAsync("el => el.click()");
         await Page.WaitForTimeoutAsync(1_500);
         await ShootAsync("using-the-video-editor", "export-dialog.png");
         await CloseAnyWindowAsync();
 
         // ── The native helper ─────────────────────────────────────────────────
-        await Page.GetByTitle("Native acceleration status — click to manage").First.ClickAsync();
+        await Page.GetByTitle("Native acceleration status — click to manage").First
+                  .EvaluateAsync("el => el.click()");
         await Page.WaitForTimeoutAsync(1_000);
         await ShootAsync("using-the-video-editor", "sidecar-panel.png");
         await CloseAnyWindowAsync();
@@ -657,43 +660,8 @@ public sealed class HelpMediaCapture : BenTestBase
         await Page.WaitForTimeoutAsync(1_200);
     }
 
-    [Test]
-    [Description("TEMPORARY probe for item 94 — full ffmpeg console output around the stall.")]
-    public async Task Probe_StallConsole()
-    {
-        var all = new List<string>();
-        Page.Console += (_, m) => all.Add($"[{m.Type}] {m.Text}");
 
-        await LoginAsync(UserEmail, UserPassword);
-        await GoAsync("/my-videos");
-        await Expect(Page.Locator(".bv-editor")).ToBeVisibleAsync(new() { Timeout = 30_000 });
-        await Page.WaitForTimeoutAsync(1_500);
 
-        await InitializeFfmpegAsync();
-        await ImportFromServerAsync("porch-camera");
-        await ImportFromServerAsync("hallway-camera");
-
-        var status = Page.Locator(".bv-toolbar__status").First;
-        for (var i = 0; i < 10 && !(await status.InnerTextAsync()).Contains("Ready"); i++)
-            await Page.WaitForTimeoutAsync(2_000);
-
-        var mark = all.Count;
-        TestContext.Out.WriteLine($"=== state before selecting: {(await status.InnerTextAsync()).Trim()} ===");
-
-        await Page.Locator(".bv-clip-chip").First.ClickAsync();
-
-        for (var i = 0; i < 12; i++)
-        {
-            await Page.WaitForTimeoutAsync(5_000);
-            var s = (await status.InnerTextAsync()).Trim();
-            if (s.Contains("Ready")) { TestContext.Out.WriteLine($"recovered after {(i + 1) * 5}s"); break; }
-        }
-
-        TestContext.Out.WriteLine($"=== state after: {(await status.InnerTextAsync()).Trim()} ===");
-        TestContext.Out.WriteLine("=== console after selecting a clip ===");
-        foreach (var line in all.Skip(mark).TakeLast(60))
-            TestContext.Out.WriteLine("  " + line);
-    }
 
     // ── Group members ─────────────────────────────────────────────────────────
 

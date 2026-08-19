@@ -482,10 +482,25 @@
     protected override void OnInitialized()
     {
         NativeSidecar.OnChanged += OnNativeSidecarChanged;
+
+        // This toolbar reads the ffmpeg state straight from the injected service — the status
+        // chip, its progress bar, and the Enabled of Initialize/Open/Preview/Export all depend on
+        // it — but nothing here re-renders when that state changes. The parent re-rendering is not
+        // enough: Blazor skips a child whose parameters have not changed, and going from
+        // Processing back to Ready changes none of this component's parameters.
+        //
+        // The result was a toolbar frozen mid-render: a chip stuck at "Processing… 33%" with
+        // Export greyed out behind it, while the service had long since returned to Ready — a
+        // stale paint, not a stalled render, and it survived until something else happened to
+        // change a parameter.
+        Ffmpeg.OnStateChanged += OnFfmpegStateChanged;
+
         if (ShowNativeSidecar) _ = NativeSidecar.ProbeAsync();
     }
 
     private void OnNativeSidecarChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnFfmpegStateChanged() => InvokeAsync(StateHasChanged);
 
     private string SidecarChipLabel() => NativeSidecar.State switch
     {
@@ -496,7 +511,11 @@
         _ => "",
     };
 
-    void IDisposable.Dispose() => NativeSidecar.OnChanged -= OnNativeSidecarChanged;
+    void IDisposable.Dispose()
+    {
+        NativeSidecar.OnChanged -= OnNativeSidecarChanged;
+        Ffmpeg.OnStateChanged   -= OnFfmpegStateChanged;
+    }
 
     /// <summary>Audit #4 — releases the cached domInterop handle. Separate from the sync
     /// <see cref="Dispose"/> above (which only unsubscribes events) because a JS module handle can

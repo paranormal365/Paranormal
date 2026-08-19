@@ -4707,7 +4707,7 @@ whether they stay disabled *after* an edit. If they do, that is a real defect in
 wiring; if they don't, the defect is that a disabled control gives no hint why, which the tooltip
 only fixes for people who hover.
 
-## 94. Background render stalls at "Processing… 0%" after an overlay is added (raised 2026-08-19)
+## 94. Background render stalls at "Processing… 0%" after an overlay is added (CLOSED 2026-08-19)
 
 Hit while automating the editor for the help screenshots, in the site host. Sequence: import two
 clips, select a clip, add a text overlay, add a callout. The ffmpeg status chip then went to
@@ -4755,11 +4755,32 @@ rather than the state machine being wrong:
 - **the `WorkerWatchdog` never declared it wedged**, so the chip never offered its "⚠ Stuck —
   Reset?" affordance and the user has no way out short of reloading.
 
-Two things to chase next: which command is issued when a clip is selected (a fine-pass render is
-the likely candidate, and the diagnostics panel does not name the command — only the log tail), and
-why the watchdog does not fire on a promise that never settles. The second matters more: whatever
-the trigger, a hung worker should surface as an offer to reset rather than as a progress bar that
-stopped.
+### Root cause found and fixed 2026-08-19 — nothing was ever stuck
+
+**The render was never hung. The toolbar had stopped repainting.**
+
+The decisive measurement: with the chip reading `Processing… 33%`, opening the diagnostics panel in
+the same second reported `State | Ready`. Two components, one service, two different answers — so
+the disagreement was in the rendering, not in ffmpeg.
+
+`Toolbar.razor` reads `Ffmpeg.State` straight from the injected service — the status chip, its
+progress bar, and the `Enabled` of Initialize, Open, Preview and Export all depend on it — and
+subscribed to nothing, relying on its parent re-rendering. Blazor skips a child whose parameters
+have not changed, and going from Processing back to Ready changes none of the toolbar's parameters.
+So the toolbar kept painting whatever was true at its last render, indefinitely, and Export stayed
+greyed out behind a progress bar that had stopped.
+
+The percentage differing run to run (33, 47, 50, 64, 65) was the giveaway in hindsight: it was
+whatever the last painted value happened to be.
+
+`Ffmpeg.OnStateChanged` is now subscribed — and the guard test written alongside found the same
+defect in three more components: `MediaLibraryPicker` (whose Import button would stay disabled
+after ffmpeg became ready), `ClipBrowser`, and `DiagnosticsPanel` itself. All four fixed.
+
+The watchdog was right not to fire: nothing was wedged.
+
+Two real bugs were found on the way there and are worth keeping separately in mind — the two audio
+mapping defects above — but neither was the stall.
 
 
 ---

@@ -127,7 +127,14 @@ finished result before committing to it. Meanwhile the editor keeps its own roug
 date in the background as you work — which is why the status chip sometimes says it is busy shortly
 after an edit.
 
-**Export** renders the final video. You choose where it goes at that point:
+![The Render and Export dialog](/help/media/using-the-video-editor/export-dialog.png)
+*Presets for the common cases, and every setting underneath them if you want it.*
+
+**Export** renders the final video. Start from a preset — Web HD, High Quality, 720p, Mobile or
+WebM — and adjust only what you care about: format, codec, quality, resolution and frame rate.
+**Export Now** renders immediately; **Add to Queue** lines it up so you can keep working.
+
+You choose where the result goes:
 
 - **To your machine** — the file is saved locally and never leaves it.
 - **To the server** — the finished video is uploaded and becomes an ordinary file in your media

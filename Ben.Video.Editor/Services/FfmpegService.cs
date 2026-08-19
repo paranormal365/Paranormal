@@ -770,9 +770,21 @@ public sealed class FfmpegService : IAsyncDisposable
     /// try/catch around a call site still runs exactly as before. Diagnostics-only; no behavior
     /// change to the happy or failure path.
     /// </summary>
+    /// <summary>
+    /// The worker call currently in flight, and when it started — null when nothing is running.
+    /// </summary>
+    /// <remarks>
+    /// The operation trace records calls when they <i>finish</i>, so a call that never comes back
+    /// leaves no trace at all: the panel shows the last thing that completed and says nothing
+    /// about what the editor is actually waiting on. That is precisely the state worth reporting,
+    /// and it was invisible while diagnosing a preview render that stopped advancing.
+    /// </remarks>
+    public (string Operation, DateTime StartedAtUtc)? InFlight { get; private set; }
+
     private async Task<T> InvokeTracedAsync<T>(string operation, Func<Task<T>> invoke)
     {
         var startedAt = DateTime.UtcNow;
+        InFlight = (operation, startedAt);
         try
         {
             var result = await invoke();
@@ -784,12 +796,17 @@ public sealed class FfmpegService : IAsyncDisposable
             RecordOperation(operation, startedAt, success: false);
             throw;
         }
+        finally
+        {
+            InFlight = null;
+        }
     }
 
     /// <summary>Void-returning counterpart to <see cref="InvokeTracedAsync{T}"/>.</summary>
     private async Task InvokeTracedAsync(string operation, Func<Task> invoke)
     {
         var startedAt = DateTime.UtcNow;
+        InFlight = (operation, startedAt);
         try
         {
             await invoke();
@@ -799,6 +816,10 @@ public sealed class FfmpegService : IAsyncDisposable
         {
             RecordOperation(operation, startedAt, success: false);
             throw;
+        }
+        finally
+        {
+            InFlight = null;
         }
     }
 
