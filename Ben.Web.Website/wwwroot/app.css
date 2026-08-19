@@ -418,6 +418,24 @@ html[data-bs-theme="dark"] {
         transition: width 470ms cubic-bezier(.34, 1.25, .3, 1);
     }
 
+    /* The sidebar is not a flat colour: the template washes it with a gradient —
+       linear-gradient(270deg, rgba(var(--bs-info-rgb), .18), transparent), repeating down — and
+       the brand block was painted the flat --app-nav-bg underneath it. Same colour, different
+       surface, and the seam showed as a rectangle of slightly cooler navy sitting on a warmer
+       column.
+
+       The template hits the same problem with its own brand and answers it the same way, on
+       .app-header .app-logo and under the same guard: light page, dark nav. In dark mode the
+       sidebar drops the gradient, so both are flat and matching already, and adding it here
+       would create the seam rather than close it.
+
+       Both boxes are var(--menu-width) wide, so the gradient lands identically across them. */
+    .set-nav-dark:not([data-bs-theme="dark"]) .app-header .ben-brand {
+        background-image: linear-gradient(270deg, rgba(var(--bs-info-rgb), .18), transparent);
+        background-repeat: repeat-y;
+        background-position: left top;
+    }
+
     /* Minified nav: the block shrinks with it, leaving the mark and hiding the wordmark. */
     .set-nav-minified:not(.set-nav-collapsed) .app-header .ben-brand {
         width: var(--menu-width-minified);

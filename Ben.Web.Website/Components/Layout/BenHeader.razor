@@ -17,7 +17,11 @@
 
 <header class="app-header">
 
-    <div class="d-flex flex-grow-1 w-100 me-auto align-items-center">
+    @* align-self-stretch is what lets the brand block reach the full height of the header. Without
+       it this wrapper is only as tall as its tallest child — 30px — and the brand's own stretch
+       can never exceed it, leaving the navigation's colour as a floating strip with white above
+       and below it. The children stay centred; only this box grows. *@
+    <div class="d-flex flex-grow-1 w-100 me-auto align-items-center align-self-stretch">
 
         @* Logo and wordmark sit ahead of the toggles, as in the template's own header.
            Deliberately NOT the template's .app-logo class: that is a fixed 252px block shaped
