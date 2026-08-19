@@ -76,7 +76,7 @@
                                 <div>
                                     <strong class="small">Anomaly Highlight</strong>
                                     <div class="d-flex gap-1 align-items-center mt-1">
-                                        <TelerikColorPicker @bind-Value="_anomalyColor" ShowPreview="true" />
+                                        <BenColorPicker @bind-Value="_anomalyColor" />
                                         <button type="button" class="btn btn-secondary btn-sm" @onclick="AddAnomalyHighlight">Add</button>
                                     </div>
                                 </div>
@@ -108,7 +108,7 @@
                         <BenPanel Title="Tool Options" Collapsed="false" Class="mb-2">
                                 <div class="d-flex flex-column gap-1 pt-1">
                                     <label class="small">Color</label>
-                                    <TelerikColorPicker @bind-Value="_drawColor" ShowPreview="true" />
+                                    <BenColorPicker @bind-Value="_drawColor" />
                                     @if (_tool is not "text")
                                     {
                                         <label class="small">Width @_drawWidth</label>

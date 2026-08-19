@@ -33,9 +33,9 @@
 
         @* Tabs — only active tab renders its gallery (lazy) *@
         <div class="flex-grow-1 overflow-hidden">
-            <TelerikTabStrip @bind-ActiveTabId="@_activeTabId">
+            <BenTabs @bind-ActiveId="@_activeTabId">
 
-                <TabStripTab Id="telerik" Title="Telerik Icons">
+                <BenTab Id="telerik" Title="Telerik Icons">
                     @if (_activeTabId == "telerik")
                     {
                         var list = FilteredTelerik.ToList();
@@ -55,9 +55,9 @@
                             </div>
                         }
                     }
-                </TabStripTab>
+                </BenTab>
 
-                <TabStripTab Id="bootstrap" Title="Bootstrap Icons">
+                <BenTab Id="bootstrap" Title="Bootstrap Icons">
                     @if (_activeTabId == "bootstrap")
                     {
                         var list = FilteredBootstrap.ToList();
@@ -77,9 +77,9 @@
                             </div>
                         }
                     }
-                </TabStripTab>
+                </BenTab>
 
-                <TabStripTab Id="fontawesome" Title="Font Awesome">
+                <BenTab Id="fontawesome" Title="Font Awesome">
                     @if (_activeTabId == "fontawesome")
                     {
                         var list = FilteredFontAwesome.ToList();
@@ -99,9 +99,9 @@
                             </div>
                         }
                     }
-                </TabStripTab>
+                </BenTab>
 
-            </TelerikTabStrip>
+            </BenTabs>
         </div>
 
     </div>

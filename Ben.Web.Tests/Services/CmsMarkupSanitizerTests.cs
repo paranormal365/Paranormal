@@ -1,5 +1,5 @@
 using Ben.Data.WebApi.Services;
-using Ben.Web.Library.Organization.Cms;
+using Ben.Web.Website.Library.Organization.Cms;
 using Xunit;
 
 namespace Ben.Web.Tests.Services;

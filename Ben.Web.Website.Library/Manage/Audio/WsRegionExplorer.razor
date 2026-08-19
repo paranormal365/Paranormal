@@ -225,11 +225,11 @@
 </BenModal>
 
 @* ── Sub-region context menu (right-click inside explorer's own player) ── *@
-<TelerikContextMenu @ref="_subRegionMenu"
+<BenContextMenu @ref="_subRegionMenu"
                     Data="@_subMenuItems"
                     TextField="@nameof(RegionMenuItem.Text)"
                     OnClick="@(async (RegionMenuItem item) => await OnSubMenuClickAsync(item))">
-</TelerikContextMenu>
+</BenContextMenu>
 
 @* ── Edit label dialog ──────────────────────────────────────────────────── *@
 <BenModal @bind-Visible="@_showEditLabelDialog" Title="Edit Region Label" Size="sm">
@@ -329,7 +329,7 @@
 
     // ── Sub-region context menu state ─────────────────────────────────────────
 
-    private TelerikContextMenu<RegionMenuItem>? _subRegionMenu;
+    private BenContextMenu<RegionMenuItem>? _subRegionMenu;
     private WsRegionContextMenuArgs?            _pendingSubRegion;
     private bool                                _showEditLabelDialog;
     private string                              _editLabelText = string.Empty;

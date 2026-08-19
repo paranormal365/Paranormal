@@ -1,0 +1,89 @@
+@typeparam TItem
+
+@*
+    TelerikContextMenu replacement, on Bootstrap's dropdown markup.
+
+    No JavaScript anywhere. Blazor's @oncontextmenu already hands the click coordinates to C# as
+    MouseEventArgs, which is how the call sites opened the Telerik menu too — so ShowAsync(x, y)
+    is a drop-in and the whole control is C# and CSS.
+
+    Staying on screen is done in CSS rather than by measuring the viewport through interop: min()
+    against 100vw/100vh clamps the menu inside the window, and the fixed width makes that clamp
+    exact. A menu opened near the right or bottom edge slides back into view instead of being cut
+    off, and nothing has to round-trip to the browser to work it out.
+*@
+
+@if (_open)
+{
+    @* Catches the click that dismisses the menu, including a second right-click. *@
+    <div class="ben-context-backdrop"
+         @onclick="Close"
+         @oncontextmenu="Close"
+         @oncontextmenu:preventDefault="true"></div>
+
+    <ul class="dropdown-menu show ben-context-menu"
+        style="left: min(@(_x.ToString(Culture))px, calc(100vw - @(WidthPx + 8)px));
+               top:  min(@(_y.ToString(Culture))px, calc(100vh - @(EstimatedHeightPx + 8)px));
+               width: @(WidthPx)px;"
+        role="menu">
+        @foreach (var item in Data ?? Enumerable.Empty<TItem>())
+        {
+            <li>
+                <button type="button" class="dropdown-item" role="menuitem"
+                        @onclick="@(() => PickAsync(item))">
+                    @SelectValue.GetMember(item, TextField)
+                </button>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private static readonly System.Globalization.CultureInfo Culture =
+        System.Globalization.CultureInfo.InvariantCulture;
+
+    [Parameter] public IEnumerable<TItem>? Data { get; set; }
+
+    /// <summary>Property on <c>TItem</c> holding the label. Omit for a list of strings.</summary>
+    [Parameter] public string? TextField { get; set; }
+
+    [Parameter] public EventCallback<TItem> OnClick { get; set; }
+
+    /// <summary>Menu width in pixels. Fixed so the on-screen clamp above can be exact.</summary>
+    [Parameter] public int WidthPx { get; set; } = 220;
+
+    private bool _open;
+    private double _x;
+    private double _y;
+
+    /// <summary>Rough height used only for the bottom clamp; the menu scrolls if it exceeds it.</summary>
+    private int EstimatedHeightPx => Math.Min(320, 12 + (Data?.Count() ?? 0) * 34);
+
+    /// <summary>
+    /// Opens the menu at a viewport coordinate — the same signature the Telerik control had, so
+    /// call sites pass MouseEventArgs.ClientX/ClientY exactly as before.
+    /// </summary>
+    public Task ShowAsync(double x, double y)
+    {
+        _x = x;
+        _y = y;
+        _open = true;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    public void Close()
+    {
+        if (!_open) return;
+        _open = false;
+        StateHasChanged();
+    }
+
+    private async Task PickAsync(TItem item)
+    {
+        // Closed first: the handler may open a dialog, and a menu still sitting over it reads as
+        // the click not having registered.
+        _open = false;
+        await OnClick.InvokeAsync(item);
+    }
+}

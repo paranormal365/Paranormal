@@ -14,12 +14,12 @@ namespace Ben.Web.Tests.Services;
 /// </remarks>
 public sealed class RecurrencePresetTests
 {
-    // Anchored on the marker class rather than any service interface: the service layer now lives
-    // in its own assembly (Ben.Web.Services), so only a type that cannot leave Ben.Web.Library
+    // Anchored on the marker class rather than any service interface: the service layer lives in
+    // its own assembly (Ben.Web.Services), so only a type that cannot leave the component library
     // identifies the assembly the components are actually in.
     private static readonly Type Scheduler =
-        typeof(Ben.Web.Library.SuperAdmin.LibraryAssemblyMarker).Assembly
-            .GetType("Ben.Web.Library.Manage.Calendar.OrgScheduler")!;
+        typeof(Ben.Web.Website.Library.LibraryAssemblyMarker).Assembly
+            .GetType("Ben.Web.Website.Library.Manage.Calendar.OrgScheduler")!;
 
     private static string? RuleFor(string choice, DateTime start)
         => (string?)Scheduler

@@ -54,11 +54,11 @@ else
 }
 
 @* ── Context menu ────────────────────────────────────────────────────────── *@
-<TelerikContextMenu @ref="_contextMenu"
+<BenContextMenu @ref="_contextMenu"
                     Data="@_menuItems"
                     TextField="@nameof(AudioContextMenuItem.Text)"
                     OnClick="@(async (AudioContextMenuItem item) => await OnMenuClickAsync(item))">
-</TelerikContextMenu>
+</BenContextMenu>
 
 @* ── Full-view window ────────────────────────────────────────────────────── *@
 <BenModal Visible="@_showModal" Title="@FileName" Size="sm">
@@ -519,18 +519,18 @@ else
 </BenModal>
 
 @* ── Spectrogram context menu (right-click on spectrogram canvas) ───── *@
-<TelerikContextMenu @ref="_spectrogramMenu"
+<BenContextMenu @ref="_spectrogramMenu"
                     Data="@_spectrogramMenuItems"
                     TextField="@nameof(SpectrogramMenuItem.Text)"
                     OnClick="@(async (SpectrogramMenuItem item) => await OnSpectrogramMenuClickAsync(item))">
-</TelerikContextMenu>
+</BenContextMenu>
 
 @* ── Region context menu (right-click in full-view player) ───────────── *@
-<TelerikContextMenu @ref="_regionMenu"
+<BenContextMenu @ref="_regionMenu"
                     Data="@_regionMenuItems"
                     TextField="@nameof(RegionContextMenuItem.Text)"
                     OnClick="@(async (RegionContextMenuItem item) => await OnRegionMenuClickAsync(item))">
-</TelerikContextMenu>
+</BenContextMenu>
 
 @* ── Region Explorer — playback + save-as-clip + notes for a drawn region ── *@
 @if (_explorerRegion is not null)
@@ -778,7 +778,7 @@ else
     private bool   _spectrogramEnabled;
     private bool   _spectrogramLabels = true;   // show frequency labels by default
     private int    _spectrogramFftSamples = 512;
-    private TelerikContextMenu<SpectrogramMenuItem>? _spectrogramMenu;
+    private BenContextMenu<SpectrogramMenuItem>? _spectrogramMenu;
 
     private static readonly List<SpectrogramMenuItem> _spectrogramMenuItems =
     [
@@ -852,12 +852,12 @@ else
 
     private WaveSurferPlayer?                          _player;
     private WaveSurferPlayer?                          _modalPlayer;
-    private TelerikContextMenu<AudioContextMenuItem>?  _contextMenu;
+    private BenContextMenu<AudioContextMenuItem>?  _contextMenu;
     private TelerikNotification?                       _toast;
 
     // ── Region context menu state ──────────────────────────────────────────────
 
-    private TelerikContextMenu<RegionContextMenuItem>? _regionMenu;
+    private BenContextMenu<RegionContextMenuItem>? _regionMenu;
     private WsRegionContextMenuArgs? _pendingRegion;
     private bool   _showEditLabelDialog;
     private string _editLabelText = string.Empty;

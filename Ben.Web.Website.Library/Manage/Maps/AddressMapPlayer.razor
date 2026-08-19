@@ -141,10 +141,8 @@ else
                     @* Row 2: marker color + icon *@
                     <div class="col-12 col-md-6">
                         <label class="form-label fw-semibold small">Marker Color</label>
-                        <TelerikColorPicker Value="@_form.MarkerColor"
-                                            ValueChanged="@((string c) => UpdateForm(_form with { MarkerColor = c }))"
-                                            Format="@ColorFormat.Hex"
-                                            ShowPreview="true" />
+                        <BenColorPicker Value="@_form.MarkerColor"
+                                            ValueChanged="@((string c) => UpdateForm(_form with { MarkerColor = c }))" />
                     </div>
 
                     <div class="col-12 col-md-6">
@@ -191,10 +189,8 @@ else
                         @* Region fill color + opacity *@
                         <div class="col-12 col-md-6">
                             <label class="form-label fw-semibold small">Region Fill Color</label>
-                            <TelerikColorPicker Value="@_form.RegionFillColor"
-                                                ValueChanged="@((string c) => UpdateForm(_form with { RegionFillColor = c }))"
-                                                Format="@ColorFormat.Hex"
-                                                ShowPreview="true" />
+                            <BenColorPicker Value="@_form.RegionFillColor"
+                                                ValueChanged="@((string c) => UpdateForm(_form with { RegionFillColor = c }))" />
                         </div>
                         <div class="col-12 col-md-6">
                             <label class="form-label fw-semibold small">
@@ -208,10 +204,8 @@ else
                         @* Region stroke color *@
                         <div class="col-12 col-md-6">
                             <label class="form-label fw-semibold small">Region Border Color</label>
-                            <TelerikColorPicker Value="@_form.RegionStrokeColor"
-                                                ValueChanged="@((string c) => UpdateForm(_form with { RegionStrokeColor = c }))"
-                                                Format="@ColorFormat.Hex"
-                                                ShowPreview="true" />
+                            <BenColorPicker Value="@_form.RegionStrokeColor"
+                                                ValueChanged="@((string c) => UpdateForm(_form with { RegionStrokeColor = c }))" />
                         </div>
                         <div class="col-12 col-md-6">
                             <label class="form-label fw-semibold small">
