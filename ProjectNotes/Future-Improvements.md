@@ -4894,3 +4894,29 @@ is the part our version cannot borrow: case messages carry visibility rules and 
 carry an audience, so the layout has to leave room to say so on each row.
 
 Sequence this after item 99 — they are the same kind of work and share the card and header idioms.
+
+---
+
+## 101. Administrator dashboard — the template's stat-card bar (raised 2026-08-19)
+
+For administrators and site administrators, Ben wants the row of cards the template's project
+dashboard opens with:
+<https://getwebora.com/smartadmin/demo/dashboard-project-management.html>
+
+Sensible things to put in them: sign-ins, new members, cases opened, investigations scheduled,
+equipment out on loan, support tickets waiting. Each card wants a number, a period-on-period
+change, and — per item 98 — a Peity sparkline rather than a full chart, which is exactly the size
+the template's cards are built for.
+
+**One of those needs data we do not keep.** The audit log records entity changes (create, update,
+delete); nothing records a *sign-in*, so "logins" cannot be charted today without first recording
+them. That is a deliberate decision to make rather than an oversight to fix quietly: sign-in
+records are personal data with their own retention question, and a chart is a poor reason to start
+keeping them indefinitely. Decide the retention window first, then record.
+
+Everything else on the list is already in the database and only needs aggregating —
+`AppUser.DateCreated` for new members, cases and investigations by their own dates, checkouts by
+status, support tickets by state.
+
+Gate the whole bar on the same administrator check the diagnostics panel now uses (item 96), so
+one rule decides who sees operator-facing surfaces.
