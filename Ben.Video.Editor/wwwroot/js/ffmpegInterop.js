@@ -309,6 +309,12 @@ export async function getMetadata(inputName, timeoutMs) {
         duration: parseFloat(video.duration ?? audio.duration ?? '0'),
         width: parseInt(video.width ?? '0', 10),
         height: parseInt(video.height ?? '0', 10),
+        // Whether the file actually carries sound. Render commands map an audio stream, and
+        // mapping one that does not exist fails the whole command ("Stream map '0:a' matches no
+        // streams") — which in the worker presents as a render that never finishes rather than
+        // as an error. Plenty of real footage has no audio: screen recordings, trail cameras,
+        // exported animations.
+        hasAudio: !!audio.codec_type,
     };
 }
 

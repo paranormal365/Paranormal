@@ -1237,6 +1237,7 @@
                 {
                     Id = clipId, Name = file.FileName, MemFsName = memFsName,
                     Duration = meta.Duration, Width = meta.Width, Height = meta.Height,
+                    HasAudio = meta.HasAudio,
                     ThumbnailUrls = [.. thumbs], OpfsExt = ext,
                 };
                 // OnAddToTimeline (→ VideoEditor.AddClipToTimeline) both registers the clip on
@@ -1592,6 +1593,7 @@
             {
                 Id = clipId, Name = status.FileName, MemFsName = memFsName,
                 Duration = meta.Duration, Width = meta.Width, Height = meta.Height,
+                    HasAudio = meta.HasAudio,
                 ThumbnailUrls = [.. thumbs], OpfsExt = ext,
             };
             Clips.AddClip(videoClip);

@@ -831,7 +831,15 @@ public sealed class FfmpegService : IAsyncDisposable
 }
 
 /// <summary>Metadata returned by ffprobe for a video stream.</summary>
-public sealed record VideoMetadata(double Duration, int Width, int Height);
+/// <summary>
+/// What a probe learned about a media file.
+/// </summary>
+/// <param name="HasAudio">
+/// Whether the file carries an audio stream. Defaults to true so a probe that predates this — a
+/// saved project, or a sidecar that has not been updated — keeps the behaviour it had rather than
+/// suddenly silencing clips that do have sound.
+/// </param>
+public sealed record VideoMetadata(double Duration, int Width, int Height, bool HasAudio = true);
 
 /// <summary>One worker command's outcome, as recorded in <see cref="FfmpegService.OperationTrace"/>
 /// (item #59-#65 flakiness investigation, phase 141).</summary>

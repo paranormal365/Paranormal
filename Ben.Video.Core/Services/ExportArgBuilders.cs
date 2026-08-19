@@ -249,9 +249,17 @@ internal static class ExportArgBuilders
     internal static string[] BuildBackgroundRenderVideoArgs(
         string input, string output, double start, double end, double speed, ExportSettings s,
         string? audioVolumeFilter = null, ClipEffects? effects = null, bool muteAudio = false,
-        string? extraVf = null, int outputWidth = 0, int outputHeight = 0)
+        string? extraVf = null, int outputWidth = 0, int outputHeight = 0,
+        bool sourceHasAudio = true)
     {
-        var hasRealAudio = s.IncludeAudio && !muteAudio;
+        // Three separate things decide whether real audio is used, and only two of them used to
+        // be consulted. A source with no audio stream at all — a screen recording, a trail
+        // camera, an exported animation — took the "has audio" branch and ended up with
+        // "-map 0:a", which ffmpeg refuses outright: "Stream map '0:a' matches no streams".
+        // The command never runs, and in the wasm worker that presents as a background render
+        // stuck at a percentage with Export disabled behind it, rather than as an error anyone
+        // can see.
+        var hasRealAudio = s.IncludeAudio && !muteAudio && sourceHasAudio;
 
         var args = new List<string> { "-i", input };
         if (!hasRealAudio)

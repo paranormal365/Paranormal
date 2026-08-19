@@ -55,6 +55,57 @@ public sealed class FfmpegServiceRecoveryTests
             => InvokeAsync<TValue>(identifier, args);
     }
 
+    // ── A failed command must not leave the service pinned at Processing ─────
+    // Backlog item 94. A background render froze at a percentage with Export disabled behind it
+    // and no ffmpeg operation in flight — the state machine had entered Processing and never
+    // come out, because every escape from a command that fails (a throw from the module, or a
+    // non-zero exit code) bypassed the SetState(Ready) that only sat on the success path.
+    //
+    // A failing command is ordinary — a bad filter, a stream that is not there — and the core
+    // survives it. What must not survive it is a status chip that says "Processing… 64%" forever.
+
+    [Fact]
+    public async Task ExecAsync_WhenTheModuleThrows_ReturnsToReady()
+    {
+        var js = new MultiModuleFakeJsRuntime();
+        js.FfmpegModule.ThrowingIdentifiers.Add("exec");
+
+        var svc = new FfmpegService(js, new ErrorLogService(), new MemFsLedger(), new WorkerWatchdog());
+        await svc.LoadAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ExecAsync(["-i", "in.mp4", "out.mp4"]));
+
+        Assert.NotEqual(FfmpegState.Processing, svc.State);
+    }
+
+    [Fact]
+    public async Task ExecAsync_WhenFfmpegExitsNonZero_ReturnsToReady()
+    {
+        var js = new MultiModuleFakeJsRuntime();
+        js.FfmpegModule.Results["exec"] = 1;          // ffmpeg refused the command
+
+        var svc = new FfmpegService(js, new ErrorLogService(), new MemFsLedger(), new WorkerWatchdog());
+        await svc.LoadAsync();
+
+        await Assert.ThrowsAnyAsync<Exception>(() => svc.ExecAsync(["-i", "in.mp4", "-map", "0:a", "out.mp4"]));
+
+        Assert.NotEqual(FfmpegState.Processing, svc.State);
+    }
+
+    [Fact]
+    public async Task ConcatCopyAsync_WhenFfmpegExitsNonZero_ReturnsToReady()
+    {
+        var js = new MultiModuleFakeJsRuntime();
+        js.FfmpegModule.Results["concatCopy"] = 1;
+
+        var svc = new FfmpegService(js, new ErrorLogService(), new MemFsLedger(), new WorkerWatchdog());
+        await svc.LoadAsync();
+
+        await Assert.ThrowsAnyAsync<Exception>(() => svc.ConcatCopyAsync(["a.mp4", "b.mp4"], "out.mp4"));
+
+        Assert.NotEqual(FfmpegState.Processing, svc.State);
+    }
+
     // ── ExtractAudioAsync nested-state bug ───────────────────────────────────
 
     [Fact]

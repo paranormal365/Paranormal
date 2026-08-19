@@ -415,10 +415,7 @@ public sealed class HelpMediaCapture : BenTestBase
         // Captured before the overlays below: adding one starts a background render, and Export
         // is disabled while ffmpeg is working. See backlog item 94 — that render does not always
         // finish, which is a defect in its own right and not something to wait on here.
-        await WaitForAsync(
-            async () => (await Page.Locator(".bv-toolbar__status").First.InnerTextAsync())
-                        .Contains("Ready", StringComparison.OrdinalIgnoreCase),
-            240, "ffmpeg never went back to Ready, so Export stayed disabled");
+        await WaitForReadyWithTrailAsync(240);
 
         await Page.GetByTitle("Render the final video locally in the browser (ffmpeg.wasm), then save or upload")
                   .First.ClickAsync();
@@ -557,6 +554,42 @@ public sealed class HelpMediaCapture : BenTestBase
     }
 
     private bool _capturedImportDialog;
+
+    /// <summary>
+    /// Waits for ffmpeg to go back to Ready, recording what the status said along the way.
+    /// </summary>
+    /// <remarks>
+    /// The trail is the whole point: a background render that is merely slow and one that is
+    /// wedged look identical in a single reading, and the difference decides whether the fix is
+    /// "wait longer" or "something is broken". Reporting the samples turns that into evidence.
+    /// </remarks>
+    private async Task WaitForReadyWithTrailAsync(int seconds)
+    {
+        var status = Page.Locator(".bv-toolbar__status").First;
+        var trail = new List<string>();
+        var deadline = DateTime.UtcNow.AddSeconds(seconds);
+        var started = DateTime.UtcNow;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            var text = (await status.InnerTextAsync()).Trim();
+            var sample = $"{(int)(DateTime.UtcNow - started).TotalSeconds}s:{text}";
+            if (trail.Count == 0 || trail[^1][(trail[^1].IndexOf(':') + 1)..] != text)
+                trail.Add(sample);
+
+            if (text.Contains("Ready", StringComparison.OrdinalIgnoreCase))
+            {
+                TestContext.Out.WriteLine("render trail: " + string.Join(" → ", trail));
+                return;
+            }
+
+            await Page.WaitForTimeoutAsync(3_000);
+        }
+
+        await ReportEditorStateAsync(
+            "ffmpeg never went back to Ready, so Export stayed disabled.\n"
+            + "  render trail: " + string.Join(" → ", trail));
+    }
 
     /// <summary>Polls a condition, and reports what the editor was showing when it never came true.</summary>
     private async Task WaitForAsync(Func<Task<bool>> condition, int seconds, string whatFailed)

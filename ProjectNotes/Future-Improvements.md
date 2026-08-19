@@ -4723,7 +4723,43 @@ exact trigger was never confirmed live. This one has a reproducible-looking reci
 lacked, so it is worth trying to reproduce by hand before assuming they are the same.
 
 Reproduce with the seeded demo footage: `/my-videos`, Initialize, import `porch-camera.mp4` and
-`hallway-camera.mp4` from the Server tab, click a clip, then add a text overlay and a callout.
+`hallway-camera.mp4` from the Server tab, then **click a clip on the timeline**. That last step is
+the trigger; importing alone renders fine (`exec 4.6s`, `concatClips 3.9s`, both ✓).
+
+### Investigated 2026-08-19 — one cause found and fixed, one still open
+
+**Fixed: a source with no audio stream produced an invalid command.**
+`BuildBackgroundRenderVideoArgs` decided whether to map audio from the export settings and the
+clip's mute flag alone, never from whether the file actually has an audio stream. For a video-only
+source it emitted `-map 0:a`, which ffmpeg refuses outright — verified against the real binary:
+
+```
+Stream map '' matches no streams.  To ignore this, add a trailing '?' to the map.
+```
+
+The probe now reports `hasAudio`, `VideoClip.HasAudio` carries it (defaulting true, so projects
+saved before this are not silenced), and the builder attaches the silent `anullsrc` track it
+already had for muted clips. Three tests, one of which fails against the old code. This moved the
+stall from 47% to 64% — it did not cure it.
+
+**Still open: what actually freezes.** With a clip selected, the status chip sits at
+`Processing… 64%` for four minutes and more. The evidence says a command is hung in the worker
+rather than the state machine being wrong:
+
+- the operation trace records entries *on completion*, and shows **nothing** after the selection;
+- `FfmpegState` is `Processing`, and the paths that fail cleanly set `Error` instead — covered by
+  three new tests in `FfmpegServiceRecoveryTests` asserting a failed exec never leaves the service
+  pinned at Processing;
+- the ffmpeg log tail ends in five × `Aborted()`, which is how ffmpeg.wasm reports an internal
+  abort;
+- **the `WorkerWatchdog` never declared it wedged**, so the chip never offered its "⚠ Stuck —
+  Reset?" affordance and the user has no way out short of reloading.
+
+Two things to chase next: which command is issued when a clip is selected (a fine-pass render is
+the likely candidate, and the diagnostics panel does not name the command — only the log tail), and
+why the watchdog does not fire on a promise that never settles. The second matters more: whatever
+the trigger, a hung worker should surface as an offer to reset rather than as a progress bar that
+stopped.
 
 
 ---
