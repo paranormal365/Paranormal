@@ -165,9 +165,10 @@ public class MyCaseDashboardTests : BenTestBase
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
         await WaitUntilLoadedAsync();
 
-        await Page.GetByText("Log Occurrence").ClickAsync();
-        // TelerikWindow should open
+        // By role, not by text: "Log Occurrence" is also the dialog's own title, so a text match
+        // becomes ambiguous the moment the dialog opens.
         var window = Page.Locator(".k-window, .modal.show");
+        await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "Log Occurrence" }).First, window);
         await Expect(window).ToBeVisibleAsync(new() { Timeout = 5_000 });
         // Description textarea should be visible
         var desc = Page.Locator("[placeholder*='Describe' i]").First;
@@ -185,10 +186,12 @@ public class MyCaseDashboardTests : BenTestBase
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
         await WaitUntilLoadedAsync();
 
-        await Page.GetByText("Log Occurrence").ClickAsync();
-        await Page.WaitForTimeoutAsync(400);
-        // Save button should be disabled without a description
-        var saveBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true });
+        var dialog = Page.Locator(".modal.show");
+        await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "Log Occurrence" }).First, dialog);
+
+        // Scoped to the dialog: the case page also has an alias "Save" that is always enabled, and
+        // an unscoped lookup found that one and reported the guard as broken.
+        var saveBtn = dialog.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true });
         Assert.That(await saveBtn.IsEnabledAsync(), Is.False,
             "Save button should be disabled until a description is entered.");
     }
@@ -204,13 +207,14 @@ public class MyCaseDashboardTests : BenTestBase
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
         await WaitUntilLoadedAsync();
 
-        await Page.GetByText("Log Occurrence").ClickAsync();
-        await Page.WaitForTimeoutAsync(400);
+        var dialog = Page.Locator(".modal.show");
+        await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "Log Occurrence" }).First, dialog);
 
-        var desc = Page.Locator("[placeholder*='Describe' i]").First;
+        var desc = dialog.Locator("[placeholder*='Describe' i]").First;
         await desc.FillAsync("Test occurrence from Playwright — loud knocking at 2 AM.");
 
-        var saveBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true });
+        // Scoped to the dialog — see the note in the sibling test about the page's alias Save.
+        var saveBtn = dialog.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true });
         await Expect(saveBtn).ToBeEnabledAsync(new() { Timeout = 3_000 });
         await saveBtn.ClickAsync();
 
@@ -235,12 +239,14 @@ public class MyCaseDashboardTests : BenTestBase
         await WaitUntilLoadedAsync();
 
         // Seeder creates "Initial Site Assessment" investigation for Daniel's case
+        // Ask the content region, not the whole body: the sidebar always says "My Investigations",
+        // so the guard was satisfied on every case and then asserted a section that is only there
+        // when the case actually has investigations.
+        var invSection = Main.GetByText("Investigations", new() { Exact = false });
+        if (await invSection.CountAsync() > 0)
+            await Expect(invSection.First).ToBeVisibleAsync(new() { Timeout = 5_000 });
+
         var body = await Page.InnerTextAsync("body");
-        if (body.Contains("Investigations"))
-        {
-            var invSection = Main.GetByText("Investigations", new() { Exact = false });
-            await Expect(invSection).ToBeVisibleAsync(new() { Timeout = 5_000 });
-        }
         Assert.That(body, Does.Not.Contain("An unhandled error has occurred"));
     }
 

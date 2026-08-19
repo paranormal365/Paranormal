@@ -98,6 +98,13 @@
             <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
         }
     </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showProposeDialog = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" @onclick="ProposeTransfer"
+                disabled="@(_proposeToOrgId == Guid.Empty || _isBusy)">
+            @(_isBusy ? "Proposing…" : "Propose Transfer")
+        </button>
+    </FooterContent>
 </BenModal>
 
 @* ── Respond dialog ────────────────────────────────────────────────────────── *@
@@ -119,6 +126,13 @@
             <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
         }
     </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showRespondDialog = false)">Cancel</button>
+        <button type="button" class="btn @(_respondAccept ? "btn-success" : "btn-danger")"
+                @onclick="RespondToTransfer" disabled="@_isBusy">
+            @(_isBusy ? "Saving…" : (_respondAccept ? "Accept" : "Reject"))
+        </button>
+    </FooterContent>
 </BenModal>
 
 @code {

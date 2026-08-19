@@ -40,8 +40,8 @@ public class WebApiAuthServiceTests
     public async Task LoginAsync_Success_SetsEmailFromParameter()
     {
         var (svc, store, idMock, _) = Build();
-        idMock.Setup(x => x.LoginAsync("admin@test.com", "pass", default))
-              .ReturnsAsync(TokenResponse(SuperAdminId, "SuperAdmin"));
+        idMock.Setup(x => x.TryLoginAsync("admin@test.com", "pass", default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(SuperAdminId, "SuperAdmin"), 200));
 
         var ok = await svc.LoginAsync("admin@test.com", "pass");
 
@@ -53,8 +53,8 @@ public class WebApiAuthServiceTests
     public async Task LoginAsync_Success_SetsUserIdFromJwt()
     {
         var (svc, store, idMock, _) = Build();
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(SuperAdminId, "SuperAdmin"));
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(SuperAdminId, "SuperAdmin"), 200));
 
         await svc.LoginAsync("admin@test.com", "pass");
 
@@ -65,8 +65,8 @@ public class WebApiAuthServiceTests
     public async Task LoginAsync_SuperAdminRole_SetsSuperAdminFlag()
     {
         var (svc, store, idMock, _) = Build();
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(SuperAdminId, "SuperAdmin"));
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(SuperAdminId, "SuperAdmin"), 200));
 
         await svc.LoginAsync("admin@test.com", "pass");
 
@@ -77,8 +77,8 @@ public class WebApiAuthServiceTests
     public async Task LoginAsync_NonAdminRole_DoesNotSetSuperAdminFlag()
     {
         var (svc, store, idMock, _) = Build();
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(TargetUserId, "Member"));
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(TargetUserId, "Member"), 200));
 
         await svc.LoginAsync("user@test.com", "pass");
 
@@ -89,8 +89,8 @@ public class WebApiAuthServiceTests
     public async Task LoginAsync_WhenApiFails_ReturnsFalse()
     {
         var (svc, store, idMock, _) = Build();
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync((WebApiTokenResponse?)null);
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(null, 401));
 
         var ok = await svc.LoginAsync("user@test.com", "badpass");
 
@@ -104,8 +104,8 @@ public class WebApiAuthServiceTests
     public async Task Logout_ClearsAllAuthFields()
     {
         var (svc, store, idMock, _) = Build();
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(SuperAdminId, "SuperAdmin"));
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(SuperAdminId, "SuperAdmin"), 200));
 
         await svc.LoginAsync("admin@test.com", "pass");
         svc.Logout();
@@ -126,8 +126,8 @@ public class WebApiAuthServiceTests
         var (svc, store, idMock, apiMock) = Build();
 
         // Log in as SuperAdmin first
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(SuperAdminId, "SuperAdmin", "admin-refresh"));
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(SuperAdminId, "SuperAdmin", "admin-refresh"), 200));
         await svc.LoginAsync("admin@test.com", "pass");
 
         var originalToken = store.AccessToken;
@@ -150,8 +150,8 @@ public class WebApiAuthServiceTests
     {
         var (svc, store, idMock, apiMock) = Build();
 
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(SuperAdminId, "SuperAdmin"));
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(SuperAdminId, "SuperAdmin"), 200));
         await svc.LoginAsync("admin@test.com", "pass");
 
         apiMock.Setup(x => x.ImpersonateAsync(TargetUserId, default))
@@ -173,8 +173,8 @@ public class WebApiAuthServiceTests
     {
         var (svc, store, idMock, apiMock) = Build();
 
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(SuperAdminId, "SuperAdmin", "admin-refresh"));
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(SuperAdminId, "SuperAdmin", "admin-refresh"), 200));
         await svc.LoginAsync("admin@test.com", "pass");
 
         var adminToken = store.AccessToken!;
@@ -216,8 +216,8 @@ public class WebApiAuthServiceTests
     {
         var (svc, store, idMock, apiMock) = Build();
 
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(SuperAdminId, "SuperAdmin"));
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(SuperAdminId, "SuperAdmin"), 200));
         await svc.LoginAsync("admin@test.com", "pass");
 
         apiMock.Setup(x => x.ImpersonateAsync(TargetUserId, default))
@@ -242,8 +242,8 @@ public class WebApiAuthServiceTests
         // IsSuperAdmin must not silently come back true from some other stale source.
         var (svc, store, idMock, apiMock) = Build();
 
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(SuperAdminId, "SuperAdmin"));
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(SuperAdminId, "SuperAdmin"), 200));
         await svc.LoginAsync("admin@test.com", "pass");
 
         apiMock.Setup(x => x.ImpersonateAsync(TargetUserId, default))
@@ -265,8 +265,8 @@ public class WebApiAuthServiceTests
     public async Task ImpersonateAsync_WhenApiFails_ReturnsFalseAndPreservesState()
     {
         var (svc, store, idMock, apiMock) = Build();
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(SuperAdminId, "SuperAdmin"));
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(SuperAdminId, "SuperAdmin"), 200));
         await svc.LoginAsync("admin@test.com", "pass");
         var originalToken = store.AccessToken;
 
@@ -327,5 +327,49 @@ public class WebApiAuthServiceTests
         var result = await svc.RefreshIfNeededAsync();
 
         Assert.False(result);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenRateLimited_ReportsThatRatherThanBadCredentials()
+    {
+        var (svc, _, idMock, _) = Build();
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(null, 429));
+
+        var ok = await svc.LoginAsync("user@test.com", "correct-password");
+
+        Assert.False(ok);
+        // The distinction is the whole point: telling someone their password is wrong when the
+        // server simply refused the request sends them to reset a password that was fine.
+        Assert.Equal(LoginFailure.RateLimited, svc.LastLoginFailure);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenCredentialsRejected_ReportsInvalidCredentials()
+    {
+        var (svc, _, idMock, _) = Build();
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(null, 401));
+
+        var ok = await svc.LoginAsync("user@test.com", "wrong");
+
+        Assert.False(ok);
+        Assert.Equal(LoginFailure.InvalidCredentials, svc.LastLoginFailure);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenSuccessful_ClearsAnyEarlierFailure()
+    {
+        var (svc, _, idMock, _) = Build();
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(null, 429));
+        await svc.LoginAsync("user@test.com", "correct-password");
+        Assert.Equal(LoginFailure.RateLimited, svc.LastLoginFailure);
+
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(SuperAdminId, "SuperAdmin"), 200));
+
+        Assert.True(await svc.LoginAsync("user@test.com", "correct-password"));
+        Assert.Null(svc.LastLoginFailure);
     }
 }

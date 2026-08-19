@@ -107,8 +107,8 @@ public class EntraTests
     {
         var (svc, store, idMock, apiMock) = Build();
 
-        idMock.Setup(x => x.LoginAsync("u@t.com", "pw", default))
-              .ReturnsAsync(TokenResponse(UserId1));
+        idMock.Setup(x => x.TryLoginAsync("u@t.com", "pw", default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(UserId1), 200));
 
         // /api/me returns a DIFFERENT userId (simulating opaque token where sub ≠ local user id)
         apiMock.Setup(x => x.GetAsync<MeResult>("/api/me", default))
@@ -124,8 +124,8 @@ public class EntraTests
     {
         var (svc, store, idMock, apiMock) = Build();
 
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(UserId1, "Member")); // JWT says Member
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(UserId1, "Member"), 200)); // JWT says Member
 
         // /api/me says SuperAdmin (server-side role check is authoritative for opaque tokens)
         apiMock.Setup(x => x.GetAsync<MeResult>("/api/me", default))
@@ -142,8 +142,8 @@ public class EntraTests
         // When /api/me returns null (e.g. WebApi unreachable), JwtClaimsParser values remain.
         var (svc, store, idMock, apiMock) = Build();
 
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(UserId1, "SuperAdmin"));
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(UserId1, "SuperAdmin"), 200));
 
         apiMock.Setup(x => x.GetAsync<MeResult>("/api/me", default))
                .ReturnsAsync((MeResult?)null);
@@ -161,8 +161,8 @@ public class EntraTests
         // Exceptions from /api/me are swallowed (non-fatal).
         var (svc, store, idMock, apiMock) = Build();
 
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(UserId1, "SuperAdmin"));
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(UserId1, "SuperAdmin"), 200));
 
         apiMock.Setup(x => x.GetAsync<MeResult>("/api/me", default))
                .ThrowsAsync(new HttpRequestException("WebApi unreachable"));
@@ -178,8 +178,8 @@ public class EntraTests
     {
         var (svc, store, idMock, apiMock) = Build();
 
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(UserId1, "Member"));
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(UserId1, "Member"), 200));
 
         apiMock.Setup(x => x.GetAsync<MeResult>("/api/me", default))
                .ReturnsAsync(new MeResult(UserId1, "u@t.com", false, false));
@@ -197,8 +197,8 @@ public class EntraTests
         var (svc, store, idMock, _) = Build();
         store.IsEntraSession = true;  // simulate prior Entra session
 
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(UserId1));
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(UserId1), 200));
 
         await svc.LoginAsync("u@t.com", "pw");
 
@@ -210,8 +210,8 @@ public class EntraTests
     {
         var (svc, store, idMock, _) = Build();
 
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(UserId1));
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(UserId1), 200));
 
         await svc.LoginAsync("u@t.com", "pw");
 
@@ -224,8 +224,8 @@ public class EntraTests
     public async Task LoginAsync_FiresStateChanged()
     {
         var (svc, store, idMock, _) = Build();
-        idMock.Setup(x => x.LoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(TokenResponse(UserId1));
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(TokenResponse(UserId1), 200));
 
         int fireCount = 0;
         store.StateChanged += () => fireCount++;

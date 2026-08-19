@@ -93,6 +93,11 @@ else
             </div>
         </div>
     </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showProposeDialog = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" @onclick="SendProposal"
+                disabled="@(_saving || !_slots.Any(s => s.Start.HasValue))">Send Proposal</button>
+    </FooterContent>
 </BenModal>
 
 @code {

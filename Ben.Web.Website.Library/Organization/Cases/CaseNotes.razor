@@ -84,6 +84,13 @@ else
             <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
         }
     </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showDialog = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" @onclick="SaveNote"
+                disabled="@(_isBusy || string.IsNullOrWhiteSpace(_formBody))">
+            <BenIcon Name="save" Class="me-1" />@(_isBusy ? "Saving…" : "Save")
+        </button>
+    </FooterContent>
 </BenModal>
 
 @* ── Delete confirmation ──────────────────────────────────────────────────── *@

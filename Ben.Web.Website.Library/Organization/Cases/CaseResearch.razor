@@ -95,6 +95,13 @@ else
             </div>
         </div>
     </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showDialog = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" @onclick="SaveEntry"
+                disabled="@(_saving || string.IsNullOrWhiteSpace(_formTitle))">
+            @(_saving ? "Saving…" : "Save")
+        </button>
+    </FooterContent>
 </BenModal>
 
 @code {

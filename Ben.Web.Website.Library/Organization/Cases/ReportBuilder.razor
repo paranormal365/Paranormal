@@ -158,6 +158,11 @@ else
             </div>
         </div>
     </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showNewDialog = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" @onclick="CreateReport"
+                disabled="@(_saving || string.IsNullOrWhiteSpace(_newTitle))">Create</button>
+    </FooterContent>
 </BenModal>
 
 @* ── Add Section dialog ───────────────────────────────────────────────────── *@
@@ -182,6 +187,11 @@ else
             </div>
         </div>
     </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showSectionDialog = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" @onclick="SaveSection"
+                disabled="@(_saving || string.IsNullOrWhiteSpace(_sectionTitle))">Add</button>
+    </FooterContent>
 </BenModal>
 
 @code {
