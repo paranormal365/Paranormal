@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using NUnit.Framework;
 
@@ -80,6 +81,8 @@ public sealed class HelpMediaCapture : BenTestBase
         }
         """;
 
+    private readonly List<string> _console = [];
+
     [SetUp]
     public async Task RequireOptInAndGoDark()
     {
@@ -87,6 +90,13 @@ public sealed class HelpMediaCapture : BenTestBase
             Assert.Ignore("Set BEN_CAPTURE=1 to re-capture the help screenshots.");
 
         await Context.AddInitScriptAsync(DarkModeInitScript);
+
+        _console.Clear();
+        Page.Console += (_, msg) =>
+        {
+            if (msg.Type is "error" or "warning") _console.Add($"[{msg.Type}] {msg.Text}");
+        };
+        Page.PageError += (_, err) => _console.Add($"[pageerror] {err}");
     }
 
     // ── Where the files go ────────────────────────────────────────────────────
@@ -297,6 +307,236 @@ public sealed class HelpMediaCapture : BenTestBase
         // he has asked for her thermal camera. Both halves of the screen are therefore populated.
         await GoAsync("/my-checkouts");
         await ShootAsync("borrowing-equipment", "my-checkouts.png", proves: "Spirit Box");
+    }
+
+    // ── The video editor ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The editor is reached through the site at /my-videos, where the seeded demo footage is
+    /// already in the media library.
+    /// </summary>
+    private async Task OpenEditorAsync()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+        await GoAsync("/my-videos");
+
+        // The editor is a large component tree behind a circuit; it takes noticeably longer to
+        // appear than an ordinary page.
+        await Expect(Page.Locator(".bv-editor")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Page.WaitForTimeoutAsync(1_500);
+    }
+
+    /// <summary>Switches the media panel to one of its tabs (Video, Audio, Image, Server).</summary>
+    private async Task OpenMediaTabAsync(string name)
+    {
+        // An import dialog left open swallows every later click through its overlay, and the
+        // failure then points at the tab rather than at the dialog sitting on top of it.
+        await DismissImportDialogAsync();
+
+        var tab = Page.GetByRole(AriaRole.Tab, new() { Name = name, Exact = true })
+                      .Or(Page.Locator(".k-tabstrip-item", new() { HasTextString = name }))
+                      .First;
+        await Expect(tab).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await tab.ClickAsync();
+        await Page.WaitForTimeoutAsync(800);
+    }
+
+    /// <summary>
+    /// Answers the Insert/Overwrite prompt that appears when a clip is dropped onto a spot that
+    /// is already occupied. Chooses Insert, which is the non-destructive answer.
+    /// </summary>
+    private async Task AnswerPlacementPromptAsync()
+    {
+        var insert = Page.GetByRole(AriaRole.Button, new() { Name = "Insert (Make Room)" });
+
+        // The prompt is not instant — it appears once the clip is ready to be placed.
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (DateTime.UtcNow < deadline && await insert.CountAsync() == 0)
+            await Page.WaitForTimeoutAsync(500);
+
+        if (await insert.CountAsync() == 0) return;
+
+        if (!_capturedPlacementPrompt)
+        {
+            await ShootAsync("using-the-video-editor", "insert-or-overwrite.png");
+            _capturedPlacementPrompt = true;
+        }
+
+        await insert.First.EvaluateAsync("el => el.click()");
+        await WaitForAsync(async () => await insert.CountAsync() == 0,
+                           20, "the placement prompt would not close");
+    }
+
+    private bool _capturedPlacementPrompt;
+
+    /// <summary>Closes the import summary dialog if it is open.</summary>
+    private async Task DismissImportDialogAsync()
+    {
+        var done = Page.GetByRole(AriaRole.Button, new() { Name = "Done", Exact = true });
+        if (await done.CountAsync() == 0) return;
+
+        await done.First.EvaluateAsync("el => el.click()");
+        await WaitForAsync(async () => await done.CountAsync() == 0,
+                           20, "the import dialog would not close");
+    }
+
+    [Test]
+    [Description("using-the-video-editor: the editor, its media library and a populated timeline.")]
+    public async Task Capture_UsingTheVideoEditor()
+    {
+        await OpenEditorAsync();
+
+        await ShootAsync("using-the-video-editor", "editor-overview.png");
+
+        await OpenMediaTabAsync("Server");
+        await ShootAsync("using-the-video-editor", "media-library.png", proves: "porch-camera.mp4");
+
+        await InitializeFfmpegAsync();
+
+        // Bringing a file over is two steps by design (phase 150): the card downloads and caches
+        // it, and the clip that appears on the Video tab is what goes onto the timeline.
+        await ImportFromServerAsync("porch-camera");
+        // A clip on the timeline is a "chip".
+        await Expect(Page.Locator(".bv-clip-chip").First)
+            .ToBeVisibleAsync(new() { Timeout = 120_000 });
+
+        await ImportFromServerAsync("hallway-camera");
+        await Page.WaitForTimeoutAsync(2_000);
+
+        await ShootAsync("using-the-video-editor", "timeline-two-clips.png");
+    }
+
+    /// <summary>
+    /// Loads the ffmpeg core, which every import and export goes through. It is not loaded on
+    /// arrival — the editor waits to be asked, so opening a project costs nothing.
+    /// </summary>
+    private async Task InitializeFfmpegAsync()
+    {
+        var status = Page.Locator(".bv-toolbar__status");
+        if ((await status.InnerTextAsync()).Contains("Ready", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Initialize" }).First.ClickAsync();
+
+        // The core is a multi-megabyte wasm download on the first run.
+        await Expect(status).ToHaveTextAsync(new Regex("Ready"), new() { Timeout = 120_000 });
+    }
+
+    /// <summary>
+    /// Brings a Server-tab file onto the timeline. Two clicks, by design (phase 150): the first
+    /// downloads and caches it, the second adds the cached file to the timeline. A single click
+    /// caches and stops, which is why the first attempt at this waited forever for a clip that was
+    /// never going to appear.
+    /// </summary>
+    private async Task ImportFromServerAsync(string namePart)
+    {
+        await OpenMediaTabAsync("Server");
+
+        var card = Page.Locator(".bv-clip-card").Filter(new() { HasTextString = namePart }).First;
+        await Expect(card).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        // Not the card's centre. A video card's middle is its thumbnail, which carries a
+        // "load a preview" button that stops propagation — clicking there looks like a click on
+        // the card and starts nothing at all. The name/meta block bubbles to the card's handler.
+        var target = card.Locator(".bv-clip-card__info").First;
+        var chipsBefore = await Page.Locator(".bv-clip-chip").CountAsync();
+
+        if (await card.Locator(".bv-clip-card__cached-badge").CountAsync() == 0)
+        {
+            await target.ClickAsync();
+            await WaitForAsync(
+                async () => await card.Locator(".bv-clip-card__cached-badge").CountAsync() > 0,
+                60, $"{namePart} never finished downloading to the browser cache");
+        }
+
+        // The card pulses while it is busy, and Playwright refuses to click a moving element.
+        await WaitForAsync(
+            async () => (await card.GetAttributeAsync("class") ?? "").Contains("busy") == false,
+            30, $"{namePart}'s card never came out of its busy state");
+
+        await target.ClickAsync();
+
+        // Importing ends on a summary dialog, and its overlay swallows every later click until it
+        // is dismissed. The first run of this fixture spent 30 seconds timing out on a tab that
+        // was behind it.
+        var done = Page.GetByRole(AriaRole.Button, new() { Name = "Done", Exact = true });
+        await WaitForAsync(
+            async () => await done.CountAsync() > 0
+                     || await Page.Locator(".bv-clip-chip").CountAsync() > chipsBefore,
+            120, $"{namePart} never reached the timeline");
+
+        if (await done.CountAsync() > 0)
+        {
+            if (!_capturedImportDialog)
+            {
+                await ShootAsync("using-the-video-editor", "import-complete.png");
+                _capturedImportDialog = true;
+            }
+
+            // A real click — even a forced one — lands on the dialog while it is still settling
+            // and does nothing. Dispatching the DOM click reaches Blazor's handler directly;
+            // this is a button, not a Telerik-bound input, so the event is honoured.
+            await done.First.EvaluateAsync("el => el.click()");
+
+            // Wait on the button's own disappearance, not on the overlay: the media panel is a
+            // window too, so an overlay is on the page whether or not the import dialog is up —
+            // waiting for zero overlays never came true and reported a dialog that had closed.
+            await WaitForAsync(async () => await done.CountAsync() == 0,
+                               20, "the import dialog would not close");
+        }
+
+        // Landing a clip where something already sits asks how to place it. Insert keeps what is
+        // there and shuffles it along; Overwrite replaces the overlap.
+        await AnswerPlacementPromptAsync();
+
+        await WaitForAsync(
+            async () => await Page.Locator(".bv-clip-chip").CountAsync() > chipsBefore,
+            60, $"{namePart} imported but never appeared on the timeline");
+    }
+
+    private bool _capturedImportDialog;
+
+    /// <summary>Polls a condition, and reports what the editor was showing when it never came true.</summary>
+    private async Task WaitForAsync(Func<Task<bool>> condition, int seconds, string whatFailed)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(seconds);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await condition()) return;
+            await Page.WaitForTimeoutAsync(500);
+        }
+
+        await ReportEditorStateAsync(whatFailed);
+    }
+
+    /// <summary>Fails with what the editor was actually showing, including its console output.</summary>
+    private async Task ReportEditorStateAsync(string what)
+    {
+        var status = await Page.Locator(".bv-toolbar__status").First.InnerTextAsync();
+        var errors = await Page.Locator(".bv-browser__error").AllInnerTextsAsync();
+        var editor = await Page.Locator(".bv-editor").First.InnerTextAsync();
+        var windows = await Page.Locator(".k-window").AllInnerTextsAsync();
+        var buttons = await Page.Locator(".k-window button").AllInnerTextsAsync();
+        var overlays = await Page.Locator(".k-overlay").CountAsync();
+
+        Assert.Fail($"{what}.\n"
+                    + $"  open windows: {windows.Count} | overlays: {overlays}\n"
+                    + $"  window buttons: {string.Join(" | ", buttons.Select(b => b.Trim()).Where(b => b.Length > 0))}\n"
+                    + $"  ffmpeg status: {status}\n"
+                    + $"  browser panel errors: {string.Join(" | ", errors)}\n"
+                    + $"  console: {string.Join("\n            ", _console.TakeLast(12))}\n"
+                    + $"  editor text: {editor.Replace("\n", " / ")}");
+    }
+
+    /// <summary>Adds an imported clip to the timeline via its card's + button.</summary>
+    private async Task AddToTimelineAsync(string namePart)
+    {
+        await OpenMediaTabAsync("Video");
+
+        var card = Page.Locator(".bv-clip-card").Filter(new() { HasTextString = namePart }).First;
+        await Expect(card).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await card.GetByTitle("Add to timeline").First.ClickAsync();
+        await Page.WaitForTimeoutAsync(1_200);
     }
 
     // ── Group members ─────────────────────────────────────────────────────────

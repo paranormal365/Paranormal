@@ -45,4 +45,12 @@
       <ProjectReference Include="..\Ben.Service.RepositoryService\Ben.Service.RepositoryService.csproj" />
     </ItemGroup>
 
+  <ItemGroup>
+    <!-- Demo footage for the video editor's help documents. Four small generated files (172 KB
+         total) that the development seeder loads into the media library, so the editor has
+         something real to show. Not shipped to production: the seeder they feed is itself gated
+         behind SeedData:DevData:Enabled. -->
+    <Content Include="SeedData\Media\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

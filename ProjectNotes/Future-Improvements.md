@@ -4632,3 +4632,32 @@ Both screens now show a "did you mean" prompt: each suggestion is one click, and
 different"* creates it as typed. Two source-scan tests hold the line — one that the suggestions
 reach a screen at all, one that **every** screen showing them can also overrule them, since a
 prettier dead end is still a dead end.
+
+---
+
+## 91. Video editor — scope the Server media tab (raised 2026-08-19)
+
+The editor's **Server** tab lists every media file the signed-in person can reach, in one flat
+list. That is fine with four demo clips and unusable with four hundred: a real investigation
+produces dozens of files per visit, and the tab is the only way to get any of them into a project.
+
+**The ask.** A scope selector above the list:
+
+- **All** — everything they may see, as today.
+- **Personal** — only files they own.
+- **By case** — pick a case, see that case's media; then optionally narrow to a single
+  **investigation** within it.
+
+Permissions decide what each scope can return, not the selector: someone with access to all media
+sees a case's whole set, while someone with narrower rights sees only their own share of it. The
+selector filters what they are already entitled to — it must never widen it.
+
+**Why it matters beyond convenience.** Importing is a two-click operation per file (download, then
+add), so the cost of finding the right file dominates. Scoping by case and investigation also puts
+the editor in the same mental model as the rest of the site, where work is organised by case first.
+
+**Notes for whoever builds it.** The list comes from `GET /api/media-library/files`, which already
+aggregates across ownership, org membership, shares and case links —
+`MediaLibraryController` composes those sets, so the scoping belongs there rather than in the
+editor, which should send a scope and an optional case/investigation id. `BenMediaLibraryProvider`
+is the client side. Keep the content-type filter as-is.

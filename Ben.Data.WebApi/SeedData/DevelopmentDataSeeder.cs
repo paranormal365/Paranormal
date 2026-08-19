@@ -407,7 +407,90 @@ internal static class DevelopmentDataSeeder
         if (tgh is not null)
             await SeedEquipmentAsync(db, tgh, owner, sarah, james, now);
 
+        // Both the regular user the documents are written for and the owner account, so the
+        // editor can be driven by hand from either.
+        await SeedVideoEditorMediaAsync(db, sarah, now);
+        await SeedVideoEditorMediaAsync(db, owner, now);
+
         Console.WriteLine("[DevDataSeeder] Development seed data applied successfully.");
+    }
+
+    /// <summary>
+    /// Four small clips in the media library, so the video editor has something to open.
+    /// </summary>
+    /// <remarks>
+    /// <para>The editor's help documents are mostly pictures of the editor, and an editor with an
+    /// empty timeline demonstrates nothing — every screenshot would be of the same grey rectangle.
+    /// These are generated files (two camera clips, a room-tone recording and a site photo,
+    /// 172 KB in total) that live in <c>SeedData/Media</c> and are loaded as ordinary uploads
+    /// belonging to the seeded regular user, which is who the documents are written for.</para>
+    ///
+    /// <para>Stored as <c>FileData</c> rather than on disk: a seeded row pointing at a storage
+    /// path would break the moment the database and the file store disagreed, and these are small
+    /// enough that the blob is the simpler half of that trade.</para>
+    ///
+    /// <para>Typed as Case Evidence because that is what investigation footage is; the media
+    /// library filters by content type, not by file type, so the editor lists them either way.</para>
+    /// </remarks>
+    private static async Task SeedVideoEditorMediaAsync(BenDataContext db, AppUser owner, DateTime now)
+    {
+        var evidenceType = await db.UploadFileTypes.FirstOrDefaultAsync(
+            t => t.Name == UploadFileTypeSeeder.EvidenceFileTypeName);
+        if (evidenceType is null)
+        {
+            Console.WriteLine("[DevDataSeeder] Case Evidence file type missing — skipping demo media.");
+            return;
+        }
+
+        var mediaRoot = Path.Combine(AppContext.BaseDirectory, "SeedData", "Media");
+        if (!Directory.Exists(mediaRoot))
+        {
+            Console.WriteLine($"[DevDataSeeder] No demo media at {mediaRoot} — skipping.");
+            return;
+        }
+
+        var files = new (string File, string ContentType, string Description)[]
+        {
+            ("porch-camera.mp4",   "video/mp4",  "Front porch camera, 8 seconds. Static wide shot."),
+            ("hallway-camera.mp4", "video/mp4",  "Upstairs hallway camera, 6 seconds."),
+            ("basement-evp.m4a",   "audio/mp4",  "Basement EVP session — room tone with a low hum."),
+            ("site-photo.jpg",     "image/jpeg", "Exterior of the property, taken on arrival."),
+        };
+
+        var added = 0;
+        foreach (var (file, contentType, description) in files)
+        {
+            if (await db.UploadFiles.AnyAsync(f => f.AppUserId == owner.Id && f.FileName == file))
+                continue;
+
+            var path = Path.Combine(mediaRoot, file);
+            if (!File.Exists(path)) continue;
+
+            var bytes = await File.ReadAllBytesAsync(path);
+
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id                 = Guid.NewGuid(),
+                UploadFileTypeId   = evidenceType.Id,
+                AppUserId          = owner.Id,
+                FileName           = file,
+                StoredFileName     = $"{Guid.NewGuid():N}{Path.GetExtension(file)}",
+                ContentType        = contentType,
+                FileSize           = bytes.LongLength,
+                FileData           = bytes,
+                Description        = description,
+                IsPublic           = false,
+                DateCreated        = now,
+                CreatedByAppUserId = owner.Id,
+            });
+            added++;
+        }
+
+        if (added > 0)
+        {
+            await db.SaveChangesAsync();
+            Console.WriteLine($"[DevDataSeeder] Added {added} demo media files for the video editor.");
+        }
     }
 
     /// <summary>
