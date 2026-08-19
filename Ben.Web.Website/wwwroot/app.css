@@ -381,3 +381,15 @@ html {
 html[data-bs-theme="dark"] {
     color-scheme: dark;
 }
+
+/* ── Sidebar colour (light mode) ─────────────────────────────────────────────
+   The template's dark navigation paints the sidebar --primary-900 (#1a2641), which is a true
+   navy. Ben wants that darker blue greyed down — "a grey blue, but more grey" — so the value is
+   mixed off the Night palette's own two scales rather than picked by eye: the navy carried most
+   of the way toward the neutral grey (--secondary-800, #494f54).
+
+   Mixed rather than hardcoded so it still tracks the skin: rebuild Night with a different primary
+   and this follows it instead of drifting out of step. */
+.set-nav-dark:not([data-bs-theme="dark"]) {
+    --app-nav-bg: color-mix(in srgb, var(--primary-900) 55%, var(--secondary-800) 45%);
+}
