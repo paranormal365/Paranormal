@@ -212,7 +212,8 @@
                                                             <td class="align-middle small">
                                                                 @if (_editRoleAttendeeId == a.Id)
                                                                 {
-                                                                    <input type="text" class="form-control" style="max-width:120px;" @bind="@_editRoleValue" @bind:event="oninput" />
+                                                                    <input type="text" class="form-control" style="max-width:120px;" @bind="@_editRoleValue" @bind:event="oninput"
+                                                                           @onblur="@(() => SaveRole(i, a))" />
                                                                 }
                                                                 else
                                                                 {

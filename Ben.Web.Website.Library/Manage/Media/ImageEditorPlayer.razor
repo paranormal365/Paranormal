@@ -154,6 +154,23 @@
                 </div>
             </div>
         </ChildContent>
+    <FooterContent>
+        @* These were WindowActions on the Telerik window — buttons in its title bar — and the
+           conversion to a Bootstrap modal dropped them, leaving both save handlers with nothing
+           calling them. There was no way to keep an edit: the editor worked and then discarded
+           everything on close. They live in the footer now, which is where a modal's actions
+           belong and where they are visible rather than hidden in a title bar. *@
+        @if (_isDirty)
+        {
+            <button type="button" class="btn btn-outline-primary" @onclick="SaveEditStateAsync">
+                <BenIcon Name="save" Class="me-1" />Save State
+            </button>
+            <button type="button" class="btn btn-primary" @onclick="SaveAsNewVersionAsync">
+                <BenIcon Name="copy" Class="me-1" />Save as New Version
+            </button>
+        }
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _show = false)">Close</button>
+    </FooterContent>
 </BenModal>
 }
 
