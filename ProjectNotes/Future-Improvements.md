@@ -4811,7 +4811,7 @@ Default it to off, so a host that forgets is safe rather than exposed.
 
 ---
 
-## 97. Expanded sidebar is clipped by the editor (raised 2026-08-19)
+## 97. Expanded sidebar is clipped by the editor (CLOSED 2026-08-19)
 
 With the site's sidebar minimised, hovering it expands a flyout over the page. On `/my-videos` the
 flyout is cut off at the editor's left edge: the menu's own tooltip and the right-hand part of the
@@ -4826,6 +4826,21 @@ content has nothing to sit above once it crosses that boundary.
 Worth checking against the template migration generally: the old Telerik-based chrome and the
 current template do not necessarily agree about which layer the expanded sidebar belongs to, and
 this is the first page where a full-viewport component sits beside it.
+
+### Fixed — a z-index tie, not a clip
+
+Reproduced with the sidebar minified and hovered open over `/my-videos`. Nothing was clipping it:
+the editor's own horizontal rules were drawing *over* it. Measured, three `.bv-divider` elements at
+**z-index 10, left: 90** — well inside the 252px the expanded sidebar occupies — against a sidebar
+that shipped at **z-index 10** itself. Equal layer, later in the document, so the page won.
+
+The shell now sits above page content: `.app-sidebar` at 1000 and `.app-header` at 1001, kept below
+the popup layer `telerik-night.css` pins at 1090 so dropdowns and pickers still open above the
+navigation. Fixing it at the shell rather than at the divider settles the whole class — a page is
+entitled to stack its own content without knowing what the chrome uses.
+
+Verified by hit-testing rather than by eye: at each divider's midpoint inside the sidebar's width,
+the topmost element is now a sidebar link.
 
 ---
 

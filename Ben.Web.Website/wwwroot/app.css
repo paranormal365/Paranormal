@@ -431,3 +431,23 @@ html[data-bs-theme="dark"] {
         display: none !important;
     }
 }
+
+/* ── The chrome outranks the page ────────────────────────────────────────────
+   The sidebar shipped at z-index 10, and page content is free to use that same value — the video
+   editor's own dividers do, at exactly 10. Equal layer, later in the document, so they won: with
+   the sidebar minified and hovered open over the page, the editor's rules drew straight across
+   the navigation. Measured: three .bv-divider elements at z-index 10 starting at left:90, well
+   inside the 252px the expanded sidebar occupies.
+
+   Raising the chrome fixes the whole class rather than that one element — any page is entitled to
+   stack its own content without knowing what the shell uses. Kept below the popup layer that
+   telerik-night.css pins at 1090, so dropdowns and pickers still open above the navigation, and
+   far below Telerik's modal windows, which are meant to cover everything. */
+.app-sidebar {
+    z-index: 1000;
+}
+
+.app-header {
+    position: relative;
+    z-index: 1001;
+}
