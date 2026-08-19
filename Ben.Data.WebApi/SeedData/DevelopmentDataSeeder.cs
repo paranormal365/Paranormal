@@ -401,7 +401,369 @@ internal static class DevelopmentDataSeeder
         if (tgh is not null && nps is not null)
             await SeedSharedPlaceAsync(db, tgh, nps, owner, emma, sarah, now);
 
+        if (tgh is not null && nps is not null)
+            await SeedLocalDiscoveryAsync(db, tgh, nps, owner, emma, now);
+
+        if (tgh is not null)
+            await SeedEquipmentAsync(db, tgh, owner, sarah, james, now);
+
+        // Both the regular user the documents are written for and the owner account, so the
+        // editor can be driven by hand from either.
+        await SeedVideoEditorMediaAsync(db, sarah, now);
+        await SeedVideoEditorMediaAsync(db, owner, now);
+
         Console.WriteLine("[DevDataSeeder] Development seed data applied successfully.");
+    }
+
+    /// <summary>
+    /// Four small clips in the media library, so the video editor has something to open.
+    /// </summary>
+    /// <remarks>
+    /// <para>The editor's help documents are mostly pictures of the editor, and an editor with an
+    /// empty timeline demonstrates nothing — every screenshot would be of the same grey rectangle.
+    /// These are generated files (two camera clips, a room-tone recording and a site photo,
+    /// 172 KB in total) that live in <c>SeedData/Media</c> and are loaded as ordinary uploads
+    /// belonging to the seeded regular user, which is who the documents are written for.</para>
+    ///
+    /// <para>Stored as <c>FileData</c> rather than on disk: a seeded row pointing at a storage
+    /// path would break the moment the database and the file store disagreed, and these are small
+    /// enough that the blob is the simpler half of that trade.</para>
+    ///
+    /// <para>Typed as Case Evidence because that is what investigation footage is; the media
+    /// library filters by content type, not by file type, so the editor lists them either way.</para>
+    /// </remarks>
+    private static async Task SeedVideoEditorMediaAsync(BenDataContext db, AppUser owner, DateTime now)
+    {
+        var evidenceType = await db.UploadFileTypes.FirstOrDefaultAsync(
+            t => t.Name == UploadFileTypeSeeder.EvidenceFileTypeName);
+        if (evidenceType is null)
+        {
+            Console.WriteLine("[DevDataSeeder] Case Evidence file type missing — skipping demo media.");
+            return;
+        }
+
+        var mediaRoot = Path.Combine(AppContext.BaseDirectory, "SeedData", "Media");
+        if (!Directory.Exists(mediaRoot))
+        {
+            Console.WriteLine($"[DevDataSeeder] No demo media at {mediaRoot} — skipping.");
+            return;
+        }
+
+        var files = new (string File, string ContentType, string Description)[]
+        {
+            ("porch-camera.mp4",   "video/mp4",  "Front porch camera, 8 seconds. Static wide shot."),
+            ("hallway-camera.mp4", "video/mp4",  "Upstairs hallway camera, 6 seconds."),
+            ("basement-evp.m4a",   "audio/mp4",  "Basement EVP session — room tone with a low hum."),
+            ("site-photo.jpg",     "image/jpeg", "Exterior of the property, taken on arrival."),
+        };
+
+        var added = 0;
+        foreach (var (file, contentType, description) in files)
+        {
+            if (await db.UploadFiles.AnyAsync(f => f.AppUserId == owner.Id && f.FileName == file))
+                continue;
+
+            var path = Path.Combine(mediaRoot, file);
+            if (!File.Exists(path)) continue;
+
+            var bytes = await File.ReadAllBytesAsync(path);
+
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id                 = Guid.NewGuid(),
+                UploadFileTypeId   = evidenceType.Id,
+                AppUserId          = owner.Id,
+                FileName           = file,
+                StoredFileName     = $"{Guid.NewGuid():N}{Path.GetExtension(file)}",
+                ContentType        = contentType,
+                FileSize           = bytes.LongLength,
+                FileData           = bytes,
+                Description        = description,
+                IsPublic           = false,
+                DateCreated        = now,
+                CreatedByAppUserId = owner.Id,
+            });
+            added++;
+        }
+
+        if (added > 0)
+        {
+            await db.SaveChangesAsync();
+            Console.WriteLine($"[DevDataSeeder] Added {added} demo media files for the video editor.");
+        }
+    }
+
+    /// <summary>
+    /// Personal equipment, group sharing, and two loans in different states.
+    /// </summary>
+    /// <remarks>
+    /// <para>Nothing seeded equipment at all, so every equipment screen rendered its empty state
+    /// on a fresh dev database: "You aren't borrowing anything", an empty personal inventory, and
+    /// a public catalog with nothing in it. Three of the help documents are about exactly those
+    /// screens, and a screenshot of an empty state teaches nobody anything.</para>
+    ///
+    /// <para><b>Both directions of a loan are seeded on one person.</b> Sarah borrows James's
+    /// spirit box and James has asked to borrow her thermal camera, so her My Checkouts screen
+    /// shows both halves — "Borrowing" and "Waiting on me" — at once. Seeding only one side leaves
+    /// half of every borrowing screen empty, which is the failure this method exists to fix.</para>
+    ///
+    /// <para>The catalog needs items whose owners opted in, so two of Sarah's three pieces set
+    /// <c>IncludeInGlobalCatalog</c> and the third does not: the difference between a listed and
+    /// an unlisted piece is itself something the help explains.</para>
+    /// </remarks>
+    private static async Task SeedEquipmentAsync(
+        BenDataContext db, Organization tgh, AppUser owner, AppUser sarah, AppUser james, DateTime now)
+    {
+        // Real makes and models rather than the generic placeholders: the catalog and the
+        // "link to a make or model" help both describe browsing by manufacturer, which reads as
+        // nonsense against a list of "Generic / Unbranded".
+        var zoom   = await BrandAsync(db, "Zoom",      owner.Id, now);
+        var flir   = await BrandAsync(db, "FLIR",      owner.Id, now);
+        var pSb    = await BrandAsync(db, "GhostStop", owner.Id, now);
+
+        var h6     = await ModelAsync(db, zoom, "Audio Recorder",            "H6 Handy Recorder",  owner.Id, now);
+        var c5     = await ModelAsync(db, flir, "Thermal Imaging",           "C5 Compact Thermal", owner.Id, now);
+        var remPod = await ModelAsync(db, pSb,  "REM-Pod / Trigger Device",  "REM-Pod EMT",        owner.Id, now);
+        var sb7    = await ModelAsync(db, pSb,  "Spirit Box",                "SB7 Spirit Box",     owner.Id, now);
+
+        if (h6 is null || c5 is null || remPod is null || sb7 is null)
+        {
+            Console.WriteLine("[DevDataSeeder] Equipment categories missing — skipping equipment seed.");
+            return;
+        }
+
+        var recorder = await ItemAsync(db, "Field Recorder (H6)", sarah, h6,
+            loanable: EquipmentLoanAudience.SharedGroups, inCatalog: true,
+            notes: "Primary recorder for interior sessions. Four XLR inputs.", now);
+
+        var thermal  = await ItemAsync(db, "Thermal Camera (C5)", sarah, c5,
+            loanable: EquipmentLoanAudience.SharedGroups, inCatalog: true,
+            notes: "Kept in the padded case with the spare battery.", now);
+
+        // Deliberately unlisted and not loanable — the contrast is what the help describes.
+        await ItemAsync(db, "REM-Pod", sarah, remPod,
+            loanable: EquipmentLoanAudience.NotLoanable, inCatalog: false,
+            notes: "Calibrated 08/2026.", now);
+
+        var spiritBox = await ItemAsync(db, "Spirit Box (SB7)", james, sb7,
+            loanable: EquipmentLoanAudience.SharedGroups, inCatalog: true,
+            notes: "Sweep rate switch is stiff — push firmly.", now);
+
+        await ShareAsync(db, recorder,  tgh, sarah.Id, now);
+        await ShareAsync(db, thermal,   tgh, sarah.Id, now);
+        await ShareAsync(db, spiritBox, tgh, james.Id, now);
+
+        // Out with Sarah now, due back in five days.
+        await CheckoutAsync(db, spiritBox, borrower: sarah, forOrg: tgh,
+            status: EquipmentCheckoutStatus.CheckedOut,
+            requestNotes: "For the Franklin walkthrough on Saturday.",
+            checkedOut: now.AddDays(-3), due: now.AddDays(5), reviewedBy: james, now);
+
+        // Waiting on Sarah to decide.
+        await CheckoutAsync(db, thermal, borrower: james, forOrg: tgh,
+            status: EquipmentCheckoutStatus.Requested,
+            requestNotes: "Would like it for the basement survey if it's free.",
+            checkedOut: null, due: null, reviewedBy: null, now);
+
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task<EquipmentBrand> BrandAsync(
+        BenDataContext db, string name, Guid ownerId, DateTime now)
+    {
+        var existing = await db.EquipmentBrands.FirstOrDefaultAsync(b => b.Name == name);
+        if (existing is not null) return existing;
+
+        var brand = new EquipmentBrand
+        {
+            Id = Guid.NewGuid(), Name = name, IsApproved = true,
+            ApprovedByAppUserId = ownerId, DateApproved = now,
+            DateCreated = now, CreatedByAppUserId = ownerId,
+        };
+        db.EquipmentBrands.Add(brand);
+        await db.SaveChangesAsync();
+
+        // Same helper the taxonomy seeder uses, so a seeded brand's address follows the one rule
+        // the rest of the catalog follows rather than a second, nearly-identical one.
+        await Services.EquipmentCatalogSlugs.AssignAsync(db, brand, default);
+        await db.SaveChangesAsync();
+        return brand;
+    }
+
+    private static async Task<EquipmentModel?> ModelAsync(
+        BenDataContext db, EquipmentBrand brand, string categoryName, string name, Guid ownerId, DateTime now)
+    {
+        var category = await db.EquipmentCategories.FirstOrDefaultAsync(c => c.Name == categoryName);
+        if (category is null) return null;   // taxonomy seeder has not run
+
+        var existing = await db.EquipmentModels
+            .FirstOrDefaultAsync(m => m.EquipmentBrandId == brand.Id && m.Name == name);
+        if (existing is not null) return existing;
+
+        var model = new EquipmentModel
+        {
+            Id = Guid.NewGuid(), EquipmentBrandId = brand.Id, EquipmentCategoryId = category.Id,
+            Name = name, IsApproved = true, ApprovedByAppUserId = ownerId, DateApproved = now,
+            DateCreated = now, CreatedByAppUserId = ownerId,
+        };
+        db.EquipmentModels.Add(model);
+        await db.SaveChangesAsync();
+
+        await Services.EquipmentCatalogSlugs.AssignAsync(db, model, default);
+        await db.SaveChangesAsync();
+        return model;
+    }
+
+    private static async Task<EquipmentItem> ItemAsync(
+        BenDataContext db, string displayName, AppUser owner, EquipmentModel model,
+        EquipmentLoanAudience loanable, bool inCatalog, string notes, DateTime now)
+    {
+        var existing = await db.EquipmentItems.FirstOrDefaultAsync(
+            i => i.OwnerAppUserId == owner.Id && i.DisplayName == displayName);
+        if (existing is not null) return existing;
+
+        var item = new EquipmentItem
+        {
+            Id = Guid.NewGuid(), OwnerAppUserId = owner.Id, EquipmentModelId = model.Id,
+            DisplayName = displayName, Notes = notes,
+            LoanAudience = loanable, IncludeInGlobalCatalog = inCatalog,
+            AcquisitionDate = now.AddMonths(-14),
+            DateCreated = now, CreatedByAppUserId = owner.Id,
+        };
+        db.EquipmentItems.Add(item);
+        await db.SaveChangesAsync();
+        return item;
+    }
+
+    private static async Task ShareAsync(
+        BenDataContext db, EquipmentItem item, Organization org, Guid byUserId, DateTime now)
+    {
+        if (await db.EquipmentItemShares.AnyAsync(
+                s => s.EquipmentItemId == item.Id && s.OrganizationId == org.Id))
+            return;
+
+        db.EquipmentItemShares.Add(new EquipmentItemShare
+        {
+            Id = Guid.NewGuid(), EquipmentItemId = item.Id, OrganizationId = org.Id,
+            DateCreated = now, CreatedByAppUserId = byUserId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task CheckoutAsync(
+        BenDataContext db, EquipmentItem item, AppUser borrower, Organization forOrg,
+        EquipmentCheckoutStatus status, string requestNotes,
+        DateTime? checkedOut, DateTime? due, AppUser? reviewedBy, DateTime now)
+    {
+        if (await db.EquipmentCheckouts.AnyAsync(
+                c => c.EquipmentItemId == item.Id && c.BorrowerAppUserId == borrower.Id))
+            return;
+
+        db.EquipmentCheckouts.Add(new EquipmentCheckout
+        {
+            Id = Guid.NewGuid(),
+            EquipmentItemId = item.Id,
+            BorrowerAppUserId = borrower.Id,
+            BorrowedForOrganizationId = forOrg.Id,
+            Status = status,
+            RequestNotes = requestNotes,
+            DateNeededFrom = checkedOut ?? now.AddDays(2),
+            DateDue = due,
+            DateCheckedOut = checkedOut,
+            CheckedOutConfirmedByAppUserId = checkedOut is null ? null : borrower.Id,
+            ReviewedByAppUserId = reviewedBy?.Id,
+            DateReviewed = reviewedBy is null ? null : now.AddDays(-3),
+            DateCreated = now.AddDays(-4), CreatedByAppUserId = borrower.Id,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Data for the home page's "What's Near You" panel — a findable group and public events.
+    /// </summary>
+    /// <remarks>
+    /// <para>Backlog item #88. Without this the panel is correct and empty: no seeded organization
+    /// address sets <c>IsSearchable</c> (it defaults to false), and nothing seeded an
+    /// <c>OrgCalendarEvent</c> at all. A feature that renders "Nothing found" on a fresh dev
+    /// database cannot be click-tested, and looks broken rather than unpopulated.</para>
+    ///
+    /// <para><b>The two halves are deliberately different, and that is the point of seeding both.</b>
+    /// The group's address is marked searchable and <c>FullAddressAndMap</c>, so it appears exactly
+    /// where it is — a group that opted in is a business listing. The events resolve through
+    /// <c>PublicCoordinates</c> and appear only approximately. Seeing both on one screen is the
+    /// cheapest way to notice if that asymmetry ever regresses into "redact everything".</para>
+    ///
+    /// <para>Events are placed at the seeded Bell Witch Cave, a <c>PlaceKind.PublicLocation</c>.
+    /// A private residence would be excluded by <c>PublicEventController.VisibleEvents</c>, so
+    /// seeding one there would produce an invisible event and a confusing afternoon.</para>
+    /// </remarks>
+    private static async Task SeedLocalDiscoveryAsync(
+        BenDataContext db, Organization tgh, Organization nps,
+        AppUser owner, AppUser emma, DateTime now)
+    {
+        // ── Make one group findable ──────────────────────────────────────────
+        // Only TGH, not both: a panel where every group is findable cannot show that the flag is
+        // what does the work.
+        var tghAddress = await db.OrganizationAddresses
+            .FirstOrDefaultAsync(a => a.OrganizationId == tgh.Id);
+
+        if (tghAddress is not null && !tghAddress.IsSearchable)
+        {
+            tghAddress.IsSearchable      = true;
+            tghAddress.SearchVisibility  = OrganizationAddressVisibility.Public;
+            tghAddress.PublicDisplayMode = OrganizationAddressDisplayMode.FullAddressAndMap;
+            tghAddress.SearchRadiusMiles = 50;
+            await db.SaveChangesAsync();
+            Console.WriteLine("[DevDataSeeder] Made Tennessee Ghost Hunters findable in nearby search.");
+        }
+
+        // ── Public events ────────────────────────────────────────────────────
+        var placeId = new Guid("40000001-0000-0000-0000-000000000001");
+        if (!await db.Places.AnyAsync(p => p.Id == placeId)) return;
+        if (await db.OrgCalendarEvents.AnyAsync(e => e.IsPublic)) return;
+
+        // Dated from "now" rather than fixed, so the panel — which shows upcoming events only —
+        // does not quietly empty out as the seed data ages.
+        var walk = new OrgCalendarEvent
+        {
+            Id = Guid.NewGuid(), OrganizationId = tgh.Id,
+            Title = "Bell Witch Cave — Public Night Walk",
+            Description = "<p>An open evening at the cave. Bring a torch; we supply the recorders.</p>",
+            PlaceId = placeId,
+            StartDateTime = now.AddDays(14).Date.AddHours(20),
+            EndDateTime   = now.AddDays(14).Date.AddHours(23),
+            IsPublic = true,
+            UrlName = $"{now.AddDays(14):yyyy-MM-dd}-bell-witch-cave-public-night-walk",
+            AttendeeCapacity = 20,
+            DateCreated = now, CreatedByAppUserId = owner.Id,
+        };
+
+        // A second event from the other group, at their own Nashville address rather than the cave.
+        // The distance matters: the cave is ~33 miles from Nashville, so at the panel's default
+        // 25-mile radius the walk alone is out of range. Seeding one event close and one far means
+        // a fresh dev database shows something immediately AND the distance dropdown visibly does
+        // something when widened — one event at 25 miles, two at 50.
+        var npsAddress = await db.OrganizationAddresses
+            .FirstOrDefaultAsync(a => a.OrganizationId == nps.Id);
+
+        var talk = new OrgCalendarEvent
+        {
+            Id = Guid.NewGuid(), OrganizationId = nps.Id,
+            Title = "Open Meeting — What We Found This Year",
+            Description = "<p>Our annual public review of the season's investigations. Anyone welcome.</p>",
+            // No PlaceId: an event may name an organization address instead, and VisibleEvents
+            // allows a null Place. The nearby projection falls back to the address for coordinates.
+            OrganizationAddressId = npsAddress?.Id,
+            StartDateTime = now.AddDays(28).Date.AddHours(19),
+            EndDateTime   = now.AddDays(28).Date.AddHours(21),
+            IsPublic = true,
+            UrlName = $"{now.AddDays(28):yyyy-MM-dd}-open-meeting-what-we-found-this-year",
+            DateCreated = now, CreatedByAppUserId = emma.Id,
+        };
+
+        db.OrgCalendarEvents.AddRange(walk, talk);
+        await db.SaveChangesAsync();
+        Console.WriteLine("[DevDataSeeder] Created two public events for local discovery.");
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 using AutoMapper;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.WebApi.Services;
 using Ben.Data.Source.Entities;
 using Ben.Service.Models.Entities;
 using Ben.Service.RepositoryService.GenericInterfaces;
@@ -14,15 +15,18 @@ namespace Ben.Data.WebApi.Controllers.Cms;
 public sealed class CmsSectionController : OrgCmsControllerBase
 {
     private readonly IAuditLogService _auditLog;
+    private readonly ICmsMarkupSanitizer _sanitizer;
 
     public CmsSectionController(
         IDbContextFactory<BenDataContext> dbFactory,
         IMapper mapper,
         IOrganizationSecurityService security,
-        IAuditLogService auditLog)
+        IAuditLogService auditLog,
+        ICmsMarkupSanitizer sanitizer)
         : base(dbFactory, mapper, security)
     {
-        _auditLog = auditLog;
+        _auditLog  = auditLog;
+        _sanitizer = sanitizer;
     }
 
     // ── GET all sections for a page ──────────────────────────────────────────
@@ -69,7 +73,7 @@ public sealed class CmsSectionController : OrgCmsControllerBase
             OrganizationPageId = pageId,
             SectionType        = request.SectionType,
             Title              = request.Title?.Trim(),
-            ContentJson        = string.IsNullOrWhiteSpace(request.ContentJson) ? "{}" : request.ContentJson,
+            ContentJson        = _sanitizer.SanitizeContentJson(request.ContentJson),
             SortOrder          = request.SortOrder,
             IsActive           = request.IsActive,
             DateCreated        = DateTime.UtcNow,
@@ -104,7 +108,7 @@ public sealed class CmsSectionController : OrgCmsControllerBase
             .FirstOrDefaultAsync(s => s.Id == sectionId && s.OrganizationPageId == pageId, ct);
 
         section!.Title              = request.Title?.Trim();
-        section.ContentJson        = string.IsNullOrWhiteSpace(request.ContentJson) ? "{}" : request.ContentJson;
+        section.ContentJson        = _sanitizer.SanitizeContentJson(request.ContentJson);
         section.IsActive           = request.IsActive;
         section.DateUpdated        = DateTime.UtcNow;
         section.UpdatedByAppUserId = userId.Value;

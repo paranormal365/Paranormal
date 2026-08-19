@@ -1,3 +1,4 @@
+@implements IDisposable
 @inject FfmpegService Ffmpeg
 @inject MemFsLedger MemFs
 
@@ -29,6 +30,18 @@
                 <span class="bv-diagnostics-panel__label">State</span>
                 <span class="bv-diagnostics-panel__value">@Ffmpeg.State</span>
             </div>
+            @* The trace below records calls when they finish, so a call that never returns leaves
+               no entry at all — the panel showed the last thing that completed and nothing about
+               what the editor was actually waiting on. *@
+            @if (Ffmpeg.InFlight is { } flight)
+            {
+                <div class="bv-diagnostics-panel__row">
+                    <span class="bv-diagnostics-panel__label">In flight</span>
+                    <span class="bv-diagnostics-panel__value">
+                        @flight.Operation — @($"{(DateTime.UtcNow - flight.StartedAtUtc).TotalSeconds:F0}s")
+                    </span>
+                </div>
+            }
             @if (Ffmpeg.LastError is not null)
             {
                 <div class="bv-diagnostics-panel__row">
@@ -92,6 +105,16 @@
 </TelerikWindow>
 
 @code {
+
+    protected override void OnInitialized()
+    {
+    // The status this component paints comes from the injected ffmpeg service, and Blazor only
+    // re-renders a child whose parameters changed — which a state change here does not touch.
+    // Without this the control shows whatever was true at its last render: see item 94, where a
+    // toolbar chip sat at "Processing… 33%" long after the service had returned to Ready.
+        Ffmpeg.OnStateChanged += OnFfmpegStateChanged;
+    }
+
     [Parameter] public bool Visible { get; set; }
     [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
 
@@ -125,4 +148,8 @@
         < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
         _ => $"{bytes / (1024.0 * 1024.0):0.#} MB",
     };
+
+    private void OnFfmpegStateChanged() => InvokeAsync(StateHasChanged);
+
+    void IDisposable.Dispose() => Ffmpeg.OnStateChanged -= OnFfmpegStateChanged;
 }

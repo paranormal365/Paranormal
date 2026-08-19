@@ -13,17 +13,124 @@ public sealed class BackgroundRenderServiceTests
         public List<RenderJob> Calls = [];
         public List<string> Deleted = [];
 
+        // Both lists are written by the render loop's own thread and read by the test's, so the
+        // signals below are raised under the same lock that records the event. Without it a test
+        // could observe a completed signal before the list it is about to assert on has settled.
+        private readonly object _sync = new();
+        private readonly Dictionary<string, TaskCompletionSource> _deletionSignals = [];
+        private readonly List<(int AtLeast, TaskCompletionSource Signal)> _callCountSignals = [];
+
+        /// <summary>
+        /// Completes once <paramref name="segmentName"/> has been deleted — already-completed if it
+        /// happened before this was called.
+        /// </summary>
+        /// <remarks>
+        /// The deletion path deliberately does not go through <c>RenderRegionTracker.OnChanged</c>
+        /// (see <c>BackgroundRenderService.TryDeleteSegmentAsync</c>, which talks only to the
+        /// backend), so waiting on the tracker for this would be waiting on an unrelated signal
+        /// that merely tends to follow. The fake is the thing that knows, so the fake says so.
+        /// </remarks>
+        public Task WhenDeletedAsync(string segmentName)
+        {
+            lock (_sync)
+            {
+                if (Deleted.Contains(segmentName)) return Task.CompletedTask;
+                if (!_deletionSignals.TryGetValue(segmentName, out var signal))
+                    _deletionSignals[segmentName] = signal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                return signal.Task;
+            }
+        }
+
+        /// <summary>Completes once the backend has been asked to render at least this many jobs.</summary>
+        public Task WhenCalledAsync(int atLeast)
+        {
+            lock (_sync)
+            {
+                if (Calls.Count >= atLeast) return Task.CompletedTask;
+                var signal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                _callCountSignals.Add((atLeast, signal));
+                return signal.Task;
+            }
+        }
+
         public async Task<RenderJobResult> RenderAsync(RenderJob job, IProgress<int> progress, CancellationToken ct)
         {
-            Calls.Add(job);
-            if (Gate is not null) return await Gate.Task;
+            TaskCompletionSource<RenderJobResult>? gate;
+            lock (_sync)
+            {
+                Calls.Add(job);
+                foreach (var (atLeast, signal) in _callCountSignals.Where(w => Calls.Count >= w.AtLeast))
+                    signal.TrySetResult();
+                gate = Gate;
+            }
+
+            if (gate is not null) return await gate.Task;
             return ResultFor(job);
         }
 
         public Task DeleteSegmentAsync(string segmentName)
         {
-            Deleted.Add(segmentName);
+            lock (_sync)
+            {
+                Deleted.Add(segmentName);
+                if (_deletionSignals.TryGetValue(segmentName, out var signal)) signal.TrySetResult();
+            }
             return Task.CompletedTask;
+        }
+    }
+
+    // ── Waiting on the loop without racing a stopwatch ───────────────────────
+
+    /// <summary>
+    /// How long a signal may take before we call it a genuine failure.
+    /// </summary>
+    /// <remarks>
+    /// Generous on purpose, and free in the passing case: every wait below completes the moment the
+    /// thing it describes actually happens, so this budget only applies when it never does. The
+    /// earlier versions polled a 2-second clock instead, which made a loaded machine
+    /// indistinguishable from a broken loop — the same defect already fixed in
+    /// <c>FfmpegServiceRecoveryTests</c> after it failed two of six full-solution runs.
+    /// </remarks>
+    private static readonly TimeSpan SignalBudget = TimeSpan.FromSeconds(30);
+
+    private static async Task AwaitSignalAsync(Task signal, string whatWasExpected)
+    {
+        var winner = await Task.WhenAny(signal, Task.Delay(SignalBudget));
+        Assert.True(winner == signal, $"Timed out after {SignalBudget.TotalSeconds:0}s: {whatWasExpected}.");
+        await signal; // surface anything the signal itself carried
+    }
+
+    /// <summary>
+    /// Waits until <paramref name="condition"/> holds, driven by the tracker's own change event
+    /// rather than by polling.
+    /// </summary>
+    /// <remarks>
+    /// The handler is attached before the first check and the condition re-tested immediately
+    /// after, so a change landing in the gap cannot be missed. The condition is evaluated
+    /// defensively because it runs on the render loop's thread inside <c>OnChanged</c>: it reads a
+    /// freshly-projected region list, and an exception escaping here would surface inside the
+    /// service rather than in the test.
+    /// </remarks>
+    private static async Task WaitForTrackerAsync(
+        RenderRegionTracker tracker, Func<bool> condition, string whatWasExpected)
+    {
+        var satisfied = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        void Handler()
+        {
+            try { if (condition()) satisfied.TrySetResult(); }
+            catch { /* transient view mid-mutation; the next change re-evaluates */ }
+        }
+
+        tracker.OnChanged += Handler;
+        try
+        {
+            Handler();
+            await AwaitSignalAsync(satisfied.Task, whatWasExpected);
+        }
+        finally
+        {
+            tracker.OnChanged -= Handler;
         }
     }
 
@@ -504,11 +611,11 @@ public sealed class BackgroundRenderServiceTests
 
         service.Start();
 
-        // Poll briefly — the loop runs on its own background Task. Two-pass: the loop should
-        // carry the region all the way Stale → Rough → Fine on its own.
-        var deadline = DateTime.UtcNow.AddSeconds(2);
-        while (tracker.Regions.Single().State != RenderRegionState.Fine && DateTime.UtcNow < deadline)
-            await Task.Delay(10);
+        // The loop runs on its own background Task. Two-pass: it should carry the region all the
+        // way Stale → Rough → Fine on its own, and we wait on the tracker saying so.
+        await WaitForTrackerAsync(tracker,
+            () => tracker.Regions.Single().State == RenderRegionState.Fine,
+            "the loop never carried the region through to Fine");
 
         Assert.Equal(RenderRegionState.Fine, tracker.Regions.Single().State);
         Assert.Equal([RenderPass.Rough, RenderPass.Fine], backend.Calls.Select(c => c.Pass).ToArray());
@@ -526,15 +633,17 @@ public sealed class BackgroundRenderServiceTests
         backend.ResultFor = job => RenderJobResult.Ok($"{job.Pass}-{job.Signature}.mp4");
         service.Start();
 
-        var deadline = DateTime.UtcNow.AddSeconds(2);
-        while (tracker.Regions.Single().State != RenderRegionState.Fine && DateTime.UtcNow < deadline)
-            await Task.Delay(10);
+        await WaitForTrackerAsync(tracker,
+            () => tracker.Regions.Single().State == RenderRegionState.Fine,
+            "the first render never reached Fine, so there was nothing to orphan");
+
+        // Subscribed before the edit: the deletion is what we are waiting for, so the signal must
+        // exist before the thing that triggers it.
+        var orphanDeleted = backend.WhenDeletedAsync("Fine-sig-a.mp4");
 
         tracker.Sync([new RenderRegionInput(id, 0, 5, "sig-b")]); // edit orphans Fine-sig-a.mp4
 
-        deadline = DateTime.UtcNow.AddSeconds(2);
-        while (!backend.Deleted.Contains("Fine-sig-a.mp4") && DateTime.UtcNow < deadline)
-            await Task.Delay(10);
+        await AwaitSignalAsync(orphanDeleted, "the loop never deleted the orphaned segment Fine-sig-a.mp4");
 
         Assert.Contains("Fine-sig-a.mp4", backend.Deleted);
         await service.DisposeAsync();
@@ -558,9 +667,7 @@ public sealed class BackgroundRenderServiceTests
         service.Start();
 
         // Wait for the loop to actually pick up the first job before racing the edit against it.
-        var pickupDeadline = DateTime.UtcNow.AddSeconds(2);
-        while (backend.Calls.Count == 0 && DateTime.UtcNow < pickupDeadline)
-            await Task.Delay(5);
+        await AwaitSignalAsync(backend.WhenCalledAsync(1), "the loop never picked up the first job");
         Assert.Single(backend.Calls);
 
         // Simulate progress noise firing Signal() repeatedly while the job is "in flight",
@@ -574,9 +681,9 @@ public sealed class BackgroundRenderServiceTests
         firstJobGate.SetResult(RenderJobResult.Ok("first-segment.mp4"));
         tracker.Sync([new RenderRegionInput(id, 0, 5, "sig-b")]); // the edit
 
-        var deadline = DateTime.UtcNow.AddSeconds(3);
-        while (tracker.Regions.Single().State != RenderRegionState.Fine && DateTime.UtcNow < deadline)
-            await Task.Delay(10);
+        await WaitForTrackerAsync(tracker,
+            () => tracker.Regions.Single() is { State: RenderRegionState.Fine, Signature: "sig-b" },
+            "the edit was dropped — the region never reached Fine on the new signature");
 
         var region = tracker.Regions.Single();
         Assert.Equal(RenderRegionState.Fine, region.State);
@@ -613,14 +720,13 @@ public sealed class BackgroundRenderServiceTests
         tracker.Sync([new RenderRegionInput(id, 0, 5, "sig-a")]);
 
         Exception? observedError = null;
-        service.OnLoopError += ex => observedError = ex;
+        var errorSurfaced = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        service.OnLoopError += ex => { observedError ??= ex; errorSurfaced.TrySetResult(); };
         backend.ResultFor = _ => throw new OperationCanceledException("simulated backend-internal fault, unrelated to our ct");
 
         service.Start();
 
-        var deadline = DateTime.UtcNow.AddSeconds(2);
-        while (observedError is null && DateTime.UtcNow < deadline)
-            await Task.Delay(10);
+        await AwaitSignalAsync(errorSurfaced.Task, "the loop never surfaced the backend fault via OnLoopError");
 
         Assert.IsType<OperationCanceledException>(observedError);
         Assert.Equal(RenderRegionState.Stale, tracker.Regions.Single().State); // not stuck RenderingRough
@@ -630,9 +736,9 @@ public sealed class BackgroundRenderServiceTests
         backend.ResultFor = job => RenderJobResult.Ok($"seg_{job.Pass}_{job.ClipId:N}");
         tracker.Sync([new RenderRegionInput(id, 0, 5, "sig-b")]);
 
-        deadline = DateTime.UtcNow.AddSeconds(2);
-        while (tracker.Regions.Single().State != RenderRegionState.Fine && DateTime.UtcNow < deadline)
-            await Task.Delay(10);
+        await WaitForTrackerAsync(tracker,
+            () => tracker.Regions.Single().State == RenderRegionState.Fine,
+            "the loop did not survive the fault — the follow-up edit never rendered");
 
         Assert.Equal(RenderRegionState.Fine, tracker.Regions.Single().State);
         await service.DisposeAsync();
@@ -670,9 +776,9 @@ public sealed class BackgroundRenderServiceTests
             new RenderRegionInput(otherId, 10, 5, "sig-other"),
         ]);
 
-        var deadline = DateTime.UtcNow.AddSeconds(2);
-        while (tracker.Regions.First(r => r.ClipId == otherId).State != RenderRegionState.Fine && DateTime.UtcNow < deadline)
-            await Task.Delay(10);
+        await WaitForTrackerAsync(tracker,
+            () => tracker.Regions.First(r => r.ClipId == otherId).State == RenderRegionState.Fine,
+            "the backed-off region blocked the loop — the unrelated region never rendered");
 
         Assert.Equal(RenderRegionState.Fine, tracker.Regions.First(r => r.ClipId == otherId).State);
         await service.DisposeAsync(); // must still shut down cleanly via real cancellation
@@ -688,9 +794,9 @@ public sealed class BackgroundRenderServiceTests
         service.Start();
         service.Start(); // no-op second call
 
-        var deadline = DateTime.UtcNow.AddSeconds(2);
-        while (tracker.Regions.Single().State != RenderRegionState.Fine && DateTime.UtcNow < deadline)
-            await Task.Delay(10);
+        await WaitForTrackerAsync(tracker,
+            () => tracker.Regions.Single().State == RenderRegionState.Fine,
+            "the region never reached Fine");
 
         // Exactly one rough + one fine — a duplicated loop would produce more.
         Assert.Equal(2, backend.Calls.Count);

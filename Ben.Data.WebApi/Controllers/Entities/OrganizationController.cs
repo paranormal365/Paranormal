@@ -3,6 +3,7 @@ using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
+using Ben.Data.Source.Services;
 using Ben.Data.WebApi.Controllers.Admin;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Entities;
@@ -187,7 +188,6 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         }
 
         if (string.IsNullOrWhiteSpace(request.Name))    return BadRequest("Name is required.");
-        if (string.IsNullOrWhiteSpace(request.UrlName)) return BadRequest("UrlName is required.");
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var before = await db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.Id == id, ct);
@@ -195,8 +195,15 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         var org = await db.Organizations.FirstOrDefaultAsync(o => o.Id == id, ct);
         if (org is null) return NotFound();
 
+        // Checked on rename as well as on create. It never was, and there was no index behind
+        // either — so a group could rename onto another group's address and take their traffic.
+        var refusal = await OrganizationUrlNames.RefusalForAsync(db, request.UrlName, id, ct);
+        if (refusal is not null) return BadRequest(refusal);
+
         org.Name                   = request.Name.Trim();
-        org.UrlName                = request.UrlName.Trim().ToLowerInvariant();
+        // Keeps the old address working. A group's address is the one part of this product that
+        // ends up on a business card, and renaming used to break every printed link in silence.
+        await OrganizationUrlNames.ApplyAsync(db, org, request.UrlName, userId, ct);
         org.IsAcceptingApplications = request.IsAcceptingApplications;
         org.PublicPhone             = request.PublicPhone?.Trim();
         org.PublicEmail             = request.PublicEmail?.Trim();
@@ -248,13 +255,13 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         if (!User.IsInRole(RoleNames.SuperAdmin)) return Forbid();
 
         if (string.IsNullOrWhiteSpace(request.Name))    return BadRequest("Name is required.");
-        if (string.IsNullOrWhiteSpace(request.UrlName)) return BadRequest("UrlName is required.");
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        var urlName = request.UrlName.Trim().ToLowerInvariant();
-        if (await db.Organizations.AnyAsync(o => o.UrlName == urlName, ct))
-            return BadRequest($"UrlName '{urlName}' is already in use.");
+        var refusal = await OrganizationUrlNames.RefusalForAsync(db, request.UrlName, null, ct);
+        if (refusal is not null) return BadRequest(refusal);
+
+        var urlName = Ben.Data.Common.SlugText.NormalizeOrEmpty(request.UrlName);
 
         var org = new Organization
         {

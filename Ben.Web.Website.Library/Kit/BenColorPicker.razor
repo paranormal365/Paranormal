@@ -1,0 +1,58 @@
+@*
+    TelerikColorPicker replacement, on the native control Bootstrap already styles.
+
+    <input type="color"> is a real form control: it opens the operating system's colour picker,
+    which is the one the user already knows, and needs no JavaScript, no popup layer and no
+    interop. Bootstrap's .form-control-color gives it the swatch appearance the template uses —
+    the "preview" the Telerik control drew by hand.
+
+    The hex text beside it is optional and off by default. It earns its place where a colour has to
+    be read back or pasted (a brand colour, a value copied from a design), which the swatch alone
+    cannot do.
+*@
+
+<div class="d-flex align-items-center gap-2 @Class">
+    <input type="color"
+           class="form-control form-control-color"
+           value="@Normalized"
+           disabled="@(!Enabled)"
+           title="@(Title ?? Normalized)"
+           aria-label="@(AriaLabel ?? Title ?? "Colour")"
+           @onchange="OnPicked" />
+
+    @if (ShowHex)
+    {
+        <code class="small text-secondary">@Normalized</code>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    /// <summary>Shown when <see cref="Value"/> is empty or is not a colour the input can display.</summary>
+    [Parameter] public string Fallback { get; set; } = "#000000";
+
+    /// <summary>Renders the hex value next to the swatch.</summary>
+    [Parameter] public bool ShowHex { get; set; }
+
+    [Parameter] public bool Enabled { get; set; } = true;
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+
+    private string Normalized => HexColor.Normalize(Value, Fallback);
+
+    private async Task OnPicked(ChangeEventArgs args)
+    {
+        var picked = HexColor.TryNormalize(args.Value?.ToString());
+        if (picked is null) return;
+
+        // Don't raise a change when normalisation alone altered the text — "#ABC" and "#aabbcc"
+        // are the same colour, and reporting that as an edit marks a clean form dirty.
+        if (HexColor.AreSame(picked, Value)) return;
+
+        Value = picked;
+        await ValueChanged.InvokeAsync(picked);
+    }
+}

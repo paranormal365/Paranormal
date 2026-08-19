@@ -1,7 +1,7 @@
 using Ben.Data.Common.Enums;
 using Ben.Service.Models.Entities;
-using Ben.Web.Library.Services;
-using Ben.Web.WebApp.Services.WebApi;
+using Ben.Web.Services;
+using Ben.Web.Services.WebApi;
 using Moq;
 using Xunit;
 
@@ -113,7 +113,7 @@ public class Phase6AdapterTests
         var api = ApiMock();
         api.Setup(x => x.GetAnonymousAsync<IReadOnlyList<PublicCaseListItem>>(
                 "/api/public/organizations/ghost-hunters-tn/cases", It.IsAny<CancellationToken>()))
-           .ReturnsAsync([new("#2026-042", "Smith, Nashville TN", "Nashville", "TN",
+           .ReturnsAsync([new("#2026-042", "the-mill-house", "Smith, Nashville TN", "Nashville", "TN",
                CaseStatus.Public, DateTime.UtcNow, null, false)]);
 
         var result = await Build(api).GetPublicCasesAsync("ghost-hunters-tn");

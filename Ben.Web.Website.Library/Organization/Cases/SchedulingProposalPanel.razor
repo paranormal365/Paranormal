@@ -1,0 +1,183 @@
+@* Embedded in InvestigationPanel — lets org send proposed dates to the client. *@
+@using Ben.Data.Common.Enums
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@if (_loading) { <BenLoaderOverlay Visible="true" Text="Loading proposals…" /> }
+else
+{
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <span class="text-secondary small">@_proposals.Count proposal@(_proposals.Count == 1 ? "" : "s") sent</span>
+        <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => _showProposeDialog = true)"><BenIcon Name="calendar" Class="me-1" />Propose Dates</button>
+    </div>
+
+    @if (_error is not null) { <div class="alert alert-danger py-2 small mb-2">@_error</div> }
+
+    @foreach (var p in _proposals)
+    {
+        var prop = p;
+        <div class="card mb-2">
+            <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div class="flex-grow-1">
+                        <span class="badge @StatusBadge(prop.Status) me-2">@prop.Status</span>
+                        <span class="text-secondary small">Sent @prop.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()</span>
+                        @if (!string.IsNullOrWhiteSpace(prop.Notes))
+                        {
+                            <div class="text-secondary small mt-1">@prop.Notes</div>
+                        }
+                        <div class="mt-1">
+                            @foreach (var slot in prop.Slots)
+                            {
+                                var isAccepted = prop.AcceptedSlotId == slot.Id;
+                                <div class="small @(isAccepted ? "text-success fw-semibold" : "")">
+                                    @(isAccepted ? "✓ " : "• ")
+                                    @slot.StartDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                    @if (slot.EndDateTime.HasValue) { <span> – @slot.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTime()</span> }
+                                </div>
+                            }
+                        </div>
+                        @if (prop.Status == ScheduleProposalStatus.Countered && prop.ClientCounterDateTime.HasValue)
+                        {
+                            <div class="text-warning small mt-1">
+                                Client proposed: @prop.ClientCounterDateTime.Value.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                @if (!string.IsNullOrEmpty(prop.ClientResponseNotes)) { <span> — @prop.ClientResponseNotes</span> }
+                            </div>
+                        }
+                    </div>
+                    @if (prop.Status == ScheduleProposalStatus.Pending)
+                    {
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => ConvertProposal(prop))" title="Convert to investigation">
+                                <BenIcon Name="check" />
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => Withdraw(prop.Id))" title="Withdraw">
+                                <BenIcon Name="x" />
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@* ── Propose dates dialog ─────────────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showProposeDialog" Title="Propose Investigation Dates">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold" for="schedulingproposalpanel-message-to-client-optional-66d6">Message to Client (optional)</label>
+                <textarea id="schedulingproposalpanel-message-to-client-optional-66d6" class="form-control" rows="2" placeholder="e.g. We have three dates available. Please choose one or suggest another." @bind="@_proposeNotes"></textarea>
+            </div>
+            <div class="col-12 fw-semibold small">Proposed Date/Time Options</div>
+            @for (var i = 0; i < _slots.Count; i++)
+            {
+                var idx = i;
+                <div class="col-12">
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="text-secondary small" style="width:20px;">@(idx + 1).</span>
+                        <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_slots[idx].Start" Width="200px" />
+                        <span class="text-secondary small">to</span>
+                        <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_slots[idx].End" Width="200px" />
+                        @if (_slots.Count > 1)
+                        {
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _slots.RemoveAt(idx))"><BenIcon Name="trash-2" /></button>
+                        }
+                    </div>
+                </div>
+            }
+            <div class="col-12">
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _slots.Add(new SlotForm()))"><BenIcon Name="plus" Class="me-1" />Add Another Date</button>
+            </div>
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showProposeDialog = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" @onclick="SendProposal"
+                disabled="@(_saving || !_slots.Any(s => s.Start.HasValue))">Send Proposal</button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId  { get; set; }
+    [Parameter, EditorRequired] public Guid CaseId { get; set; }
+
+    private List<ScheduleProposalDto> _proposals = [];
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+
+    private bool _showProposeDialog;
+    private string _proposeNotes = "";
+    private List<SlotForm> _slots = [new()];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _proposals = (await AdminClient.GetScheduleProposalsAsync(OrgId, CaseId)).ToList(); }
+        catch { _error = "Failed to load proposals."; }
+        _loading = false;
+    }
+
+    private async Task SendProposal()
+    {
+        _saving = true;
+        var slots = _slots
+            .Where(s => s.Start.HasValue)
+            .Select((s, i) => new SlotInput(s.Start!.Value, s.End))
+            .ToList();
+        try
+        {
+            var result = await AdminClient.CreateScheduleProposalAsync(OrgId, CaseId,
+                new CreateProposalRequest(_proposeNotes, slots));
+            if (result is not null)
+            {
+                _proposals.Insert(0, result);
+                _showProposeDialog = false;
+                _proposeNotes = "";
+                _slots = [new()];
+            }
+        }
+        catch { _error = "Failed to send proposal."; }
+        finally { _saving = false; StateHasChanged(); }
+    }
+
+    private async Task Withdraw(Guid proposalId)
+    {
+        await AdminClient.WithdrawScheduleProposalAsync(OrgId, CaseId, proposalId);
+        var idx = _proposals.FindIndex(p => p.Id == proposalId);
+        if (idx >= 0) _proposals[idx] = _proposals[idx] with { Status = ScheduleProposalStatus.Withdrawn };
+        StateHasChanged();
+    }
+
+    private async Task ConvertProposal(ScheduleProposalDto prop)
+    {
+        var firstSlot = prop.Slots.FirstOrDefault();
+        if (firstSlot is null) return;
+        var result = await AdminClient.ConvertProposalToInvestigationAsync(OrgId, CaseId, prop.Id,
+            new ConvertProposalRequest(firstSlot.Id, "Investigation"));
+        if (result is not null)
+        {
+            var idx = _proposals.FindIndex(p => p.Id == prop.Id);
+            if (idx >= 0) _proposals[idx] = result;
+            StateHasChanged();
+        }
+    }
+
+    private static string StatusBadge(ScheduleProposalStatus s) => s switch
+    {
+        ScheduleProposalStatus.Pending          => "bg-warning text-dark",
+        ScheduleProposalStatus.AcceptedByClient => "bg-success",
+        ScheduleProposalStatus.Countered        => "bg-info text-dark",
+        ScheduleProposalStatus.Declined         => "bg-danger",
+        ScheduleProposalStatus.Converted        => "bg-primary",
+        _                                       => "bg-secondary",
+    };
+
+    private class SlotForm
+    {
+        public DateTime? Start { get; set; }
+        public DateTime? End   { get; set; }
+    }
+}

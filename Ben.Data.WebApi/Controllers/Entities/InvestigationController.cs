@@ -2,6 +2,7 @@ using AutoMapper;
 using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.WebApi.Services;
 using Ben.Data.Source.Entities;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -108,6 +109,9 @@ public sealed class InvestigationController : BenControllerBase
         if (InvestigationVisibilityFilter.Reject(entity.Visibility, placement.Place) is { } scopeError)
             return BadRequest(scopeError);
 
+        if (await EnsurePublicSlugAsync(db, entity, ct) is string newSlugRefusal)
+            return BadRequest(newSlugRefusal);
+
         // Auto-create an org calendar event if none was supplied
         if (entity.OrgCalendarEventId is null)
         {
@@ -175,6 +179,9 @@ public sealed class InvestigationController : BenControllerBase
         if (request.Visibility is { } requested) entity.Visibility = requested;
         if (InvestigationVisibilityFilter.Reject(entity.Visibility, placement.Place) is { } scopeError)
             return BadRequest(scopeError);
+
+        if (await EnsurePublicSlugAsync(db, entity, ct) is string slugRefusal)
+            return BadRequest(slugRefusal);
 
         await db.SaveChangesAsync(ct);
         var loaded = await db.Investigations.AsNoTracking()
@@ -373,6 +380,41 @@ public sealed class InvestigationController : BenControllerBase
         return await InvestigationAccess.CanManageAsync(
             db, investigationId, GetCurrentUserId(), User.IsInRole(RoleNames.SuperAdmin), ct);
     }
+
+    /// <summary>
+    /// Gives a newly-public investigation its readable address, or explains why it cannot have one.
+    /// </summary>
+    /// <remarks>
+    /// <para>Date first, then the title. The date makes a list of them sort by name alone and says
+    /// something useful when a title does not; the title stops a date-only address being walkable,
+    /// which would let anybody step through the calendar and enumerate a group's visits.</para>
+    ///
+    /// <para>An investigation is often at somebody's home, so a title reading like a street address
+    /// is refused rather than slugged — the same rule cases follow, and for the same reason: a URL
+    /// outlives the page and ends up in histories and pasted links.</para>
+    ///
+    /// <para>Assigned once. Renaming afterwards leaves the address alone.</para>
+    /// </remarks>
+    private static async Task<string?> EnsurePublicSlugAsync(
+        BenDataContext db, Investigation entity, CancellationToken ct)
+    {
+        if (entity.Visibility != InvestigationVisibility.Public || entity.UrlName is not null)
+            return null;
+
+        if (UrlSlug.LooksLikeAStreetAddress(entity.Title))
+            return "This investigation's title looks like a street address, and the title becomes "
+                 + "part of its public web address. Give it a name that doesn't identify the "
+                 + "property before making it public.";
+
+        var candidate = UrlSlug.FromDateAndTitle(entity.ScheduledDateTime, entity.Title)
+                        ?? entity.ScheduledDateTime.ToString("yyyy-MM-dd");
+
+        entity.UrlName = await UrlSlug.MakeUniqueAsync(candidate, async slug =>
+            await db.Investigations.AnyAsync(i => i.OrganizationId == entity.OrganizationId
+                                               && i.UrlName == slug
+                                               && i.Id != entity.Id, ct));
+        return null;
+    }
 }
 
 // ── Evidence voting (separate route) ─────────────────────────────────────────
@@ -412,7 +454,8 @@ public sealed class EvidenceVoteController : BenControllerBase
             DisputesCount:     votes.Count(v => v.VoteType == EvidenceVoteType.Disputes),
             InconclusiveCount: votes.Count(v => v.VoteType == EvidenceVoteType.Inconclusive),
             TotalVotes:        votes.Count,
-            CurrentUserVote:   myVote));
+            CurrentUserVote:   myVote,
+            Score:             EvidenceVoteScore.Score(votes.Select(v => v.VoteType))));
     }
 
     /// <summary>Returns all votes with voter identities. Requires org membership (any active
@@ -541,6 +584,7 @@ public sealed class EvidenceVoteController : BenControllerBase
         await db.SaveChangesAsync(ct);
         return NoContent();
     }
+
 }
 
 // ── Request records ───────────────────────────────────────────────────────────

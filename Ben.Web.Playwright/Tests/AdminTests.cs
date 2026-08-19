@@ -46,7 +46,7 @@ public class AdminTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/admin/users");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         // Should not show user management data
-        var isAdminPage = await Page.GetByText("AverageBen").IsVisibleAsync();
+        var isAdminPage = await Main.GetByText("AverageBen").First.IsVisibleAsync();
         Assert.That(isAdminPage, Is.False, "Regular user should not see admin user list.");
     }
 
@@ -58,11 +58,13 @@ public class AdminTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/admin/users");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var viewLink = Page.GetByRole(AriaRole.Link, new() { Name = "View" })
+                           .Or(Page.GetByRole(AriaRole.Button, new() { Name = "View" }))
                            .Or(Page.GetByRole(AriaRole.Button, new() { Name = "Detail" }))
                            .First;
         await Expect(viewLink).ToBeVisibleAsync(new() { Timeout = 10_000 });
-        await viewLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // View is a Telerik GridCommandButton calling NavigationManager — pure Blazor, so a click
+        // before the circuit connects does nothing at all.
+        await ClickUntilUrlAsync(viewLink, @"/admin/users/[0-9a-f\-]+");
         Assert.That(Page.Url, Does.Match(@"/admin/users/[0-9a-f\-]+"), "Expected navigation to user detail.");
     }
 
@@ -72,11 +74,15 @@ public class AdminTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/admin/users");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var viewLink = Page.GetByRole(AriaRole.Link, new() { Name = "View" })
+                           .Or(Page.GetByRole(AriaRole.Button, new() { Name = "View" }))
                            .Or(Page.GetByRole(AriaRole.Button, new() { Name = "Detail" }))
                            .First;
-        await viewLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var profileTab = Page.GetByText("Profile", new() { Exact = false });
+        await ClickUntilUrlAsync(viewLink, @"/admin/users/[0-9a-f\-]+");
+        // Not GetByText("Profile"): that also matches the "Save Profile" button on the same page,
+        // and two matches is a strict-mode violation rather than a pass.
+        var profileTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Profile", Exact = true })
+                             .Or(Page.Locator(".nav-tabs .nav-link", new() { HasTextString = "Profile" }))
+                             .First;
         await Expect(profileTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 
@@ -146,7 +152,9 @@ public class AdminTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/admin/experience-taxonomy");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         // ExperienceTaxonomySeeder seeds Audible, Visual, Physical, Olfactory, Psychological
-        await Expect(Page.GetByText("Audible", new() { Exact = false }))
+        // .First because the taxonomy page lists each category in both its tree and its detail
+        // pane, so an unscoped match trips strict mode.
+        await Expect(Main.GetByText("Audible", new() { Exact = false }).First)
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
@@ -168,10 +176,18 @@ public class AdminTests : BenTestBase
     {
         await Page.GotoAsync(BaseUrl);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var adminBtn = Page.GetByText("Administration");
-        await Expect(adminBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await adminBtn.ClickAsync();
-        // Side panel should open (contains navigation links)
+
+        // The admin tools used to live in a right-hand side panel. They are now a group inside the
+        // sidebar: Administration opens into Users, which in turn holds Manage Users. Opening both
+        // levels is the equivalent journey.
+        var admin = Page.Locator(".nav-menu > li").Filter(new() { HasText = "Administration" }).First;
+        await Expect(admin).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await admin.Locator("> a").ClickAsync();
+
+        var users = admin.Locator("> ul > li").Filter(new() { HasText = "Users" }).First;
+        await Expect(users).ToBeVisibleAsync(new() { Timeout = 5_000 });
+        await users.Locator("> a").ClickAsync();
+
         var usersLink = Page.GetByText("Manage Users", new() { Exact = false });
         await Expect(usersLink).ToBeVisibleAsync(new() { Timeout = 5_000 });
     }

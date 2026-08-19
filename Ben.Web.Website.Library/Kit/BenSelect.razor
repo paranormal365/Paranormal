@@ -1,0 +1,86 @@
+@typeparam TItem
+@typeparam TValue
+
+@*
+    The template's own dropdown: a native <select class="form-select">.
+
+    SmartAdmin ships no dropdown plugin — Bootstrap's form-select is what its form pages use — so
+    this replaces TelerikDropDownList across the site. Being native, it needs no JavaScript, no
+    popup layer and no interop: selection is a plain Blazor change event, and the browser handles
+    keyboard, touch and mobile pickers on its own.
+
+    The parameter surface deliberately mirrors the control it replaces (Data, TextField,
+    ValueField, DefaultText, @bind-Value), so a call site converts by changing the tag name.
+*@
+
+<select class="form-select @Class"
+        style="@(Width is not null ? $"width:{Width};" : null)"
+        disabled="@(!Enabled)"
+        title="@Title"
+        aria-label="@AriaLabel"
+        value="@SelectValue.ToOptionString(Value)"
+        @onchange="OnChanged">
+    @* Rendered whenever there is placeholder text, and also whenever the current value matches no
+       option — otherwise the browser would fall back to showing the first item as though it were
+       selected, which reads as data the user never chose. *@
+    @if (!string.IsNullOrEmpty(DefaultText) || !HasMatchingOption)
+    {
+        <option value="">@(DefaultText ?? string.Empty)</option>
+    }
+
+    @foreach (var item in Data ?? Enumerable.Empty<TItem>())
+    {
+        <option value="@SelectValue.ToOptionString(ValueOf(item))">@TextOf(item)</option>
+    }
+</select>
+
+@code {
+    /// <summary>The options.</summary>
+    [Parameter] public IEnumerable<TItem>? Data { get; set; }
+
+    /// <summary>Property on <c>TItem</c> to display. Omit for a list of strings or enums.</summary>
+    [Parameter] public string? TextField { get; set; }
+
+    /// <summary>Property on <c>TItem</c> holding the value. Omit to use the item itself.</summary>
+    [Parameter] public string? ValueField { get; set; }
+
+    /// <summary>Placeholder shown for "nothing selected".</summary>
+    [Parameter] public string? DefaultText { get; set; }
+
+    [Parameter] public TValue? Value { get; set; }
+    [Parameter] public EventCallback<TValue?> ValueChanged { get; set; }
+
+    /// <summary>Raised after <see cref="ValueChanged"/>, for callers that need to react.</summary>
+    [Parameter] public EventCallback<TValue?> OnChange { get; set; }
+
+    [Parameter] public bool Enabled { get; set; } = true;
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+
+    /// <summary>CSS width, e.g. "100%". Left unset the control fills its column, as Bootstrap intends.</summary>
+    [Parameter] public string? Width { get; set; }
+
+    private object? ValueOf(TItem item) => SelectValue.GetMember(item, ValueField);
+    private object? TextOf(TItem item)  => SelectValue.GetMember(item, TextField);
+
+    private bool HasMatchingOption
+    {
+        get
+        {
+            if (Data is null) return false;
+            var current = SelectValue.ToOptionString(Value);
+            if (string.IsNullOrEmpty(current)) return false;
+            return Data.Any(i => SelectValue.ToOptionString(ValueOf(i)) == current);
+        }
+    }
+
+    private async Task OnChanged(ChangeEventArgs args)
+    {
+        if (!SelectValue.TryParse<TValue>(args.Value?.ToString(), out var parsed)) return;
+
+        Value = parsed;
+        await ValueChanged.InvokeAsync(parsed);
+        await OnChange.InvokeAsync(parsed);
+    }
+}

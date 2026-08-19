@@ -2,6 +2,7 @@ using AutoMapper;
 using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.WebApi.Services;
 using Ben.Data.Source.Entities;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -163,9 +164,20 @@ public sealed class OrgCalendarEventController : BenControllerBase
             MeetingUrl = NormaliseUrl(request.MeetingUrl),
             StartDateTime = request.StartDateTime, EndDateTime = request.EndDateTime,
             IsAllDay = request.IsAllDay, IsPublic = request.IsPublic,
+            PlaceId = request.PlaceId,
+            HideExactLocation = request.HideExactLocation,
+            AttendeeCapacity = request.AttendeeCapacity,
+            RsvpClosesAt = request.RsvpClosesAt,
             RecurrenceRule = request.RecurrenceRule?.Trim(),
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         };
+
+        if (entity.IsPublic
+            && await PublicEventRefusalAsync(db, entity.CaseId, entity.PlaceId, ct) is string refusal)
+            return BadRequest(refusal);
+
+        await EnsurePublicSlugAsync(db, entity, ct);
+
         db.OrgCalendarEvents.Add(entity);
         await db.SaveChangesAsync(ct);
 
@@ -174,6 +186,72 @@ public sealed class OrgCalendarEventController : BenControllerBase
             .FirstAsync(e => e.Id == entity.Id, ct);
         return CreatedAtAction(nameof(GetById), new { orgId, eventId = entity.Id },
             _mapper.Map<OrgCalendarEventRecord>(loaded));
+    }
+
+
+    /// <summary>
+    /// Whether this event may be made public, or the reason it may not.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A public event is never at somebody's home.</b> A listing with a date and an address
+    /// is an invitation for strangers to turn up, which is a sharper version of the rule that
+    /// already refuses <c>InvestigationVisibility.Public</c> for a private residence — and there is
+    /// still no mechanism for asking a client to agree to it.</para>
+    ///
+    /// <para>Two signals, because either alone leaves a gap. A <b>case</b> is a client engagement and
+    /// is at their address by default, whether or not a place was ever recorded. A <b>place</b> says
+    /// what kind of location it is outright. An event with neither is the organization publishing
+    /// about a venue of their own choosing, which is theirs to publish.</para>
+    ///
+    /// <para>The reasons are written to be shown to a person: an organizer who ticks the box and
+    /// gets a bare refusal has learned nothing about what to do instead.</para>
+    /// </remarks>
+    private static async Task<string?> PublicEventRefusalAsync(
+        BenDataContext db, Guid? caseId, Guid? placeId, CancellationToken ct)
+    {
+        if (caseId is not null)
+            return "An event attached to a case can't be made public — a case is somebody's home, "
+                 + "and publishing when people will be there isn't ours or yours to decide. "
+                 + "Remove the case link, or create a separate public event for the venue.";
+
+        if (placeId is Guid id)
+        {
+            var kind = await db.Places.AsNoTracking()
+                .Where(p => p.Id == id).Select(p => (PlaceKind?)p.Kind).FirstOrDefaultAsync(ct);
+
+            if (kind is null)
+                return "That location could not be found.";
+
+            if (kind == PlaceKind.PrivateResidence)
+                return "That location is a private residence, so this event can't be made public. "
+                     + "Public events are for landmarks, businesses, and your own addresses.";
+        }
+
+        return null;
+    }
+
+
+    /// <summary>
+    /// Gives a newly-public event its readable URL, and leaves an existing one alone.
+    /// </summary>
+    /// <remarks>
+    /// Assigned once, on the way to being public, and never regenerated. A slug that followed the
+    /// title would break every link somebody had already shared the moment an organizer fixed a
+    /// typo — and the whole reason for a slug is that people share it.
+    /// </remarks>
+    private static async Task EnsurePublicSlugAsync(
+        BenDataContext db, OrgCalendarEvent entity, CancellationToken ct)
+    {
+        if (!entity.IsPublic || entity.UrlName is not null) return;
+
+        var candidate = UrlSlug.FromDateAndTitle(entity.StartDateTime, entity.Title)
+                        ?? entity.StartDateTime.ToString("yyyy-MM-dd");
+
+        entity.UrlName = await UrlSlug.MakeUniqueAsync(candidate, async slug =>
+            await db.OrgCalendarEvents
+                .AnyAsync(e => e.OrganizationId == entity.OrganizationId
+                            && e.UrlName == slug
+                            && e.Id != entity.Id, ct));
     }
 
     [HttpPut("{eventId:guid}")]
@@ -193,9 +271,20 @@ public sealed class OrgCalendarEventController : BenControllerBase
         entity.MeetingUrl = NormaliseUrl(request.MeetingUrl);
         entity.StartDateTime = request.StartDateTime; entity.EndDateTime = request.EndDateTime;
         entity.IsAllDay = request.IsAllDay; entity.IsPublic = request.IsPublic;
+        entity.PlaceId = request.PlaceId;
+        entity.HideExactLocation = request.HideExactLocation;
+        entity.AttendeeCapacity = request.AttendeeCapacity;
+        entity.RsvpClosesAt = request.RsvpClosesAt;
         entity.RecurrenceRule = request.RecurrenceRule?.Trim();
+
+        if (entity.IsPublic
+            && await PublicEventRefusalAsync(db, entity.CaseId, entity.PlaceId, ct) is string refusal)
+            return BadRequest(refusal);
+
         entity.DateUpdated = DateTime.UtcNow;
         entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
+
+        await EnsurePublicSlugAsync(db, entity, ct);
         await db.SaveChangesAsync(ct);
         var loaded = await db.OrgCalendarEvents.AsNoTracking()
             .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees).Include(e => e.OrganizationAddress)
@@ -398,7 +487,12 @@ public sealed record UpsertCalendarEventRequest(
     DateTime StartDateTime, DateTime EndDateTime, bool IsAllDay, bool IsPublic,
     Guid? EventTypeId, Guid? CaseId, string? RecurrenceRule,
     Guid? OrganizationAddressId = null,
-    string? MeetingUrl = null);
+    string? MeetingUrl = null,
+    // Public-event fields (item #87), defaulted so every existing caller is unaffected.
+    Guid? PlaceId = null,
+    bool HideExactLocation = false,
+    int? AttendeeCapacity = null,
+    DateTime? RsvpClosesAt = null);
 
 public sealed record AddAttendeeByEmailRequest(string? Email);
 

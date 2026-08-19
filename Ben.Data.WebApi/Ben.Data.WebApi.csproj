@@ -11,6 +11,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="HtmlSanitizer" Version="9.2.995" />
         <PackageReference Include="MailKit" Version="4.17.0" />
         <PackageReference Include="MetadataExtractor" Version="2.9.3" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
@@ -23,6 +24,8 @@
         <PackageReference Include="NAudio" Version="2.2.1" />
         <PackageReference Include="NLayer.NAudioSupport" Version="2.0.1" />
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+        <PackageReference Include="SkiaSharp" Version="4.151.1" />
+        <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.151.1" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
         <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
         <PackageReference Include="Serilog.Settings.Configuration" Version="10.0.1" />
@@ -41,5 +44,13 @@
       <ProjectReference Include="..\Ben.Service.Models\Ben.Service.Models.csproj" />
       <ProjectReference Include="..\Ben.Service.RepositoryService\Ben.Service.RepositoryService.csproj" />
     </ItemGroup>
+
+  <ItemGroup>
+    <!-- Demo footage for the video editor's help documents. Four small generated files (172 KB
+         total) that the development seeder loads into the media library, so the editor has
+         something real to show. Not shipped to production: the seeder they feed is itself gated
+         behind SeedData:DevData:Enabled. -->
+    <Content Include="SeedData\Media\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
 </Project>

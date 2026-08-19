@@ -1,0 +1,55 @@
+@*
+    TelerikLoaderContainer replacement (~84 call sites).
+
+    Wraps content and covers it while loading, so the page does not jump between a spinner and
+    the real thing. With no ChildContent it renders as a standalone block spinner.
+*@
+
+@if (ChildContent is not null)
+{
+    <div class="position-relative @Class">
+        @ChildContent
+
+        @if (Visible)
+        {
+            <div class="ben-loader-overlay" role="status" aria-live="polite">
+                <div class="text-center">
+                    <div class="spinner-border @SpinnerClass" aria-hidden="true"></div>
+                    @if (!string.IsNullOrWhiteSpace(Text))
+                    {
+                        <div class="mt-2 small">@Text</div>
+                    }
+                    <span class="visually-hidden">@(Text ?? "Loading")</span>
+                </div>
+            </div>
+        }
+    </div>
+}
+else if (Visible)
+{
+    <div class="text-center py-4 @Class" role="status" aria-live="polite">
+        <div class="spinner-border @SpinnerClass" aria-hidden="true"></div>
+        @if (!string.IsNullOrWhiteSpace(Text))
+        {
+            <div class="mt-2 small text-muted">@Text</div>
+        }
+        <span class="visually-hidden">@(Text ?? "Loading")</span>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+
+    /// <summary>Content to cover. Omit for a standalone spinner.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Message under the spinner. Also the screen-reader label.</summary>
+    [Parameter] public string? Text { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>"sm" for a small spinner.</summary>
+    [Parameter] public string? Size { get; set; }
+
+    private string SpinnerClass => Size == "sm" ? "spinner-border-sm text-primary" : "text-primary";
+}

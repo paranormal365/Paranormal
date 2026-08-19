@@ -1,0 +1,200 @@
+@page "/organizations/{OrgId:guid}/equipment/{ItemId:guid}"
+@namespace Ben.Web.Website.Library.Organization.Equipment
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Shared
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@* Everything about one piece of the group's gear: what has happened to it, and its service and
+   defect log.
+
+   Its own page rather than a window — it holds a full history timeline, the service log, and the
+   add-entry form, which is more than a modal can show without losing its own footer. *@
+
+<PageTitle>@(Item?.DisplayName ?? "Equipment")</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:900px;">
+    <div class="mb-3">
+        <a href="@($"/organizations/{OrgId}")" class="text-decoration-none small">&larr; Back to the group</a>
+    </div>
+
+    <h3 class="mb-1">@(Item?.DisplayName ?? "Equipment")<HelpLink Slug="organization-administration" Anchor="the-equipment-tab" /></h3>
+    @if (Item is not null)
+    {
+        <p class="text-secondary small mb-3">@Item.BrandName · @Item.ModelName · @Item.CategoryName</p>
+    }
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger py-2">@_error</div>
+        }
+
+        @if (Item?.DefectNotes is not null)
+        {
+            <div class="alert alert-warning py-2">
+                <strong>Currently faulty:</strong> @Item.DefectNotes
+            </div>
+        }
+
+        @if (Item?.LastServicedDate is not null)
+        {
+            <p class="text-secondary small mb-3">
+                Last serviced @Item.LastServicedDate.Value.ToDisplayDate().
+            </p>
+        }
+
+        @if (Item?.Flags.CanManageServiceLog == true)
+        {
+            <div class="card mb-3">
+                <div class="card-body py-2">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold mb-1">What happened</label>
+                            <TelerikDropDownList Data="@_entryTypes" @bind-Value="@_entryType" Width="100%">
+                                <ItemTemplate>@Describe((EquipmentServiceLogType)context)</ItemTemplate>
+                                <ValueTemplate>@Describe((EquipmentServiceLogType)context)</ValueTemplate>
+                            </TelerikDropDownList>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold mb-1">When</label>
+                            <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_entryDate" Width="100%" />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-semibold mb-1" for="orgequipmentservicelog-note-3fd9">Note</label>
+                            <input id="orgequipmentservicelog-note-3fd9" class="form-control" maxlength="2000" value="@_notes"
+                                   @oninput="@(e => _notes = e.Value?.ToString() ?? string.Empty)" />
+                        </div>
+                    </div>
+                    <div class="mt-2 text-end">
+                        <button type="button" class="btn btn-primary btn-sm" @onclick="AddEntryAsync" disabled="@(!(!_busy && !string.IsNullOrWhiteSpace(_notes)))">Add entry</button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* The merged account — loans, renewals, service and faults together. The service-only list
+           below stays because adding an entry belongs next to what it changes. *@
+        @if (Item is not null)
+        {
+            <h6 class="mb-2">Everything that's happened</h6>
+            <div class="mb-3">
+                <Ben.Web.Website.Library.Equipment.EquipmentItemHistory ItemId="@ItemId" />
+            </div>
+            <h6 class="mb-2">Service log</h6>
+        }
+
+        @if (_loading)
+        {
+            <p class="text-secondary">Loading history…</p>
+        }
+        else if (_entries.Count == 0)
+        {
+            <p class="text-secondary mb-0">Nothing recorded for this piece yet.</p>
+        }
+        else
+        {
+            <ul class="list-unstyled mb-0">
+                @foreach (var entry in _entries)
+                {
+                    <li class="border-bottom py-2">
+                        <div class="d-flex justify-content-between">
+                            <span class="fw-semibold">@Describe(entry.EntryType)</span>
+                            <span class="text-secondary small">@entry.EntryDate.ToDisplayDate()</span>
+                        </div>
+                        <div class="small">@entry.Notes</div>
+                        <div class="text-secondary small">
+                            Logged by @(entry.CreatedByDisplayName ?? "someone")
+                            @if (entry.PerformedByDisplayName is not null)
+                            {
+                                <span>· work done by @entry.PerformedByDisplayName</span>
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid ItemId { get; set; }
+
+    private EquipmentItemRecord? Item { get; set; }
+
+    private static readonly List<EquipmentServiceLogType> _entryTypes =
+    [
+        EquipmentServiceLogType.Service,
+        EquipmentServiceLogType.DefectReported,
+        EquipmentServiceLogType.DefectResolved,
+    ];
+
+    private List<EquipmentServiceLogRecord> _entries = [];
+    private EquipmentServiceLogType _entryType = EquipmentServiceLogType.Service;
+    private DateTime? _entryDate = DateTime.Today;
+    private string _notes = string.Empty;
+    private bool _loading;
+    private bool _busy;
+    private string? _error;
+
+    private static string Describe(EquipmentServiceLogType type) => type switch
+    {
+        EquipmentServiceLogType.Service        => "Serviced",
+        EquipmentServiceLogType.DefectReported => "Fault reported",
+        EquipmentServiceLogType.DefectResolved => "Fault fixed",
+        _                                      => type.ToString(),
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
+        await LoadItemAsync();
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Re-reads the item, because a service entry changes its own defect/last-serviced fields and
+    /// the header above shows them.
+    /// </summary>
+    private async Task LoadItemAsync()
+    {
+        var owned = await AdminClient.GetOrgEquipmentAsync(OrgId);
+        Item = owned.Items.FirstOrDefault(i => i.Id == ItemId);
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        _entries = [.. await AdminClient.GetOrgEquipmentServiceLogAsync(OrgId, ItemId)];
+        _loading = false;
+    }
+
+    private async Task AddEntryAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        var saved = await AdminClient.AddOrgEquipmentServiceLogAsync(OrgId, ItemId,
+            new AddEquipmentServiceLogRequest(_entryType, _entryDate ?? DateTime.UtcNow, _notes.Trim(), null));
+
+        _busy = false;
+
+        if (saved is null)
+        {
+            _error = "That entry couldn't be saved.";
+            return;
+        }
+
+        _notes = string.Empty;
+        // The entry changes the item's own defect/serviced fields, so re-read both.
+        await LoadItemAsync();
+        await LoadAsync();
+    }
+}

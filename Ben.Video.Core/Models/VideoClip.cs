@@ -75,6 +75,21 @@ public sealed record VideoClip : TrackItem, IHasVolumeAutomation
     public bool MuteAudio { get; set; }
 
     /// <summary>
+    /// Whether the source file has an audio stream at all, as opposed to having one the user has
+    /// muted (<see cref="MuteAudio"/>).
+    /// </summary>
+    /// <remarks>
+    /// Render commands attach a silent track to clips without sound, so that every rendered
+    /// segment has the same audio layout and the segments stay concat-compatible. Getting this
+    /// wrong in the "has audio" direction is not a cosmetic error: ffmpeg refuses the whole
+    /// command with "Stream map '0:a' matches no streams".
+    ///
+    /// Defaults to true, so clips restored from a project saved before this existed behave as
+    /// they did rather than being silenced.
+    /// </remarks>
+    public bool HasAudio { get; set; } = true;
+
+    /// <summary>
     /// Returns the linearly-interpolated gain at a normalised position [0,1] within the clip.
     /// Falls back to the scalar <see cref="Volume"/> when fewer than 2 keyframes are present.
     /// </summary>

@@ -1,0 +1,100 @@
+/*
+ * site-palette.css
+ * ─────────────────────────────────────────────────────────────────────────────
+ * The site's palette, and nothing else.
+ *
+ * This host shows one screen — the editor — so pulling in the template's
+ * stylesheet (563 KB of sidebar, dashboard and widget CSS, none of which this
+ * host renders) to obtain a dozen colours would be the wrong trade. What the
+ * editor actually needs from the template is its custom properties, because
+ * _content/Ben.Video.Editor/css/ben-video-theme.css maps every editor and Kendo
+ * colour token onto them.
+ *
+ * The values are the Night skin's own, read off the running site rather than
+ * copied from source, in both themes. Keep them in step with
+ * Ben.Web.Website/wwwroot/css/themes/night.min.css if that skin is rebuilt —
+ * this file is a deliberate copy of the palette, not a second definition of it.
+ *
+ * The light block is the default and the dark block keys off data-bs-theme,
+ * exactly as Bootstrap and the template do, so the boot script in index.html
+ * only has to set that one attribute.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+:root {
+    /* Brand — identical in both themes */
+    --bs-primary:           #37508a;
+    --bs-primary-rgb:       55, 80, 138;
+    --bs-success:           #489e48;
+    --bs-danger:            #a85593;
+    --bs-danger-rgb:        168, 85, 147;
+    --bs-warning:           #aaa256;
+    --bs-info:              #66366c;
+
+    /* Light */
+    --bs-body-bg:           #fff;
+    --bs-body-color:        #505050;
+    --bs-border-color:      #dee2e6;
+    --bs-secondary-color:   rgba(70, 79, 87, .70);
+    --bs-secondary-bg:      #e9ecef;
+    --bs-tertiary-bg:       #f8f9fa;
+    --bs-emphasis-color:    #000;
+    --bs-link-color:        #37508a;
+
+    --bs-border-radius:     .375rem;
+    --bs-body-font-family:  system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+                            "Noto Sans", "Liberation Sans", Arial, sans-serif,
+                            "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    --bs-body-font-size:    1rem;
+    --bs-body-line-height:  1.5;
+}
+
+:root[data-bs-theme="dark"] {
+    --bs-body-bg:           #212529;
+    --bs-body-color:        #dee2e6;
+    --bs-border-color:      #495057;
+    --bs-secondary-color:   rgba(222, 226, 230, .75);
+    --bs-secondary-bg:      #343a40;
+    --bs-tertiary-bg:       #2b3035;
+    --bs-emphasis-color:    #fff;
+    --bs-link-color:        #8796b9;
+}
+
+/* ── Kendo → palette ──────────────────────────────────────────────────────────
+ * The site does this in Ben.Web.Website/wwwroot/theme/telerik-night.css, so that its Telerik
+ * widgets read as part of the template rather than as a control suite dropped on top of it. This
+ * host loads the same Kendo Bootstrap baseline and needs the same correction; the editor's own
+ * tokens are handled separately by _content/Ben.Video.Editor/css/ben-video-theme.css.
+ *
+ * Keep this block in step with that file. It is short on purpose: only what the editor's Telerik
+ * widgets actually render — sliders, dropdowns, windows, the colour picker and context menus.
+ */
+:root {
+    --kendo-color-primary:          var(--bs-primary);
+    --kendo-color-primary-contrast: #fff;
+    --kendo-color-success:          var(--bs-success);
+    --kendo-color-info:             var(--bs-info);
+    --kendo-color-warning:          var(--bs-warning);
+    --kendo-color-error:            var(--bs-danger);
+
+    --kendo-color-app-surface:      var(--bs-body-bg);
+    --kendo-color-on-app-surface:   var(--bs-body-color);
+    --kendo-color-surface:          var(--bs-tertiary-bg);
+    --kendo-color-surface-alt:      var(--bs-body-bg);
+    --kendo-color-base:             var(--bs-tertiary-bg);
+    --kendo-color-on-base:          var(--bs-body-color);
+    --kendo-color-border:           var(--bs-border-color);
+    --kendo-color-border-alt:       var(--bs-border-color);
+
+    --kendo-font-family:            var(--bs-body-font-family);
+    --kendo-font-size:              var(--bs-body-font-size);
+    --kendo-line-height:            var(--bs-body-line-height);
+    --kendo-border-radius-md:       var(--bs-border-radius);
+}
+
+/* The Kendo body class must not repaint the page — same reason as on the site. */
+body.k-body {
+    background-color: transparent;
+    color: var(--bs-body-color);
+    font-family: var(--bs-body-font-family);
+}

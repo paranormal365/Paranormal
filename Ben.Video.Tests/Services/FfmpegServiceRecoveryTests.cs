@@ -43,7 +43,7 @@ public sealed class FfmpegServiceRecoveryTests
 
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
         {
-            if (identifier == "import" && args?[0] is string path)
+            if (identifier == "benImportEditorModule" && args?[0] is string path)
             {
                 if (path.Contains("ffmpegInterop")) return ValueTask.FromResult((TValue)(object)FfmpegModule);
                 if (path.Contains("opfsInterop")) return ValueTask.FromResult((TValue)(object)OpfsModule);
@@ -53,6 +53,57 @@ public sealed class FfmpegServiceRecoveryTests
 
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken ct, object?[]? args)
             => InvokeAsync<TValue>(identifier, args);
+    }
+
+    // ── A failed command must not leave the service pinned at Processing ─────
+    // Backlog item 94. A background render froze at a percentage with Export disabled behind it
+    // and no ffmpeg operation in flight — the state machine had entered Processing and never
+    // come out, because every escape from a command that fails (a throw from the module, or a
+    // non-zero exit code) bypassed the SetState(Ready) that only sat on the success path.
+    //
+    // A failing command is ordinary — a bad filter, a stream that is not there — and the core
+    // survives it. What must not survive it is a status chip that says "Processing… 64%" forever.
+
+    [Fact]
+    public async Task ExecAsync_WhenTheModuleThrows_ReturnsToReady()
+    {
+        var js = new MultiModuleFakeJsRuntime();
+        js.FfmpegModule.ThrowingIdentifiers.Add("exec");
+
+        var svc = new FfmpegService(js, new ErrorLogService(), new MemFsLedger(), new WorkerWatchdog());
+        await svc.LoadAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ExecAsync(["-i", "in.mp4", "out.mp4"]));
+
+        Assert.NotEqual(FfmpegState.Processing, svc.State);
+    }
+
+    [Fact]
+    public async Task ExecAsync_WhenFfmpegExitsNonZero_ReturnsToReady()
+    {
+        var js = new MultiModuleFakeJsRuntime();
+        js.FfmpegModule.Results["exec"] = 1;          // ffmpeg refused the command
+
+        var svc = new FfmpegService(js, new ErrorLogService(), new MemFsLedger(), new WorkerWatchdog());
+        await svc.LoadAsync();
+
+        await Assert.ThrowsAnyAsync<Exception>(() => svc.ExecAsync(["-i", "in.mp4", "-map", "0:a", "out.mp4"]));
+
+        Assert.NotEqual(FfmpegState.Processing, svc.State);
+    }
+
+    [Fact]
+    public async Task ConcatCopyAsync_WhenFfmpegExitsNonZero_ReturnsToReady()
+    {
+        var js = new MultiModuleFakeJsRuntime();
+        js.FfmpegModule.Results["concatCopy"] = 1;
+
+        var svc = new FfmpegService(js, new ErrorLogService(), new MemFsLedger(), new WorkerWatchdog());
+        await svc.LoadAsync();
+
+        await Assert.ThrowsAnyAsync<Exception>(() => svc.ConcatCopyAsync(["a.mp4", "b.mp4"], "out.mp4"));
+
+        Assert.NotEqual(FfmpegState.Processing, svc.State);
     }
 
     // ── ExtractAudioAsync nested-state bug ───────────────────────────────────
@@ -183,11 +234,34 @@ public sealed class FfmpegServiceRecoveryTests
     {
         public GatedFakeModule Module { get; } = new();
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
-            => identifier == "import"
+            => identifier == "benImportEditorModule"
                 ? ValueTask.FromResult((TValue)(object)Module)
                 : throw new NotSupportedException(identifier);
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken ct, object?[]? args)
             => InvokeAsync<TValue>(identifier, args);
+    }
+
+    /// <summary>
+    /// How long a wedge signal may take before we call it a genuine failure.
+    /// </summary>
+    /// <remarks>
+    /// Generous on purpose, and it costs nothing in the passing case: the test awaits the event, so
+    /// it finishes the moment the watchdog fires (tens of milliseconds) and this budget only comes
+    /// into play when the watchdog never fires at all. The earlier version polled a 2-second clock
+    /// instead, which made a busy machine indistinguishable from a broken watchdog — it failed in
+    /// two of six full-solution runs on 2026-08-16 while passing every time in isolation.
+    /// </remarks>
+    private static readonly TimeSpan WedgeSignalBudget = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Awaits <paramref name="signal"/>, failing with a readable message rather than a bare
+    /// timeout if it never arrives.
+    /// </summary>
+    private static async Task AwaitSignalAsync(Task signal, string whatWasExpected)
+    {
+        var winner = await Task.WhenAny(signal, Task.Delay(WedgeSignalBudget));
+        Assert.True(winner == signal, $"Timed out after {WedgeSignalBudget.TotalSeconds:0}s: {whatWasExpected}.");
+        await signal; // surface any exception the signal itself carried
     }
 
     [Fact]
@@ -199,17 +273,16 @@ public sealed class FfmpegServiceRecoveryTests
             watchdogPollInterval: TimeSpan.FromMilliseconds(10));
         await svc.LoadAsync();
 
-        var fired = false;
-        svc.OnWorkerWedged += () => fired = true;
+        // Subscribed before the command starts, so the signal cannot be missed by arriving early.
+        var wedged = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        svc.OnWorkerWedged += () => wedged.TrySetResult();
 
         var stuckTask = svc.ExecAsync(["-i", "a.mp4"]); // never resolves until the gate releases
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-        while (!svc.IsWorkerWedged && !cts.IsCancellationRequested)
-            await Task.Delay(10);
+        await AwaitSignalAsync(wedged.Task, "the watchdog never reported the worker as wedged");
 
+        // The event fired; the flag it is supposed to accompany must agree.
         Assert.True(svc.IsWorkerWedged);
-        Assert.True(fired);
 
         js.Module.Release(); // the gate finally opens — proves the watchdog flag didn't kill anything
         var code = await stuckTask;

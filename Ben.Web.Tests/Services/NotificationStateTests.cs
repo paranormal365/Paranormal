@@ -1,5 +1,5 @@
 using Ben.Service.Models.Entities;
-using Ben.Web.Library.Services;
+using Ben.Web.Services;
 using Microsoft.AspNetCore.Components;
 using Moq;
 using Xunit;
@@ -47,7 +47,7 @@ public class NotificationStateTests
         new(new NotificationBucket(orgMessages, DateTime.UtcNow),
             NotificationBucket.Empty, NotificationBucket.Empty,
             NotificationBucket.Empty, NotificationBucket.Empty,
-            NotificationBucket.Empty);
+            NotificationBucket.Empty, NotificationBucket.Empty);
 
     private static (NotificationState State, Mock<IBenAdminClient> Client, FakeUserState User, TestNavigationManager Nav)
         Build(NotificationSummaryResponse? returns = null)

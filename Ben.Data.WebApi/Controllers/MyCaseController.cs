@@ -36,11 +36,15 @@ public sealed class MyCaseController : BenControllerBase
 
     public MyCaseController(IDbContextFactory<BenDataContext> db, IMapper mapper,
         IFileStorageService fileStorage, FileMetadataExtractorService metadataExtractor, IAuditLogService auditLog,
-        IEmailService emailService, IConfiguration configuration, ILogger<MyCaseController> logger)
+        IEmailService emailService, IConfiguration configuration, ILogger<MyCaseController> logger,
+        Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site)
     {
         _db = db; _mapper = mapper; _fileStorage = fileStorage; _metadataExtractor = metadataExtractor; _auditLog = auditLog;
         _emailService = emailService; _configuration = configuration; _logger = logger;
+        _site = site.Value;
     }
+
+    private readonly Ben.Data.Common.SiteIdentity _site;
 
     /// <summary>
     /// Returns all active cases the current user can access as a client — either as the
@@ -311,6 +315,9 @@ public sealed class MyCaseController : BenControllerBase
             .Where(t => t.CaseTimelineEntryId == entryId)
             .ToListAsync(ct);
 
+        var untagged = existing.Where(t => !wanted.Contains(t.ExperienceTypeId))
+            .Select(t => t.ExperienceTypeId).ToList();
+
         db.CaseTimelineEntryExperienceTypes.RemoveRange(
             existing.Where(t => !wanted.Contains(t.ExperienceTypeId)));
 
@@ -324,6 +331,11 @@ public sealed class MyCaseController : BenControllerBase
         }
 
         await db.SaveChangesAsync(ct);
+
+        // Unticking the last use of a type somebody had to invent takes the type with it, when no
+        // human has endorsed it. Otherwise a typed-once mistake sits in everyone's picker for good,
+        // and the group that made it has no way to clear it up.
+        await TaxonomyCleanup.RemoveOrphanedExperienceTypesAsync(db, untagged, ct);
         return true;
     }
 
@@ -343,9 +355,20 @@ public sealed class MyCaseController : BenControllerBase
         if (entry is null) return NotFound();
         if (!await IsCaseClient(db, caseId, userId, ct)) return Forbid();
 
+        // Read before deleting: the join rows cascade away with the entry, so afterwards there is
+        // nothing left to say which types this occurrence was the last user of.
+        var taggedTypeIds = await db.CaseTimelineEntryExperienceTypes.AsNoTracking()
+            .Where(x => x.CaseTimelineEntryId == entryId)
+            .Select(x => x.ExperienceTypeId)
+            .ToListAsync(ct);
+
         db.CaseTimelineEntries.Remove(entry);
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(CaseTimelineEntry), entry.Id, entry, userId, AppSources.WebApi));
+
+        // Ben's original case, one taxonomy over: invent a word for tonight, mistype it, delete the
+        // occurrence — and without this the word outlives the thing it was invented for.
+        await TaxonomyCleanup.RemoveOrphanedExperienceTypesAsync(db, taggedTypeIds, ct);
         return NoContent();
     }
 
@@ -855,9 +878,9 @@ public sealed class MyCaseController : BenControllerBase
                 var inviteLink = $"{appBaseUrl}/invite/{invite.Token}";
                 var inviterName = System.Net.WebUtility.HtmlEncode(inviter?.DisplayName ?? "Someone");
                 var caseTitle = System.Net.WebUtility.HtmlEncode(primaryClient.Title);
-                var subject = $"{inviter?.DisplayName ?? "Someone"} invited you to a case on IsHaunted.com";
+                var subject = $"{inviter?.DisplayName ?? "Someone"} invited you to a case on {_site.Name}";
                 var body = $"<p>{inviterName} has invited you to collaborate on the case " +
-                           $"\"<strong>{caseTitle}</strong>\" on IsHaunted.com.</p>" +
+                           $"\"<strong>{caseTitle}</strong>\" on {_site.Name}.</p>" +
                            $"<p><a href=\"{inviteLink}\">Accept invitation</a></p>" +
                            $"<p>This link expires {invite.DateExpires:MMMM d, yyyy}.</p>";
                 await _emailService.SendAsync(email, subject, body, ct);

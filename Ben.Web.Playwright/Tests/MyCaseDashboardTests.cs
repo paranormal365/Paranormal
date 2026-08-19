@@ -98,8 +98,8 @@ public class MyCaseDashboardTests : BenTestBase
             Assert.Pass("No cases in list — DevelopmentDataSeeder may not have run.");
             return;
         }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
         Assert.That(Page.Url, Does.Match(@"/my-cases/[0-9a-f\-]+"),
             "Expected navigation to case detail URL.");
     }
@@ -114,8 +114,8 @@ public class MyCaseDashboardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
         // Calendar should be visible
         var calendar = Page.Locator("[class*='k-calendar']").First;
@@ -130,8 +130,8 @@ public class MyCaseDashboardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
         // Should show "Park Residence" or the case reference
         var body = await Page.InnerTextAsync("body");
@@ -147,8 +147,8 @@ public class MyCaseDashboardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
         var logBtn = Page.GetByText("Log Occurrence", new() { Exact = false });
         await Expect(logBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });
@@ -162,12 +162,13 @@ public class MyCaseDashboardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
-        await Page.GetByText("Log Occurrence").ClickAsync();
-        // TelerikWindow should open
-        var window = Page.Locator(".k-window");
+        // By role, not by text: "Log Occurrence" is also the dialog's own title, so a text match
+        // becomes ambiguous the moment the dialog opens.
+        var window = Page.Locator(".k-window, .modal.show");
+        await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "Log Occurrence" }).First, window);
         await Expect(window).ToBeVisibleAsync(new() { Timeout = 5_000 });
         // Description textarea should be visible
         var desc = Page.Locator("[placeholder*='Describe' i]").First;
@@ -182,13 +183,15 @@ public class MyCaseDashboardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
-        await Page.GetByText("Log Occurrence").ClickAsync();
-        await Page.WaitForTimeoutAsync(400);
-        // Save button should be disabled without a description
-        var saveBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true });
+        var dialog = Page.Locator(".modal.show");
+        await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "Log Occurrence" }).First, dialog);
+
+        // Scoped to the dialog: the case page also has an alias "Save" that is always enabled, and
+        // an unscoped lookup found that one and reported the guard as broken.
+        var saveBtn = dialog.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true });
         Assert.That(await saveBtn.IsEnabledAsync(), Is.False,
             "Save button should be disabled until a description is entered.");
     }
@@ -201,26 +204,27 @@ public class MyCaseDashboardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
-        await Page.GetByText("Log Occurrence").ClickAsync();
-        await Page.WaitForTimeoutAsync(400);
+        var dialog = Page.Locator(".modal.show");
+        await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "Log Occurrence" }).First, dialog);
 
-        var desc = Page.Locator("[placeholder*='Describe' i]").First;
+        var desc = dialog.Locator("[placeholder*='Describe' i]").First;
         await desc.FillAsync("Test occurrence from Playwright — loud knocking at 2 AM.");
 
-        var saveBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true });
+        // Scoped to the dialog — see the note in the sibling test about the page's alias Save.
+        var saveBtn = dialog.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true });
         await Expect(saveBtn).ToBeEnabledAsync(new() { Timeout = 3_000 });
         await saveBtn.ClickAsync();
 
         // Dialog should close after save
-        await Expect(Page.Locator(".k-window")).ToBeHiddenAsync(new() { Timeout = 8_000 });
+        await Expect(Page.Locator(".k-window, .modal.show")).ToBeHiddenAsync(new() { Timeout = 8_000 });
 
-        // Occurrence should now appear for today's date
-        var body = await Page.InnerTextAsync("body");
-        Assert.That(body, Does.Contain("knocking").Or.Contain("Playwright"),
-            "Logged occurrence should appear in the occurrence list.");
+        // Poll rather than read once: the handler closes the dialog and *then* reloads the list, so
+        // the moment the dialog hides is before the new occurrence exists on screen.
+        await Expect(Main.GetByText("knocking", new() { Exact = false }).First)
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
     [Test]
@@ -231,16 +235,18 @@ public class MyCaseDashboardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
         // Seeder creates "Initial Site Assessment" investigation for Daniel's case
+        // Ask the content region, not the whole body: the sidebar always says "My Investigations",
+        // so the guard was satisfied on every case and then asserted a section that is only there
+        // when the case actually has investigations.
+        var invSection = Main.GetByText("Investigations", new() { Exact = false });
+        if (await invSection.CountAsync() > 0)
+            await Expect(invSection.First).ToBeVisibleAsync(new() { Timeout = 5_000 });
+
         var body = await Page.InnerTextAsync("body");
-        if (body.Contains("Investigations"))
-        {
-            var invSection = Page.GetByText("Investigations", new() { Exact = false });
-            await Expect(invSection).ToBeVisibleAsync(new() { Timeout = 5_000 });
-        }
         Assert.That(body, Does.Not.Contain("An unhandled error has occurred"));
     }
 
@@ -252,8 +258,8 @@ public class MyCaseDashboardTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
         var backLink = Page.GetByRole(AriaRole.Link, new() { Name = "← My Cases" })
                           .Or(Page.GetByText("← My Cases"));
@@ -281,10 +287,14 @@ public class MyCaseDashboardTests : BenTestBase
             Assert.Pass("No Assigned requests visible — seeder may not have run or status differs.");
             return;
         }
-        await Page.Locator(".card").Filter(new() { HasText = "Assigned" }).First.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(Page.Locator(".card").Filter(new() { HasText = "Assigned" }).First,
+                                 @"/my-requests/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
-        var viewCasesBtn = Page.GetByText("View My Cases", new() { Exact = false });
+        // "View My Case →" when the request has a linked case, "View My Cases →" when it does not.
+        // The plural-only match missed the very state this test is about — an assigned request is
+        // exactly the one that has a case.
+        var viewCasesBtn = Main.GetByText("View My Case", new() { Exact = false }).First;
         await Expect(viewCasesBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 }

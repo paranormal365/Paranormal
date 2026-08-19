@@ -11,7 +11,7 @@
 
 /* Path lines */
 .bv-motion-path__line {
-    stroke: var(--kendo-color-primary, #89b4fa);
+    stroke: var(--bv-accent, var(--kendo-color-primary));
     stroke-width: 0.004;
     stroke-dasharray: 0.01 0.008;
     opacity: 0.8;
@@ -35,14 +35,14 @@
 /* Keyframe dots */
 .bv-motion-kf {
     fill: var(--kendo-color-surface-alt, #181825);
-    stroke: var(--kendo-color-primary, #89b4fa);
+    stroke: var(--bv-accent, var(--kendo-color-primary));
     stroke-width: 0.004;
     pointer-events: all;
     transition: r .1s;
 }
 
 .bv-motion-kf--selected {
-    fill: var(--kendo-color-primary, #89b4fa);
+    fill: var(--bv-accent, var(--kendo-color-primary));
     stroke: #fff;
 }
 
@@ -76,7 +76,7 @@
 
 /* Current interpolated position */
 .bv-motion-playhead {
-    fill: var(--kendo-color-primary, #89b4fa);
+    fill: var(--bv-accent, var(--kendo-color-primary));
     opacity: 0.6;
     pointer-events: none;
 }

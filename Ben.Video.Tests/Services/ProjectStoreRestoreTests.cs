@@ -44,7 +44,7 @@ public sealed class ProjectStoreRestoreTests
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken ct, object?[]? args)
         {
             // ProjectStore imports the module once and caches the handle.
-            if (identifier == "import")
+            if (identifier == "benImportEditorModule")
                 return ValueTask.FromResult((TValue)(object)new FakeStorageModule(Storage));
 
             throw new NotSupportedException($"Unexpected top-level JS call: {identifier}");

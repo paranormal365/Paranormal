@@ -1,6 +1,7 @@
 using AutoMapper;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.Source.Services;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -31,8 +32,7 @@ public sealed class PublicCaseController : ControllerBase
         string orgUrlName, CancellationToken ct)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
-        var org = await db.Organizations.AsNoTracking()
-            .FirstOrDefaultAsync(o => o.UrlName == orgUrlName, ct);
+        var (org, _) = await OrganizationUrlNames.ResolveAsync(db, orgUrlName, ct);
         if (org is null) return NotFound();
 
         var cases = await db.Cases.AsNoTracking()
@@ -44,6 +44,9 @@ public sealed class PublicCaseController : ControllerBase
 
         var result = cases.Select(c => new PublicCaseListItem(
             CaseReference:    $"#{c.CaseYear}-{c.OrgCaseNumber:D3}",
+            // Falls back to the reference for a case published before slugs existed, so a card
+            // always has somewhere to point rather than silently linking nowhere.
+            UrlName:          c.UrlName ?? $"{c.CaseYear}-{c.OrgCaseNumber:D3}",
             Title:            c.Title,
             City:             c.City,
             State:            c.State,
@@ -56,27 +59,44 @@ public sealed class PublicCaseController : ControllerBase
     }
 
     /// <summary>Returns the public detail of a specific case by reference (e.g. "2026-042").</summary>
+    /// <summary>
+    /// Splits "2026-042" or "#2026-042" into its parts, or nulls when it is not a reference at all.
+    /// </summary>
+    /// <remarks>
+    /// Nulls rather than a failure: a segment that is not a reference is almost certainly a slug,
+    /// and the old behaviour — a 400 saying "expected format 2026-042" — would now be wrong for
+    /// every readable address on the site.
+    /// </remarks>
+    private static (int? Year, int? Number) ParseCaseReference(string value)
+    {
+        var parts = value.TrimStart('#').Split('-');
+        return parts.Length == 2 && int.TryParse(parts[0], out var year) && int.TryParse(parts[1], out var number)
+            ? (year, number)
+            : (null, null);
+    }
+
     [HttpGet("cases/{caseRef}")]
     public async Task<ActionResult<PublicCaseDetail>> GetPublicCase(
         string orgUrlName, string caseRef, CancellationToken ct)
     {
-        // Parse caseRef: "2026-042" → year=2026, number=42
-        var parts = caseRef.TrimStart('#').Split('-');
-        if (parts.Length != 2 || !int.TryParse(parts[0], out int year) || !int.TryParse(parts[1], out int number))
-            return BadRequest("Invalid case reference. Expected format: 2026-042");
-
         await using var db = await _db.CreateDbContextAsync(ct);
-        var org = await db.Organizations.AsNoTracking()
-            .FirstOrDefaultAsync(o => o.UrlName == orgUrlName, ct);
+        var (org, _) = await OrganizationUrlNames.ResolveAsync(db, orgUrlName, ct);
         if (org is null) return NotFound();
+
+        // Accepts either the readable slug or the old "2026-042" reference. The slug is what people
+        // share; the reference is what an organization says out loud to a client, and both should
+        // land on the same page rather than one of them being a dead end.
+        var slug = Ben.Data.Common.SlugText.NormalizeOrEmpty(caseRef);
+        var (refYear, refNumber) = ParseCaseReference(caseRef);
 
         var c = await db.Cases.AsNoTracking()
             .Include(x => x.TimelineEntries.Where(e => e.Visibility == CaseTimelineVisibility.Public).OrderBy(e => e.EventDateTime ?? e.DateCreated).ThenBy(e => e.DateCreated).ThenBy(e => e.Id))
                 .ThenInclude(e => e.Files)
             .FirstOrDefaultAsync(x => x.OrganizationId == org.Id
-                                   && x.CaseYear == year && x.OrgCaseNumber == number
                                    && x.IsPublic
-                                   && (x.Status == CaseStatus.Public || x.Status == CaseStatus.Haunted), ct);
+                                   && (x.Status == CaseStatus.Public || x.Status == CaseStatus.Haunted)
+                                   && (x.UrlName == slug
+                                       || (refYear != null && x.CaseYear == refYear && x.OrgCaseNumber == refNumber)), ct);
         if (c is null) return NotFound();
 
         // The client's own alias when they set one, the org's pseudonym otherwise, and nothing
@@ -115,6 +135,8 @@ public sealed class PublicCaseController : ControllerBase
 
 public sealed record PublicCaseListItem(
     string CaseReference,
+    // The readable address to link to, falling back to the reference.
+    string UrlName,
     string Title,
     string City,
     string State,

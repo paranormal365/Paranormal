@@ -1,0 +1,23 @@
+@*
+    NotFoundPage, not a <NotFound> block. In a Blazor Web App the <NotFound> render fragment is
+    never invoked — it belongs to the old hosted-WASM router — so an unmatched URL rendered
+    nothing at all once the circuit connected, blanking the page the server had already drawn.
+    NotFoundPage is the .NET 10 replacement and covers the interactive pass; the status-code
+    middleware in Program.cs covers the server pass. Both are needed.
+*@
+<Router AppAssembly="typeof(Program).Assembly"
+        AdditionalAssemblies="new[] { typeof(Ben.Web.Website.Library.LibraryAssemblyMarker).Assembly }"
+        NotFoundPage="typeof(Pages.NotFound)">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+        @*
+            No <FocusOnNavigate>. The template's default (Selector="h1") moved focus to the page
+            heading on every load, which paints a focus ring on arrival and reads as though a
+            control has been activated before the visitor has touched anything.
+
+            The cost is that screen-reader focus is not moved to the new heading on client-side
+            navigation. Page titles still change, and every page leads with its heading, so the
+            content is announced on request rather than automatically.
+        *@
+    </Found>
+</Router>

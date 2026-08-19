@@ -14,29 +14,33 @@ public class MediaLibraryTests : BenTestBase
 {
     // ── Standalone page ───────────────────────────────────────────────────────
     //
-    // NOTE: these navigate via the in-app nav drawer link (SPA navigation within the
-    // already-connected Blazor circuit) rather than Page.GotoAsync(".../media-library")
-    // directly. A direct hard navigation to any authenticated page in this app currently
-    // redirects to the Login content while the nav bar still shows the authenticated user
-    // — reproduced the same way on the pre-existing /upload-files page, so it's a
-    // pre-existing, app-wide auth-timing issue unrelated to this feature, not something
-    // introduced here. SPA nav-link navigation is what actually works today.
+    // These go through the sidebar link rather than a direct GotoAsync, which is what the page
+    // is actually reached by. The link click is retried: it is an ordinary Blazor navigation and
+    // a click that lands before the circuit connects is silently dropped, which left the browser
+    // sitting on the page it was already on. That read as "the media library rendered the home
+    // page", and the earlier note here blamed an app-wide auth-timing bug on hard navigation —
+    // it was a dropped click, and hard navigation to this page works (see the parity tests).
 
     private async Task NavigateToMediaLibraryAsync()
     {
         await LoginAsync(UserEmail, UserPassword);
-        await Page.GetByRole(AriaRole.Menuitem, new() { Name = "Media Library", Exact = true }).ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        var link = Page.GetByRole(AriaRole.Link, new() { Name = "Media Library", Exact = true })
+                       .Or(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Media Library", Exact = true }))
+                       .First;
+        await ClickUntilUrlAsync(link, "/media-library");
+        await WaitUntilLoadedAsync();
     }
 
     [Test]
     public async Task Page_RendersWithoutError()
     {
         await NavigateToMediaLibraryAsync();
+        await Expect(Main.GetByText("Everything you own", new() { Exact = false }))
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
+
         var body = await Page.InnerTextAsync("body");
         Assert.That(body, Is.Not.Empty);
         Assert.That(body, Does.Not.Contain("An unhandled error has occurred"));
-        Assert.That(body, Does.Contain("Everything you own"));
     }
 
     [Test]
@@ -99,12 +103,19 @@ public class MediaLibraryTests : BenTestBase
     public async Task NavDrawer_MediaLibraryLinkNavigates()
     {
         await LoginAsync(UserEmail, UserPassword);
-        var link = Page.GetByRole(AriaRole.Menuitem, new() { Name = "Media Library", Exact = true });
+        var link = Page.GetByRole(AriaRole.Link, new() { Name = "Media Library", Exact = true })
+                       .Or(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Media Library", Exact = true }))
+                       .First;
         await Expect(link).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await link.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var body = await Page.InnerTextAsync("body");
-        Assert.That(body, Does.Contain("Everything you own"));
+        // Retried: an unretried click here left the browser on the page it started from, which
+        // read as the media library rendering the home page's content.
+        await ClickUntilUrlAsync(link, "/media-library");
+        // Expect, not a single InnerText read: Blazor changes the address before the new page has
+        // rendered, so reading once caught the home page's text and reported the media library as
+        // missing its own copy. Verified against the running app — both soft and hard navigation
+        // to /media-library render correctly; only the test was early.
+        await Expect(Main.GetByText("Everything you own", new() { Exact = false }))
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
     // ── "Attach from Library" picker embedding on the case Files tab ────────────
@@ -112,30 +123,15 @@ public class MediaLibraryTests : BenTestBase
     private async Task NavigateToTghCaseFilesTab()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah — TGH org member
-        // SPA nav-link click, not Page.GotoAsync — see the note above the standalone-page
-        // tests: a hard navigation to an authenticated route currently mis-redirects here too.
-        await Page.GetByRole(AriaRole.Menuitem, new() { Name = "Organizations", Exact = true }).ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var tgh = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
-        if (!await tgh.IsVisibleAsync()) { Assert.Pass("TGH org not visible; seed data may differ."); return; }
-        await tgh.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // The shared walk. This had its own copy, written against the original site: it clicked
+        // the organisation's name (a grid cell here, not a link) after an unretried nav click, so
+        // it was really operating on whatever page it had failed to leave.
+        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+            Assert.Ignore("TGH case not in the seed data.");
 
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Page.GetByText("Cases", new() { Exact = true })).First;
-        await casesLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var caseItem = Page.GetByText("Park", new() { Exact = false }).First;
-        await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await caseItem.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var filesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Files", Exact = true })
-                           .Or(Page.GetByText("Files", new() { Exact = true })).First;
-        await filesTab.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await OpenTabAsync("Files", Main.GetByRole(AriaRole.Button, new() { Name = "Attach from Library", Exact = false })
+                                        .Or(Main.GetByText("No files", new() { Exact = false })));
     }
 
     [Test]

@@ -12,6 +12,26 @@ namespace Ben.Data.Source.Entities
         public Guid Id { get; set; }
 
         /// <summary>
+        /// The readable part of this investigation's public address —
+        /// <c>/o/{org}/investigations/{UrlName}</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>Date and title, because "which one?" is usually answered by when — and a date on
+        /// its own would be walkable, letting anybody step through the calendar to enumerate what a
+        /// group has been doing.</para>
+        ///
+        /// <para><b>Flat under the organization, not nested under a case.</b> <see cref="CaseId"/>
+        /// is nullable — a group can investigate a landmark with no client — so a URL that assumed
+        /// the case would have no form for those at all. URL depth follows what the model requires,
+        /// not what is usually true.</para>
+        ///
+        /// <para>Assigned when the investigation first becomes publicly visible, and then left
+        /// alone: renaming it must not break a link somebody has already shared. Null while it is
+        /// not public, because a private visit has no address to promise.</para>
+        /// </remarks>
+        public string? UrlName { get; set; }
+
+        /// <summary>
         /// The organization that ran this investigation.
         /// </summary>
         /// <remarks>

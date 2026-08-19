@@ -1,0 +1,998 @@
+@page "/admin/users/{UserId:guid}"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@using System.Text.Json
+@using Ben.Web.Website.Library.Manage.Audio
+@using Ben.Web.Website.Library.Shared
+@using Ben.Web.Website.Library.Manage.Maps
+@using Ben.Web.Website.Library.Manage.Icon
+@using Ben.Web.Website.Library.Manage.Media
+
+<PageTitle>SuperAdmin — User Detail</PageTitle>
+
+<AddressMapModal @ref="_mapModal" />
+<DirectionsMapModal @ref="_directionsModal" />
+
+@if (_detail is null)
+{
+    <div class="container-fluid px-3 py-4 text-center text-secondary">
+        <div class="spinner-border mb-2"></div><br/>Loading user…
+    </div>
+}
+else
+{
+    <div class="container-fluid px-3">
+
+        @* Header *@
+        <div class="row mb-3 align-items-center">
+            <div class="col">
+                <button type="button" class="btn btn-link text-decoration-none" @onclick="@(() => NavManager.NavigateTo("/admin/users"))"><BenIcon Name="arrow-left" Class="me-1" />Back to Users</button>
+                <h3 class="d-inline-block ms-3 mb-0">@(_detail.User.DisplayName ?? _detail.User.Email)</h3>
+            </div>
+            <div class="col-auto">
+                <button type="button" class="btn btn-warning" @onclick="ImpersonateUser"><BenIcon Name="user" Class="me-1" />Impersonate</button>
+            </div>
+        </div>
+
+        @if (_errorMessage is not null) { <div class="alert alert-danger mb-3">@_errorMessage</div> }
+        @if (_successMessage is not null) { <div class="alert alert-success mb-3">@_successMessage</div> }
+
+        <BenTabs>
+
+            @* ── Profile ─────────────────────────────────────────────────── *@
+            <BenTab Title="Profile">
+                <div class="row g-3 mt-1" style="max-width:760px">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold" for="adminuserdetail-display-name-830c">Display Name</label>
+                        <input id="adminuserdetail-display-name-830c" type="text" class="form-control" @bind="@_edit.DisplayName" @bind:event="oninput" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold" for="adminuserdetail-username-be2f">Username</label>
+                        <input id="adminuserdetail-username-be2f" type="text" class="form-control" @bind="@_edit.UserName" @bind:event="oninput" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold" for="adminuserdetail-email-1efa">Email</label>
+                        <input id="adminuserdetail-email-1efa" type="text" class="form-control" @bind="@_edit.Email" @bind:event="oninput" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold" for="adminuserdetail-phone-410c">Phone</label>
+                        <input id="adminuserdetail-phone-410c" type="text" class="form-control" @bind="@_edit.PhoneNumber" @bind:event="oninput" />
+                    </div>
+                    <div class="col-12 d-flex flex-wrap gap-4 mt-1">
+                        <label class="d-flex align-items-center gap-2"><input type="checkbox" class="form-check-input" @bind="@_edit.IsEmailConfirmed" /> Email Confirmed</label>
+                        <label class="d-flex align-items-center gap-2"><input type="checkbox" class="form-check-input" @bind="@_edit.IsTwoFactorEnabled" /> 2FA Enabled</label>
+                        <label class="d-flex align-items-center gap-2"><input type="checkbox" class="form-check-input" @bind="@_edit.IsLockoutEnabled" /> Lockout Enabled</label>
+                    </div>
+                    <div class="col-12 mt-2"><p class="text-secondary small mb-1">Audit Fields</p></div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Date Created</label>
+                        <TelerikDateTimePicker @bind-Value="@_edit.DateCreated" Format="dd/MM/yyyy hh:mm tt" Width="100%" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Date Updated</label>
+                        <TelerikDateTimePicker @bind-Value="@_edit.DateUpdated" Format="dd/MM/yyyy hh:mm tt" Width="100%" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Lockout End</label>
+                        <TelerikDateTimePicker @bind-Value="@_edit.LockoutEnd" Format="dd/MM/yyyy hh:mm tt" Width="100%" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Access Failed Count</label>
+                        <p class="form-control-plaintext">@_detail.User.AccessFailedCount</p>
+                    </div>
+                    <div class="col-12 mt-2">
+                        <button type="button" class="btn btn-primary" @onclick="SaveProfile" disabled="@(!(!_isSaving))">
+                            @(_isSaving ? "Saving…" : "Save Profile")
+                        </button>
+                    </div>
+                </div>
+            </BenTab>
+
+            @* ── Addresses ────────────────────────────────────────────────── *@
+            <BenTab Title="@($"Addresses ({_addresses.Count})")">
+                <div class="d-flex justify-content-end mb-2 mt-2">
+                    <button type="button" class="btn btn-primary" @onclick="@(() => OpenSubDialog("address", null))"><BenIcon Name="plus" Class="me-1" />Add Address</button>
+                </div>
+                <TelerikGrid Data="@_addresses" TItem="UserAddressAdminRecord" Pageable="true" PageSize="10">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(UserAddressAdminRecord.StreetAddress1)" Title="Street" />
+                        <GridColumn Field="@nameof(UserAddressAdminRecord.City)" Title="City" Width="120px" />
+                        <GridColumn Field="@nameof(UserAddressAdminRecord.State)" Title="State" Width="80px" />
+                        <GridColumn Field="@nameof(UserAddressAdminRecord.ZipCode)" Title="Zip" Width="90px" />
+                        <GridColumn Field="@nameof(UserAddressAdminRecord.IsPublic)" Title="Public" Width="70px" />
+                        <GridCommandColumn Width="220px">
+                            <GridCommandButton Icon="@SvgIcon.Pencil"
+                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("address", e.Items.First()))">Edit</GridCommandButton>
+                            <GridCommandButton Icon="@SvgIcon.MapMarker"
+                                OnClick="@((GridCommandEventArgs e) => OpenAddressMap((UserAddressAdminRecord)e.Items.First()))">Map</GridCommandButton>
+                            <GridCommandButton Icon="@SvgIcon.Directions"
+                                OnClick="@((GridCommandEventArgs e) => OpenDirections((UserAddressAdminRecord)e.Items.First()))">Directions</GridCommandButton>
+                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteAddress((UserAddressAdminRecord)e.Items.First()))"></GridCommandButton>
+                        </GridCommandColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            </BenTab>
+
+            @* ── Emails ───────────────────────────────────────────────────── *@
+            <BenTab Title="@($"Emails ({_emails.Count})")">
+                <div class="d-flex justify-content-end mb-2 mt-2">
+                    <button type="button" class="btn btn-primary" @onclick="@(() => OpenSubDialog("email", null))"><BenIcon Name="plus" Class="me-1" />Add Email</button>
+                </div>
+                <TelerikGrid Data="@_emails" TItem="UserEmailAdminRecord" Pageable="true" PageSize="10">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(UserEmailAdminRecord.EmailAddress)" Title="Email" />
+                        <GridColumn Field="@nameof(UserEmailAdminRecord.IsPrimary)" Title="Primary" Width="80px" />
+                        <GridColumn Field="@nameof(UserEmailAdminRecord.IsPublic)" Title="Public" Width="70px" />
+                        <GridCommandColumn Width="130px">
+                            <GridCommandButton Icon="@SvgIcon.Pencil"
+                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("email", e.Items.First()))">Edit</GridCommandButton>
+                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteEmail((UserEmailAdminRecord)e.Items.First()))"></GridCommandButton>
+                        </GridCommandColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            </BenTab>
+
+            @* ── Phones ───────────────────────────────────────────────────── *@
+            <BenTab Title="@($"Phones ({_phones.Count})")">
+                <div class="d-flex justify-content-end mb-2 mt-2">
+                    <button type="button" class="btn btn-primary" @onclick="@(() => OpenSubDialog("phone", null))"><BenIcon Name="plus" Class="me-1" />Add Phone</button>
+                </div>
+                <TelerikGrid Data="@_phones" TItem="UserPhoneAdminRecord" Pageable="true" PageSize="10">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(UserPhoneAdminRecord.PhoneNumber)" Title="Number" />
+                        <GridColumn Field="@nameof(UserPhoneAdminRecord.IsPrimary)" Title="Primary" Width="80px" />
+                        <GridColumn Field="@nameof(UserPhoneAdminRecord.IsCellular)" Title="Cell" Width="70px" />
+                        <GridColumn Field="@nameof(UserPhoneAdminRecord.IsPublic)" Title="Public" Width="70px" />
+                        <GridCommandColumn Width="130px">
+                            <GridCommandButton Icon="@SvgIcon.Pencil"
+                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("phone", e.Items.First()))">Edit</GridCommandButton>
+                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeletePhone((UserPhoneAdminRecord)e.Items.First()))"></GridCommandButton>
+                        </GridCommandColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            </BenTab>
+
+            @* ── Links ────────────────────────────────────────────────────── *@
+            <BenTab Title="@($"Links ({_links.Count})")">
+                <div class="d-flex justify-content-end mb-2 mt-2">
+                    <button type="button" class="btn btn-primary" @onclick="@(() => OpenSubDialog("link", null))"><BenIcon Name="plus" Class="me-1" />Add Link</button>
+                </div>
+                <TelerikGrid Data="@_links" TItem="UserLinkAdminRecord" Pageable="true" PageSize="10">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(UserLinkAdminRecord.LinkUrl)" Title="URL" />
+                        <GridColumn Field="@nameof(UserLinkAdminRecord.DisplayText)" Title="Label" Width="120px" />
+                        <GridColumn Field="@nameof(UserLinkAdminRecord.IsPublic)" Title="Public" Width="70px" />
+                        <GridColumn Field="@nameof(UserLinkAdminRecord.IsActive)" Title="Active" Width="70px" />
+                        <GridCommandColumn Width="130px">
+                            <GridCommandButton Icon="@SvgIcon.Pencil"
+                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("link", e.Items.First()))">Edit</GridCommandButton>
+                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteLink((UserLinkAdminRecord)e.Items.First()))"></GridCommandButton>
+                        </GridCommandColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            </BenTab>
+
+            @* ── Notes ────────────────────────────────────────────────────── *@
+            <BenTab Title="@($"Notes ({_notes.Count})")">
+                <div class="d-flex justify-content-end mb-2 mt-2">
+                    <button type="button" class="btn btn-primary" @onclick="@(() => OpenSubDialog("note", null))"><BenIcon Name="plus" Class="me-1" />Add Note</button>
+                </div>
+                <TelerikGrid Data="@_notes" TItem="UserNoteAdminRecord" Pageable="true" PageSize="10">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(UserNoteAdminRecord.NoteSubject)" Title="Subject" Width="150px" />
+                        <GridColumn Field="@nameof(UserNoteAdminRecord.NoteBody)" Title="Body" />
+                        <GridColumn Field="@nameof(UserNoteAdminRecord.NoteBody)" Title="Body" />
+                        <GridCommandColumn Width="130px">
+                            <GridCommandButton Icon="@SvgIcon.Pencil"
+                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("note", e.Items.First()))">Edit</GridCommandButton>
+                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteNote((UserNoteAdminRecord)e.Items.First()))"></GridCommandButton>
+                        </GridCommandColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            </BenTab>
+
+            @* ── Memberships ──────────────────────────────────────────────── *@
+            <BenTab Title="@($"Memberships ({_memberships.Count})")">
+                <TelerikGrid Data="@_memberships" TItem="OrganizationUserMembershipAdminRecord" Pageable="true" PageSize="10" Class="mt-2">
+                    <GridColumns>
+                        <GridColumn Title="Organization">
+                            <Template>
+                                @{ var m = (OrganizationUserMembershipAdminRecord)context; }
+                                @(_orgNames.TryGetValue(m.OrganizationId, out var orgName) ? orgName : m.OrganizationId.ToString("D")[..8] + "…")
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.Role)" Title="Role" Width="130px" />
+                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.IsActive)" Title="Active" Width="70px" />
+                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.DateCreated)" Title="Joined" Width="110px">
+                            <Template>
+                                @(((OrganizationUserMembershipAdminRecord)context).DateCreated.ToViewerLocalTime(UserState).ToDisplayDate())
+                            </Template>
+                        </GridColumn>
+                        <GridCommandColumn Width="80px">
+                            <GridCommandButton Icon="@SvgIcon.Eye"
+                                OnClick="@((GridCommandEventArgs e) => ViewOrganization((OrganizationUserMembershipAdminRecord)e.Items.First()))">
+                                View
+                            </GridCommandButton>
+                        </GridCommandColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            </BenTab>
+
+            @* ── Files ────────────────────────────────────────────────────── *@
+            <BenTab Title="@($"Files ({_files.Count})")">
+                <div class="d-flex justify-content-end mb-2 mt-2">
+                    <button type="button" class="btn btn-primary" @onclick="@OpenUploadDialog"><BenIcon Name="upload" Class="me-1" />Upload File</button>
+                </div>
+                <TelerikGrid Data="@_files" TItem="UploadFileAdminRecord" Pageable="true" PageSize="10" Class="mt-0">
+                    <GridColumns>
+                        <GridColumn Title="Preview" Width="160px">
+                            <Template>
+                                @{ var f = (UploadFileAdminRecord)context; }
+                                <UserMediaPreview FileId="@f.Id"
+                                                  ContentType="@f.ContentType"
+                                                  FileName="@f.FileName"
+                                                  FileSize="@f.FileSize" />
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="@nameof(UploadFileAdminRecord.FileName)" Title="File Name" />
+                        <GridColumn Field="@nameof(UploadFileAdminRecord.ContentType)" Title="Type" Width="130px" />
+                        <GridColumn Field="@nameof(UploadFileAdminRecord.FileSize)" Title="Size" Width="80px">
+                            <Template>
+                                @(AudioFormatUtils.FormatSize(((UploadFileAdminRecord)context).FileSize))
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="@nameof(UploadFileAdminRecord.IsPublic)" Title="Public" Width="70px" />
+                        <GridCommandColumn Width="130px">
+                            @{ var fc = (UploadFileAdminRecord)context; }
+                            @if (fc.ContentType.StartsWith("image/"))
+                            {
+                                <GridCommandButton Icon="@SvgIcon.Pencil"
+                                    Size="@ThemeConstants.Button.Size.Small"
+                                    OnClick="@((GridCommandEventArgs e) => OpenImageEditor((UploadFileAdminRecord)e.Items.First()))">
+                                    Edit
+                                </GridCommandButton>
+                            }
+                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteFile((UploadFileAdminRecord)e.Items.First()))"></GridCommandButton>
+                        </GridCommandColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            </BenTab>
+
+        </BenTabs>
+    </div>
+}
+
+@* ══ Sub-entity dialog (shared for address/email/phone/link/note) ═══════════ *@
+<BenModal @bind-Visible="@_showSubDialog" Title="@_subDialogTitle" Size="lg">
+    <ChildContent>
+        @if (_subEntityType == "address")
+        {
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Type</label>
+                    <div class="d-flex gap-2">
+                        <BenSelect Data="@_addressTypes" @bind-Value="@_addr.TypeId" ValueField="@nameof(UserAddressTypeRecord.Id)" TextField="@nameof(UserAddressTypeRecord.Name)" Width="100%" />
+                        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenAddTypeDialog("address"))"><BenIcon Name="plus" Class="me-1" />New</button>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <AddressFieldsWithMap @ref="_addrFields" State="@_addrState" />
+                </div>
+                <div class="col-md-6 d-flex align-items-center gap-2">
+                    <input type="checkbox" class="form-check-input" id="addr-pub" @bind="@_addr.IsPublic" />
+                    <label for="addr-pub" class="form-label mb-0">Public</label>
+                </div>
+            </div>
+        }
+        else if (_subEntityType == "email")
+        {
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Type</label>
+                    <div class="d-flex gap-2">
+                        <BenSelect Data="@_emailTypes" @bind-Value="@_eml.TypeId" ValueField="@nameof(UserEmailTypeRecord.Id)" TextField="@nameof(UserEmailTypeRecord.Name)" Width="100%" />
+                        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenAddTypeDialog("email"))"><BenIcon Name="plus" Class="me-1" />New</button>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold" for="adminuserdetail-email-address-d159">Email Address <span class="text-danger">*</span></label>
+                    <input id="adminuserdetail-email-address-d159" type="text" class="form-control" @bind="@_eml.EmailAddress" @bind:event="oninput" />
+                </div>
+                <div class="col-md-6 d-flex align-items-center gap-2">
+                    <input type="checkbox" class="form-check-input" id="eml-pri" @bind="@_eml.IsPrimary" />
+                    <label for="eml-pri" class="form-label mb-0">Primary</label>
+                </div>
+                <div class="col-md-6 d-flex align-items-center gap-2">
+                    <input type="checkbox" class="form-check-input" id="eml-pub" @bind="@_eml.IsPublic" />
+                    <label for="eml-pub" class="form-label mb-0">Public</label>
+                </div>
+            </div>
+        }
+        else if (_subEntityType == "phone")
+        {
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Type</label>
+                    <div class="d-flex gap-2">
+                        <BenSelect Data="@_phoneTypes" @bind-Value="@_phn.TypeId" ValueField="@nameof(UserPhoneTypeRecord.Id)" TextField="@nameof(UserPhoneTypeRecord.Name)" Width="100%" />
+                        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenAddTypeDialog("phone"))"><BenIcon Name="plus" Class="me-1" />New</button>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label fw-semibold" for="adminuserdetail-phone-number-2d1e">Phone Number <span class="text-danger">*</span></label>
+                    <input id="adminuserdetail-phone-number-2d1e" type="text" class="form-control" @bind="@_phn.PhoneNumber" @bind:event="oninput" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold" for="adminuserdetail-country-code-3dcc">Country Code</label>
+                    <input id="adminuserdetail-country-code-3dcc" type="text" class="form-control" placeholder="+1" @bind="@_phn.PhoneCountry" @bind:event="oninput" />
+                </div>
+                <div class="col-md-4 d-flex align-items-center gap-2">
+                    <input type="checkbox" class="form-check-input" id="phn-pri" @bind="@_phn.IsPrimary" />
+                    <label for="phn-pri" class="form-label mb-0">Primary</label>
+                </div>
+                <div class="col-md-4 d-flex align-items-center gap-2">
+                    <input type="checkbox" class="form-check-input" id="phn-cell" @bind="@_phn.IsCellular" />
+                    <label for="phn-cell" class="form-label mb-0">Cellular</label>
+                </div>
+                <div class="col-md-4 d-flex align-items-center gap-2">
+                    <input type="checkbox" class="form-check-input" id="phn-pub" @bind="@_phn.IsPublic" />
+                    <label for="phn-pub" class="form-label mb-0">Public</label>
+                </div>
+            </div>
+        }
+        else if (_subEntityType == "link")
+        {
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Type</label>
+                    <div class="d-flex gap-2">
+                        <BenSelect Data="@_linkTypes" @bind-Value="@_lnk.TypeId" ValueField="@nameof(UserLinkTypeRecord.Id)" TextField="@nameof(UserLinkTypeRecord.Name)" Width="100%" />
+                        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenAddTypeDialog("link"))"><BenIcon Name="plus" Class="me-1" />New</button>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold" for="adminuserdetail-url-91df">URL <span class="text-danger">*</span></label>
+                    <input id="adminuserdetail-url-91df" type="text" class="form-control" placeholder="https://..." @bind="@_lnk.LinkUrl" @bind:event="oninput" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold" for="adminuserdetail-display-label-f242">Display Label</label>
+                    <input id="adminuserdetail-display-label-f242" type="text" class="form-control" @bind="@_lnk.DisplayText" @bind:event="oninput" />
+                </div>
+                <div class="col-md-6 d-flex align-items-center gap-2">
+                    <input type="checkbox" class="form-check-input" id="lnk-pub" @bind="@_lnk.IsPublic" />
+                    <label for="lnk-pub" class="form-label mb-0">Public</label>
+                </div>
+                <div class="col-md-6 d-flex align-items-center gap-2">
+                    <input type="checkbox" class="form-check-input" id="lnk-act" @bind="@_lnk.IsActive" />
+                    <label for="lnk-act" class="form-label mb-0">Active</label>
+                </div>
+            </div>
+        }
+        else if (_subEntityType == "note")
+        {
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Type</label>
+                    <div class="d-flex gap-2">
+                        <BenSelect Data="@_noteTypes" @bind-Value="@_nte.TypeId" ValueField="@nameof(UserNoteTypeRecord.Id)" TextField="@nameof(UserNoteTypeRecord.Name)" Width="100%" />
+                        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenAddTypeDialog("note"))"><BenIcon Name="plus" Class="me-1" />New</button>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold" for="adminuserdetail-subject-0255">Subject</label>
+                    <input id="adminuserdetail-subject-0255" type="text" class="form-control" @bind="@_nte.NoteSubject" @bind:event="oninput" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold" for="adminuserdetail-body-70e8">Body <span class="text-danger">*</span></label>
+                    <textarea id="adminuserdetail-body-70e8" class="form-control" rows="4" @bind="_nte.NoteBody"></textarea>
+                </div>
+                <div class="col-md-6 d-flex align-items-center gap-2">
+                    <input type="checkbox" class="form-check-input" id="nte-pub" @bind="@_nte.IsPublic" />
+                    <label for="nte-pub" class="form-label mb-0">Public</label>
+                </div>
+            </div>
+        }
+
+        @if (_subError is not null) { <div class="alert alert-danger mt-3 mb-0">@_subError</div> }
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <button type="button" class="btn btn-secondary" @onclick="CloseSubDialog">Cancel</button>
+            <button type="button" class="btn btn-primary" @onclick="SaveSubEntity" disabled="@(!(!_isSaving))"><BenIcon Name="save" Class="me-1" />
+                @(_isSaving ? "Saving…" : "Save")
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@* ── Add New Type mini-dialog ─────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showAddTypeDialog" Title="@($"New {_addTypeFor} Type")">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold" for="adminuserdetail-name-54c3">Name <span class="text-danger">*</span></label>
+                <input id="adminuserdetail-name-54c3" type="text" class="form-control" @bind="@_newTypeName" @bind:event="oninput" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold" for="adminuserdetail-description-7eb8">Description</label>
+                <input id="adminuserdetail-description-7eb8" type="text" class="form-control" @bind="@_newTypeDescription" @bind:event="oninput" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Icon</label>
+                <IconClassPicker @bind-Value="@_newTypeIconClass" />
+                <small class="text-secondary">Browse to pick from Telerik, Bootstrap, or Font Awesome icons.</small>
+            </div>
+            @* Color Class *@
+            <div class="col-12">
+                <label class="form-label fw-semibold" for="adminuserdetail-color-class-css-class-1499">Color Class <span class="text-secondary small">(CSS class, optional)</span></label>
+                <input id="adminuserdetail-color-class-css-class-1499" type="text" class="form-control" placeholder="e.g. text-primary or text-danger" @bind="@_newTypeColorClass" @bind:event="oninput" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold" for="adminuserdetail-sort-order-02f0">Sort Order</label>
+                <input id="adminuserdetail-sort-order-02f0" type="number" class="form-control" min="0" @bind="_newTypeSortOrder" />
+            </div>
+            <div class="col-md-4 d-flex align-items-center gap-2 pt-4">
+                <input type="checkbox" class="form-check-input" id="newtype-act" @bind="@_newTypeIsActive" />
+                <label for="newtype-act" class="form-label mb-0">Active</label>
+            </div>
+            <div class="col-md-4 d-flex align-items-center gap-2 pt-4">
+                <input type="checkbox" class="form-check-input" id="newtype-pub" @bind="@_newTypeIsPublic" />
+                <label for="newtype-pub" class="form-label mb-0">Public</label>
+            </div>
+        </div>
+        @if (_typeError is not null) { <div class="alert alert-danger mt-2 mb-0">@_typeError</div> }
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <button type="button" class="btn btn-secondary" @onclick="@(() => { _showAddTypeDialog = false; _typeError = null; })">Cancel</button>
+            <button type="button" class="btn btn-primary" @onclick="SaveNewType" disabled="@(!(!_isSaving))">Save</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+
+@* ── Upload File dialog ───────────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showUploadDialog" Title="Upload File">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">File Type <span class="text-danger">*</span></label>
+                <BenSelect Data="@_uploadFileTypes" @bind-Value="@_uploadFileTypeId" ValueField="@nameof(UploadFileTypeRecord.Id)" TextField="@nameof(UploadFileTypeRecord.Name)" Width="100%" DefaultText="— select —" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">File <span class="text-danger">*</span></label>
+                <InputFile OnChange="@OnFileSelected" class="form-control" accept="*/*" />
+                @if (_selectedFileName is not null)
+                {
+                    <small class="text-secondary mt-1 d-block">@_selectedFileName (@FormatUploadSize(_selectedFileSize))</small>
+                }
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold" for="adminuserdetail-description-00f4">Description</label>
+                <input id="adminuserdetail-description-00f4" type="text" class="form-control" @bind="@_uploadDescription" @bind:event="oninput" />
+            </div>
+            <div class="col-12 d-flex align-items-center gap-2">
+                <input type="checkbox" class="form-check-input" id="upl-pub" @bind="@_uploadIsPublic" />
+                <label for="upl-pub" class="form-label mb-0">Public</label>
+            </div>
+        </div>
+        @if (_uploadError is not null) { <div class="alert alert-danger mt-3 mb-0">@_uploadError</div> }
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <button type="button" class="btn btn-secondary" @onclick="@CloseUploadDialog">Cancel</button>
+            <button type="button" class="btn btn-primary" @onclick="UploadFile" disabled="@(!(!_isUploading))"><BenIcon Name="upload" Class="me-1" />
+                @(_isUploading ? "Uploading…" : "Upload")
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+<ImageEditorPlayer @ref="_imageEditor"
+                   UploadFileId="@_editImageId"
+                   FileName="@_editImageName" />
+
+@code {
+    [Parameter] public Guid UserId { get; set; }
+
+    private AppUserDetailAdminRecord? _detail;
+    private List<UserAddressAdminRecord> _addresses = [];
+    private List<UserEmailAdminRecord>   _emails    = [];
+    private List<UserPhoneAdminRecord>   _phones    = [];
+
+    // Image editor
+    private ImageEditorPlayer? _imageEditor;
+    private Guid _editImageId;
+    private string? _editImageName;
+
+    private async Task OpenImageEditor(UploadFileAdminRecord file)
+    {
+        _editImageId   = file.Id;
+        _editImageName = file.FileName;
+        StateHasChanged();
+        if (_imageEditor is not null)
+            await _imageEditor.OpenAsync();
+    }
+    private List<UserLinkAdminRecord>    _links     = [];
+    private List<UserNoteAdminRecord>    _notes     = [];
+    private List<OrganizationUserMembershipAdminRecord> _memberships = [];
+    private Dictionary<Guid, string> _orgNames = [];
+    private List<UploadFileAdminRecord>  _files     = [];
+
+    private EditModel _edit = new();
+    private bool _isSaving;
+    private string? _errorMessage;
+    private string? _successMessage;
+
+    // Type lists (for dropdowns)
+    private IReadOnlyList<UserAddressTypeRecord> _addressTypes = [];
+    private IReadOnlyList<UserEmailTypeRecord>   _emailTypes   = [];
+    private IReadOnlyList<UserPhoneTypeRecord>   _phoneTypes   = [];
+    private IReadOnlyList<UserLinkTypeRecord>    _linkTypes    = [];
+    private IReadOnlyList<UserNoteTypeRecord>    _noteTypes    = [];
+
+    // Upload dialog state
+    private bool   _showUploadDialog;
+    private IReadOnlyList<UploadFileTypeRecord> _uploadFileTypes = [];
+    private Guid   _uploadFileTypeId;
+    private string? _uploadDescription;
+    private bool   _uploadIsPublic;
+    private IBrowserFile? _selectedFile;
+    private string? _selectedFileName;
+    private long   _selectedFileSize;
+    private bool   _isUploading;
+    private string? _uploadError;
+
+    // Sub-entity dialog
+    private bool _showSubDialog;
+    private string _subDialogTitle = "";
+    private string _subEntityType = "";
+    private string? _subError;
+    private Guid _editingSubId;
+
+    // Per-type form models
+    private AddrForm  _addr      = new();
+    private AddressMapModal?       _mapModal;
+    private DirectionsMapModal?    _directionsModal;
+    private AddressFieldsWithMap? _addrFields;
+    private AddressFieldsState    _addrState = new();
+    private EmlForm   _eml  = new();
+    private PhnForm   _phn  = new();
+    private LnkForm   _lnk  = new();
+    private NteForm   _nte  = new();
+
+    // Add type mini-dialog
+    private bool _showAddTypeDialog;
+    private string _addTypeFor = "";
+    private string _newTypeName        = "";
+    private string _newTypeDescription = "";
+    private string _newTypeIconClass   = "";
+    private string _newTypeColorClass  = "";
+    private bool   _newTypeIsActive    = true;
+    private bool   _newTypeIsPublic;
+    private int    _newTypeSortOrder;
+    private string? _typeError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
+            NavManager.NavigateTo("/");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        _detail = await AdminClient.GetUserDetailAsync(UserId);
+        if (_detail is null) { NavManager.NavigateTo("/admin/users"); return; }
+        RefreshLists();
+        _edit = EditModel.From(_detail.User);
+
+        // Pre-load type lists for dropdowns
+        _addressTypes    = await AdminClient.GetUserAddressTypesAsync();
+        _emailTypes      = await AdminClient.GetUserEmailTypesAsync();
+        _phoneTypes      = await AdminClient.GetUserPhoneTypesAsync();
+        _linkTypes       = await AdminClient.GetUserLinkTypesAsync();
+        _noteTypes       = await AdminClient.GetUserNoteTypesAsync();
+        _uploadFileTypes = await AdminClient.GetPublicFileTypesAsync();
+
+        // Build org-name lookup for the Memberships tab
+        try
+        {
+            var orgs = await AdminClient.GetOrganizationsAsync();
+            _orgNames = orgs.ToDictionary(o => o.Id, o => o.Name);
+        }
+        catch { /* non-critical — memberships tab falls back to ID */ }
+
+        StateHasChanged();
+    }
+
+    private void RefreshLists()
+    {
+        if (_detail is null) return;
+        _addresses   = [.. _detail.Addresses];
+        _emails      = [.. _detail.Emails];
+        _phones      = [.. _detail.Phones];
+        _links       = [.. _detail.Links];
+        _notes       = [.. _detail.Notes];
+        _memberships = [.. _detail.Memberships];
+        _files       = [.. _detail.UploadFiles];
+    }
+
+    private async Task Reload()
+    {
+        _detail = await AdminClient.GetUserDetailAsync(UserId);
+        if (_detail is not null) RefreshLists();
+    }
+
+    // ── Profile save ──────────────────────────────────────────────────────────
+
+    private async Task SaveProfile()
+    {
+        if (_detail is null) return;
+        _isSaving = true; _errorMessage = null; _successMessage = null;
+        var updated = await AdminClient.UpdateUserProfileAsync(UserId, new AdminUpdateUserProfileRequest(
+            _edit.DisplayName, _edit.UserName, _edit.Email, _edit.PhoneNumber,
+            _edit.IsEmailConfirmed, _edit.IsTwoFactorEnabled, _edit.IsLockoutEnabled,
+            _edit.LockoutEnd, _edit.DateCreated, _edit.DateUpdated));
+        _isSaving = false;
+        if (updated is not null) { _detail = _detail with { User = updated }; _successMessage = "Profile saved."; }
+        else _errorMessage = "Save failed.";
+    }
+
+    private async Task ImpersonateUser()
+    {
+        if (_detail is null) return;
+        var ok = await AdminClient.ImpersonateUserAsync(UserId, _detail.User.Email ?? string.Empty);
+        if (ok) NavManager.NavigateTo("/");
+        else _errorMessage = "Impersonation failed.";
+    }
+
+    // ── Sub-entity dialog open/close ──────────────────────────────────────────
+
+    private void OpenSubDialog(string entityType, object? existing)
+    {
+        _subEntityType = entityType;
+        _subError = null;
+        _editingSubId = Guid.Empty;
+        bool isEdit = existing is not null;
+
+        switch (entityType)
+        {
+            case "address":
+                _subDialogTitle = isEdit ? "Edit Address" : "New Address";
+                var a = existing as UserAddressAdminRecord;
+                _addr = a is null ? new() : new AddrForm
+                {
+                    TypeId = a.UserAddressTypeId, StreetAddress1 = a.StreetAddress1,
+                    StreetAddress2 = a.StreetAddress2, City = a.City, State = a.State,
+                    ZipCode = a.ZipCode, Country = a.Country, IsPublic = a.IsPublic
+                };
+                _addrState = new AddressFieldsState
+                {
+                    StreetAddress1 = _addr.StreetAddress1 ?? "",
+                    StreetAddress2 = _addr.StreetAddress2,
+                    City           = _addr.City ?? "",
+                    State          = _addr.State ?? "",
+                    ZipCode        = _addr.ZipCode ?? "",
+                    Country        = _addr.Country ?? "US",
+                    Latitude       = a?.Latitude,     // carried into component so map shows existing pin
+                    Longitude      = a?.Longitude
+                };
+                if (a is null)
+                    _addrFields?.ResetPreview();   // new address — clear previous pin
+                if (a is not null) _editingSubId = a.Id;
+                break;
+            case "email":
+                _subDialogTitle = isEdit ? "Edit Email" : "New Email";
+                var em = existing as UserEmailAdminRecord;
+                _eml = em is null ? new() : new EmlForm
+                {
+                    TypeId = em.UserEmailTypeId, EmailAddress = em.EmailAddress,
+                    IsPrimary = em.IsPrimary, IsPublic = em.IsPublic
+                };
+                if (em is not null) _editingSubId = em.Id;
+                break;
+            case "phone":
+                _subDialogTitle = isEdit ? "Edit Phone" : "New Phone";
+                var ph = existing as UserPhoneAdminRecord;
+                _phn = ph is null ? new() : new PhnForm
+                {
+                    TypeId = ph.UserPhoneTypeId, PhoneNumber = ph.PhoneNumber,
+                    PhoneCountry = ph.PhoneCountry, IsPrimary = ph.IsPrimary,
+                    IsCellular = ph.IsCellular, IsPublic = ph.IsPublic
+                };
+                if (ph is not null) _editingSubId = ph.Id;
+                break;
+            case "link":
+                _subDialogTitle = isEdit ? "Edit Link" : "New Link";
+                var ln = existing as UserLinkAdminRecord;
+                _lnk = ln is null ? new() { IsActive = true } : new LnkForm
+                {
+                    TypeId = ln.UserLinkTypeId, LinkUrl = ln.LinkUrl,
+                    DisplayText = ln.DisplayText, IsPublic = ln.IsPublic, IsActive = ln.IsActive
+                };
+                if (ln is not null) _editingSubId = ln.Id;
+                break;
+            case "note":
+                _subDialogTitle = isEdit ? "Edit Note" : "New Note";
+                var nt = existing as UserNoteAdminRecord;
+                _nte = nt is null ? new() : new NteForm
+                {
+                    TypeId = nt.UserNoteTypeId, NoteSubject = nt.NoteSubject,
+                    NoteBody = nt.NoteBody, IsPublic = false
+                };
+                if (nt is not null) _editingSubId = nt.Id;
+                break;
+        }
+        _showSubDialog = true;
+    }
+
+    private void CloseSubDialog() { _showSubDialog = false; _subError = null; }
+
+    private async Task SaveSubEntity()
+    {
+        _isSaving = true; _subError = null;
+        var actor = UserState.UserId ?? Guid.Empty;
+        bool ok = false;
+
+        switch (_subEntityType)
+        {
+            case "address":
+                if (_addrFields is not null && !_addrFields.IsValid)
+                {
+                    _subError = _addrFields.ValidationMessage;
+                    _isSaving = false;
+                    return;
+                }
+                var areq = new UserAddressUpsertRequest(_addr.TypeId, _addrState.StreetAddress1, _addrState.StreetAddress2,
+                    _addrState.City, _addrState.State, _addrState.ZipCode, _addrState.Country, _addr.IsPublic,
+                    Latitude: _addrState.Latitude, Longitude: _addrState.Longitude);
+                ok = _editingSubId == Guid.Empty
+                    ? await AdminClient.CreateUserAddressAsync(UserId, actor, areq)
+                    : await AdminClient.UpdateUserAddressAsync(_editingSubId, UserId, actor, areq);
+                break;
+            case "email":
+                var ereq = new UserEmailUpsertRequest(_eml.TypeId, _eml.EmailAddress ?? "", _eml.IsPrimary, _eml.IsPublic);
+                ok = _editingSubId == Guid.Empty
+                    ? await AdminClient.CreateUserEmailAsync(UserId, actor, ereq)
+                    : await AdminClient.UpdateUserEmailAsync(_editingSubId, UserId, actor, ereq);
+                break;
+            case "phone":
+                var preq = new UserPhoneUpsertRequest(_phn.TypeId, _phn.PhoneNumber ?? "", _phn.PhoneCountry, _phn.IsPrimary, _phn.IsCellular, _phn.IsPublic);
+                ok = _editingSubId == Guid.Empty
+                    ? await AdminClient.CreateUserPhoneAsync(UserId, actor, preq)
+                    : await AdminClient.UpdateUserPhoneAsync(_editingSubId, UserId, actor, preq);
+                break;
+            case "link":
+                var lreq = new UserLinkUpsertRequest(_lnk.TypeId, _lnk.LinkUrl ?? "", _lnk.DisplayText, _lnk.IsPublic, _lnk.IsActive);
+                ok = _editingSubId == Guid.Empty
+                    ? await AdminClient.CreateUserLinkAsync(UserId, actor, lreq)
+                    : await AdminClient.UpdateUserLinkAsync(_editingSubId, UserId, actor, lreq);
+                break;
+            case "note":
+                var nreq = new UserNoteUpsertRequest(_nte.TypeId, _nte.NoteSubject ?? "", _nte.NoteBody ?? "", _nte.IsPublic);
+                ok = _editingSubId == Guid.Empty
+                    ? await AdminClient.CreateUserNoteAsync(UserId, actor, nreq)
+                    : await AdminClient.UpdateUserNoteAsync(_editingSubId, UserId, actor, nreq);
+                break;
+        }
+
+        _isSaving = false;
+        if (ok) { _showSubDialog = false; await Reload(); }
+        else _subError = "Save failed. Check all required fields.";
+    }
+
+    // ── Delete helpers ────────────────────────────────────────────────────────
+
+    private async Task DeleteAddress(UserAddressAdminRecord r) { if (await AdminClient.DeleteUserAddressAsync(r.Id)) await Reload(); else _errorMessage = "Delete failed."; }
+
+    private void OpenAddressMap(UserAddressAdminRecord r)
+    {
+        var parts = new[] { r.StreetAddress1, r.StreetAddress2, r.City, r.State, r.ZipCode, r.Country }
+                        .Where(s => !string.IsNullOrWhiteSpace(s));
+        var title = string.Join(", ", parts);
+        _mapModal?.Show(title,
+            r.Latitude  is not null ? (double)r.Latitude  : null,
+            r.Longitude is not null ? (double)r.Longitude : null);
+    }
+
+    private void OpenDirections(UserAddressAdminRecord r)
+    {
+        if (!r.Latitude.HasValue || !r.Longitude.HasValue) return;
+        var parts = new[] { r.StreetAddress1, r.StreetAddress2, r.City, r.State, r.ZipCode, r.Country }
+                        .Where(s => !string.IsNullOrWhiteSpace(s));
+        _directionsModal?.Show(string.Join(", ", parts), (double)r.Latitude.Value, (double)r.Longitude.Value);
+    }
+    private async Task DeleteEmail(UserEmailAdminRecord r)     { if (await AdminClient.DeleteUserEmailAsync(r.Id))   await Reload(); else _errorMessage = "Delete failed."; }
+    private async Task DeletePhone(UserPhoneAdminRecord r)     { if (await AdminClient.DeleteUserPhoneAsync(r.Id))   await Reload(); else _errorMessage = "Delete failed."; }
+    private async Task DeleteLink(UserLinkAdminRecord r)       { if (await AdminClient.DeleteUserLinkAsync(r.Id))    await Reload(); else _errorMessage = "Delete failed."; }
+    private async Task DeleteNote(UserNoteAdminRecord r)       { if (await AdminClient.DeleteUserNoteAsync(r.Id))    await Reload(); else _errorMessage = "Delete failed."; }
+    private async Task DeleteFile(UploadFileAdminRecord r)     { if (await AdminClient.DeleteUploadFileAdminAsync(r.Id)) await Reload(); else _errorMessage = "Delete failed."; }
+
+    // ── Membership navigation ─────────────────────────────────────────────────
+
+    private void ViewOrganization(OrganizationUserMembershipAdminRecord m)
+    {
+        var returnUrl = Uri.EscapeDataString(NavManager.Uri);
+        NavManager.NavigateTo($"/organizations/{m.OrganizationId}?returnUrl={returnUrl}");
+    }
+
+    // ── Upload File dialog ────────────────────────────────────────────────────
+
+    private void OpenUploadDialog()
+    {
+        _uploadFileTypeId  = Guid.Empty;
+        _uploadDescription = null;
+        _uploadIsPublic    = false;
+        _selectedFile      = null;
+        _selectedFileName  = null;
+        _selectedFileSize  = 0;
+        _uploadError       = null;
+        _showUploadDialog  = true;
+    }
+
+    private void CloseUploadDialog()
+    {
+        _showUploadDialog = false;
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedFile     = e.File;
+        _selectedFileName = e.File.Name;
+        _selectedFileSize = e.File.Size;
+    }
+
+    private async Task UploadFile()
+    {
+        if (_selectedFile is null)    { _uploadError = "Please select a file."; return; }
+        if (_uploadFileTypeId == Guid.Empty) { _uploadError = "Please select a file type."; return; }
+
+        _isUploading = true;
+        _uploadError = null;
+        StateHasChanged();
+
+        try
+        {
+            // No practical upload size limit for now — a future limit belongs at app-settings /
+            // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
+            const long maxBytes = long.MaxValue;
+            using var ms = new System.IO.MemoryStream();
+            await _selectedFile.OpenReadStream(maxBytes).CopyToAsync(ms);
+            var bytes = ms.ToArray();
+
+            var result = await AdminClient.UploadUserFileAsync(
+                _uploadFileTypeId, UserId,
+                _selectedFile.Name, _selectedFile.ContentType,
+                bytes, _uploadDescription, _uploadIsPublic);
+
+            if (result is not null)
+            {
+                _showUploadDialog = false;
+                await Reload();
+            }
+            else
+            {
+                _uploadError = "Upload failed. The file may not match the allowed extensions for the selected type.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _uploadError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _isUploading = false;
+        }
+    }
+
+    private static string FormatUploadSize(long bytes) =>
+        AudioFormatUtils.FormatSizeCompact(bytes);
+
+    // ── Add New Type dialog ───────────────────────────────────────────────────
+
+    private void OpenAddTypeDialog(string entityType)
+    {
+        _addTypeFor          = entityType;
+        _newTypeName         = "";
+        _newTypeDescription  = "";
+        _newTypeIconClass    = "";
+        _newTypeColorClass   = "";
+        _newTypeIsActive     = true;
+        _newTypeIsPublic     = false;
+        _newTypeSortOrder    = 0;
+        _typeError           = null;
+        _showAddTypeDialog   = true;
+    }
+
+    private async Task SaveNewType()
+    {
+        if (string.IsNullOrWhiteSpace(_newTypeName)) { _typeError = "Name is required."; return; }
+        _isSaving = true;
+        bool ok = _addTypeFor switch
+        {
+            "address" => await AdminClient.CreateUserAddressTypeAsync(_newTypeName.Trim(), _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder, _newTypeIconClass?.Trim(), _newTypeColorClass?.Trim()),
+            "email"   => await AdminClient.CreateUserEmailTypeAsync(_newTypeName.Trim(),   _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder, _newTypeIconClass?.Trim(), _newTypeColorClass?.Trim()),
+            "phone"   => await AdminClient.CreateUserPhoneTypeAsync(_newTypeName.Trim(),   _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder, _newTypeIconClass?.Trim(), _newTypeColorClass?.Trim()),
+            "link"    => await AdminClient.CreateUserLinkTypeAsync(_newTypeName.Trim(),    _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder, _newTypeIconClass?.Trim(), _newTypeColorClass?.Trim()),
+            "note"    => await AdminClient.CreateUserNoteTypeAsync(_newTypeName.Trim(),    _newTypeDescription?.Trim(), _newTypeIsActive, _newTypeIsPublic, _newTypeSortOrder, _newTypeIconClass?.Trim(), _newTypeColorClass?.Trim()),
+            _ => false
+        };
+        if (ok)
+        {
+            // Reload the relevant type list and auto-select the new type in the form
+            switch (_addTypeFor)
+            {
+                case "address":
+                    _addressTypes = await AdminClient.GetUserAddressTypesAsync();
+                    var newAddr = _addressTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
+                    if (newAddr is not null) _addr.TypeId = newAddr.Id;
+                    break;
+                case "email":
+                    _emailTypes = await AdminClient.GetUserEmailTypesAsync();
+                    var newEml = _emailTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
+                    if (newEml is not null) _eml.TypeId = newEml.Id;
+                    break;
+                case "phone":
+                    _phoneTypes = await AdminClient.GetUserPhoneTypesAsync();
+                    var newPhn = _phoneTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
+                    if (newPhn is not null) _phn.TypeId = newPhn.Id;
+                    break;
+                case "link":
+                    _linkTypes = await AdminClient.GetUserLinkTypesAsync();
+                    var newLnk = _linkTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
+                    if (newLnk is not null) _lnk.TypeId = newLnk.Id;
+                    break;
+                case "note":
+                    _noteTypes = await AdminClient.GetUserNoteTypesAsync();
+                    var newNte = _noteTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
+                    if (newNte is not null) _nte.TypeId = newNte.Id;
+                    break;
+            }
+            _showAddTypeDialog = false;
+        }
+        else _typeError = "Failed to create type. Check that the name is unique.";
+        _isSaving = false;
+    }
+
+    // ── Form models ───────────────────────────────────────────────────────────
+
+    private sealed class AddrForm { public Guid TypeId; public string? StreetAddress1; public string? StreetAddress2; public string? City; public string? State; public string? ZipCode; public string? Country = "US"; public bool IsPublic; }
+    private sealed class EmlForm  { public Guid TypeId; public string? EmailAddress; public bool IsPrimary; public bool IsPublic; }
+    private sealed class PhnForm  { public Guid TypeId; public string? PhoneNumber; public string? PhoneCountry; public bool IsPrimary; public bool IsCellular; public bool IsPublic; }
+    private sealed class LnkForm  { public Guid TypeId; public string? LinkUrl; public string? DisplayText; public bool IsPublic; public bool IsActive = true; }
+    private sealed class NteForm  { public Guid TypeId; public string? NoteSubject; public string? NoteBody; public bool IsPublic; }
+
+    private sealed class EditModel
+    {
+        public string? DisplayName { get; set; }
+        public string? UserName { get; set; }
+        public string? Email { get; set; }
+        public string? PhoneNumber { get; set; }
+        public bool IsEmailConfirmed { get; set; }
+        public bool IsTwoFactorEnabled { get; set; }
+        public bool IsLockoutEnabled { get; set; }
+        public DateTimeOffset? LockoutEnd { get; set; }
+        public DateTime DateCreated { get; set; }
+        public DateTime? DateUpdated { get; set; }
+
+        public static EditModel From(AppUserAdminRecord u) => new()
+        {
+            DisplayName = u.DisplayName, UserName = u.UserName, Email = u.Email,
+            PhoneNumber = u.PhoneNumber, IsEmailConfirmed = u.IsEmailConfirmed,
+            IsTwoFactorEnabled = u.IsTwoFactorEnabled, IsLockoutEnabled = u.IsLockoutEnabled,
+            LockoutEnd = u.LockoutEnd, DateCreated = u.DateCreated, DateUpdated = u.DateUpdated
+        };
+    }
+}

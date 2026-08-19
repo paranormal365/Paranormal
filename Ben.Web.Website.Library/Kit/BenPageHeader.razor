@@ -1,0 +1,78 @@
+@*
+    Typed replacement for the template's _PageTitle partial.
+
+    That partial took `@model dynamic` with four loosely-named slots, so every one of its ~110
+    call sites had to pass `(string?)null` for the ones it did not use and a typo in a slot name
+    failed silently at runtime. Parameters here are checked at compile time, and breadcrumbs are
+    a list rather than two fixed levels.
+*@
+
+<div class="subheader">
+    <h1 class="subheader-title">
+        @if (!string.IsNullOrWhiteSpace(Icon))
+        {
+            <BenIcon Name="@Icon" Class="subheader-icon" />
+        }
+        @Title
+        @if (!string.IsNullOrWhiteSpace(Subtitle))
+        {
+            <small>@Subtitle</small>
+        }
+    </h1>
+
+    @if (Actions is not null)
+    {
+        <div class="subheader-block d-flex align-items-center gap-2">
+            @Actions
+        </div>
+    }
+</div>
+
+@if (Breadcrumbs is { Count: > 0 })
+{
+    <nav class="app-breadcrumb" aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            @foreach (var crumb in Breadcrumbs)
+            {
+                var isLast = ReferenceEquals(crumb, Breadcrumbs[^1]);
+                <li class="breadcrumb-item @(isLast ? "active" : null)"
+                    aria-current="@(isLast ? "page" : null)">
+                    @if (!isLast && !string.IsNullOrWhiteSpace(crumb.Href))
+                    {
+                        <a href="@crumb.Href">@crumb.Text</a>
+                    }
+                    else
+                    {
+                        @crumb.Text
+                    }
+                </li>
+            }
+        </ol>
+    </nav>
+}
+
+@if (!string.IsNullOrWhiteSpace(Description))
+{
+    <p class="text-muted">@Description</p>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+
+    /// <summary>Shown smaller, beside the title — a qualifier, not a sentence.</summary>
+    [Parameter] public string? Subtitle { get; set; }
+
+    /// <summary>Sprite icon name, e.g. "folder".</summary>
+    [Parameter] public string? Icon { get; set; }
+
+    /// <summary>A sentence of context below the breadcrumbs.</summary>
+    [Parameter] public string? Description { get; set; }
+
+    /// <summary>Trail ending with the current page; the last entry renders unlinked.</summary>
+    [Parameter] public IReadOnlyList<Crumb>? Breadcrumbs { get; set; }
+
+    /// <summary>Buttons for the page as a whole (New, Save, …), right-aligned in the header.</summary>
+    [Parameter] public RenderFragment? Actions { get; set; }
+
+    public sealed record Crumb(string Text, string? Href = null);
+}

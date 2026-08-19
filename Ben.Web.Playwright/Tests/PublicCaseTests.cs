@@ -95,7 +95,7 @@ public class PublicCaseTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/o/{OrgUrlName}/cases/{CaseRef}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        await Expect(Page.GetByText("Timeline", new() { Exact = false })).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await Expect(Main.GetByText("Timeline", new() { Exact = false })).ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
     [Test]

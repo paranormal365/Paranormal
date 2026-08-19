@@ -1,0 +1,82 @@
+@*
+    TelerikPopover replacement, on Bootstrap's dropdown markup with Blazor-owned open state.
+
+    No data-bs-toggle: Bootstrap's Dropdown plugin would take ownership of this subtree, and
+    anything interactive inside (a filter box, a form) would stop binding. Dismissal uses a
+    transparent backdrop element rather than a document-level JS listener — it cannot outlive
+    the component, and it costs no interop.
+*@
+
+<div class="dropdown @Class">
+    <button type="button" class="@ToggleClass @(NoArrow ? "no-arrow" : "dropdown-toggle") @(_open ? "show ben-dropdown-open" : null)"
+            title="@Title" aria-label="@Title"
+            aria-expanded="@_open.ToString().ToLowerInvariant()"
+            disabled="@Disabled"
+            @onclick="Toggle">
+        @ToggleContent
+    </button>
+
+    <div class="dropdown-menu @(AlignEnd ? "dropdown-menu-end" : null) dropdown-menu-animated @(_open ? "show" : null)"
+         style="@(MinWidth is not null ? $"min-width:{MinWidth};" : null)">
+        @* Only while open: a closed menu that still renders its items leaves every one of them
+           in the DOM as an invisible match for any text lookup. The wrapper stays so the
+           template's open/close animation still has something to animate. *@
+        @if (_open)
+        {
+            <CascadingValue Value="this" IsFixed="true">
+                @ChildContent
+            </CascadingValue>
+        }
+    </div>
+</div>
+
+@if (_open)
+{
+    <div class="ben-dropdown-backdrop" @onclick="Close"></div>
+}
+
+@code {
+    /// <summary>What the trigger button renders — an icon, an avatar, a label.</summary>
+    [Parameter] public RenderFragment? ToggleContent { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public string ToggleClass { get; set; } = "btn btn-system";
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public bool AlignEnd { get; set; } = true;
+    [Parameter] public bool NoArrow { get; set; } = true;
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>CSS length, e.g. "320px".</summary>
+    [Parameter] public string? MinWidth { get; set; }
+
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+
+    private bool _open;
+
+    protected override void OnParametersSet()
+    {
+        // Only take the caller's value when Open is actually bound. Copying it unconditionally
+        // meant an unbound (always-false) parameter slammed the menu shut on every re-render of
+        // the parent — invisible in the header, but a grid re-renders constantly, so the menu
+        // inside one could never stay open long enough to click.
+        if (OpenChanged.HasDelegate) _open = Open;
+    }
+
+    private async Task Toggle()
+    {
+        _open = !_open;
+        if (OpenChanged.HasDelegate) await OpenChanged.InvokeAsync(_open);
+    }
+
+    /// <summary>Closes the menu. Items call this so picking one dismisses the dropdown.</summary>
+    public async Task Close()
+    {
+        if (!_open) return;
+        _open = false;
+        if (OpenChanged.HasDelegate) await OpenChanged.InvokeAsync(false);
+        StateHasChanged();
+    }
+}

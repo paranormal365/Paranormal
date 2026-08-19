@@ -1,0 +1,197 @@
+@page "/invite/{Token}"
+
+@inject IWebApiClient Api
+@inject IWebApiAuthService AuthService
+@inject IWebApiTokenStore TokenStore
+@inject NavigationManager NavManager
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+
+<PageTitle>Accept Invitation</PageTitle>
+
+<div class="login-container">
+    <div class="login-card">
+        @if (_loading)
+        {
+            <BenLoaderOverlay Visible="true" Text="Loading invitation..." />
+        }
+        else if (_info is null)
+        {
+            <h2 class="mb-3">Invitation Not Found</h2>
+            <p class="text-secondary">This invite link isn't valid. Double-check the link, or ask the person who invited you to send a new one.</p>
+        }
+        else if (_info.Status != InviteStatus.Valid)
+        {
+            <h2 class="mb-3">Invitation @StatusLabel(_info.Status)</h2>
+            <p class="text-secondary">@StatusMessage(_info.Status)</p>
+        }
+        else
+        {
+            <h2 class="mb-1">You're Invited</h2>
+            <p class="text-secondary mb-4">
+                <strong>@_info.InviterDisplayName</strong> invited you to collaborate on the case
+                "<strong>@_info.CaseTitle</strong>" on @SiteOptions.Value.Name.
+            </p>
+
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger py-2 mb-3">@_error</div>
+            }
+
+            @if (_info.AccountExists)
+            {
+                @if (!_authReady)
+                {
+                    <BenLoaderOverlay Visible="true" Text="Checking sign-in status..." />
+                }
+                else if (TokenStore.IsAuthenticated && TokenStore.UserId.HasValue)
+                {
+                    <p>Signed in as <strong>@(TokenStore.UserDisplayName ?? TokenStore.UserEmail)</strong>.</p>
+                    <button type="button" class="btn btn-primary w-100" @onclick="AcceptAsSignedInUser" disabled="@(!(!_submitting))">
+                        @(_submitting ? "Accepting..." : "Accept Invitation")
+                    </button>
+                }
+                else
+                {
+                    <p class="text-secondary">An account already exists for <strong>@_info.Email</strong>. Sign in to accept this invitation.</p>
+                    <button type="button" class="btn btn-primary w-100" @onclick="GoToSignIn">
+                        Sign In
+                    </button>
+                }
+            }
+            else
+            {
+                <EditForm Model="@_model" OnValidSubmit="Register" FormName="InviteAcceptForm">
+                    <DataAnnotationsValidator />
+
+                    <div class="mb-3">
+                        <label class="form-label" for="inviteaccept-your-name-a392">Your Name</label>
+                        <input id="inviteaccept-your-name-a392" type="text" class="form-control" placeholder="Jane Doe" @bind="@_model.DisplayName" @bind:event="oninput" />
+                        <ValidationMessage For="@(() => _model.DisplayName)" class="text-danger small" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="inviteaccept-password-87da">Password</label>
+                        <input id="inviteaccept-password-87da" type="text" class="form-control" placeholder="••••••••" @bind="@_model.Password" @bind:event="oninput" />
+                        <ValidationMessage For="@(() => _model.Password)" class="text-danger small" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="inviteaccept-confirm-password-d259">Confirm Password</label>
+                        <input id="inviteaccept-confirm-password-d259" type="text" class="form-control" placeholder="••••••••" @bind="@_model.ConfirmPassword" @bind:event="oninput" />
+                        <ValidationMessage For="@(() => _model.ConfirmPassword)" class="text-danger small" />
+                    </div>
+
+                    <button type="button" class="btn btn-primary w-100" disabled="@(!(!_submitting))">
+                        @(_submitting ? "Creating account..." : "Create Account & Accept")
+                    </button>
+                </EditForm>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Token { get; set; } = string.Empty;
+
+    private InviteInfoRecord? _info;
+    private bool _loading = true;
+    private bool _authReady;
+    private bool _submitting;
+    private string? _error;
+    private readonly RegisterModel _model = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _info = await Api.GetInviteInfoAsync(Token); }
+        catch { _info = null; }
+        _loading = false;
+
+        if (!await TokenStore.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        _authReady = true;
+    }
+
+    private async Task Register()
+    {
+        if (_info is null) return;
+        _submitting = true;
+        _error = null;
+        try
+        {
+            var result = await Api.AcceptInviteAsync(Token, new AcceptInviteRequest(_model.DisplayName.Trim(), _model.Password));
+            if (result is null)
+            {
+                _error = "Couldn't create your account. The invitation may have just expired or been used — refresh and try again.";
+                return;
+            }
+
+            // Auto-sign-in with the credentials just set, then land on the case.
+            var signedIn = await AuthService.LoginAsync(_info.Email, _model.Password);
+            NavManager.NavigateTo(signedIn ? $"/my-cases/{result.CaseId}" : "/login");
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private async Task AcceptAsSignedInUser()
+    {
+        _submitting = true;
+        _error = null;
+        try
+        {
+            var result = await Api.AcceptInviteExistingAsync(Token);
+            if (result is null)
+            {
+                _error = "Couldn't accept this invitation. It may have just expired, been revoked, or already been used.";
+                return;
+            }
+            NavManager.NavigateTo($"/my-cases/{result.CaseId}");
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private void GoToSignIn() => NavManager.NavigateTo($"/login?ReturnUrl={Uri.EscapeDataString($"/invite/{Token}")}");
+
+    private static string StatusLabel(InviteStatus status) => status switch
+    {
+        InviteStatus.Used    => "Already Accepted",
+        InviteStatus.Expired => "Expired",
+        InviteStatus.Revoked => "Revoked",
+        _                    => "Unavailable",
+    };
+
+    private static string StatusMessage(InviteStatus status) => status switch
+    {
+        InviteStatus.Used    => "This invitation has already been accepted.",
+        InviteStatus.Expired => "This invitation has expired. Ask the person who invited you to send a new one.",
+        InviteStatus.Revoked => "This invitation was revoked by the person who sent it.",
+        _                    => "This invitation isn't available.",
+    };
+
+    private sealed class RegisterModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.StringLength(200, MinimumLength = 1)]
+        public string DisplayName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(6)]
+        public string Password { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.Compare(nameof(Password), ErrorMessage = "Passwords do not match.")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+}

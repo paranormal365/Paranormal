@@ -82,3 +82,7 @@ Ben.Video.Sidecar/installer/dist/
 
 # Rider/ReSharper per-user solution settings — machine-specific, not shared config.
 *.DotSettings.user
+
+# Publish output for the standalone editor (scripts/publish-editor.sh). Regenerated on demand and
+# around 65 MB, most of it the .NET runtime — a build product, not a source artefact.
+artifacts/

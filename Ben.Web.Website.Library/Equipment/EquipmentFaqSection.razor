@@ -1,0 +1,136 @@
+@namespace Ben.Web.Website.Library.Equipment
+@inject IBenAdminClient AdminClient
+
+@* An item's FAQ. Read-only for everyone but the people who look after the piece; nobody ever sees
+   who wrote an entry, including on this page where the reader may already know whose gear it is —
+   the same shape feeds the make/model aggregate, and one unattributed shape is safer than two. *@
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">Things worth knowing<HelpLink Slug="your-equipment" Anchor="questions-and-faqs" /></h6>
+            @if (CanEdit && !_composing)
+            {
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => StartCompose(null))">Add an entry</button>
+            }
+        </div>
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger py-2">@_error</div>
+        }
+
+        @if (_faqs.Count == 0 && !_composing)
+        {
+            <p class="text-secondary small mb-0">
+                @(CanEdit
+                    ? "Nothing here yet. Anything a borrower would want to know — a temperamental battery door, a lens cap that goes missing — belongs here."
+                    : "The owner hasn't added anything here yet.")
+            </p>
+        }
+
+        @foreach (var faq in _faqs)
+        {
+            <div class="border-bottom py-2">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div>
+                        <div class="fw-semibold">@faq.Question</div>
+                        <div class="small" style="white-space:pre-line;">@faq.Answer</div>
+                    </div>
+                    @if (CanEdit)
+                    {
+                        <div class="d-flex gap-1 flex-shrink-0">
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1"
+                                    style="font-size:.7rem;" disabled="@_busy"
+                                    @onclick="@(() => StartCompose(faq))">Edit</button>
+                            <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1"
+                                    style="font-size:.7rem;" disabled="@_busy"
+                                    @onclick="@(() => DeleteAsync(faq.Id))">Delete</button>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @* Inline, not a window: this is part of managing the piece, and the page is where that
+           happens. *@
+        @if (_composing)
+        {
+            <div class="border rounded p-2 mt-3">
+                <label class="form-label fw-semibold small mb-1" for="equipmentfaqsection-question-7efc">Question</label>
+                <input id="equipmentfaqsection-question-7efc" class="form-control form-control-sm mb-2" maxlength="500" value="@_question"
+                       placeholder="e.g. Does it come with a windscreen?"
+                       @oninput="@(e => _question = e.Value?.ToString() ?? string.Empty)" />
+
+                <label class="form-label fw-semibold small mb-1" for="equipmentfaqsection-answer-614a">Answer</label>
+                <textarea id="equipmentfaqsection-answer-614a" class="form-control form-control-sm mb-2" rows="3" maxlength="4000" value="@_answer"
+                          @oninput="@(e => _answer = e.Value?.ToString() ?? string.Empty)"></textarea>
+
+                <div class="d-flex gap-2 justify-content-end">
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelCompose" disabled="@(!(!_busy))">Cancel</button>
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="SaveAsync" disabled="@(!(!_busy && !string.IsNullOrWhiteSpace(_question) && !string.IsNullOrWhiteSpace(_answer)))">Save</button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid ItemId { get; set; }
+    [Parameter] public bool CanEdit { get; set; }
+
+    private IReadOnlyList<EquipmentFaqRecord> _faqs = [];
+    private bool _composing, _busy;
+    private Guid? _editingId;
+    private string _question = string.Empty, _answer = string.Empty;
+    private string? _error;
+    private Guid _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ItemId == Guid.Empty || _loadedFor == ItemId) return;
+        _loadedFor = ItemId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => _faqs = await AdminClient.GetEquipmentFaqsAsync(ItemId);
+
+    private void StartCompose(EquipmentFaqRecord? existing)
+    {
+        _editingId = existing?.Id;
+        _question  = existing?.Question ?? string.Empty;
+        _answer    = existing?.Answer ?? string.Empty;
+        _composing = true;
+        _error     = null;
+    }
+
+    private void CancelCompose()
+    {
+        _composing = false;
+        _editingId = null;
+        _question = _answer = string.Empty;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true; _error = null;
+        var request = new UpsertEquipmentFaqRequest(_question.Trim(), _answer.Trim());
+
+        var saved = _editingId is Guid id
+            ? await AdminClient.UpdateEquipmentFaqAsync(ItemId, id, request)
+            : await AdminClient.AddEquipmentFaqAsync(ItemId, request);
+
+        if (saved is null) _error = "That couldn't be saved.";
+        else { CancelCompose(); await LoadAsync(); }
+
+        _busy = false;
+    }
+
+    private async Task DeleteAsync(Guid faqId)
+    {
+        _busy = true; _error = null;
+        if (!await AdminClient.DeleteEquipmentFaqAsync(ItemId, faqId)) _error = "That couldn't be removed.";
+        else await LoadAsync();
+        _busy = false;
+    }
+}

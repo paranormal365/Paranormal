@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
-using Ben.Web.WebApp.Services.WebApi;
+using Ben.Web.Services.WebApi;
 using Xunit;
 
 namespace Ben.Web.Tests.Services;

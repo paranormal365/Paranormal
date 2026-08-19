@@ -1,0 +1,144 @@
+/* Styles for the kit components, shipped with the library so a host gets them by referencing it.
+   Served at /_content/Ben.Web.Website.Library/Kit/BenKit.css.
+
+   Everything here is a gap the template does not already cover. If a rule here looks like it is
+   fighting smartapp.min.css, the template's own class is almost certainly the better answer. */
+
+/* ── BenLoaderOverlay ───────────────────────────────────────────────────── */
+.ben-loader-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* color-mix keeps the veil tied to the active theme's own surface, so it reads correctly in
+       both light and dark without a second rule. */
+    background: color-mix(in srgb, var(--bs-body-bg) 70%, transparent);
+    z-index: 5;
+}
+
+/* ── BenDropdown / header menus ─────────────────────────────────────────── */
+/* Click-away layer for the Blazor-owned dropdowns: under the menu, over everything else. */
+.ben-dropdown-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: transparent;
+}
+
+.dropdown .dropdown-menu.show { z-index: 1001; }
+
+/* The toggle sits above its own backdrop while the menu is open. Without this the click-away
+   layer covers the button that opened it, so clicking it again cannot close the menu — the
+   backdrop swallows the click. Found by the Playwright suite, where the click simply hung. */
+.ben-dropdown-open {
+    position: relative;
+    z-index: 1001;
+}
+
+/* ── BenModal ───────────────────────────────────────────────────────────── */
+/* Bootstrap's .modal is display:none until its JS adds inline styles; this component renders
+   .d-block instead and needs the backdrop to sit beneath the dialog rather than over it. */
+.modal.show.d-block { z-index: 1055; }
+.modal-backdrop.show { z-index: 1050; }
+
+/* ── BenPanel ───────────────────────────────────────────────────────────── */
+.panel-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 1040;
+    margin: 0;
+    border-radius: 0;
+    overflow: auto;
+}
+
+.btn-panel {
+    background: transparent;
+    border: 0;
+    padding: .25rem .4rem;
+    line-height: 1;
+    color: inherit;
+    opacity: .65;
+}
+
+.btn-panel:hover { opacity: 1; }
+
+/* ── BenIcon inside text ────────────────────────────────────────────────────
+   The template's .sa-icon is display:block, which suits the standalone icons it was written for
+   (nav bullets, tiles). Inside a button or link beside a label it takes its own line, and the
+   control renders at ~60px tall instead of ~38px with the glyph stranded above the text.
+
+   Only inline contexts are corrected; standalone .sa-icon keeps the template's behaviour. */
+/* The :not() guards matter. The template pairs two icons in one control and shows whichever
+   suits the current state — .sa-mode-light/.sa-mode-dark on the theme toggle,
+   .sa-fullscreen-on/.sa-fullscreen-off on the fullscreen button — hiding the other with
+   `.app-header .sa-mode-light { display: none }`. That rule has the same specificity as this one,
+   and this file loads later, so without the guards this quietly un-hides it and the theme toggle
+   shows a sun and a moon at once. */
+.btn > .sa-icon:not([class*="sa-mode-"]):not([class*="sa-fullscreen-"]),
+.nav-link > .sa-icon,
+.dropdown-item > .sa-icon,
+.page-link > .sa-icon,
+label > .sa-icon,
+.badge > .sa-icon,
+.alert > .sa-icon {
+    display: inline-block;
+    vertical-align: -.125em;   /* sits on the text baseline rather than riding above it */
+}
+
+/* Icons in buttons follow the label rather than the template's fixed 20px, so a button's glyph and
+   its text stay in proportion at any button size. */
+.btn > .sa-icon,
+.dropdown-item > .sa-icon,
+.page-link > .sa-icon {
+    width: 1.05em;
+    height: 1.05em;
+}
+
+/* ── Context menu (BenContextMenu) ───────────────────────────────────────────
+   Positioned by the component in fixed coordinates, so it needs to sit above the page and out of
+   normal flow. The backdrop is what closes it: a document-level listener would outlive the
+   component, and this cannot. */
+.ben-context-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1085;
+}
+
+.ben-context-menu {
+    position: fixed;
+    z-index: 1086;
+    display: block;
+    /* A long menu scrolls rather than running off the bottom of the window. */
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+/* ── Help document screenshots ───────────────────────────────────────────────
+   The help body is rendered markdown, so these elements carry no classes of their own and have to
+   be reached by tag. Screenshots are captured at 2× device scale, so an unconstrained <img> would
+   render at twice its intended width — the max-width is what makes it sharp rather than huge.
+
+   A border matters more here than it looks: the screenshots are captured in dark mode, and a dark
+   screenshot on a dark card has no edge at all without one. */
+.help-body img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 1.25rem 0 0.5rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+    /* The shots are wide-screen captures; without this a tall page reduces them to a strip. */
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+
+/* Markdown has no <figcaption>, so a caption is the italic line an author puts under the image.
+   Styling it as small and secondary is what stops it reading as body prose. */
+.help-body img + em,
+.help-body p > img + em {
+    display: block;
+    margin-bottom: 1.5rem;
+    font-size: 0.875rem;
+    font-style: normal;
+    color: var(--bs-secondary-color);
+}

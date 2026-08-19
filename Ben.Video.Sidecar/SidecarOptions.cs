@@ -28,6 +28,11 @@ public sealed class SidecarOptions
         "http://localhost:5000", "https://localhost:5001",
         "http://localhost:5078",  "https://localhost:7050",  // Ben.Web.WebApp dev defaults
         "http://localhost:5180",                             // Ben.Wasm.Video dev default
+
+        // Production. Without these the sidecar refuses every request from the deployed editor,
+        // and it refuses them the same way it refuses a wrong pairing code — a 403 that reads to
+        // the user as "the code did not work", with a healthy sidecar sitting right there.
+        "https://ishaunted.com", "https://www.ishaunted.com",
     ];
 
     /// <summary>Default cap on the source cache (OPFS clip uploads), in bytes. LRU-evicted.</summary>

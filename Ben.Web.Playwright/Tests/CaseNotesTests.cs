@@ -24,7 +24,7 @@ public class CaseNotesTests : BenTestBase
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var casesTab = Page.GetByText("Cases", new() { Exact = false }).First;
+        var casesTab = Main.GetByText("Cases", new() { Exact = false }).First;
         await Expect(casesTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
@@ -34,7 +34,7 @@ public class CaseNotesTests : BenTestBase
         await caseLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var notesTab = Page.GetByText("Notes", new() { Exact = true }).First;
+        var notesTab = Main.GetByText("Notes", new() { Exact = true }).First;
         await Expect(notesTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await notesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
@@ -79,9 +79,9 @@ public class CaseNotesTests : BenTestBase
         await Page.GetByRole(AriaRole.Button, new() { Name = "New Note" }).ClickAsync();
         await Page.WaitForTimeoutAsync(300);
 
-        var dialog = Page.Locator(".k-window");
+        var dialog = Page.Locator(".k-window, .modal.show");
         await Expect(dialog).ToBeVisibleAsync(new() { Timeout = 5_000 });
-        var titleText = await Page.Locator(".k-window-title, .k-window-titlebar").First.InnerTextAsync();
+        var titleText = await Page.Locator(".k-window, .modal.show-title, .k-window, .modal.show-titlebar, .modal.show .modal-title").First.InnerTextAsync();
         Assert.That(titleText, Does.Contain("Note").IgnoreCase);
     }
 

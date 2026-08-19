@@ -1,0 +1,267 @@
+@page "/my-videos"
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject ProjectService Projects
+@inject ProjectStore ProjectStore
+@inject NavigationManager NavManager
+@inject IJSRuntime JSRuntime
+@inject VideoExportPublisher ExportPublisher
+@inject BenToastService Toasts
+
+<PageTitle>My Videos</PageTitle>
+
+@if (!_authReady)
+{
+    <BenLoaderOverlay Visible="true" Text="Loading…" />
+    return;
+}
+
+@if (!UserState.IsAuthenticated)
+{
+    <div class="container py-4"><p class="text-muted">You must be signed in to use the video editor.</p></div>
+    return;
+}
+
+<div class="d-flex flex-column" style="height:100vh; overflow:hidden;">
+
+    @* ── Header bar ──────────────────────────────────────────────────────── *@
+    <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom bg-body" style="flex:0 0 auto;">
+        <h5 class="mb-0 me-auto">My Videos</h5>
+
+        @if (_projects.Count > 0)
+        {
+            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _showProjectList = true)"><BenIcon Name="folder" Class="me-1" />Saved Projects (@_projects.Count)</button>
+        }
+
+        @if (_saving)
+        {
+            <span class="text-muted small">Saving…</span>
+        }
+        else
+        {
+            <button type="button" class="btn btn-primary btn-sm" @onclick="SaveProjectAsync"><BenIcon Name="save" Class="me-1" />Save to Server</button>
+        }
+    </div>
+
+    @* ── Editor (full remaining height) ─────────────────────────────────── *@
+    <div style="flex:1 1 auto; min-height:0; overflow:hidden;">
+        <VideoEditor OnPublishExport="OnPublishExportAsync"
+                     ShowDiagnostics="@(UserState.IsSuperAdmin || UserState.IsAdmin)" />
+    </div>
+</div>
+
+@* ── Saved Projects dialog ──────────────────────────────────────────────── *@
+<BenModal @bind-Visible="_showProjectList" Title="Saved Projects" Size="lg">
+    <ChildContent>
+        @if (_loadingList)
+        {
+            <BenLoaderOverlay Visible="true" Text="Loading…" />
+        }
+        else if (_projects.Count == 0)
+        {
+            <p class="text-muted">No projects saved to server yet.</p>
+        }
+        else
+        {
+            <TelerikGrid Data="@_projects" Pageable="false" Sortable="false"
+                         Height="360px">
+                <GridColumns>
+                    <GridColumn Field="@nameof(VideoProjectRecord.Name)" Title="Name" />
+                    <GridColumn Title="Saved" Width="170px">
+                        <Template>
+                            @{ var proj = (VideoProjectRecord)context; }
+                            @proj.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                        </Template>
+                    </GridColumn>
+                    <GridColumn Width="160px">
+                        <Template>
+                            @{ var row = (VideoProjectRecord)context; }
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenProjectAsync(row))">Open</button>
+                            <button type="button" class="btn btn-success btn-sm" @onclick="@(() => TriggerPublishAsync(row))" disabled="@(!(!_publishing))" title="Publish rendered video"><BenIcon Name="upload" /></button>
+                            <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => ConfirmDeleteAsync(row))"><BenIcon Name="trash-2" /></button>
+                        </Template>
+                    </GridColumn>
+                </GridColumns>
+            </TelerikGrid>
+        }
+    </ChildContent>
+</BenModal>
+
+@* ── Delete confirm dialog ──────────────────────────────────────────────── *@
+<BenModal @bind-Visible="_showDeleteConfirm" Title="Delete Project" Size="sm">
+    <ChildContent>
+        <p>Delete <strong>@_deleteTarget?.Name</strong>? This cannot be undone.</p>
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <button type="button" class="btn btn-secondary" @onclick="@(() => _showDeleteConfirm = false)">Cancel</button>
+            <button type="button" class="btn btn-danger" @onclick="DeleteConfirmedAsync">Delete</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@* Hidden file input triggered by TriggerPublishAsync — accepts the rendered export from the user's Downloads *@
+<InputFile id="publish-input-my" OnChange="OnPublishFileSelectedAsync" accept="video/*" style="display:none" />
+
+@code {
+    private List<VideoProjectRecord> _projects = [];
+    private bool _loadingList;
+    private bool _showProjectList;
+    private bool _saving;
+    private bool _publishing;
+    private bool _showDeleteConfirm;
+    private VideoProjectRecord? _deleteTarget;
+    private VideoProjectRecord? _publishTarget;
+    private bool _authReady;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Gated so the prerender pass — where AuthReady can never resolve — just shows the
+        // loading state above instead of racing IsAuthenticated and flashing "not signed in"
+        // on a hard nav for a genuinely signed-in user.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        _authReady = true;
+        if (!UserState.IsAuthenticated) return;
+        await LoadProjectListAsync();
+    }
+
+    private async Task LoadProjectListAsync()
+    {
+        _loadingList = true;
+        _projects = (await AdminClient.GetMyVideoProjectsAsync()).ToList();
+        _loadingList = false;
+    }
+
+    private async Task SaveProjectAsync()
+    {
+        _saving = true;
+        StateHasChanged();
+        try
+        {
+            var file   = Projects.BuildCurrentProjectFile(ProjectStore.CurrentProjectName);
+            var record = await AdminClient.SaveMyVideoProjectAsync(file);
+            if (record is not null)
+            {
+                _projects.Insert(0, record);
+                Toasts.Success("Project saved.");
+            }
+            else
+            {
+                Toasts.Error("Save failed.");
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task OpenProjectAsync(VideoProjectRecord record)
+    {
+        _showProjectList = false;
+        try
+        {
+            var file = System.Text.Json.JsonSerializer.Deserialize<Ben.Video.Editor.Models.ProjectFile>(
+                record.ProjectJson,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (file is not null)
+                await ProjectStore.LoadFromFileAsync(file, record.Name, record.Id);
+        }
+        catch
+        {
+            Toasts.Error("Could not load project.");
+        }
+    }
+
+    private void ConfirmDeleteAsync(VideoProjectRecord record)
+    {
+        _deleteTarget = record;
+        _showDeleteConfirm = true;
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        _showDeleteConfirm = false;
+        if (_deleteTarget is null) return;
+        var ok = await AdminClient.DeleteMyVideoProjectAsync(_deleteTarget.Id);
+        if (ok)
+        {
+            _projects.Remove(_deleteTarget);
+            Toasts.Success("Project deleted.");
+        }
+        else
+        {
+            Toasts.Error("Failed to delete the project. Please try again.");
+        }
+        _deleteTarget = null;
+    }
+
+    /// <summary>Opens the hidden file input's native picker — see the case editor's copy for why
+    /// this goes through a typed interop module rather than <c>eval</c>.</summary>
+    private async Task TriggerPublishAsync(VideoProjectRecord record)
+    {
+        _publishTarget = record;
+        await using var dom = await JSRuntime.InvokeAsync<IJSObjectReference>(
+            "import", "/_content/Ben.Web.Website.Library/js/domInterop.js");
+        await dom.InvokeVoidAsync("clickElementById", "publish-input-my");
+    }
+
+    /// <summary>Server project id from an earlier publish this session — see the case editor's
+    /// copy of this field for why it exists.</summary>
+    private Guid? _publishedProjectId;
+
+    /// <summary>
+    /// The editor's own "Upload to server" destination. Throws on failure by design so the
+    /// editor's prompt can stay open and keep "Save to my machine" available — see
+    /// VideoExportPublisher.
+    /// </summary>
+    private async Task OnPublishExportAsync(ExportedVideo exported)
+    {
+        var result = await ExportPublisher.PublishAsync(exported, caseId: null, _publishedProjectId);
+        _publishedProjectId = result.ProjectId;
+
+        var idx = _projects.FindIndex(p => p.Id == result.Record.Id);
+        if (idx >= 0) _projects[idx] = result.Record;
+        else          _projects.Add(result.Record);
+
+        Toasts.Success("Video published.");
+        StateHasChanged();
+    }
+
+    private async Task OnPublishFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        if (_publishTarget is null || e.FileCount == 0) return;
+        _publishing = true;
+        StateHasChanged();
+        try
+        {
+            // No practical upload size limit for now — a future limit belongs at app-settings /
+            // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
+            const long maxBytes = long.MaxValue;
+            using var ms = new System.IO.MemoryStream();
+            await e.File.OpenReadStream(maxBytes).CopyToAsync(ms);
+            var bytes  = ms.ToArray();
+            var record = await AdminClient.PublishVideoProjectAsync(
+                _publishTarget.Id, bytes, e.File.Name, e.File.ContentType);
+            if (record is not null)
+            {
+                var idx = _projects.FindIndex(p => p.Id == record.Id);
+                if (idx >= 0) _projects[idx] = record;
+                Toasts.Success("Video published.");
+            }
+            else
+            {
+                Toasts.Error("Publish failed.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Publish error: {ex.Message}");
+        }
+        finally
+        {
+            _publishing = false;
+            _publishTarget = null;
+        }
+    }
+}

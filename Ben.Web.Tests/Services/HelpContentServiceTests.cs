@@ -1,5 +1,5 @@
 using Ben.Data.Common.Enums;
-using Ben.Web.Library.Help;
+using Ben.Web.Services.Help;
 using Markdig;
 using Xunit;
 
@@ -79,7 +79,7 @@ public sealed class HelpContentServiceTests
     {
         var embedded = typeof(HelpContentService).Assembly
             .GetManifestResourceNames()
-            .Count(n => n.StartsWith("Ben.Web.Library.Help.Content.") && n.EndsWith(".md"));
+            .Count(n => n.StartsWith("Ben.Web.Services.Help.Content.") && n.EndsWith(".md"));
 
         // A file dropped for missing or malformed front matter simply vanishes from the index,
         // which is exactly the kind of failure nobody notices. Count it instead.

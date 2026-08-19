@@ -128,18 +128,18 @@
 }
 
 .bv-clip-card:hover {
-    border-color: var(--kendo-color-primary, var(--bv-accent));
+    border-color: var(--bv-accent, var(--kendo-color-primary));
     background: var(--bv-surface-3);
 }
 
 .bv-clip-card--selected {
-    border-color: var(--kendo-color-primary, var(--bv-accent));
+    border-color: var(--bv-accent, var(--kendo-color-primary));
     background: var(--bv-accent-muted);
 }
 
 .bv-clip-card--dragging {
     opacity: .5;
-    outline: 2px dashed var(--kendo-color-primary, var(--bv-accent));
+    outline: 2px dashed var(--bv-accent, var(--kendo-color-primary));
     cursor: grabbing;
 }
 
@@ -339,7 +339,7 @@
 }
 
 .bv-import-row__wasm {
-    color: var(--kendo-color-primary, var(--bv-accent));
+    color: var(--bv-accent, var(--kendo-color-primary));
 }
 
 .bv-import-row__bar {
@@ -366,12 +366,12 @@
     margin-top: .15rem;
 }
 
-.bv-import-badge--queued     { color: #888; border-color: #888; }
-.bv-import-badge--preview    { color: #888; border-color: #888; }
-.bv-import-badge--writing    { color: var(--kendo-color-primary, var(--bv-accent)); }
-.bv-import-badge--metadata   { color: var(--kendo-color-primary, var(--bv-accent)); }
-.bv-import-badge--thumbnails { color: var(--kendo-color-primary, var(--bv-accent)); }
-.bv-import-badge--audio      { color: var(--kendo-color-primary, var(--bv-accent)); }
+.bv-import-badge--queued     { color: var(--bv-text-muted); border-color: var(--bv-border); }
+.bv-import-badge--preview    { color: var(--bv-text-muted); border-color: var(--bv-border); }
+.bv-import-badge--writing    { color: var(--bv-accent, var(--kendo-color-primary)); }
+.bv-import-badge--metadata   { color: var(--bv-accent, var(--kendo-color-primary)); }
+.bv-import-badge--thumbnails { color: var(--bv-accent, var(--kendo-color-primary)); }
+.bv-import-badge--audio      { color: var(--bv-accent, var(--kendo-color-primary)); }
 .bv-import-badge--done       { color: #4caf89; border-color: #4caf89; }
 .bv-import-badge--error      { color: var(--kendo-color-error, #e06c75); border-color: var(--kendo-color-error, #e06c75); }
 

@@ -53,6 +53,7 @@ public sealed class PublicPlaceController : ControllerBase
             .OrderByDescending(i => i.ScheduledDateTime)
             .Select(i => new PublicPlaceInvestigationRow(
                 i.Id,
+                i.UrlName,
                 i.Title,
                 i.ScheduledDateTime,
                 i.Status,
@@ -77,6 +78,10 @@ public sealed record PublicPlaceResponse(
 /// </summary>
 public sealed record PublicPlaceInvestigationRow(
     Guid Id,
+    // The readable address of this investigation's own page, or null for one published before
+    // slugs existed. Without it the row has nowhere to link, which is how a list of published
+    // work becomes a list nobody can read.
+    string? UrlName,
     string Title,
     DateTime ScheduledDateTime,
     InvestigationStatus Status,

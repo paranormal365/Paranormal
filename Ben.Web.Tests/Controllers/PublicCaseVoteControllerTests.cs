@@ -3,8 +3,8 @@ using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Public;
 using Ben.Service.Models.Entities;
-using Ben.Web.Library.Services;
-using Ben.Web.WebApp.Services.WebApi;
+using Ben.Web.Services;
+using Ben.Web.Services.WebApi;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -132,6 +132,43 @@ public class PublicCaseVoteControllerTests
         Assert.Equal(1, summary.ConfirmsCount);
         Assert.Equal(1, summary.DisputesCount);
         Assert.Equal(EvidenceVoteType.Confirms, summary.CurrentUserVote);
+        // One each way cancels — and the endpoint has to actually carry the number, not leave the
+        // record's default sitting there. (Item #81.)
+        Assert.Equal(0, summary.Score);
+    }
+
+    /// <summary>
+    /// The score reaches the wire, and it is not the counts in disguise: three confirms against one
+    /// dispute is +2, a value nothing else in the payload happens to equal.
+    /// </summary>
+    [Fact]
+    public async Task GetSummary_CarriesTheSignedScore()
+    {
+        var factory  = TestDbFactory.Create();
+        var (_, cas) = await SeedPublicCaseAsync(factory);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            foreach (var voteType in new[]
+                     {
+                         EvidenceVoteType.Confirms, EvidenceVoteType.Confirms, EvidenceVoteType.Confirms,
+                         EvidenceVoteType.Disputes,
+                         EvidenceVoteType.Inconclusive,
+                     })
+                db.CaseVotes.Add(new CaseVote
+                {
+                    Id = Guid.NewGuid(), CaseId = cas.Id,
+                    VoterAppUserId = await SeedVoterAsync(factory),
+                    VoteType = voteType, DateVoted = DateTime.UtcNow,
+                });
+            await db.SaveChangesAsync();
+        }
+
+        var result  = await Build(factory).GetSummary(cas.Id, default);
+        var summary = Assert.IsType<CaseVoteSummary>(Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        Assert.Equal(2, summary.Score);
+        Assert.Equal(5, summary.TotalVotes);   // the inconclusive vote counts, but does not lean
     }
 
     // ── CastVote ──────────────────────────────────────────────────────────────
@@ -247,7 +284,7 @@ public class CaseVoteAdapterTests
     {
         var caseId  = Guid.NewGuid();
         var api     = ApiMock();
-        api.Setup(x => x.GetAnonymousAsync<CaseVoteSummary>(
+        api.Setup(x => x.GetAsync<CaseVoteSummary>(
                 $"/api/public/cases/{caseId}/votes", It.IsAny<CancellationToken>()))
            .ReturnsAsync(new CaseVoteSummary(caseId, 3, 1, 0, 4, EvidenceVoteType.Confirms));
 
@@ -255,8 +292,30 @@ public class CaseVoteAdapterTests
 
         Assert.NotNull(result);
         Assert.Equal(4, result!.TotalVotes);
-        api.Verify(x => x.GetAnonymousAsync<CaseVoteSummary>(
+        api.Verify(x => x.GetAsync<CaseVoteSummary>(
             $"/api/public/cases/{caseId}/votes", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetCaseVoteSummaryAsync_SendsTheViewersToken()
+    {
+        // This endpoint is [AllowAnonymous] but fills in CurrentUserVote when a token is present,
+        // so fetching it anonymously made a signed-in person's own vote invisible: the page looked
+        // as though the vote had not registered, and the obvious response is to vote again.
+        //
+        // The previous version of this test asserted the anonymous call, which is to say it pinned
+        // the bug in place. Asserting the opposite here, explicitly, so that reading the test says
+        // why rather than just what.
+        var caseId = Guid.NewGuid();
+        var api    = ApiMock();
+        api.Setup(x => x.GetAsync<CaseVoteSummary>(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+           .ReturnsAsync(new CaseVoteSummary(caseId, 0, 0, 0, 0, null));
+
+        await Build(api).GetCaseVoteSummaryAsync(caseId);
+
+        api.Verify(x => x.GetAnonymousAsync<CaseVoteSummary>(
+            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never,
+            "the vote summary must carry the viewer's token, or their own vote comes back empty");
     }
 
     [Fact]

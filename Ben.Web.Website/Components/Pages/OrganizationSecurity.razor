@@ -1,0 +1,436 @@
+@page "/organization-security"
+
+@using Ben.Data.Common.Enums
+@inject IWebApiClient WebApiClient
+@inject IWebApiTokenStore TokenStore
+@inject NavigationManager NavManager
+
+<PageTitle>Organization Security</PageTitle>
+
+<div class="container py-4">
+    <h1>Organization Security</h1>
+    <p class="text-secondary">Starter management UI for tenant memberships, grants, and access checks.</p>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <h4>Register Organization</h4>
+            <div class="mb-2">
+                <label for="organizationsecurity-name-7dea">Name</label>
+                <input id="organizationsecurity-name-7dea" class="form-control" @bind="newOrganizationName" />
+            </div>
+            <div class="mb-2">
+                <label for="organizationsecurity-url-name-dda4">Url Name</label>
+                <input id="organizationsecurity-url-name-dda4" class="form-control" @bind="newOrganizationUrlName" />
+            </div>
+            <button class="btn btn-primary" @onclick="RegisterOrganizationAsync">Register</button>
+        </div>
+
+        <div class="col-md-6">
+            <h4>My Organizations</h4>
+            <button class="btn btn-outline-primary mb-2" @onclick="LoadOrganizationsAsync">Refresh</button>
+            <select class="form-select" @bind="selectedOrganizationIdString" @bind:after="OnOrgSelectedAsync">
+                <option value="">Select organization...</option>
+                @foreach (var organization in organizations)
+                {
+                    <option value="@organization.OrganizationId">@organization.Name (@organization.UrlName)</option>
+                }
+            </select>
+            @if (_currentUserRole.HasValue)
+            {
+                <div class="mt-2"><span class="badge bg-secondary">Your role: @_currentUserRole.Value</span></div>
+            }
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <h4>Check My Access</h4>
+            <div class="mb-2">
+                <label for="organizationsecurity-table-50c9">Table</label>
+                <select id="organizationsecurity-table-50c9" class="form-select" @bind="selectedTable">
+                    @foreach (var table in tableOptions)
+                    {
+                        <option value="@table">@table</option>
+                    }
+                </select>
+            </div>
+            <div class="mb-2">
+                <label for="organizationsecurity-action-d74a">Action</label>
+                <select id="organizationsecurity-action-d74a" class="form-select" @bind="selectedAction">
+                    @foreach (var action in actionOptions)
+                    {
+                        <option value="@action">@action</option>
+                    }
+                </select>
+            </div>
+            <button class="btn btn-outline-success" @onclick="CheckMyAccessAsync">Check Access</button>
+            @if (myAccessResult.HasValue)
+            {
+                <p class="mt-2"><strong>Result:</strong> @(myAccessResult.Value ? "Allowed" : "Denied")</p>
+            }
+        </div>
+
+        <div class="col-md-6">
+            <h4>Organization Users</h4>
+            <button class="btn btn-outline-secondary mb-2" @onclick="LoadOrganizationUsersAsync">Load Users</button>
+            <ul class="list-group">
+                @foreach (var user in organizationUsers)
+                {
+                    <li class="list-group-item @(user.AppUserId == TokenStore.UserId ? "list-group-item-primary" : "")">
+                        <div><strong>User:</strong> @user.AppUserId</div>
+                        <div><strong>Role:</strong> @user.Role</div>
+                        <div><strong>Active:</strong> @user.IsActive</div>
+                    </li>
+                }
+            </ul>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <h4>User Search</h4>
+            <div class="mb-2">
+                <label for="organizationsecurity-search-users-in-scope-b69f">Search users in scope</label>
+                <input id="organizationsecurity-search-users-in-scope-b69f" class="form-control" @bind="userSearchText" @bind:event="oninput" placeholder="Name, email, or username" />
+            </div>
+            <button class="btn btn-outline-info mb-2" @onclick="SearchUsersAsync">Search</button>
+            <select class="form-select" @bind="selectedTargetUserIdString">
+                <option value="">Select user...</option>
+                @foreach (var user in userSearchResults)
+                {
+                    <option value="@user.AppUserId">@user.DisplayLabel</option>
+                }
+            </select>
+        </div>
+
+        @if (CanManageOrg)
+        {
+        <div class="col-md-6">
+            <h4>Update Membership</h4>
+            <div class="mb-2 text-muted">Uses selected user from User Search.</div>
+            <div class="mb-2">
+                <label for="organizationsecurity-role-3f90">Role</label>
+                <select id="organizationsecurity-role-3f90" class="form-select" @bind="membershipRole">
+                    @foreach (var role in Enum.GetValues<OrganizationMemberRole>())
+                    {
+                        <option value="@role">@role</option>
+                    }
+                </select>
+            </div>
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="isMembershipActive" @bind="membershipIsActive" />
+                <label class="form-check-label" for="isMembershipActive">Active Membership</label>
+            </div>
+            <button class="btn btn-outline-primary" @onclick="UpsertMembershipAsync">Save Membership</button>
+        </div>
+
+        <div class="col-md-6">
+            <h4>Set Grant</h4>
+            <div class="mb-2 text-muted">Uses selected user from User Search.</div>
+            <div class="mb-2">
+                <label for="organizationsecurity-table-a399">Table</label>
+                <select id="organizationsecurity-table-a399" class="form-select" @bind="grantTable">
+                    @foreach (var table in tableOptions)
+                    {
+                        <option value="@table">@table</option>
+                    }
+                </select>
+            </div>
+            <div class="mb-2">
+                <label>Actions to grant</label>
+                <div class="d-flex gap-3 flex-wrap">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="grantCreate" @bind="_grantCreate" />
+                        <label class="form-check-label" for="grantCreate">Create</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="grantRead" @bind="_grantRead" />
+                        <label class="form-check-label" for="grantRead">Read</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="grantUpdate" @bind="_grantUpdate" />
+                        <label class="form-check-label" for="grantUpdate">Update</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="grantDelete" @bind="_grantDelete" />
+                        <label class="form-check-label" for="grantDelete">Delete</label>
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn-outline-warning" @onclick="SetGrantAsync">Save Grant</button>
+        </div>
+        }
+        else if (TryGetSelectedOrganizationId(out _))
+        {
+            <div class="col-12"><div class="alert alert-info py-2">Membership and grant management requires Owner or Administrator role in this organization.</div></div>
+        }
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <h4>Check Access For User</h4>
+            <div class="mb-2 text-muted">Uses selected user from User Search.</div>
+            <div class="mb-2">
+                <label for="organizationsecurity-table-df54">Table</label>
+                <select id="organizationsecurity-table-df54" class="form-select" @bind="checkTable">
+                    @foreach (var table in tableOptions)
+                    {
+                        <option value="@table">@table</option>
+                    }
+                </select>
+            </div>
+            <div class="mb-2">
+                <label for="organizationsecurity-action-7b49">Action</label>
+                <select id="organizationsecurity-action-7b49" class="form-select" @bind="checkAction">
+                    @foreach (var action in actionOptions)
+                    {
+                        <option value="@action">@action</option>
+                    }
+                </select>
+            </div>
+            <button class="btn btn-outline-dark" @onclick="CheckUserAccessAsync">Check User Access</button>
+            @if (userAccessResult.HasValue)
+            {
+                <p class="mt-2"><strong>User Access:</strong> @(userAccessResult.Value ? "Allowed" : "Denied")</p>
+            }
+        </div>
+
+        <div class="col-md-6">
+            <h4>Status</h4>
+            <p>@statusMessage</p>
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly OrganizationSecurityTable[] tableOptions =
+        Enum.GetValues<OrganizationSecurityTable>().Skip(1).ToArray();
+    private static readonly OrganizationSecurityAction[] actionOptions =
+        [OrganizationSecurityAction.Create, OrganizationSecurityAction.Read, OrganizationSecurityAction.Update, OrganizationSecurityAction.Delete];
+
+    private List<OrganizationSummaryResponse> organizations = [];
+    private List<OrganizationUserMembershipResponse> organizationUsers = [];
+    private List<UserSearchResultResponse> userSearchResults = [];
+
+    private string selectedOrganizationIdString = string.Empty;
+    private OrganizationSecurityTable selectedTable = OrganizationSecurityTable.Organization;
+    private OrganizationSecurityAction selectedAction = OrganizationSecurityAction.Read;
+    private bool? myAccessResult;
+    private bool? userAccessResult;
+
+    private string newOrganizationName = string.Empty;
+    private string newOrganizationUrlName = string.Empty;
+    private OrganizationMemberRole membershipRole = OrganizationMemberRole.Member;
+    private bool membershipIsActive = true;
+
+    private string userSearchText = string.Empty;
+    private string selectedTargetUserIdString = string.Empty;
+
+    private OrganizationSecurityTable grantTable = OrganizationSecurityTable.Organization;
+    private bool _grantCreate;
+    private bool _grantRead;
+    private bool _grantUpdate;
+    private bool _grantDelete;
+
+    private OrganizationSecurityTable checkTable = OrganizationSecurityTable.Organization;
+    private OrganizationSecurityAction checkAction = OrganizationSecurityAction.Read;
+
+    private OrganizationMemberRole? _currentUserRole;
+    private bool CanManageOrg => TokenStore.IsSuperAdmin ||
+        (_currentUserRole is OrganizationMemberRole.Owner or OrganizationMemberRole.Administrator);
+
+    private OrganizationSecurityAction GrantActions =>
+        (_grantCreate ? OrganizationSecurityAction.Create : OrganizationSecurityAction.None) |
+        (_grantRead   ? OrganizationSecurityAction.Read   : OrganizationSecurityAction.None) |
+        (_grantUpdate ? OrganizationSecurityAction.Update : OrganizationSecurityAction.None) |
+        (_grantDelete ? OrganizationSecurityAction.Delete : OrganizationSecurityAction.None);
+
+    private string statusMessage = "Ready.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await TokenStore.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!TokenStore.IsAuthenticated)
+        {
+            NavManager.NavigateTo("/login");
+            return;
+        }
+
+        await LoadOrganizationsAsync();
+    }
+
+    private async Task OnOrgSelectedAsync()
+    {
+        _currentUserRole = null;
+        organizationUsers = [];
+        userSearchResults = [];
+        selectedTargetUserIdString = string.Empty;
+        myAccessResult = null;
+        userAccessResult = null;
+
+        if (!TryGetSelectedOrganizationId(out var organizationId)) return;
+
+        organizationUsers = (await WebApiClient.GetOrganizationUsersAsync(organizationId)).ToList();
+        _currentUserRole = organizationUsers
+            .FirstOrDefault(m => m.AppUserId == TokenStore.UserId)
+            ?.Role;
+    }
+
+    private async Task LoadOrganizationsAsync()
+    {
+        organizations = (await WebApiClient.GetMyOrganizationsAsync()).ToList();
+    }
+
+    private async Task RegisterOrganizationAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newOrganizationName) || string.IsNullOrWhiteSpace(newOrganizationUrlName))
+        {
+            statusMessage = "Name and Url Name are required.";
+            return;
+        }
+
+        var created = await WebApiClient.RegisterOrganizationAsync(new RegisterOrganizationRequest
+        {
+            Name = newOrganizationName,
+            UrlName = newOrganizationUrlName
+        });
+
+        if (created is not null)
+        {
+            newOrganizationName = string.Empty;
+            newOrganizationUrlName = string.Empty;
+            await LoadOrganizationsAsync();
+            selectedOrganizationIdString = created.OrganizationId.ToString();
+            statusMessage = "Organization registered successfully.";
+        }
+        else
+        {
+            statusMessage = "Organization registration failed.";
+        }
+    }
+
+    private async Task SearchUsersAsync()
+    {
+        userSearchResults = (await WebApiClient.SearchUsersAsync(userSearchText, 50)).ToList();
+        statusMessage = $"Found {userSearchResults.Count} users in your search scope.";
+    }
+
+    private async Task CheckMyAccessAsync()
+    {
+        if (!TryGetSelectedOrganizationId(out var organizationId))
+        {
+            statusMessage = "Select an organization first.";
+            return;
+        }
+
+        myAccessResult = await WebApiClient.CheckMyOrganizationAccessAsync(organizationId, selectedTable, selectedAction);
+        statusMessage = "Checked current user access.";
+    }
+
+    private async Task LoadOrganizationUsersAsync()
+    {
+        if (!TryGetSelectedOrganizationId(out var organizationId))
+        {
+            statusMessage = "Select an organization first.";
+            return;
+        }
+
+        organizationUsers = (await WebApiClient.GetOrganizationUsersAsync(organizationId)).ToList();
+        statusMessage = $"Loaded {organizationUsers.Count} organization user memberships.";
+    }
+
+    private async Task UpsertMembershipAsync()
+    {
+        if (!TryGetSelectedOrganizationId(out var organizationId))
+        {
+            statusMessage = "Select an organization first.";
+            return;
+        }
+
+        if (!TryGetSelectedTargetUserId(out var targetUserId))
+        {
+            statusMessage = "Select a target user from User Search first.";
+            return;
+        }
+
+        var updated = await WebApiClient.UpsertOrganizationMembershipAsync(
+            organizationId,
+            targetUserId,
+            new UpsertOrganizationMembershipRequest
+            {
+                Role = membershipRole,
+                IsActive = membershipIsActive
+            });
+
+        if (updated is null)
+        {
+            statusMessage = "Membership update failed.";
+            return;
+        }
+
+        await LoadOrganizationUsersAsync();
+        statusMessage = "Membership updated.";
+    }
+
+    private async Task SetGrantAsync()
+    {
+        if (!TryGetSelectedOrganizationId(out var organizationId))
+        {
+            statusMessage = "Select an organization first.";
+            return;
+        }
+
+        if (!TryGetSelectedTargetUserId(out var targetUserId))
+        {
+            statusMessage = "Select a target user from User Search first.";
+            return;
+        }
+
+        var saved = await WebApiClient.SetOrganizationGrantAsync(
+            organizationId,
+            targetUserId,
+            new SetOrganizationGrantRequest
+            {
+                Table = grantTable,
+                Actions = GrantActions
+            });
+
+        statusMessage = saved is null ? "Grant update failed." : $"Grant updated (Actions={saved.Actions}).";
+    }
+
+    private async Task CheckUserAccessAsync()
+    {
+        if (!TryGetSelectedOrganizationId(out var organizationId))
+        {
+            statusMessage = "Select an organization first.";
+            return;
+        }
+
+        if (!TryGetSelectedTargetUserId(out var targetUserId))
+        {
+            statusMessage = "Select a target user from User Search first.";
+            return;
+        }
+
+        userAccessResult = await WebApiClient.CheckOrganizationAccessAsync(
+            organizationId,
+            new CheckOrganizationAccessRequest
+            {
+                AppUserId = targetUserId,
+                Table = checkTable,
+                Action = checkAction
+            });
+
+        statusMessage = "Checked target user access.";
+    }
+
+    private bool TryGetSelectedOrganizationId(out Guid organizationId)
+    {
+        return Guid.TryParse(selectedOrganizationIdString, out organizationId);
+    }
+
+    private bool TryGetSelectedTargetUserId(out Guid targetUserId)
+    {
+        return Guid.TryParse(selectedTargetUserIdString, out targetUserId);
+    }
+}

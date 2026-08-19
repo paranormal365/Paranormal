@@ -1,0 +1,182 @@
+@page "/organizations"
+@using Ben.Web.Website.Library.Shared
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>Organizations</PageTitle>
+
+<div class="container-fluid px-3">
+
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Organizations</h3>
+        </div>
+        @if (UserState.IsSuperAdmin && !UserState.IsImpersonating)
+        {
+            <div class="col-auto">
+                <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo("/organizations/create"))"><BenIcon Name="plus" Class="me-1" />
+                    New Organization
+                </button>
+            </div>
+        }
+    </div>
+
+    @if (_errorMessage is not null)
+    {
+        <div class="alert alert-danger mb-3">@_errorMessage</div>
+    }
+    @if (_successMessage is not null)
+    {
+        <div class="alert alert-success mb-3">@_successMessage</div>
+    }
+
+    @if (_orgs is null)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading organizations…" />
+    }
+    else
+    {
+        <TelerikGrid Data="@_orgs"
+                     TItem="OrganizationListItemResponse"
+                     Pageable="true"
+                     PageSize="25"
+                     Sortable="true"
+                     Class="org-list-grid">
+            <GridColumns>
+                <GridColumn Field="@nameof(OrganizationListItemResponse.Name)" Title="Name" />
+                <GridColumn Field="@nameof(OrganizationListItemResponse.UrlName)" Title="URL Name" Width="180px" />
+                <GridColumn Title="Applications" Width="120px">
+                    <Template>
+                        @{ var item = (OrganizationListItemResponse)context; }
+                        @if (item.IsAcceptingApplications)
+                        {
+                            <span class="badge bg-success">Open</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Closed</span>
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Field="@nameof(OrganizationListItemResponse.DateCreated)" Title="Created" Width="110px">
+                    <Template>
+                        @{ var item = (OrganizationListItemResponse)context; }
+                        @item.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()
+                    </Template>
+                </GridColumn>
+                @if (UserState.IsSuperAdmin)
+                {
+                    <GridColumn Field="@nameof(OrganizationListItemResponse.MemberCount)" Title="Members" Width="90px" TextAlign="@ColumnTextAlign.Center" />
+                    <GridColumn Field="@nameof(OrganizationListItemResponse.CaseCount)" Title="Cases" Width="80px" TextAlign="@ColumnTextAlign.Center" />
+                    <GridColumn Field="@nameof(OrganizationListItemResponse.InvestigationCount)" Title="Investigations" Width="110px" TextAlign="@ColumnTextAlign.Center" />
+                }
+                <GridColumn Title="Actions" Width="110px">
+                    <Template>
+                        @{
+                            var org = (OrganizationListItemResponse)context;
+                        }
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-link text-decoration-none btn-sm text-nowrap"
+                                    @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}"))">
+                                <BenIcon Name="eye" Class="me-1" />View
+                            </button>
+                            <BenDropdown ToggleClass="btn btn-link text-decoration-none btn-sm" Title="More actions" MinWidth="180px">
+                                <ToggleContent><span class="visually-hidden">More actions</span></ToggleContent>
+                                <ChildContent>
+                                    <li><button class="dropdown-item" type="button" @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/cms"))">CMS</button></li>
+                                    <li><button class="dropdown-item" type="button" @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/cases"))">Cases</button></li>
+                                    <li><button class="dropdown-item" type="button" @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/calendar"))">Calendar</button></li>
+                                    <li><button class="dropdown-item" type="button" @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/messages"))">Messages</button></li>
+                                    <li><button class="dropdown-item" type="button" @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/client-settings"))">Clients</button></li>
+                                    <li><button class="dropdown-item" type="button" @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/membership-questions"))">Q&amp;A</button></li>
+                                    <li><button class="dropdown-item" type="button" @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/edit"))">Edit</button></li>
+                                    <li><button class="dropdown-item" type="button" @onclick="@(() => RequestDelete(org))">Delete</button></li>
+                                </ChildContent>
+                            </BenDropdown>
+                        </div>
+                    </Template>
+                </GridColumn>
+            </GridColumns>
+        </TelerikGrid>
+    }
+</div>
+
+@* ── Delete Confirmation ── *@
+<BenConfirmDialog @bind-Visible="@_showDeleteDialog"
+               Title="Delete Organization"
+               Busy="@_isBusy"
+               BusyText="Deleting…"
+               OnConfirm="ConfirmDelete"
+               OnCancel="@(() => _pendingDelete = null)">
+    @if (_pendingDelete is not null)
+    {
+        <p>Permanently delete <strong>@_pendingDelete.Name</strong>?</p>
+        <p class="text-secondary small mb-0">This cannot be undone. All associated data will be removed.</p>
+    }
+</BenConfirmDialog>
+
+@code {
+    private IReadOnlyList<OrganizationListItemResponse>? _orgs;
+    private string? _errorMessage;
+    private string? _successMessage;
+    private bool _isBusy;
+    private bool _showDeleteDialog;
+    private OrganizationListItemResponse? _pendingDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated)
+            NavManager.NavigateTo("/login");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // OnInitializedAsync's AuthReady wait covers static SSR prerender, but this
+            // hook runs again once the interactive circuit takes over — the bearer token
+            // isn't guaranteed attached yet at that exact moment either, so a hard
+            // navigation could fire GetOrganizationsAsync unauthenticated and render an
+            // empty list. Wait here too, at the point the call actually happens.
+            if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+            await LoadOrgs();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadOrgs()
+        => _orgs = await AdminClient.GetOrganizationsAsync();
+
+    private void RequestDelete(OrganizationListItemResponse org)
+    {
+        _errorMessage     = null;
+        _successMessage   = null;
+        _pendingDelete    = org;
+        _showDeleteDialog = true;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_pendingDelete is null) return;
+        _isBusy = true;
+
+        var ok = await AdminClient.DeleteOrganizationAsync(_pendingDelete.Id);
+        _isBusy           = false;
+        _showDeleteDialog = false;
+
+        if (ok)
+        {
+            _successMessage = $"'{_pendingDelete.Name}' deleted.";
+            _pendingDelete  = null;
+            await LoadOrgs();
+        }
+        else
+        {
+            _errorMessage  = $"Could not delete '{_pendingDelete?.Name}'. It may have active members or related data.";
+            _pendingDelete = null;
+        }
+    }
+}

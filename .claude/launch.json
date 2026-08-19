@@ -2,15 +2,35 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "ben-webapp",
+      "name": "ben-website",
       "runtimeExecutable": "bash",
-      "runtimeArgs": ["scripts/start-webapp-with-api.sh"],
+      "runtimeArgs": [
+        "scripts/start-website-with-api.sh"
+      ],
       "port": 5078
+    },
+    {
+      "name": "smartadmin-template",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "/Users/ben/Source/ASP.NET-Core10/Full/SmartAdmin",
+        "--configuration",
+        "Debug"
+      ],
+      "port": 5266
     },
     {
       "name": "wasm-video-editor",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "/Users/ben/Source/Ben/Ben.Wasm.Video", "--configuration", "Debug"],
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "/Users/ben/Source/Ben/Ben.Wasm.Video",
+        "--configuration",
+        "Debug"
+      ],
       "port": 5180
     }
   ]

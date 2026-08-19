@@ -1,0 +1,808 @@
+@* Renders the appropriate content editor for each CmsSection type. *@
+
+@using System.Text.Json
+@using System.Text.Json.Nodes
+@using Ben.Data.Common.Enums
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+
+@if (_contentWarning is not null)
+{
+    <div class="alert alert-warning" role="alert">@_contentWarning</div>
+}
+
+@if (SectionType is CmsSectionType.RichText or CmsSectionType.CustomHtml)
+{
+    <div class="mt-3">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="form-label fw-semibold mb-0">Content</label>
+
+            @* Ready-made blocks. Picking one adds it to the end of the content with the parts left
+               blank to fill in — the editor's own cursor lives inside its rich-text engine and is
+               not reachable from C#, and appending is honest about that rather than putting things
+               somewhere surprising. *@
+            <span class="d-flex gap-2">
+                <BenDropdown ToggleClass="btn btn-secondary btn-sm">
+                    <ToggleContent><BenIcon Name="plus" Class="me-1" />Add a block</ToggleContent>
+                    <ChildContent>
+                        @foreach (var snippet in CmsSnippets.All)
+                        {
+                            var chosen = snippet;
+                            <li><button class="dropdown-item" type="button" @onclick="@(() => InsertSnippetAsync(chosen))">
+                                @chosen.Name — <span class="text-secondary">@chosen.Description</span>
+                            </button></li>
+                        }
+                    </ChildContent>
+                </BenDropdown>
+
+                @* The group's own saved blocks, offered beside ours — from an author's point of
+                   view they are the same kind of thing, and separating them into two screens would
+                   only make the ones they built themselves harder to find. *@
+                @if (OrgId is not null)
+                {
+                    <BenDropdown ToggleClass="btn btn-secondary btn-sm" Disabled="@(!(_orgTemplates.Count > 0))">
+                    <ToggleContent><BenIcon Name="folder" Class="me-1" />@(_orgTemplates.Count > 0 ? "Our blocks" : "No saved blocks")</ToggleContent>
+                    <ChildContent>
+                            @foreach (var template in _orgTemplates)
+                            {
+                                var chosen = template;
+                                <li><button class="dropdown-item" type="button" @onclick="@(() => InsertTemplateAsync(chosen))">
+                                    @chosen.Name
+                                </button></li>
+                            }
+                        </ChildContent>
+                </BenDropdown>
+
+                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => { _saveTemplateName = ""; _savingTemplate = true; })" disabled="@(!(!string.IsNullOrWhiteSpace(_html)))"><BenIcon Name="save" Class="me-1" />
+                        Save as ours
+                    </button>
+                }
+            </span>
+        </div>
+
+        <TelerikEditor Value="@_html"
+                       ValueChanged="@OnHtmlChanged"
+                       Height="300px" />
+        <div class="form-text">
+            Blocks are added at the end. Move them where you want them, then replace the placeholder
+            text.
+        </div>
+    </div>
+}
+else if (SectionType == CmsSectionType.ImageBanner)
+{
+    <div class="row g-3 mt-1">
+        <div class="col-12">
+            <label class="form-label fw-semibold" for="cmssectioneditor-upload-file-id-8ad5">Upload File ID</label>
+            <input id="cmssectioneditor-upload-file-id-8ad5" type="text" class="form-control" placeholder="GUID of an uploaded image file" value="@_imgFileId" @oninput="@(e => { var v = e.Value?.ToString() ?? string.Empty; _imgFileId = v; PushImageJson(); })" />
+        </div>
+        <div class="col-12">
+            <label class="form-label fw-semibold" for="cmssectioneditor-alt-text-4058">Alt Text</label>
+            <input id="cmssectioneditor-alt-text-4058" type="text" class="form-control" value="@_imgAlt" @oninput="@(e => { var v = e.Value?.ToString() ?? string.Empty; _imgAlt = v; PushImageJson(); })" />
+        </div>
+        <div class="col-12">
+            <label class="form-label fw-semibold" for="cmssectioneditor-link-url-optional-82dd">Link URL (optional)</label>
+            <input id="cmssectioneditor-link-url-optional-82dd" type="text" class="form-control" placeholder="https://example.com" value="@_imgLink" @oninput="@(e => { var v = e.Value?.ToString() ?? string.Empty; _imgLink = v; PushImageJson(); })" />
+        </div>
+    </div>
+}
+else if (SectionType is CmsSectionType.EmbeddedInvestigations or CmsSectionType.EmbeddedCases)
+{
+    @* Ben's order, kept deliberately: warn on adding something not already public, THEN ask about
+       the address, THEN about identities. The warning is what makes the two questions land as
+       decisions rather than as a settings screen. *@
+    <div class="mb-3">
+        <label class="form-label fw-semibold">
+            Which of your @(SectionType == CmsSectionType.EmbeddedCases ? "cases" : "investigations") should this show?
+        </label>
+
+        @if (_embedLoading)
+        {
+            <div class="text-secondary small">Loading…</div>
+        }
+        else if (_embedChoices.Count == 0)
+        {
+            <div class="alert alert-light py-2 mb-0">
+                Your group has nothing to show here yet.
+            </div>
+        }
+        else
+        {
+            <div class="border rounded p-2" style="max-height:260px; overflow-y:auto;">
+                @foreach (var choice in _embedChoices)
+                {
+                    var chosen = _embedIds.Contains(choice.Id);
+                    <div class="form-check d-flex align-items-start gap-2 py-1">
+                        <input class="form-check-input mt-1" type="checkbox" checked="@chosen"
+                               id="@($"embed-{choice.Id}")"
+                               @onchange="@(e => ToggleEmbed(choice, (bool?)e.Value == true))" />
+                        <label class="form-check-label flex-grow-1" for="@($"embed-{choice.Id}")">
+                            <span class="fw-semibold">@choice.Title</span>
+                            @if (choice.Date is { } d)
+                            {
+                                <span class="text-secondary small"> — @d.ToDisplayDate()</span>
+                            }
+                            @if (!choice.IsAlreadyPublic)
+                            {
+                                <span class="badge bg-warning text-dark ms-2">Not public yet</span>
+                            }
+                        </label>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @* The warning, shown only once something not already public is selected. *@
+    @if (_embedIncludesNonPublic)
+    {
+        <div class="alert alert-warning py-2">
+            <div class="fw-semibold mb-1">Some of these are not public yet.</div>
+            <p class="small mb-2">
+                Adding them to this page publishes them to anyone who visits your site. Work that is
+                private today becomes readable by everyone, including the person it is about.
+            </p>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="embed-ack"
+                       checked="@_embedIncludeNonPublic"
+                       @onchange="@(e => SetIncludeNonPublic((bool?)e.Value == true))" />
+                <label class="form-check-label" for="embed-ack">
+                    I understand, and I want to publish these.
+                </label>
+            </div>
+            @if (!_embedIncludeNonPublic)
+            {
+                <div class="small text-secondary mt-1">
+                    Until you tick this, the ones marked <em>Not public yet</em> will not appear on
+                    the page.
+                </div>
+            }
+        </div>
+    }
+
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Where it happened</label>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="embed-loc"
+                   checked="@_embedShowLocation"
+                   @onchange="@(e => SetShowLocation((bool?)e.Value == true))" />
+            <label class="form-check-label" for="embed-loc">
+                Show the rough area — town, state, and a point on a map
+            </label>
+        </div>
+        <div class="form-text">
+            The exact address is never published, whichever way you set this. The point we show is
+            the centre of an area several miles across, so it cannot be traced back to a building.
+            Leave it off to say nothing about location at all.
+        </div>
+    </div>
+
+    @if (SectionType == CmsSectionType.EmbeddedCases)
+    {
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Who it was for</label>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="embed-client"
+                       checked="@_embedShowClientName"
+                       @onchange="@(e => SetShowClientName((bool?)e.Value == true))" />
+                <label class="form-check-label" for="embed-client">
+                    Show the client's chosen name
+                </label>
+            </div>
+            <div class="form-text">
+                Only the alias the client picked, or the one your group set for them. A client's real
+                name is never published here — if neither alias is set, the case appears with no name
+                at all.
+            </div>
+        </div>
+    }
+}
+else if (SectionType == CmsSectionType.CaseMedia)
+{
+    @* The case-bound slot. Two steps on purpose: choosing the case is a different decision from
+       choosing what to show from it, and collapsing them into one long list of every photo the
+       group owns is how somebody publishes the wrong case's file. *@
+    <div class="mb-3">
+        <label class="form-label fw-semibold" for="cmssectioneditor-which-case-are-these-c552">
+            Which case are these from?<HelpLink Slug="organization-administration"
+                                                Anchor="putting-a-cases-photos-on-a-page" />
+        </label>
+
+        @if (_embedLoading)
+        {
+            <div class="text-secondary small">Loading…</div>
+        }
+        else if (_embedChoices.Count == 0)
+        {
+            <div class="alert alert-light py-2 mb-0">Your group has no cases yet.</div>
+        }
+        else
+        {
+            <select id="cmssectioneditor-which-case-are-these-c552" class="form-select" value="@(_mediaCaseId == Guid.Empty ? "" : _mediaCaseId.ToString())"
+                    @onchange="@(e => OnMediaCaseChanged(e.Value?.ToString()))">
+                <option value="">— choose a case —</option>
+                @foreach (var choice in _embedChoices)
+                {
+                    <option value="@choice.Id">
+                        @choice.Title@(choice.IsAlreadyPublic ? "" : " (not public)")
+                    </option>
+                }
+            </select>
+        }
+    </div>
+
+    @if (_mediaCaseId != Guid.Empty)
+    {
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Which of its files should this show?</label>
+
+            @if (_mediaLoading)
+            {
+                <div class="text-secondary small">Loading…</div>
+            }
+            else if (_mediaChoices.Count == 0)
+            {
+                @* Empty is the normal answer, not a failure, and saying so is the whole point of
+                   this branch: an author who picked the right case and saw a blank box would
+                   reasonably conclude the feature was broken. *@
+                <div class="alert alert-info py-2 mb-0">
+                    <div class="fw-semibold mb-1">This case has no files that can be published.</div>
+                    <p class="small mb-0">
+                        A file can go on a public page only when it is attached to a timeline entry
+                        marked <em>Public</em>, on a case that is itself public. Files on the case's
+                        Files tab are never publishable. To use a photo here, add it to a public
+                        timeline entry on the case first.
+                    </p>
+                </div>
+            }
+            else
+            {
+                <div class="border rounded p-2" style="max-height:320px; overflow-y:auto;">
+                    <div class="row g-2">
+                        @foreach (var file in _mediaChoices)
+                        {
+                            var chosen = _mediaFileIds.Contains(file.UploadFileId);
+                            <div class="col-6 col-md-4">
+                                <div class="border rounded p-1 h-100 @(chosen ? "border-primary" : "")">
+                                    <label class="d-block m-0" style="cursor:pointer;">
+                                        <img src="@AdminClient.GetPublicCaseMediaUrl(_mediaCaseId, file.UploadFileId)"
+                                             alt="@(file.Context ?? "Case file")"
+                                             class="img-fluid rounded mb-1"
+                                             style="width:100%; height:90px; object-fit:cover;" />
+                                        <div class="form-check m-0">
+                                            <input class="form-check-input" type="checkbox" checked="@chosen"
+                                                   @onchange="@(e => ToggleMediaFile(file.UploadFileId, (bool?)e.Value == true))" />
+                                            <span class="small">@(file.Context ?? "Untitled entry")</span>
+                                        </div>
+                                        @if (file.When is { } w)
+                                        {
+                                            <div class="text-secondary" style="font-size:.75rem;">@w.ToDisplayDate()</div>
+                                        }
+                                    </label>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="form-text">
+                    Only files already attached to a public timeline entry appear here. If a photo is
+                    missing, it has not been made public on the case yet.
+                </div>
+            }
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Captions</label>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="media-captions"
+                       checked="@_mediaShowCaptions"
+                       @onchange="@(e => SetMediaShowCaptions((bool?)e.Value == true))" />
+                <label class="form-check-label" for="media-captions">
+                    Show which timeline entry each file came from
+                </label>
+            </div>
+            <div class="form-text">
+                Off by default. The entry title is your group's own working description of what
+                happened, and it may say more than you want on a public page.
+            </div>
+        </div>
+
+        <div class="alert alert-light py-2 small mb-0">
+            These files stay linked to the case rather than copied onto the page. If a timeline entry
+            is later made private, or the case is unpublished, the files disappear from here on their
+            own — you do not have to remember which pages used them.
+        </div>
+    }
+}
+else if (SectionType == CmsSectionType.ContactInfo)
+{
+    <div class="row g-2 mt-1">
+        <p class="col-12 mb-1 fw-semibold">Show organization contact info:</p>
+        <div class="col-6 d-flex align-items-center gap-2">
+            <input type="checkbox" id="ci-addr" class="form-check-input" checked="@_contactShowAddresses" @onchange="@(e => { var v = (bool)(e.Value ?? false); _contactShowAddresses = v; PushContactJson(); })" />
+            <label for="ci-addr" class="form-label mb-0">Addresses</label>
+        </div>
+        <div class="col-6 d-flex align-items-center gap-2">
+            <input type="checkbox" id="ci-email" class="form-check-input" checked="@_contactShowEmails" @onchange="@(e => { var v = (bool)(e.Value ?? false); _contactShowEmails = v; PushContactJson(); })" />
+            <label for="ci-email" class="form-label mb-0">Emails</label>
+        </div>
+        <div class="col-6 d-flex align-items-center gap-2">
+            <input type="checkbox" id="ci-phone" class="form-check-input" checked="@_contactShowPhones" @onchange="@(e => { var v = (bool)(e.Value ?? false); _contactShowPhones = v; PushContactJson(); })" />
+            <label for="ci-phone" class="form-label mb-0">Phone Numbers</label>
+        </div>
+        <div class="col-6 d-flex align-items-center gap-2">
+            <input type="checkbox" id="ci-links" class="form-check-input" checked="@_contactShowLinks" @onchange="@(e => { var v = (bool)(e.Value ?? false); _contactShowLinks = v; PushContactJson(); })" />
+            <label for="ci-links" class="form-label mb-0">Links</label>
+        </div>
+    </div>
+}
+else
+{
+    @* FileGallery / MemberRoster — raw JSON editor (enhanced in a later phase) *@
+    <div class="mt-3">
+        <label class="form-label fw-semibold" for="cmssectioneditor-content-json-1ebf">Content JSON</label>
+        <textarea id="cmssectioneditor-content-json-1ebf" class="form-control" rows="8" value="@ContentJson" @oninput="@(e => ContentJsonChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty))"></textarea>
+        <div class="form-text">
+            @if (SectionType == CmsSectionType.FileGallery)
+            {
+                <span>Format: <code>{ "uploadFileIds": ["guid1", "guid2"] }</code></span>
+            }
+            else if (SectionType == CmsSectionType.MemberRoster)
+            {
+                <span>Format: <code>{ "memberIds": ["guid1"], "showRole": true, "showBio": false }</code></span>
+            }
+        </div>
+    </div>
+}
+
+@* Saving what is in the editor as one of the group's own reusable blocks. A small
+   single-purpose interaction, so it stays a window. *@
+<BenModal Visible="@_savingTemplate" Title="Save this as one of our blocks">
+    <ChildContent>
+        @if (_templateError is not null)
+        {
+            <div class="alert alert-danger py-2">@_templateError</div>
+        }
+
+        <label class="form-label fw-semibold" for="cmssectioneditor-name-it-3fc9">Name it</label>
+        <input id="cmssectioneditor-name-it-3fc9" class="form-control mb-2" maxlength="200" value="@_saveTemplateName"
+               placeholder="e.g. Investigation write-up layout"
+               @oninput="@(e => _saveTemplateName = e.Value?.ToString() ?? string.Empty)" />
+
+        <label class="form-label fw-semibold" for="cmssectioneditor-what-is-it-for-6189">What is it for? (optional)</label>
+        <input id="cmssectioneditor-what-is-it-for-6189" class="form-control" maxlength="500" value="@_saveTemplateDescription"
+               @oninput="@(e => _saveTemplateDescription = e.Value?.ToString() ?? string.Empty)" />
+
+        <div class="form-text mt-2">
+            Saved for the whole group, not just you. Anyone who can edit pages will be able to
+            insert it.
+        </div>
+
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-secondary" @onclick="@(() => _savingTemplate = false)" disabled="@(!(!_templateBusy))">Cancel</button>
+            <button type="button" class="btn btn-primary" @onclick="SaveAsTemplateAsync" disabled="@(!(!_templateBusy && !string.IsNullOrWhiteSpace(_saveTemplateName)))">Save</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    [Parameter] public CmsSectionType SectionType { get; set; }
+
+    /// <summary>
+    /// Whose saved blocks to offer. Null in contexts with no organization in scope, where the
+    /// palette we ship is still available but the group's own is not.
+    /// </summary>
+    [Parameter] public Guid? OrgId { get; set; }
+    [Parameter] public string ContentJson { get; set; } = "{}";
+    [Parameter] public EventCallback<string> ContentJsonChanged { get; set; }
+
+    // RichText / CustomHtml
+    private string _html = "";
+
+    /// <summary>
+    /// Adds a ready-made block to the content.
+    /// </summary>
+    /// <remarks>
+    /// Goes through the same <c>OnHtmlChanged</c> path a typed edit takes, so the value the editor
+    /// shows and the JSON that gets saved cannot disagree. Setting the DOM directly would update
+    /// neither — Telerik inputs ignore values written by anything but their own binding, which has
+    /// produced a convincing-but-wrong result in this codebase before.
+    /// </remarks>
+    private Guid? _templatesLoadedFor;
+
+
+    private async Task InsertSnippetAsync(CmsSnippet snippet)
+        => await AppendMarkupAsync(CmsSnippets.Render(snippet));
+
+    // ── The group's own saved blocks ────────────────────────────────────────
+
+    private IReadOnlyList<CmsTemplateRecord> _orgTemplates = [];
+    private bool _savingTemplate, _templateBusy;
+    private string _saveTemplateName = "", _saveTemplateDescription = "";
+    private string? _templateError;
+
+    private async Task LoadOrgTemplatesAsync()
+    {
+        if (OrgId is not Guid orgId) return;
+        _orgTemplates = await AdminClient.GetCmsTemplatesAsync(orgId, CmsTemplateScope.Section);
+    }
+
+    /// <summary>
+    /// Inserts one of the group's saved blocks. Its stored content is a section's own JSON, so the
+    /// markup is read out of it rather than assumed — a saved block of a different section type
+    /// contributes nothing here rather than pasting raw JSON into the page.
+    /// </summary>
+    private async Task InsertTemplateAsync(CmsTemplateRecord template)
+    {
+        string? markup = null;
+        try
+        {
+            var node = JsonNode.Parse(template.ContentJson);
+            markup = node?["html"]?.GetValue<string>();
+        }
+        catch (JsonException) { }
+
+        if (!string.IsNullOrWhiteSpace(markup)) await AppendMarkupAsync(markup);
+    }
+
+    private async Task AppendMarkupAsync(string markup)
+    {
+        var combined = string.IsNullOrWhiteSpace(_html) ? markup : _html + "\n" + markup;
+        await OnHtmlChanged(combined);
+    }
+
+    private async Task SaveAsTemplateAsync()
+    {
+        if (OrgId is not Guid orgId) return;
+        _templateBusy = true;
+        _templateError = null;
+
+        // Stored as a section's own content shape, so inserting it later is the same operation as
+        // inserting one of ours.
+        var content = new JsonObject { ["html"] = _html }.ToJsonString();
+
+        var saved = await AdminClient.SaveCmsTemplateAsync(orgId, new SaveCmsTemplateRequest(
+            _saveTemplateName.Trim(),
+            string.IsNullOrWhiteSpace(_saveTemplateDescription) ? null : _saveTemplateDescription.Trim(),
+            CmsTemplateScope.Section,
+            SectionType,
+            content));
+
+        _templateBusy = false;
+
+        if (saved is null)
+        {
+            _templateError = "That couldn't be saved. The group may already have a block with that name.";
+            return;
+        }
+
+        _savingTemplate = false;
+        _saveTemplateName = _saveTemplateDescription = "";
+        await LoadOrgTemplatesAsync();
+    }
+    private string? _contentWarning;
+
+    // ImageBanner
+    private string _imgFileId = "";
+    private string _imgAlt    = "";
+    private string _imgLink   = "";
+
+    // ContactInfo
+    private bool _contactShowAddresses = true;
+    private bool _contactShowEmails    = true;
+    private bool _contactShowPhones    = true;
+    private bool _contactShowLinks     = true;
+
+
+    // ── Embedded cases / investigations (item #80 part 4) ────────────────────
+    // The editor only ever offers this group's own work, and the server re-checks that on read.
+    // Nothing here is a control; it is the place where the group is told what publishing means.
+
+    private List<EmbeddableRecord> _embedChoices = [];
+    private bool _embedLoading;
+    private List<Guid> _embedIds = [];
+    private bool _embedIncludeNonPublic;
+    private bool _embedShowLocation;
+    private bool _embedShowClientName;
+
+    /// <summary>True when the selection contains work that is not already public.</summary>
+    private bool _embedIncludesNonPublic
+        => _embedChoices.Any(c => _embedIds.Contains(c.Id) && !c.IsAlreadyPublic);
+
+    private async Task LoadEmbedChoicesAsync()
+    {
+        if (OrgId is not { } orgId) return;
+
+        _embedLoading = true;
+        // CaseMedia lists cases too — it is a case-bound section. Left off this condition it would
+        // have silently offered investigations, and every id it saved would have resolved to
+        // nothing.
+        _embedChoices = SectionType is CmsSectionType.EmbeddedCases or CmsSectionType.CaseMedia
+            ? [.. await AdminClient.GetEmbeddableCasesAsync(orgId)]
+            : [.. await AdminClient.GetEmbeddableInvestigationsAsync(orgId)];
+        _embedLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task ToggleEmbed(EmbeddableRecord choice, bool selected)
+    {
+        if (selected)
+        {
+            if (!_embedIds.Contains(choice.Id)) _embedIds.Add(choice.Id);
+        }
+        else
+        {
+            _embedIds.Remove(choice.Id);
+
+            // Nothing non-public left selected, so the acknowledgement no longer applies. Clearing
+            // it means re-adding one asks again, rather than inheriting a yes given for a different
+            // record entirely.
+            if (!_embedIncludesNonPublic) _embedIncludeNonPublic = false;
+        }
+
+        await WriteEmbedAsync();
+    }
+
+    private async Task SetIncludeNonPublic(bool value)
+    {
+        _embedIncludeNonPublic = value;
+        await WriteEmbedAsync();
+    }
+
+    private async Task SetShowLocation(bool value)
+    {
+        _embedShowLocation = value;
+        await WriteEmbedAsync();
+    }
+
+    private async Task SetShowClientName(bool value)
+    {
+        _embedShowClientName = value;
+        await WriteEmbedAsync();
+    }
+
+    // ── Case media (item #80 part 2b, the case-bound slot) ───────────────────
+    // Reuses _embedChoices for the case list — it is the same question ("which of our cases") and
+    // a second endpoint answering it would be a second place for "is this ours" to drift.
+
+    private Guid _mediaCaseId;
+    private List<Guid> _mediaFileIds = [];
+    private bool _mediaShowCaptions;
+    private List<PublishableCaseFile> _mediaChoices = [];
+    private bool _mediaLoading;
+
+    /// <summary>Which case's media has been fetched, so switching back and forth does not refetch.</summary>
+    private Guid _mediaLoadedFor;
+
+    private async Task OnMediaCaseChanged(string? raw)
+    {
+        var caseId = Guid.TryParse(raw, out var g) ? g : Guid.Empty;
+        if (caseId == _mediaCaseId) return;
+
+        _mediaCaseId = caseId;
+
+        // A file id only means anything alongside the case it came from. Carrying the old selection
+        // across would hand the new case a list of ids it does not own — which the server would
+        // drop, leaving the author with an empty section and no explanation.
+        _mediaFileIds = [];
+
+        await LoadMediaChoicesAsync();
+        await WriteCaseMediaAsync();
+    }
+
+    private async Task LoadMediaChoicesAsync()
+    {
+        if (OrgId is not { } orgId || _mediaCaseId == Guid.Empty)
+        {
+            _mediaChoices = [];
+            _mediaLoadedFor = Guid.Empty;
+            return;
+        }
+
+        if (_mediaLoadedFor == _mediaCaseId) return;
+
+        _mediaLoading = true;
+        StateHasChanged();
+
+        _mediaChoices = [.. await AdminClient.GetPublishableCaseMediaAsync(orgId, _mediaCaseId)];
+        _mediaLoadedFor = _mediaCaseId;
+        _mediaLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task ToggleMediaFile(Guid uploadFileId, bool selected)
+    {
+        if (selected)
+        {
+            if (!_mediaFileIds.Contains(uploadFileId)) _mediaFileIds.Add(uploadFileId);
+        }
+        else
+        {
+            _mediaFileIds.Remove(uploadFileId);
+        }
+
+        await WriteCaseMediaAsync();
+    }
+
+    private async Task SetMediaShowCaptions(bool value)
+    {
+        _mediaShowCaptions = value;
+        await WriteCaseMediaAsync();
+    }
+
+    /// <summary>
+    /// The stored shape: one case, the chosen files in the author's order, and the caption switch.
+    /// </summary>
+    /// <remarks>
+    /// camelCase, matching <c>CmsEmbed.CaseMediaSettings</c>. This JSON is read by the server with
+    /// its own serializer, so the casing written here is the only thing that makes the two agree —
+    /// getting it wrong published an empty section once already, in part 4.
+    /// </remarks>
+    private async Task WriteCaseMediaAsync()
+    {
+        var json = new JsonObject
+        {
+            ["caseId"] = _mediaCaseId.ToString(),
+            ["fileIds"] = new JsonArray([.. _mediaFileIds.Select(id => JsonValue.Create(id.ToString()))]),
+            ["showCaptions"] = _mediaShowCaptions,
+        }.ToJsonString();
+
+        await ContentJsonChanged.InvokeAsync(json);
+    }
+
+    private void ParseCaseMedia(JsonElement root)
+    {
+        _mediaCaseId = root.TryGetProperty("caseId", out var c) && Guid.TryParse(c.GetString(), out var cg)
+            ? cg
+            : Guid.Empty;
+
+        _mediaFileIds = root.TryGetProperty("fileIds", out var ids) && ids.ValueKind == JsonValueKind.Array
+            ? [.. ids.EnumerateArray()
+                     .Select(e => Guid.TryParse(e.GetString(), out var g) ? g : Guid.Empty)
+                     .Where(g => g != Guid.Empty)]
+            : [];
+
+        _mediaShowCaptions = GetBool(root, "showCaptions", false);
+    }
+
+    private async Task WriteEmbedAsync()
+    {
+        var json = new JsonObject
+        {
+            ["ids"] = new JsonArray([.. _embedIds.Select(id => JsonValue.Create(id.ToString()))]),
+            ["includeNonPublic"] = _embedIncludeNonPublic,
+            ["showApproximateLocation"] = _embedShowLocation,
+            ["showClientName"] = _embedShowClientName,
+        }.ToJsonString();
+
+        await ContentJsonChanged.InvokeAsync(json);
+    }
+
+    private void ParseEmbed(JsonElement root)
+    {
+        _embedIds = root.TryGetProperty("ids", out var ids) && ids.ValueKind == JsonValueKind.Array
+            ? [.. ids.EnumerateArray()
+                     .Select(e => Guid.TryParse(e.GetString(), out var g) ? g : Guid.Empty)
+                     .Where(g => g != Guid.Empty)]
+            : [];
+
+        _embedIncludeNonPublic = GetBool(root, "includeNonPublic", false);
+        _embedShowLocation     = GetBool(root, "showApproximateLocation", false);
+        _embedShowClientName   = GetBool(root, "showClientName", false);
+    }
+
+    /// <summary>
+    /// One override for all three concerns, because there can only be one.
+    /// </summary>
+    /// <remarks>
+    /// Parsing runs first and unconditionally. The template load below returns early once it has
+    /// run for this organization, and when that guard lived in its own override it sat in front of
+    /// everything — so adding a second override here was the moment the section's own content would
+    /// have stopped being parsed. Order matters more than it looks.
+    /// </remarks>
+    protected override async Task OnParametersSetAsync()
+    {
+        ParseContentJson();
+
+        if (SectionType is CmsSectionType.EmbeddedInvestigations or CmsSectionType.EmbeddedCases
+                        or CmsSectionType.CaseMedia
+            && _embedChoices.Count == 0 && !_embedLoading)
+        {
+            await LoadEmbedChoicesAsync();
+        }
+
+        // A saved section arrives with a case already chosen, so its files must be fetched without
+        // anybody touching the dropdown — otherwise reopening the editor shows the right case and
+        // no ticked photos, and the next save would write the selection away.
+        if (SectionType == CmsSectionType.CaseMedia && _mediaCaseId != Guid.Empty && !_mediaLoading)
+        {
+            await LoadMediaChoicesAsync();
+        }
+
+        if (OrgId is not Guid orgId || _templatesLoadedFor == orgId) return;
+        _templatesLoadedFor = orgId;
+        await LoadOrgTemplatesAsync();
+    }
+
+    private void ParseContentJson()
+    {
+        // Cleared each parse: OnParametersSet re-runs this, and a warning left over from earlier
+        // content would outlive the problem it described.
+        _contentWarning = null;
+        if (string.IsNullOrWhiteSpace(ContentJson)) return;
+        try
+        {
+            using var doc = JsonDocument.Parse(ContentJson);
+            var root = doc.RootElement;
+
+            if (SectionType is CmsSectionType.RichText or CmsSectionType.CustomHtml)
+            {
+                _html = root.TryGetProperty("html", out var el) ? el.GetString() ?? "" : "";
+            }
+            else if (SectionType == CmsSectionType.ImageBanner)
+            {
+                _imgFileId = root.TryGetProperty("uploadFileId", out var id)  ? id.GetString()  ?? "" : "";
+                _imgAlt    = root.TryGetProperty("altText",      out var alt) ? alt.GetString() ?? "" : "";
+                _imgLink   = root.TryGetProperty("linkUrl",      out var lnk) ? lnk.GetString() ?? "" : "";
+            }
+            else if (SectionType is CmsSectionType.EmbeddedInvestigations or CmsSectionType.EmbeddedCases)
+            {
+                ParseEmbed(root);
+            }
+            else if (SectionType == CmsSectionType.CaseMedia)
+            {
+                ParseCaseMedia(root);
+            }
+            else if (SectionType == CmsSectionType.ContactInfo)
+            {
+                _contactShowAddresses = GetBool(root, "showAddresses", true);
+                _contactShowEmails    = GetBool(root, "showEmails",    true);
+                _contactShowPhones    = GetBool(root, "showPhones",    true);
+                _contactShowLinks     = GetBool(root, "showLinks",     true);
+            }
+        }
+        catch (JsonException)
+        {
+            // Stored content that won't parse. The editor keeps its defaults rather than throwing,
+            // so the section stays editable and can be saved back into a good state — but say so,
+            // because silently showing defaults looks identical to the settings never having been
+            // set, and the next save would overwrite whatever is really stored.
+            _contentWarning = "This section's saved content could not be read, so the fields below "
+                            + "show defaults. Saving will replace the stored content.";
+        }
+    }
+
+    private static bool GetBool(JsonElement root, string key, bool fallback)
+        => root.TryGetProperty(key, out var el) ? el.GetBoolean() : fallback;
+
+    private async Task OnHtmlChanged(string value)
+    {
+        _html = value;
+        var json = JsonSerializer.Serialize(new { html = _html });
+        await ContentJsonChanged.InvokeAsync(json);
+    }
+
+    private void PushImageJson()
+    {
+        var json = JsonSerializer.Serialize(new
+        {
+            uploadFileId = _imgFileId,
+            altText      = _imgAlt,
+            linkUrl      = _imgLink
+        });
+        ContentJsonChanged.InvokeAsync(json);
+    }
+
+    private void PushContactJson()
+    {
+        var json = JsonSerializer.Serialize(new
+        {
+            showAddresses = _contactShowAddresses,
+            showEmails    = _contactShowEmails,
+            showPhones    = _contactShowPhones,
+            showLinks     = _contactShowLinks
+        });
+        ContentJsonChanged.InvokeAsync(json);
+    }
+}

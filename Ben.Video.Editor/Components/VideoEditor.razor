@@ -53,6 +53,7 @@
              IsDirty="@Projects.IsDirty"
              ShowErrorLog="@EffectiveOptions.ErrorLog"
              ShowNativeSidecar="@EffectiveOptions.NativeSidecar"
+             ShowDiagnostics="@EffectiveOptions.ShowDiagnostics"
              OnInitialize="LoadCoreAsync"
              OnOpen="OpenFilesAsync"
              OnPreview="RenderFullQualityPreviewAsync"
@@ -483,7 +484,7 @@
 
     private async Task<IJSObjectReference> DomAsync() =>
         _dom ??= await JS.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/js/domInterop.js");
+            "benImportEditorModule", "js/domInterop.js");
     private TransferProgressState? _transfer;
     private string?       _timelinePreviewUrl;
     private double        _timelinePreviewDuration;
@@ -514,6 +515,12 @@
 
     // ── Effective options ─────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Shows the ffmpeg diagnostics chip and panel. Left null, the host's registered option
+    /// decides; a page that knows the signed-in person's role passes it explicitly.
+    /// </summary>
+    [Parameter] public bool? ShowDiagnostics { get; set; }
+
     private VideoEditorOptions EffectiveOptions
     {
         get
@@ -523,6 +530,9 @@
             return new()
             {
                 MultiTrack            = MultiTrack   ?? base_.MultiTrack,
+                // Per-user, not per-app: whether someone sees the operator tools depends on who
+                // they are, and the DI options are registered once for everybody.
+                ShowDiagnostics       = ShowDiagnostics ?? base_.ShowDiagnostics,
                 AudioTracks           = AudioTracks  ?? base_.AudioTracks,
                 Transitions           = Transitions  ?? base_.Transitions,
                 TextOverlays          = TextOverlays ?? base_.TextOverlays,
@@ -608,7 +618,7 @@
             if (EffectiveOptions.ProjectPersistence)
                 await Projects.RestoreLastActiveAsync();
 
-            _fullscreenModule = await JS.InvokeAsync<IJSObjectReference>("import", FullscreenModulePath);
+            _fullscreenModule = await JS.InvokeAsync<IJSObjectReference>("benImportEditorModule", FullscreenModulePath);
             _fullscreenSelfRef = DotNetObjectReference.Create(this);
             await _fullscreenModule.InvokeVoidAsync("addChangeListener", _fullscreenSelfRef);
 
@@ -659,7 +669,7 @@
 
     // ── Fullscreen toggle ────────────────────────────────────────────────────────
 
-    private const string FullscreenModulePath = "/_content/Ben.Video.Editor/js/fullscreenInterop.js";
+    private const string FullscreenModulePath = "js/fullscreenInterop.js";
     private IJSObjectReference?              _fullscreenModule;
     private DotNetObjectReference<VideoEditor>? _fullscreenSelfRef;
     private ElementReference                 _editorRoot;
@@ -667,7 +677,7 @@
 
     // ── Preview popout ───────────────────────────────────────────────────────────
 
-    private const string ViewportModulePath = "/_content/Ben.Video.Editor/js/viewportInterop.js";
+    private const string ViewportModulePath = "js/viewportInterop.js";
     private IJSObjectReference? _viewportModule;
 
     private bool   _isPoppedOut;
@@ -688,7 +698,7 @@
 
     private async Task OpenPopoutAsync()
     {
-        _viewportModule ??= await JS.InvokeAsync<IJSObjectReference>("import", ViewportModulePath);
+        _viewportModule ??= await JS.InvokeAsync<IJSObjectReference>("benImportEditorModule", ViewportModulePath);
         var viewport = await _viewportModule.InvokeAsync<ViewportSize>("getViewportSize");
 
         var aspect = ExportRes.Height > 0 ? (double)ExportRes.Width / ExportRes.Height : 16.0 / 9.0;
@@ -826,7 +836,7 @@
 
     private async Task OpenFullQualityWindowAsync()
     {
-        _viewportModule ??= await JS.InvokeAsync<IJSObjectReference>("import", ViewportModulePath);
+        _viewportModule ??= await JS.InvokeAsync<IJSObjectReference>("benImportEditorModule", ViewportModulePath);
         var viewport = await _viewportModule.InvokeAsync<ViewportSize>("getViewportSize");
         var aspect = ExportRes.Height > 0 ? (double)ExportRes.Width / ExportRes.Height : 16.0 / 9.0;
 
@@ -1528,7 +1538,8 @@
                 var args = ExportArgBuilders.BuildTrimArgs(
                     vid.MemFsName!, segName, start, end, vid.Speed, previewSettings,
                     volumeFilter, vid.Effects, vid.MuteAudio,
-                    extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf);
+                    extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf,
+                    sourceHasAudio: vid.HasAudio);
                 await Ffmpeg.ExecAsync(args);
                 // Item #59-#65 flakiness investigation, phase 146 — size unknown (produced by an
                 // ffmpeg exec, not a C#-side byte array), so this is a 0-byte lower-bound entry

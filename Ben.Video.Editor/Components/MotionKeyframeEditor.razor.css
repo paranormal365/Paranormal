@@ -32,7 +32,7 @@
     font-size: .8rem;
     font-weight: 600;
     font-family: monospace;
-    color: var(--kendo-color-primary, var(--bv-accent));
+    color: var(--bv-accent, var(--kendo-color-primary));
 }
 
 .bv-mkf-editor__section {

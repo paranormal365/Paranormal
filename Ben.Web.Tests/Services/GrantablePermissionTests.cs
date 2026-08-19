@@ -44,7 +44,7 @@ public sealed class GrantablePermissionTests
         var root = RepoRoot();
 
         var editorPath = Path.Combine(
-            root.FullName, "Ben.Web.Library", "Organization", "Roles", "OrgRoleEditor.razor");
+            root.FullName, "Ben.Web.Website.Library", "Organization", "Roles", "OrgRoleEditor.razor");
         Assert.True(File.Exists(editorPath), $"The role editor was not where this test expects: {editorPath}");
 
         var offered = TableReference.Matches(File.ReadAllText(editorPath))

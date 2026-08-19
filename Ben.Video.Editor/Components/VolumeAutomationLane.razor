@@ -56,7 +56,7 @@
         if (firstRender)
         {
             _module = await JS.InvokeAsync<IJSObjectReference>(
-                "import", "/_content/Ben.Video.Editor/js/volumeAutomationLane.js");
+                "benImportEditorModule", "js/volumeAutomationLane.js");
 
             // Clip may have gone null (the <svg> removed from the @if above) while the import
             // just awaited was in flight — calling init() with the now-stale/removed _svg

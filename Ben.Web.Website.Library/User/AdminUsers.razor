@@ -1,0 +1,138 @@
+@page "/admin/users"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>SuperAdmin — Users</PageTitle>
+
+<div class="container-fluid px-3">
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">All Users</h3>
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo("/admin/users/create"))"><BenIcon Name="plus" Class="me-1" />
+                New User
+            </button>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <input type="text" class="form-control" placeholder="Search by name or email…" style="max-width:320px;" @bind="@_search" @bind:event="oninput" />
+        <button type="button" class="btn btn-primary ms-2" @onclick="ApplySearch"><BenIcon Name="search" Class="me-1" />Search</button>
+        @if (!string.IsNullOrWhiteSpace(_search))
+        {
+            <button type="button" class="btn btn-link text-decoration-none ms-1" @onclick="ClearSearch">Clear</button>
+        }
+    </div>
+
+    <TelerikGrid Data="@_filtered"
+                 TItem="AppUserRecord"
+                 Pageable="true"
+                 PageSize="25"
+                 Sortable="true"
+                 Class="admin-users-grid">
+        <GridColumns>
+            <GridColumn Field="@nameof(AppUserRecord.DisplayName)" Title="Display Name" Width="180px" />
+            <GridColumn Field="@nameof(AppUserRecord.Email)" Title="Email" />
+            <GridColumn Field="@nameof(AppUserRecord.DateCreated)" Title="Created" Width="110px">
+                <Template>
+                    @(((AppUserRecord)context).DateCreated.ToViewerLocalTime(UserState).ToDisplayDate())
+                </Template>
+            </GridColumn>
+            <GridColumn Field="@nameof(AppUserRecord.IsEmailConfirmed)" Title="Verified" Width="80px">
+                <Template>
+                    @if (((AppUserRecord)context).IsEmailConfirmed)
+                    {
+                        <BenIcon Name="check" Class="text-success" />
+                    }
+                </Template>
+            </GridColumn>
+            <GridCommandColumn Width="200px">
+                <GridCommandButton Command="View"
+                                   Icon="@SvgIcon.Eye"
+                                   OnClick="@((GridCommandEventArgs e) => ViewUser((AppUserRecord)e.Items.First()))">
+                    View
+                </GridCommandButton>
+                <GridCommandButton Command="Impersonate"
+                                   Icon="@SvgIcon.User"
+                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
+                                   OnClick="@((GridCommandEventArgs e) => Impersonate((AppUserRecord)e.Items.First()))">
+                    Impersonate
+                </GridCommandButton>
+            </GridCommandColumn>
+        </GridColumns>
+    </TelerikGrid>
+
+    @if (_errorMessage is not null)
+    {
+        <div class="alert alert-danger mt-3">@_errorMessage</div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<AppUserRecord> _users  = [];
+    private IReadOnlyList<AppUserRecord> _filtered = [];
+    private string _search = string.Empty;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
+            NavManager.NavigateTo("/");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+            _users    = await AdminClient.GetAllUsersAsync();
+            _filtered = _users;
+            StateHasChanged();
+        }
+    }
+
+    private void ApplySearch()
+    {
+        if (string.IsNullOrWhiteSpace(_search))
+        {
+            _filtered = _users;
+            return;
+        }
+
+        var q = _search.Trim().ToLowerInvariant();
+        _filtered = _users
+            .Where(u => (u.DisplayName?.ToLowerInvariant().Contains(q) ?? false)
+                     || (u.Email?.ToLowerInvariant().Contains(q) ?? false)
+                     || (u.UserName?.ToLowerInvariant().Contains(q) ?? false))
+            .ToList();
+    }
+
+    private void ClearSearch()
+    {
+        _search   = string.Empty;
+        _filtered = _users;
+    }
+
+    private void ViewUser(AppUserRecord user)
+        => NavManager.NavigateTo($"/admin/users/{user.Id}");
+
+    private async Task Impersonate(AppUserRecord user)
+    {
+        if (user.Id == UserState.UserId)
+        {
+            _errorMessage = "You cannot impersonate yourself.";
+            return;
+        }
+        _errorMessage = null;
+
+        var ok = await AdminClient.ImpersonateUserAsync(user.Id, user.Email ?? string.Empty);
+        if (ok)
+            NavManager.NavigateTo("/");
+        else
+            _errorMessage = $"Failed to impersonate {user.Email}.";
+    }
+}

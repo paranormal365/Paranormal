@@ -1,0 +1,105 @@
+@page "/organizations/{OrgId:guid}/cms/pages/{PageId:guid}/preview"
+@namespace Ben.Web.Website.Library.Organization.Cms
+@using Ben.Web.Website.Library.Organization.Public
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+<PageTitle>Preview — @(_page?.Page.PageTitle ?? "Page")</PageTitle>
+
+@* The page as a visitor would see it, drawn by the public renderer rather than a copy of it —
+   a preview that used its own markup would eventually stop matching the thing it previews. *@
+
+@if (_loading)
+{
+    <div class="d-flex justify-content-center py-5">
+        <BenLoaderOverlay Visible="true" Text="Loading the preview…" />
+    </div>
+}
+else if (_page is null)
+{
+    <div class="container py-5 text-center">
+        <h2 class="text-muted">Preview not available</h2>
+        <p class="text-secondary">
+            That page could not be found, or you cannot edit this group's pages.
+            <a href="@($"/organizations/{OrgId}/cms")">← Back to pages</a>
+        </p>
+    </div>
+}
+else
+{
+    @* A banner, not a subtle border: somebody who forgets they are in a preview will conclude the
+       page is live and stop wondering why nobody can see it. *@
+    <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2 mb-0 rounded-0 py-2">
+        <strong>Preview.</strong>
+        <span>This is how <em>@_page.Page.PageTitle</em> will look to a visitor.</span>
+        <span class="ms-auto d-flex gap-2">
+            <a class="btn btn-sm btn-outline-secondary"
+               href="@($"/organizations/{OrgId}/cms/pages/{PageId}")">Back to editing</a>
+        </span>
+    </div>
+
+    <div class="container-fluid px-3 py-3" style="max-width:900px; margin:auto;">
+        <div class="d-flex align-items-center gap-3 mb-3">
+            @if (_page.Logos.Any())
+            {
+                <img src="@AdminClient.GetFileDownloadUrl(_page.Logos.First().UploadFileId)"
+                     alt="@(_page.Logos.First().AltText ?? _page.OrgName)"
+                     style="max-height:48px; max-width:96px; object-fit:contain;" />
+            }
+            <span class="fs-5 fw-semibold text-secondary">@_page.OrgName</span>
+        </div>
+
+        @* Navigation is what a visitor would get — the published pages. If this page is not among
+           them, that is the useful thing to notice before publishing. *@
+        <nav class="mb-4 d-flex flex-wrap gap-2">
+            <span class="btn btn-sm btn-outline-secondary disabled">Home</span>
+            <span class="btn btn-sm btn-outline-secondary disabled">Cases</span>
+            @foreach (var navPage in _page.NavPages.Where(p => p.ParentPageId is null).OrderBy(p => p.SortOrder))
+            {
+                var isThisPage = navPage.Id == PageId;
+                <span class="btn btn-sm @(isThisPage ? "btn-primary" : "btn-outline-secondary") disabled">
+                    @navPage.PageTitle
+                </span>
+            }
+            @if (_page.NavPages.All(p => p.Id != PageId))
+            {
+                <span class="badge bg-warning text-dark align-self-center">
+                    Not in the menu yet — publish it to add it
+                </span>
+            }
+        </nav>
+
+        <h1 class="mb-4">@_page.Page.PageTitle</h1>
+
+        @if (_page.Page.Sections.Count == 0)
+        {
+            <p class="text-secondary">This page has no sections yet, so a visitor would see an empty page.</p>
+        }
+        else
+        {
+            @foreach (var section in _page.Page.Sections.OrderBy(s => s.SortOrder))
+            {
+                <OrgPublicSection Section="section"
+                                  FileBaseUrl="@AdminClient.GetFileDownloadUrl(Guid.Empty).Replace(Guid.Empty.ToString(), "")" PublicMediaBaseUrl="@AdminClient.GetPublicCaseMediaBaseUrl()" />
+            }
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid PageId { get; set; }
+
+    private OrgPublicPageResponse? _page;
+    private bool _loading = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        _page    = await AdminClient.GetCmsPagePreviewAsync(OrgId, PageId);
+        _loading = false;
+        StateHasChanged();
+    }
+}

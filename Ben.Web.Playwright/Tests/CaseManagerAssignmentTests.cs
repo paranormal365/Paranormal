@@ -16,23 +16,8 @@ public class CaseManagerAssignmentTests : BenTestBase
     private async Task NavigateToTghCaseDetail()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        await Page.GotoAsync($"{BaseUrl}/organizations");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var tgh = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
-        if (!await tgh.IsVisibleAsync()) { Assert.Pass("TGH org not visible; seed data may differ."); return; }
-        await tgh.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Page.GetByText("Cases", new() { Exact = true })).First;
-        await casesLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var caseItem = Page.GetByText("Park", new() { Exact = false }).First;
-        await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await caseItem.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+            Assert.Pass("TGH case not in the seed data; nothing to assert against.");
     }
 
     // ── CaseList: manager column ───────────────────────────────────────────────
@@ -41,18 +26,10 @@ public class CaseManagerAssignmentTests : BenTestBase
     public async Task CaseList_ShowsManagerOrUnassigned()
     {
         await LoginAsync(UserEmail, UserPassword);
-        await Page.GotoAsync($"{BaseUrl}/organizations");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var tgh = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
-        if (!await tgh.IsVisibleAsync()) { Assert.Pass("TGH org not visible."); return; }
-        await tgh.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Page.GetByText("Cases", new() { Exact = true })).First;
-        await casesLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        if (!await OpenOrganizationAsync("Tennessee Ghost Hunters"))
+            Assert.Pass("TGH org not in the seed data.");
+        await OpenTabAsync("Cases", Main.GetByText("Manager:", new() { Exact = false })
+                                        .Or(Main.GetByText("No cases", new() { Exact = false })));
 
         // Each case card should show either a manager name or 'Unassigned'
         var managerLabels = Page.GetByText("Manager:", new() { Exact = false });
@@ -97,7 +74,9 @@ public class CaseManagerAssignmentTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         // 'Case Manager' label should appear in the dialog
-        var label = Page.GetByText("Case Manager", new() { Exact = false });
+        // Exact, and the label specifically: a loose match also picks up the case header's
+        // "Case Manager: Sarah Mitchell", and two matches is a strict-mode violation.
+        var label = Page.Locator("label", new() { HasTextString = "Case Manager" }).First;
         await Expect(label).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 
@@ -113,7 +92,9 @@ public class CaseManagerAssignmentTests : BenTestBase
         // Wait for the dropdown to populate with org members (loaded lazily)
         await Page.WaitForTimeoutAsync(800);
 
-        var label = Page.GetByText("Case Manager", new() { Exact = false });
+        // Exact, and the label specifically: a loose match also picks up the case header's
+        // "Case Manager: Sarah Mitchell", and two matches is a strict-mode violation.
+        var label = Page.Locator("label", new() { HasTextString = "Case Manager" }).First;
         await Expect(label).ToBeVisibleAsync(new() { Timeout = 8_000 });
 
         // The dropdown should be present and interactable

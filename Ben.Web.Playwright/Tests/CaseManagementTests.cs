@@ -30,7 +30,7 @@ public class CaseManagementTests : BenTestBase
     public async Task CaseList_RendersFromOrgView()
     {
         await GetFirstOrgUrl();
-        var casesTab = Page.GetByText("Cases", new() { Exact = false });
+        var casesTab = Main.GetByText("Cases", new() { Exact = false });
         await Expect(casesTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
@@ -42,7 +42,7 @@ public class CaseManagementTests : BenTestBase
     public async Task CaseList_HasNewCaseButton()
     {
         await GetFirstOrgUrl();
-        var casesTab = Page.GetByText("Cases", new() { Exact = false });
+        var casesTab = Main.GetByText("Cases", new() { Exact = false });
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var newCase = Page.GetByText("New Case", new() { Exact = false })
@@ -58,7 +58,7 @@ public class CaseManagementTests : BenTestBase
     {
         // Navigate into a case via the org → cases tab → first case
         await GetFirstOrgUrl();
-        var casesTab = Page.GetByText("Cases", new() { Exact = false });
+        var casesTab = Main.GetByText("Cases", new() { Exact = false });
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var caseLink = Page.GetByRole(AriaRole.Link, new() { Name = "#", Exact = false })

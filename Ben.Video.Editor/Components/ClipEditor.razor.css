@@ -37,7 +37,7 @@
 }
 
 .bv-clip-editor__link-offset {
-    color: var(--kendo-color-primary, var(--bv-accent));
+    color: var(--bv-accent, var(--kendo-color-primary));
 }
 
 /* ── Fields ────────────────────────────────────────────────────────────────────── */

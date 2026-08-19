@@ -74,7 +74,8 @@ public sealed class RenderWorkerBackend : IRenderBackend
                     inputName, segmentName, start, end, videoClip.Speed, settings,
                     volumeFilter, videoClip.Effects, videoClip.MuteAudio,
                     extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf,
-                    outputWidth: previewWidth, outputHeight: previewHeight);
+                    outputWidth: previewWidth, outputHeight: previewHeight,
+                    sourceHasAudio: videoClip.HasAudio);
 
                 var code = await _worker.ExecAsync(args);
                 if (code != 0) return RenderJobResult.Failed($"ffmpeg exit code {code}");

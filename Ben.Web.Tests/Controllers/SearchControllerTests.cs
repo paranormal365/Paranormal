@@ -2,6 +2,7 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Public;
+using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -13,6 +14,10 @@ namespace Ben.Web.Tests.Controllers;
 /// Tests for <see cref="SearchController"/> — verifies proximity search filtering,
 /// Haversine bounding, SearchRadiusMiles enforcement, query filtering, and display-mode masking.
 /// </summary>
+// These assert the ORGANIZATIONS half of /api/public/search/nearby. The endpoint returns two lists
+// as of item #88 — groups and public events — because the two obey different privacy rules: a
+// searchable group is a business listing shown as precisely as it chose, while an event's location
+// is approximate until somebody is attending. The events half is covered by NearbySearchTests.
 public class SearchControllerTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -76,7 +81,7 @@ public class SearchControllerTests
         var result = await ctrl.Nearby(36.0, -86.0, 25);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var list = Assert.IsAssignableFrom<IReadOnlyList<NearbyOrgResult>>(ok.Value);
+        var list = Assert.IsType<NearbyResults>(ok.Value).Organizations;
         Assert.Empty(list);
     }
 
@@ -91,7 +96,7 @@ public class SearchControllerTests
         var result = await ctrl.Nearby(36.1627, -86.7816, 25); // search 25 miles around same point
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var list = Assert.IsAssignableFrom<IReadOnlyList<NearbyOrgResult>>(ok.Value);
+        var list = Assert.IsType<NearbyResults>(ok.Value).Organizations;
         Assert.Single(list);
         Assert.Equal("Close Org", list[0].OrgName);
         Assert.True(list[0].DistanceMiles < 1.0); // ~0 distance — same coords
@@ -108,7 +113,7 @@ public class SearchControllerTests
         var result = await ctrl.Nearby(36.0, -86.0, 10); // only 10-mile search
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var list = Assert.IsAssignableFrom<IReadOnlyList<NearbyOrgResult>>(ok.Value);
+        var list = Assert.IsType<NearbyResults>(ok.Value).Organizations;
         Assert.Empty(list);
     }
 
@@ -124,13 +129,13 @@ public class SearchControllerTests
         // Searcher is ~3 miles away — should NOT appear
         var result1 = await ctrl.Nearby(36.045, -86.0, 50); // ~3 miles N
         var ok1 = Assert.IsType<OkObjectResult>(result1.Result);
-        var list1 = Assert.IsAssignableFrom<IReadOnlyList<NearbyOrgResult>>(ok1.Value);
+        var list1 = Assert.IsType<NearbyResults>(ok1.Value).Organizations;
         Assert.Empty(list1);
 
         // Searcher is right at the address — should appear
         var result2 = await ctrl.Nearby(36.0, -86.0, 50);
         var ok2 = Assert.IsType<OkObjectResult>(result2.Result);
-        var list2 = Assert.IsAssignableFrom<IReadOnlyList<NearbyOrgResult>>(ok2.Value);
+        var list2 = Assert.IsType<NearbyResults>(ok2.Value).Organizations;
         Assert.Single(list2);
     }
 
@@ -145,7 +150,7 @@ public class SearchControllerTests
         var result = await ctrl.Nearby(36.0, -86.0, 50, query: "McDonald");
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var list = Assert.IsAssignableFrom<IReadOnlyList<NearbyOrgResult>>(ok.Value);
+        var list = Assert.IsType<NearbyResults>(ok.Value).Organizations;
         Assert.Single(list);
         Assert.Equal("McDonalds Franklin", list[0].OrgName);
     }
@@ -161,7 +166,7 @@ public class SearchControllerTests
         var result = await ctrl.Nearby(36.0, -86.0, 50);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var list = Assert.IsAssignableFrom<IReadOnlyList<NearbyOrgResult>>(ok.Value);
+        var list = Assert.IsType<NearbyResults>(ok.Value).Organizations;
         Assert.Single(list);
         // Exact coords should be masked for RegionOnly
         Assert.Null(list[0].Latitude);
@@ -180,7 +185,7 @@ public class SearchControllerTests
         var result = await ctrl.Nearby(36.0, -86.0, 50);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var list = Assert.IsAssignableFrom<IReadOnlyList<NearbyOrgResult>>(ok.Value);
+        var list = Assert.IsType<NearbyResults>(ok.Value).Organizations;
         Assert.Equal(2, list.Count);
         Assert.Equal("Near Org", list[0].OrgName);  // closer first
         Assert.Equal("Far Org",  list[1].OrgName);

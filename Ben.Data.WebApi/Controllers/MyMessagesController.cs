@@ -56,8 +56,14 @@ public sealed class MyMessagesController : BenControllerBase
                 t.UserMessage.UserMessageType.ColorClass,
                 t.UserMessage.DateCreated,
                 t.DateLastRead,
-                t.UserMessage.CreatedByAppUserId,
-                t.UserMessage.CreatedByAppUser.DisplayName ?? t.UserMessage.CreatedByAppUser.Email))
+                // Both the id and the name go, not just the name: an anonymous channel that still
+                // hands over the author's user id is not anonymous. Note the fallback below — when
+                // a display name is missing this used to send the author's EMAIL address.
+                t.UserMessage.HideSenderIdentity ? null : (Guid?)t.UserMessage.CreatedByAppUserId,
+                t.UserMessage.HideSenderIdentity
+                    ? null
+                    : (t.UserMessage.CreatedByAppUser.DisplayName ?? t.UserMessage.CreatedByAppUser.Email),
+                t.UserMessage.HideSenderIdentity))
             .ToListAsync(ct);
 
         return Ok(items);

@@ -19,7 +19,7 @@
     <PackageReference Include="Moq" Version="4.20.72" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Ben.Web.WebApp\Ben.Web.WebApp.csproj" />
     <ProjectReference Include="..\Ben.Data.WebApi\Ben.Data.WebApi.csproj" />
+    <ProjectReference Include="..\Ben.Web.Website.Library\Ben.Web.Website.Library.csproj" />
   </ItemGroup>
 </Project>

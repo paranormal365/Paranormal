@@ -1,7 +1,7 @@
 using Ben.Service.Models.Entities;
-using Ben.Web.Library.Services;
+using Ben.Web.Services;
 using Xunit;
-using static Ben.Web.Library.Services.NotificationBadge;
+using static Ben.Web.Services.NotificationBadge;
 
 namespace Ben.Web.Tests.Services;
 
@@ -65,7 +65,8 @@ public class NotificationBadgeTests
             CaseMessagesAsClient:      Aged(1, TimeSpan.FromDays(4)),
             SystemMessages:            NotificationBucket.Empty,
             PendingPermissionRequests: Aged(3, TimeSpan.FromHours(2)),
-            InvestigationInvites:      NotificationBucket.Empty);
+            InvestigationInvites:      NotificationBucket.Empty,
+            EquipmentCheckouts:        NotificationBucket.Empty);
 
         Assert.Equal(6, summary.TotalCount);
         Assert.Equal(Urgency.Overdue, Classify(summary, Now));

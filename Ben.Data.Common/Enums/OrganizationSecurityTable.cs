@@ -69,4 +69,31 @@ public enum OrganizationSecurityTable
     /// delegable one: it is what an organization grants to someone whose job is scheduling.
     /// </remarks>
     Investigation = 34,
+
+    /// <summary>
+    /// Grants access to manage the organization's own equipment — adding and editing gear, its
+    /// photos, its service and defect log, and who is currently holding a piece.
+    /// </summary>
+    /// <remarks>
+    /// Covers the group's <i>property</i> only. Gear that members have shared with the group from
+    /// their own lists is readable by any active member without this permission, because the
+    /// sharing is the owner's own decision and not the group's to gate. Reading the group's own
+    /// equipment is likewise open to members; this value governs changing it, and seeing serial
+    /// numbers.
+    /// </remarks>
+    Equipment = 35,
+
+    /// <summary>
+    /// Grants access to review equipment checkouts for the organization — approving or denying
+    /// requests, handing gear over, and receiving it back. The delegable "Equipment Management"
+    /// right item #55 asks for.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Equipment"/> so a group can hand someone the loans desk without
+    /// also handing them the catalog: running checkouts and deciding what the group owns are
+    /// different jobs. Rendered as a sub-permission of <see cref="Equipment"/> in the role editor.
+    /// Applies to the group's own gear; a loan of a member's personal item is always approved by
+    /// its owner, never by this permission.
+    /// </remarks>
+    EquipmentCheckout = 36,
 }

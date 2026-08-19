@@ -153,11 +153,20 @@ builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IOrga
 builder.Services.AddScoped<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService, Ben.Service.RepositoryService.Services.AuditLogService>();
 builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IFileStorageService, Ben.Data.WebApi.Services.LocalFileStorageService>();
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.FileMetadataExtractorService>();
+// Separates a media file's metadata from the bytes that get served — see IMediaSanitizationService.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.IMediaSanitizationService, Ben.Data.WebApi.Services.MediaSanitizationService>();
+// The one place an uploaded media file is taken in — see IMediaIngestService.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.IMediaIngestService, Ben.Data.WebApi.Services.MediaIngestService>();
+// Author-written page markup is cleaned at the point it is stored, so what is in the database is
+// what will be rendered — see ICmsMarkupSanitizer for why provenance alone is not enough.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.ICmsMarkupSanitizer, Ben.Data.WebApi.Services.CmsMarkupSanitizer>();
 // Scoped: it opens its own DbContext per call and holds no state between them.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.SiteSettingsService>();
 // Stateless apart from its keys, so one instance serves every request.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.SupportFormGuard>();
 builder.Services.Configure<Ben.Data.WebApi.Services.SmtpOptions>(builder.Configuration.GetSection("Smtp"));
+// What the site is called, in one place — see SiteIdentity for why it is not a literal.
+builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));
 builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IEmailService, Ben.Data.WebApi.Services.SmtpEmailService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>();
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);
@@ -335,6 +344,7 @@ if (app.Configuration.GetValue("SeedData:Enabled", true))
     await Ben.Data.WebApi.SeedData.OrganizationSeeder.SeedAsync(app.Services, app.Configuration);
     await Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.SeedAsync(app.Services, app.Configuration);
     await Ben.Data.WebApi.SeedData.ExperienceTaxonomySeeder.SeedAsync(app.Services, app.Configuration);
+    await Ben.Data.WebApi.SeedData.EquipmentTaxonomySeeder.SeedAsync(app.Services, app.Configuration);
     await Ben.Data.WebApi.SeedData.ContactTypeSeeder.SeedAsync(app.Services, app.Configuration);
     // DevelopmentDataSeeder runs last — depends on all users/orgs above being present.
     // Enable via SeedData:DevData:Enabled = true in appsettings.Development.json.

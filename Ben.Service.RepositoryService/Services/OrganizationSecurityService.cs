@@ -139,11 +139,14 @@ public class OrganizationSecurityService : IOrganizationSecurityService
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(token);
 
         var normalizedName = name.Trim();
-        var normalizedUrlName = urlName.Trim();
+        // Lowercased, not merely trimmed. The admin path already did this and registration did
+        // not, so an organization's public address worked or did not depending on which door it
+        // came through — and on SQL Server's case-insensitive collation, mostly by luck.
+        var normalizedUrlName = Ben.Data.Common.SlugText.NormalizeOrEmpty(urlName);
 
-        if (string.IsNullOrWhiteSpace(normalizedName) || string.IsNullOrWhiteSpace(normalizedUrlName))
+        if (string.IsNullOrWhiteSpace(normalizedName))
         {
-            throw new InvalidOperationException("Organization name and urlName are required.");
+            throw new InvalidOperationException("Organization name is required.");
         }
 
         var appUserExists = await dbContext.AppUsers.AnyAsync(u => u.Id == appUserId, token);
@@ -152,10 +155,15 @@ public class OrganizationSecurityService : IOrganizationSecurityService
             throw new InvalidOperationException("AppUser not found.");
         }
 
-        var urlExists = await dbContext.Organizations.AnyAsync(o => o.UrlName == normalizedUrlName, token);
-        if (urlExists)
+        // The third door onto the same column. This one checked uniqueness against current names
+        // only, validated the shape not at all, and knew nothing about retired addresses — so
+        // registration could take a name a group had renamed away from and inherit its links.
+        var refusal = await Ben.Data.Source.Services.OrganizationUrlNames
+            .RefusalForAsync(dbContext, normalizedUrlName, null, token);
+
+        if (refusal is not null)
         {
-            throw new InvalidOperationException("An organization with this urlName already exists.");
+            throw new InvalidOperationException(refusal);
         }
 
         var organization = new Organization

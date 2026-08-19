@@ -210,14 +210,27 @@ public sealed class AdminExperienceTypeController : BenControllerBase
         Guid categoryId, [FromBody] UpsertExperienceTypeRequest request, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
+        var name = request.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(name)) return BadRequest("A name is required.");
+
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await db.ExperienceCategories.AnyAsync(c => c.Id == categoryId, ct))
             return NotFound("Category not found.");
+
+        // The group-facing path has always deduped case-insensitively; this one never did, so an
+        // administrator could quietly create the second "Knocking" that everyone else was being
+        // stopped from creating. Returns the existing row rather than erroring — the caller wanted
+        // a type with this name in this category, and there is one.
+        var normalized = name.ToLowerInvariant();
+        var duplicate = await db.ExperienceTypes.FirstOrDefaultAsync(
+            t => t.ExperienceCategoryId == categoryId && t.Name.ToLower() == normalized, ct);
+        if (duplicate is not null) return Ok(_mapper.Map<ExperienceTypeRecord>(duplicate));
+
         var entity = new ExperienceType
         {
             Id                   = Guid.NewGuid(),
             ExperienceCategoryId = categoryId,
-            Name                 = request.Name.Trim(),
+            Name                 = name,
             Description          = request.Description?.Trim(),
             IconClass            = request.IconClass?.Trim(),
             SortOrder            = request.SortOrder,
@@ -233,16 +246,44 @@ public sealed class AdminExperienceTypeController : BenControllerBase
         return CreatedAtAction(nameof(GetAll), new { categoryId }, _mapper.Map<ExperienceTypeRecord>(entity));
     }
 
+    /// <summary>
+    /// Renames a type, or says the name is taken in this category and offers to merge.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A collision is refused, not silently applied.</b> Renaming "Knockign" to "Knocking"
+    /// when "Knocking" exists used to leave two identical rows in one category — which is the exact
+    /// mess the rename was trying to clear up, now with the added property that nobody can tell the
+    /// two apart. The 409 carries the id it collided with, so the merge can be chosen deliberately.
+    /// </para>
+    ///
+    /// <para>The merge itself is a separate call because it is not undoable: taggings move and a row
+    /// disappears, and only the person renaming knows whether the two words really mean one thing.
+    /// </para>
+    /// </remarks>
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<ExperienceTypeRecord>> Update(
         Guid categoryId, Guid id, [FromBody] UpsertExperienceTypeRequest request, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
+        var name = request.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(name)) return BadRequest("A name is required.");
+
         await using var db = await _db.CreateDbContextAsync(ct);
         var entity = await db.ExperienceTypes
             .FirstOrDefaultAsync(t => t.Id == id && t.ExperienceCategoryId == categoryId, ct);
         if (entity is null) return NotFound();
-        entity.Name                = request.Name.Trim();
+
+        var normalized = name.ToLowerInvariant();
+        var clash = await db.ExperienceTypes.AsNoTracking().FirstOrDefaultAsync(
+            t => t.Id != id && t.ExperienceCategoryId == categoryId && t.Name.ToLower() == normalized, ct);
+
+        if (clash is not null)
+            return Conflict(new TaxonomyMergeOffer(
+                entity.Id, entity.Name, clash.Id, clash.Name,
+                $"\"{clash.Name}\" already exists in this category. Merging moves everything tagged "
+                + $"\"{entity.Name}\" onto it and removes the duplicate. That cannot be undone."));
+
+        entity.Name                = name;
         entity.Description         = request.Description?.Trim();
         entity.IconClass           = request.IconClass?.Trim();
         entity.SortOrder           = request.SortOrder;
@@ -253,6 +294,85 @@ public sealed class AdminExperienceTypeController : BenControllerBase
         return Ok(_mapper.Map<ExperienceTypeRecord>(entity));
     }
 
+    /// <summary>
+    /// Folds one type into another in the same category: its taggings move across, and it goes.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Refused when it would lose a review.</b> Merging a human-reviewed type into an
+    /// unreviewed one is almost always the direction reversed — somebody correcting a typo has the
+    /// two the wrong way round — and the result would be a taxonomy where the endorsed word vanished
+    /// and the slip survived.</para>
+    ///
+    /// <para><b>Same category only.</b> Moving a tagging from <i>Visual</i> to <i>Auditory</i>
+    /// changes what somebody recorded about their own night, which is not a rename.</para>
+    ///
+    /// <para><b>Taggings are deleted and re-added, not repointed.</b> The join's primary key is the
+    /// pair (entry, type), and EF refuses to modify a key property on a tracked entity — so
+    /// assigning the new type id would throw rather than move the row. An entry already tagged with
+    /// both types simply loses the source row and keeps the one it has.</para>
+    /// </remarks>
+    [HttpPost("{id:guid}/merge-into/{targetId:guid}")]
+    public async Task<IActionResult> Merge(
+        Guid categoryId, Guid id, Guid targetId, CancellationToken ct)
+    {
+        if (id == targetId) return BadRequest("A type cannot be merged into itself.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var source = await db.ExperienceTypes
+            .FirstOrDefaultAsync(t => t.Id == id && t.ExperienceCategoryId == categoryId, ct);
+        var target = await db.ExperienceTypes
+            .FirstOrDefaultAsync(t => t.Id == targetId && t.ExperienceCategoryId == categoryId, ct);
+        if (source is null || target is null) return NotFound();
+
+        // "Reviewed" is approved-with-an-approver: an org-proposed type is live (IsApproved) but
+        // unreviewed until a human stamps ApprovedByAppUserId, so IsApproved alone cannot tell the
+        // endorsed word from the one somebody typed last night.
+        if (source.ApprovedByAppUserId is not null && target.ApprovedByAppUserId is null)
+            return Conflict(
+                $"\"{source.Name}\" has been reviewed and \"{target.Name}\" has not. Merge the other "
+                + "way round, or review the target first — otherwise the endorsed word is the one "
+                + "that disappears.");
+
+        var sourceUsages = await db.CaseTimelineEntryExperienceTypes
+            .Where(x => x.ExperienceTypeId == source.Id).ToListAsync(ct);
+        var targetEntryIds = await db.CaseTimelineEntryExperienceTypes.AsNoTracking()
+            .Where(x => x.ExperienceTypeId == target.Id)
+            .Select(x => x.CaseTimelineEntryId)
+            .ToListAsync(ct);
+
+        await using var tx = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(ct)
+            : null;
+
+        db.CaseTimelineEntryExperienceTypes.RemoveRange(sourceUsages);
+
+        foreach (var usage in sourceUsages.Where(u => !targetEntryIds.Contains(u.CaseTimelineEntryId)))
+        {
+            db.CaseTimelineEntryExperienceTypes.Add(new CaseTimelineEntryExperienceType
+            {
+                CaseTimelineEntryId = usage.CaseTimelineEntryId,
+                ExperienceTypeId    = target.Id,
+            });
+        }
+
+        db.ExperienceTypes.Remove(source);
+        await db.SaveChangesAsync(ct);
+
+        if (tx is not null) await tx.CommitAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Removes a type that nothing is tagged with.
+    /// </summary>
+    /// <remarks>
+    /// A type in use is refused rather than deleted. The foreign key is <c>NoAction</c>, so the old
+    /// unguarded delete did not quietly strip the taggings — it failed at the database with a
+    /// constraint violation and surfaced as a 500, which told the administrator nothing about what
+    /// was wrong or what to do instead. Rejecting is the operation that removes a type <i>and</i>
+    /// its taggings, and it reports the count; this says so.
+    /// </remarks>
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid categoryId, Guid id, CancellationToken ct)
     {
@@ -260,6 +380,17 @@ public sealed class AdminExperienceTypeController : BenControllerBase
         var entity = await db.ExperienceTypes
             .FirstOrDefaultAsync(t => t.Id == id && t.ExperienceCategoryId == categoryId, ct);
         if (entity is null) return NotFound();
+
+        var usages = await db.CaseTimelineEntryExperienceTypes
+            .CountAsync(x => x.ExperienceTypeId == id, ct);
+
+        if (usages > 0)
+            return Conflict(
+                $"\"{entity.Name}\" is tagged on {usages} timeline "
+                + (usages == 1 ? "entry" : "entries")
+                + ". Reject it instead to remove the tags with it, or merge it into the type it "
+                + "should have been.");
+
         db.ExperienceTypes.Remove(entity);
         await db.SaveChangesAsync(ct);
         return NoContent();

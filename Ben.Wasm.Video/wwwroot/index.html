@@ -7,41 +7,83 @@
     <title>Ben Video Editor</title>
     <base href="/" />
     <link rel="preload" id="webassembly" />
-    <link rel="stylesheet" href="css/app.css" />
-    <link rel="icon" type="image/png" href="favicon.png" />
-    <!-- RCL scoped CSS — must be linked here so it resolves from / not from the current route -->
-    <link href="_content/Ben.Video.Editor/Ben.Video.Editor.bundle.scp.css" rel="stylesheet" />
-    <!-- Intercept Blazor-injected <link> tags that use relative _content/ paths.
-         On sub-routes like /editor the relative path resolves to /editor/_content/...
-         instead of /_content/... — this observer fixes it before the browser requests it.
-         (Carried over from Ben.Video.App, where this bit on every sub-route.) -->
+    <!-- Theme before anything paints. Mirrors the site's ben-boot.js convention — the same
+         layoutSettings/ben-theme keys — so a browser that has been to the site opens the editor
+         in the theme chosen there. Kept inline and render-blocking: loading it as a file would
+         let the page paint light first and flash. -->
     <script>
       (function () {
-        const fix = node => {
-          if (node.nodeType !== 1 || node.tagName !== 'LINK') return;
-          const href = node.getAttribute('href') || '';
-          if (href && !href.startsWith('/') && !href.startsWith('http') && href.includes('_content/')) {
-            node.setAttribute('href', '/' + href);
-          }
-        };
-        const observer = new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(fix)));
-        observer.observe(document.head, { childList: true });
+        var theme;
+        try {
+          var settings = JSON.parse(localStorage.getItem('layoutSettings') || '{}');
+          theme = settings.theme;
+          if (theme !== 'light' && theme !== 'dark') theme = localStorage.getItem('ben-theme');
+        } catch (e) { /* storage blocked — fall through to the OS preference */ }
+
+        // Dark by default, by preference: an editor is looked at for hours against video, and a
+        // bright chrome around a dark picture is the wrong way round. The OS preference is not
+        // consulted — someone who wants light picks it once with the toggle and it sticks.
+        if (theme !== 'light' && theme !== 'dark') theme = 'dark';
+        document.documentElement.setAttribute('data-bs-theme', theme);
       })();
+
+      /* Flips the theme and writes it back under the template's own keys, so the choice carries
+         to the site and back. Plain global rather than JS interop: the button is host chrome and
+         needs no Blazor round-trip to paint. */
+      function benToggleTheme() {
+        var root = document.documentElement;
+        var next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-bs-theme', next);
+        try {
+          localStorage.setItem('layoutSettings', JSON.stringify({ theme: next }));
+          localStorage.setItem('ben-theme', next);
+        } catch (e) { /* storage blocked — the choice lasts for this page only */ }
+      }
     </script>
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <!-- Scoped component CSS, through this app's own bundle rather than the library's.
+         Ben.Wasm.Video.styles.css is a one-line @import of the RCL bundle, and publish fingerprints
+         that bundle (Ben.Video.Editor.57vsoqoxwu.bundle.scp.css) while leaving this file's name
+         alone — so this is the stable address, and the import inside it always names the current
+         build. Linking the RCL bundle directly, as this did, worked in development and 404'd in
+         every published build: the browser hands back a stylesheet object with zero rules for a
+         404, so nothing errored and the editor simply rendered with no component styling at all. -->
+    <link href="Ben.Wasm.Video.styles.css" rel="stylesheet" />
+    <!-- An observer used to live here that rewrote every relative _content/… href to a
+         root-absolute /_content/… one, to survive sub-routes like /editor. It was solving a
+         problem <base href> already solves: a relative URL resolves against the base, not against
+         the current route, so the plain relative paths below are correct on every route.
+
+         It has been removed because it was actively wrong for the deployed editor. Production
+         serves the app from https://ishaunted.com/editor/, and rewriting to the site root sent
+         the Kendo theme, both Ben.Video stylesheets and every injected link to an address one
+         directory above where they are published — a 404 each, and an unstyled editor. -->
     <script type="importmap"></script>
-    <!-- Telerik theme, served from the NuGet package — no vendored theme tree in this host.
-         The site's own ben-light/ben-dark styling applies when the editor is reached through the
-         site; this standalone host just needs the components to render correctly. -->
-    <link href="_content/Telerik.UI.for.Blazor/css/kendo-theme-meridian/all.css" rel="stylesheet" />
+    <!-- Kendo's Bootstrap flavour, the same starting point the site uses, so both hosts are
+         correcting the same baseline. Meridian was here before and is a *light* theme, which is
+         why this host rendered light while the site is dark. -->
+    <link href="_content/Telerik.UI.for.Blazor/css/kendo-theme-bootstrap/all.css" rel="stylesheet" />
+    <!-- The site's palette, and the Kendo remap built on it. Must come AFTER the Kendo theme:
+         both define their variables on :root, so the later file wins. Loaded before the theme
+         first time round, which left the Kendo baseline in charge and the editor painting itself
+         white on a dark page. -->
+    <link rel="stylesheet" href="css/site-palette.css" />
     <!-- Ben.Video CSS variable fallbacks — must load after theme, before RCL component CSS -->
     <link href="_content/Ben.Video.Editor/css/ben-video-variables.css" rel="stylesheet" />
+    <!-- …and the map onto the site palette, which must win over both of the above. -->
+    <link href="_content/Ben.Video.Editor/css/ben-video-theme.css" rel="stylesheet" />
+    <!-- This host's own shell (page ground, login screen). Last, so its rules beat the Kendo
+         baseline rather than losing to it — it sat before the theme and was being overridden. -->
+    <link rel="stylesheet" href="css/app.css" />
     <!-- Telerik Blazor JS — served from local NuGet package (avoids CDN latency/availability) -->
     <script src="_content/Telerik.UI.for.Blazor/js/telerik-blazor.js"></script>
     <!-- ffmpeg.wasm — served locally so the worker chunk (814.ffmpeg.js) is same-origin -->
+    <script src="_content/Ben.Video.Editor/js/moduleLoader.js"></script>
     <script src="_content/Ben.Video.Editor/js/ffmpeg.umd.js"></script>
 </head>
 
-<body>
+<!-- k-body is what the Kendo theme keys its base type and colour off, the same as the site. -->
+<body class="k-body">
     <div id="app">
         <svg class="loading-progress">
             <circle r="40%" cx="50%" cy="50%" />

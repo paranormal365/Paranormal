@@ -1,0 +1,259 @@
+@namespace Ben.Web.Website.Library.Organization.Equipment
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+
+@* Add or edit a piece of the group's own gear. TelerikWindow with an in-content footer — never
+   TelerikDialog (its inputs never reach Blazor) and never WindowActions (they render detached). *@
+
+<BenModal Visible="@Visible" Title="@(Item is null ? "Add group equipment" : "Edit equipment")">
+    <ChildContent>
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger py-2">@_error</div>
+        }
+
+        <div class="mb-2">
+            <label class="form-label fw-semibold">Category</label>
+            <BenSelect Data="@_categories" Value="@_categoryId" ValueChanged="@((Guid? v) => OnCategoryChangedAsync(v))" TextField="@nameof(EquipmentCategoryRecord.Name)" ValueField="@nameof(EquipmentCategoryRecord.Id)" DefaultText="Choose a category…" Width="100%" />
+        </div>
+
+        <div class="mb-2">
+            <label class="form-label fw-semibold">Make</label>
+            <BenSelect Data="@_brands" Value="@_brandId" ValueChanged="@((Guid? v) => OnBrandChangedAsync(v))" TextField="@nameof(EquipmentBrandRecord.Name)" ValueField="@nameof(EquipmentBrandRecord.Id)" DefaultText="Choose a make…" Width="100%" Enabled="@(_categoryId is not null)" />
+        </div>
+
+        <div class="mb-2">
+            <label class="form-label fw-semibold">Model</label>
+            <BenSelect Data="@_models" Value="@_modelId" ValueChanged="@((Guid? v) => _modelId = v)" TextField="@nameof(EquipmentModelRecord.Name)" ValueField="@nameof(EquipmentModelRecord.Id)" DefaultText="Choose a model…" Width="100%" Enabled="@(_brandId is not null)" />
+        </div>
+
+        @* Plain inputs: Telerik text boxes commit on blur, which drops the last keystroke when
+           Save is clicked straight from the field — and Save is gated on this one. *@
+        <div class="mb-2">
+            <label class="form-label fw-semibold" for="orgequipmenteditor-what-the-group-calls-d894">What the group calls it</label>
+            <input id="orgequipmenteditor-what-the-group-calls-d894" class="form-control" maxlength="200" value="@_displayName"
+                   @oninput="@(e => _displayName = e.Value?.ToString() ?? string.Empty)" />
+        </div>
+
+        <div class="row g-2 mb-2">
+            <div class="col-md-6">
+                <label class="form-label fw-semibold" for="orgequipmenteditor-serial-number-5121">Serial number</label>
+                <input id="orgequipmenteditor-serial-number-5121" class="form-control" maxlength="100" value="@_serialNumber"
+                       @oninput="@(e => _serialNumber = e.Value?.ToString() ?? string.Empty)" />
+                <span class="text-secondary small">Only visible to people who can manage equipment.</span>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Acquired</label>
+                <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_acquisitionDate" Width="100%" />
+            </div>
+        </div>
+
+        <div class="mb-2">
+            <label class="form-label fw-semibold" for="orgequipmenteditor-notes-44c2">Notes</label>
+            <textarea id="orgequipmenteditor-notes-44c2" class="form-control" rows="2" maxlength="2000" value="@_notes"
+                      @oninput="@(e => _notes = e.Value?.ToString() ?? string.Empty)"></textarea>
+        </div>
+
+        <div class="mb-2">
+            <label class="form-label fw-semibold" for="orgequipmenteditor-manufacturer-s-page-5dba">Manufacturer's page</label>
+            <input id="orgequipmenteditor-manufacturer-s-page-5dba" class="form-control" maxlength="500" placeholder="https://…" value="@_websiteUrl"
+                   @oninput="@(e => _websiteUrl = e.Value?.ToString() ?? string.Empty)" />
+            <div class="form-text">
+                Optional. Gathered with everyone else's links on this make and model's catalog page.
+            </div>
+        </div>
+
+        <div class="d-flex align-items-start gap-2">
+            <input type="checkbox" class="form-check-input mt-1" id="org-eq-global"
+                   checked="@_includeInGlobalCatalog"
+                   @onchange="@(e => _includeInGlobalCatalog = (bool)(e.Value ?? false))" />
+            <label for="org-eq-global" class="mb-0">
+                List this in the public catalog
+                <span class="d-block text-secondary small">
+                    Shows the piece and its photos publicly. Never the serial number.
+                </span>
+            </label>
+        </div>
+
+        @* The capability this editor has claimed since phase 3, finally real. *@
+        @if (Item is not null)
+        {
+            <div class="mb-2">
+                <label class="form-label fw-semibold">Photos</label>
+                @* Its own list rather than Item.Photos: the parent's reload does not hand this
+                   window a fresh record, so without this the strip would show a stale tick after
+                   a photo is added, removed or hidden from the model page. *@
+                <Ben.Web.Website.Library.Equipment.EquipmentPhotoStrip ItemId="@Item.Id"
+                                                              OrgId="@OrgId"
+                                                              CanEdit="true"
+                                                              Photos="@_photos"
+                                                              OnChanged="ReloadPhotosAsync" />
+            </div>
+        }
+        else
+        {
+            <p class="text-secondary small">Photos can be added once the piece is saved.</p>
+        }
+
+        <div class="dialog-footer-actions">
+            @if (Item is not null)
+            {
+                <button type="button" class="btn btn-secondary" @onclick="ToggleRetiredAsync" disabled="@(!(!_busy))">
+                    @(Item.IsRetired ? "Put back in service" : "Retire")
+                </button>
+            }
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-secondary" @onclick="@(() => OnVisibleChanged(false))" disabled="@(!(!_busy))">Cancel</button>
+            <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(!(!_busy && _modelId is not null && !string.IsNullOrWhiteSpace(_displayName)))">Save</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter] public EquipmentItemRecord? Item { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private List<EquipmentCategoryRecord> _categories = [];
+    private List<EquipmentBrandRecord> _brands = [];
+    private List<EquipmentModelRecord> _models = [];
+
+    private Guid? _categoryId, _brandId, _modelId;
+    private string _displayName = string.Empty;
+    private string _serialNumber = string.Empty;
+    private DateTime? _acquisitionDate;
+    private string _notes = string.Empty;
+    private string _websiteUrl = string.Empty;
+    private bool _includeInGlobalCatalog;
+    private IReadOnlyList<EquipmentItemPhotoRecord> _photos = [];
+
+    private bool _busy;
+    private string? _error;
+    private Guid? _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Visible) { _loadedFor = null; return; }
+
+        var key = Item?.Id ?? Guid.Empty;
+        if (_loadedFor == key) return;
+        _loadedFor = key;
+        _error = null;
+
+        if (_categories.Count == 0)
+            _categories = [.. await AdminClient.GetEquipmentCategoriesAsync()];
+        _brands = [.. await AdminClient.GetEquipmentBrandsAsync()];
+
+        if (Item is null)
+        {
+            _categoryId = null; _brandId = null; _modelId = null;
+            _displayName = string.Empty; _serialNumber = string.Empty;
+            _acquisitionDate = null; _notes = string.Empty;
+            _websiteUrl = string.Empty;
+            _includeInGlobalCatalog = false;
+            _models = [];
+            _photos = [];
+        }
+        else
+        {
+            _photos = Item.Photos;
+            _modelId         = Item.EquipmentModelId;
+            _displayName     = Item.DisplayName;
+            _serialNumber    = Item.SerialNumber ?? string.Empty;
+            _acquisitionDate = Item.AcquisitionDate;
+            _notes           = Item.Notes ?? string.Empty;
+            _websiteUrl      = Item.WebsiteUrl ?? string.Empty;
+            _includeInGlobalCatalog = Item.IncludeInGlobalCatalog;
+
+            // Work back from the model so the cascading pickers open on the right rungs.
+            _categoryId = _categories.FirstOrDefault(c => c.Name == Item.CategoryName)?.Id;
+            _brandId    = _brands.FirstOrDefault(b => b.Name == Item.BrandName)?.Id;
+            if (_brandId is not null)
+                _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)];
+        }
+    }
+
+    /// <summary>
+    /// Re-reads this piece after any photo change. The unified item endpoint answers rather than an
+    /// org-specific one — it already serves equipment managers everything they may see, so there is
+    /// no second projection to keep in step with the first.
+    /// </summary>
+    private async Task ReloadPhotosAsync()
+    {
+        if (Item is null) return;
+        var refreshed = await AdminClient.GetEquipmentItemAsync(Item.Id);
+        if (refreshed is not null) _photos = refreshed.Photos;
+        await OnSaved.InvokeAsync();
+    }
+
+    private async Task OnCategoryChangedAsync(Guid? categoryId)
+    {
+        _categoryId = categoryId;
+        _brandId = null; _modelId = null; _models = [];
+        await Task.CompletedTask;
+    }
+
+    private async Task OnBrandChangedAsync(Guid? brandId)
+    {
+        _brandId = brandId;
+        _modelId = null;
+        _models = brandId is null ? [] : [.. await AdminClient.GetEquipmentModelsForBrandAsync(brandId.Value, _categoryId)];
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_modelId is null) return;
+        _busy = true;
+        _error = null;
+
+        var request = new UpsertOrgEquipmentItemRequest(
+            _modelId.Value,
+            _displayName.Trim(),
+            string.IsNullOrWhiteSpace(_serialNumber) ? null : _serialNumber.Trim(),
+            _acquisitionDate,
+            string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim(),
+            _includeInGlobalCatalog,
+            string.IsNullOrWhiteSpace(_websiteUrl) ? null : _websiteUrl.Trim());
+
+        var saved = Item is null
+            ? await AdminClient.CreateOrgEquipmentAsync(OrgId, request)
+            : await AdminClient.UpdateOrgEquipmentAsync(OrgId, Item.Id, request);
+
+        _busy = false;
+
+        if (saved is null)
+        {
+            _error = "That couldn't be saved. You may no longer have permission to manage this group's equipment.";
+            return;
+        }
+
+        await OnSaved.InvokeAsync();
+        await OnVisibleChanged(false);
+    }
+
+    private async Task ToggleRetiredAsync()
+    {
+        if (Item is null) return;
+        _busy = true;
+        _error = null;
+
+        if (!await AdminClient.RetireOrgEquipmentAsync(OrgId, Item.Id, !Item.IsRetired))
+            _error = Item.IsRetired
+                ? "That couldn't be put back in service."
+                : "That couldn't be retired — it may be out on loan right now.";
+
+        _busy = false;
+        await OnSaved.InvokeAsync();
+        if (_error is null) await OnVisibleChanged(false);
+    }
+
+    private async Task OnVisibleChanged(bool visible)
+    {
+        Visible = visible;
+        if (!visible) _loadedFor = null;
+        await VisibleChanged.InvokeAsync(visible);
+    }
+}

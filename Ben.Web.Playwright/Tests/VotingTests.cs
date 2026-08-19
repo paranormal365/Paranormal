@@ -115,6 +115,16 @@ public class VotingTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/o/{TghUrlName}/cases/{TghCaseRef}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
+        // Start from "no vote". These tests write real votes, and the vote buttons toggle — so a
+        // run that inherited a vote from the previous one un-voted here instead of voting, leaving
+        // nothing to assert on. That is what made this fail intermittently rather than never.
+        var existing = Page.GetByRole(AriaRole.Button, new() { Name = "Remove" }).First;
+        if (await existing.CountAsync() > 0 && await existing.IsVisibleAsync())
+        {
+            await existing.ClickAsync();
+            await Expect(existing).ToBeHiddenAsync(new() { Timeout = 8_000 });
+        }
+
         // Cast a vote
         await Page.GetByRole(AriaRole.Button, new() { Name = "✓ Confirms" }).ClickAsync();
         await Page.WaitForTimeoutAsync(600);

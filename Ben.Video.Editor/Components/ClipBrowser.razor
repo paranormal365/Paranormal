@@ -226,11 +226,11 @@
 
     private async Task<IJSObjectReference> DomAsync() =>
         _dom ??= await JS.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/js/domInterop.js");
+            "benImportEditorModule", "js/domInterop.js");
 
     private async Task<IJSObjectReference> StorageAsync() =>
         _storage ??= await JS.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/js/storageInterop.js");
+            "benImportEditorModule", "js/storageInterop.js");
 
 
     // The grids below (VideoClipGrid/AudioClipGrid/ImageClipGrid/LibraryFileGrid) are built with raw
@@ -1237,6 +1237,7 @@
                 {
                     Id = clipId, Name = file.FileName, MemFsName = memFsName,
                     Duration = meta.Duration, Width = meta.Width, Height = meta.Height,
+                    HasAudio = meta.HasAudio,
                     ThumbnailUrls = [.. thumbs], OpfsExt = ext,
                 };
                 // OnAddToTimeline (→ VideoEditor.AddClipToTimeline) both registers the clip on
@@ -1375,6 +1376,8 @@
         // VideoEditor.OpenFilesAsync is what makes the button actually *work* in that state.
         => await (await DomAsync()).InvokeVoidAsync("click", "#bv-file-input", false);
 
+    private void OnFfmpegStateChanged() => InvokeAsync(StateHasChanged);
+
     // ── Pin / float window ────────────────────────────────────────────────────
 
     protected override async Task OnInitializedAsync()
@@ -1384,6 +1387,11 @@
         // a parameter change, so this component needs its own OnChange subscription to see it —
         // OnParametersSet alone misses shared-state changes (same lesson as phase 95/LiveOverlayPreview).
         Clips.OnChange += StateHasChanged;
+
+        // Same reasoning, for the ffmpeg service: this grid's cards and their controls read its
+        // state directly, and a state change is not a parameter change, so nothing would re-render
+        // them. Item 94 — a control that goes on showing what was true at its last paint.
+        Ffmpeg.OnStateChanged += OnFfmpegStateChanged;
 
         try
         {
@@ -1400,7 +1408,7 @@
         try
         {
             _dragBridgeModule = await JS.InvokeAsync<IJSObjectReference>(
-                "import", "/_content/Ben.Video.Editor/js/clipDragBridge.js");
+                "benImportEditorModule", "js/clipDragBridge.js");
             _dragSourceRef = DotNetObjectReference.Create(this);
             await _dragBridgeModule.InvokeVoidAsync("registerDragSource", _dragSourceRef);
         }
@@ -1409,6 +1417,9 @@
 
     public async ValueTask DisposeAsync()
     {
+        Clips.OnChange        -= StateHasChanged;
+        Ffmpeg.OnStateChanged -= OnFfmpegStateChanged;
+
         // Audit #4 — release the cached interop module handles. Guarded because teardown races
         // circuit shutdown: once the circuit is gone the module is already unreachable and
         // disposing it throws, which must not surface as an error during a normal navigation.
@@ -1592,6 +1603,7 @@
             {
                 Id = clipId, Name = status.FileName, MemFsName = memFsName,
                 Duration = meta.Duration, Width = meta.Width, Height = meta.Height,
+                    HasAudio = meta.HasAudio,
                 ThumbnailUrls = [.. thumbs], OpfsExt = ext,
             };
             Clips.AddClip(videoClip);

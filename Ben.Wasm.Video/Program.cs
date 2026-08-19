@@ -34,6 +34,10 @@ builder.Services.AddBenVideoEditor(options =>
     // persistence, in-browser render — which is also the safe state for a fresh checkout.
     if (string.IsNullOrEmpty(apiBaseUrl)) return;
 
+    // Without this the Server tab is never rendered at all — the host wired up the media-library
+    // client, the base URL and the sign-in that authorises it, and then left the one flag that
+    // puts the tab on screen at its default of false. Signing in appeared to do nothing.
+    options.MediaLibrary        = true;
     options.MediaLibraryBaseUrl = apiBaseUrl;
     options.AssetCatalogUrl     = apiBaseUrl;
     options.DocumentPostUrl     = $"{apiBaseUrl}/api/video-projects";

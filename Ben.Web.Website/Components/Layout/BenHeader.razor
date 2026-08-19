@@ -1,0 +1,107 @@
+@implements IDisposable
+
+@inject IWebApiTokenStore TokenStore
+
+@*
+    The template's app-header.
+
+    The layout controls (theme, nav-minify, mobile menu, settings drawer, fullscreen) keep the
+    template's own markup and data-action attributes — including its two-icon theme switcher,
+    where CSS shows the sun or the moon based on data-bs-theme rather than Blazor re-rendering
+    the icon. ben-boot.js implements that data-action contract; those handlers only ever touch
+    <html>'s class list and localStorage, never Blazor-rendered DOM.
+
+    The parts that are genuinely app state rather than layout state — the notification bell, the
+    user menu, the admin panel toggle — are Blazor components with C#-owned open state.
+*@
+
+<header class="app-header">
+
+    @* align-self-stretch is what lets the brand block reach the full height of the header. Without
+       it this wrapper is only as tall as its tallest child — 30px — and the brand's own stretch
+       can never exceed it, leaving the navigation's colour as a floating strip with white above
+       and below it. The children stay centred; only this box grows. *@
+    <div class="d-flex flex-grow-1 w-100 me-auto align-items-center align-self-stretch">
+
+        @* Logo and wordmark sit ahead of the toggles, as in the template's own header.
+           Deliberately NOT the template's .app-logo class: that is a fixed 252px block shaped
+           around the template's own logo markup, and our wordmark overflows it straight under
+           the toggle button. This one sizes to its content. *@
+        <a href="/" class="ben-brand d-flex align-items-center gap-2 me-3 flex-shrink-0">
+            <img src="/static/images/is-haunted-logo.svg" alt="" style="height:30px;width:auto;" />
+            <span class="is-haunted-text d-none d-sm-inline">
+                <strong>Is</strong><em>Haunted</em><span class="opacity-75">.com</span>
+            </span>
+        </a>
+
+        <button class="mobile-menu-icon me-2 d-flex d-lg-none flex-shrink-0" type="button"
+                data-action="toggle-swap" data-toggleclass="app-mobile-menu-open"
+                aria-label="Toggle Mobile Menu">
+            <BenIcon Name="menu" />
+        </button>
+
+        <button type="button" class="collapse-icon me-3 d-none d-lg-inline-flex"
+                data-action="toggle" data-class="set-nav-minified"
+                aria-label="Toggle Navigation Size">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 5 8">
+                <polygon fill="currentColor" points="4.5,1 3.8,0.2 0,4 3.8,7.8 4.5,7 1.5,4" />
+            </svg>
+        </button>
+    </div>
+
+    @* No settings drawer: the template's layout options (fixed header, nav variants, skins) are
+       decisions this site makes once rather than settings to hand the visitor. Light/dark stays,
+       because that is a genuine viewing preference. *@
+
+    <!-- Theme modes: the template's own switcher. Both icons render; CSS picks which is shown. -->
+    <button type="button" class="btn btn-system" data-action="toggle-theme"
+            aria-label="Toggle Dark Mode" aria-pressed="false">
+        <BenIcon Name="sun" Class="sa-icon-2x sa-mode-light" />
+        <BenIcon Name="moon" Class="sa-icon-2x sa-mode-dark" />
+    </button>
+
+    <!-- Full screen -->
+    <button type="button" class="btn btn-system d-none d-lg-block" data-action="app-fullscreen"
+            aria-label="Toggle Fullscreen" aria-pressed="false">
+        <BenIcon Name="minimize" Class="sa-icon-2x sa-fullscreen-on" />
+        <BenIcon Name="maximize" Class="sa-icon-2x sa-fullscreen-off" />
+    </button>
+
+    @if (IsAuthenticated)
+    {
+        <BenNotificationBell />
+    }
+
+    @* No admin button here: Administration is an expandable group in the sidebar (see BenNav),
+       so there is one place to look for navigation instead of two. *@
+
+    @if (IsAuthenticated)
+    {
+        <BenUserMenu OnSignOut="OnSignOut" />
+    }
+    else
+    {
+        @* btn-system, like the other header controls — a filled primary button here reads as a
+           call to action sitting in a row of chrome icons. The label is small and inherits the
+           icon's colour so it reads as one control; text-nowrap because it wraps inside the
+           header's fixed-height row otherwise. *@
+        <a class="btn btn-system ben-signin text-nowrap d-flex align-items-center gap-1" href="/login">
+            <BenIcon Name="log-in" Class="sa-icon-2x" />
+            <span class="ben-signin-text d-none d-sm-inline">Sign In</span>
+        </a>
+    }
+</header>
+
+@code {
+    /// <summary>Passed down by MainLayout — see the note at its call site for why this is a
+    /// parameter rather than a read of the token store.</summary>
+    [Parameter] public bool IsAuthenticated { get; set; }
+
+    [Parameter] public EventCallback OnSignOut { get; set; }
+
+    protected override void OnInitialized() => TokenStore.StateChanged += OnAuthChanged;
+
+    private void OnAuthChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => TokenStore.StateChanged -= OnAuthChanged;
+}

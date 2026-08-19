@@ -1,6 +1,6 @@
 using Ben.Service.Models.Entities;
-using Ben.Web.Library.Services;
-using Ben.Web.WebApp.Services.WebApi;
+using Ben.Web.Services;
+using Ben.Web.Services.WebApi;
 using Moq;
 using Xunit;
 
@@ -20,7 +20,7 @@ public class CmsFileLibraryTests
     private static BenAdminClientAdapter Build(
         Mock<IWebApiClient> api, Mock<IWebApiAuthService>? auth = null)
         => new BenAdminClientAdapter(api.Object, (auth ?? AuthMock()).Object,
-            Microsoft.Extensions.Options.Options.Create(new Ben.Web.WebApp.Services.WebApi.WebApiOptions()));
+            Microsoft.Extensions.Options.Options.Create(new Ben.Web.Services.WebApi.WebApiOptions()));
 
     // ── GetOrgSharedFilesAsync ────────────────────────────────────────────────
 

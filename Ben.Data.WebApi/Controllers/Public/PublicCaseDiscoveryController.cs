@@ -77,6 +77,12 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
         var items = cases.Select(c =>
         {
             voteCounts.TryGetValue(c.Id, out var vc);
+
+            // The field names have promised this since the endpoint was written; until now nothing
+            // performed it. Redacted here, in the projection, so the exact coordinates are never in
+            // the response for a client to ignore.
+            var (approxLat, approxLon) = PublicCoordinates.Approximate(c.Latitude, c.Longitude);
+
             return new PublicCaseDiscoveryItem(
                 CaseId:            c.Id,
                 CaseReference:     $"#{c.CaseYear}-{c.OrgCaseNumber:D3}",
@@ -93,9 +99,11 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
                 ConfirmsCount:     vc?.Confirms     ?? 0,
                 DisputesCount:     vc?.Disputes     ?? 0,
                 InconclusiveCount: vc?.Inconclusive ?? 0,
+                Score:             EvidenceVoteScore.FromCounts(
+                                       vc?.Confirms ?? 0, vc?.Disputes ?? 0, vc?.Inconclusive ?? 0),
                 TotalVotes:        vc?.Total        ?? 0,
-                ApproxLatitude:    c.Latitude,
-                ApproxLongitude:   c.Longitude,
+                ApproxLatitude:    approxLat,
+                ApproxLongitude:   approxLon,
                 ClientName:        PublicClientName.For(c));
         }).ToList();
 
@@ -147,6 +155,7 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
                 ConfirmsCount:     caseVotes.Count(v => v.VoteType == EvidenceVoteType.Confirms),
                 DisputesCount:     caseVotes.Count(v => v.VoteType == EvidenceVoteType.Disputes),
                 InconclusiveCount: caseVotes.Count(v => v.VoteType == EvidenceVoteType.Inconclusive),
+                Score:             EvidenceVoteScore.Score(caseVotes.Select(v => v.VoteType)),
                 TotalVotes:        caseVotes.Count,
                 CurrentUserVote:   myVote);
         }).ToList();
@@ -180,6 +189,9 @@ public sealed record PublicCaseDiscoveryItem(
     int      DisputesCount,
     int      InconclusiveCount,
     int      TotalVotes,
+    // Signed total: +1 confirms, 0 inconclusive, -1 disputes. From EvidenceVoteScore, never
+    // recomputed by a reader — the counts beside it are what make it trustworthy, not a substitute.
+    int      Score,
     decimal? ApproxLatitude,
     decimal? ApproxLongitude,
     string?  ClientName);

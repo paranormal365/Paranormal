@@ -1,0 +1,676 @@
+@*
+  WsRegionExplorer.razor
+  ──────────────────────
+  Full-featured explorer window for a selected WaveSurfer region.
+
+  • Loads ONLY the region’s audio (server-side WAV clip, no DB record).
+  • All times displayed are relative to the region start (clip time 0 = Region.Start).
+  • Notes shown are filtered to those whose RegionStart/End matches this region or
+    whose TimeOffset falls within [Region.Start, Region.End].
+  • Point-in-time notes are stored with absolute file time (Region.Start + clip time).
+  • Sub-regions can be drawn with click-drag; their times are relative to the clip.
+  • Sub-region “Explore” / “Save” converts back to absolute original-file coordinates.
+*@
+
+@namespace Ben.Web.Website.Library.Manage.Audio
+@using Telerik.Blazor.Components.Editor
+@inject IBenAdminClient AdminClient
+@inject IBenUserState   UserState
+
+<BenModal @bind-Visible="@Visible" Title="@RegionTitle" Size="sm">
+    <ChildContent>
+        @if (_loading)
+        {
+            <div class="d-flex align-items-center justify-content-center h-100">
+                <span class="spinner-border text-primary" role="status"></span>
+                <span class="ms-3">Loading audio…</span>
+            </div>
+        }
+        else if (_loadError is not null)
+        {
+            <div class="alert alert-danger m-3">@_loadError</div>
+        }
+        else
+        {
+            <div class="d-flex gap-3 h-100" style="overflow:hidden;">
+
+                @* ══ Left — player + controls ══════════════════════════════════ *@
+                <div class="d-flex flex-column" style="flex:2.5;min-width:0;overflow:hidden;">
+
+                    @* Info bar *@
+                    <div class="d-flex flex-wrap gap-3 mb-2 p-2 rounded small"
+                         style="background:var(--kendo-color-surface,#f5f5f5);flex:0 0 auto;">
+                        <span><strong>Start:</strong> @FormatTime(Region!.Start)</span>
+                        <span><strong>End:</strong> @FormatTime(Region!.End)</span>
+                        <span><strong>Duration:</strong> @FormatTime(Region!.End - Region!.Start)</span>
+                        <span><strong>File:</strong> @FileName</span>
+                        @if (!string.IsNullOrWhiteSpace(Region!.Label))
+                        {
+                            <span><strong>Label:</strong> @Region!.Label</span>
+                        }
+                        <span class="ms-auto"><strong>Position:</strong> @FormatTime(_currentTime)</span>
+                    </div>
+
+                    @* WaveSurfer player *@
+                    <div style="flex:1;min-height:0;">
+                        @if (_source is not null)
+                        {
+                            <WaveSurferPlayer @ref="_player"
+                                              Config="@BuildConfig()"
+                                              OnReady="@(() => OnPlayerReady())"
+                                              OnPlay="@(() => { _isPlaying = true; StateHasChanged(); })"
+                                              OnPause="@(() => { _isPlaying = false; StateHasChanged(); })"
+                                              OnFinish="@(() => { _isPlaying = false; StateHasChanged(); })"
+                                              OnTimeUpdate="@(t => { _currentTime = t; StateHasChanged(); })"
+                                              OnRegionContextMenu="@OnSubRegionContextMenu"
+                                              Resizable="true" />
+                        }
+                    </div>
+
+                    @* Speed + playback controls *@
+                    <div class="d-flex align-items-center gap-3 mt-2 p-2 rounded"
+                         style="background:var(--kendo-color-surface,#f5f5f5);flex:0 0 auto;flex-wrap:wrap;">
+
+                        <button type="button" class="btn btn-primary" @onclick="PlayRegionAsync" disabled="@(!(_ready))"><BenIcon Name="play" Class="me-1" />Play Region</button>
+
+                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="TogglePlayAsync" disabled="@(!(_ready))"><BenIcon Name="@(_isPlaying ? "pause" : "play")" Class="me-1" />@(_isPlaying ? "Pause" : "Play/Pause")</button>
+
+                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="StopAsync" disabled="@(!(_ready))"><BenIcon Name="square" Class="me-1" />Stop</button>
+
+                        <label class="d-flex align-items-center gap-2 mb-0 small">
+                            <strong>Speed</strong>
+                            <input type="range" class="form-range" style="width:7rem;"
+                                   min="0.25" max="3" step="0.05"
+                                   value="@_playbackRate.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)"
+                                   @oninput="OnSpeedInput" />
+                            <span style="min-width:2.5rem;">@_playbackRate.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)×</span>
+                        </label>
+                    </div>
+
+                    @* ── Save / clip section ──────────────────────────────── *@
+                    <div class="mt-3 p-2 rounded border" style="flex:0 0 auto;">
+                        <h6 class="mb-2">Save Region as New File</h6>
+                        @if (_clipSuccess is not null)
+                        {
+                            <div class="alert alert-success py-1 px-2 small mb-2">@_clipSuccess</div>
+                        }
+                        @if (_clipError is not null)
+                        {
+                            <div class="alert alert-danger py-1 px-2 small mb-2">@_clipError</div>
+                        }
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-5">
+                                <label class="form-label form-label-sm mb-1" for="wsregionexplorer-file-name-label-2f2a">File name / label</label>
+                                <input id="wsregionexplorer-file-name-label-2f2a" type="text" class="form-control" placeholder="Optional — auto-generated if blank" @bind="@_clipLabel" @bind:event="oninput" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label form-label-sm mb-1">File type</label>
+                                <BenSelect Data="@_fileTypes" @bind-Value="@_clipFileTypeId" TextField="@nameof(UploadFileTypeRecord.Name)" ValueField="@nameof(UploadFileTypeRecord.Id)" DefaultText="— select —" Width="100%" />
+                            </div>
+                            <div class="col-auto d-flex align-items-center gap-2">
+                                <input type="checkbox" class="form-check-input" id="clip-pub" @bind="@_clipIsPublic" />
+                                <label for="clip-pub" class="form-label form-label-sm mb-0">Public</label>
+                            </div>
+                            <div class="col-auto">
+                                <button type="button" class="btn btn-success" @onclick="SaveClipAsync" disabled="@(!(!_isClipping && _clipFileTypeId != Guid.Empty))"><BenIcon Name="save" Class="me-1" />
+                                    @(_isClipping ? "Saving…" : "Save as WAV")
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* ══ Right — notes panel ═══════════════════════════════════════ *@
+                <div class="d-flex flex-column" style="flex:1;min-width:280px;max-width:400px;overflow:hidden;">
+                    <h5 class="mb-2" style="flex:0 0 auto;">Region Notes</h5>
+
+                    @* Notes list (scrollable) *@
+                    <div style="flex:1;overflow-y:auto;min-height:0;">
+                        @if (_loadingNotes)
+                        {
+                            <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
+                        }
+                        else if (!_notes.Any())
+                        {
+                            <p class="text-secondary small">No notes yet. Add one below.</p>
+                        }
+                        else
+                        {
+                            @foreach (var note in _notes)
+                            {
+                                <div class="card mb-2" style="font-size:.875rem;">
+                                    <div class="card-header py-1 px-2 d-flex align-items-center justify-content-between">
+                                        <span>
+                                            @if (note.TimeOffset.HasValue)
+                                            {
+                                                @* TimeOffset is absolute; show clip-relative time *@
+                                                <span class="badge bg-primary me-1"
+                                                      title="File time: @FormatTime(note.TimeOffset.Value)">
+                                                    ⏱ +@FormatTime(note.TimeOffset.Value - (Region?.Start ?? 0))
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary me-1">Region</span>
+                                            }
+                                            @note.DateCreated.ToDisplayDateTime()
+                                            @if (note.IsPublic)
+                                            {
+                                                <span class="badge bg-info ms-1">Public</span>
+                                            }
+                                        </span>
+                                        <span class="d-flex gap-1">
+                                            @if (_editNoteId == note.Id)
+                                            {
+                                                <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => SaveEditAsync(note))">Save</button>
+                                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="CancelEdit">Cancel</button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => StartEdit(note))"><BenIcon Name="edit-2" /></button>
+                                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => DeleteNoteAsync(note.Id))"><BenIcon Name="trash-2" /></button>
+                                            }
+                                        </span>
+                                    </div>
+                                    <div class="card-body py-1 px-2">
+                                        @if (_editNoteId == note.Id)
+                                        {
+                                            <TelerikEditor @bind-Value="@_editNoteHtml" Height="140px" Tools="@_noteEditorTools" />
+                                            <div class="d-flex align-items-center gap-2 mt-1">
+                                                <input type="checkbox" class="form-check-input" id="@($"enp-{note.Id}")" @bind="@_editNotePublic" />
+                                                <label for="@($"enp-{note.Id}")" class="form-label form-label-sm mb-0">Public</label>
+                                                @if (note.TimeOffset.HasValue)
+                                                {
+                                                    <span class="text-secondary small ms-2">⏱ @FormatTime(_editTimeOffset ?? note.TimeOffset ?? 0)</span>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            @((MarkupString)(note.NoteHtml ?? string.Empty))
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    @* Add note form *@
+                    <div class="border rounded p-2 mt-2" style="flex:0 0 auto;">
+                        <h6 class="mb-2">Add Note</h6>
+                        @if (_noteError is not null)
+                        {
+                            <div class="alert alert-danger py-1 px-2 small mb-2">@_noteError</div>
+                        }
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <input type="checkbox" class="form-check-input" id="pit-note" @bind="@_isPointInTime" />
+                            <label for="pit-note" class="form-label form-label-sm mb-0">
+                                Attach to current position (+@FormatTime(_currentTime) in clip
+                                / @FormatTime(_currentTime + (Region?.Start ?? 0)) in file)
+                            </label>
+                        </div>
+                        <TelerikEditor @bind-Value="@_noteHtml" Height="120px" Tools="@_noteEditorTools" />
+                        <div class="d-flex align-items-center gap-2 mt-2">
+                            <input type="checkbox" class="form-check-input" id="note-pub" @bind="@_noteIsPublic" />
+                            <label for="note-pub" class="form-label form-label-sm mb-0">Public</label>
+                            <button type="button" class="btn btn-primary" @onclick="AddNoteAsync" disabled="@(!(!_addingNote))"><BenIcon Name="plus" Class="me-1" />
+                                @(_addingNote ? "Adding…" : "Add Note")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </ChildContent>
+</BenModal>
+
+@* ── Sub-region context menu (right-click inside explorer's own player) ── *@
+<BenContextMenu @ref="_subRegionMenu"
+                    Data="@_subMenuItems"
+                    TextField="@nameof(RegionMenuItem.Text)"
+                    OnClick="@(async (RegionMenuItem item) => await OnSubMenuClickAsync(item))">
+</BenContextMenu>
+
+@* ── Edit label dialog ──────────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showEditLabelDialog" Title="Edit Region Label" Size="sm">
+    <ChildContent>
+        <label class="form-label fw-semibold" for="wsregionexplorer-label-5788">Label</label>
+        <input id="wsregionexplorer-label-5788" type="text" class="form-control" @bind="@_editLabelText" @bind:event="oninput" />
+            <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => _showEditLabelDialog = false)">Cancel</button>
+            <button type="button" class="btn btn-primary" @onclick="SaveRegionLabelAsync">Save</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@* ── Nested region explorer ─────────────────────────────────────────────── *@
+@if (_subRegion is not null)
+{
+    <WsRegionExplorer FileId="@FileId"
+                      FileName="@FileName"
+                      ContentType="@ContentType"
+                      FileSize="@FileSize"
+                      Region="@_subRegion"
+                      @bind-Visible="@_showSubExplorer" />
+}
+
+@code {
+    /// <summary>Dialog heading: the region's label when it has one, else its time range.
+    /// A property, not an inline interpolation — a ternary's ':' terminates an interpolated
+    /// string, so the inline form does not compile.</summary>
+    private string RegionTitle
+        => "Region Explorer — " + (string.IsNullOrWhiteSpace(Region?.Label) ? $"{FormatTime(Region?.Start ?? 0)} – {FormatTime(Region?.End ?? 0)}" : Region!.Label);
+
+    // ── Editor toolbar — Bold / Italic / Underline / Ordered list / Unordered list ──
+
+    private static readonly List<IEditorTool> _noteEditorTools = new()
+    {
+        new EditorButtonGroup(
+            new Telerik.Blazor.Components.Editor.Bold(),
+            new Telerik.Blazor.Components.Editor.Italic(),
+            new Telerik.Blazor.Components.Editor.Underline()),
+        new EditorButtonGroup(
+            new UnorderedList(),
+            new OrderedList()),
+    };
+
+    // ── Parameters ────────────────────────────────────────────────────────────
+
+    [Parameter, EditorRequired] public Guid         FileId      { get; set; }
+    [Parameter, EditorRequired] public string       FileName    { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string       ContentType { get; set; } = string.Empty;
+    [Parameter]                 public long         FileSize    { get; set; }
+    [Parameter, EditorRequired] public WsRegionData? Region     { get; set; }
+
+    [Parameter] public bool              Visible        { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    /// <summary>Fired after a new clip file is saved so the parent can refresh its clip overlay.</summary>
+    [Parameter] public EventCallback<UploadFileRecord> OnClipSaved { get; set; }
+
+    // ── Player state ──────────────────────────────────────────────────────────
+
+    private WsAudioSource?  _source;
+    private bool            _loading = true;
+    private string?         _loadError;
+    private WaveSurferPlayer? _player;
+    private bool            _ready;
+    private bool            _isPlaying;
+    private double          _currentTime;     // relative to clip start (0 = Region.Start)
+    private double          _playbackRate = 1.0;
+
+    // ── Clip state ────────────────────────────────────────────────────────────
+
+    private bool   _isClipping;
+    private string? _clipError;
+    private string? _clipSuccess;
+    private string  _clipLabel      = string.Empty;
+    private bool    _clipIsPublic;
+    private Guid    _clipFileTypeId;
+    private IReadOnlyList<UploadFileTypeRecord> _fileTypes = [];
+
+    // ── Notes state ───────────────────────────────────────────────────────────
+
+    private IReadOnlyList<UploadFileRegionNoteRecord> _notes = [];
+    private bool   _loadingNotes;
+    private string? _noteError;
+    private bool   _isPointInTime;
+    private string _noteHtml     = string.Empty;
+    private bool   _noteIsPublic;
+    private bool   _addingNote;
+
+    // Edit note state
+    private Guid?   _editNoteId;
+    private string  _editNoteHtml    = string.Empty;
+    private bool    _editNotePublic;
+    private double? _editTimeOffset;
+
+    // ── Sub-region context menu state ─────────────────────────────────────────
+
+    private BenContextMenu<RegionMenuItem>? _subRegionMenu;
+    private WsRegionContextMenuArgs?            _pendingSubRegion;
+    private bool                                _showEditLabelDialog;
+    private string                              _editLabelText = string.Empty;
+    private WsRegionData?                       _subRegion;
+    private bool                                _showSubExplorer;
+
+    private static readonly List<RegionMenuItem> _subMenuItems =
+    [
+        new("play",    "▶  Play Region"),
+        new("explore", "⤢  Explore Region"),
+        new("label",   "✏  Edit Label"),
+        new("delete",  "🗑  Delete Region"),
+    ];
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Visible || _source is not null) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Region is null) return;
+        _loading = true;
+        _loadError = null;
+        StateHasChanged();
+
+        try
+        {
+            // Load ONLY the region’s bytes — no full-file download
+            var clipTask  = AdminClient.GetClipPreviewAsync(FileId, Region.Start, Region.End);
+            var typesTask = AdminClient.GetPublicFileTypesAsync();
+            var notesTask = AdminClient.GetRegionNotesAsync(FileId);
+
+            await Task.WhenAll(clipTask, typesTask, notesTask);
+
+            var clip = clipTask.Result;
+            if (clip is not null)
+                _source = WsAudioSource.FromBytes(clip.Value.Data, clip.Value.ContentType);
+            else
+                _loadError = "Could not clip audio for this region. Only WAV and MP3 sources are supported.";
+
+            _fileTypes = typesTask.Result;
+            _notes     = FilterNotesForRegion(notesTask.Result);
+
+            if (_fileTypes.Any())
+                _clipFileTypeId = _fileTypes[0].Id;
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Load failed: {ex.Message}";
+        }
+
+        _loading = false;
+    }
+
+    /// <summary>
+    /// Returns only notes that belong to this region:
+    /// exact region match, or point-in-time offset within [Region.Start, Region.End].
+    /// </summary>
+    private IReadOnlyList<UploadFileRegionNoteRecord> FilterNotesForRegion(
+        IReadOnlyList<UploadFileRegionNoteRecord> all)
+    {
+        if (Region is null) return [];
+        return all.Where(n =>
+            // Exact region match
+            (Math.Abs(n.RegionStart - Region.Start) < 0.05 && Math.Abs(n.RegionEnd - Region.End) < 0.05)
+            // Point-in-time note whose absolute offset falls within this region
+            || (n.TimeOffset.HasValue
+                && n.TimeOffset.Value >= Region.Start
+                && n.TimeOffset.Value <= Region.End)
+        ).ToList();
+    }
+
+    private async Task ReloadNotesAsync()
+    {
+        _loadingNotes = true;
+        try
+        {
+            var all = await AdminClient.GetRegionNotesAsync(FileId);
+            _notes = FilterNotesForRegion(all);
+            _noteError = null;
+        }
+        catch { _noteError = "Failed to load notes."; }
+        _loadingNotes = false;
+    }
+
+    // ── Player ready ────────────────────────────────────────────────────────────
+    // The audio IS the region; no locked overlay needed.
+
+    private void OnPlayerReady()
+    {
+        _ready = true;
+        StateHasChanged();
+    }
+
+    // ── Playback ──────────────────────────────────────────────────────────────
+
+    private async Task PlayRegionAsync()
+    {
+        if (_player is null) return;
+        await _player.SeekToAsync(0); // clip start = region start
+        await _player.PlayAsync();
+    }
+
+    private async Task TogglePlayAsync()
+    {
+        if (_player is not null) await _player.PlayPauseAsync();
+    }
+
+    private async Task StopAsync()
+    {
+        if (_player is not null) await _player.StopAsync();
+    }
+
+    private async Task OnSpeedInput(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any,
+                            System.Globalization.CultureInfo.InvariantCulture, out var rate))
+        {
+            _playbackRate = Math.Clamp(rate, 0.25, 3.0);
+            if (_player is not null) await _player.SetPlaybackRateAsync(_playbackRate);
+        }
+    }
+
+    // ── Clip / Save ───────────────────────────────────────────────────────────
+
+    private async Task SaveClipAsync()
+    {
+        if (Region is null || _clipFileTypeId == Guid.Empty) return;
+
+        _isClipping  = true;
+        _clipError   = null;
+        _clipSuccess = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await AdminClient.ClipAudioAsync(FileId, new ClipAudioRequest(
+                Region.Start, Region.End, _clipLabel.Trim().Length > 0 ? _clipLabel.Trim() : null,
+                _clipIsPublic, _clipFileTypeId));
+
+            if (result is not null)
+            {
+                _clipSuccess = $"Saved as \"{result.FileName}\" ({AudioFormatUtils.FormatSize(result.FileSize)}).";
+                await OnClipSaved.InvokeAsync(result);
+            }
+            else
+                _clipError = "Clip failed. WAV and MP3 sources are supported.";
+        }
+        catch (Exception ex)
+        {
+            _clipError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _isClipping = false;
+        }
+    }
+
+    // ── Notes ─────────────────────────────────────────────────────────────────
+
+    private async Task AddNoteAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_noteHtml) || Region is null) return;
+
+        _addingNote = true;
+        _noteError  = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await AdminClient.CreateRegionNoteAsync(FileId, new CreateRegionNoteRequest(
+                RegionStart: Region.Start,
+                RegionEnd:   Region.End,
+                RegionLabel: Region.Label,
+                // _currentTime is clip-relative; store absolute (original file) time
+                TimeOffset:  _isPointInTime ? (_currentTime + Region.Start) : null,
+                NoteHtml:    _noteHtml,
+                IsPublic:    _noteIsPublic));
+
+            if (result is not null)
+            {
+                _noteHtml      = string.Empty;
+                _isPointInTime = false;
+                _noteIsPublic  = false;
+                await ReloadNotesAsync();
+            }
+            else
+            {
+                _noteError = "Failed to save note.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _noteError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _addingNote = false;
+        }
+    }
+
+    private void StartEdit(UploadFileRegionNoteRecord note)
+    {
+        _editNoteId     = note.Id;
+        _editNoteHtml   = note.NoteHtml;
+        _editNotePublic = note.IsPublic;
+        _editTimeOffset = note.TimeOffset;
+    }
+
+    private void CancelEdit()
+    {
+        _editNoteId = null;
+    }
+
+    private async Task SaveEditAsync(UploadFileRegionNoteRecord note)
+    {
+        if (_editNoteId is null) return;
+        try
+        {
+            var result = await AdminClient.UpdateRegionNoteAsync(FileId, _editNoteId.Value,
+                new UpdateRegionNoteRequest(_editTimeOffset, _editNoteHtml, _editNotePublic));
+            if (result is not null)
+            {
+                _editNoteId = null;
+                _noteError = null;
+                await ReloadNotesAsync();
+            }
+            else
+            {
+                _noteError = "Failed to save changes to the note.";
+            }
+        }
+        catch { _noteError = "Failed to save changes to the note."; }
+    }
+
+    private async Task DeleteNoteAsync(Guid noteId)
+    {
+        try
+        {
+            if (await AdminClient.DeleteRegionNoteAsync(FileId, noteId))
+            {
+                _noteError = null;
+                await ReloadNotesAsync();
+            }
+            else
+            {
+                _noteError = "Failed to delete the note.";
+            }
+        }
+        catch { _noteError = "Failed to delete the note."; }
+    }
+
+    // ── Sub-region context menu ───────────────────────────────────────────────
+
+    private async Task OnSubRegionContextMenu(WsRegionContextMenuArgs args)
+    {
+        _pendingSubRegion = args;
+        if (_subRegionMenu is not null)
+            await _subRegionMenu.ShowAsync(args.ClientX, args.ClientY);
+    }
+
+    private async Task OnSubMenuClickAsync(RegionMenuItem item)
+    {
+        if (_pendingSubRegion is null) return;
+        switch (item.Action)
+        {
+            case "play":
+                if (_player is not null) await _player.PlayRegionAsync(_pendingSubRegion.RegionId);
+                break;
+            case "explore":
+                // Sub-region times are relative to the clip (0 = Region.Start);
+                // convert to absolute original-file coordinates before opening nested explorer
+                _subRegion = new WsRegionData
+                {
+                    Id    = _pendingSubRegion.RegionId,
+                    Start = Region!.Start + _pendingSubRegion.Start,
+                    End   = Region!.Start + _pendingSubRegion.End,
+                    Label = _pendingSubRegion.Label,
+                };
+                _showSubExplorer = true;
+                StateHasChanged();
+                break;
+            case "label":
+                _editLabelText       = _pendingSubRegion.Label ?? string.Empty;
+                _showEditLabelDialog = true;
+                break;
+            case "delete":
+                if (_player is not null) await _player.RemoveRegionAsync(_pendingSubRegion.RegionId);
+                break;
+        }
+    }
+
+    private async Task SaveRegionLabelAsync()
+    {
+        if (_pendingSubRegion is null || _player is null) return;
+        await _player.UpdateRegionLabelAsync(_pendingSubRegion.RegionId, _editLabelText);
+        _pendingSubRegion = new WsRegionContextMenuArgs
+        {
+            RegionId = _pendingSubRegion.RegionId,
+            Start    = _pendingSubRegion.Start,
+            End      = _pendingSubRegion.End,
+            Label    = _editLabelText,
+            ClientX  = _pendingSubRegion.ClientX,
+            ClientY  = _pendingSubRegion.ClientY,
+        };
+        _showEditLabelDialog = false;
+    }
+
+    // ── WsConfig builder ──────────────────────────────────────────────────────
+
+    private WsConfig BuildConfig() => new()
+    {
+        Source        = _source,
+        Options       = new WsOptions { Normalize = true },
+        Plugins       = new WsPluginConfig
+        {
+            Hover               = true,
+            Timeline            = true,
+            Zoom                = true,
+            Regions             = true,
+            RegionsDragToCreate = true,  // allow drawing sub-regions
+        },
+        InitialHeight = "260px",
+        MinHeight     = "100px",
+        MaxHeight     = "600px",
+        ShowControls  = false,
+    };
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static string FormatTime(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.TotalHours >= 1 ? ts.ToString(@"h\:mm\:ss\.ff") : ts.ToString(@"m\:ss\.ff");
+    }
+
+    // ── Menu item record ──────────────────────────────────────────────────────
+
+    private sealed record RegionMenuItem(string Action, string Text);
+}

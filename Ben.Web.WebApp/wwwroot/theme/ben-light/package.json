@@ -1,8 +1,0 @@
-{
-  "name": "ben-light",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "@progress/kendo-theme-meridian": "14.1.0"
-  }
-}

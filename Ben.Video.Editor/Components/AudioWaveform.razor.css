@@ -41,11 +41,11 @@
     bottom: 0;
     width: 2px;
     left: calc(var(--bv-wf-progress, 0) * 100%);
-    background: var(--kendo-color-primary, var(--bv-accent));
+    background: var(--bv-accent, var(--kendo-color-primary));
     opacity: .85;
     pointer-events: none;
     border-radius: 1px;
-    box-shadow: 0 0 4px var(--kendo-color-primary, var(--bv-accent));
+    box-shadow: 0 0 4px var(--bv-accent, var(--kendo-color-primary));
     transform: translateX(-50%);
     z-index: 2;
 }

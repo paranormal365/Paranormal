@@ -1,6 +1,7 @@
 using AutoMapper;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
+using Ben.Data.Source.Services;
 using Ben.Service.Models.Admin;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -35,14 +36,13 @@ public sealed class AdminOrganizationController : AdminEntityControllerBase<Orga
     {
         if (string.IsNullOrWhiteSpace(request.Name))
             return BadRequest("Name is required.");
-        if (string.IsNullOrWhiteSpace(request.UrlName))
-            return BadRequest("UrlName is required.");
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        var urlName = request.UrlName.Trim().ToLowerInvariant();
-        if (await db.Organizations.AnyAsync(o => o.UrlName == urlName, ct))
-            return BadRequest($"UrlName '{urlName}' is already in use.");
+        var refusal = await OrganizationUrlNames.RefusalForAsync(db, request.UrlName, null, ct);
+        if (refusal is not null) return BadRequest(refusal);
+
+        var urlName = Ben.Data.Common.SlugText.NormalizeOrEmpty(request.UrlName);
 
         var org = new Organization
         {

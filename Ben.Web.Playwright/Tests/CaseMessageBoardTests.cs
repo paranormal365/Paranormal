@@ -19,16 +19,34 @@ public class CaseMessageBoardTests : BenTestBase
 
     // ── Helper ────────────────────────────────────────────────────────────────
 
-    /// <summary>Logs in as Daniel, navigates to his first case, returns when detail page has loaded.</summary>
+    /// <summary>
+    /// Logs in as Daniel and opens the case that carries the seeded conversation.
+    /// <para>
+    /// Deliberately not "the first card". Daniel has four cases now — the others arrived from
+    /// later seeding and from these tests' own sends — and the seeded conversation is on the
+    /// oldest, which sorts last. Taking the first card opened a case with no messages, so the
+    /// panel rendered correctly and empty and the assertions read as though the feature was
+    /// broken.
+    /// </para>
+    /// <para>
+    /// The seeded case is the only one with a case manager assigned, and the card shows that, so
+    /// it is both a stable identifier and a visible one.
+    /// </para>
+    /// </summary>
     private async Task NavigateToClientCaseDetail()
     {
         await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var card = Page.Locator(".card").First;
+
+        var card = Page.Locator(".card").Filter(new() { HasTextString = "Case Manager:" }).First;
+        if (await card.CountAsync() == 0)
+            Assert.Ignore("No managed case in the seed data; the seeded conversation lives on one.");
+
         await Expect(card).ToBeVisibleAsync(new() { Timeout = 10_000 });
-        await card.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // The card navigates via NavigationManager, so a click before the circuit is live is lost.
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
     }
 
     // ── Client-side: panel rendering ─────────────────────────────────────────
@@ -139,11 +157,12 @@ public class CaseMessageBoardTests : BenTestBase
         await textArea.FillAsync("Temporary message to test compose clear");
 
         await Page.GetByRole(AriaRole.Button, new() { Name = "Send" }).ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // Compose box should be empty after send
-        var val = await textArea.InputValueAsync();
-        Assert.That(val, Is.Empty.Or.EqualTo(""), "Compose box should clear after send.");
+        // Not WaitForLoadState(NetworkIdle): sending is a SignalR message on the live circuit, not
+        // an HTTP request, so NetworkIdle is already true and returns before the send has been
+        // handled. Reading the box straight after that raced the re-render and saw the text still
+        // in it. Expect polls until the clear actually happens.
+        await Expect(textArea).ToHaveValueAsync("", new() { Timeout = 10_000 });
     }
 
     // ── Org-side: Messages tab in CaseDetail ─────────────────────────────────
@@ -152,32 +171,12 @@ public class CaseMessageBoardTests : BenTestBase
     public async Task OrgCaseDetail_MessagesTab_IsVisible()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        await Page.GotoAsync($"{BaseUrl}/organizations");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        // Navigate into TGH org
-        var tghLink = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
-        if (!await tghLink.IsVisibleAsync()) { Assert.Pass("TGH org not visible; seed data may differ."); return; }
-        await tghLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        // Go to Cases
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Page.GetByText("Cases", new() { Exact = true }))
-                            .First;
-        await Expect(casesLink).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await casesLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        // Find and open Daniel's case (look for "Park" in the title)
-        var caseItem = Page.GetByText("Park", new() { Exact = false }).First;
-        await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await caseItem.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        { Assert.Pass("TGH case not in the seed data."); return; }
 
         // Messages tab should be present
         var messagesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Messages" })
-                              .Or(Page.GetByText("Messages", new() { Exact = true }))
+                              .Or(Main.GetByText("Messages", new() { Exact = true }))
                               .First;
         await Expect(messagesTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
@@ -186,31 +185,15 @@ public class CaseMessageBoardTests : BenTestBase
     public async Task OrgCaseDetail_MessagesTab_ShowsClientMessages()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        await Page.GotoAsync($"{BaseUrl}/organizations");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var tghLink = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
-        if (!await tghLink.IsVisibleAsync()) { Assert.Pass("TGH org not visible; seed data may differ."); return; }
-        await tghLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Page.GetByText("Cases", new() { Exact = true }))
-                            .First;
-        await casesLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var caseItem = Page.GetByText("Park", new() { Exact = false }).First;
-        await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await caseItem.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        { Assert.Pass("TGH case not in the seed data."); return; }
 
         // Click Messages tab
-        var messagesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Messages" })
-                              .Or(Page.GetByText("Messages", new() { Exact = true }))
-                              .First;
-        await messagesTab.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // The compose box is the one thing both sides of the thread render. Its placeholder differs
+        // by side — "Message your investigation group…" for the client, "Message the client…" for
+        // the organisation — so match the shared prefix rather than the client's wording, which is
+        // not what this tab shows.
+        await OpenTabAsync("Messages", Main.GetByPlaceholder("Message", new() { Exact = false }).First);
 
         // Daniel's reply should be visible to the org
         var clientMsg = Page.GetByText("activity has been a bit more frequent", new() { Exact = false });
@@ -221,34 +204,23 @@ public class CaseMessageBoardTests : BenTestBase
     public async Task OrgCaseDetail_MessagesTab_CanSendMessage()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        await Page.GotoAsync($"{BaseUrl}/organizations");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        { Assert.Pass("TGH case not in the seed data."); return; }
 
-        var tghLink = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
-        if (!await tghLink.IsVisibleAsync()) { Assert.Pass("TGH org not visible; seed data may differ."); return; }
-        await tghLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Page.GetByText("Cases", new() { Exact = true }))
-                            .First;
-        await casesLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var caseItem = Page.GetByText("Park", new() { Exact = false }).First;
-        await Expect(caseItem).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await caseItem.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var messagesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Messages" })
-                              .Or(Page.GetByText("Messages", new() { Exact = true }))
-                              .First;
-        await messagesTab.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // The compose box is the one thing both sides of the thread render. Its placeholder differs
+        // by side — "Message your investigation group…" for the client, "Message the client…" for
+        // the organisation — so match the shared prefix rather than the client's wording, which is
+        // not what this tab shows.
+        await OpenTabAsync("Messages", Main.GetByPlaceholder("Message", new() { Exact = false }).First);
 
         var uniqueText = $"Org reply from Playwright {Guid.NewGuid():N}";
         var textArea   = Page.GetByPlaceholder("Message the client", new() { Exact = false });
         await Expect(textArea).ToBeVisibleAsync(new() { Timeout = 8_000 });
+
+        // Let the thread finish loading before sending into it. Sending mid-load used to lose the
+        // message on screen; the component now survives that, but the test should still exercise
+        // the ordinary path rather than depend on the fix for its own timing.
+        await WaitUntilLoadedAsync();
         await textArea.FillAsync(uniqueText);
 
         await Page.GetByRole(AriaRole.Button, new() { Name = "Send" }).ClickAsync();

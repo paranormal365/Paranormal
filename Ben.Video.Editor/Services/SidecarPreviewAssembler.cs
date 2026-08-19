@@ -24,7 +24,7 @@ public sealed class SidecarPreviewAssembler(
     SidecarTransport transport,
     ErrorLogService errorLog)
 {
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/sidecarInterop.js";
+    private const string ModulePath = "js/sidecarInterop.js";
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
 
     /// <summary>Beyond this the native path has already lost to wasm for an interactive preview,
@@ -66,7 +66,7 @@ public sealed class SidecarPreviewAssembler(
 
             // Straight to a blob URL in JS — the assembled preview's bytes never enter the WASM
             // heap, which is the entire point of this phase.
-            var module = await js.InvokeAsync<IJSObjectReference>("import", ModulePath);
+            var module = await js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
             try
             {
                 var url = await module.InvokeAsync<string>(

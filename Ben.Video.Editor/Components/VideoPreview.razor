@@ -412,7 +412,7 @@
     private async Task InitModuleAsync()
     {
         _module = await JS.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/js/videoPreviewInterop.js");
+            "benImportEditorModule", "js/videoPreviewInterop.js");
         await _module.InvokeVoidAsync("init", _videoElementId, DotNetObjectReference.Create(this));
 
         // Apply a load requested before the module finished initializing — see LoadUrlAsync's

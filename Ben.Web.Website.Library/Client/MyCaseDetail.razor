@@ -1,0 +1,1275 @@
+@page "/my-cases/{CaseId:guid}"
+@using Ben.Data.Common.Enums
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Shared
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject IJSRuntime JS
+
+<PageTitle>@(_case?.Title ?? "My Case")</PageTitle>
+
+@if (_loading)
+{
+    <BenLoaderOverlay Visible="true" Text="Loading your case…" />
+    return;
+}
+
+@if (_case is null)
+{
+    <div class="container py-5 text-center">
+        <h2 class="text-muted">Case not found</h2>
+        <a href="/my-cases" class="btn btn-outline-secondary mt-3">← Back to My Cases</a>
+    </div>
+    return;
+}
+
+<div class="container-fluid py-3" style="max-width:960px;">
+
+    @* ── Header ──────────────────────────────────────────────────────────────── *@
+    <div class="d-flex align-items-start justify-content-between mb-3 flex-wrap gap-2">
+        <div>
+            <a href="/my-cases" class="text-secondary small">← My Cases</a>
+            <div class="d-flex align-items-center gap-2 mt-1">
+                <span class="font-monospace text-muted">@_case.CaseReference</span>
+                <span class="badge @_case.Status.BadgeClass()">@_case.Status.Label()</span>
+            </div>
+            <h3 class="mb-0 mt-1">@_case.Title<HelpLink Slug="your-case" /></h3>
+            <div class="text-secondary small">@_case.City, @_case.State · Opened @_case.DateCaseOpened.ToViewerLocalTime(UserState).ToDisplayDate()</div>
+            @if (!string.IsNullOrWhiteSpace(_case.CaseManagerDisplayName))
+            {
+                <div class="text-secondary small mt-1">Case Manager: <strong>@_case.CaseManagerDisplayName</strong></div>
+            }
+        </div>
+        <button type="button" class="btn btn-primary" @onclick="OpenLogDialog"><BenIcon Name="plus" Class="me-1" />Log Occurrence</button>
+    </div>
+
+    @if (_error is not null) { <div class="alert alert-danger mb-3">@_error</div> }
+
+    @* ── Main grid ────────────────────────────────────────────────────────────── *@
+    <div class="row g-4">
+
+        @* ── Calendar + occurrences ──────────────────────────────────────────── *@
+        <div class="col-12 col-lg-7">
+            <div class="card mb-3">
+                <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+                    <span>Occurrence Calendar</span>
+                    <span class="text-muted small">@_case.Occurrences.Count occurrence@(_case.Occurrences.Count == 1 ? "" : "s")</span>
+                </div>
+                <div class="card-body">
+                    <TelerikCalendar Value="@_selectedDate"
+                                     ValueChanged="@((DateTime d) => _selectedDate = d)"
+                                     Min="@_case.DateCaseOpened.ToViewerLocalTime(UserState).Date"
+                                     Max="@(_case.DateCaseClosed?.ToViewerLocalTime(UserState).Date ?? UserState.NowInViewerTimeZone().Date)"
+                                     ShowOtherMonthDays="false">
+                    </TelerikCalendar>
+                </div>
+            </div>
+
+            @* Occurrences for selected date *@
+            @{ var dayOccurrences = OccurrencesForDate(_selectedDate); }
+            @if (dayOccurrences.Count > 0)
+            {
+                <div class="card">
+                    <div class="card-header fw-semibold">
+                        @_selectedDate.ToDisplayDate()
+                        <span class="badge bg-secondary ms-2">@dayOccurrences.Count</span>
+                    </div>
+                    <div class="list-group list-group-flush">
+                        @foreach (var occ in dayOccurrences)
+                        {
+                            var o = occ;
+                            <div class="list-group-item">
+                                <div class="d-flex align-items-start justify-content-between">
+                                    <div class="flex-grow-1">
+                                        @* Org-authored entries can now reach this list, so say so —
+                                           otherwise an investigator's note reads as the client's own. *@
+                                        @if (o.FromInvestigators)
+                                        {
+                                            <span class="badge bg-primary mb-1">From the investigators</span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(o.Title))
+                                        {
+                                            <div class="fw-semibold small">@o.Title</div>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(o.Body))
+                                        {
+                                            <div class="text-secondary small mt-1">@((MarkupString)o.Body)</div>
+                                        }
+                                        <div class="text-muted" style="font-size:.72rem;">
+                                            @((o.EventDateTime ?? o.DateCreated).ToViewerLocalTime(UserState).ToDisplayTime())
+                                        </div>
+                                        @* Shown back so tagging isn't a control that swallows input. *@
+                                        @if (o.ExperienceTypeIds.Count > 0)
+                                        {
+                                            <div class="d-flex flex-wrap gap-1 mt-1">
+                                                @foreach (var tid in o.ExperienceTypeIds)
+                                                {
+                                                    <span class="badge bg-info-subtle text-info-emphasis" style="font-size:.65rem;">
+                                                        @(_expTypeNames.TryGetValue(tid, out var tn) ? tn : "Tagged")
+                                                    </span>
+                                                }
+                                            </div>
+                                        }
+                                        @* Attached files *@
+                                        @if (o.Files.Count > 0)
+                                        {
+                                            <div class="d-flex flex-wrap gap-1 mt-1">
+                                                @foreach (var f in o.Files)
+                                                {
+                                                    var icon = f.ContentType.StartsWith("image/") ? "image"
+                                                             : f.ContentType.StartsWith("video/") ? "play"
+                                                             : f.ContentType.StartsWith("audio/") ? "play"
+                                                             : "file";
+                                                    <span class="badge bg-secondary d-flex align-items-center gap-1" title="@f.FileName">
+                                                        <BenIcon Name="@icon" />
+                                                        <span style="max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@f.FileName</span>
+                                                        <button type="button" class="btn btn-secondary btn-sm text-white p-0" @onclick="@(async () => await RemoveFile(o.Id, f.FileId))"><BenIcon Name="x" /></button>
+                                                    </span>
+                                                }
+                                            </div>
+                                        }
+                                        @* Attach file input *@
+                                        <div class="mt-1">
+                                            <InputFile OnChange="@(e => AttachFiles(o.Id, e))"
+                                                       accept="image/*,audio/*,video/*,.pdf,.doc,.docx"
+                                                       multiple
+                                                       style="display:none;"
+                                                       id="@($"file-{o.Id}")" />
+                                            <label for="@($"file-{o.Id}")" class="btn btn-outline-secondary btn-sm" style="cursor:pointer; font-size:.72rem;">
+                                                <BenIcon Name="upload" /> Attach File
+                                            </label>
+                                            @if (_uploading.Contains(o.Id))
+                                            {
+                                                <span class="spinner-border spinner-border-sm" role="status" aria-label="Loading"></span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-1 ms-2">
+                                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEditDialog(o))"><BenIcon Name="edit-2" /></button>
+                                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => ConfirmDelete(o))"><BenIcon Name="trash-2" /></button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else if (_case.Occurrences.Count > 0)
+            {
+                <p class="text-secondary small text-center">No occurrences on @_selectedDate.ToDisplayDate().</p>
+            }
+        </div>
+
+        @* ── Right column: description + investigations ───────────────────────── *@
+        <div class="col-12 col-lg-5">
+            @if (!string.IsNullOrWhiteSpace(_case.Description))
+            {
+                <div class="card mb-3">
+                    <div class="card-header fw-semibold">Case Summary</div>
+                    <div class="card-body">@((MarkupString)_case.Description)</div>
+                </div>
+            }
+
+            @if (_case.Investigations.Count > 0)
+            {
+                <div class="card">
+                    <div class="card-header fw-semibold">Investigations</div>
+                    <div class="list-group list-group-flush">
+                        @foreach (var inv in _case.Investigations.OrderBy(i => i.ScheduledDateTime))
+                        {
+                            var canCancel  = inv.CancellationDeadlineUtc.HasValue && DateTime.UtcNow < inv.CancellationDeadlineUtc.Value;
+                            var deadlinePassed = inv.CancellationDeadlineUtc.HasValue && DateTime.UtcNow >= inv.CancellationDeadlineUtc.Value;
+                            <div class="list-group-item">
+                                <div class="d-flex align-items-start justify-content-between gap-2">
+                                    <div>
+                                        <div class="fw-semibold small">@inv.Title</div>
+                                        <div class="text-secondary small">
+                                            @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                            @if (inv.EndDateTime.HasValue)
+                                            { <span> – @inv.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTime()</span> }
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(inv.Location))
+                                        {
+                                            <div class="text-secondary small">@inv.Location</div>
+                                        }
+                                        @if (inv.EvidenceDueDate.HasValue)
+                                        {
+                                            var isPastDue = inv.EvidenceDueDate.Value < DateTime.UtcNow;
+                                            var isSoon    = !isPastDue && inv.EvidenceDueDate.Value < DateTime.UtcNow.AddDays(7);
+                                            <div class="small mt-1 @(isPastDue ? "text-danger" : isSoon ? "text-warning" : "text-secondary")">
+                                                Evidence @(isPastDue ? "was due" : "due"):
+                                                @inv.EvidenceDueDate.Value.ToViewerLocalTime(UserState).ToDisplayDate()
+                                                @if (isPastDue) { <strong> (closed)</strong> }
+                                            </div>
+                                        }
+                                        @if (canCancel)
+                                        {
+                                            <div class="text-secondary small mt-1">
+                                                Cancel by: @inv.CancellationDeadlineUtc!.Value.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                            </div>
+                                        }
+                                        @if (deadlinePassed && inv.Status == Ben.Data.Common.Enums.InvestigationStatus.Scheduled)
+                                        {
+                                            <div class="text-muted small mt-1"><em>Cancellation window closed</em></div>
+                                        }
+                                    </div>
+                                    <div class="d-flex flex-column align-items-end gap-1">
+                                        <span class="badge @InvStatusBadge(inv.Status)">@InvStatusLabel(inv.Status)</span>
+                                        @if (canCancel)
+                                        {
+                                            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="@(async () => await CancelInvestigation(inv.Id))" disabled="@(!(!_cancelling))">Cancel Visit</button>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+    </div>
+
+    @* ── Scheduling proposals from the org ───────────────────────────────────── *@
+    @if (_pendingProposals.Count > 0)
+    {
+        <div class="card mt-4 border-warning">
+            <div class="card-header fw-semibold d-flex align-items-center gap-2 bg-warning text-dark">
+                <BenIcon Name="calendar" />
+                Investigation Date Proposal
+                <span class="badge bg-dark">@_pendingProposals.Count</span>
+            </div>
+            <div class="list-group list-group-flush">
+                @foreach (var prop in _pendingProposals)
+                {
+                    var p = prop;
+                    <div class="list-group-item">
+                        @if (!string.IsNullOrWhiteSpace(p.Notes))
+                        {
+                            <div class="small mb-2">@p.Notes</div>
+                        }
+                        <div class="d-flex flex-column gap-1 mb-3">
+                            @foreach (var slot in p.Slots)
+                            {
+                                var s = slot;
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="small">
+                                        @s.StartDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                        @if (s.EndDateTime.HasValue) { <span> – @s.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTime()</span> }
+                                    </span>
+                                    <button type="button" class="btn btn-success btn-sm" @onclick="@(async () => await AcceptProposal(p.Id, s.Id))" disabled="@(!(!_respondingProposal))">Accept</button>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => { _counterProposalId = p.Id; _showCounterDialog = true; })" disabled="@(!(!_respondingProposal))">Suggest Different Date</button>
+                            <button type="button" class="btn btn-danger btn-sm" @onclick="@(async () => await DeclineProposal(p.Id))" disabled="@(!(!_respondingProposal))">Decline All</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @* ── Co-client access management (primary client only) ──────────────────── *@
+    @if (_isPrimaryClient)
+    {
+        <div class="card mt-4">
+            <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+                <span><BenIcon Name="users" /> Shared Access</span>
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _showAddCoClient = true)"><BenIcon Name="plus" Class="me-1" />Add Person</button>
+            </div>
+            <div class="card-body">
+                @if (_coClients.Count == 0 && _pendingInvites.Count == 0)
+                {
+                    <div class="text-secondary small">Only you have access. Use 'Add Person' to share this case with another account.</div>
+                }
+                <div class="d-flex flex-column gap-1">
+                    @foreach (var cc in _coClients)
+                    {
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="small">@cc.DisplayName</span>
+                            <button type="button" class="btn btn-danger btn-sm" @onclick="@(async () => await RemoveCoClient(cc.AccessId))"><BenIcon Name="x" /></button>
+                        </div>
+                    }
+                </div>
+
+                @if (_pendingInvites.Count > 0)
+                {
+                    <div class="text-secondary small fw-semibold mt-3 mb-1">Pending Invites</div>
+                    <div class="d-flex flex-column gap-1">
+                        @foreach (var inv in _pendingInvites)
+                        {
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span class="small">
+                                    @inv.Email
+                                    <span class="text-secondary"> · expires @inv.DateExpires.ToViewerLocalTime(UserState).ToDisplayDate()</span>
+                                </span>
+                                <div class="d-flex gap-1">
+                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => CopyInviteLink(inv))"><BenIcon Name="copy" Class="me-1" />Copy Link</button>
+                                    <button type="button" class="btn btn-danger btn-sm" @onclick="@(async () => await RevokeInvite(inv.Id))"><BenIcon Name="x" /></button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @* ── People at the property (basic info, no account) ─────────────────────── *@
+@* ── Public name (U6) ─────────────────────────────────────────────────────────
+   Only meaningful to the primary client: they're the one the public page names. *@
+@if (_isPrimaryClient)
+{
+    <div class="card mt-4">
+        <div class="card-header fw-semibold">
+            <BenIcon Name="eye" /> How You're Named Publicly
+        </div>
+        <div class="card-body">
+            <div class="text-secondary small mb-2">
+                If this case is ever published, this is the name shown on the public page.
+                Your investigators always see your real name — they can't work the case otherwise.
+            </div>
+
+            <div class="d-flex gap-2 align-items-start flex-wrap">
+                <input class="form-control" style="max-width:320px;" maxlength="128"
+                       placeholder="e.g. The Miller Family" value="@_aliasDraft"
+                       @oninput="@(e => _aliasDraft = e.Value?.ToString() ?? string.Empty)" />
+                <button type="button" class="btn btn-primary" @onclick="SaveAliasAsync" disabled="@(!(!_aliasSaving))">Save</button>
+                @if (!string.IsNullOrWhiteSpace(_alias?.ClientDisplayAlias))
+                {
+                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="ClearAliasAsync" disabled="@(!(!_aliasSaving))">Clear</button>
+                }
+            </div>
+
+            <div class="d-flex gap-1 flex-wrap mt-2">
+                <span class="small text-secondary me-1">Suggestions:</span>
+                @foreach (var s in AliasSuggestions)
+                {
+                    var suggestion = s;
+                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _aliasDraft = suggestion)">@suggestion</button>
+                }
+            </div>
+
+            @if (_alias is not null)
+            {
+                <div class="mt-3 small">
+                    @* States what the public actually sees, computed server-side — the client
+                       shouldn't have to work out whose name wins. *@
+                    @if (_alias.EffectivePublicName is { } shown)
+                    {
+                        <span class="text-secondary">Public pages currently show:</span>
+                        <strong class="ms-1">@shown</strong>
+                        @if (string.IsNullOrWhiteSpace(_alias.ClientDisplayAlias)
+                             && !string.IsNullOrWhiteSpace(_alias.OrganizationPseudonym))
+                        {
+                            <span class="d-block text-secondary">
+                                That was chosen by the group. Set your own above to replace it.
+                            </span>
+                        }
+                    }
+                    else
+                    {
+                        <span class="text-secondary">
+                            Public pages currently show no name for you at all.
+                        </span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+    <div class="card mt-4">
+        <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+            <span><BenIcon Name="users" /> People at the Property</span>
+            @if (_isPrimaryClient)
+            {
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="OpenAddPerson"><BenIcon Name="plus" Class="me-1" />Add Person</button>
+            }
+        </div>
+        <div class="card-body">
+            <div class="text-secondary small mb-2">
+                People you mention who don't have accounts on this site — for reference in your notes and timeline. This information is never made public.
+            </div>
+            @if (_relatedPeople.Count == 0)
+            {
+                <div class="text-secondary small">No one added yet.</div>
+            }
+            <div class="d-flex flex-column gap-2">
+                @foreach (var p in _relatedPeople)
+                {
+                    <div class="d-flex align-items-start justify-content-between">
+                        <div class="d-flex align-items-start gap-2">
+                            @if (p.UploadFileId is { } pf && _personPhotos.TryGetValue(pf, out var pfSrc))
+                            {
+                                <img src="@pfSrc" alt="@p.Name" class="rounded border"
+                                     style="width:40px;height:40px;object-fit:cover;flex:0 0 auto;" />
+                            }
+                        <div>
+                            <span class="small fw-semibold">@p.Name</span>
+                            @if (p.Age.HasValue) { <span class="small text-secondary"> · Age @p.Age</span> }
+                            @if (!string.IsNullOrWhiteSpace(p.Relationship)) { <span class="small text-secondary"> · @p.Relationship</span> }
+                            @if (p.LivesAtProperty) { <span class="badge bg-info text-dark ms-1" style="font-size:.65rem;">Lives here</span> }
+                            @if (!string.IsNullOrWhiteSpace(p.Notes))
+                            {
+                                <div class="text-secondary small">@p.Notes</div>
+                            }
+                        </div>
+                        </div>
+                        @if (_isPrimaryClient)
+                        {
+                            <div class="d-flex gap-1">
+                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenEditPerson(p))" title="Edit"><BenIcon Name="edit-2" /></button>
+                                <button type="button" class="btn btn-danger btn-sm" @onclick="@(async () => await RemoveRelatedPerson(p.Id))" title="Remove"><BenIcon Name="x" /></button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ── Message thread ──────────────────────────────────────────────────────── *@
+    <div class="card mt-4">
+        <div class="card-header fw-semibold d-flex align-items-center gap-2">
+            <BenIcon Name="message-square" />
+            Messages with your investigation group
+            @if (_case.UnreadMessageCount > 0)
+            {
+                <span class="badge bg-danger rounded-pill" title="@_case.UnreadMessageCount unread">@_case.UnreadMessageCount</span>
+            }
+        </div>
+        <div class="card-body">
+            <CaseMessageThread CurrentSide="@Ben.Data.Common.Enums.CaseMessageSide.Client"
+                               LoadMessages="@LoadClientMessages"
+                               PostMessage="@PostClientMessage" />
+        </div>
+    </div>
+
+    @* ── Published investigation reports ─────────────────────────────────────── *@
+    @if (_reports.Count > 0)
+    {
+        <div class="card mt-4">
+            <div class="card-header fw-semibold d-flex align-items-center gap-2">
+                <BenIcon Name="file" />
+                Investigation Reports
+                <span class="badge bg-secondary">@_reports.Count</span>
+            </div>
+            <div class="list-group list-group-flush">
+                @foreach (var r in _reports)
+                {
+                    <div class="list-group-item d-flex align-items-start justify-content-between gap-2">
+                        <div>
+                            <div class="fw-semibold small">@r.Title</div>
+                            @if (r.PublishedAt.HasValue)
+                            {
+                                <div class="text-secondary small">Published @r.PublishedAt.Value.ToViewerLocalTime(UserState).ToDisplayDate()</div>
+                            }
+                        </div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(async () => await DownloadReport(r.Id))"><BenIcon Name="file-text" Class="me-1" />PDF</button>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+</div>
+
+@* ── Log / Edit Occurrence dialog ─────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showDialog" Title="@(_editOcc is null ? "Log Occurrence" : "Edit Occurrence")">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Date & Time</label>
+                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.EventDateTime" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold" for="mycasedetail-brief-title-optional-e44e">Brief Title (optional)</label>
+                <input id="mycasedetail-brief-title-optional-e44e" type="text" class="form-control" placeholder="e.g. Knocking sounds in basement" @bind="@_form.Title" @bind:event="oninput" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold" for="mycasedetail-description-df0a">Description <span class="text-danger">*</span></label>
+                <textarea id="mycasedetail-description-df0a" class="form-control" rows="5" placeholder="Describe what happened in detail…" @bind="@_form.Body" @bind:event="oninput"></textarea>
+            </div>
+            @if (_taxonomy.Count > 0)
+            {
+                <div class="col-12">
+                    <label class="form-label fw-semibold">What kind of experience? (optional)</label>
+                    <div class="text-secondary small mb-2">
+                        Helps your investigators group similar reports. Pick as many as fit.
+                    </div>
+                    @foreach (var category in _taxonomy)
+                    {
+                        <div class="mb-2">
+                            <div class="small text-secondary">@category.Category.Name</div>
+                            <div class="d-flex gap-1 flex-wrap">
+                                @foreach (var t in category.Types)
+                                {
+                                    var type = t;
+                                    var on = _form.ExperienceTypeIds.Contains(type.Id);
+                                    <button type="button" class="btn @((on ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Outline) == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => ToggleExperienceType(type.Id))">@type.Name</button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+        @if (_dialogError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showDialog = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" @onclick="SaveOccurrence"
+                disabled="@(_isBusy || string.IsNullOrWhiteSpace(_form.Body))">
+            <BenIcon Name="save" Class="me-1" />@(_isBusy ? "Saving…" : "Save")
+        </button>
+    </FooterContent>
+</BenModal>
+
+@* ── Delete confirmation ──────────────────────────────────────────────────────── *@
+@if (_deleteOcc is not null)
+{
+    <BenModal Visible="true" Title="Delete Occurrence">
+    <ChildContent>
+            <p>Are you sure you want to delete this occurrence?</p>
+        </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _deleteOcc = null)">Cancel</button>
+        <button type="button" class="btn btn-danger" @onclick="DeleteOccurrence" disabled="@_isBusy">Delete</button>
+    </FooterContent>
+</BenModal>
+}
+
+@* ── Add co-client / invite dialog ────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showAddCoClient" Title="Share Case Access">
+    <ChildContent>
+        @if (_inviteResult is null)
+        {
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold" for="mycasedetail-email-address-of-person-baf6">Email address of person to add</label>
+                    <input id="mycasedetail-email-address-of-person-baf6" type="text" class="form-control" placeholder="person@example.com" @bind="@_addCoClientEmail" @bind:event="oninput" />
+                    <div class="form-text">If they don't have an account yet, we'll send them an invite to create one.</div>
+                    @if (!string.IsNullOrWhiteSpace(_addCoClientEmail) && !IsValidEmailFormat(_addCoClientEmail))
+                    {
+                        <div class="text-danger small mt-1">Enter a valid email address.</div>
+                    }
+                </div>
+                @if (_inviteError is not null)
+                {
+                    <div class="col-12"><div class="alert alert-danger py-2 mb-0">@_inviteError</div></div>
+                }
+            </div>
+        }
+        else if (_inviteResult.LinkedExistingAccount)
+        {
+            <div class="alert alert-success mb-0">
+                <strong>@_inviteResult.CoClient?.DisplayName</strong> already has an account and now has access to this case.
+            </div>
+        }
+        else
+        {
+            <p class="mb-2">
+                @if (_inviteResult.EmailSent)
+                {
+                    <text>An invite email is on its way to <strong>@_inviteResult.Invite?.Email</strong>. You can also share this link directly:</text>
+                }
+                else
+                {
+                    <text>Email isn't set up on this server yet — share this link with <strong>@_inviteResult.Invite?.Email</strong> yourself:</text>
+                }
+            </p>
+            <div class="d-flex gap-2">
+                <input type="text" class="form-control" value="@InviteLink(_inviteResult.Invite)" />
+                <button type="button" class="btn btn-secondary" @onclick="@(() => CopyToClipboard(InviteLink(_inviteResult.Invite)))"><BenIcon Name="copy" /></button>
+            </div>
+            <div class="text-secondary small mt-2">This link expires @_inviteResult.Invite?.DateExpires.ToViewerLocalTime(UserState).ToDisplayDate().</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        @if (_inviteResult is null)
+        {
+            <button type="button" class="btn btn-outline-secondary" @onclick="CloseAddCoClientDialog">Cancel</button>
+            <button type="button" class="btn btn-primary" @onclick="AddCoClient"
+                    disabled="@(!IsValidEmailFormat(_addCoClientEmail) || _isInviting)">
+                @(_isInviting ? "Sending..." : "Add")
+            </button>
+        }
+        else
+        {
+            <button type="button" class="btn btn-primary" @onclick="CloseAddCoClientDialog">Done</button>
+        }
+    </FooterContent>
+</BenModal>
+
+@* ── Add related person dialog ────────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showAddRelatedPerson" Title="@(_editingPersonId is null ? "Add a Person" : "Edit Person")">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold" for="mycasedetail-name-d0a4">Name</label>
+                <input id="mycasedetail-name-d0a4" type="text" class="form-control" placeholder="Full name" @bind="@_newPersonName" @bind:event="oninput" />
+            </div>
+            <div class="col-6">
+                <label class="form-label fw-semibold" for="mycasedetail-age-optional-e00c">Age (optional)</label>
+                <input id="mycasedetail-age-optional-e00c" type="number" class="form-control" min="0" max="120" step="1" @bind="@_newPersonAge" @bind:event="oninput" />
+            </div>
+            <div class="col-6 d-flex align-items-end">
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="livesHere" @bind="@_newPersonLivesAtProperty" />
+                    <label class="form-check-label ms-1" for="livesHere">Lives at the property</label>
+                </div>
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold" for="mycasedetail-relationship-optional-8370">Relationship (optional)</label>
+                <input id="mycasedetail-relationship-optional-8370" type="text" class="form-control" placeholder="e.g. spouse, neighbor, tenant" @bind="@_newPersonRelationship" @bind:event="oninput" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold" for="mycasedetail-notes-optional-fd4e">Notes (optional)</label>
+                <textarea id="mycasedetail-notes-optional-fd4e" class="form-control" rows="2" @bind="@_newPersonNotes"></textarea>
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Photo (optional)</label>
+                <div class="d-flex align-items-center gap-3">
+                    @if (_personPhotoPreview is not null)
+                    {
+                        <img src="@_personPhotoPreview" alt="" class="rounded border"
+                             style="width:64px;height:64px;object-fit:cover;flex:0 0 auto;" />
+                    }
+                    <div class="d-flex flex-column gap-1 flex-grow-1">
+                        <InputFile OnChange="OnPersonPhotoSelected" class="form-control form-control-sm"
+                                   accept="image/jpeg,image/png,image/gif,image/webp" />
+                        @if (_personPhotoUploading)
+                        {
+                            <span class="text-secondary small">Uploading…</span>
+                        }
+                        else if (_newPersonPhotoFileId is not null)
+                        {
+                            <button type="button" class="btn btn-danger btn-sm" @onclick="ClearPersonPhoto">Remove photo</button>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="text-secondary small">This information is never made public, even if the case is.</div>
+            </div>
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showAddRelatedPerson = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" @onclick="SaveRelatedPerson"
+                disabled="@(string.IsNullOrWhiteSpace(_newPersonName) || _personPhotoUploading)">
+            @(_editingPersonId is null ? "Add" : "Save")
+        </button>
+    </FooterContent>
+</BenModal>
+
+@* ── Counter-proposal dialog ──────────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showCounterDialog" Title="Suggest a Different Date">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Your Preferred Date & Time</label>
+                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_counterDateTime" Width="100%" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold" for="mycasedetail-notes-optional-70d8">Notes (optional)</label>
+                <textarea id="mycasedetail-notes-optional-70d8" class="form-control" rows="3" placeholder="e.g. I am free weekends only." @bind="@_counterNotes"></textarea>
+            </div>
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showCounterDialog = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" @onclick="SendCounter"
+                disabled="@(!_counterDateTime.HasValue || _respondingProposal)">Send</button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    [Parameter] public Guid CaseId { get; set; }
+
+    private ClientCaseDetail? _case;
+    private bool _loading = true;
+    private string? _error;
+    private bool _isBusy;
+    private HashSet<Guid> _uploading = [];
+    private DateTime _selectedDate = DateTime.Today;
+
+    // Dialog state
+    private bool _showDialog;
+    private ClientCaseOccurrence? _editOcc;
+    private ClientCaseOccurrence? _deleteOcc;
+    private string? _dialogError;
+    private OccForm _form = new();
+    private List<CaseReportSummary> _reports = [];
+    private List<ScheduleProposalDto> _pendingProposals = [];
+    private List<CoClientItem> _coClients = [];
+    private bool _isPrimaryClient;
+    private bool _respondingProposal;
+    private bool _cancelling;
+    private bool _showAddCoClient;
+    private string _addCoClientEmail = "";
+    private List<CaseClientInviteRecord> _pendingInvites = [];
+    private InviteCoClientResult? _inviteResult;
+    private string? _inviteError;
+    private bool _isInviting;
+    private List<CaseRelatedPersonRecord> _relatedPeople = [];
+    private bool _showAddRelatedPerson;
+
+    private CaseDisplayAliasRecord? _alias;
+    private string _aliasDraft = string.Empty;
+    private bool   _aliasSaving;
+
+    /// <summary>
+    /// Starting points, not a fixed list — the field stays free text. Offered because "what should
+    /// I call myself" is a harder question than it looks when someone is deciding how exposed to be.
+    /// </summary>
+    private static readonly string[] AliasSuggestions =
+        ["The homeowner", "A local family", "Anonymous", "The tenant", "A neighbour"];
+
+    /// <summary>Which person is being edited; null while adding a new one.</summary>
+    private Guid? _editingPersonId;
+    private Guid? _newPersonPhotoFileId;
+    private string? _personPhotoPreview;
+    private bool _personPhotoUploading;
+
+    /// <summary>
+    /// Witness photo thumbnails as data URIs, keyed by upload-file id. Fetched through the
+    /// authenticated client rather than linked directly: these files are private, and a browser
+    /// sends no bearer token with an &lt;img&gt; request, so a direct URL renders broken.
+    /// </summary>
+    private readonly Dictionary<Guid, string> _personPhotos = [];
+
+    /// <summary>Witness photos are case evidence — same upload type as everything else on a case.</summary>
+    private static readonly Guid EvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
+    private string _newPersonName = "";
+    private int? _newPersonAge;
+    private string _newPersonRelationship = "";
+    private bool _newPersonLivesAtProperty;
+    private string _newPersonNotes = "";
+    private bool _showCounterDialog;
+    private Guid _counterProposalId;
+    private DateTime? _counterDateTime;
+    private string _counterNotes = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        try { _case = await AdminClient.GetMyCaseAsync(CaseId); }
+        catch { _error = "Failed to load case."; }
+        _loading = false;
+        StateHasChanged();
+
+        // Load published reports after case renders (non-blocking)
+        try { _reports = (await AdminClient.GetMyCaseReportsAsync(CaseId)).ToList(); StateHasChanged(); }
+        catch { /* reports are optional; silent failure */ }
+
+        // Load pending scheduling proposals
+        try { _pendingProposals = (await AdminClient.GetMyScheduleProposalsAsync(CaseId)).ToList(); StateHasChanged(); }
+        catch { /* silent */ }
+
+        // Co-clients — only load (and only shown) for the primary client. IsPrimaryClient comes
+        // from the case detail response itself, not from whether GetCoClients happens not to
+        // throw: the generic HTTP client returns an empty list on a 403 rather than throwing, so
+        // that inference silently showed every co-client the primary-only admin controls too.
+        _isPrimaryClient = _case?.IsPrimaryClient ?? false;
+        if (_isPrimaryClient)
+        {
+            try
+            {
+                _coClients = (await AdminClient.GetCoClientsAsync(CaseId)).ToList();
+                _pendingInvites = (await AdminClient.GetCaseInvitesAsync(CaseId)).ToList();
+                StateHasChanged();
+            }
+            catch { /* silent — Shared Access card just shows its empty state */ }
+        }
+
+        try
+        {
+            _relatedPeople = (await AdminClient.GetRelatedPeopleAsync(CaseId)).ToList();
+            await LoadPersonPhotosAsync();
+            await LoadAliasAsync();
+            await LoadTaxonomyAsync();
+            StateHasChanged();
+        }
+        catch { /* silent */ }
+    }
+
+    private List<ClientCaseOccurrence> OccurrencesForDate(DateTime date) =>
+        _case?.Occurrences
+            .Where(o => (o.EventDateTime ?? o.DateCreated).ToViewerLocalTime(UserState).Date == date.Date)
+            .OrderBy(o => o.EventDateTime ?? o.DateCreated)
+            .ThenBy(o => o.DateCreated).ThenBy(o => o.Id)
+            .ToList() ?? [];
+
+    /// <summary>
+    /// The shared experience taxonomy, used for optional tagging. Read-only here — clients pick
+    /// from the platform's list rather than inventing their own, so investigators can actually
+    /// group reports across cases.
+    /// </summary>
+    private List<ExperienceCategoryWithTypesResponse> _taxonomy = [];
+    private Dictionary<Guid, string> _expTypeNames = [];
+
+    private void ToggleExperienceType(Guid id)
+    {
+        if (!_form.ExperienceTypeIds.Remove(id)) _form.ExperienceTypeIds.Add(id);
+    }
+
+    private async Task LoadTaxonomyAsync()
+    {
+        if (_taxonomy.Count > 0) return;
+        try
+        {
+            _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).ToList();
+            _expTypeNames = _taxonomy.SelectMany(c => c.Types).ToDictionary(t => t.Id, t => t.Name);
+        }
+        catch { /* tagging is optional — the dialog still works without the list */ }
+    }
+
+    private void OpenLogDialog()
+    {
+        _editOcc = null;
+        _form = new OccForm { EventDateTime = _selectedDate.Date.AddHours(UserState.NowInViewerTimeZone().Hour) };
+        _dialogError = null;
+        _showDialog = true;
+    }
+
+    private void OpenEditDialog(ClientCaseOccurrence occ)
+    {
+        _editOcc = occ;
+        _form = new OccForm
+        {
+            EventDateTime = (occ.EventDateTime ?? occ.DateCreated).ToViewerLocalTime(UserState),
+            Title         = occ.Title ?? "",
+            Body          = occ.Body ?? "",
+        };
+        foreach (var id in occ.ExperienceTypeIds) _form.ExperienceTypeIds.Add(id);
+        _dialogError = null;
+        _showDialog = true;
+    }
+
+    private void ConfirmDelete(ClientCaseOccurrence occ) => _deleteOcc = occ;
+
+    private async Task SaveOccurrence()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Body)) { _dialogError = "Description is required."; return; }
+        _isBusy = true; _dialogError = null;
+        try
+        {
+            var req = new LogOccurrenceRequest(
+                _form.EventDateTime!.Value.ToUtcFromViewerLocal(UserState),
+                _form.Title?.Trim(), _form.Body.Trim(),
+                _form.ExperienceTypeIds.ToList());
+            if (_editOcc is null)
+                await AdminClient.LogOccurrenceAsync(CaseId, req);
+            else
+                await AdminClient.UpdateOccurrenceAsync(CaseId, _editOcc.Id, req);
+            _showDialog = false;
+            await LoadAsync();
+        }
+        catch { _dialogError = "Save failed. Please try again."; }
+        finally { _isBusy = false; }
+    }
+
+    private async Task DeleteOccurrence()
+    {
+        if (_deleteOcc is null) return;
+        _isBusy = true;
+        try
+        {
+            await AdminClient.DeleteOccurrenceAsync(CaseId, _deleteOcc.Id);
+            _deleteOcc = null;
+            await LoadAsync();
+        }
+        catch { _error = "Delete failed."; }
+        finally { _isBusy = false; }
+    }
+
+    private static string InvStatusBadge(InvestigationStatus s) => s switch
+    {
+        InvestigationStatus.Scheduled  => "bg-primary",
+        InvestigationStatus.InProgress => "bg-warning text-dark",
+        InvestigationStatus.Completed  => "bg-success",
+        _                              => "bg-secondary",
+    };
+
+    private static string InvStatusLabel(InvestigationStatus s) => s switch
+    {
+        InvestigationStatus.Scheduled  => "Scheduled",
+        InvestigationStatus.InProgress => "In Progress",
+        InvestigationStatus.Completed  => "Completed",
+        InvestigationStatus.Cancelled  => "Cancelled",
+        _                              => s.ToString(),
+    };
+
+    private class OccForm
+    {
+        public DateTime? EventDateTime { get; set; } = DateTime.Now;
+        public string    Title         { get; set; } = "";
+        public string    Body          { get; set; } = "";
+        public HashSet<Guid> ExperienceTypeIds { get; } = [];
+    }
+
+    private async Task RemoveCoClient(Guid accessId)
+    {
+        await AdminClient.RemoveCoClientAsync(CaseId, accessId);
+        _coClients.RemoveAll(c => c.AccessId == accessId);
+        StateHasChanged();
+    }
+
+    /// <summary>Server-side validation is already correct; this is UX polish only — catches an
+    /// obviously malformed address before round-tripping to the API.</summary>
+    private static bool IsValidEmailFormat(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return false;
+        try { return new System.Net.Mail.MailAddress(email.Trim()).Address == email.Trim(); }
+        catch { return false; }
+    }
+
+    private async Task AddCoClient()
+    {
+        if (!IsValidEmailFormat(_addCoClientEmail) || _isInviting) return;
+        _isInviting = true;
+        _inviteError = null;
+        try
+        {
+            var result = await AdminClient.InviteCoClientAsync(CaseId, _addCoClientEmail.Trim());
+            if (result is null)
+            {
+                _inviteError = "Something went wrong. Please try again.";
+                return;
+            }
+
+            if (result.LinkedExistingAccount && result.CoClient is not null)
+                _coClients.Add(result.CoClient);
+            else if (result.Invite is not null)
+                _pendingInvites.Insert(0, result.Invite);
+
+            _inviteResult = result;
+        }
+        catch
+        {
+            _inviteError = "Something went wrong. Please try again.";
+        }
+        finally
+        {
+            _isInviting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CloseAddCoClientDialog()
+    {
+        _showAddCoClient = false;
+        _addCoClientEmail = "";
+        _inviteResult = null;
+        _inviteError = null;
+    }
+
+    private string InviteLink(CaseClientInviteRecord? invite) =>
+        invite is null ? "" : $"{NavManager.BaseUri.TrimEnd('/')}/invite/{invite.Token}";
+
+    private async Task CopyToClipboard(string text)
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", text); }
+        catch { /* clipboard access can be denied by the browser — link is still visible/selectable */ }
+    }
+
+    private Task CopyInviteLink(CaseClientInviteRecord invite) => CopyToClipboard(InviteLink(invite));
+
+    private async Task RevokeInvite(Guid inviteId)
+    {
+        await AdminClient.RevokeCaseInviteAsync(CaseId, inviteId);
+        _pendingInvites.RemoveAll(i => i.Id == inviteId);
+        StateHasChanged();
+    }
+
+    private async Task RemoveRelatedPerson(Guid personId)
+    {
+        await AdminClient.RemoveRelatedPersonAsync(CaseId, personId);
+        _relatedPeople.RemoveAll(p => p.Id == personId);
+        StateHasChanged();
+    }
+
+    private async Task LoadAliasAsync()
+    {
+        try
+        {
+            _alias = await AdminClient.GetCaseDisplayAliasAsync(CaseId);
+            _aliasDraft = _alias?.ClientDisplayAlias ?? string.Empty;
+        }
+        catch { /* the rest of the page is still useful without it */ }
+    }
+
+    private async Task SaveAliasAsync()
+    {
+        _aliasSaving = true;
+        try
+        {
+            var updated = await AdminClient.SetCaseDisplayAliasAsync(
+                CaseId, new SetCaseDisplayAliasRequest(_aliasDraft));
+            if (updated is null) { _error = "Couldn't save that name."; return; }
+            _alias = updated;
+            _aliasDraft = updated.ClientDisplayAlias ?? string.Empty;
+        }
+        catch { _error = "Couldn't save that name."; }
+        finally { _aliasSaving = false; StateHasChanged(); }
+    }
+
+    private async Task ClearAliasAsync()
+    {
+        _aliasDraft = string.Empty;
+        await SaveAliasAsync();
+    }
+
+    private void OpenAddPerson()
+    {
+        _editingPersonId = null;
+        ResetPersonForm();
+        _showAddRelatedPerson = true;
+    }
+
+    private void OpenEditPerson(CaseRelatedPersonRecord p)
+    {
+        _editingPersonId          = p.Id;
+        _newPersonName            = p.Name;
+        _newPersonAge             = p.Age;
+        _newPersonRelationship    = p.Relationship ?? "";
+        _newPersonLivesAtProperty = p.LivesAtProperty;
+        _newPersonNotes           = p.Notes ?? "";
+        _newPersonPhotoFileId     = p.UploadFileId;
+        _personPhotoPreview       = p.UploadFileId is { } f && _personPhotos.TryGetValue(f, out var src) ? src : null;
+        _showAddRelatedPerson     = true;
+    }
+
+    private void ResetPersonForm()
+    {
+        _newPersonName = ""; _newPersonAge = null; _newPersonRelationship = "";
+        _newPersonLivesAtProperty = false; _newPersonNotes = "";
+        _newPersonPhotoFileId = null; _personPhotoPreview = null;
+    }
+
+    private void ClearPersonPhoto()
+    {
+        _newPersonPhotoFileId = null;
+        _personPhotoPreview   = null;
+    }
+
+    private async Task OnPersonPhotoSelected(InputFileChangeEventArgs e)
+    {
+        _personPhotoUploading = true;
+        try
+        {
+            var file = e.File;
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(maxAllowedSize: long.MaxValue).CopyToAsync(ms);
+            var bytes = ms.ToArray();
+
+            var uploaded = await AdminClient.UploadUserFileAsync(
+                EvidenceFileTypeId, UserState.UserId ?? Guid.Empty,
+                file.Name, file.ContentType, bytes,
+                description: "Witness photo", isPublic: false);
+            if (uploaded is null) { _error = "Couldn't upload that photo."; return; }
+
+            _newPersonPhotoFileId = uploaded.Id;
+            // Preview from the bytes already in hand — no round trip, and it works regardless of
+            // the file being private.
+            _personPhotoPreview   = $"data:{file.ContentType};base64,{Convert.ToBase64String(bytes)}";
+            _personPhotos[uploaded.Id] = _personPhotoPreview;
+        }
+        catch { _error = "Couldn't upload that photo."; }
+        finally { _personPhotoUploading = false; StateHasChanged(); }
+    }
+
+    private async Task SaveRelatedPerson()
+    {
+        if (string.IsNullOrWhiteSpace(_newPersonName)) return;
+
+        var name         = _newPersonName.Trim();
+        var relationship = string.IsNullOrWhiteSpace(_newPersonRelationship) ? null : _newPersonRelationship.Trim();
+        var notes        = string.IsNullOrWhiteSpace(_newPersonNotes) ? null : _newPersonNotes.Trim();
+
+        if (_editingPersonId is { } editId)
+        {
+            var updated = await AdminClient.UpdateRelatedPersonAsync(CaseId, editId,
+                new UpdateRelatedPersonRequest(name, _newPersonAge, relationship,
+                                               _newPersonLivesAtProperty, notes, _newPersonPhotoFileId));
+            if (updated is not null)
+            {
+                var idx = _relatedPeople.FindIndex(p => p.Id == editId);
+                if (idx >= 0) _relatedPeople[idx] = updated;
+                _showAddRelatedPerson = false;
+                _editingPersonId = null;
+            }
+            else { _error = "Couldn't save that person."; }
+        }
+        else
+        {
+            var added = await AdminClient.AddRelatedPersonAsync(CaseId,
+                new AddRelatedPersonRequest(name, _newPersonAge, relationship,
+                                            _newPersonLivesAtProperty, notes, _newPersonPhotoFileId));
+            if (added is not null)
+            {
+                _relatedPeople.Add(added);
+                _showAddRelatedPerson = false;
+                ResetPersonForm();
+            }
+            else { _error = "Couldn't add that person."; }
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>Fetches thumbnails for any witness photos not already cached.</summary>
+    private async Task LoadPersonPhotosAsync()
+    {
+        foreach (var id in _relatedPeople.Select(p => p.UploadFileId).OfType<Guid>().Distinct())
+        {
+            if (_personPhotos.ContainsKey(id)) continue;
+            try
+            {
+                var file = await AdminClient.GetFileDataAsync(id);
+                if (file is { } f)
+                    _personPhotos[id] = $"data:{f.ContentType};base64,{Convert.ToBase64String(f.Data)}";
+            }
+            catch { /* a missing thumbnail is not worth failing the page over */ }
+        }
+    }
+
+    private Task<IReadOnlyList<CaseMessageRecord>> LoadClientMessages()
+        => AdminClient.GetMyCaseMessagesAsync(CaseId);
+
+    private async Task<CaseMessageRecord?> PostClientMessage(string body)
+        => await AdminClient.PostMyCaseMessageAsync(CaseId, body);
+
+    private async Task DownloadReport(Guid reportId)
+    {
+        var result = await AdminClient.DownloadMyCaseReportPdfAsync(CaseId, reportId);
+        if (result is null) return;
+        var base64 = Convert.ToBase64String(result.Value.Data);
+        await JS.InvokeVoidAsync("downloadFileFromBase64", base64, "application/pdf", result.Value.FileName);
+    }
+
+    private async Task AcceptProposal(Guid proposalId, Guid slotId)
+    {
+        _respondingProposal = true;
+        try
+        {
+            var result = await AdminClient.AcceptScheduleProposalAsync(CaseId, proposalId, slotId);
+            if (result is not null) _pendingProposals.RemoveAll(p => p.Id == proposalId);
+        }
+        catch { _error = "Failed to accept proposal."; }
+        finally { _respondingProposal = false; StateHasChanged(); }
+    }
+
+    private async Task DeclineProposal(Guid proposalId)
+    {
+        _respondingProposal = true;
+        try
+        {
+            await AdminClient.DeclineScheduleProposalAsync(CaseId, proposalId, null);
+            _pendingProposals.RemoveAll(p => p.Id == proposalId);
+        }
+        catch { _error = "Failed to decline proposal."; }
+        finally { _respondingProposal = false; StateHasChanged(); }
+    }
+
+    private async Task CancelInvestigation(Guid invId)
+    {
+        _cancelling = true;
+        try
+        {
+            var ok = await AdminClient.CancelMyInvestigationAsync(CaseId, invId);
+            if (ok)
+            {
+                // Reload so the status badge and cancel button update
+                _case = await AdminClient.GetMyCaseAsync(CaseId);
+                _pendingProposals = (await AdminClient.GetMyScheduleProposalsAsync(CaseId)).ToList();
+            }
+            else { _error = "The cancellation window has closed for this investigation."; }
+        }
+        catch { _error = "Failed to cancel investigation."; }
+        finally { _cancelling = false; StateHasChanged(); }
+    }
+
+    private async Task SendCounter()
+    {
+        if (!_counterDateTime.HasValue) return;
+        _respondingProposal = true;
+        try
+        {
+            await AdminClient.CounterScheduleProposalAsync(CaseId, _counterProposalId, _counterDateTime.Value, _counterNotes);
+            _pendingProposals.RemoveAll(p => p.Id == _counterProposalId);
+            _showCounterDialog = false;
+        }
+        catch { _error = "Failed to send counter-proposal."; }
+        finally { _respondingProposal = false; StateHasChanged(); }
+    }
+
+    private async Task AttachFiles(Guid entryId, InputFileChangeEventArgs e)
+    {
+        _uploading.Add(entryId);
+        StateHasChanged();
+        try
+        {
+            foreach (var f in e.GetMultipleFiles(10))
+            {
+                // No practical upload size limit for now — a future limit belongs at app-settings /
+                // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
+                using var stream = f.OpenReadStream(maxAllowedSize: long.MaxValue);
+                var item = await AdminClient.AttachOccurrenceFileAsync(CaseId, entryId, stream, f.Name, f.ContentType);
+                if (item is not null)
+                {
+                    // Optimistic update — add file to the in-memory occurrence
+                    var occ = _case?.Occurrences.FirstOrDefault(o => o.Id == entryId);
+                    if (occ is not null)
+                    {
+                        var updatedFiles = occ.Files.ToList();
+                        updatedFiles.Add(item);
+                        var idx = _case!.Occurrences.ToList().IndexOf(occ);
+                        var newList = _case.Occurrences.ToList();
+                        newList[idx] = occ with { Files = updatedFiles };
+                        _case = _case with { Occurrences = newList };
+                    }
+                }
+            }
+        }
+        catch { _error = "Failed to attach file. Please try again."; }
+        finally { _uploading.Remove(entryId); StateHasChanged(); }
+    }
+
+    private async Task RemoveFile(Guid entryId, Guid fileId)
+    {
+        try
+        {
+            await AdminClient.DetachOccurrenceFileAsync(CaseId, entryId, fileId);
+            var occ = _case?.Occurrences.FirstOrDefault(o => o.Id == entryId);
+            if (occ is not null)
+            {
+                var updatedFiles = occ.Files.Where(f => f.FileId != fileId).ToList();
+                var idx = _case!.Occurrences.ToList().IndexOf(occ);
+                var newList = _case.Occurrences.ToList();
+                newList[idx] = occ with { Files = updatedFiles };
+                _case = _case with { Occurrences = newList };
+                StateHasChanged();
+            }
+        }
+        catch { _error = "Failed to remove file."; }
+    }
+}

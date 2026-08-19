@@ -1,0 +1,145 @@
+@page "/admin/users/create"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>SuperAdmin — New User</PageTitle>
+
+<div class="container-fluid px-3" style="max-width:760px">
+
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <button type="button" class="btn btn-link text-decoration-none" @onclick="@(() => NavManager.NavigateTo("/admin/users"))"><BenIcon Name="arrow-left" Class="me-1" />
+                Back to Users
+            </button>
+            <h3 class="d-inline-block ms-3 mb-0">New User</h3>
+        </div>
+    </div>
+
+    @if (_errorMessages.Count > 0)
+    {
+        <div class="alert alert-danger mb-3">
+            <ul class="mb-0">
+                @foreach (var msg in _errorMessages)
+                {
+                    <li>@msg</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <div class="row g-3">
+
+        <div class="col-md-6">
+            <label class="form-label fw-semibold" for="adminusercreate-display-name-4286">Display Name</label>
+            <input id="adminusercreate-display-name-4286" type="text" class="form-control" placeholder="e.g. Jane Smith" @bind="@_form.DisplayName" @bind:event="oninput" />
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label fw-semibold" for="adminusercreate-username-defaults-to-email-0b90">Username <span class="text-secondary fw-normal">(defaults to email)</span></label>
+            <input id="adminusercreate-username-defaults-to-email-0b90" type="text" class="form-control" placeholder="Leave blank to use email" @bind="@_form.UserName" @bind:event="oninput" />
+        </div>
+
+        <div class="col-12">
+            <label class="form-label fw-semibold" for="adminusercreate-email-0463">Email <span class="text-danger">*</span></label>
+            <input id="adminusercreate-email-0463" type="text" class="form-control" placeholder="user@example.com" @bind="@_form.Email" @bind:event="oninput" />
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label fw-semibold" for="adminusercreate-password-2989">Password <span class="text-danger">*</span></label>
+            <input id="adminusercreate-password-2989" type="password" class="form-control" @bind="@_form.Password" placeholder="••••••••" />
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label fw-semibold" for="adminusercreate-confirm-password-f173">Confirm Password <span class="text-danger">*</span></label>
+            <input id="adminusercreate-confirm-password-f173" type="password" class="form-control" @bind="@_form.ConfirmPassword" placeholder="••••••••" />
+        </div>
+
+        <div class="col-12 d-flex flex-wrap gap-4 mt-1">
+            <label class="d-flex align-items-center gap-2">
+                <input type="checkbox" class="form-check-input" @bind="@_form.IsEmailConfirmed" />
+                Email Confirmed
+            </label>
+            <label class="d-flex align-items-center gap-2">
+                <input type="checkbox" class="form-check-input" @bind="@_form.IsSuperAdmin" />
+                SuperAdmin
+            </label>
+        </div>
+
+        <div class="col-12 mt-2 d-flex gap-2">
+            <button type="button" class="btn btn-primary" @onclick="CreateUser" disabled="@(!(!_isSaving))"><BenIcon Name="save" Class="me-1" />
+                @(_isSaving ? "Creating…" : "Create User")
+            </button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="@(() => NavManager.NavigateTo("/admin/users"))">
+                Cancel
+            </button>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    private FormModel _form = new();
+    private bool _isSaving;
+    private List<string> _errorMessages = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
+            NavManager.NavigateTo("/");
+    }
+
+    private async Task CreateUser()
+    {
+        _errorMessages = Validate();
+        if (_errorMessages.Count > 0) return;
+
+        _isSaving = true;
+
+        var request = new AdminCreateUserRequest(
+            Email:            _form.Email!.Trim(),
+            Password:         _form.Password!,
+            DisplayName:      string.IsNullOrWhiteSpace(_form.DisplayName) ? null : _form.DisplayName.Trim(),
+            UserName:         string.IsNullOrWhiteSpace(_form.UserName)    ? null : _form.UserName.Trim(),
+            IsEmailConfirmed: _form.IsEmailConfirmed,
+            IsSuperAdmin:     _form.IsSuperAdmin);
+
+        var created = await AdminClient.CreateUserAsync(request);
+
+        _isSaving = false;
+
+        if (created is not null)
+            NavManager.NavigateTo($"/admin/users/{created.Id}");
+        else
+            _errorMessages = ["The server rejected the request. Check that the email is not already in use and the password meets the complexity requirements."];
+    }
+
+    private List<string> Validate()
+    {
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(_form.Email))
+            errors.Add("Email is required.");
+
+        if (string.IsNullOrWhiteSpace(_form.Password))
+            errors.Add("Password is required.");
+
+        if (_form.Password != _form.ConfirmPassword)
+            errors.Add("Passwords do not match.");
+
+        return errors;
+    }
+
+    private sealed class FormModel
+    {
+        public string? DisplayName    { get; set; }
+        public string? UserName       { get; set; }
+        public string? Email          { get; set; }
+        public string? Password       { get; set; }
+        public string? ConfirmPassword { get; set; }
+        public bool    IsEmailConfirmed { get; set; } = true;
+        public bool    IsSuperAdmin   { get; set; }
+    }
+}

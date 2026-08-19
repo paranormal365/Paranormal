@@ -1,6 +1,8 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
+using Ben.Data.Source.Services;
+using Ben.Data.WebApi.Controllers.Cms;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -29,8 +31,9 @@ public sealed class OrgPublicController : ControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var org = await db.Organizations.AsNoTracking()
-            .FirstOrDefaultAsync(o => o.UrlName == urlName.ToLowerInvariant(), ct);
+        // Resolves a retired address too, so a link printed before a rename still opens. The
+        // response carries the current UrlName, which is how the page knows to correct the address.
+        var (org, _) = await OrganizationUrlNames.ResolveAsync(db, urlName, ct);
 
         if (org is null) return NotFound();
 
@@ -53,12 +56,13 @@ public sealed class OrgPublicController : ControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var org = await db.Organizations.AsNoTracking()
-            .FirstOrDefaultAsync(o => o.UrlName == urlName.ToLowerInvariant(), ct);
+        // Resolves a retired address too, so a link printed before a rename still opens. The
+        // response carries the current UrlName, which is how the page knows to correct the address.
+        var (org, _) = await OrganizationUrlNames.ResolveAsync(db, urlName, ct);
 
         if (org is null) return NotFound();
 
-        var page = await BuildPageAsync(db, org.Id, isHome: false, pageSlug: pageSlug.ToLowerInvariant(), ct);
+        var page = await BuildPageAsync(db, org.Id, isHome: false, pageSlug: Ben.Data.Common.SlugText.NormalizeOrEmpty(pageSlug), ct);
         if (page is null) return NotFound();
 
         var logos    = await BuildLogosAsync(db, org.Id, ct);
@@ -104,9 +108,18 @@ public sealed class OrgPublicController : ControllerBase
 
         if (page is null) return null;
 
-        var sections = page.CmsSections
-            .Select(s => new OrgPublicSectionItem(s.Id, s.SectionType, s.Title, s.ContentJson, s.SortOrder))
-            .ToList();
+        var sections = new List<OrgPublicSectionItem>(page.CmsSections.Count);
+        foreach (var s in page.CmsSections)
+        {
+            // An embed's stored content is references and switches, never the records themselves.
+            // Resolving here means the redaction rules run on every request against live data — so
+            // a client who withdraws their alias next month disappears from pages published today.
+            var content = CmsEmbed.IsEmbed(s.SectionType)
+                ? await CmsEmbed.ResolveAsync(db, orgId, s.SectionType, s.ContentJson, ct)
+                : s.ContentJson;
+
+            sections.Add(new OrgPublicSectionItem(s.Id, s.SectionType, s.Title, content, s.SortOrder));
+        }
 
         return new OrgPublicPageItem(page.Id, page.PageTitle, page.UrlName, page.IsHome, sections);
     }

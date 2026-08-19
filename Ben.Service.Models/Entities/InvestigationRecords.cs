@@ -110,7 +110,13 @@ public record EvidenceVoteSummary(
     int DisputesCount,
     int InconclusiveCount,
     int TotalVotes,
-    EvidenceVoteType? CurrentUserVote);
+    EvidenceVoteType? CurrentUserVote,
+    /// <summary>
+    /// Signed total: +1 confirms, 0 inconclusive, −1 disputes. Computed server-side by
+    /// <see cref="Ben.Data.Common.Enums.EvidenceVoteScore"/> and rendered as given — never
+    /// re-derived from the counts, which is how four surfaces end up with four answers.
+    /// </summary>
+    int Score = 0);
 
 /// <summary>
 /// Aggregate community-vote counts for a public <see cref="Ben.Data.Source.Entities.Case"/>,
@@ -140,4 +146,6 @@ public record CaseVoteSummary(
     int DisputesCount,
     int InconclusiveCount,
     int TotalVotes,
-    EvidenceVoteType? CurrentUserVote);
+    EvidenceVoteType? CurrentUserVote,
+    /// <summary>Signed total: +1 confirms, 0 inconclusive, −1 disputes. See <see cref="EvidenceVoteSummary"/>.</summary>
+    int Score = 0);

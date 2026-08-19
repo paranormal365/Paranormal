@@ -7,19 +7,22 @@
 
 <header class="bv-toolbar">
 
-    <span class="bv-toolbar__title">Ben.Video</span>
-
     <TelerikToolBar OverflowMode="@ToolBarOverflowMode.Menu"
                      Size="@ThemeConstants.Button.Size.Small"
                      Class="bv-toolbar__telerik-bar">
 
-        <!-- Initialize ffmpeg.wasm core -->
-        <ToolBarButton OnClick="OnInitializeClicked"
-                       Enabled="@(Ffmpeg.State is FfmpegState.Idle or FfmpegState.Error)"
-                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Icon="@SvgIcon.Play">
-            Initialize
-        </ToolBarButton>
+        @* Initialize ffmpeg.wasm core. Hidden once it has loaded: it is a one-shot action whose
+           result is already announced by the status chip, so leaving it in place costs permanent
+           width for a button nobody presses twice. It comes back on Error, which is the one case
+           where pressing it again is exactly what to do. *@
+        @if (Ffmpeg.State is FfmpegState.Idle or FfmpegState.Error)
+        {
+            <ToolBarButton OnClick="OnInitializeClicked"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Icon="@SvgIcon.Play">
+                Initialize
+            </ToolBarButton>
+        }
 
         <!-- Open files — only active when ready -->
         <ToolBarButton OnClick="OnOpenClicked"
@@ -51,18 +54,29 @@
         </ToolBarButton>
 
         <!-- Undo -->
+        @* These three carry a label as well as an icon. They are the only buttons here without
+           Overflow="Never", so they are the ones that can collapse into the "…" menu — and a menu
+           of unlabelled icons makes people guess. The label is hidden while the button is in the
+           bar (see .bv-icon-only in the stylesheet) and shows in the menu, which renders in a
+           popup outside the toolbar. *@
         <ToolBarButton OnClick="OnUndoClicked"
                        Enabled="@CanUndo"
                        Icon="@SvgIcon.Undo"
                        FillMode="@ThemeConstants.Button.FillMode.Flat"
-                       Title="@(UndoDescription is not null ? $"Undo: {UndoDescription}" : "Nothing to undo")" />
+                       Class="bv-icon-only"
+                       Title="@(UndoDescription is not null ? $"Undo: {UndoDescription}" : "Nothing to undo")">
+            Undo
+        </ToolBarButton>
 
         <!-- Redo -->
         <ToolBarButton OnClick="OnRedoClicked"
                        Enabled="@CanRedo"
                        Icon="@SvgIcon.Redo"
                        FillMode="@ThemeConstants.Button.FillMode.Flat"
-                       Title="@(RedoDescription is not null ? $"Redo: {RedoDescription}" : "Nothing to redo")" />
+                       Class="bv-icon-only"
+                       Title="@(RedoDescription is not null ? $"Redo: {RedoDescription}" : "Nothing to redo")">
+            Redo
+        </ToolBarButton>
 
         <!-- File menu — replaces the old Save / Open / Project buttons -->
         <ToolBarTemplateItem>
@@ -121,7 +135,10 @@
                            Enabled="@(HasClips)"
                            ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
                            Icon="@SvgIcon.Cloud"
-                           Title="Save to server" />
+                           Class="bv-icon-only"
+                           Title="Save to server">
+                Save to server
+            </ToolBarButton>
         }
 
         <ToolBarSpacer />
@@ -214,9 +231,15 @@
                 }
         </ToolBarTemplateItem>
 
-        @* Phase 141 (flakiness investigation) — ffmpeg diagnostics chip. Always shown: makes
-           MEMFS residency, the operation trace, and the raw log tail one click away instead of
-           only reachable by exporting the error log after the fact. *@
+        @* Phase 141 (flakiness investigation) — ffmpeg diagnostics chip: MEMFS residency, the
+           operation trace and the raw log tail, one click away instead of only reachable by
+           exporting the error log after the fact.
+
+           Shown only where the host says so (VideoEditorOptions.ShowDiagnostics). It is an
+           operator tool, and it was previously on the toolbar for every user regardless of who
+           they were. *@
+        @if (ShowDiagnostics)
+        {
         <ToolBarTemplateItem>
             <button type="button"
                     class="bv-diagnostics-chip @(Ffmpeg.IsWorkerWedged ? "bv-diagnostics-chip--wedged" : $"bv-diagnostics-chip--{Ffmpeg.State.ToString().ToLowerInvariant()}")"
@@ -225,6 +248,7 @@
                 @(Ffmpeg.IsWorkerWedged ? "⚠ Stuck — Reset?" : $"🩺 {DiagnosticsChipLabel()}")
             </button>
         </ToolBarTemplateItem>
+        }
 
         @* Item #38 phase E — native sidecar status chip. Only shown when the host opted in
            (VideoEditorOptions.NativeSidecar); clicking it opens the pairing panel regardless of
@@ -243,12 +267,20 @@
 
     </TelerikToolBar>
 
+    @* The mark sits at the end of the bar rather than the start: the left edge is where the eye
+       looks for the next action, and the logo does not need it. Sized in CSS so it can never
+       grow the bar's height. *@
+    <span class="bv-toolbar__mark" aria-hidden="true"></span>
+
     @if (ShowNativeSidecar)
     {
         <NativeSidecarPanel @bind-Visible="_showSidecarPanel" />
     }
 
-    <DiagnosticsPanel @bind-Visible="_showDiagnosticsPanel" OnResetWorker="OnInitializeClicked" />
+    @if (ShowDiagnostics)
+    {
+        <DiagnosticsPanel @bind-Visible="_showDiagnosticsPanel" OnResetWorker="OnInitializeClicked" />
+    }
 
     <!-- Feature badges — purely informational, so kept outside the ToolBar (whose
          ToolBarTemplateItem always behaves as Overflow=Never and can't collapse
@@ -280,7 +312,7 @@
 
     private async Task<IJSObjectReference> DomAsync() =>
         _dom ??= await JS.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/js/domInterop.js");
+            "benImportEditorModule", "js/domInterop.js");
 
     [Parameter] public bool HasClips            { get; set; }
     [Parameter] public bool ShowMultiTrack      { get; set; }
@@ -456,15 +488,33 @@
 
     [Parameter] public bool ShowNativeSidecar { get; set; }
 
+    /// <summary>Whether the operator tools (diagnostics chip and panel) are shown at all.</summary>
+    [Parameter] public bool ShowDiagnostics { get; set; }
+
     private bool _showSidecarPanel;
 
     protected override void OnInitialized()
     {
         NativeSidecar.OnChanged += OnNativeSidecarChanged;
+
+        // This toolbar reads the ffmpeg state straight from the injected service — the status
+        // chip, its progress bar, and the Enabled of Initialize/Open/Preview/Export all depend on
+        // it — but nothing here re-renders when that state changes. The parent re-rendering is not
+        // enough: Blazor skips a child whose parameters have not changed, and going from
+        // Processing back to Ready changes none of this component's parameters.
+        //
+        // The result was a toolbar frozen mid-render: a chip stuck at "Processing… 33%" with
+        // Export greyed out behind it, while the service had long since returned to Ready — a
+        // stale paint, not a stalled render, and it survived until something else happened to
+        // change a parameter.
+        Ffmpeg.OnStateChanged += OnFfmpegStateChanged;
+
         if (ShowNativeSidecar) _ = NativeSidecar.ProbeAsync();
     }
 
     private void OnNativeSidecarChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnFfmpegStateChanged() => InvokeAsync(StateHasChanged);
 
     private string SidecarChipLabel() => NativeSidecar.State switch
     {
@@ -475,7 +525,11 @@
         _ => "",
     };
 
-    void IDisposable.Dispose() => NativeSidecar.OnChanged -= OnNativeSidecarChanged;
+    void IDisposable.Dispose()
+    {
+        NativeSidecar.OnChanged -= OnNativeSidecarChanged;
+        Ffmpeg.OnStateChanged   -= OnFfmpegStateChanged;
+    }
 
     /// <summary>Audit #4 — releases the cached domInterop handle. Separate from the sync
     /// <see cref="Dispose"/> above (which only unsubscribes events) because a JS module handle can

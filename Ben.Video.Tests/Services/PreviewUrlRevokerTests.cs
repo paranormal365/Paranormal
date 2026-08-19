@@ -39,7 +39,7 @@ public sealed class PreviewUrlRevokerTests
 
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
         {
-            if (identifier == "import" && args?[0] is string path)
+            if (identifier == "benImportEditorModule" && args?[0] is string path)
             {
                 if (path.Contains("ffmpegInterop")) return ValueTask.FromResult((TValue)(object)FfmpegModule);
                 if (path.Contains("sidecarInterop")) return ValueTask.FromResult((TValue)(object)SidecarModule);

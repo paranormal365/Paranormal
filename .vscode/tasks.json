@@ -2,15 +2,15 @@
   "version": "2.0.0",
   "tasks": [
 
-    // ── Step 2: Start WebApi (background) then WebApp (foreground) ─────────
+    // ── Step 2: Start WebApi (background) then the Website (foreground) ────
     {
       "label": "start-web-app",
       "type": "shell",
-      "command": "bash scripts/start-webapp-with-api.sh",
+      "command": "bash scripts/start-website-with-api.sh",
       "options": { "cwd": "${workspaceFolder}" },
       "isBackground": true,
       "presentation": {
-        "label": "WebApp",
+        "label": "Website",
         "panel": "dedicated",
         "reveal": "always",
         "showReuseMessage": false,
@@ -31,11 +31,11 @@
     {
       "label": "start-full-stack",
       "type": "shell",
-      "command": "bash scripts/start-webapp-with-api.sh",
+      "command": "bash scripts/start-website-with-api.sh",
       "options": { "cwd": "${workspaceFolder}" },
       "isBackground": true,
       "presentation": {
-        "label": "WebApp",
+        "label": "Website",
         "panel": "dedicated",
         "reveal": "always",
         "showReuseMessage": false,

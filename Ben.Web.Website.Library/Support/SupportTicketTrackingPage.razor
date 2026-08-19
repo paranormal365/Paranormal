@@ -1,0 +1,162 @@
+@page "/support/{AccessToken:guid}"
+@namespace Ben.Web.Website.Library.Support
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Support
+
+@inject IBenAdminClient AdminClient
+
+<PageTitle>Your message — IsHaunted</PageTitle>
+
+<div class="container-fluid px-3 py-4" style="max-width:760px; margin:auto;">
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+    }
+    else if (_ticket is null)
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <h5 class="mb-2">We can't find that message</h5>
+                <p class="text-secondary mb-3">
+                    The link may be incomplete or mistyped. Check the whole link from the page you
+                    saw after sending, or send a new message.
+                </p>
+                <a class="btn btn-primary" href="/contact">Contact us</a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="d-flex align-items-baseline gap-2 mb-1 flex-wrap">
+            <h3 class="mb-0">@_ticket.Subject</h3>
+            <span class="badge @StatusClass(_ticket.Status)">@StatusLabel(_ticket.Status)</span>
+        </div>
+        <p class="text-secondary small mb-4">
+            Reference <span class="font-monospace">@_ticket.Reference</span>
+            · sent @_ticket.DateCreated.ToLocalTime().ToDisplayDateTime()
+        </p>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="text-secondary small mb-1">You wrote</div>
+                <div style="white-space:pre-wrap;">@_ticket.Body</div>
+            </div>
+        </div>
+
+        @foreach (var reply in _ticket.Replies)
+        {
+            <div class="card mb-3 @(reply.IsFromStaff ? "border-primary" : "")">
+                <div class="card-body">
+                    <div class="text-secondary small mb-1">
+                        @(reply.IsFromStaff ? (reply.AuthorDisplayName ?? "Support") : "You")
+                        · @reply.DateCreated.ToLocalTime().ToDisplayDateTime()
+                    </div>
+                    <div style="white-space:pre-wrap;">@reply.Body</div>
+                </div>
+            </div>
+        }
+
+        @if (_ticket.Status == SupportTicketStatus.Closed)
+        {
+            <div class="alert alert-light text-secondary">
+                This conversation is closed. If you still need help,
+                <a href="/contact">send a new message</a>.
+            </div>
+        }
+        else
+        {
+            <div class="card">
+                <div class="card-body">
+                    <label class="form-label fw-semibold" for="supporttickettrackingpage-add-to-this-conversation-669c">Add to this conversation</label>
+                    @if (_error is not null)
+                    {
+                        <div class="alert alert-danger">@_error</div>
+                    }
+                    <textarea id="supporttickettrackingpage-add-to-this-conversation-669c" class="form-control mb-2" rows="4" maxlength="8000"
+                              value="@_reply"
+                              @oninput="@(e => _reply = e.Value?.ToString() ?? "")"></textarea>
+                    <button type="button" class="btn btn-primary"
+                            disabled="@(_sending || string.IsNullOrWhiteSpace(_reply))"
+                            @onclick="SendReplyAsync">
+                        @(_sending ? "Sending…" : "Send")
+                    </button>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// The secret from the sender's tracking link. This is the only credential on the thread — the
+    /// page is anonymous by necessity, because the sender may well have no account.
+    /// </summary>
+    [Parameter] public Guid AccessToken { get; set; }
+
+    private SupportTicketPublicRecord? _ticket;
+    private bool _loading = true;
+    private bool _sending;
+    private string _reply = "";
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Anonymous endpoint, so no AuthReady wait — but still skip the prerender, which would
+        // fetch once and then immediately fetch again on the interactive render.
+        if (!RendererInfo.IsInteractive) return;
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _ticket = await AdminClient.GetSupportTicketByTokenAsync(AccessToken);
+        _loading = false;
+    }
+
+    private async Task SendReplyAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_reply)) return;
+
+        _sending = true;
+        _error = null;
+        try
+        {
+            var ok = await AdminClient.ReplyToSupportTicketByTokenAsync(
+                AccessToken, new AddSupportTicketReplyRequest(_reply, IsInternalNote: false));
+
+            if (!ok)
+            {
+                _error = "We couldn't add that. Please try again.";
+                return;
+            }
+
+            _reply = "";
+            await LoadAsync();
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+
+    private static string StatusLabel(SupportTicketStatus status) => status switch
+    {
+        SupportTicketStatus.New      => "Received",
+        SupportTicketStatus.Open     => "With our team",
+        SupportTicketStatus.Answered => "Replied",
+        SupportTicketStatus.Closed   => "Closed",
+        _                            => status.ToString(),
+    };
+
+    private static string StatusClass(SupportTicketStatus status) => status switch
+    {
+        SupportTicketStatus.New      => "bg-secondary",
+        SupportTicketStatus.Open     => "bg-primary",
+        SupportTicketStatus.Answered => "bg-success",
+        SupportTicketStatus.Closed   => "bg-dark",
+        _                            => "bg-secondary",
+    };
+}

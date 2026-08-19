@@ -1,5 +1,5 @@
 using Ben.Data.Common.Enums;
-using Ben.Web.Library.Help;
+using Ben.Web.Services.Help;
 using System.Text.RegularExpressions;
 using Xunit;
 
@@ -41,7 +41,7 @@ public sealed class HelpLinkTargetTests
         // read it. Whether the reader is allowed in is the resolver's job, tested separately.
         var viewer = new HelpViewer(HelpAudience.AppAdministrator);
 
-        var razorFiles = new[] { "Ben.Web.Library", "Ben.Web.WebApp" }
+        var razorFiles = new[] { "Ben.Web.Website.Library", "Ben.Web.Website" }
             .Select(p => Path.Combine(root.FullName, p))
             .Where(Directory.Exists)
             .SelectMany(p => Directory.EnumerateFiles(p, "*.razor", SearchOption.AllDirectories))

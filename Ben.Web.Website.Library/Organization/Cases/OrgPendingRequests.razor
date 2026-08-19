@@ -1,0 +1,268 @@
+@page "/organizations/{OrgId:guid}/pending-requests"
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@if (!EmbeddedMode) { <PageTitle>Pending Requests</PageTitle> }
+
+<div class="@(EmbeddedMode ? "mt-2" : "container-fluid py-3" )" style="@(EmbeddedMode ? "" : "max-width:900px;")">
+    @if (!EmbeddedMode)
+    {
+        <div class="d-flex align-items-center gap-2 mb-4">
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases"))"><BenIcon Name="arrow-left" Class="me-1" />
+                Cases
+            </button>
+            <span class="text-secondary">/</span>
+            <h5 class="mb-0">Pending Investigation Requests</h5>
+        </div>
+    }
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_requests is null)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading pending requests…" />
+    }
+    else if (_requests.Count == 0)
+    {
+        <div class="text-center py-5 text-secondary">
+            <p>No pending investigation requests.</p>
+        </div>
+    }
+    else
+    {
+        <div class="d-flex flex-column gap-3">
+            @foreach (var r in _requests)
+            {
+                var isExpanded = _expandedId == r.ClientRequestId;
+                <div class="card @(r.Status == ClientOrgRequestStatus.UnderReview ? "border-warning" : "")">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start justify-content-between gap-3">
+                            <div class="flex-grow-1" style="cursor:pointer;" @onclick="@(() => ToggleExpand(r))">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="badge @StatusBadge(r.Status)">@StatusLabel(r.Status)</span>
+                                    <span class="fw-semibold">@r.City, @r.State @r.ZipCode</span>
+                                </div>
+                                <div class="text-secondary small">
+                                    Submitted @r.DateApplied.ToViewerLocalTime(UserState).ToDisplayDate()
+                                </div>
+                            </div>
+                            <div class="d-flex gap-2 flex-wrap justify-content-end">
+                                @if (r.Status == ClientOrgRequestStatus.Pending || r.Status == ClientOrgRequestStatus.Viewed)
+                                {
+                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => MarkUnderReview(r))" disabled="@(!(!_isBusy))"><BenIcon Name="search" Class="me-1" />
+                                        Under Review
+                                    </button>
+                                }
+                                <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => OpenAccept(r))" disabled="@(!(!_isBusy))"><BenIcon Name="check" Class="me-1" />
+                                    Accept
+                                </button>
+                                <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => OpenDecline(r))" disabled="@(!(!_isBusy))"><BenIcon Name="x" Class="me-1" />
+                                    Decline
+                                </button>
+                            </div>
+                        </div>
+
+                        @* Expanded details — clicking auto-marks Viewed *@
+                        @if (isExpanded && !string.IsNullOrWhiteSpace(r.Description))
+                        {
+                            <div class="mt-3 border-top pt-3">
+                                <div class="text-secondary small fw-semibold mb-1">Request Details</div>
+                                <div class="text-body-secondary small">@((MarkupString)r.Description)</div>
+                            </div>
+                        }
+                        else if (!isExpanded && !string.IsNullOrWhiteSpace(r.Description))
+                        {
+                            <div class="text-secondary small mt-2 border-top pt-2"
+                                 style="max-height:3em;overflow:hidden;cursor:pointer;"
+                                 @onclick="@(() => ToggleExpand(r))">
+                                @((MarkupString)TruncateHtml(r.Description, 150))
+                                <span class="text-primary ms-1">View more…</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@* ── Accept window ─────────────────────────────────────────────────────────── *@
+@if (_acceptTarget is not null)
+{
+    <BenModal Visible="true" Title="Accept Investigation Request" Static="true">
+    <ChildContent>
+            <div class="p-2">
+                <p class="text-secondary small mb-3">
+                    Accepting this request will create a new case.
+                    You can update the title and assign a case manager later.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="orgpendingrequests-case-title-optional-280c">Case Title <span class="text-secondary fw-normal">(optional)</span></label>
+                    <input id="orgpendingrequests-case-title-optional-280c" type="text" class="form-control" placeholder="Auto-generated from client name and city if blank" @bind="@_acceptTitle" @bind:event="oninput" />
+                </div>
+                @if (_actionError is not null)
+                {
+                    <div class="alert alert-danger">@_actionError</div>
+                }
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button type="button" class="btn btn-secondary" @onclick="@(() => _acceptTarget = null)">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="AcceptAsync" disabled="@(!(!_isBusy))"><BenIcon Name="check" Class="me-1" />
+                        @(_isBusy ? "Accepting…" : "Accept & Create Case")
+                    </button>
+                </div>
+            </div>
+        </ChildContent>
+</BenModal>
+}
+
+@* ── Decline window ────────────────────────────────────────────────────────── *@
+@if (_declineTarget is not null)
+{
+    <BenModal Visible="true" Title="Decline Request" Static="true">
+    <ChildContent>
+            <div class="p-2">
+                <p>Are you sure you want to decline this request from <strong>@_declineTarget?.City, @_declineTarget?.State</strong>?</p>
+                @if (_actionError is not null)
+                {
+                    <div class="alert alert-danger">@_actionError</div>
+                }
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button type="button" class="btn btn-secondary" @onclick="@(() => _declineTarget = null)">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="DeclineAsync" disabled="@(!(!_isBusy))">
+                        @(_isBusy ? "Declining…" : "Decline")
+                    </button>
+                </div>
+            </div>
+        </ChildContent>
+</BenModal>
+}
+
+@code {
+    [Parameter] public Guid OrgId       { get; set; }
+    [Parameter] public bool EmbeddedMode { get; set; }
+
+    private List<OrgPendingRequestRecord>? _requests;
+    private string? _error;
+    private bool _isBusy;
+    private Guid? _expandedId;
+    private string? _actionError;
+
+    private OrgPendingRequestRecord? _acceptTarget;
+    private string _acceptTitle = "";
+    private OrgPendingRequestRecord? _declineTarget;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        try { _requests = (await AdminClient.GetOrgPendingRequestsAsync(OrgId)).ToList(); }
+        catch { _error = "Failed to load pending requests."; _requests = []; }
+    }
+
+    private async Task ToggleExpand(OrgPendingRequestRecord r)
+    {
+        _expandedId = _expandedId == r.ClientRequestId ? null : r.ClientRequestId;
+        // Auto-mark as Viewed when first expanded (if still Pending)
+        if (_expandedId == r.ClientRequestId && r.Status == ClientOrgRequestStatus.Pending)
+        {
+            await AdminClient.UpdatePendingRequestStatusAsync(OrgId, r.ClientRequestId, ClientOrgRequestStatus.Viewed);
+            await LoadAsync();
+        }
+    }
+
+    private async Task MarkUnderReview(OrgPendingRequestRecord r)
+    {
+        _isBusy = true;
+        try
+        {
+            await AdminClient.UpdatePendingRequestStatusAsync(OrgId, r.ClientRequestId, ClientOrgRequestStatus.UnderReview);
+            await LoadAsync();
+        }
+        catch { _error = "Failed to update status."; }
+        finally { _isBusy = false; }
+    }
+
+    private static string StatusLabel(ClientOrgRequestStatus s) => s switch
+    {
+        ClientOrgRequestStatus.Pending     => "Submitted",
+        ClientOrgRequestStatus.Viewed      => "Viewed",
+        ClientOrgRequestStatus.UnderReview => "Under Review",
+        _                                  => s.ToString(),
+    };
+
+    private static string StatusBadge(ClientOrgRequestStatus s) => s switch
+    {
+        ClientOrgRequestStatus.Pending     => "bg-secondary",
+        ClientOrgRequestStatus.Viewed      => "bg-info text-dark",
+        ClientOrgRequestStatus.UnderReview => "bg-warning text-dark",
+        _                                  => "bg-secondary",
+    };
+
+    private void OpenAccept(OrgPendingRequestRecord r)
+    {
+        _acceptTarget = r;
+        _acceptTitle  = "";
+        _actionError  = null;
+    }
+
+    private void OpenDecline(OrgPendingRequestRecord r)
+    {
+        _declineTarget = r;
+        _actionError   = null;
+    }
+
+    private async Task AcceptAsync()
+    {
+        if (_acceptTarget is null) return;
+        _isBusy = true; _actionError = null;
+        try
+        {
+            var req = new AcceptClientRequestAsCaseRequest(
+                Title: string.IsNullOrWhiteSpace(_acceptTitle) ? null : _acceptTitle.Trim(),
+                CaseManagerAppUserId: null);
+            var newCase = await AdminClient.AcceptClientRequestAsCaseAsync(OrgId, _acceptTarget.ClientRequestId, req);
+            if (newCase is null) { _actionError = "Accept failed."; }
+            else
+            {
+                _acceptTarget = null;
+                NavManager.NavigateTo($"/organizations/{OrgId}/cases/{newCase.Id}");
+            }
+        }
+        catch (Exception ex) { _actionError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private async Task DeclineAsync()
+    {
+        if (_declineTarget is null) return;
+        _isBusy = true; _actionError = null;
+        try
+        {
+            await AdminClient.DeclineClientRequestAsync(OrgId, _declineTarget.ClientRequestId);
+            _requests?.Remove(_declineTarget);
+            _declineTarget = null;
+        }
+        catch (Exception ex) { _actionError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    private static string TruncateHtml(string html, int maxChars)
+    {
+        var text = System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", " ")
+                       .Replace("&nbsp;", " ").Trim();
+        return text.Length > maxChars ? text[..maxChars] + "…" : text;
+    }
+}

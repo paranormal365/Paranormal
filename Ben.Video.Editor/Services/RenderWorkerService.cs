@@ -11,7 +11,7 @@ namespace Ben.Video.Editor.Services;
 /// </summary>
 public sealed class RenderWorkerService : IAsyncDisposable
 {
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/renderWorkerInterop.js";
+    private const string ModulePath = "js/renderWorkerInterop.js";
 
     private readonly IJSRuntime _js;
     private readonly OPFSService _opfs;
@@ -30,7 +30,7 @@ public sealed class RenderWorkerService : IAsyncDisposable
     public async Task LoadAsync()
     {
         if (_loaded) return;
-        _module ??= await _js.InvokeAsync<IJSObjectReference>("import", ModulePath);
+        _module ??= await _js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
         _selfRef ??= DotNetObjectReference.Create(this);
         await _module.InvokeVoidAsync("loadCore", _selfRef);
         _loaded = true;

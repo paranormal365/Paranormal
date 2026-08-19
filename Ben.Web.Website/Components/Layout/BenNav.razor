@@ -1,0 +1,375 @@
+@implements IDisposable
+
+@inject IWebApiTokenStore TokenStore
+@inject IWebApiAuthService AuthService
+@inject NavigationManager NavManager
+@inject NotificationState Notifications
+
+@*
+    The template's sidebar, driven by data instead of hand-maintained markup.
+
+    Replaces three things at once: the 694-line _GeneratedNavigation partial, the inline script
+    in _Sidebar.cshtml that marked the active link by string-matching window.location, and
+    smartNavigation.js's accordion. Active state, expansion and filtering are all C# here — two
+    owners of the same DOM classes (Blazor and a jQuery-era script) is the classic way this breaks.
+
+    Administration lives here as an expandable group rather than in a separate right-hand drawer:
+    the template already has a nested-menu pattern, and one place to look for navigation beats two.
+*@
+
+<aside class="app-sidebar d-flex flex-column">
+
+    @* No logo here: the brand lives in the header, ahead of the sidebar toggle. *@
+
+    @* The template's own filter markup, class names and id included. Those are not decoration:
+       the minified-sidebar rule is `.app-menu-filter-container #searchInput { visibility: hidden }`,
+       so a differently-named wrapper leaves the box on screen when the sidebar shrinks to 70px. *@
+    <form class="app-menu-filter-container px-4" @onsubmit:preventDefault="true">
+        <input type="text" class="form-control" id="searchInput" placeholder="Filter"
+               autocomplete="off" aria-label="Filter menu"
+               value="@_filter" @oninput="OnFilterInput" />
+    </form>
+
+    <nav class="primary-nav flex-grow-1 custom-scroll">
+        <ul class="nav-menu">
+            @foreach (var section in VisibleSections)
+            {
+                @if (section.Title is { } title)
+                {
+                    <li class="nav-title"><span>@title</span></li>
+                }
+
+                @foreach (var item in section.Items)
+                {
+                    @RenderItem(item)
+                }
+            }
+        </ul>
+
+        @if (!VisibleSections.Any())
+        {
+            <div class="no-results-msg pt-3 info-container">
+                <h6 class="mb-1">No menu items found.</h6>
+                <p class="fs-sm">Try searching with different keywords.</p>
+            </div>
+        }
+    </nav>
+
+    @if (IsImpersonating)
+    {
+        <div class="impersonation-banner p-2">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <BenIcon Name="user" />
+                <span class="text-truncate">Viewing as <strong>@TokenStore.UserEmail</strong></span>
+            </div>
+            <button type="button" class="btn btn-warning btn-sm w-100" @onclick="ReturnToSuperAdmin">
+                Return to SuperAdmin
+            </button>
+        </div>
+    }
+</aside>
+
+@* The template's own backdrop, from _Sidebar.cshtml. It does two jobs on small screens: dims the
+   page behind the open menu, and closes it when tapped. Without it the menu is a one-way door —
+   the open sidebar is 288px wide starting at x:0, which covers the hamburger that opened it, so
+   the only way out is to pick a link. CSS shows it only while .app-mobile-menu-open is set. *@
+<div class="backdrop" data-action="toggle-swap" data-toggleclass="app-mobile-menu-open"></div>
+
+@code {
+    /// <summary>Passed down by MainLayout — see the note at its call site for why these are
+    /// parameters rather than reads of the token store.</summary>
+    [Parameter] public bool IsAuthenticated { get; set; }
+    [Parameter] public bool IsSuperAdmin { get; set; }
+    [Parameter] public bool IsImpersonating { get; set; }
+
+    private string _filter = string.Empty;
+    private readonly HashSet<string> _openGroups = new();
+
+    private sealed record Section(string? Title, IReadOnlyList<NavItem> Items);
+
+    /// <summary>Sections after the filter box has been applied, dropping any left empty.</summary>
+    private IEnumerable<Section> VisibleSections
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_filter)) return Sections;
+
+            return Sections
+                .Select(s => s with { Items = s.Items.Where(Matches).ToList() })
+                .Where(s => s.Items.Count > 0)
+                .ToList();
+        }
+    }
+
+    private bool Matches(NavItem item)
+        => item.Text.Contains(_filter, StringComparison.OrdinalIgnoreCase)
+        || item.Children.Any(c => c.Text.Contains(_filter, StringComparison.OrdinalIgnoreCase));
+
+    // Same buckets, order and roll-up rules as the Telerik drawer this replaces — only the
+    // icon names change (Telerik SvgIcon -> sprite symbol id).
+    private IReadOnlyList<Section> Sections
+    {
+        get
+        {
+            var sections = new List<Section>();
+
+            // Home stands alone so Administration can sit directly beneath it for an admin,
+            // ahead of the visitor-facing entries — an admin arrives to run the site, not to
+            // browse it, and the admin tools are what they are reaching for.
+            var home = new List<NavItem> { new NavItem("Home", "home", "/") };
+
+            var main = new List<NavItem>
+            {
+                // The client's way in: the request wizard, where they give the address the case
+                // is about. Sits above the browse-style entries because it is the thing a first
+                // -time visitor actually came to do. Anonymous visitors see it too — the wizard
+                // itself handles sending them through sign-in.
+                new NavItem("Request Investigation", "file-plus", "/my-requests/new"),
+                new NavItem("Join a Group", "map-pin", "/find"),
+                new NavItem("Equipment", "tool", "/equipment-catalog"),
+            };
+
+            if (IsAuthenticated && !IsImpersonating)
+            {
+                var s = Notifications.Current;
+
+                // Buckets are rolled up to the page a user would actually go to. Group messages and
+                // client messages awaiting a reply both live under an organization, so they share
+                // the Organizations badge; the bell popover is what breaks them apart again.
+                var orgSide = Combine(s.OrgMessages, s.CaseMessagesAsOrgMember);
+
+                main.Add(new NavItem("Notifications",     "bell",        "/notifications",
+                                     Combine(s.SystemMessages, s.PendingPermissionRequests),
+                                     badgeNoun: "unread notifications"));
+                main.Add(new NavItem("My Cases",          "folder",      "/my-cases", s.CaseMessagesAsClient,
+                                     badgeNoun: "unread case messages"));
+                main.Add(new NavItem("My Investigations", "calendar",    "/my-investigations", s.InvestigationInvites,
+                                     badgeNoun: "investigation invitations"));
+                main.Add(new NavItem("My Requests",       "inbox",       "/my-requests"));
+                main.Add(new NavItem("My Videos",         "film",        "/my-videos"));
+                main.Add(new NavItem("My Equipment",      "tool",        "/my-equipment"));
+                main.Add(new NavItem("My Checkouts",      "calendar",    "/my-checkouts"));
+                main.Add(new NavItem("Gear Questions",    "help-circle", "/my-equipment/questions"));
+                main.Add(new NavItem("Organizations",     "globe",       "/organizations", orgSide,
+                                     badgeNoun: "unread group messages"));
+                main.Add(new NavItem("Upload Files",      "upload",      "/upload-files"));
+                main.Add(new NavItem("Media Library",     "image",       "/media-library"));
+            }
+
+            // No Login entry here: the header carries a Sign In control on every page, and a
+            // second one in the nav list is the same destination twice.
+
+            sections.Add(new Section(null, home));
+
+            if (IsSuperAdmin && !IsImpersonating)
+            {
+                // One expandable entry rather than a headed section: the admin tools are a place
+                // you go, not a permanent third of the sidebar. Everything below it stays grouped
+                // by area, one level further in.
+                sections.Add(new Section(null, new[]
+                {
+                    new NavItem("Administration", "settings", children: AdminGroups),
+                }));
+            }
+
+            sections.Add(new Section(null, main));
+
+            return sections;
+        }
+    }
+
+    /// <summary>
+    /// The former right-hand admin drawer, as expandable groups. Same destinations and grouping,
+    /// so muscle memory carries over.
+    /// </summary>
+    private static IReadOnlyList<NavItem> AdminGroups => new List<NavItem>
+    {
+        new NavItem("Users", "users", children: new[]
+        {
+            new NavItem("Manage Users", "user", "/admin/users"),
+            new NavItem("Site Roles",   "lock", "/admin/roles"),
+        }),
+        new NavItem("Cases & Investigations", "folder", children: new[]
+        {
+            new NavItem("All Cases",          "folder",   "/admin/cases"),
+            new NavItem("All Investigations", "calendar", "/admin/investigations"),
+        }),
+        new NavItem("Content", "layers", children: new[]
+        {
+            new NavItem("File Types",           "file",   "/admin/file-types"),
+            new NavItem("Lookup Types",         "list",   "/admin/lookup-types"),
+            new NavItem("Clipart Library",      "image",  "/admin/video-assets"),
+            new NavItem("Experience Taxonomy",  "layers", "/admin/experience-taxonomy"),
+            new NavItem("Equipment Taxonomy",   "tool",   "/admin/equipment-taxonomy"),
+        }),
+        new NavItem("System", "settings", children: new[]
+        {
+            new NavItem("Site Settings",    "settings", "/admin/site-settings"),
+            new NavItem("Support Tickets",  "mail",     "/admin/support-tickets"),
+            new NavItem("Audit Log",        "list",     "/admin/audit-log"),
+            new NavItem("Sidecar Installs", "download", "/admin/sidecar-telemetry"),
+        }),
+    };
+
+    protected override void OnInitialized()
+    {
+        NavManager.LocationChanged += OnLocationChanged;
+        // Sections are recomputed on every render, so the badges only need a re-render to update.
+        Notifications.Changed += OnNotificationsChanged;
+        TokenStore.StateChanged += OnAuthChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Notifications.EnsureStartedAsync(RendererInfo.IsInteractive);
+    }
+
+    private void OnFilterInput(ChangeEventArgs e) => _filter = e.Value?.ToString() ?? string.Empty;
+
+    private void ToggleGroup(string key)
+    {
+        if (!_openGroups.Remove(key)) _openGroups.Add(key);
+    }
+
+    /// <summary>A group is open when the user opened it, or when the current page is inside it.</summary>
+
+    @* Rendered recursively rather than as fixed levels, so Administration can hold groups that
+       themselves hold links. The template's own nav nests three <ul> deep and styles
+       `.primary-nav ul ul ul`, so the depth costs nothing extra. *@
+    private RenderFragment RenderItem(NavItem item) => __builder =>
+    {
+        @* has-ul and aria-haspopup are what the template's own nav script sets on a parent item;
+           the template's CSS keys its active-state styling off has-ul, and the chevron below is
+           the affordance that tells a reader the item opens at all. Rendered here in C# because
+           that script is not shipped — without them Administration looked like a plain link. *@
+        <li class="nav-item @(item.Children.Count > 0 ? "has-ul" : null) @(item.Children.Count > 0 && IsExpanded(item) ? "open active" : null) @(item.Children.Count == 0 && IsActive(item) ? "active" : null)"
+            aria-haspopup="@(item.Children.Count > 0 ? "true" : null)">
+            @if (item.Children.Count == 0)
+            {
+                <a href="@item.Url" title="@item.Text">
+                    <BenIcon Name="@item.Icon" />
+                    <span class="nav-link-text">@item.Text</span>
+                    @if (item.Count > 0)
+                    {
+                        @* The visible glyph stays a bare number — there is no room for more — but
+                           the tooltip and the accessible name both say what it is counting. *@
+                        <span class="badge badge-end @NotificationBadge.CssClass(item.Urgency)"
+                              title="@($"{item.Count} {item.BadgeNoun}")"
+                              aria-label="@($"{item.Count} {item.BadgeNoun}")">@NotificationBadge.Text(item.Count)</span>
+                    }
+                </a>
+            }
+            else
+            {
+                <a href="#" title="@item.Text"
+                   aria-expanded="@IsExpanded(item).ToString().ToLowerInvariant()"
+                   @onclick="() => ToggleGroup(item.Text)" @onclick:preventDefault="true">
+                    <BenIcon Name="@item.Icon" />
+                    <span class="nav-link-text">@item.Text</span>
+                    <span class="collapse-sign" aria-hidden="true">
+                        <i class="sa @(IsExpanded(item) ? "sa-chevron-up" : "sa-chevron-down")"></i>
+                    </span>
+                </a>
+                @* The template hides every nav list with `.primary-nav ul { display: none }` and
+                   reveals a submenu with `.primary-nav ul.nav-menu ul.active` — the class belongs
+                   on the <ul> itself, not the parent <li>. Toggling an inline style instead left
+                   the CSS default in force, so the group opened in the DOM and stayed invisible. *@
+                <ul class="@(IsExpanded(item) ? "active" : null)">
+                    @foreach (var child in item.Children)
+                    {
+                        @RenderItem(child)
+                    }
+                </ul>
+            }
+        </li>
+    };
+
+    /// <summary>
+    /// Open if the reader opened it, or if the current page is anywhere beneath it — checked
+    /// recursively, so Administration opens along with the group holding the active link rather
+    /// than only when that link is its direct child.
+    /// </summary>
+    private bool IsExpanded(NavItem group)
+        => _openGroups.Contains(group.Text) || ContainsActive(group);
+
+    private bool ContainsActive(NavItem group)
+        => group.Children.Any(c => IsActive(c) || ContainsActive(c));
+
+    private bool IsActive(NavItem item)
+    {
+        if (string.IsNullOrEmpty(item.Url)) return false;
+        var path = "/" + NavManager.ToBaseRelativePath(NavManager.Uri).Split('?')[0].TrimEnd('/');
+        if (item.Url == "/") return path == "/";
+        return path.Equals(item.Url, StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith(item.Url + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Raised off the renderer's synchronization context by NotificationState's poll.
+    private void OnNotificationsChanged() => InvokeAsync(StateHasChanged);
+    private void OnAuthChanged() => InvokeAsync(StateHasChanged);
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs args) => InvokeAsync(StateHasChanged);
+
+    private async Task ReturnToSuperAdmin()
+    {
+        await AuthService.StopImpersonatingAsync();
+        NavManager.NavigateTo("/admin/users");
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        NavManager.LocationChanged -= OnLocationChanged;
+        Notifications.Changed -= OnNotificationsChanged;
+        TokenStore.StateChanged -= OnAuthChanged;
+    }
+
+    /// <summary>Merges buckets that share one destination, keeping the older timestamp.</summary>
+    private static NotificationBucket Combine(params NotificationBucket[] buckets)
+    {
+        var count = buckets.Sum(b => b.Count);
+        if (count == 0) return NotificationBucket.Empty;
+
+        var oldest = buckets.Where(b => b.Count > 0 && b.OldestUnreadUtc.HasValue)
+                            .Select(b => b.OldestUnreadUtc!.Value)
+                            .DefaultIfEmpty()
+                            .Min();
+        return new NotificationBucket(count, oldest == default ? null : oldest);
+    }
+
+    public sealed class NavItem
+    {
+        public string Text { get; }
+        public string Icon { get; }
+        public string Url { get; }
+        public IReadOnlyList<NavItem> Children { get; }
+
+        /// <summary>Items waiting behind this destination, or 0 for a plain nav item.</summary>
+        public int Count { get; }
+
+        /// <summary>How overdue those items are — drives the badge colour.</summary>
+        public NotificationBadge.Urgency Urgency { get; }
+
+        /// <summary>
+        /// Plural noun for whatever the badge is counting, e.g. "unread case messages".
+        /// <para>
+        /// A bare number sitting directly after a nav label reads as a quantity of that label:
+        /// "Organizations 17" was taken to mean seventeen organizations, when it meant seventeen
+        /// unread messages and the page behind it lists three organizations. The badge has to name
+        /// its own units.
+        /// </para>
+        /// </summary>
+        public string BadgeNoun { get; }
+
+        public NavItem(string text, string icon, string url = "", NotificationBucket? bucket = null,
+                       IReadOnlyList<NavItem>? children = null, string badgeNoun = "waiting")
+        {
+            Text = text;
+            Icon = icon;
+            Url = url;
+            Children = children ?? Array.Empty<NavItem>();
+            Count = bucket?.Count ?? 0;
+            Urgency = bucket is null ? NotificationBadge.Urgency.None : NotificationBadge.Classify(bucket);
+            BadgeNoun = badgeNoun;
+        }
+    }
+}

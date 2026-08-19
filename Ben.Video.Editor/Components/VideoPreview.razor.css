@@ -127,7 +127,7 @@
     font-size: .7rem;
     font-variant-numeric: tabular-nums;
     font-family: monospace;
-    color: var(--kendo-color-primary, var(--bv-accent));
+    color: var(--bv-accent, var(--kendo-color-primary));
     letter-spacing: .03em;
     padding: 0 .25rem;
     opacity: .85;

@@ -820,7 +820,7 @@
 
     private async Task<IJSObjectReference> DomAsync() =>
         _dom ??= await JS.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/js/domInterop.js");
+            "benImportEditorModule", "js/domInterop.js");
 
     [Parameter] public bool? MultiTrack   { get; set; }
     [Parameter] public bool? AudioTracks  { get; set; }
@@ -1138,7 +1138,7 @@
         try
         {
             _dragBridgeModule = await JS.InvokeAsync<IJSObjectReference>(
-                "import", "/_content/Ben.Video.Editor/js/clipDragBridge.js");
+                "benImportEditorModule", "js/clipDragBridge.js");
             _dropBridgeRef = DotNetObjectReference.Create(this);
             await _dragBridgeModule.InvokeVoidAsync("registerDropTarget", _dropBridgeRef);
             await _dragBridgeModule.InvokeVoidAsync("registerTransitionDropTarget", _dropBridgeRef);
@@ -1309,7 +1309,7 @@
     private async Task<IJSObjectReference> GetJsModuleAsync()
     {
         _jsModule ??= await JS.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/Components/VideoTimeline.razor.js");
+            "benImportEditorModule", "Components/VideoTimeline.razor.js");
         return _jsModule;
     }
 

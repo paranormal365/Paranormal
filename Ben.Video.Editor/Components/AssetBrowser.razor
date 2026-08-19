@@ -280,7 +280,7 @@
         try
         {
             _dragBridgeModule = await JS.InvokeAsync<IJSObjectReference>(
-                "import", "/_content/Ben.Video.Editor/js/clipDragBridge.js");
+                "benImportEditorModule", "js/clipDragBridge.js");
             _dragSourceRef = DotNetObjectReference.Create(this);
             await _dragBridgeModule.InvokeVoidAsync("registerTransitionDragSource", _dragSourceRef);
         }

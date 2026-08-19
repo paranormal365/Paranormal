@@ -1,0 +1,35 @@
+# SMARTADMIN FONT ICON LIBRARY LICENSE AGREEMENT
+
+## 1. LICENSE GRANT
+This license agreement (“Agreement”) is made between the **SmartAdmin Font Icon Library** (“Font Library”) owner (“Licensor”) and the end user (“Licensee”). 
+By downloading, using, or distributing this Font Library, the Licensee agrees to the terms outlined below.
+
+Subject to compliance with this Agreement, the Licensor grants the Licensee a **non-exclusive, worldwide, royalty-free license** to use, modify, and 
+integrate the Font Library **exclusively within the SmartAdmin template**.
+
+## 2. PERMITTED USE
+The Licensee is allowed to:
+- Use the Font Library **only within projects that utilize the SmartAdmin template**.
+- Embed the fonts in **websites, web apps, and software** that are built using SmartAdmin.
+- Modify the font files for **personal or internal** use within SmartAdmin projects.
+
+## 3. RESTRICTIONS
+The Licensee **may NOT**:
+- Use the Font Library in **any project that does not include SmartAdmin**.
+- Sell, sublicense, or distribute the Font Library as a standalone product.
+- Claim ownership or trademark rights over the Font Library.
+- Use the Font Library for unlawful or misleading purposes.
+
+## 4. OWNERSHIP & ATTRIBUTION
+The Font Library remains the **intellectual property** of the Licensor. Attribution is not required but is **appreciated** in open-source or public projects.
+
+## 5. DISCLAIMER & LIABILITY
+THIS FONT LIBRARY IS PROVIDED **"AS IS"** WITHOUT WARRANTIES OF ANY KIND. THE LICENSOR DISCLAIMS ALL LIABILITY FOR DAMAGES ARISING FROM THE USE OF THIS FONT LIBRARY.
+
+## 6. TERMINATION
+Failure to comply with this Agreement may result in **license termination**, requiring the Licensee to cease all use of the Font Library.
+
+## 7. GOVERNING LAW
+This Agreement shall be governed by and construed in accordance with the **laws of [Your Country]**, without regard to conflict of law principles.
+
+For inquiries, contact: sunnyisatwork@gmail.com

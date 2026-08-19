@@ -1,4 +1,5 @@
 @inject IMediaLibraryProvider Library
+@implements IDisposable
 @inject FfmpegService Ffmpeg
 @inject SidecarMediaProbe SidecarMedia
 @inject OPFSService OPFS
@@ -117,6 +118,16 @@
 </TelerikContextMenu>
 
 @code {
+
+    protected override void OnInitialized()
+    {
+    // The status this component paints comes from the injected ffmpeg service, and Blazor only
+    // re-renders a child whose parameters changed — which a state change here does not touch.
+    // Without this the control shows whatever was true at its last render: see item 94, where a
+    // toolbar chip sat at "Processing… 33%" long after the service had returned to Ready.
+        Ffmpeg.OnStateChanged += OnFfmpegStateChanged;
+    }
+
     // ── Parameters ────────────────────────────────────────────────────────────
 
     /// <summary>Controls window visibility — two-way bindable.</summary>
@@ -280,4 +291,8 @@
         Visible = visible;
         await VisibleChanged.InvokeAsync(visible);
     }
+
+    private void OnFfmpegStateChanged() => InvokeAsync(StateHasChanged);
+
+    void IDisposable.Dispose() => Ffmpeg.OnStateChanged -= OnFfmpegStateChanged;
 }

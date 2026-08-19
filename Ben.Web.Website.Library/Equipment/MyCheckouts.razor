@@ -1,0 +1,270 @@
+@page "/my-checkouts"
+@namespace Ben.Web.Website.Library.Equipment
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Shared
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>My Checkouts</PageTitle>
+
+@* Answers the three questions Ben asked of this page at once: what I have out, what of mine is
+   out with someone else, and when any of it is due. Both stacks live here rather than on a
+   calendar, because a personal loan has no group whose calendar it could sit on. *@
+
+<div class="container-fluid py-3" style="max-width:1000px;">
+    <h3 class="mb-1">Equipment I'm Borrowing<HelpLink Slug="borrowing-equipment" /></h3>
+    <p class="text-secondary small mb-4">
+        Gear you have out, and requests waiting on you.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading your loans…" />
+    }
+    else
+    {
+        <h5 class="mb-2">Borrowing</h5>
+        @if (_borrowing.Count == 0)
+        {
+            <div class="card mb-4">
+                <div class="card-body text-center py-4">
+                    <p class="text-secondary small mb-0">
+                        You aren't borrowing anything. Browse your groups' equipment to ask.
+                    </p>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="row g-3 mb-4">
+                @foreach (var loan in _borrowing)
+                {
+                    <div class="col-md-6">
+                        <div class="card h-100 @(loan.IsOverdue ? "border-danger" : "")">
+                            <div class="card-body">
+                                @RenderHeader(loan)
+
+                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => NavManager.NavigateTo($"/my-checkouts/{loan.Id}"))">Details</button>
+                                @if (loan.Flags.CanCancel)
+                                {
+                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => CancelAsync(loan))" disabled="@(!(!_busy))">Cancel request</button>
+                                }
+                                @if (loan.Flags.CanConfirmHandoff)
+                                {
+                                    <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ConfirmHandoffAsync(loan))" disabled="@(!(!_busy))">I've got it</button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <h5 class="mb-2">Waiting on me</h5>
+        @if (_toApprove.Count == 0)
+        {
+            <div class="card">
+                <div class="card-body text-center py-4">
+                    <p class="text-secondary small mb-0">Nothing of yours is out or waiting for a decision.</p>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="row g-3">
+                @foreach (var loan in _toApprove)
+                {
+                    <div class="col-md-6">
+                        <div class="card h-100 @(loan.IsOverdue ? "border-danger" : "")">
+                            <div class="card-body">
+                                @RenderHeader(loan)
+
+                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => NavManager.NavigateTo($"/my-checkouts/{loan.Id}"))">Details</button>
+                                @if (loan.Flags.CanApprove)
+                                {
+                                    <div class="row g-2 align-items-end mb-2">
+                                        <div class="col-7">
+                                            <label class="form-label small fw-semibold mb-1">Due back (optional)</label>
+                                            <TelerikDatePicker Format="dd/MM/yyyy" Value="@GetDue(loan.Id)"
+                                                               ValueChanged="@((DateTime? v) => _dueDates[loan.Id] = v)"
+                                                               Width="100%" />
+                                        </div>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label small fw-semibold mb-1" for="mycheckouts-reason-required-to-decline-bd0c">Reason (required to decline)</label>
+                                        <input id="mycheckouts-reason-required-to-decline-bd0c" class="form-control form-control-sm" maxlength="1000"
+                                               value="@GetNote(loan.Id)"
+                                               @oninput="@(e => _reviewNotes[loan.Id] = e.Value?.ToString() ?? string.Empty)" />
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ApproveAsync(loan))" disabled="@(!(!_busy))">Approve</button>
+                                        <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => DenyAsync(loan))" disabled="@(!(!_busy && !string.IsNullOrWhiteSpace(GetNote(loan.Id))))">Decline</button>
+                                    </div>
+                                }
+                                else if (loan.Flags.CanReceiveReturn)
+                                {
+                                    <div class="mb-2">
+                                        <label class="form-label small fw-semibold mb-1" for="mycheckouts-condition-on-return-optional-a06a">Condition on return (optional)</label>
+                                        <input id="mycheckouts-condition-on-return-optional-a06a" class="form-control form-control-sm" maxlength="2000"
+                                               value="@GetNote(loan.Id)"
+                                               @oninput="@(e => _reviewNotes[loan.Id] = e.Value?.ToString() ?? string.Empty)" />
+                                    </div>
+                                    <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ReceiveReturnAsync(loan))" disabled="@(!(!_busy))">Got it back</button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<EquipmentCheckoutRecord> _borrowing = [];
+    private List<EquipmentCheckoutRecord> _toApprove = [];
+    private readonly Dictionary<Guid, DateTime?> _dueDates = [];
+    private readonly Dictionary<Guid, string> _reviewNotes = [];
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+
+    private DateTime? GetDue(Guid id) => _dueDates.TryGetValue(id, out var d) ? d : null;
+    private string GetNote(Guid id) => _reviewNotes.TryGetValue(id, out var n) ? n : string.Empty;
+
+    private RenderFragment RenderHeader(EquipmentCheckoutRecord loan) => @<text>
+        <div class="d-flex justify-content-between align-items-start">
+            <h6 class="card-title mb-1">@loan.ItemDisplayName</h6>
+            <span class="badge @StatusClass(loan)">@StatusLabel(loan)</span>
+        </div>
+        <div class="text-secondary small">@loan.BrandName · @loan.ModelName</div>
+        <div class="text-secondary small mb-2">
+            @if (loan.Flags.IsBorrower)
+            {
+                <span>From @(loan.ItemOwnerDisplayName ?? "the group")</span>
+            }
+            else
+            {
+                <span>Asked for by @(loan.BorrowerDisplayName ?? "a member")</span>
+            }
+            @if (loan.BorrowedForOrganizationName is not null)
+            {
+                <span> · for @loan.BorrowedForOrganizationName</span>
+            }
+            @if (loan.InvestigationTitle is not null)
+            {
+                <span> · @loan.InvestigationTitle</span>
+            }
+        </div>
+
+        @* The borrower filled this in to say when they need it — the approver could not see it. *@
+        @if (loan.DateNeededFrom is not null)
+        {
+            <div class="small text-secondary mb-1">
+                Needed from @loan.DateNeededFrom.Value.ToDisplayDate()
+            </div>
+        }
+        @if (loan.DateDue is not null)
+        {
+            <div class="small mb-2 @(loan.IsOverdue ? "text-danger fw-semibold" : "text-secondary")">
+                Due @loan.DateDue.Value.ToDisplayDate()@(loan.IsOverdue ? " — overdue" : "")
+            </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(loan.RequestNotes))
+        {
+            <p class="small mb-2">“@loan.RequestNotes”</p>
+        }
+        @if (!string.IsNullOrWhiteSpace(loan.ReviewNotes))
+        {
+            <p class="small text-secondary mb-2">Reply: @loan.ReviewNotes</p>
+        }
+    </text>;
+
+    private static string StatusLabel(EquipmentCheckoutRecord loan) => loan.Status switch
+    {
+        EquipmentCheckoutStatus.Requested  => "Waiting",
+        EquipmentCheckoutStatus.Approved   => "Approved",
+        EquipmentCheckoutStatus.Denied     => "Declined",
+        EquipmentCheckoutStatus.Cancelled  => "Cancelled",
+        EquipmentCheckoutStatus.CheckedOut => loan.IsOverdue ? "Overdue" : "Out",
+        EquipmentCheckoutStatus.Returned   => "Returned",
+        _                                  => loan.Status.ToString(),
+    };
+
+    private static string StatusClass(EquipmentCheckoutRecord loan) => loan.Status switch
+    {
+        EquipmentCheckoutStatus.Requested  => "bg-warning text-dark",
+        EquipmentCheckoutStatus.Approved   => "bg-info text-dark",
+        EquipmentCheckoutStatus.Denied     => "bg-secondary",
+        EquipmentCheckoutStatus.Cancelled  => "bg-secondary",
+        EquipmentCheckoutStatus.CheckedOut => loan.IsOverdue ? "bg-danger" : "bg-success",
+        EquipmentCheckoutStatus.Returned   => "bg-light text-secondary border",
+        _                                  => "bg-secondary",
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _borrowing = [.. await AdminClient.GetMyEquipmentCheckoutsAsync("borrower")];
+            _toApprove = [.. await AdminClient.GetMyEquipmentCheckoutsAsync("approver")];
+        }
+        catch (Exception ex)
+        {
+            _error = $"Your loans could not be loaded: {ex.Message}";
+        }
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task RunAsync(Func<Task<EquipmentCheckoutRecord?>> action, string failure)
+    {
+        _busy = true;
+        _error = null;
+        var result = await action();
+        _busy = false;
+
+        // A null here is the server refusing — most often because the loan moved on under us.
+        if (result is null) _error = failure;
+        await LoadAsync();
+    }
+
+    private Task CancelAsync(EquipmentCheckoutRecord loan)
+        => RunAsync(() => AdminClient.CancelEquipmentCheckoutAsync(loan.Id),
+                    "That request couldn't be cancelled — it may have already been decided.");
+
+    private Task ConfirmHandoffAsync(EquipmentCheckoutRecord loan)
+        => RunAsync(() => AdminClient.ConfirmEquipmentHandoffAsync(loan.Id),
+                    "That couldn't be confirmed — the loan may have changed.");
+
+    private Task ApproveAsync(EquipmentCheckoutRecord loan)
+        => RunAsync(() => AdminClient.ApproveEquipmentCheckoutAsync(loan.Id, GetDue(loan.Id), GetNote(loan.Id)),
+                    "That request couldn't be approved — it may have been withdrawn.");
+
+    private Task DenyAsync(EquipmentCheckoutRecord loan)
+        => RunAsync(() => AdminClient.DenyEquipmentCheckoutAsync(loan.Id, GetNote(loan.Id)),
+                    "That request couldn't be declined — it may have been withdrawn.");
+
+    private Task ReceiveReturnAsync(EquipmentCheckoutRecord loan)
+        => RunAsync(() => AdminClient.ReturnEquipmentCheckoutAsync(loan.Id, GetNote(loan.Id)),
+                    "That return couldn't be recorded.");
+}

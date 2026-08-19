@@ -1,0 +1,138 @@
+@implements IDisposable
+
+@inject NotificationState Notifications
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    Port of the library's NotificationBell onto the template's dropdown markup.
+
+    The bucket roll-up, ordering and comments are carried over unchanged — the popover shell is
+    what differs. Open state is a C# field rather than data-bs-toggle, for the same reason as
+    BenUserMenu: Bootstrap's dropdown JS and Blazor cannot both own this subtree.
+*@
+
+@if (UserState.IsAuthenticated)
+{
+    <div class="dropdown notification-bell">
+        <button type="button" class="btn btn-system no-arrow @(_open ? "show ben-dropdown-open" : null)" title="@TooltipText"
+                aria-label="Open Notifications" aria-expanded="@_open.ToString().ToLowerInvariant()"
+                @onclick="Toggle">
+            @if (_summary.TotalCount > 0)
+            {
+                <span class="badge badge-icon pos-top pos-end @NotificationBadge.CssClass(_summary)">
+                    @NotificationBadge.Text(_summary.TotalCount)
+                </span>
+            }
+            <BenIcon Name="bell" Class="sa-icon-2x" />
+        </button>
+
+        <div class="dropdown-menu dropdown-menu-end dropdown-menu-animated @(_open ? "show" : null)"
+             style="min-width:320px;">
+            @* Contents only while open — a closed menu that still renders its rows leaves each one
+               in the DOM as an invisible match for any text lookup. *@
+            @if (_open)
+            {
+            <div class="d-flex align-items-center justify-content-between px-3 py-2">
+                <strong>Notifications</strong>
+                <a href="/notifications" class="small" @onclick="Close">View all</a>
+            </div>
+            <div class="dropdown-divider m-0"></div>
+
+            @if (_summary.TotalCount == 0)
+            {
+                <div class="text-secondary small px-3 py-3">Nothing waiting on you.</div>
+            }
+            else
+            {
+                <div class="list-group list-group-flush">
+                    @foreach (var row in Rows())
+                    {
+                        <button type="button"
+                                class="list-group-item list-group-item-action d-flex align-items-center gap-2"
+                                @onclick="@(() => GoTo(row.Destination))">
+                            <span class="flex-grow-1 text-start small">@row.Title</span>
+                            <span class="@NotificationBadge.CssClass(row.Bucket)">
+                                @NotificationBadge.Text(row.Bucket.Count)
+                            </span>
+                        </button>
+                    }
+                </div>
+            }
+            }
+        </div>
+    </div>
+
+    @if (_open)
+    {
+        <div class="ben-dropdown-backdrop" @onclick="Close"></div>
+    }
+}
+
+@code {
+    private NotificationSummaryResponse _summary = NotificationSummaryResponse.Empty;
+    private bool _open;
+
+    private string TooltipText => _summary.TotalCount switch
+    {
+        0   => "Notifications",
+        1   => "1 item waiting",
+        var n => $"{n} items waiting",
+    };
+
+    protected override void OnInitialized() => Notifications.Changed += OnNotificationsChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Startup lives here rather than in OnInitialized because the first fetch has to wait for
+        // AuthReady, which MainLayout only signals during its own first render.
+        await Notifications.EnsureStartedAsync(RendererInfo.IsInteractive);
+        _summary = Notifications.Current;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // NotificationState raises Changed from its poll, which ticks off the renderer's
+    // synchronization context — hence InvokeAsync rather than a bare StateHasChanged.
+    private void OnNotificationsChanged() => InvokeAsync(() =>
+    {
+        _summary = Notifications.Current;
+        StateHasChanged();
+    });
+
+    private void Toggle() => _open = !_open;
+    private void Close()  => _open = false;
+
+    private void GoTo(string destination)
+    {
+        Close();
+        NavManager.NavigateTo(destination);
+    }
+
+    private IEnumerable<Row> Rows()
+    {
+        var s = _summary;
+        // First: an unanswered RSVP has a deadline the message rows don't — the visit happens
+        // whether or not you replied, and the badge colour can't convey that (see the DTO).
+        if (s.InvestigationInvites.Count > 0)
+            yield return new("Investigation invitations", "/my-investigations", s.InvestigationInvites);
+
+        if (s.EquipmentCheckouts.Count > 0)
+            yield return new("Equipment requests & overdue gear", "/my-checkouts", s.EquipmentCheckouts);
+        if (s.CaseMessagesAsClient.Count > 0)
+            yield return new("Replies on your cases", "/my-cases", s.CaseMessagesAsClient);
+        if (s.CaseMessagesAsOrgMember.Count > 0)
+            yield return new("Client messages to answer", "/organizations", s.CaseMessagesAsOrgMember);
+        if (s.OrgMessages.Count > 0)
+            yield return new("Group messages", "/organizations", s.OrgMessages);
+        if (s.PendingPermissionRequests.Count > 0)
+            yield return new("File permission requests", "/notifications", s.PendingPermissionRequests);
+        if (s.SystemMessages.Count > 0)
+            yield return new("Messages", "/notifications", s.SystemMessages);
+    }
+
+    private sealed record Row(string Title, string Destination, NotificationBucket Bucket);
+
+    public void Dispose() => Notifications.Changed -= OnNotificationsChanged;
+}

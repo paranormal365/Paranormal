@@ -26,7 +26,7 @@ public sealed class OPFSService : IAsyncDisposable
     private readonly ErrorLogService   _errorLog;
     private IJSObjectReference?        _module;
 
-    private const string ModuleUrl = "/_content/Ben.Video.Editor/js/opfsInterop.js";
+    private const string ModuleUrl = "js/opfsInterop.js";
 
     public bool IsAvailable { get; private set; }
 
@@ -47,7 +47,7 @@ public sealed class OPFSService : IAsyncDisposable
         if (_module is not null) return;
         try
         {
-            _module      = await _js.InvokeAsync<IJSObjectReference>("import", ModuleUrl);
+            _module      = await _js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModuleUrl);
             IsAvailable  = await _module.InvokeAsync<bool>("opfsIsAvailable");
         }
         catch (Exception ex)

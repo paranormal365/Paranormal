@@ -2124,18 +2124,37 @@ carefully enough this session to be certain it's the same root cause rather than
 
 ---
 
-## 54. Member photos (not started)
+## 54. Member photos (✅ Complete — delivered by Area 4, closed out 2026-08-17)
 
 Let members add a profile photo, with a per-photo choice of visibility: public (visible to anyone,
 e.g. on a public case page or org roster) or members-only (visible only to other active members of
 the same organization).
 
 > Raised 2026-08-11 alongside item #55 (equipment tracking) — Ben WebApi/WebApp, not Ben.Video.Editor.
-> Not scoped: needs a storage decision (reuse the existing `UploadFile`/Media Library pipeline
-> rather than a bespoke upload path — item #6 already built a general-purpose, audience-aware file
-> system with public/org/private visibility tiers via `FileAudienceAccess`, which is very likely the
-> right mechanism to reuse here rather than inventing a second one), plus a profile-photo field on
-> `AppUser` or a dedicated join, and UI for setting/changing the visibility choice.
+
+**Delivered by the "Things to Add" roadmap's Area 4 (U1–U6), merged to `main` 2026-08-15** — which
+went further than this entry asked, giving the product its first self-service account surface:
+
+- `AppUserPhoto` with **two slots**, public and private, one active each via a filtered unique
+  index, rather than one photo with a visibility flag. Two pictures serve two purposes; forcing one
+  photo to be either meant choosing between a face colleagues recognise and one a stranger may see.
+- `GET /api/users/{id}/avatar` — the caller names a **person**, never a photo, and the server
+  decides which (if either) that viewer gets. `AvatarCache` is circuit-scoped for correctness, not
+  memory: avatar resolution depends on who is asking.
+- The **two-key consent rule** in `PrivatePhotoConsent.MayShowToClient`: showing a member's private
+  photo to a client needs both the group's policy and the member's own opt-in.
+- `/profile`, `UserMenu`, plus witness photos and `Case.ClientDisplayAlias`.
+
+**Closed out 2026-08-17.** `UserNameLink.ShowAvatar` existed but no caller ever set it, so the whole
+avatar-rendering path was unreachable in the UI — the same write-only shape this backlog has now hit
+three times. Now wired on the organization member roster, investigation attendee lists, and file
+comment threads.
+
+**Still unverified:** the `InputFile` → upload chain has never been exercised by a real click (the
+dev tooling cannot drive an OS file picker). Profile and witness photos were verified via the API.
+
+> The public **CMS member roster** section (`CmsSectionType.MemberRoster`) is still a placeholder
+> that renders "Member roster section." — that belongs to item #80's CMS phases, not here.
 
 ## 55. Equipment inventory & checkout tracking (not started)
 
@@ -3291,7 +3310,7 @@ one setting per line or a settings page that renders a textarea. Worth deciding 
 
 ---
 
-## 80. CMS: preview, templates, publish-when-ready, and embedding cases/investigations safely (not started, requested 2026-08-15)
+## 80. CMS: preview, templates, publish-when-ready, and embedding cases/investigations safely ✅ Complete (all parts built 2026-08-17)
 
 Ben's request, five parts. The first three are ordinary CMS maturity. The fourth is where the real
 design work is, because it is the point where a group could publish somebody's home address.
@@ -3302,42 +3321,269 @@ Today `OrgCmsPageEdit.razor` edits sections in place and saves straight to the l
 way to see the page as a visitor would before committing. Two shapes, and they are not equal in
 cost:
 
-- **Preview the saved-but-unpublished page** — cheap. `OrganizationPage.IsPublished` already exists
-  and the editor already exposes it. A preview route that renders the page through the public
-  renderer while ignoring the publish flag (for members with `CmsPageAction.View`) is most of the
-  value for very little work.
-- **Preview *unsaved* edits** — expensive, because it needs draft storage. See part 3.
+- **Preview the saved-but-unpublished page** — ✅ **built 2026-08-17**, alongside the coordinate fix,
+  because it needed no schema and no decision. `/organizations/{OrgId}/cms/pages/{PageId}/preview`
+  and `CmsPagePreviewController` return exactly the public endpoint's shape, so `OrgPublicSection`
+  draws it and a preview cannot drift from the real page. **Only the publish flag is relaxed** —
+  which sections show and in what order stays the public rule, or the preview would be reassuring
+  about a page that will not look like that. Gated on `CmsSection` Read, answering 404 rather than
+  403 so an unpublished page is not confirmed to exist by the shape of the refusal. Both guards
+  verified by deletion.
+- **Preview *unsaved* edits** — still open, and still expensive, because it needs draft storage.
+  See part 3.
 
-### 2. A template library
+> **Found while building it:** `OrgCmsPageEdit` already had a "Preview" button, but it renders a
+> **second, hand-written approximation** of each section (`RenderSectionPreview`) in a half-width
+> column — a duplicate of `OrgPublicSection` that will drift from it. It has a real use the new
+> preview cannot serve (it follows what you are typing, before saving), so it was kept and renamed
+> "Side-by-side", with "View as visitor" beside it for the real thing. **Collapsing the two
+> renderers is worth doing when part 3 lands**, since a draft store would let the side-by-side panel
+> use the public renderer too and the duplicate could go.
 
-Both granularities Ben asked for. A section template (one `CmsSection` with pre-filled
-`ContentJson`) and a whole-page template (an ordered set of sections). The six section types in
-`CmsSectionType` — RichText, ImageBanner, FileGallery, ContactInfo, MemberRoster, CustomHtml — are
-the vocabulary a template is assembled from, so this is mostly a seeding-and-cloning job rather than
-new rendering.
+### 2. A template library — snippet insertion
 
-Open question worth settling early: are templates **site-provided only**, or can a group save its
-own page as a template and reuse it? The second is a small extra step (a "save as template" that
-clones sections) but changes ownership and permissions.
+Ben clarified this three times on 2026-08-17, and the third is the one that settles it:
 
-### 3. Draft vs live
+1. *"The templates are things like build a card with a header and body or build a collapsable set of
+   items. It is functionality and look helpers."*
+2. *"The templates created by users are ones that put together the ones we create on the
+   server-side. Like carrousel."*
+3. *"They can pick from a list and it adds to their html editor where it places it in for them to
+   fill in the parts."*
 
-`IsPublished` exists, the editor exposes it, and `OrgCmsEditor` already shows the state per page.
-What does *not* exist is a draft that differs from what is live — editing a published page edits the
-live page immediately, which is the actual gap behind Ben's "make them live when they are ready".
+**So this is a snippet palette, not a page builder.** An author editing a rich-text or custom-HTML
+section picks a block from a list; its markup is inserted at the cursor with the parts left blank,
+and they type into it. A "user template" is whatever they end up with — a carousel assembled from
+inserted pieces — saved as a block of their own to insert again later.
 
-The honest options:
+That is dramatically less machinery than the earlier readings on this entry (a pre-filled section
+type, then a nested node tree with a visual composer). **Both of those overshot** — this needs no new
+`CmsSectionType`, no nesting model, no tree in `ContentJson`, and no changes to the public renderer
+at all, because the output is ordinary markup in the section types that already render markup.
 
-| Approach | Cost | Notes |
-|---|---|---|
-| Publish flag only (today) | done | Editing a live page is still live-editing |
-| Draft copy of the page + sections, promoted on publish | M | Real drafts; needs a clone + swap and a "discard draft" |
-| Version history with a published-version pointer | L | Gives rollback too; the most work |
+**What it actually needs:**
 
-Recommend the middle one unless rollback is wanted, in which case go straight to versions rather
-than building drafts twice.
+- A **snippet catalogue** — name, description, and a markup template with obvious placeholders. Card
+  with header and body, collapsible list, carousel, two- and three-column strips, call-to-action.
+  Site-provided, seeded, and using the Bootstrap classes the public pages already load, so a snippet
+  looks right without shipping new CSS.
+- A **picker in `CmsSectionEditor`** that inserts at the cursor rather than replacing the field.
+- **Group-owned saved snippets** for the user tier — a name plus a blob of markup. The same
+  reasoning as group-owned equipment: it is the group's site, and a member leaving should not take
+  its building blocks with them.
 
-### 4. Embedding cases and investigations — the part with teeth
+**✅ Built 2026-08-17 — the block palette half.** `CmsSnippets` is the catalogue (card, card with
+header, collapsible list, carousel, two columns, three across, callout, button link) and
+`CmsSectionEditor` gained an **Add a block** picker for the RichText and CustomHtml section types.
+Ids are made unique per insertion, and a test proves it by failing when they are fixed. Blocks are
+appended rather than inserted at the cursor: the cursor lives inside Telerik's rich-text engine and
+is not reachable from C#, and appending is honest about that rather than putting things somewhere
+surprising. Insertion goes through the same binding a typed edit takes — writing to the DOM would
+update neither the editor nor the saved JSON, a trap this codebase has already hit.
+
+**Two real gotchas, worth handling on the first pass rather than after somebody hits them:**
+
+- **Unique ids per insertion.** Bootstrap collapsibles and carousels are wired by `id`/`data-bs-target`.
+  Insert two carousels into one page from the same snippet and they will drive each other. The
+  inserter must rewrite the ids to something unique at insertion time.
+- **Sanitization is now load-bearing.** These sections already render as `MarkupString`, so the XSS
+  surface pre-dates this — but a palette that *encourages* pasting structural markup makes it much
+  more travelled. Sanitize on save, allow-listing the tags and attributes the snippets actually use
+  (including the `data-bs-*` the components need), rather than trying to block what is dangerous.
+  **Not done, and it is the open risk on this part.** The unique-id test asserts no snippet *we*
+  ship carries `<script>` or `<style>`, which is a different and much weaker guarantee than what an
+  author may type into the same box.
+
+### 2b. Page templates — "Investigation Results" ✅ built 2026-08-17 (both halves)
+
+> Ben, fourth clarification: *"They create templates like Investigation Results and it gives them a
+> page to fill in or chose from their media and records in the case to add to the template."* And:
+> *"So, they put together the pieces they need to fill in for it to complete."*
+
+**This is a different feature from 2a, and much larger.** A block snippet is markup with blanks an
+author types into. A **page template** is a named, structured document — *Investigation Results* — that
+presents a set of **slots**, and an author fills each slot either by typing or by **choosing from the
+case's own media and records**. Assembling which slots a template has is itself something the author
+does: they put together the pieces the write-up needs.
+
+The distinction that matters for design: 2a's output is markup and knows nothing about the domain.
+2b's output is **bound to a case** — a slot holds "this photo from this case's media library", not a
+copy of it — which is why this overlaps **part 4** almost entirely and should be built with it rather
+than before it.
+
+**What it needs, roughly in dependency order:**
+
+- **A template definition**: an ordered list of slots, each with a kind — free text, a heading, one
+  photo from the case, a set of photos, a timeline entry, an investigation summary, equipment used
+  on a visit, a piece of evidence and its vote score. Group-owned, and composable by the author.
+- **A fill-in surface**: a page listing the template's slots, each with a picker scoped to **this
+  case**. This is where most of the work is, and most of the value.
+- **Rendering**, honouring part 4's rules — which is why it must not be built first. Coordinates are
+  already redacted (fixed 2026-08-17); client names already go through `PublicClientName`; **private
+  investigations and non-public media do not yet have an equivalent**, and a template that can pull
+  "any photo from the case" into a public page is precisely the hole part 4 exists to close.
+- **Binding, not copying.** A slot referencing a photo that is later deleted, or a case that is later
+  unpublished, must degrade to nothing rather than to a broken image or a leak. Copying the photo
+  into the page at fill-in time would make the page immune to a later "unpublish this" — which is
+  exactly the wrong behaviour.
+
+**Sequencing recommendation:** part 4 first (the redaction rules and the safe projections for
+embedding case data), then 2b on top of it. Building 2b first means writing the pickers twice, and
+the first version would be able to publish things part 4 is meant to prevent.
+
+> **✅ Part 4 built 2026-08-17.** See above. 2b is now unblocked.
+
+#### 2b, first half — page layouts ✅ built 2026-08-17
+
+**The storage already existed and nothing could reach it.** `CmsTemplateScope.Page` was defined,
+saved, listed, updated, deleted and sanitized by `OrgCmsTemplateController` — and no screen or
+endpoint ever created a page from one. The **sixth** write-only feature in this codebase, and the
+quietest, because every individual layer worked.
+
+So this half cost far less than the entry assumed:
+
+- `CreateCmsPageRequest.FromTemplateId` copies a page template's sections onto the new page,
+  **server-side**, so the sanitizer sees the markup on its way in. "Cleaned when the template was
+  saved" is not "clean now", and a rule enforced only by the browser is not a rule.
+- **Copied, not referenced**, matching the decision already recorded on the entity — proven by a test
+  that edits the template afterwards and asserts the page is untouched.
+- Another group's template, a section-scoped one, a deleted one and unparseable content all yield a
+  **bare page** rather than a failed create: the page is what the caller asked for.
+- UI both ways — **Save as a layout** on the page editor, and a layout picker when creating a page.
+  A source-scan test asserts both halves exist, because either alone is useless.
+
+#### 2b, second half — the case-bound slot ✅ built 2026-08-17
+
+`CmsSectionType.CaseMedia`. The stored content is a case id, the chosen file ids in the author's
+order, and a caption switch; the public endpoint replaces it with a projection built by re-asking
+`CaseMediaPublication` on every request. Two independent gates, both re-checked at render: the case
+must belong to this group, and each file must still be publishable.
+
+- **Binding, not copying — proved, not asserted.** A test narrows a timeline entry's visibility
+  *after* the section is saved and asserts the photo leaves the page. Another unpublishes the case.
+  Neither edits the page. That was this entry's stated requirement and it is the one that would have
+  been quietly lost by the far simpler copy-at-fill-in-time design.
+- **No `IncludeNonPublic` escape hatch**, deliberately, and unlike part 4's embeds. For a record the
+  group owns, an acknowledgement is a real decision somebody can make. For an investigator's working
+  file, nobody has ever said it could be shown — so the one route stays the one the prerequisite
+  describes, and the section offers no way around it.
+- **Captions are off by default and absent from the payload when off.** The caption is the timeline
+  entry's own title — the group's working description — so it is withheld at the server rather than
+  hidden in the renderer.
+
+> **Found while building it, and it would have shipped broken:** *nothing could serve the bytes.*
+> The prerequisite decided which files may be published, but `/api/upload-files/{id}/download` gates
+> anonymous callers through `FileAudienceAccess.CanViewFileAsync`, which grants only files flagged
+> `IsPublic` or shared to a Public target. A photo on a Public timeline entry is neither. The rule
+> said publishable; the pipe said 401. Every visitor would have seen broken frames — and **the
+> author never would**, being logged in and therefore inside the audience union.
+>
+> `PublicCaseMediaController` (`/api/public/cases/{caseId}/media/{fileId}`) closes it by asking
+> `CaseMediaPublication.MayPublishAsync` per request, 404 either way so a refusal does not confirm
+> an id. The route carries the case because "may this file be published" is only answerable in the
+> context of one.
+>
+> **The cheap fix was the dangerous one.** Setting `IsPublic` on the file when an author picks it is
+> two lines. That flag is global and permanent: it would outlive the page, survive the entry being
+> pulled back to private, and grant the file to every other endpoint at once. Publishing a photo on
+> one page would have quietly handed it out everywhere, for good — the exact opposite of the
+> binding-not-copying discipline the rest of this item is built on.
+>
+> The reachability test guards all three halves, the third being that the renderer uses the public
+> media URL *by name*: pointing it at the ordinary download URL compiles, passes every resolution
+> test, and looks right to whoever built it.
+
+#### 2b prerequisite — which of a case's files may be published (✅ built 2026-08-17)
+
+The gap this entry flagged — *"private investigations and non-public media do not yet have an
+equivalent"* — was half true. Investigations got theirs in part 4; **media had nothing at all**, and a
+slot offering "a photo from the case" would have been a way to publish the investigators' working
+files.
+
+`CaseMediaPublication` answers it, and deliberately **grants nothing new**: the rule is the one the
+public case page already follows, restated in one place rather than invented. A file is publishable
+when it hangs off a timeline entry that is `Public`, on a case that is itself public. A template can
+publish what a visitor could already reach and not one file more.
+
+- **Resolved at read**, like `CmsEmbed`. Narrowing an entry to `OrgOnly` next month withdraws its
+  photo from pages published today; unpublishing the case withdraws everything at once. Both proven
+  by tests, which is the binding-not-copying requirement this entry asks for.
+- **`Client` visibility is not public.** Shared with the family is not shared with the world — the
+  one a reader gets wrong by treating "shared" as "not internal".
+- Both guards verified by breaking them.
+
+> **⚠ A decision for Ben.** Files on the case's **general Files tab** (`CaseFile`) are treated as
+> never publishable, because that table **has no visibility column at all** — there is no answer to
+> "did anybody agree to this being public?", and defaulting would publish in bulk exactly the
+> material nobody has reviewed. That matches today's behaviour exactly (the public case page has
+> never shown them). If those should be publishable, `CaseFile` needs a visibility field and a person
+> to set it, which is a product decision rather than a guess.
+
+### 3. Draft vs live — ✅ built 2026-08-17
+
+**Ben chose the draft copy** over version history, accepting no rollback for noticeably less work.
+
+A draft is a whole `OrganizationPage` row with its own sections, pointing at the page it will
+replace via `DraftOfOrganizationPageId` (unique, filtered). That shape is the point: every public
+query already filters `IsPublished && IsPublic`, and a draft is created with both false, so **the
+public read path needed no changes at all** and future queries cannot forget to exclude drafts.
+
+- **Copy-on-write, published pages only.** Nobody can see an unpublished page, so editing one
+  directly is already safe and a draft would be ceremony. `POST .../draft` is idempotent — two
+  editors opening a page at once must not make two drafts, and the unique index would otherwise turn
+  the second into a 500.
+- **Publishing copies onto the live row and deletes the draft**, rather than swapping ids. The live
+  page keeps its id, so links, permission rows and attached cases all survive.
+- **`IsHome`, `IsPublished`, `IsPublic` and `CaseId` are deliberately not copied** — they are the
+  page's place in the site, not content. A test asserts publishing a draft cannot make an
+  unpublished page live, which would otherwise be a way to publish something by accident.
+- The editor routes to the draft's own id, so from there it edits an ordinary page row and nothing
+  else in that screen knows drafts exist.
+
+Guards verified by breaking them: making the draft published/public, and copying the visibility
+flags on publish, each fail their tests.
+
+**Still open:** the side-by-side editor panel still has its own hand-written section renderer.
+Collapsing it into `OrgPublicSection` is easier now drafts exist — the panel could preview the draft
+through the real renderer — and is worth doing alongside part 2's new section types.
+
+### 4. Embedding cases and investigations — ✅ built 2026-08-17
+
+Two section types, `EmbeddedInvestigations` and `EmbeddedCases`. The design decision everything else
+follows from: **references are stored, records are resolved.** The section holds ids and switches,
+never a copy of the data — so redaction runs on every request against live rows, and a client who
+withdraws their alias next month disappears from pages published today. A snapshot taken at embed
+time would freeze whatever happened to be true that afternoon and outlive every later decision.
+
+**The published shapes have no field for the dangerous values.** No exact latitude, no street
+address, no real name anywhere in `EmbeddedInvestigation` or `EmbeddedCase` — absent, not nulled.
+Reflection tests assert that, which is the cheapest guard here and the strongest: every other test
+checks what the code currently puts in the payload, this checks what the payload is *able* to hold.
+
+Rules, all enforced at read:
+- **Ownership is re-checked when the page is rendered.** The picker offers only the group's own work,
+  but a picker is a convenience and a request can say anything.
+- **Work not already public needs a deliberate acknowledgement**, so a section saved by an older
+  editor cannot publish something by omission.
+- **Client names route through `PublicClientName`**, which has no branch that returns a real name.
+- **Malformed settings publish nothing.** Elsewhere in the CMS an unparseable section renders an
+  empty box; here it would be deciding whether an address goes out, so it fails closed.
+- **Preview resolves identically** to the public endpoint — a preview that redacted differently would
+  be reassuring about a page that will not look like that.
+
+The editor keeps Ben's order: warn about non-public work, *then* ask about the address, *then* about
+identities. The warning is what makes the two questions land as decisions rather than as settings.
+
+**Found while testing:** the resolver emitted PascalCase while the renderer reads camelCase, so every
+embedded card would have rendered blank on a real page. Caught by a test asserting the title *is*
+published — not by any of the ones asserting an address is not. The positive tests earned their place
+again.
+
+**Found by the discrimination run:** breaking the location switch on the investigation branch alone
+failed nothing, because every location test happened to use a case. Two branches resolve locations
+and only one was covered. Both are now.
+
+### 4-original. Embedding cases and investigations — the part with teeth
 
 Appending public cases and investigations to a page is straightforward. **Private investigations are
 not**, and Ben's two safeguards are the right ones. Both must be enforced **server-side, before the
@@ -3348,15 +3594,27 @@ one half of it.
 address is redacted. The redaction happens in the projection, so the exact coordinates are never in
 the response at all.
 
-> **Finding, worth knowing before this is built:** `PublicCaseDiscoveryController` already has fields
-> named `ApproxLatitude` / `ApproxLongitude` — and passes `c.Latitude` / `c.Longitude` straight
-> through. The name promises an approximation the code does not perform. Any published case's exact
-> coordinates are public today. That is a live exposure independent of this item, and it is the first
-> thing to fix when this is picked up (or sooner).
+> **✅ Fixed 2026-08-17, ahead of the rest of this item.** `PublicCaseDiscoveryController` had fields
+> named `ApproxLatitude` / `ApproxLongitude` and passed `c.Latitude` / `c.Longitude` straight
+> through — every published case's exact coordinates were public. A live exposure independent of this
+> item, so it was fixed on its own rather than waiting for the CMS work.
+>
+> `PublicCoordinates.Approximate` now snaps to a grid cell (~7 miles of latitude, widened by
+> 1/cos(latitude) so cells stay roughly square on the ground) and publishes the **cell centre**.
+> **Snapped, not jittered** — a random offset per request would let anyone average many responses
+> back to the true point; snapping is deterministic, so there is nothing to average, and every case
+> in a cell publishes identically.
+>
+> Two things found while building it. A test asserting that neighbours publish identically caught a
+> real flaw in the first version: the longitude step was derived from the caller's *true* latitude,
+> which made the published longitude a continuous function of it, so two houses on one street landed
+> metres apart and the snapping did nothing. It is now derived from the snapped latitude. And the
+> existing test was named `GetAll_ReturnsStoredCoordinates_WithoutGeocoding` — it asserted the leak
+> and pinned it in place.
 
-Note also that a circle drawn *centred on the true point* still leaks the point — the centre is the
-answer. Jitter the centre within the radius, or snap it to a grid cell, so the circle is honest about
-what it hides.
+Note that a circle drawn *centred on the true point* still leaks the point — the centre is the
+answer. The grid centre published above has nothing to do with the property, and any circle a client
+draws must be at least `PublicCoordinates.RadiusMiles` for it to honestly contain the true location.
 
 **4b. Client identity.** Replace real names with the alias the client configured, again before the
 response is built, leaving the stored case untouched. **This already exists for cases**:
@@ -3390,7 +3648,7 @@ already set.
 
 ---
 
-## 81. Score the haunting vote instead of only counting it (not started, requested 2026-08-15)
+## 81. Score the haunting vote instead of only counting it (✅ Complete — shipped 2026-08-17)
 
 Ben: *"For voting on haunting, we use 3 values. I want the indecisive to equal zero, then +1 for
 haunted and -1 for not convinced."*
@@ -3418,11 +3676,38 @@ Worth settling when this is picked up:
 - One place computes it, reused by every surface — the same rule `PublicClientName` follows, and
   for the same reason: four endpoints each doing their own arithmetic is four answers.
 
-Deferred by Ben — *"we can work on that later."*
+Deferred by Ben — *"we can work on that later."* **Picked up and shipped 2026-08-17.**
+
+### What was built
+
+`EvidenceVoteScore` in `Ben.Data.Common`, beside the enum it weights — `Weight`, `Score` (from
+votes) and `FromCounts` (for the discovery list, which never holds individual votes). All four
+surfaces reuse it: `PublicCaseVoteController`, `PublicCaseDiscoveryController`,
+`InvestigationController` and the widgets.
+
+The three open questions, settled:
+
+- **Alongside the counts, not replacing them.** The counts are what make a score trustworthy, and
+  the entry's own leaning was right.
+- **A sum, not an average** — the literal reading of what Ben asked for. `TotalVotes` already
+  travels with it everywhere, which is what stops a sum being read without its weight. An average is
+  this sum over that count if it is ever wanted, and needs no new storage.
+- **One place computes it**, as planned.
+
+`VoteScoreBadge` renders it identically on every surface: **+n** green, **−n** red, **0** amber
+rather than grey (an even split is a real answer, not a missing one), with the vote count in the
+tooltip.
+
+### The trap, held
+
+The enum's stored values are untouched. Two tests guard it from opposite directions: one pins
+`Confirms = 0, Disputes = 1, Inconclusive = 2`, and one asserts every weight *differs* from its own
+stored value — so an implementation that quietly cast the stored number could not pass. The
+controller test was verified by removing the wiring and watching it fail.
 
 ---
 
-## 82. Two P3 gaps left open: attendee findings, and the roster on case-less visits (found 2026-08-15)
+## 82. Two P3 gaps left open: attendee findings, and the roster on case-less visits (both closed 2026-08-15)
 
 Found auditing Area 9's permission phase after it shipped. Neither is a bug in what was built —
 both are places where something was built halfway and the missing half is a feature, not a fix.
@@ -3445,14 +3730,6 @@ Left for later: findings do not feed the case timeline, and there is no way to a
 
 ### 82b. The roster is only on case-bound investigations ✅ fixed 2026-08-15
 
-`InvestigationRoster` — the team list, **I've arrived**, the attendance override, and now the Lead
-column — is mounted in exactly one place: `InvestigationPanel.razor`, on a case's Investigations
-tab. A case-less visit, which is the whole point of P2 and P4, **has no roster UI at all**. Nobody
-can check in to a landmark visit, and nobody can record who turned up.
-
-The endpoints are all case-agnostic already (`api/organizations/{orgId}/investigations/{id}/…`), so
-this was a mounting problem, not a backend one.
-
 **Fixed** by putting the roster where the visits already are: every row of the group's
 Investigations grid has a **Team** button that expands the roster inline, gated on the same
 `CanEditRecord` verdict the Edit button uses. One row open at a time, because each roster runs its
@@ -3460,3 +3737,1246 @@ own poll timer. No new page and no detail view — the grid was already the plac
 lives.
 
 Live-verified on "Cave return visit", a visit with no case: the team panel opens under the row.
+
+---
+
+## 83. Explain and list available permissions to assign to roles individually in an organization (closed 2026-08-17, pending click-test)
+
+Ben, raised mid-planning-session for item #55: *"Explain and list available permissions to assign
+to roles individually in an organization — each one has their own."*
+
+Previously `OrgRoleEditor.razor`'s Permissions section rendered one create/read/update/delete toggle
+row per `PermissionSection` (a hardcoded `DisplayName` + `OrganizationSecurityTable` pair), and the
+`DisplayName` was the only explanation a role-builder got — "Files", "Membership Applications",
+"Investigations." What each toggle actually *grants* only existed as an XML doc comment on the
+corresponding `OrganizationSecurityTable` enum value, invisible from the UI.
+
+**Built**: `PermissionSection` now carries a fourth field, `Description`, rendered as always-visible
+small muted text under each row's `DisplayName` — chosen over a hover tooltip so the explanation
+doesn't require discovering it. All 22 rows in the current `Sections` list have one. For the eight
+values that already carried an XML doc comment (`OrganizationSettings`,
+`OrganizationAddressMemberAccess`, `OrganizationAddressSearch`, `MembershipRequests`,
+`OrganizationFiles`, `Investigation`, `Equipment`, `EquipmentCheckout`), the description is adapted
+from that comment; the other fourteen (plain CRUD tables with no prior doc comment, e.g.
+`OrganizationAddress`, `OrganizationNoteType`) got a new one-line description written for this pass.
+Text lives only in `OrgRoleEditor.razor` — it is not read from the enum's XML doc comments at
+runtime (Blazor Server doesn't ship the doc XML, and reflecting it in would be real machinery for
+static strings), so a future doc-comment edit does **not** automatically update the row; whoever
+touches the enum doc comment should update the matching `Description` in the same commit.
+
+Not built: the "possibly explain C/R/U/D individually where a table's actions aren't uniform CRUD"
+stretch goal — skipped, the per-row description already answers what a role-builder needs and no
+current table has meaningfully non-uniform CRUD semantics.
+
+**Guarded by a source scan** (`RolePermissionCoverageTests`). The `Sections` list is hand-written, and
+a permission missing from it is *invisible* rather than broken — the enum value exists, the server
+enforces it, and no role can ever be granted it. Three assertions: every organization-scoped value has
+a row, no row names a value that does not exist, and every row carries a description. Verified by
+removing a row and watching it fail.
+
+> **Found by that scan on its first run:** `OrganizationSecurityTable.AppUser` (= 13) is **referenced
+> nowhere in the codebase** — no controller checks it, no screen assigns it, and it has no row in the
+> role editor. It is excluded from the scan as user-scoped rather than given a row, deliberately: a
+> toggle that grants nothing is worse than no toggle, because it tells a role-builder something
+> untrue. **Worth deleting**, but renumbering a persisted enum is not free — the stored
+> `OrganizationAccessGrant.TableName` values would need migrating — so it is recorded here rather
+> than done in passing.
+
+**⚠ Not click-tested.** `Ben.Web.Tests.Services.GrantablePermissionTests` passes (unaffected — it
+source-scans for `OrganizationSecurityTable.X` references, and the new code only adds plain string
+literals) and the solution builds clean, but the actual rendered rows are behind Entra login, which
+this environment cannot pass. Ben should open an org's role editor once and confirm the description
+text reads well under real Telerik table layout before considering this fully done.
+
+---
+
+## 84. Organization subscription lapse, and what happens to their clients (not started, designed 2026-08-17)
+
+Ben's policy, worked out while sizing monetisation (see item #85 for the billing model itself).
+Deferred with the rest of monetisation until the site's functionality and help documents are
+complete — this entry exists so the design is not re-derived later.
+
+### The group's own wind-down
+
+"Closed" does not mean gone. Billing stops at the end of the cycle and **everything stays available
+until the paid period ends** — so a group that closes is simply active with a known end date, not a
+new state. They keep every paid-for ability in the meantime, and can re-enable billing or upgrade
+before the date arrives.
+
+At the billing date:
+
+- They **stop being able to add records**. No new scheduling, no new entries dated past the billing
+  date.
+- **Everything already there remains**: a scheduled investigation stays as a record, along with the
+  history collection, visits and client interaction done up to that date.
+- Read access continues until they are disabled.
+
+### Notifications, escalating
+
+| When | Who | What |
+|---|---|---|
+| ~2 weeks out | Owner, Administrators, and the group's **treasurer** if it has one | Billing is ending |
+| 1 week out | The group | **They must notify existing clients** their cases will need reassigning |
+| Date passes | Clients | Their case is paused; they may choose a new organization |
+
+The owner should be able to **nominate who receives billing notices** rather than the system
+guessing from roles — a group's treasurer is not necessarily an Administrator.
+
+### What happens to the clients
+
+Cases the organization worked go into a **paused** state, and the client may select a new
+organization to investigate — if they wish to at all.
+
+If they pick a new one, that organization can see the client's existing records, and **the client
+chooses what carries over**, per category:
+
+- whether to share the **history collected** by the original group, and
+- whether to share the **investigations and investigation records** of the original group.
+
+**Findings remain the original group's — and also the client's.** Dual ownership is the rule, which
+is why the client can share them onward without the original group's permission.
+
+This applies to every way a client relationship can end, not only a lapse: the group drops the
+client, the client drops the group, or payment lapses. In all three, the information becomes
+shareable at the client's discretion.
+
+Groups are to be told all of this **when they join**, not when it happens.
+
+### Notes for whoever builds it
+
+- The per-category share choice is the same **two-key consent** shape already used for private
+  member photos — one side offers, the other opts in — rather than a new mechanism.
+- "Paused" is a real case state distinct from Closed and Transferred; check `CaseStatus` and the
+  places that branch on it (`CaseOrgAccess`, the client-facing `MyCaseController`, the discovery
+  endpoints) before adding it.
+- The existing `CaseTransferLog` and its Pending/Accepted/Rejected/Cancelled flow is the closest
+  prior art for moving a case between organizations — extend it rather than inventing a parallel
+  path.
+- Dual ownership means deletion by the original group must not remove what the client can still
+  share. The equipment work's retire-instead-of-delete rule is the same instinct.
+
+---
+
+## 85. Monetisation: subscriptions, and paid rental (not started, direction set 2026-08-17)
+
+Deferred by Ben until the site's functionality and help documents are complete. Recorded so the
+thinking is not repeated. Payment provider undecided — **Square or PayPal** are the candidates.
+
+### The model Ben has converged on
+
+**The platform bills organizations, tiered by member count** — e.g. 1–3 members free, 4–10 at
+around $15/month. One merchant, money flowing inward only. Deliberately **not** collecting money the
+platform has not earned: a group may run its own member billing, but the platform does not handle
+it.
+
+That choice matters more than it looks. Collecting dues on a group's behalf, or taking a cut of
+equipment rental, would make the platform a payment facilitator — payouts to each group, identity
+verification per group, and the regulatory weight of holding other people's money. Billing
+organizations directly avoids all of it and is a fraction of the work (weeks, against months).
+
+Wind-down when a subscription ends is item #84.
+
+### Sizing, if paid rental is ever revisited
+
+| | What | Cost |
+|---|---|---|
+| Tier 1 | Record the agreed price and deposit; money changes hands outside the app | ~2–4 days |
+| Tier 2 | Borrower pays through the app, settled with lenders manually | ~2–3 weeks, plus the question of holding funds |
+| Tier 3 | Real marketplace with automatic payouts | ~6–10 weeks, plus terms, tax reporting and likely legal review |
+
+Most of the rental *domain* already exists: the loan lifecycle, one-item-one-holder, due dates and
+overdue, condition photos at both ends, ratings, and audit on every transition. Money attaches to
+transitions that are already there; it does not reshape them.
+
+### Monetising rental without handling money
+
+**Sell the tooling, not the transaction.** A paid tier for the rental features — deposit tracking,
+late fees, and a printable or e-signable rental agreement with the condition photos embedded as
+evidence — is worth paying for precisely because the condition-photo and history work already
+exists. The platform never touches a payment.
+
+Secondary: promoted listings in the catalog, with the interest counters (phase 6b) as the evidence
+that promotion works.
+
+### Design consequences to raise when this is built, not before
+
+- Member count becomes a **billing input**, so add/remove-member and active/inactive transitions
+  become financially meaningful, and the tier boundary creates an incentive to under-report. Count
+  actives at a defined moment rather than continuously.
+- Financially relevant records must not be destroyable. The equipment work's
+  retire-instead-of-delete rule is the pattern to follow.
+
+---
+
+## 86. Equipment: what phase 6 deliberately left (recorded 2026-08-17)
+
+Item #55 closed across six phases. These were considered and deferred with a reason, so they are
+here rather than lost in a branch README.
+
+**SuperAdmin cross-group equipment browse.** There is no single screen listing every group's gear.
+A SuperAdmin passes each group's own permission check anyway, so nothing is inaccessible — it is
+purely a convenience, and building it invites treating the whole estate as one inventory when it
+belongs to separate groups.
+
+**Folding the org maintenance page into the unified item page.** Phase 6b's `/equipment/{id}` now
+serves every audience, and `/organizations/{orgId}/equipment/{itemId}` overlaps it substantially.
+The two were left side by side rather than merged mid-phase; the merge is small and safe once
+somebody has used both for a while and can say which surface's habits should win.
+
+**Model-page review and FAQ pagination.** Both aggregates cap at 20 with no paging. Fine while no
+model has more than a handful; revisit when one does, together with caching, since a model page is
+public and cheap to hammer.
+
+**Time-series interest counters.** `ViewCount` and `LinkClickCount` are lifetime totals. "Views this
+month" needs a separate table; nobody has asked, and the totals answer the question that prompted
+them ("is anyone looking at this?").
+
+**Future-dated borrowing / reservations.** Explicitly deferred with Ben during phase 6a: the request
+queue plus visible current-holder covers the need. Revisit only if people start asking for gear
+weeks ahead and the queue stops being enough.
+
+**Video and audio metadata stripping.** Phase 6a strips images by re-encoding through SkiaSharp.
+A/V needs an ffmpeg remux (`-map_metadata -1`) and ffmpeg is reachable only from the sidecar, not
+the WebApi — a hosting decision, not a code change. Metadata is already *extracted* from A/V, so the
+Admin view is complete; only the stripping half waits.
+
+---
+
+## 87. Open events — public investigations and open meetings (mostly built 2026-08-17 — the pre-event reminder remains, and needs a scheduler)
+
+Ben: *"An open investigation can be open to the public and if someone wants to attend and let them
+know they are coming they have to be a site user. The information to attend and information about
+the investigation will be public on the site. These will benefit the organizations because it is
+also an introduction to them by people attending. The organization can have open meetings as well...
+We have to let them advertise by giving them the opportunity for people to attend. So, giving them
+the ability to create open events might benefit us as well by increasing their numbers."*
+
+**This is an acquisition channel, not a scheduling feature**, and that is the reason to build it.
+Today the platform is a records system for groups that already exist. A public event listing is the
+first thing on it that brings *strangers* in — someone finds a ghost walk at a local landmark,
+signs up to attend, and meets a group. That is how groups grow, and it is also how the platform
+grows, which puts it squarely alongside item #85's monetization thinking.
+
+### Most of it already exists, and one flag is doing nothing
+
+`OrgCalendarEvent` already has **`IsPublic`**, `MeetingUrl`, an optional `CaseId`, an
+`OrganizationAddressId`, and an `OrgCalendarEventAttendee` table with `RsvpStatus`. `Investigation`
+already carries an optional `OrgCalendarEventId`.
+
+**But `OrgCalendarEvent.IsPublic` is written and never read.** There is no public endpoint serving
+calendar events at all — the only `IsPublic` filter in `OrgCalendarController` is on `UserEmails`.
+An organization can tick "public" today and nothing whatsoever happens. That is the **fifth**
+write-only feature this backlog has recorded, and it means the substrate for this item is half
+built already.
+
+### The shape
+
+**One concept, not two.** An open investigation and an open meeting are the same thing — *a public
+event an organization hosts that a site user can say they are coming to*. `OrgCalendarEvent` is
+already that, with an investigation optionally attached. Bolting "open" onto `Investigation` and
+then adding a second mechanism for meetings would be two half-features that drift.
+
+- **Public read**: `GET /api/public/organizations/{urlName}/events` and a per-event page. Anonymous.
+  Title, description, when, where, and how to come — plus the organization, prominently, because
+  the introduction is the point.
+- **Self-RSVP** needs a **site account**, per Ben — that is the line between browsing and attending,
+  and it is what makes an attendee reachable. Its own endpoint, refusing anything not public, and
+  creating the `OrgCalendarEventAttendee` row the org currently has to create by hand.
+- **Discovery**: an events list across organizations is what actually makes this an acquisition
+  channel rather than a page nobody finds. Worth building with it, not after.
+- **Interest counters**, reusing the equipment pattern (#55 phase 6b): views and RSVP conversions
+  per event, visible to the organization. If this is being sold as advertising, they need to see it
+  working.
+
+### The constraint that is not negotiable
+
+**A public event must not be at a private residence.** `InvestigationVisibility.Public` is already
+refused there, deliberately: publishing what happens inside somebody's home is theirs to agree to,
+and there is no mechanism for asking. A *public event listing with an address and a date* is a far
+sharper version of the same problem — it is an invitation to strangers to come to a client's house.
+
+So: open events are for landmarks, public sites, an organization's own address, and case-less
+visits. Enforce it server-side on create, not in the UI. The coordinate redaction built for the
+case-discovery leak (`PublicCoordinates`) is the right tool where an approximate location should
+still be shown before someone commits to attending.
+
+### The evidence bargain, from Ben's earlier message
+
+*"All collected evidence and data is public and cannot be made private for an open investigation.
+The location can be scrubbed and hidden to the public not attending, but evidence is not."*
+
+Right, and cleaner now the event is public anyway: if anyone may come, nobody may afterwards decide
+what the group saw is theirs to withhold. Two things follow that must be **enforced, not defaulted**:
+
+- Visibility locks once the event is public and anyone has RSVP'd. Otherwise somebody flips it later
+  and the people who turned up lose the deal they came under.
+- Openness itself is not revocable once anyone has joined.
+
+### 87a. "Near me" — filtering the public calendar by the visitor's location
+
+Ben, same day: *"people who allow us to read their GPS coordinates should filter the public calendar
+by their location."*
+
+This is the half that makes the acquisition channel actually work. A national list of events is a
+directory; a list of events **near you this weekend** is a reason to come back. Kept as its own
+sub-part because it is only meaningful once public events exist, and it should not delay them.
+
+**Consent, and what we do with the answer:**
+
+- Browser geolocation is permission-gated and must stay opt-in — a **"Near me" button**, not a prompt
+  on page load. Somebody who declines gets the list they already had, sorted by date.
+- **Do not store it.** A visitor's position is needed for the length of one query. Storing it turns a
+  convenience into a location history, which is a different product and a much heavier promise.
+- **Round it before it leaves the browser.** `PublicCoordinates` already snaps a *case* to a grid
+  cell; the same trick applied to the *visitor* means the server sees roughly where somebody is
+  rather than exactly, and a coarse "within N miles" filter is unaffected by the loss of precision.
+  Pleasing symmetry: the same function protects the people being listed and the people looking.
+- **Say the distance, not the direction.** "About 12 miles away" is what a reader needs. Rendering a
+  line from their house to the venue is not.
+
+**Also worth having regardless of geolocation:** a town or postcode box. It works for somebody
+planning a trip, for anyone who declines the permission, and on a desktop where the browser's guess
+is often wrong by a county.
+
+### 87b. Hidden locations, and how somebody without an account attends
+
+Ben: *"If it is made hidden, they cannot see the actual location unless they choose to attend and
+they ask to attend. Then they can see the actual address — assuming they have contact information if
+they do not have an account yet. They can create one or maybe we allow the temporary with contact
+info. I am not sure how this is usually handled."*
+
+**The hidden-location pattern is well established** — Airbnb shows a circle until a booking is
+confirmed, Eventbrite hides the address until a ticket is issued, and recovery meetings and private
+supper clubs have done the same thing for decades. So the shape is not in doubt; the question is
+what unlocks it.
+
+**Two reveal modes, chosen per event**, because Ben described both "choose to attend" and "ask to
+attend":
+
+- **Open** — the address appears as soon as somebody confirms they are coming.
+- **By request** — the organization approves first, and the address appears on approval. The
+  equipment loan lifecycle is already exactly this shape (requested → approved → …) and is the
+  pattern to copy rather than reinvent.
+
+#### The account question — recommendation: a magic link that leaves a real account behind
+
+The three options in the wild are guest RSVP with an email (Eventbrite), a required account
+(Meetup), and a **magic link that creates a lightweight passwordless account on first click**
+(Luma, Partiful). **The third is right here**, for three reasons that are specific to this product
+rather than to taste:
+
+1. **The reveal has to be gated on a *verified* email, not a typed one.** If anyone can type an
+   address into a box and be shown where a group is meeting, the hidden location is theatre. A
+   click-through link is the cheapest gate that actually verifies anything.
+2. **Ben's stated purpose is acquisition** — *"an introduction to them by people attending."* A guest
+   RSVP leaves nothing behind. A magic-link RSVP leaves the organization a contactable person and
+   the platform a user, which is the entire point of the feature.
+3. **Strangers are meeting at a location, often at night.** A persistent identity is the minimum for
+   an organization to notice somebody who no-showed twice, or to remove them.
+
+It also reconciles Ben's two statements — *"they have to be a site user"* and *"maybe we allow the
+temporary with contact info"*. They **are** a site user; they simply never had to invent a password.
+Setting one later is an upgrade, not a requirement.
+
+**The infrastructure is already here.** `IEmailService` exists, and `CaseClientInvite` is already an
+email + token + expiry + `AcceptedByAppUserId` flow built for item #4 — the same shape, pointed at
+an event instead of a case.
+
+**Worth getting right:**
+- **Expire the link and single-use it.** A forwarded email should not hand the address to a mailing
+  list.
+- **The address lives behind the endpoint, not in the page.** Reveal means the server checks the
+  RSVP and returns the address; it does not mean shipping it to the browser with `display:none`.
+- **Cancelling revokes the reveal** for future loads. It cannot un-tell somebody, and pretending
+  otherwise would be dishonest — but it should stop the page serving it again.
+- **Say what happens before they commit.** "The exact address is shared with people who are coming"
+  on the listing, so nobody feels tricked into identifying themselves.
+
+#### The radius filter, and the leak it would otherwise create
+
+A distance dropdown (**5 / 10 / 25 / 50 / 100 miles**) over the calendar and the map, per Ben.
+
+**Filter and plot against the *redacted* coordinate, never the true one.** This is the part that is
+easy to get wrong: if the radius query runs against the real position, somebody can narrow the
+radius step by step around a guessed point and binary-search their way to the exact location —
+the filter becomes an oracle that gives away precisely what the hidden address was protecting.
+Running it against the `PublicCoordinates` cell centre caps the resolution of any such attack at the
+cell size, by construction.
+
+Same rule for the map pin, and show **"about 12 miles away"** rather than a precise figure or a line
+drawn from the visitor to the venue.
+
+### 87c. Seeing it on your own calendar, and confirming a non-user is coming
+
+Ben, 2026-08-17: *"On the org calendar, we should make this event a different color and have a
+different icon to represent public investigations. If someone chooses and is accepted or is
+auto-accepted to attend an investigation, they should see it on their calendar. If not a member, we
+should at least let them know when they are expected to attend an investigation. I base this off my
+experience. Someone may give some information, but we need enough to be able to show them they have
+elected to attend if not already users of our site."*
+
+**Calendar styling — ✅ built 2026-08-17.** Public events now render with their own marker on the
+organization's calendar. Worth noting what this uncovered: `OrgCalendarEventType` has carried
+`ColorClass` and `IconClass` since it was built, and **only the type-manager screen ever read them**.
+The calendar — the one place the distinction matters — rendered every appointment identically, so a
+month with thirty events told an organizer nothing until they clicked one. Both now show.
+
+**Attendees seeing it — ✅ built 2026-08-17.** `GET /api/public/events/mine` and an "Events you're
+going to" section on `/my-investigations`. Put there rather than on a page of its own because from
+the person's point of view "things I am going to" is one list, and the difference between being on a
+team and having signed up to a public walk is a distinction only the database cares about.
+
+Recently-finished events stay listed for thirty days: somebody asking *"what was that place
+called?"* the morning after has nowhere else to look. And the page's empty state now checks **both**
+lists — it would otherwise have told somebody they had nothing while hiding the event they signed up
+to that morning, which is the same bug in a new place.
+
+The original gap, for the record: `/my-investigations` exists, but it is
+fed by `InvestigationAttendee`. An RSVP to a public event creates an `OrgCalendarEventAttendee`, a
+different table, so **somebody who signs up to a public event sees it nowhere afterwards**. There is
+also no personal calendar surface at all — only a list. Two options:
+
+- Surface RSVP'd events on `/my-investigations` alongside assigned investigations. Cheap, and
+  probably right: from the attendee's point of view "things I am going to" is one list.
+- A proper personal calendar. More work, and worth it only if there is enough on it to be worth
+  opening.
+
+**Non-users — ✅ built 2026-08-17.** An email box on the public event page, a single-use link good
+for a fortnight, and confirming creates a passwordless account and records the attendance in one
+save. `EventAttendanceInvite` is modelled on `CaseClientInvite`, the same shape pointed at an event.
+
+Three things worth knowing about how it behaves:
+- **Asking always answers the same way**, whether or not that address already has an account, and
+  whether or not the mail actually went. Anything else makes the endpoint a way of testing which
+  emails are registered here.
+- **Nothing happens until the link is clicked** — no attendee row, no account. A typed address is a
+  claim, not a confirmation, and the page confirms on a button press rather than on load so a mail
+  scanner prefetching the link cannot sign somebody up.
+- **Capacity is re-checked when the link is used**, not only when it was sent. A fortnight is long
+  enough for an event to fill.
+
+Both guarantees verified by breaking them: leaving the token usable, and creating the attendee at
+request time, each fail their tests.
+
+**Still to do here:** a reminder before the date. Ben's *"I base this off my experience"* is the
+argument — somebody who signed up three weeks ago needs telling again, and a stranger who does not
+turn up is worse for the organization than one who never signed up.
+
+**The original decision, for the record —** *"we need enough to be able to show them
+they have elected to attend if not already users of our site"* settles the open question in favour of
+the magic-link approach: collect an email, send a link that both confirms the address and creates a
+lightweight passwordless account, and that link is thereafter **their view of the event** — proof
+they are coming, the exact address, and a way to cancel. They are a site user; they simply never had
+to invent a password.
+
+A reminder before the date belongs here too. Ben's *"I base this off my experience"* is the argument
+for it: somebody who signed up three weeks ago needs telling again, and a stranger who does not turn
+up is worse for the organization than one who never signed up.
+
+### Smaller things to settle when it is picked up
+
+- **Who sees the attendee list?** These are strangers. Default to the organization seeing names and
+  attendees seeing only a count; make anything wider a deliberate choice.
+- **Capacity and a cut-off.** A real site has a limit, and there is a point after which turning up
+  is not useful. Cheap now, awkward later.
+- **The organization needs to be able to remove somebody**, and an attendee to cancel.
+- **Real-world safety.** This arranges strangers meeting at a location, often at night. Not a
+  blocker, but the listing should carry what to bring and what to expect, and the organization
+  should be named — an anonymous invitation to a dark building is not something to ship.
+
+---
+
+## 88. Local discovery — "what's near me" across groups, events and places (built 2026-08-17)
+
+Ben: *"Like if a person wants to see what is local... group events or actually local groups etc."*
+
+The natural companion to item #87. A visitor picks a distance and sees what is around them —
+**groups, public events, and places worth visiting** — on a list and a map. This is the front door
+for somebody who has never heard of any of these organizations, which makes it the same acquisition
+argument as #87 and probably the same piece of work.
+
+### What already exists, which is more than it looks
+
+**Two different "nearby" questions are already implemented, and they are not the same question.**
+
+- **"Which groups serve my area?"** — `PublicOrganizationSearchController.Search`, **live and wired**
+  into `HomeHero`, `OrgDiscovery` and the client request wizard. Matches the visitor's point against
+  each organization's declared `AreaOfOperation` circle and filters on `IsAcceptingClients`. The
+  radius here belongs to the **organization** — it is their service range — and the endpoint
+  deliberately **never returns an org's coordinates**, only a label, a distance, and whether the
+  point falls inside their range.
+- **"What is within N miles of me?"** — `SearchController.Nearby` at `/api/public/search/nearby`,
+  which honours each `OrganizationAddress`'s `IsSearchable`, `SearchVisibility` and
+  `SearchRadiusMiles`, takes a caller-supplied radius, and **nothing anywhere calls it**. Ben's
+  distance dropdown is, almost exactly, a parameter that already exists and was never exposed.
+
+So the second implementation is dead code that happens to be most of the feature being asked for.
+Worth deciding on sight whether to wire it up or fold it into the live one, rather than writing a
+third.
+
+**What does not exist at all:** local *events*. `OrgCalendarEvent.IsPublic` is written and never
+read (item #87) — so there is nothing to plot even once the map exists.
+
+### The rule that must not be applied uniformly
+
+Three kinds of thing would appear on one map, and **they do not share a privacy rule**. Getting this
+wrong in either direction breaks something:
+
+| What | Location shown | Why |
+|---|---|---|
+| **Organizations** | as precisely as they chose | A group ticking "searchable" *wants* to be found. It is a business listing. Grid-snapping it would defeat the feature. |
+| **Public events** | approximate until attending | Item #87b — an invitation with an address is a different thing from a listing. |
+| **Public cases** | always approximate | Somebody's home. `PublicCoordinates`, already enforced. |
+
+The temptation, having just built coordinate redaction, is to apply it everywhere. **Do not.** An
+organization that cannot be found has been broken, not protected.
+
+### ✅ Server side built 2026-08-17
+
+**The dead endpoint was extended, not replaced** — the decision this entry asked for. `SearchController.Nearby`
+already honoured `IsSearchable`, `SearchVisibility`, `SearchRadiusMiles` and each address's
+`PublicDisplayMode`; it now also returns **upcoming public events**, and answers with
+`NearbyResults(Organizations, Events)` — two lists precisely because the two obey different rules.
+
+- **Events reuse `PublicEventController.VisibleEvents`**, now `internal`, rather than restating the
+  predicate. An event hidden on the events pages cannot surface here, including one at a private
+  residence.
+- **The published distance is measured to the *snapped* point, not the real one.** A true distance
+  beside an approximate position hands back the position: query from three points and trilaterate.
+  Everything reported derives from the grid cell, so there is nothing to solve for. The cost is that
+  an event within a mile or two of the radius edge may fall on the wrong side, which does not matter
+  for browsing.
+- `NearbyEventResult` has **no field for a street address**, asserted by a test.
+- The asymmetry itself is tested: the group is asserted to appear at its *real* coordinates and the
+  event at *not* its real ones, in the same file, so a later uniform "redact everything" pass fails
+  loudly.
+
+> **Not "untested", just uncalled.** `SearchControllerTests` existed and covered the organizations
+> half all along; what never existed was a caller. Changing the response shape broke those seven
+> tests, which is exactly what they were for — they now unwrap `.Organizations`.
+
+**Still to do:** the visitor-facing screen — a distance dropdown, a list and a map. The server now
+answers the question; nothing asks it yet. Public *cases* are also not in the response (they are
+already discoverable via `PublicCaseDiscoveryController`, with coordinates approximated); folding
+them in is a third list obeying the same rule as events.
+
+### The decision this forces
+
+The live org search **deliberately withholds organization coordinates** — it returns a distance and
+a label, never a point. That is a good decision for "who serves my postcode" and an impossible one
+for "show me a map", which needs somewhere to draw a pin.
+
+So plotting groups needs one of:
+- Use `OrganizationAddress` (where `IsSearchable` and the public display mode already permit it) as
+  the map identity, leaving `AreaOfOperation` for the service-area question. **Recommended** — the
+  two questions stay separate, and the address already carries per-address visibility controls
+  built for exactly this.
+- Or let `AreaOfOperation` return its centre when the org opts in, which conflates a service area
+  with a location and means a group "is" wherever the middle of its patch happens to be.
+
+### Shape
+
+- One **"Near me"** surface with a distance dropdown (5 / 10 / 25 / 50 / 100), a list and a map, and
+  toggles for **groups / events / places**.
+- Location by opt-in geolocation **or** a typed town or postcode — see 87a; the typed box is not a
+  fallback, it is what most desktop visitors will actually use.
+- Reuses `PublicCaseDiscovery`'s existing map rather than adding a second one.
+- Empty states that do something: "no groups within 25 miles — try 50" beats a blank list, and is
+  the difference between a visitor leaving and widening the search.
+
+---
+
+### ✅ UI built 2026-08-17
+
+`NearbyDiscovery.razor`, mounted on the home page between `HomeHero` and `PublicCaseDiscovery`. On
+load it asks the browser for the visitor's location; declining or lacking geolocation falls back to
+the same typed-place-name search `HomeHero` already offers (`SearchGeocodingAsync`), so the feature
+degrades rather than disappears. A distance dropdown (10/25/50/100 mi) re-queries on change.
+
+**Deliberately list-only, no map.** `PublicCaseDiscovery` already carries a Telerik Map plus its own
+colocated JS for marker clustering; duplicating that machinery for a first version was not worth the
+risk in an environment where Telerik rendering cannot be visually verified. A map is additive later
+— the two result lists this renders do not need to change shape to gain one.
+
+The privacy asymmetry the server enforces is rendered as-is, not re-decided: a group's card links
+straight to `/o/{org}`, an event's card says "approximate" and gives no address at all. Guarded by
+`ReachableComponentTests.Nearby_search_is_called_by_a_screen` — the whole reason this item existed
+was a fully-built, fully-correct endpoint with zero callers, and adding a UI without a test asserting
+the UI is real would have been the same mistake with better production values.
+
+**Dev seed data added, because the panel was correct and empty.** No seeded organization address set
+`IsSearchable` (it defaults to false) and nothing seeded an `OrgCalendarEvent` at all, so a fresh dev
+database rendered "Nothing found" — indistinguishable from broken. `SeedLocalDiscoveryAsync` now
+marks *one* group findable (not both: a panel where everything is findable cannot show that the flag
+is what does the work) and creates two public events.
+
+The two events are placed deliberately. Bell Witch Cave is **33.4 miles** from the Nashville seed
+point, so at the panel's default 25-mile radius it is out of range; the second event sits at the
+other group's own Nashville address. A fresh database therefore shows one event immediately, and
+widening the dropdown to 50 visibly adds the second — the control does something observable rather
+than being taken on trust.
+
+That second event also uses `OrganizationAddressId` with **no** `PlaceId`, which `VisibleEvents`
+permits and which the nearby projection falls back to for coordinates. **That fallback had no test**
+until the seed data started depending on it — a line of code nothing exercised, relied upon by data
+whose breakage only a running app would have revealed. Now covered, including the point that such an
+event is *still* snapped even though the organization's listing drawn from the very same address is
+shown precisely: same coordinates, two answers, decided by what the row means.
+
+### Playwright coverage — and the bug it found
+
+`NearbyDiscoveryTests` (category `Nearby`), run against the live stack, **7 passing**. Geolocation is
+granted and pinned to the Nashville seed point in one fixture; a second fixture withholds it to
+exercise the declined-permission path.
+
+**It found a real bug that nothing else could have.** The component was one long `if / else if`
+chain: `Asking` → `Denied` → `_searching` → results. So whenever geolocation was declined, the
+`Denied` branch matched and **shadowed every results branch** — a visitor who typed a place and
+searched had their data load correctly and saw nothing at all. Unit tests pass (the endpoint is
+right), the source scan passes (a screen does call it), and the feature is silently broken for
+everybody who says no to the browser prompt. Fixed by splitting into two independent chains, which
+is also correct behaviourally: the manual box has to stay on screen, since it is how somebody
+searches a different place.
+
+Two smaller things worth recording:
+- **`HomeHero` carries the identical placeholder text**, so a placeholder-based Playwright selector
+  fills *its* box and then clicks this panel's button — which stays correctly disabled. That looks
+  exactly like a component bug and is not one; it cost a wrong diagnosis before the id was added.
+- The manual input is a **plain `<input>` with `@oninput`**, not `TelerikTextBox`, matching the
+  convention already used in the equipment and timeline editors: a Telerik text box commits on blur,
+  so a button gated on its value stays disabled for anyone who types and clicks straight through.
+- `[SetUp]` waits for the panel, not just `NetworkIdle` — a Blazor Server circuit loads its data
+  after the network goes quiet, and the first run against a freshly restarted app failed on that
+  race while warm runs passed.
+
+## 89. Readable URLs — the scheme, settled 2026-08-17 (closed 2026-08-17)
+
+Ben: *"we use the GUID for many of the IDs. That is not human readable... I was thinking we need
+'/c' for cases and '/i' for investigations."* Then, on single letters: *"how can we provide a
+concrete link to equipment... '/e' it is going to get crazy eventually."*
+
+**He is right, and it settles the question.** `/e` is events or equipment. `/c` is cases or catalog.
+Single letters do not survive the fourth entity type, and the app already has more than four.
+
+### Two decisions
+
+**1. Full words, not letters.** `/o/ghost-squad/events/2026-08-17-ghost-walk`, not `/o/ghost-squad/e/…`.
+
+- They scale without collisions, and without anybody memorising a lookup table.
+- They are self-documenting in a link, a log, or a support ticket.
+- **SEO**, which matters specifically because item #87's purpose is discovery by strangers. A search
+  engine reads `/events/` as a keyword; `/e/` is noise.
+- The cost is that an organization cannot have a CMS page called `events` — bounded, and arguably
+  correct, since a page about their events *is* that page.
+
+**2. Two roots, decided by ownership — not everything belongs under `/o/`.**
+
+Equipment is the case that proves it. The make/model catalog is deliberately **cross-organization**:
+a Zoom H1n is not owned by one group, and pooling every owner's photos and links onto one page is
+the entire point of what shipped in #55 phase 6b. Forcing it under `/o/{org}/` would be wrong.
+
+| Root | For | Examples |
+|---|---|---|
+| `/o/{org}/…` | belongs to one organization | pages, cases, investigations, events |
+| `/{type}/…` | platform-wide | equipment catalog and model pages, places, the public case map |
+
+**The app already does this correctly** — `/equipment-catalog`, `/equipment-models/{id}` and
+`/equipment/{id}` are top-level and org-agnostic. They do not need moving; they need slugs instead
+of GUIDs.
+
+### The shape
+
+```
+/o/{org}                              organization home
+/o/{org}/{page}                       CMS pages — reserved words enforced
+/o/{org}/cases/{case-slug}
+/o/{org}/investigations/{slug}        flat, NOT nested under a case — see below
+/o/{org}/events/{slug}                ✅ built 2026-08-17
+
+/equipment/{brand}/{model}            the pooled make/model page
+/places/{place-slug}
+/cases                                the public discovery map
+/events                               cross-organization "what's on" (item #88)
+```
+
+**Investigations are flat, and that is structural rather than aesthetic.** Ben asked whether an
+investigation needs `/o/{org}/cases/{case}/investigations/{inv}`. It must not: `Investigation.CaseId`
+is **nullable** — a group can investigate a landmark with no client case, and then a `PlaceId` is
+required instead. A URL that assumed the case would have no form for those at all. The general rule
+falls out of it: **URL depth follows what the model actually requires, not what is usually true.**
+The organization is required on everything (verified 2026-08-17), so one level under `/o/{org}` is
+always enough.
+
+### Not everything gets a slug
+
+A slug is a **public name**. An individual piece of equipment — somebody's specific recorder, called
+"My backup H1n" — has no business having one: it would publish the owner's private naming in a URL,
+and most items are not public at all. Keep the GUID there.
+
+The rule: **a readable URL for things meant to be found and shared; an opaque id for things reached
+from inside the app.**
+
+### Still to do
+
+- **The reserved-word bug — ✅ fixed 2026-08-17.** `CmsReservedSlugs` refuses a routed word on both
+  create and rename, with a message naming the word and suggesting a way round it. Existing pages
+  saved before the check are flagged **Unreachable** in the CMS list, because nothing else about
+  them looks wrong — they sit in the list like any other page and only fail when somebody follows
+  the link.
+
+  The part that makes it stay fixed is a **source scan**: a test reads every `@page "/o/{...}/x"`
+  route in the app and fails if `x` is not reserved. Refusing today's words was the easy half; the
+  failure mode is somebody adding `/o/{org}/team` in six months with nobody remembering the list
+  exists, and an organization losing a page silently. Verified by adding a route for an unreserved
+  word and watching the test name both the word and the file.
+
+  A few extra words are held back for routes the site will want. Reserving one costs an
+  organization nothing today; taking it back after they have built a page there breaks their link.
+- **Cases — ✅ built 2026-08-17.** `/o/{org}/cases/{slug}`, generated from the case **title** the
+  first time it is published and then left alone. Derived rather than typed on purpose: the title is
+  already on the public case page, so the URL exposes nothing the page does not, which is not true
+  of free text.
+
+  **A case is somebody's home**, and a URL outlives the page — it sits in browser histories,
+  referrer headers and pasted links long after anyone thinks about it. So a title that reads like a
+  street address is **refused at publish** rather than quietly slugged, which would have handed back
+  what redacting the coordinates was built to protect. The check is deliberately narrow: it refuses
+  a title an organization typed, and a rule that fired on "The 1892 Foundry" would teach people to
+  work around it rather than to name things carefully.
+
+  The old `#2026-042` reference still resolves, because it is what an organization says out loud to
+  a client. The endpoint's old "expected format 2026-042" 400 became wrong the moment the same
+  segment could carry a slug, and is now a plain 404.
+
+  *Worth recording:* the street-address regex shipped broken in its first draft — `\b` was eaten
+  during editing and became a literal backspace, so it matched nothing at all. Only the test caught
+  it. A guard that silently never fires is the worst kind.
+
+- **Investigations — ✅ built 2026-08-17.** `/o/{org}/investigations/{date}-{title}`, and a public
+  page to go with it: a published write-up could previously only be reached through the page of the
+  place it happened at, which is a fine way to browse and a poor way to share.
+
+  Date first, then the title. The date makes a list sort by name alone and says something useful
+  when a title does not; the title stops a date-only address being **walkable**, which would let
+  anybody step through the calendar and enumerate a group's visits.
+
+  **Flat under the organization**, as decided — `CaseId` is nullable, so a nested address has no
+  form for a landmark visit. Visibility runs through the **shared** `InvestigationVisibilityFilter`
+  rather than a second `Visibility == Public`, so a group-only investigation is unreachable here for
+  the same reason it is unreachable on a place page. The location is approximate: a write-up says a
+  group was somewhere, not which door they knocked on. The same street-address refusal as cases
+  applies to the title.
+
+  The place page's rows now link to it — they carried no slug, which is the third time in this
+  session a list has shipped unable to open its own contents.
+
+- **Equipment model slugs — ✅ built 2026-08-17.** `/equipment/{make}/{model}` — the last page in
+  this work still wearing a GUID, and the one Ben raised first.
+
+  **This slug is regenerated on rename**, which is the opposite of every other slug here and
+  deliberate. A case, an event and an organization freeze theirs because somebody chose and shared
+  it. The catalog is the site's own vocabulary and its rename path exists specifically to correct
+  mistakes — a page for a make fixed from "Sansung" to "Samsung" that still answered only to
+  `/equipment/sansung` would preserve the error in the most visible place there is. The cost is that
+  a catalog link shared before a correction dies; accepted because these addresses are brand new, so
+  nothing has been shared yet.
+
+  Model slugs are unique **within the make**, matching how the names are: two manufacturers may both
+  make an "X1", and neither should be forced to take a suffix. Existing rows are backfilled by the
+  seeder in C# rather than by SQL in the migration, so there is one definition of how a name becomes
+  a slug — a SQL approximation would quietly disagree with `UrlSlug` on accents and length.
+
+  The GUID route stays and **redirects to the readable address**, because every list in the app
+  still links by id. Without that the readable route would exist and nothing would ever reach it.
+
+- **Alias-and-redirect for changed slugs — ✅ built 2026-08-17**, and the investigation found three
+  faults rather than the one that was expected.
+
+  **The expected one:** renaming an organization broke every link ever shared, silently. Old
+  addresses are now kept as aliases and still resolve, and the public page moves the browser to the
+  current address so what gets copied onward is the one that will still be right tomorrow. Aliases
+  are **never reassigned** — pointing a saved link at a different group is worse than the link being
+  dead, because a dead link says "gone" while a captured one says something false.
+
+  **Two that were not:**
+  - **`Organization.UrlName` had no unique index and the rename path never checked.** Create checked;
+    rename did not. Two groups could hold one address, and all seventeen lookup sites are first-match
+    queries — so a group could rename onto another group's address and take their public traffic.
+  - **Nothing validated the characters.** Both write paths trimmed and lowercased and stopped there,
+    so `ghost squad`, `a/b` and `../admin` were all storable.
+
+  There turned out to be **three** creation paths, not two: the admin endpoint, the org endpoint, and
+  `RegisterOrganizationAsync` in the repository layer, which knew about none of this. They now share
+  one helper, in `Ben.Data.Source` because that is the only project all three can see. Two endpoints
+  writing one column with different rules is exactly how the original collation bug happened.
+
+  Cases, investigations and events need no aliases: all three generate a slug once and return early
+  if one exists. **If any of them ever becomes editable, it needs this on the same day.**
+
+---
+
+## 90. Taxonomy typos and staleness — the Sansung problem (closed 2026-08-17)
+
+Ben: *"if I make a piece of equipment from a manufacturer Sansung and I make a typo Samsung, and
+delete the item before someone else makes a Samsung product, what happens when I delete my Sansung
+product or what happens when I try to change Samsung to Sansung?"*
+
+### What happened before, which was worse than the question assumed
+
+- **Deleting the item left the typo behind.** The model and brand stayed in the shared catalog for
+  ever, unapproved and unreferenced, and **the member who created them could not remove them** —
+  rejecting taxonomy is a SuperAdmin action. Everybody adding a Samsung recorder afterwards was
+  offered two manufacturers, and the wrong one looked exactly as real as the right one.
+- **Renaming was impossible.** There is no rename endpoint for brands or models at all — only
+  approve and delete, and delete is refused while anything references them. So "change Samsung to
+  Sansung" could not be done, and its opposite could not be undone.
+- **Dedup was collation-dependent.** Proposing matched on `Name == name`, so whether "samsung" and
+  "Samsung" were one brand or two depended on the database's collation rather than on anything in
+  the code — the same fault as the slug lookups.
+
+### Fixed
+
+- **Near-duplicate detection at the moment of typing**, which is the only cheap moment. Proposing
+  "Sansung" when "Samsung" exists returns the suggestions instead of creating it; the person either
+  picks the real one or confirms theirs is genuinely different. The pattern already existed for
+  places, where `FindPlaceCandidatesAsync` asks "did you mean this?" before a duplicate exists.
+- **Case-insensitive dedup**, explicitly, rather than by collation.
+- **Orphan cleanup.** Deleting the last item that used an *unapproved* brand or model takes them
+  with it — model first, then the brand that existed only to hold it. **Approved entries are never
+  swept**: the catalog describes what exists in the world, not what somebody happens to own this
+  week, and a Zoom H1n is still a real recorder on the day the last owner here sells theirs. That is
+  the answer to "how long until a name goes stale" — an unapproved one goes the moment nothing uses
+  it; an approved one never does.
+
+### Two defects the positive tests found, which the negative ones would not have
+
+Ben's point that *"proving a single negative doesn't necessarily mean proving it positive"* was
+immediately borne out:
+
+- **"Olympsu" for "Olympus" was not caught.** A transposition is the commonest typo there is, and
+  plain Levenshtein charges two for it, putting it past the threshold. Now Damerau-Levenshtein,
+  where a swap costs one.
+- **"Ring" and "Ping" were flagged as the same name**, as were "Zoom" and "Boom". One letter is the
+  entire difference between two real companies at that length. Short names are now left alone
+  entirely — a check that cried wolf would train people to click past it, which is worse than not
+  having one.
+
+### Still to do
+
+- **Rename-as-merge — ✅ built 2026-08-17.** Brands and models can be renamed at last, and a
+  collision is **offered as a merge rather than performed**: two manufacturers becoming one changes
+  what make somebody's equipment is, which is far too large a thing to happen because a name was
+  typed. The 409 carries the id it collided with, so the caller chooses deliberately.
+
+  Three rules worth knowing:
+  - **Merging an approved brand into an unapproved one is refused.** Somebody correcting a typo has
+    the two the wrong way round more often than not, and the result would be a catalog where the
+    endorsed name vanished and the typo survived.
+  - **A model name on both sides is folded, not moved.** Two "X1" rows under one brand is exactly
+    what the unique index forbids, so the duplicate's items move to the survivor — the same merge
+    one level down. Handling it here rather than failing is what makes the tool usable on real data.
+  - **Models under different makes are not merged**; that silently changes what somebody owns, and
+    it is the brand merge's decision rather than this one's.
+- **The same treatment for other user-grown taxonomies — ✅ done 2026-08-17.** The guess was half
+  right, and the wrong half is the more interesting one.
+
+  **Experience types were worse off than equipment ever was**, because a group cannot delete a type
+  it proposed — the only delete lives behind an app-administrator screen — so a mistyping was
+  permanent. Five distinct gaps, all now closed:
+  - No typo detection at all when a group proposed a type. Now checked against **reviewed** types in
+    the same category, with the same confirm-it-is-different escape.
+  - **The administrator's own create path never deduped**, so it could quietly make the second
+    "Knocking" that every group was being stopped from making.
+  - **Renaming onto a taken name silently produced twins** in one category — the exact mess the
+    rename was trying to clear up, now indistinguishable. Now offered as a merge.
+  - **No merge existed.** Now folds taggings onto the survivor, refusing to lose a review or to
+    cross a category, since moving a tagging from Visual to Auditory rewrites what somebody recorded
+    about their own night.
+  - **No orphan sweep**, on either untagging or deleting the occurrence. Both now sweep, on the
+    equipment rule: group-proposed and unreviewed only.
+
+  Two things worth remembering from the build:
+  - **"Reviewed" is `IsApproved && ApprovedByAppUserId != null`, not `IsApproved`.** An org-proposed
+    type goes live immediately with the approver left null, and that null is the entire marker.
+    Testing `IsApproved` alone would sweep away words an administrator had deliberately endorsed.
+  - **The join's primary key is the pair (entry, type)**, so a merge cannot repoint a tagging — EF
+    refuses to modify a key property on a tracked entity. Rows are deleted and re-added instead.
+    Caught by reading the model config, not by a test.
+
+  **The table had no unique index and no length cap at all** — `nvarchar(max)`, with the advertised
+  100-character limit enforced nowhere. Both added, with a dedupe pre-step in the migration so it
+  can apply to a database that already has twins. Verified against the real dev SQL Server, not only
+  in memory.
+
+  **Places turned out to be fine.** `PlaceMatcher` already had a genuine dedup rule — same address
+  *and* within a tenth of a mile — and already normalised case, punctuation and a leading "the". The
+  one gap was a mistyped landmark name, now tolerated, which is safe here in a way it would not be
+  elsewhere: candidates are only *offered*, and proximity has already been checked, so a wrong
+  suggestion costs a glance while a missed one costs a duplicate somebody must merge later.
+
+### The typo check was unreachable in the UI the whole time — ⚠ found and fixed 2026-08-17
+
+The most useful finding of the session, and it was **my own earlier work**. The server answers a
+probable typo with a 409 listing the names it might have been. Both callers — the equipment editor
+and the case timeline — threw it away and rendered "could not be added".
+
+So the person could not take the suggested name, could not insist on their own, and simply could not
+add any name resembling an existing one. **The check made the feature strictly worse than not having
+it**: before it, the word at least got created.
+
+Every unit test passed, on both sides. They asserted the server returns suggestions, which it did.
+Nothing asserted a person ever sees them — the same shape as the platform-messages and
+permission-requests findings, now the fifth instance.
+
+Both screens now show a "did you mean" prompt: each suggestion is one click, and *"no, mine is
+different"* creates it as typed. Two source-scan tests hold the line — one that the suggestions
+reach a screen at all, one that **every** screen showing them can also overrule them, since a
+prettier dead end is still a dead end.
+
+---
+
+## 91. Video editor — scope the Server media tab (raised 2026-08-19)
+
+The editor's **Server** tab lists every media file the signed-in person can reach, in one flat
+list. That is fine with four demo clips and unusable with four hundred: a real investigation
+produces dozens of files per visit, and the tab is the only way to get any of them into a project.
+
+**The ask.** A scope selector above the list:
+
+- **All** — everything they may see, as today.
+- **Personal** — only files they own.
+- **By case** — pick a case, see that case's media; then optionally narrow to a single
+  **investigation** within it.
+
+Permissions decide what each scope can return, not the selector: someone with access to all media
+sees a case's whole set, while someone with narrower rights sees only their own share of it. The
+selector filters what they are already entitled to — it must never widen it.
+
+**Why it matters beyond convenience.** Importing is a two-click operation per file (download, then
+add), so the cost of finding the right file dominates. Scoping by case and investigation also puts
+the editor in the same mental model as the rest of the site, where work is organised by case first.
+
+**Notes for whoever builds it.** The list comes from `GET /api/media-library/files`, which already
+aggregates across ownership, org membership, shares and case links —
+`MediaLibraryController` composes those sets, so the scoping belongs there rather than in the
+editor, which should send a scope and an optional case/investigation id. `BenMediaLibraryProvider`
+is the client side. Keep the content-type filter as-is.
+
+---
+
+## 92. Home map renders into a sliver (CLOSED 2026-08-19)
+
+Reported with a screenshot: on the home page, the "Public Investigations" map draws its tiles into
+a narrow strip down the left of its container and leaves the rest black. The zoom and recentre
+controls sit inside the strip, so the map believes it is that width.
+
+**The guess in this entry was wrong twice over**, and is kept because the shape of the mistake is
+worth remembering: it named Leaflet and `invalidateSize()`, and these maps are Telerik's. The
+reasoning about *when* — measured once at mount, never re-measured — was right; the library was
+not. Diagnosing from a symptom's resemblance to a library you have used before will do that.
+
+**Where to look.** The home map component and its JS interop, plus anything that resizes the page
+after first render. Worth checking whether it reproduces on a hard reload versus a soft navigation,
+and whether collapsing the sidebar fixes or worsens it — both distinguish "never measured" from
+"measured too early".
+
+Not reproduced in the capture harness, which screenshots the same page at a fixed 1440×900 viewport
+and gets a full-width map — so it likely depends on window size or on the sidebar state at load.
+
+**Suspect the template migration first.** The map predates the move from the Telerik-based layout to
+the current template, and the new layout owns the page's widths and the collapsible sidebar. A map
+that measured itself correctly under the old chrome would fail exactly this way under new chrome
+that sizes its container later or differently.
+
+### What it was (fixed in 8798656)
+
+Both public maps re-measured themselves by reaching for a global `kendo` object —
+`kendo.widgetInstance(el).resize(true)`, behind a `typeof kendo !== 'undefined'` guard. Telerik UI
+for Blazor ships no jQuery and defines no such global, so the guard was false every time and every
+call did nothing. The map kept whatever width it measured at mount: load narrow, widen, and the
+tiles stayed in a strip.
+
+Both components now hold a `TelerikMap` ref and call `Refresh()`; the JS keeps only the debounced
+resize event. The same dead path drove `setMapCenter`, so recentring the home map on a searched
+location had quietly done nothing since it was written.
+
+Re-checked live 2026-08-19 after the toolbar work, since the entry had been left open: tiles cover
+100% of the map box at 1280, at 1600, at 1024 on a fresh load, after collapsing the sidebar, and in
+dark mode. Worth knowing for the next map bug — a screenshot taken too early shows a blank white
+map, because Kendo creates each tile with `visibility: hidden` and reveals it on load. That is not
+a defect, and it briefly looked like one here.
+
+---
+
+## 93. Editor toolbar — overflow items need labels, and undo/redo need checking (CLOSED 2026-08-19)
+
+Reported against the WASM host, but the toolbar is shared, so both apply to the site too.
+
+**Labels in the overflow.** The toolbar's "More tools" dropdown shows its items as bare icons. In
+the toolbar itself an icon with a tooltip is fine — the row is a known set and space is tight — but
+a dropdown is a list of choices being read one after another, and there icons alone make people
+guess. Give the overflow items their text. The same goes for the cloud icon, whose meaning
+(save/publish to the server) is not something anyone should have to hover to learn.
+
+**Undo and redo appear unclickable.** Both are legitimately disabled when there is nothing to undo —
+their tooltips say "Nothing to undo" / "Nothing to redo" — so the first thing to establish is
+whether they stay disabled *after* an edit. If they do, that is a real defect in the undo stack's
+wiring; if they don't, the defect is that a disabled control gives no hint why, which the tooltip
+only fixes for people who hover.
+
+### What it turned out to be
+
+**Undo and redo were never broken.** Measured before and after an edit: with an empty project the
+button reports `Nothing to undo` and disabled; after adding a marker it reports
+`Undo: Add marker "0:00.0"` and enabled. The undo stack was wired correctly the whole time. What
+was true is the second half of the report — a disabled control explains itself only to whoever
+hovers it, and in a dropdown nobody hovers.
+
+**Labels.** Only three buttons could ever reach the "…" menu: Undo, Redo and Save to server. Every
+other icon button in the bar sets `Overflow="Never"` and stays put, and `ToolBarTemplateItem`
+behaves as `Never` regardless. Those three now carry child content, which the menu renders as the
+row's text; a scoped rule hides that text while the button is in the bar, so the bar is unchanged.
+The rule needs `::deep` — the span holding the text is Telerik's, so it never receives this
+component's isolation attribute and a plain descendant selector matches nothing at all.
+
+**And the reason nobody had complained the menu was useless.** It was covered. Kendo puts popups at
+z-index 10002 and windows at 11500, and the Media & Properties window docks to the right, directly
+beneath the "…" button. Hit-testing the menu's four items returned the window's title bar and tab
+strip: not a cosmetic overlap but an unclickable menu, and at narrow widths it is the only route to
+Preview, Export, Undo and Redo. The popup is now raised above the window layer. An earlier attempt
+at 10050 looked plausible and changed nothing, because the number to beat was never the 10003 the
+panel happened to be reporting at the time.
+
+Verified end to end at 900px: added a marker, opened the menu, clicked **Undo** in it, and the
+state went to `Nothing to undo` / `Redo: Add marker "0:00.0"`. Two guards added in
+`ToolbarOverflowLabelTests` — one fails if a button that can overflow has no label, one fails if the
+popup is not raised past 11500 — both confirmed to fail against the unfixed code.
+
+## 94. Background render stalls at "Processing… 0%" after an overlay is added (CLOSED 2026-08-19)
+
+Hit while automating the editor for the help screenshots, in the site host. Sequence: import two
+clips, select a clip, add a text overlay, add a callout. The ffmpeg status chip then went to
+`Processing… 0%` and stayed there for the full two minutes the capture waited, which also leaves
+Export disabled (it requires `FfmpegState.Ready`).
+
+Reproduced three times while capturing screenshots. It is a genuine stall, not slowness: the first
+run sat at `Processing… 0%`, the next two reached `Processing… 47%` and stayed there for four and a
+half minutes without moving. Export is unusable for as long as it lasts.
+
+This may be the same class as the clip-art background-render stall hardened in phase 138, whose
+exact trigger was never confirmed live. This one has a reproducible-looking recipe, which that one
+lacked, so it is worth trying to reproduce by hand before assuming they are the same.
+
+Reproduce with the seeded demo footage: `/my-videos`, Initialize, import `porch-camera.mp4` and
+`hallway-camera.mp4` from the Server tab, then **click a clip on the timeline**. That last step is
+the trigger; importing alone renders fine (`exec 4.6s`, `concatClips 3.9s`, both ✓).
+
+### Investigated 2026-08-19 — one cause found and fixed, one still open
+
+**Fixed: a source with no audio stream produced an invalid command.**
+`BuildBackgroundRenderVideoArgs` decided whether to map audio from the export settings and the
+clip's mute flag alone, never from whether the file actually has an audio stream. For a video-only
+source it emitted `-map 0:a`, which ffmpeg refuses outright — verified against the real binary:
+
+```
+Stream map '' matches no streams.  To ignore this, add a trailing '?' to the map.
+```
+
+The probe now reports `hasAudio`, `VideoClip.HasAudio` carries it (defaulting true, so projects
+saved before this are not silenced), and the builder attaches the silent `anullsrc` track it
+already had for muted clips. Three tests, one of which fails against the old code. This moved the
+stall from 47% to 64% — it did not cure it.
+
+**Still open: what actually freezes.** With a clip selected, the status chip sits at
+`Processing… 64%` for four minutes and more. The evidence says a command is hung in the worker
+rather than the state machine being wrong:
+
+- the operation trace records entries *on completion*, and shows **nothing** after the selection;
+- `FfmpegState` is `Processing`, and the paths that fail cleanly set `Error` instead — covered by
+  three new tests in `FfmpegServiceRecoveryTests` asserting a failed exec never leaves the service
+  pinned at Processing;
+- the ffmpeg log tail ends in five × `Aborted()`, which is how ffmpeg.wasm reports an internal
+  abort;
+- **the `WorkerWatchdog` never declared it wedged**, so the chip never offered its "⚠ Stuck —
+  Reset?" affordance and the user has no way out short of reloading.
+
+### Root cause found and fixed 2026-08-19 — nothing was ever stuck
+
+**The render was never hung. The toolbar had stopped repainting.**
+
+The decisive measurement: with the chip reading `Processing… 33%`, opening the diagnostics panel in
+the same second reported `State | Ready`. Two components, one service, two different answers — so
+the disagreement was in the rendering, not in ffmpeg.
+
+`Toolbar.razor` reads `Ffmpeg.State` straight from the injected service — the status chip, its
+progress bar, and the `Enabled` of Initialize, Open, Preview and Export all depend on it — and
+subscribed to nothing, relying on its parent re-rendering. Blazor skips a child whose parameters
+have not changed, and going from Processing back to Ready changes none of the toolbar's parameters.
+So the toolbar kept painting whatever was true at its last render, indefinitely, and Export stayed
+greyed out behind a progress bar that had stopped.
+
+The percentage differing run to run (33, 47, 50, 64, 65) was the giveaway in hindsight: it was
+whatever the last painted value happened to be.
+
+`Ffmpeg.OnStateChanged` is now subscribed — and the guard test written alongside found the same
+defect in three more components: `MediaLibraryPicker` (whose Import button would stay disabled
+after ffmpeg became ready), `ClipBrowser`, and `DiagnosticsPanel` itself. All four fixed.
+
+The watchdog was right not to fire: nothing was wedged.
+
+Two real bugs were found on the way there and are worth keeping separately in mind — the two audio
+mapping defects above — but neither was the stall.
+
+
+---
+
+## 95. Editor toolbar — reclaim the space (raised 2026-08-19)
+
+Three changes to the same row, all about making room for the buttons that matter:
+
+- **Drop the "Ben.Video" wordmark** and put the ghost logo at the far right of the bar instead, as
+  a small image that does not grow the bar's height. Light and dark versions, chosen by the active
+  theme like everything else on the page.
+- **Hide the Initialize button once ffmpeg has loaded.** It is a one-shot action with a visible
+  result — the status chip already says "Ready" — so keeping it costs permanent width for a button
+  nobody presses twice.
+- Use the space that frees up to show undo/redo (and friends) directly, rather than pushing them
+  into the overflow where they need text labels (item 93).
+
+## 96. Diagnostics and logs are visible to everyone (raised 2026-08-19)
+
+The editor's ffmpeg diagnostics panel and its error log are on the toolbar for every user. They are
+operator tools: memory use, worker state, ffmpeg command output, internal errors. A client editing
+their own footage has no use for them, and the output names internals they should not be reading.
+
+Show them only to platform and group administrators. The editor itself has no notion of roles — it
+is a component library — so the flag belongs in `VideoEditorOptions`, set by each host from the
+identity it already has: the site from its user state, the WASM host from the signed-in account.
+Default it to off, so a host that forgets is safe rather than exposed.
+
+---
+
+## 97. Expanded sidebar is clipped by the editor (CLOSED 2026-08-19)
+
+With the site's sidebar minimised, hovering it expands a flyout over the page. On `/my-videos` the
+flyout is cut off at the editor's left edge: the menu's own tooltip and the right-hand part of the
+panel disappear behind the editor's chrome, so the labels are unreadable exactly where the flyout
+is supposed to be doing its job.
+
+A stacking problem, not a layout one — the menu is drawn, then something in the editor paints over
+it. The editor's root establishes its own stacking context (it positions its panels, the preview
+and the timeline against each other), so a flyout that relies on sitting above ordinary page
+content has nothing to sit above once it crosses that boundary.
+
+Worth checking against the template migration generally: the old Telerik-based chrome and the
+current template do not necessarily agree about which layer the expanded sidebar belongs to, and
+this is the first page where a full-viewport component sits beside it.
+
+### Fixed — a z-index tie, not a clip
+
+Reproduced with the sidebar minified and hovered open over `/my-videos`. Nothing was clipping it:
+the editor's own horizontal rules were drawing *over* it. Measured, three `.bv-divider` elements at
+**z-index 10, left: 90** — well inside the 252px the expanded sidebar occupies — against a sidebar
+that shipped at **z-index 10** itself. Equal layer, later in the document, so the page won.
+
+The shell now sits above page content: `.app-sidebar` at 1000 and `.app-header` at 1001, kept below
+the popup layer `telerik-night.css` pins at 1090 so dropdowns and pickers still open above the
+navigation. Fixing it at the shell rather than at the divider settles the whole class — a page is
+entitled to stack its own content without knowing what the chrome uses.
+
+Verified by hit-testing rather than by eye: at each divider's midpoint inside the sidebar's width,
+the topmost element is now a sidebar link.
+
+---
+
+## 98. Charts — the template already styles ApexCharts, we just never shipped it (raised 2026-08-19)
+
+Ben likes the look of the ApexCharts in the SmartAdmin demos and asked whether they come with the
+template. They effectively do: `smartapp.min.css` carries **190 `.apexcharts-*` rules** — the whole
+theming layer, tooltips, legends, grid lines, the lot — so a chart dropped in would already match
+the site. What is missing is only the library: `wwwroot/plugins/` holds `bootstrap` and `waves` and
+nothing else, and no page references ApexCharts.
+
+So this is not "build a charting story from scratch"; it is "add the script and use it".
+
+**Where charts would actually earn their place**, rather than decorating a page:
+
+- a group's own dashboard — cases opened/closed over time, investigations per month, equipment out
+  on loan;
+- the site administration screens, which currently report counts as bare numbers;
+- a case's evidence over time, which is the one chart a client would care about.
+
+Ben's reference for the full set of template functionality:
+<https://getwebora.com/smartadmin/demo/dashboard-project-management.html> — worth walking through
+before choosing, since the template ships more patterns than we have adopted.
+
+**Peity** is the other half, and Ben flagged it separately: tiny inline charts — sparklines, mini
+bars, mini pies — for places too small for a real chart. Think a row in a list, a stat tile, a
+count beside a heading. Apex for the panel, Peity for the cell; picking one for both jobs is how
+dashboards end up with either unreadable thumbnails or oversized decorations.
+
+**Check first** whether the vendored Night skin's palette reaches the Apex variables the way it
+reaches Kendo's; if not, the same bridge trick used for the video editor applies.
+
+---
+
+## 99. Profile page — adopt the template's layout (raised 2026-08-19)
+
+Ben likes the SmartAdmin profile demo and wants our profile page to read like it:
+<https://getwebora.com/smartadmin/demo/profile.html>
+
+The catch is that ours carries considerably more than the demo does — two photos with their
+two-key consent, contact details with their own visibility rules, email confirmation, addresses,
+phones, links, and the investigation map. So this is a layout adoption, not a page swap: take the
+demo's structure (the header band with the avatar and identity, the tabbed/carded body, the
+consistent section rhythm) and fit our sections into it, rather than dropping our controls into a
+page built for fewer of them.
+
+Worth deciding up front which sections are prominent — most people come to this page to change one
+thing — and whether the investigation map belongs on the profile at all or behind its own tab.
+
+---
+
+## 100. Internal messages — adopt the template's mail layout (raised 2026-08-19)
+
+Ben likes the SmartAdmin system-mail demo for our internal messaging:
+<https://getwebora.com/smartadmin/demo/systemmail.html>
+
+Three surfaces could share it, and they should look like one thing rather than three:
+
+- the **case message board** (client ↔ group), today a plain list;
+- **platform messages** from site administrators;
+- the **notifications** page, which is closer to a feed but shares the read/unread rhythm.
+
+The demo's useful parts are the list/detail split, the unread treatment, and the sender block —
+all of which we already have data for. What it does not cover is who may see a given message, which
+is the part our version cannot borrow: case messages carry visibility rules and platform messages
+carry an audience, so the layout has to leave room to say so on each row.
+
+Sequence this after item 99 — they are the same kind of work and share the card and header idioms.
+
+---
+
+## 101. Administrator dashboard — the template's stat-card bar (raised 2026-08-19)
+
+For administrators and site administrators, Ben wants the row of cards the template's project
+dashboard opens with:
+<https://getwebora.com/smartadmin/demo/dashboard-project-management.html>
+
+Sensible things to put in them: sign-ins, new members, cases opened, investigations scheduled,
+equipment out on loan, support tickets waiting. Each card wants a number, a period-on-period
+change, and — per item 98 — a Peity sparkline rather than a full chart, which is exactly the size
+the template's cards are built for.
+
+**One of those needs data we do not keep.** The audit log records entity changes (create, update,
+delete); nothing records a *sign-in*, so "logins" cannot be charted today without first recording
+them. That is a deliberate decision to make rather than an oversight to fix quietly: sign-in
+records are personal data with their own retention question, and a chart is a poor reason to start
+keeping them indefinitely. Decide the retention window first, then record.
+
+Everything else on the list is already in the database and only needs aggregating —
+`AppUser.DateCreated` for new members, cases and investigations by their own dates, checkouts by
+status, support tickets by state.
+
+Gate the whole bar on the same administrator check the diagnostics panel now uses (item 96), so
+one rule decides who sees operator-facing surfaces.

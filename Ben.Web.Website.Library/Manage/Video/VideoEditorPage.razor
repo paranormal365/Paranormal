@@ -1,0 +1,57 @@
+@page "/video-editor"
+@using Microsoft.Extensions.Options
+
+@inject IOptions<VideoEditorOptions> EditorOptions
+@inject IBenUserState UserState
+@inject VideoExportPublisher ExportPublisher
+
+<PageTitle>Video Editor</PageTitle>
+
+@* Auth state is not known during prerender, and this page used to read IsAuthenticated straight
+   away — so arriving here signed in showed "You must be signed in" and stayed that way, because
+   nothing re-rendered when auth resolved. Wait for AuthReady first, the same as every other
+   auth-gated page. *@
+@if (!_authResolved)
+{
+    <p class="text-muted">Loading…</p>
+}
+else if (!UserState.IsAuthenticated)
+{
+    <p class="text-muted">You must be signed in to use the video editor.</p>
+}
+else
+{
+    <VideoEditor OnPublishExport="OnPublishExportAsync"
+                     ShowDiagnostics="@(UserState.IsSuperAdmin || UserState.IsAdmin)" />
+}
+
+@code {
+    /// <summary>False until AuthReady has been awaited; see the guard above.</summary>
+    private bool _authResolved;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        _authResolved = true;
+    }
+
+    /// <summary>Server project id from an earlier publish this session, so a second export in the
+    /// same session updates that project rather than creating another row.</summary>
+    private Guid? _publishedProjectId;
+
+    /// <summary>
+    /// Sends a finished render to the server as a personal (non-case) video project. This page has
+    /// no project list of its own, so there is nothing to refresh afterwards — MyVideosPage is
+    /// where the result shows up.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately no try/catch: the editor's destination prompt uses the exception to keep itself
+    /// open and leave "Save to my machine" available. Catching here would report success and let
+    /// the editor discard the render.
+    /// </remarks>
+    private async Task OnPublishExportAsync(ExportedVideo exported)
+    {
+        var result = await ExportPublisher.PublishAsync(exported, caseId: null, _publishedProjectId);
+        _publishedProjectId = result.ProjectId;
+    }
+}
