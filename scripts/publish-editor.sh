@@ -62,13 +62,20 @@ PY
 # The development override ships in the publish output and would win on any machine whose
 # environment says Development. It points at localhost:5252, which on the production box is
 # nothing at all — remove it rather than leave a file that can only do harm there.
+rm -f "$WWW/appsettings.Development.json"
+
+# Publish pre-compresses every static file, so each file patched or removed above still has .br
+# and .gz twins holding the ORIGINAL bytes — <base href="/"> and an empty WebApiBaseUrl. Stock IIS
+# never serves those, but a server with pre-compressed static serving enabled would hand back a
+# stale index.html and the app would look for its runtime at the site root.
 #
-# The .br and .gz twins go with it. Publish pre-compresses every static file, and a server
-# configured to serve those directly would hand back the localhost config from a file that looks
-# deleted.
-rm -f "$WWW/appsettings.Development.json" \
-      "$WWW/appsettings.Development.json.br" \
-      "$WWW/appsettings.Development.json.gz"
+# They are deleted rather than regenerated because there is no brotli encoder to regenerate the
+# .br with, and one correct representation beats two that can disagree. The cost is a few KB on a
+# ~10 MB app; the alternative is a fault that appears only on a server configured slightly
+# differently from the one it was tested on.
+for stale in index.html appsettings.json appsettings.Development.json; do
+    rm -f "$WWW/$stale.br" "$WWW/$stale.gz"
+done
 
 echo
 echo "Checks:"
@@ -76,6 +83,18 @@ grep -o '<base href="[^"]*"' "$WWW/index.html" | sed 's/^/  /'
 grep -o '"WebApiBaseUrl": "[^"]*"' "$WWW/appsettings.json" | sed 's/^/  /'
 [ -f "$WWW/web.config" ] && echo "  web.config present (IIS MIME types + SPA rewrite)" \
                          || echo "  WARNING: no web.config — IIS will refuse .wasm and .dat files"
+
+# Prove it rather than trust it: any surviving twin of a patched file is a stale copy of the very
+# values this script exists to set.
+for stale in index.html appsettings.json appsettings.Development.json; do
+    for ext in br gz; do
+        if [ -f "$WWW/$stale.$ext" ]; then
+            echo "  FAILED: $stale.$ext survived — it holds the pre-patch bytes" >&2
+            exit 1
+        fi
+    done
+done
+echo "  no stale pre-compressed copies of the patched files"
 echo "  $(find "$WWW/_framework" -type f | wc -l | tr -d ' ') framework files"
 echo "  $(du -sh "$WWW" | cut -f1) total"
 echo
