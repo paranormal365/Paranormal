@@ -62,7 +62,13 @@ PY
 # The development override ships in the publish output and would win on any machine whose
 # environment says Development. It points at localhost:5252, which on the production box is
 # nothing at all — remove it rather than leave a file that can only do harm there.
-rm -f "$WWW/appsettings.Development.json"
+#
+# The .br and .gz twins go with it. Publish pre-compresses every static file, and a server
+# configured to serve those directly would hand back the localhost config from a file that looks
+# deleted.
+rm -f "$WWW/appsettings.Development.json" \
+      "$WWW/appsettings.Development.json.br" \
+      "$WWW/appsettings.Development.json.gz"
 
 echo
 echo "Checks:"
