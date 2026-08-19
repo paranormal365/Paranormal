@@ -404,7 +404,195 @@ internal static class DevelopmentDataSeeder
         if (tgh is not null && nps is not null)
             await SeedLocalDiscoveryAsync(db, tgh, nps, owner, emma, now);
 
+        if (tgh is not null)
+            await SeedEquipmentAsync(db, tgh, owner, sarah, james, now);
+
         Console.WriteLine("[DevDataSeeder] Development seed data applied successfully.");
+    }
+
+    /// <summary>
+    /// Personal equipment, group sharing, and two loans in different states.
+    /// </summary>
+    /// <remarks>
+    /// <para>Nothing seeded equipment at all, so every equipment screen rendered its empty state
+    /// on a fresh dev database: "You aren't borrowing anything", an empty personal inventory, and
+    /// a public catalog with nothing in it. Three of the help documents are about exactly those
+    /// screens, and a screenshot of an empty state teaches nobody anything.</para>
+    ///
+    /// <para><b>Both directions of a loan are seeded on one person.</b> Sarah borrows James's
+    /// spirit box and James has asked to borrow her thermal camera, so her My Checkouts screen
+    /// shows both halves — "Borrowing" and "Waiting on me" — at once. Seeding only one side leaves
+    /// half of every borrowing screen empty, which is the failure this method exists to fix.</para>
+    ///
+    /// <para>The catalog needs items whose owners opted in, so two of Sarah's three pieces set
+    /// <c>IncludeInGlobalCatalog</c> and the third does not: the difference between a listed and
+    /// an unlisted piece is itself something the help explains.</para>
+    /// </remarks>
+    private static async Task SeedEquipmentAsync(
+        BenDataContext db, Organization tgh, AppUser owner, AppUser sarah, AppUser james, DateTime now)
+    {
+        // Real makes and models rather than the generic placeholders: the catalog and the
+        // "link to a make or model" help both describe browsing by manufacturer, which reads as
+        // nonsense against a list of "Generic / Unbranded".
+        var zoom   = await BrandAsync(db, "Zoom",      owner.Id, now);
+        var flir   = await BrandAsync(db, "FLIR",      owner.Id, now);
+        var pSb    = await BrandAsync(db, "GhostStop", owner.Id, now);
+
+        var h6     = await ModelAsync(db, zoom, "Audio Recorder",            "H6 Handy Recorder",  owner.Id, now);
+        var c5     = await ModelAsync(db, flir, "Thermal Imaging",           "C5 Compact Thermal", owner.Id, now);
+        var remPod = await ModelAsync(db, pSb,  "REM-Pod / Trigger Device",  "REM-Pod EMT",        owner.Id, now);
+        var sb7    = await ModelAsync(db, pSb,  "Spirit Box",                "SB7 Spirit Box",     owner.Id, now);
+
+        if (h6 is null || c5 is null || remPod is null || sb7 is null)
+        {
+            Console.WriteLine("[DevDataSeeder] Equipment categories missing — skipping equipment seed.");
+            return;
+        }
+
+        var recorder = await ItemAsync(db, "Field Recorder (H6)", sarah, h6,
+            loanable: EquipmentLoanAudience.SharedGroups, inCatalog: true,
+            notes: "Primary recorder for interior sessions. Four XLR inputs.", now);
+
+        var thermal  = await ItemAsync(db, "Thermal Camera (C5)", sarah, c5,
+            loanable: EquipmentLoanAudience.SharedGroups, inCatalog: true,
+            notes: "Kept in the padded case with the spare battery.", now);
+
+        // Deliberately unlisted and not loanable — the contrast is what the help describes.
+        await ItemAsync(db, "REM-Pod", sarah, remPod,
+            loanable: EquipmentLoanAudience.NotLoanable, inCatalog: false,
+            notes: "Calibrated 08/2026.", now);
+
+        var spiritBox = await ItemAsync(db, "Spirit Box (SB7)", james, sb7,
+            loanable: EquipmentLoanAudience.SharedGroups, inCatalog: true,
+            notes: "Sweep rate switch is stiff — push firmly.", now);
+
+        await ShareAsync(db, recorder,  tgh, sarah.Id, now);
+        await ShareAsync(db, thermal,   tgh, sarah.Id, now);
+        await ShareAsync(db, spiritBox, tgh, james.Id, now);
+
+        // Out with Sarah now, due back in five days.
+        await CheckoutAsync(db, spiritBox, borrower: sarah, forOrg: tgh,
+            status: EquipmentCheckoutStatus.CheckedOut,
+            requestNotes: "For the Franklin walkthrough on Saturday.",
+            checkedOut: now.AddDays(-3), due: now.AddDays(5), reviewedBy: james, now);
+
+        // Waiting on Sarah to decide.
+        await CheckoutAsync(db, thermal, borrower: james, forOrg: tgh,
+            status: EquipmentCheckoutStatus.Requested,
+            requestNotes: "Would like it for the basement survey if it's free.",
+            checkedOut: null, due: null, reviewedBy: null, now);
+
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task<EquipmentBrand> BrandAsync(
+        BenDataContext db, string name, Guid ownerId, DateTime now)
+    {
+        var existing = await db.EquipmentBrands.FirstOrDefaultAsync(b => b.Name == name);
+        if (existing is not null) return existing;
+
+        var brand = new EquipmentBrand
+        {
+            Id = Guid.NewGuid(), Name = name, IsApproved = true,
+            ApprovedByAppUserId = ownerId, DateApproved = now,
+            DateCreated = now, CreatedByAppUserId = ownerId,
+        };
+        db.EquipmentBrands.Add(brand);
+        await db.SaveChangesAsync();
+
+        // Same helper the taxonomy seeder uses, so a seeded brand's address follows the one rule
+        // the rest of the catalog follows rather than a second, nearly-identical one.
+        await Services.EquipmentCatalogSlugs.AssignAsync(db, brand, default);
+        await db.SaveChangesAsync();
+        return brand;
+    }
+
+    private static async Task<EquipmentModel?> ModelAsync(
+        BenDataContext db, EquipmentBrand brand, string categoryName, string name, Guid ownerId, DateTime now)
+    {
+        var category = await db.EquipmentCategories.FirstOrDefaultAsync(c => c.Name == categoryName);
+        if (category is null) return null;   // taxonomy seeder has not run
+
+        var existing = await db.EquipmentModels
+            .FirstOrDefaultAsync(m => m.EquipmentBrandId == brand.Id && m.Name == name);
+        if (existing is not null) return existing;
+
+        var model = new EquipmentModel
+        {
+            Id = Guid.NewGuid(), EquipmentBrandId = brand.Id, EquipmentCategoryId = category.Id,
+            Name = name, IsApproved = true, ApprovedByAppUserId = ownerId, DateApproved = now,
+            DateCreated = now, CreatedByAppUserId = ownerId,
+        };
+        db.EquipmentModels.Add(model);
+        await db.SaveChangesAsync();
+
+        await Services.EquipmentCatalogSlugs.AssignAsync(db, model, default);
+        await db.SaveChangesAsync();
+        return model;
+    }
+
+    private static async Task<EquipmentItem> ItemAsync(
+        BenDataContext db, string displayName, AppUser owner, EquipmentModel model,
+        EquipmentLoanAudience loanable, bool inCatalog, string notes, DateTime now)
+    {
+        var existing = await db.EquipmentItems.FirstOrDefaultAsync(
+            i => i.OwnerAppUserId == owner.Id && i.DisplayName == displayName);
+        if (existing is not null) return existing;
+
+        var item = new EquipmentItem
+        {
+            Id = Guid.NewGuid(), OwnerAppUserId = owner.Id, EquipmentModelId = model.Id,
+            DisplayName = displayName, Notes = notes,
+            LoanAudience = loanable, IncludeInGlobalCatalog = inCatalog,
+            AcquisitionDate = now.AddMonths(-14),
+            DateCreated = now, CreatedByAppUserId = owner.Id,
+        };
+        db.EquipmentItems.Add(item);
+        await db.SaveChangesAsync();
+        return item;
+    }
+
+    private static async Task ShareAsync(
+        BenDataContext db, EquipmentItem item, Organization org, Guid byUserId, DateTime now)
+    {
+        if (await db.EquipmentItemShares.AnyAsync(
+                s => s.EquipmentItemId == item.Id && s.OrganizationId == org.Id))
+            return;
+
+        db.EquipmentItemShares.Add(new EquipmentItemShare
+        {
+            Id = Guid.NewGuid(), EquipmentItemId = item.Id, OrganizationId = org.Id,
+            DateCreated = now, CreatedByAppUserId = byUserId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task CheckoutAsync(
+        BenDataContext db, EquipmentItem item, AppUser borrower, Organization forOrg,
+        EquipmentCheckoutStatus status, string requestNotes,
+        DateTime? checkedOut, DateTime? due, AppUser? reviewedBy, DateTime now)
+    {
+        if (await db.EquipmentCheckouts.AnyAsync(
+                c => c.EquipmentItemId == item.Id && c.BorrowerAppUserId == borrower.Id))
+            return;
+
+        db.EquipmentCheckouts.Add(new EquipmentCheckout
+        {
+            Id = Guid.NewGuid(),
+            EquipmentItemId = item.Id,
+            BorrowerAppUserId = borrower.Id,
+            BorrowedForOrganizationId = forOrg.Id,
+            Status = status,
+            RequestNotes = requestNotes,
+            DateNeededFrom = checkedOut ?? now.AddDays(2),
+            DateDue = due,
+            DateCheckedOut = checkedOut,
+            CheckedOutConfirmedByAppUserId = checkedOut is null ? null : borrower.Id,
+            ReviewedByAppUserId = reviewedBy?.Id,
+            DateReviewed = reviewedBy is null ? null : now.AddDays(-3),
+            DateCreated = now.AddDays(-4), CreatedByAppUserId = borrower.Id,
+        });
+        await db.SaveChangesAsync();
     }
 
     /// <summary>
