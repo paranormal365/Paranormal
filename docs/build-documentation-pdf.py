@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Builds the end-user documentation into a single printable HTML file.
 
-Content comes verbatim from Ben.Web.Library/Help/Content — the same files the in-app help
+Content comes verbatim from Ben.Web.Services/Help/Content — the same files the in-app help
 serves. Nothing is paraphrased, so the document cannot drift from what the product says.
 """
 import re, pathlib, datetime, html
 import markdown
 
-ROOT = pathlib.Path("/Users/ben/Source/Ben")
-CONTENT = ROOT / "Ben.Web.Library/Help/Content"
+# Derived from this file's own location rather than hard-coded, so the build follows the repo
+# instead of one machine's checkout path.
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+CONTENT = ROOT / "Ben.Web.Services/Help/Content"
 OUT = pathlib.Path(__file__).parent / "ishaunted-documentation.html"
 
 AUDIENCE_LABEL = {
@@ -50,6 +52,13 @@ docs = sorted(
     (d for d in (parse(p) for p in CONTENT.glob("*.md")) if d),
     key=lambda d: (d["order"], d["title"]),
 )
+
+# A moved content folder used to fail silently: glob on a missing directory yields nothing, the
+# build succeeds, Chrome succeeds, and the PDF comes out empty. Refuse instead. (The help moved
+# from Ben.Web.Library to Ben.Web.Services when the old WebApp was retired, and this script kept
+# pointing at the old path.)
+if not docs:
+    raise SystemExit(f"No help documents found under {CONTENT} — has the content folder moved?")
 
 md = markdown.Markdown(extensions=["tables", "sane_lists"])
 

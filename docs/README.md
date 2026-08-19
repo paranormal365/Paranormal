@@ -4,7 +4,7 @@
 
 Every in-app help document, reproduced **verbatim**, as one printable PDF.
 
-To regenerate after changing anything in `Ben.Web.Library/Help/Content/`, run both steps from the
+To regenerate after changing anything in `Ben.Web.Services/Help/Content/`, run both steps from the
 repository root:
 
 ```bash
