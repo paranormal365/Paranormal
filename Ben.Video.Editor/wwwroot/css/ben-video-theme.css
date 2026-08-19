@@ -1,0 +1,120 @@
+/*
+ * ben-video-theme.css
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Makes the editor wear the site's theme.
+ *
+ * WHY THIS FILE EXISTS
+ * The editor's own components resolve colour as
+ *     var(--kendo-color-…, var(--bv-…))
+ * so whatever the host's Telerik theme defines wins, and --bv-* in
+ * ben-video-variables.css is the fallback. Both of those are the *editor's*
+ * palette — a Catppuccin-ish dark that has nothing to do with the site. Dropped
+ * into the site, the editor read as a different application; standing alone on
+ * the Kendo Meridian theme, it rendered light while the site is dark.
+ *
+ * This file re-points both families at the template's Bootstrap custom
+ * properties, so one palette drives everything. Because --bs-* are themselves
+ * theme-dependent, the editor follows the site's light/dark toggle with no
+ * second block here and no JavaScript.
+ *
+ * The literal fallbacks are the Night skin's own values, for a host that has
+ * not loaded Bootstrap at all. Ben.Wasm.Video is such a host: it ships
+ * css/site-palette.css instead of the 563 KB template stylesheet, which defines
+ * exactly these --bs-* tokens for both themes.
+ *
+ * LOADING ORDER (host requirement)
+ *   1. Telerik/Kendo theme            (kendo-theme-bootstrap/all.css)
+ *   2. ben-video-variables.css        (the editor's own fallbacks)
+ *   3. this file                      ← must win over both
+ *   4. RCL component CSS              (Ben.Video.Editor.bundle.scp.css)
+ *
+ * SCOPE — deliberately :root, not .bv-editor. Telerik renders windows, popups
+ * and dropdowns in a portal at the document root, so a scoped override would
+ * style the editor while leaving its own dialogs on the stock theme. The site
+ * already remaps the same family in wwwroot/theme/telerik-night.css for exactly
+ * this reason; the tokens below are the ones that file does not cover but the
+ * editor reads — chiefly --kendo-color-subtle-text, which the editor uses in 54
+ * places for every secondary label in the timeline and panels.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+:root {
+    /* ── The editor's own tokens ────────────────────────────────────────── */
+
+    /* Not --bs-primary raw. The brand navy is a *fill* colour: the editor also uses its accent
+       as text (the brand mark, active tabs, selected-clip labels — 14 rules), and #37508a on the
+       dark ground is navy on navy. Mixing it toward the body colour lifts it in dark and deepens
+       it in light, so one expression stays legible in both themes and still reads as the brand.
+       The editor's own component CSS asks for --bv-accent first for exactly this reason; the
+       host's Kendo primary remains the fallback and is left untouched for the site's widgets. */
+    --bv-accent:        color-mix(in srgb, var(--bs-primary, #37508a) 65%, var(--bs-body-color, #dee2e6) 35%);
+    --bv-border:        var(--bs-border-color, #495057);
+
+    /* Surface depth follows the template's own ladder, which reads correctly in
+       both themes: in dark, body → tertiary → secondary gets progressively
+       lighter (raised panels); in light it gets progressively darker (recessed
+       panels). Mapping to fixed greys would have inverted in one of the two. */
+    --bv-surface-1:     var(--bs-body-bg, #212529);
+    --bv-surface-2:     var(--bs-tertiary-bg, #2b3035);
+    --bv-surface-3:     var(--bs-secondary-bg, #343a40);
+
+    --bv-text:          var(--bs-body-color, #dee2e6);
+    --bv-text-muted:    var(--bs-secondary-color, rgba(222, 226, 230, .75));
+
+    /* A wash of the brand rather than a fixed navy, so selection highlights stay
+       legible against either theme's ground. */
+    --bv-accent-muted:  rgba(var(--bs-primary-rgb, 55, 80, 138), .28);
+
+    --bv-marker-color:  var(--bs-warning, #aaa256);
+
+    /* "Needs your attention, but nothing is wrong" — the sidecar and diagnostics chips. Mixed
+       toward the body colour for the same reason as --bv-accent: the raw amber measured 1.5:1
+       against a light page, which is a chip you cannot read. */
+    --bv-attention:     color-mix(in srgb, var(--bs-warning, #aaa256) 60%, var(--bs-body-color, #dee2e6) 40%);
+
+    /* ── Tokens the components ask for but nothing ever defined ─────────────
+       Each of these is the fallback half of a var(--kendo-…, var(--bv-…)) pair, so it only
+       came into play if the host had no Kendo theme — at which point the property dropped
+       entirely and the panel lost its background. Defining them closes that silent failure
+       and gives the pair a meaning in both halves. */
+    --bv-bg:            var(--bv-surface-1);
+    --bv-panel-bg:      var(--bv-surface-2);
+    --bv-clip-bg:       var(--bv-surface-3);
+
+    /* The export prompt's warning strip. Same mixing as the accent, for the same reason: the
+       literal #b00020 it fell back to is unreadable on a dark ground. */
+    --bv-danger-text:   color-mix(in srgb, var(--bs-danger, #a85593) 65%, var(--bs-body-color, #dee2e6) 35%);
+    --bv-danger-bg:     rgba(var(--bs-danger-rgb, 168, 85, 147), .12);
+
+    /* ── Panel title accents ────────────────────────────────────────────────
+       These stay distinct per panel — that difference is how you tell a video
+       clip's editor from an audio clip's at a glance — but they are drawn from
+       the template's semantic colours instead of the editor's old pastel set,
+       which clashed with the Night palette. */
+    --bv-title-video:   var(--bs-primary, #37508a);
+    --bv-title-audio:   var(--bs-success, #489e48);
+    --bv-title-text:    var(--bs-danger,  #a85593);
+    --bv-title-trans:   var(--bs-info,    #66366c);
+    --bv-title-image:   var(--bs-warning, #aaa256);
+
+    /* ── Kendo tokens the editor reads that the site's bridge does not define ──────
+       Deliberately only the neutral ones. --kendo-color-primary and the semantic colours are
+       left to the host: the site sets them from the Night palette in telerik-night.css, and
+       redefining them here would restyle every Telerik widget on the site as a side effect of
+       theming the editor. Ben.Wasm.Video, which has no such bridge, sets them in its own
+       css/site-palette.css instead. */
+    --kendo-color-on-primary:       #fff;
+    --kendo-color-primary-rgb:      var(--bs-primary-rgb, 55, 80, 138);
+    --kendo-color-surface-hovered:  var(--bs-secondary-bg, #343a40);
+    --kendo-color-on-surface:       var(--bs-body-color, #dee2e6);
+    --kendo-color-subtle-text:      var(--bs-secondary-color, rgba(222, 226, 230, .75));
+    --kendo-color-subtle:           var(--bs-secondary-color, rgba(222, 226, 230, .75));
+    --kendo-color-base-subtle:      var(--bs-secondary-bg, #343a40);
+}
+
+/* The editor fills its host: its own root paints the ground, and the page behind
+   it must not show a different one through the gaps. */
+.bv-editor {
+    background-color: var(--bv-surface-1);
+    color: var(--bv-text);
+}

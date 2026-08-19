@@ -48,6 +48,11 @@
     <script src="/_content/Ben.Video.Editor/js/ffmpeg.umd.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/fabric@@6/dist/index.min.js" defer></script>
     <link href="/_content/Ben.Video.Editor/css/ben-video-variables.css" rel="stylesheet" />
+    @* …then the map onto this template's palette. telerik-night.css above covers the Kendo
+       variables the widgets use; this covers the editor's own --bv-* family and the handful of
+       Kendo tokens only the editor reads (--kendo-color-subtle-text alone drives every secondary
+       label in its timeline). Without it the editor kept its own dark palette inside the site. *@
+    <link href="/_content/Ben.Video.Editor/css/ben-video-theme.css" rel="stylesheet" />
     @* No themeSwitcher.js here — the old host's version swapped between two compiled Kendo
        theme files, which this host does not have. ben-boot.js owns setTheme/toggleTheme using
        the template's own layoutSettings convention. *@

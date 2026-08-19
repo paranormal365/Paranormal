@@ -89,12 +89,12 @@
 }
 
 .bv-transition-editor__style-card:hover {
-    border-color: var(--kendo-color-primary, var(--bv-accent));
+    border-color: var(--bv-accent, var(--kendo-color-primary));
 }
 
 .bv-transition-editor__style-card--selected {
-    border-color: var(--kendo-color-primary, var(--bv-accent));
-    box-shadow: 0 0 0 1px var(--kendo-color-primary, var(--bv-accent));
+    border-color: var(--bv-accent, var(--kendo-color-primary));
+    box-shadow: 0 0 0 1px var(--bv-accent, var(--kendo-color-primary));
 }
 
 .bv-transition-editor__style-name {

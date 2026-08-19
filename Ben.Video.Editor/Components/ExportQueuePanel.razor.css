@@ -14,7 +14,7 @@
 
 /* Active job count badge */
 .bv-queue-badge {
-    background: var(--kendo-color-primary, #89b4fa);
+    background: var(--bv-accent, var(--kendo-color-primary));
     color: var(--kendo-color-on-primary, #1e1e2e);
     border-radius: 999px;
     font-size: .65rem;
@@ -61,7 +61,7 @@
     gap: .25rem;
 }
 
-.bv-queue-item--running   { border-color: var(--kendo-color-primary, #89b4fa); }
+.bv-queue-item--running   { border-color: var(--bv-accent, var(--kendo-color-primary)); }
 .bv-queue-item--completed { opacity: .7; }
 .bv-queue-item--cancelled { opacity: .5; }
 .bv-queue-item--failed    { border-color: var(--kendo-color-error, #f38ba8); }
@@ -92,7 +92,7 @@
 }
 
 .bv-queue-state--queued    { background: #2a2a3a; color: #7f849c; }
-.bv-queue-state--running   { background: #1c2a3a; color: var(--kendo-color-primary, #89b4fa); }
+.bv-queue-state--running   { background: #1c2a3a; color: var(--bv-accent, var(--kendo-color-primary)); }
 .bv-queue-state--completed { background: #1a2a1a; color: #a6e3a1; }
 .bv-queue-state--cancelled { background: #2a2a2a; color: #7f849c; }
 .bv-queue-state--failed    { background: #3b1a1a; color: #f38ba8; }

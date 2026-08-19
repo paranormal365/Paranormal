@@ -333,7 +333,7 @@
 }
 
 .bv-track--drop-target {
-    outline: 2px dashed var(--kendo-color-primary, var(--bv-accent));
+    outline: 2px dashed var(--bv-accent, var(--kendo-color-primary));
     outline-offset: -2px;
     background: var(--bv-accent-muted);
 }
@@ -341,9 +341,9 @@
 /* Cross-track body-drag hover (item #25) — a lighter, non-dashed treatment than
    .bv-track--drop-target so it doesn't imply overwriting the row's own content. */
 .bv-track--move-hover {
-    outline: 2px solid var(--kendo-color-primary, var(--bv-accent));
+    outline: 2px solid var(--bv-accent, var(--kendo-color-primary));
     outline-offset: -2px;
-    background: color-mix(in srgb, var(--kendo-color-primary, var(--bv-accent)) 10%, transparent);
+    background: color-mix(in srgb, var(--bv-accent, var(--kendo-color-primary)) 10%, transparent);
 }
 
 /* Snap guide — vertical line overlaid inside bv-track__items during drag */
@@ -352,12 +352,12 @@
     top:        0;
     bottom:     0;
     width:      2px;
-    background: var(--kendo-color-primary, var(--bv-accent));
+    background: var(--bv-accent, var(--kendo-color-primary));
     opacity:    0.9;
     pointer-events: none;
     z-index:    10;
     transform:  translateX(-50%);
-    box-shadow: 0 0 4px var(--kendo-color-primary, var(--bv-accent));
+    box-shadow: 0 0 4px var(--bv-accent, var(--kendo-color-primary));
 }
 
 /* Layer badge — shown in the label strip for video tracks when MultiTrack is enabled */
@@ -373,8 +373,8 @@
     font-weight:    700;
     letter-spacing: .03em;
     background:     var(--bv-accent-muted);
-    color:          var(--kendo-color-primary, var(--bv-accent));
-    border:         1px solid var(--kendo-color-primary, var(--bv-accent));
+    color:          var(--bv-accent, var(--kendo-color-primary));
+    border:         1px solid var(--bv-accent, var(--kendo-color-primary));
     flex-shrink:    0;
     user-select:    none;
 }
@@ -418,7 +418,7 @@
     font-weight: 500;
     background: var(--kendo-color-surface-alt, var(--bv-surface-1));
     color: var(--kendo-color-on-surface, var(--bv-text));
-    border: 1px solid var(--kendo-color-primary, var(--bv-accent));
+    border: 1px solid var(--bv-accent, var(--kendo-color-primary));
     border-radius: 3px;
     padding: 1px 4px;
     outline: none;
@@ -552,7 +552,7 @@
 .bv-clip-chip--text     { background: #2a1a2a; border-color: #5a2a5a; }
 
 .bv-clip-chip--selected {
-    border-color: var(--kendo-color-primary, var(--bv-accent)) !important;
+    border-color: var(--bv-accent, var(--kendo-color-primary)) !important;
     box-shadow: 0 0 0 2px var(--bv-accent-muted);
 }
 
@@ -637,7 +637,7 @@
 
 /* Linked clip (item #52 — J-cuts/L-cuts) */
 .bv-clip-chip--linked {
-    border-left: 3px solid var(--kendo-color-primary, var(--bv-accent));
+    border-left: 3px solid var(--bv-accent, var(--kendo-color-primary));
 }
 
 /* Missing-media state */
@@ -699,7 +699,7 @@
     background: transparent;
     border: 1px dashed var(--bv-accent-muted);
     border-radius: 50%;
-    color: var(--kendo-color-primary, var(--bv-accent));
+    color: var(--bv-accent, var(--kendo-color-primary));
     font-size: 12px;
     cursor: pointer;
     opacity: .55;
@@ -711,7 +711,7 @@
 .bv-transition-insert:hover {
     opacity: 1;
     background: var(--bv-accent-muted);
-    border-color: var(--kendo-color-primary, var(--bv-accent));
+    border-color: var(--bv-accent, var(--kendo-color-primary));
 }
 
 /* Wraps the insert button + its popover so the popover can be positioned relative to the
@@ -727,15 +727,15 @@
    the pointer (item #57 T3). */
 .bv-transition-insert.bv-transition-drop-hover {
     opacity: 1;
-    background: var(--kendo-color-primary, var(--bv-accent));
-    border-color: var(--kendo-color-primary, var(--bv-accent));
+    background: var(--bv-accent, var(--kendo-color-primary));
+    border-color: var(--bv-accent, var(--kendo-color-primary));
     border-style: solid;
     color: #fff;
 }
 
 .bv-transition-chip.bv-transition-drop-hover {
-    border-color: var(--kendo-color-primary, var(--bv-accent)) !important;
-    box-shadow: 0 0 0 2px var(--kendo-color-primary, var(--bv-accent));
+    border-color: var(--bv-accent, var(--kendo-color-primary)) !important;
+    box-shadow: 0 0 0 2px var(--bv-accent, var(--kendo-color-primary));
 }
 
 /* ── Transition style picker popover (item #57 T3) ─────────────────────────────
@@ -813,12 +813,12 @@
 }
 
 .bv-transition-chip--selected {
-    border-color: var(--kendo-color-primary, var(--bv-accent)) !important;
+    border-color: var(--bv-accent, var(--kendo-color-primary)) !important;
     box-shadow: 0 0 0 2px var(--bv-accent-muted);
 }
 
 .bv-transition-chip--resizing {
-    border-color: var(--kendo-color-primary, var(--bv-accent)) !important;
+    border-color: var(--bv-accent, var(--kendo-color-primary)) !important;
 }
 
 .bv-transition-chip:hover { border-color: #7c6a9a; }
@@ -906,7 +906,7 @@
     border-radius: 3px 0 0 3px;
     cursor: w-resize;
     /* Solid accent-coloured left bar — always visible */
-    border-left: 3px solid var(--kendo-color-primary, var(--bv-accent));
+    border-left: 3px solid var(--bv-accent, var(--kendo-color-primary));
     background: rgba(var(--kendo-color-primary-rgb, 137 180 250) / .12);
 }
 
@@ -915,7 +915,7 @@
     border-radius: 0 3px 3px 0;
     cursor: e-resize;
     /* Solid accent-coloured right bar — always visible */
-    border-right: 3px solid var(--kendo-color-primary, var(--bv-accent));
+    border-right: 3px solid var(--bv-accent, var(--kendo-color-primary));
     background: rgba(var(--kendo-color-primary-rgb, 137 180 250) / .12);
 }
 
@@ -932,7 +932,7 @@
     font-size: 11px;
     font-weight: 700;
     line-height: 1;
-    color: var(--kendo-color-primary, var(--bv-accent));
+    color: var(--bv-accent, var(--kendo-color-primary));
     opacity: .9;
     pointer-events: none;
     user-select: none;
@@ -942,7 +942,7 @@
     font-size: 11px;
     font-weight: 700;
     line-height: 1;
-    color: var(--kendo-color-primary, var(--bv-accent));
+    color: var(--bv-accent, var(--kendo-color-primary));
     opacity: .9;
     pointer-events: none;
     user-select: none;
@@ -959,7 +959,7 @@
     height: 9px;
     z-index: 11;
     transform: translate(-50%, -50%) rotate(45deg);
-    background: var(--kendo-color-primary, var(--bv-accent));
+    background: var(--bv-accent, var(--kendo-color-primary));
     border: 1px solid var(--kendo-color-surface, var(--bv-surface-2));
     border-radius: 2px;
     cursor: ew-resize;
@@ -996,7 +996,7 @@
 .bv-clip-chip--dragging {
     opacity: 0.35;
     filter: brightness(1.2);
-    outline: 2px dashed var(--kendo-color-primary, var(--bv-accent));
+    outline: 2px dashed var(--bv-accent, var(--kendo-color-primary));
     outline-offset: -2px;
 }
 
@@ -1074,7 +1074,7 @@
     padding: 0 2px;
     background: var(--kendo-color-surface-alt, var(--bv-surface-1));
     color: var(--kendo-color-on-surface, var(--bv-text));
-    border: 1px solid var(--kendo-color-primary, var(--bv-accent));
+    border: 1px solid var(--bv-accent, var(--kendo-color-primary));
     border-radius: 2px;
     outline: none;
     cursor: text;

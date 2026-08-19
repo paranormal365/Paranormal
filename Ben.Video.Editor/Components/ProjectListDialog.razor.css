@@ -35,7 +35,7 @@
     font-size: .8125rem;
     background: var(--kendo-color-surface-alt, #181825);
     color: var(--kendo-color-on-surface, #cdd6f4);
-    border: 1px solid var(--kendo-color-primary, #89b4fa);
+    border: 1px solid var(--bv-accent, var(--kendo-color-primary));
     border-radius: 3px;
     padding: 2px 6px;
     outline: none;

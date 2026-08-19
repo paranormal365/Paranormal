@@ -44,7 +44,7 @@
     font-size: .9375rem;
     font-weight: 600;
     letter-spacing: .02em;
-    color: var(--kendo-color-primary, var(--bv-accent));
+    color: var(--bv-accent, var(--kendo-color-primary));
     white-space: nowrap;
     margin-right: .25rem;
 }
@@ -80,7 +80,7 @@
 
 /* Input shows subtle accent border when dirty */
 .bv-toolbar__proj-name--dirty {
-    border-color: var(--kendo-color-primary, var(--bv-accent)) !important;
+    border-color: var(--bv-accent, var(--kendo-color-primary)) !important;
 }
 
 /* ── Status label ───────────────────────────────────────────────────────── */
@@ -94,10 +94,10 @@
     border: 1px solid transparent;
 }
 
-.bv-status--idle        { color: #888; border-color: #444; }
+.bv-status--idle        { color: var(--bv-text-muted); border-color: var(--bv-border); }
 .bv-status--loadingcore {
-    color: #f5c542;
-    border-color: #f5c542;
+    color: var(--bv-attention);
+    border-color: var(--bv-attention);
     animation: bv-status-pulse 1.4s ease-in-out infinite;
 }
 .bv-status--ready       { color: #4caf89; border-color: #4caf89; }
@@ -141,8 +141,8 @@
     font-family: inherit;
 }
 
-.bv-sidecar-chip--disconnected  { color: #888; border: 1px solid #444; }
-.bv-sidecar-chip--foundunpaired { color: #f5c542; border: 1px solid #f5c542; }
+.bv-sidecar-chip--disconnected  { color: var(--bv-text-muted); border: 1px solid var(--bv-border); }
+.bv-sidecar-chip--foundunpaired { color: var(--bv-attention); border: 1px solid var(--bv-attention); }
 .bv-sidecar-chip--tokenrejected { color: #e06c75; border: 1px solid #e06c75; }
 .bv-sidecar-chip--paired        { color: #4caf89; border: 1px solid #4caf89; }
 .bv-sidecar-chip--disabled      { color: #666; border: 1px solid #333; }
@@ -159,8 +159,8 @@
     font-family: inherit;
 }
 
-.bv-diagnostics-chip--idle        { color: #888; border: 1px solid #444; }
-.bv-diagnostics-chip--loadingcore { color: #f5c542; border: 1px solid #f5c542; }
+.bv-diagnostics-chip--idle        { color: var(--bv-text-muted); border: 1px solid var(--bv-border); }
+.bv-diagnostics-chip--loadingcore { color: var(--bv-attention); border: 1px solid var(--bv-attention); }
 .bv-diagnostics-chip--ready       { color: #4caf89; border: 1px solid #4caf89; }
 .bv-diagnostics-chip--processing  { color: #7c9ef8; border: 1px solid #7c9ef8; }
 .bv-diagnostics-chip--error       { color: #e06c75; border: 1px solid #e06c75; }
@@ -181,8 +181,8 @@
     padding: .15rem .45rem;
     border-radius: 4px;
     background: var(--bv-accent-muted);
-    color: var(--kendo-color-primary, var(--bv-accent));
-    border: 1px solid var(--kendo-color-primary, var(--bv-accent));
+    color: var(--bv-accent, var(--kendo-color-primary));
+    border: 1px solid var(--bv-accent, var(--kendo-color-primary));
     white-space: nowrap;
 }
 
@@ -201,7 +201,7 @@
 /* active (visible) state — subtle highlight */
 .bv-toolbar__toggles .bv-toggle--active {
     background: var(--bv-accent-muted) !important;
-    color: var(--kendo-color-primary, var(--bv-accent)) !important;
-    border-color: var(--kendo-color-primary, var(--bv-accent)) !important;
+    color: var(--bv-accent, var(--kendo-color-primary)) !important;
+    border-color: var(--bv-accent, var(--kendo-color-primary)) !important;
 }
 

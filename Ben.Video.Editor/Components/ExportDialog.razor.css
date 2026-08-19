@@ -99,7 +99,7 @@
 .bv-export-form__pct {
     font-size: .75rem;
     font-variant-numeric: tabular-nums;
-    color: var(--kendo-color-primary, var(--bv-accent));
+    color: var(--bv-accent, var(--kendo-color-primary));
 }
 
 .bv-export-form__phases {
@@ -149,7 +149,7 @@
     padding: .5rem .75rem;
     border-radius: 4px;
     background: var(--kendo-color-surface-alt, var(--bv-surface-1));
-    border-left: 3px solid var(--kendo-color-primary, var(--bv-accent));
+    border-left: 3px solid var(--bv-accent, var(--kendo-color-primary));
     margin-top: .5rem;
     line-height: 1.5;
 }
@@ -183,6 +183,6 @@
 
 .bv-export-preset-btn:hover {
     background: var(--bv-accent-muted);
-    border-color: var(--kendo-color-primary, var(--bv-accent));
+    border-color: var(--bv-accent, var(--kendo-color-primary));
 }
 

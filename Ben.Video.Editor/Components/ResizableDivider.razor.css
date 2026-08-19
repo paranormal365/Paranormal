@@ -9,7 +9,7 @@
 
 .bv-divider:hover,
 .bv-divider:active {
-    background: var(--kendo-color-primary, var(--bv-accent));
+    background: var(--bv-accent, var(--kendo-color-primary));
 }
 
 /* Horizontal divider — sits between left/right panels, resizes width */

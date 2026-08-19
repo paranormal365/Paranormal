@@ -25,8 +25,8 @@
     border-radius: 999px;
 }
 
-.bv-sidecar-panel__badge--off   { color: #888; border: 1px solid #444; }
-.bv-sidecar-panel__badge--found { color: #f5c542; border: 1px solid #f5c542; }
+.bv-sidecar-panel__badge--off   { color: var(--bv-text-muted); border: 1px solid var(--bv-border); }
+.bv-sidecar-panel__badge--found { color: var(--bv-attention); border: 1px solid var(--bv-attention); }
 .bv-sidecar-panel__badge--on    { color: #4caf89; border: 1px solid #4caf89; }
 
 .bv-sidecar-panel__error {

@@ -22,7 +22,7 @@
 /* ── Alignment-guide lines (item #57 P5) — same accent color/opacity as the timeline's own
    .bv-snap-guide, so a snap reads consistently wherever it happens in the app. */
 .bv-canvas-snap-guide {
-    stroke: var(--kendo-color-primary, var(--bv-accent));
+    stroke: var(--bv-accent, var(--kendo-color-primary));
     stroke-width: 2;
     opacity: 0.9;
 }
@@ -80,6 +80,6 @@
 }
 
 .bv-canvas-hud__row button:hover {
-    border-color: var(--kendo-color-primary, var(--bv-accent));
-    color: var(--kendo-color-primary, var(--bv-accent));
+    border-color: var(--bv-accent, var(--kendo-color-primary));
+    color: var(--bv-accent, var(--kendo-color-primary));
 }

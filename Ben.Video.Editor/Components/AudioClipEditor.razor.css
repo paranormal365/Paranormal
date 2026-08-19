@@ -92,7 +92,7 @@
 /* ── Automation badge ───────────────────────────────────────── */
 .bv-audio-editor__badge {
     font-size:        0.65rem;
-    background:       var(--kendo-color-primary, var(--bv-accent));
+    background:       var(--bv-accent, var(--kendo-color-primary));
     color:            #fff;
     border-radius:    3px;
     padding:          1px 5px;
