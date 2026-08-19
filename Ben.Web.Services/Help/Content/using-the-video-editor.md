@@ -31,6 +31,10 @@ say so. Opening a project to look at it costs nothing; editing needs the engine.
 The chip beside the toolbar tells you where it is up to: *Not loaded*, then *Loading ffmpeg…*, then
 **Ready**. Import, preview and export all wait for Ready.
 
+Once it says Ready the **Initialize** button goes away — it has done its one job, and the space goes
+to the tools you will actually use. It comes back if the engine ever fails, which is the one case
+where pressing it again is the right move.
+
 ## Bringing in footage
 
 There are two ways in.
