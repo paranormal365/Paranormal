@@ -203,7 +203,7 @@ public class RequestStatusProgressionTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
-        await ClickUntilUrlAsync(card, @"/my-requests/[0-9a-f\\-]+");
+        await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
 
         // Only test if there are occurrences in the list
         var editBtn = Page.GetByTitle("Edit").Or(Page.GetByRole(AriaRole.Button).Filter(new() { HasText = "" }).First).First;

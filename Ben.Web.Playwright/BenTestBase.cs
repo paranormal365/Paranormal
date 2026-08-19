@@ -98,8 +98,17 @@ public abstract class BenTestBase : PageTest
             }
             catch (TimeoutException)
             {
-                // Dropped click, or bad credentials. Re-fill in case the re-render cleared the
-                // fields, then try again; the assert below reports honestly if it never takes.
+                // Dropped click, bad credentials, or a navigation still in flight from a sign-out
+                // that had not finished — that last one moves the page out from under the form
+                // mid-fill. Go back to a known state rather than assuming the form is still there,
+                // then try again; the assert below reports honestly if it never takes.
+                if (!Page.Url.Contains("/login"))
+                {
+                    await Page.GotoAsync($"{BaseUrl}/login");
+                    await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+                    if (!Page.Url.Contains("/login")) return;   // already signed in as this user
+                }
+
                 await Page.FillAsync("input[type='email'], input[placeholder*='email' i], input[id*='email' i], input[placeholder='you@example.com']", email);
                 await Page.FillAsync("input[type='password']", password);
             }
@@ -296,9 +305,10 @@ public abstract class BenTestBase : PageTest
         var caseItem = Main.GetByText(caseText, new() { Exact = false }).First;
         if (await caseItem.CountAsync() == 0) return false;
 
-        // The case detail is identified by its own tab strip.
-        await ClickUntilAsync(caseItem, Main.Locator(".nav-tabs .nav-link").Or(Main.GetByRole(AriaRole.Tab)));
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // Waiting on the URL, not on a tab strip: the organisation hub has tabs of its own, so
+        // "a tab strip is visible" was already true before the click and the helper returned
+        // having gone nowhere. That made the walk pass or fail depending on timing.
+        await ClickUntilUrlAsync(caseItem, @"/organizations/[0-9a-f\-]+/cases/[0-9a-f\-]+");
         return true;
     }
 
@@ -365,7 +375,23 @@ public abstract class BenTestBase : PageTest
         await OpenProfileMenuAsync();
 
         var signOut = Page.GetByText("Sign Out");
-        if (await signOut.IsVisibleAsync())
-            await signOut.ClickAsync();
+        if (!await signOut.IsVisibleAsync()) return;   // already signed out
+
+        await signOut.ClickAsync();
+
+        // Wait for the sign-out to have actually happened before returning. Signing out navigates
+        // to /login on its own, and returning early let the next LoginAsync start filling the form
+        // while that navigation was still in flight — it then wiped the fields, the submit went
+        // nowhere, and sign-in "failed" three times running for no reason visible in the app.
+        try
+        {
+            await Page.GetByText("Sign In").Or(Page.Locator("form button[type='submit']"))
+                      .First.WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 10_000 });
+        }
+        catch (TimeoutException)
+        {
+            // Fall through: LoginAsync retries and reports honestly if it never takes.
+        }
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
     }
 }

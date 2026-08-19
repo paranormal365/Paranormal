@@ -100,10 +100,13 @@ public class MediaLibraryTests : BenTestBase
     public async Task NavDrawer_MediaLibraryLinkNavigates()
     {
         await LoginAsync(UserEmail, UserPassword);
-        var link = Page.GetByRole(AriaRole.Link, new() { Name = "Media Library", Exact = true }).Or(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Media Library", Exact = true })).First;
+        var link = Page.GetByRole(AriaRole.Link, new() { Name = "Media Library", Exact = true })
+                       .Or(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Media Library", Exact = true }))
+                       .First;
         await Expect(link).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await link.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // Retried: an unretried click here left the browser on the page it started from, which
+        // read as the media library rendering the home page's content.
+        await ClickUntilUrlAsync(link, "/media-library");
         var body = await Page.InnerTextAsync("body");
         Assert.That(body, Does.Contain("Everything you own"));
     }
