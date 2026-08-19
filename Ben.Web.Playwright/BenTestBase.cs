@@ -114,8 +114,20 @@ public abstract class BenTestBase : PageTest
             }
         }
 
+        // Say what the page was showing, not just that it did not move. "Never left the login page"
+        // is the same message whether the credentials were rejected, the submit never fired, or a
+        // navigation pulled the form away — and those need different fixes.
+        var shown = "";
+        try
+        {
+            shown = (await Page.Locator(".alert, .text-danger, .validation-message")
+                               .AllInnerTextsAsync() is { Count: > 0 } texts)
+                    ? string.Join(" | ", texts) : "(no error shown on the page)";
+        }
+        catch { shown = "(could not read the page)"; }
+
         Assert.That(Page.Url, Does.Not.Contain("/login"),
-            $"sign-in as {email} never left the login page");
+            $"sign-in as {email} never left the login page. Page reported: {shown}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
     }
 
@@ -253,6 +265,28 @@ public abstract class BenTestBase : PageTest
     }
 
     /// <summary>
+    /// Waits for the page's "Loading…" placeholders to go away.
+    /// <para>
+    /// Needed because WaitForLoadState(NetworkIdle) proves nothing here: a page's data arrives
+    /// over the SignalR circuit, not as an HTTP request, so NetworkIdle is already true while the
+    /// component is still showing its placeholder. Tests that read the body straight after
+    /// navigating captured "Loading your case…" and reported the content as missing.
+    /// </para>
+    /// </summary>
+    protected async Task WaitUntilLoadedAsync(int timeoutMs = 15_000)
+    {
+        var placeholder = Main.GetByText("Loading", new() { Exact = false });
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await placeholder.CountAsync() == 0) return;
+            await Task.Delay(150);
+        }
+        // Deliberately does not throw: some pages keep a permanent element containing the word,
+        // and a caller's own assertion is a better failure message than a generic timeout here.
+    }
+
+    /// <summary>
     /// Clicks whichever of <paramref name="candidates"/> is actually on top at its own centre.
     /// Returns false when every one of them is covered.
     /// <para>
@@ -302,13 +336,22 @@ public abstract class BenTestBase : PageTest
         await OpenTabAsync("Cases", Main.GetByText(caseText, new() { Exact = false })
                                         .Or(Main.GetByText("No cases", new() { Exact = false })));
 
-        var caseItem = Main.GetByText(caseText, new() { Exact = false }).First;
-        if (await caseItem.CountAsync() == 0) return false;
+        // Each case is a card with its own "Open" button, and the card's text is not itself
+        // clickable — the same shape as the organisation list. Clicking the case name did nothing
+        // at all, so the walk sat on the organisation hub and reported the case as missing.
+        var row = Main.Locator(".card").Filter(new() { HasTextString = caseText }).First;
+        if (await row.CountAsync() == 0) return false;
+
+        var opener = row.GetByRole(AriaRole.Button, new() { Name = "Open" })
+                        .Or(row.GetByRole(AriaRole.Link, new() { Name = "Open" }))
+                        .Or(row)     // the original site made the whole card clickable
+                        .First;
 
         // Waiting on the URL, not on a tab strip: the organisation hub has tabs of its own, so
         // "a tab strip is visible" was already true before the click and the helper returned
-        // having gone nowhere. That made the walk pass or fail depending on timing.
-        await ClickUntilUrlAsync(caseItem, @"/organizations/[0-9a-f\-]+/cases/[0-9a-f\-]+");
+        // having gone nowhere.
+        await ClickUntilUrlAsync(opener, @"/organizations/[0-9a-f\-]+/cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
         return true;
     }
 

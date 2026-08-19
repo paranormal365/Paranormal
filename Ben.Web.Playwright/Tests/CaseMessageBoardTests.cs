@@ -46,6 +46,7 @@ public class CaseMessageBoardTests : BenTestBase
         await Expect(card).ToBeVisibleAsync(new() { Timeout = 10_000 });
         // The card navigates via NavigationManager, so a click before the circuit is live is lost.
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
     }
 
     // ── Client-side: panel rendering ─────────────────────────────────────────

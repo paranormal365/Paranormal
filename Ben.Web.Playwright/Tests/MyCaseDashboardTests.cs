@@ -99,6 +99,7 @@ public class MyCaseDashboardTests : BenTestBase
             return;
         }
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
         Assert.That(Page.Url, Does.Match(@"/my-cases/[0-9a-f\-]+"),
             "Expected navigation to case detail URL.");
     }
@@ -114,6 +115,7 @@ public class MyCaseDashboardTests : BenTestBase
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
         // Calendar should be visible
         var calendar = Page.Locator("[class*='k-calendar']").First;
@@ -129,6 +131,7 @@ public class MyCaseDashboardTests : BenTestBase
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
         // Should show "Park Residence" or the case reference
         var body = await Page.InnerTextAsync("body");
@@ -145,6 +148,7 @@ public class MyCaseDashboardTests : BenTestBase
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
         var logBtn = Page.GetByText("Log Occurrence", new() { Exact = false });
         await Expect(logBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });
@@ -159,6 +163,7 @@ public class MyCaseDashboardTests : BenTestBase
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
         await Page.GetByText("Log Occurrence").ClickAsync();
         // TelerikWindow should open
@@ -178,6 +183,7 @@ public class MyCaseDashboardTests : BenTestBase
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
         await Page.GetByText("Log Occurrence").ClickAsync();
         await Page.WaitForTimeoutAsync(400);
@@ -196,6 +202,7 @@ public class MyCaseDashboardTests : BenTestBase
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
         await Page.GetByText("Log Occurrence").ClickAsync();
         await Page.WaitForTimeoutAsync(400);
@@ -225,6 +232,7 @@ public class MyCaseDashboardTests : BenTestBase
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
         // Seeder creates "Initial Site Assessment" investigation for Daniel's case
         var body = await Page.InnerTextAsync("body");
@@ -245,6 +253,7 @@ public class MyCaseDashboardTests : BenTestBase
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
         var backLink = Page.GetByRole(AriaRole.Link, new() { Name = "← My Cases" })
                           .Or(Page.GetByText("← My Cases"));
@@ -274,6 +283,7 @@ public class MyCaseDashboardTests : BenTestBase
         }
         await ClickUntilUrlAsync(Page.Locator(".card").Filter(new() { HasText = "Assigned" }).First,
                                  @"/my-requests/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
         var viewCasesBtn = Page.GetByText("View My Cases", new() { Exact = false });
         await Expect(viewCasesBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });

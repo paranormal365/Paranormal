@@ -68,7 +68,11 @@ public class LoginTests : BenTestBase
         await LogoutAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var signIn = Page.GetByText("Sign In");
+        // The header's Sign In control specifically. A loose "Sign In" also matches the home
+        // page's "Sign In to Request an Investigation" call to action, and two matches is a
+        // strict-mode violation rather than a pass — which only showed up once sign-out started
+        // reliably landing on a page that has both.
+        var signIn = Page.Locator(".app-header").GetByText("Sign In", new() { Exact = true });
         await Expect(signIn).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 

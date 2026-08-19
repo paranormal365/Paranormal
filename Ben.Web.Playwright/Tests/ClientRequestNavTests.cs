@@ -137,6 +137,7 @@ public class ClientRequestNavTests : BenTestBase
             return;
         }
         await ClickUntilUrlAsync(card, @"/my-requests/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
         Assert.That(Page.Url, Does.Match(@"/my-requests/[0-9a-f\-]+"),
             "Expected navigation to request detail URL.");
     }
@@ -150,6 +151,7 @@ public class ClientRequestNavTests : BenTestBase
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No requests."); return; }
         await ClickUntilUrlAsync(card, @"/my-requests/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
         var body = await Page.InnerTextAsync("body");
         Assert.That(body, Does.Contain("Address").Or.Contain("City"),
             "Expected address information on request detail.");
@@ -167,6 +169,7 @@ public class ClientRequestNavTests : BenTestBase
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No requests."); return; }
         await ClickUntilUrlAsync(card, @"/my-requests/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
         var body = await Page.InnerTextAsync("body");
         Assert.That(body, Does.Not.Contain("An unhandled error has occurred"));
         // If "Submitted To" section is present (for submitted requests), verify it renders correctly

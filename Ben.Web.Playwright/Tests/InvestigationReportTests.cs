@@ -29,6 +29,7 @@ public class InvestigationReportTests : BenTestBase
         var card = Page.Locator(".card").Filter(new() { HasTextString = "Case Manager:" }).First;
         if (await card.CountAsync() == 0) { Assert.Pass("No managed case seeded."); return; }
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
         // Reports card should appear since we have a seeded published report
         var reportTitle = Page.GetByText("Initial Assessment — Park Residence", new() { Exact = false });
@@ -47,6 +48,7 @@ public class InvestigationReportTests : BenTestBase
         var card = Page.Locator(".card").Filter(new() { HasTextString = "Case Manager:" }).First;
         if (await card.CountAsync() == 0) { Assert.Pass("No managed case seeded."); return; }
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
 
         // Wait for the reports section to render
         await Expect(Page.GetByText("Initial Assessment — Park Residence", new() { Exact = false }))
