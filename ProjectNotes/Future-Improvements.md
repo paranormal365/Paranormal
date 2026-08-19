@@ -4661,3 +4661,111 @@ aggregates across ownership, org membership, shares and case links —
 `MediaLibraryController` composes those sets, so the scoping belongs there rather than in the
 editor, which should send a scope and an optional case/investigation id. `BenMediaLibraryProvider`
 is the client side. Keep the content-type filter as-is.
+
+---
+
+## 92. Home map renders into a sliver (raised 2026-08-19, not yet diagnosed)
+
+Reported with a screenshot: on the home page, the "Public Investigations" map draws its tiles into
+a narrow strip down the left of its container and leaves the rest black. The zoom and recentre
+controls sit inside the strip, so the map believes it is that width.
+
+**Most likely cause, unverified.** Leaflet measures its container once, when it initialises. If it
+initialises while the container has not been laid out yet — or the container's width changes
+afterwards (sidebar collapse, a stylesheet arriving late, the theme swap) — the map keeps the old
+size until something calls `invalidateSize()`. The symptom matches that exactly: correct tiles,
+wrong viewport.
+
+**Where to look.** The home map component and its JS interop, plus anything that resizes the page
+after first render. Worth checking whether it reproduces on a hard reload versus a soft navigation,
+and whether collapsing the sidebar fixes or worsens it — both distinguish "never measured" from
+"measured too early".
+
+Not reproduced in the capture harness, which screenshots the same page at a fixed 1440×900 viewport
+and gets a full-width map — so it likely depends on window size or on the sidebar state at load.
+
+**Suspect the template migration first.** The map predates the move from the Telerik-based layout to
+the current template, and the new layout owns the page's widths and the collapsible sidebar. A map
+that measured itself correctly under the old chrome would fail exactly this way under new chrome
+that sizes its container later or differently.
+
+---
+
+## 93. Editor toolbar — overflow items need labels, and undo/redo need checking (raised 2026-08-19)
+
+Reported against the WASM host, but the toolbar is shared, so both apply to the site too.
+
+**Labels in the overflow.** The toolbar's "More tools" dropdown shows its items as bare icons. In
+the toolbar itself an icon with a tooltip is fine — the row is a known set and space is tight — but
+a dropdown is a list of choices being read one after another, and there icons alone make people
+guess. Give the overflow items their text. The same goes for the cloud icon, whose meaning
+(save/publish to the server) is not something anyone should have to hover to learn.
+
+**Undo and redo appear unclickable.** Both are legitimately disabled when there is nothing to undo —
+their tooltips say "Nothing to undo" / "Nothing to redo" — so the first thing to establish is
+whether they stay disabled *after* an edit. If they do, that is a real defect in the undo stack's
+wiring; if they don't, the defect is that a disabled control gives no hint why, which the tooltip
+only fixes for people who hover.
+
+## 94. Background render stalls at "Processing… 0%" after an overlay is added (raised 2026-08-19)
+
+Hit while automating the editor for the help screenshots, in the site host. Sequence: import two
+clips, select a clip, add a text overlay, add a callout. The ffmpeg status chip then went to
+`Processing… 0%` and stayed there for the full two minutes the capture waited, which also leaves
+Export disabled (it requires `FfmpegState.Ready`).
+
+Reproduced three times while capturing screenshots. It is a genuine stall, not slowness: the first
+run sat at `Processing… 0%`, the next two reached `Processing… 47%` and stayed there for four and a
+half minutes without moving. Export is unusable for as long as it lasts.
+
+This may be the same class as the clip-art background-render stall hardened in phase 138, whose
+exact trigger was never confirmed live. This one has a reproducible-looking recipe, which that one
+lacked, so it is worth trying to reproduce by hand before assuming they are the same.
+
+Reproduce with the seeded demo footage: `/my-videos`, Initialize, import `porch-camera.mp4` and
+`hallway-camera.mp4` from the Server tab, click a clip, then add a text overlay and a callout.
+
+
+---
+
+## 95. Editor toolbar — reclaim the space (raised 2026-08-19)
+
+Three changes to the same row, all about making room for the buttons that matter:
+
+- **Drop the "Ben.Video" wordmark** and put the ghost logo at the far right of the bar instead, as
+  a small image that does not grow the bar's height. Light and dark versions, chosen by the active
+  theme like everything else on the page.
+- **Hide the Initialize button once ffmpeg has loaded.** It is a one-shot action with a visible
+  result — the status chip already says "Ready" — so keeping it costs permanent width for a button
+  nobody presses twice.
+- Use the space that frees up to show undo/redo (and friends) directly, rather than pushing them
+  into the overflow where they need text labels (item 93).
+
+## 96. Diagnostics and logs are visible to everyone (raised 2026-08-19)
+
+The editor's ffmpeg diagnostics panel and its error log are on the toolbar for every user. They are
+operator tools: memory use, worker state, ffmpeg command output, internal errors. A client editing
+their own footage has no use for them, and the output names internals they should not be reading.
+
+Show them only to platform and group administrators. The editor itself has no notion of roles — it
+is a component library — so the flag belongs in `VideoEditorOptions`, set by each host from the
+identity it already has: the site from its user state, the WASM host from the signed-in account.
+Default it to off, so a host that forgets is safe rather than exposed.
+
+---
+
+## 97. Expanded sidebar is clipped by the editor (raised 2026-08-19)
+
+With the site's sidebar minimised, hovering it expands a flyout over the page. On `/my-videos` the
+flyout is cut off at the editor's left edge: the menu's own tooltip and the right-hand part of the
+panel disappear behind the editor's chrome, so the labels are unreadable exactly where the flyout
+is supposed to be doing its job.
+
+A stacking problem, not a layout one — the menu is drawn, then something in the editor paints over
+it. The editor's root establishes its own stacking context (it positions its panels, the preview
+and the timeline against each other), so a flyout that relies on sitting above ordinary page
+content has nothing to sit above once it crosses that boundary.
+
+Worth checking against the template migration generally: the old Telerik-based chrome and the
+current template do not necessarily agree about which layer the expanded sidebar belongs to, and
+this is the first page where a full-viewport component sits beside it.

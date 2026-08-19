@@ -39,15 +39,7 @@
     min-width: 0;
 }
 
-.bv-toolbar__title {
-    flex-shrink: 0;
-    font-size: .9375rem;
-    font-weight: 600;
-    letter-spacing: .02em;
-    color: var(--bv-accent, var(--kendo-color-primary));
-    white-space: nowrap;
-    margin-right: .25rem;
-}
+/* .bv-toolbar__title removed with the wordmark — the mark now sits at the end of the bar. */
 
 /* pushes feature badges + status to the right */
 .bv-toolbar__spacer {
@@ -205,3 +197,21 @@
     border-color: var(--bv-accent, var(--kendo-color-primary)) !important;
 }
 
+
+/* ── The mark ────────────────────────────────────────────────────────────────
+   Drawn as a mask rather than an <img> so it takes its colour from the theme: the artwork is a
+   near-white ghost, which would vanish on a light page. One file, both themes.
+
+   Sized in em and pushed to the end of the bar. align-self keeps it from stretching the row —
+   the height of this bar belongs to the buttons, not to the logo. */
+.bv-toolbar__mark {
+    margin-left: auto;
+    align-self: center;
+    flex: 0 0 auto;
+    width: 1.35rem;
+    height: 1.35rem;
+    background-color: var(--bv-text-muted);
+    -webkit-mask: url('../img/ghost.svg') center / contain no-repeat;
+    mask: url('../img/ghost.svg') center / contain no-repeat;
+    opacity: .85;
+}

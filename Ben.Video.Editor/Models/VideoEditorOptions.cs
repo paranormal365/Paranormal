@@ -253,4 +253,18 @@ public sealed class VideoEditorOptions
     /// Default: false
     /// </summary>
     public bool NativeSidecar { get; set; } = false;
+
+    /// <summary>
+    /// Whether to show the operator tools — the ffmpeg diagnostics chip and the panel behind it
+    /// (MEMFS residency, worker state, the raw ffmpeg log).
+    /// </summary>
+    /// <remarks>
+    /// Off by default, deliberately. These are for whoever runs the platform, not for someone
+    /// editing their own footage: the panel reports internals, names files and commands, and
+    /// offers a worker reset that is meaningless to anyone else. The editor has no notion of
+    /// roles — it is a component library — so each host sets this from the identity it already
+    /// holds. Defaulting to off means a host that never thinks about it stays quiet rather than
+    /// exposing its plumbing.
+    /// </remarks>
+    public bool ShowDiagnostics { get; set; } = false;
 }

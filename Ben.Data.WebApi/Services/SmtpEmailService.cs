@@ -19,7 +19,33 @@ public sealed class SmtpOptions
     /// is configured once rather than repeated here.
     /// </summary>
     public string? FromName { get; set; }
+
+    /// <summary>
+    /// Kept for existing configuration: true means "use TLS", and <see cref="Security"/> decides
+    /// which kind. False disables it entirely, which is only ever right for a local test relay.
+    /// </summary>
     public bool UseSsl { get; set; } = true;
+
+    /// <summary>
+    /// How TLS is established: <c>StartTls</c> upgrades a plain connection (ports 587 and 3325),
+    /// <c>SslOnConnect</c> negotiates TLS before anything else (port 465).
+    /// </summary>
+    /// <remarks>
+    /// This exists because <see cref="UseSsl"/> alone could only ever mean StartTls, so a server
+    /// that offers implicit TLS on 465 — as No-IP's does — could not be configured at all: the
+    /// client would send EHLO in the clear and the server would drop it.
+    /// </remarks>
+    public SmtpSecurity Security { get; set; } = SmtpSecurity.StartTls;
+}
+
+/// <summary>How the SMTP connection establishes TLS.</summary>
+public enum SmtpSecurity
+{
+    /// <summary>Connect in the clear, then upgrade with STARTTLS. Ports 587, 3325.</summary>
+    StartTls = 0,
+
+    /// <summary>Negotiate TLS immediately on connect. Port 465.</summary>
+    SslOnConnect = 1,
 }
 
 /// <summary>
@@ -53,7 +79,13 @@ public sealed class SmtpEmailService : IEmailService
         message.Body = new TextPart("html") { Text = htmlBody };
 
         using var client = new SmtpClient();
-        var secureSocketOptions = _options.UseSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None;
+        var secureSocketOptions = _options.UseSsl
+            ? _options.Security switch
+            {
+                SmtpSecurity.SslOnConnect => SecureSocketOptions.SslOnConnect,
+                _                         => SecureSocketOptions.StartTls,
+            }
+            : SecureSocketOptions.None;
         await client.ConnectAsync(_options.Host!, _options.Port, secureSocketOptions, ct); // non-null: IsConfigured already checked above
         if (!string.IsNullOrEmpty(_options.User))
             await client.AuthenticateAsync(_options.User, _options.Password ?? string.Empty, ct);

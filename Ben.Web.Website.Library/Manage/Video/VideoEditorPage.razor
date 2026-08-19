@@ -21,7 +21,8 @@ else if (!UserState.IsAuthenticated)
 }
 else
 {
-    <VideoEditor OnPublishExport="OnPublishExportAsync" />
+    <VideoEditor OnPublishExport="OnPublishExportAsync"
+                     ShowDiagnostics="@(UserState.IsSuperAdmin || UserState.IsAdmin)" />
 }
 
 @code {

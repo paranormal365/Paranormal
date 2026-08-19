@@ -404,6 +404,68 @@ public sealed class HelpMediaCapture : BenTestBase
         await Page.WaitForTimeoutAsync(2_000);
 
         await ShootAsync("using-the-video-editor", "timeline-two-clips.png");
+
+        // ── The panels a clip opens ───────────────────────────────────────────
+        await Page.Locator(".bv-clip-chip").First.ClickAsync();
+        await Page.WaitForTimeoutAsync(800);
+        await OpenMediaTabAsync("Properties");
+        await ShootAsync("using-the-video-editor", "clip-properties.png");
+
+        // ── Export ────────────────────────────────────────────────────────────
+        // Captured before the overlays below: adding one starts a background render, and Export
+        // is disabled while ffmpeg is working. See backlog item 94 — that render does not always
+        // finish, which is a defect in its own right and not something to wait on here.
+        await WaitForAsync(
+            async () => (await Page.Locator(".bv-toolbar__status").First.InnerTextAsync())
+                        .Contains("Ready", StringComparison.OrdinalIgnoreCase),
+            240, "ffmpeg never went back to Ready, so Export stayed disabled");
+
+        await Page.GetByTitle("Render the final video locally in the browser (ffmpeg.wasm), then save or upload")
+                  .First.ClickAsync();
+        await Page.WaitForTimeoutAsync(1_500);
+        await ShootAsync("using-the-video-editor", "export-dialog.png");
+        await CloseAnyWindowAsync();
+
+        // ── The native helper ─────────────────────────────────────────────────
+        await Page.GetByTitle("Native acceleration status — click to manage").First.ClickAsync();
+        await Page.WaitForTimeoutAsync(1_000);
+        await ShootAsync("using-the-video-editor", "sidecar-panel.png");
+        await CloseAnyWindowAsync();
+
+        // ── Titles and callouts ───────────────────────────────────────────────
+        await ClickTimelineToolAsync("Add text overlay");
+        await Page.WaitForTimeoutAsync(1_500);
+        await ShootAsync("using-the-video-editor", "text-overlay.png");
+
+        await ClickTimelineToolAsync("Add callout shape (rectangle, ellipse, arrow…)");
+        await Page.WaitForTimeoutAsync(1_500);
+        await ShootAsync("using-the-video-editor", "callout.png");
+    }
+
+    /// <summary>
+    /// Clicks one of the timeline's add-a-thing buttons by its title.
+    /// </summary>
+    /// <remarks>
+    /// By title and by DOM click: the media panel floats over the right-hand end of the timeline
+    /// toolbar, so a real pointer click on a button underneath it is intercepted and times out
+    /// pointing at the button rather than at the panel on top of it.
+    /// </remarks>
+    private async Task ClickTimelineToolAsync(string title)
+    {
+        var button = Page.GetByTitle(title).First;
+        await Expect(button).ToBeAttachedAsync(new() { Timeout = 10_000 });
+        await button.EvaluateAsync("el => el.click()");
+    }
+
+    /// <summary>Closes the topmost Telerik window, whatever it is.</summary>
+    private async Task CloseAnyWindowAsync()
+    {
+        var close = Page.Locator(".k-window-actions button, .k-window .k-i-x, .k-window [title='Close']").Last;
+        if (await close.CountAsync() > 0)
+        {
+            await close.EvaluateAsync("el => el.click()");
+            await Page.WaitForTimeoutAsync(800);
+        }
     }
 
     /// <summary>

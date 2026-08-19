@@ -7,19 +7,22 @@
 
 <header class="bv-toolbar">
 
-    <span class="bv-toolbar__title">Ben.Video</span>
-
     <TelerikToolBar OverflowMode="@ToolBarOverflowMode.Menu"
                      Size="@ThemeConstants.Button.Size.Small"
                      Class="bv-toolbar__telerik-bar">
 
-        <!-- Initialize ffmpeg.wasm core -->
-        <ToolBarButton OnClick="OnInitializeClicked"
-                       Enabled="@(Ffmpeg.State is FfmpegState.Idle or FfmpegState.Error)"
-                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Icon="@SvgIcon.Play">
-            Initialize
-        </ToolBarButton>
+        @* Initialize ffmpeg.wasm core. Hidden once it has loaded: it is a one-shot action whose
+           result is already announced by the status chip, so leaving it in place costs permanent
+           width for a button nobody presses twice. It comes back on Error, which is the one case
+           where pressing it again is exactly what to do. *@
+        @if (Ffmpeg.State is FfmpegState.Idle or FfmpegState.Error)
+        {
+            <ToolBarButton OnClick="OnInitializeClicked"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Icon="@SvgIcon.Play">
+                Initialize
+            </ToolBarButton>
+        }
 
         <!-- Open files — only active when ready -->
         <ToolBarButton OnClick="OnOpenClicked"
@@ -214,9 +217,15 @@
                 }
         </ToolBarTemplateItem>
 
-        @* Phase 141 (flakiness investigation) — ffmpeg diagnostics chip. Always shown: makes
-           MEMFS residency, the operation trace, and the raw log tail one click away instead of
-           only reachable by exporting the error log after the fact. *@
+        @* Phase 141 (flakiness investigation) — ffmpeg diagnostics chip: MEMFS residency, the
+           operation trace and the raw log tail, one click away instead of only reachable by
+           exporting the error log after the fact.
+
+           Shown only where the host says so (VideoEditorOptions.ShowDiagnostics). It is an
+           operator tool, and it was previously on the toolbar for every user regardless of who
+           they were. *@
+        @if (ShowDiagnostics)
+        {
         <ToolBarTemplateItem>
             <button type="button"
                     class="bv-diagnostics-chip @(Ffmpeg.IsWorkerWedged ? "bv-diagnostics-chip--wedged" : $"bv-diagnostics-chip--{Ffmpeg.State.ToString().ToLowerInvariant()}")"
@@ -225,6 +234,7 @@
                 @(Ffmpeg.IsWorkerWedged ? "⚠ Stuck — Reset?" : $"🩺 {DiagnosticsChipLabel()}")
             </button>
         </ToolBarTemplateItem>
+        }
 
         @* Item #38 phase E — native sidecar status chip. Only shown when the host opted in
            (VideoEditorOptions.NativeSidecar); clicking it opens the pairing panel regardless of
@@ -243,12 +253,20 @@
 
     </TelerikToolBar>
 
+    @* The mark sits at the end of the bar rather than the start: the left edge is where the eye
+       looks for the next action, and the logo does not need it. Sized in CSS so it can never
+       grow the bar's height. *@
+    <span class="bv-toolbar__mark" aria-hidden="true"></span>
+
     @if (ShowNativeSidecar)
     {
         <NativeSidecarPanel @bind-Visible="_showSidecarPanel" />
     }
 
-    <DiagnosticsPanel @bind-Visible="_showDiagnosticsPanel" OnResetWorker="OnInitializeClicked" />
+    @if (ShowDiagnostics)
+    {
+        <DiagnosticsPanel @bind-Visible="_showDiagnosticsPanel" OnResetWorker="OnInitializeClicked" />
+    }
 
     <!-- Feature badges — purely informational, so kept outside the ToolBar (whose
          ToolBarTemplateItem always behaves as Overflow=Never and can't collapse
@@ -455,6 +473,9 @@
     // ── Item #38 phase E: native sidecar status chip ────────────────────────
 
     [Parameter] public bool ShowNativeSidecar { get; set; }
+
+    /// <summary>Whether the operator tools (diagnostics chip and panel) are shown at all.</summary>
+    [Parameter] public bool ShowDiagnostics { get; set; }
 
     private bool _showSidecarPanel;
 

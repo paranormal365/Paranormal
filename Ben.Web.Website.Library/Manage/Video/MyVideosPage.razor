@@ -45,7 +45,8 @@
 
     @* ── Editor (full remaining height) ─────────────────────────────────── *@
     <div style="flex:1 1 auto; min-height:0; overflow:hidden;">
-        <VideoEditor OnPublishExport="OnPublishExportAsync" />
+        <VideoEditor OnPublishExport="OnPublishExportAsync"
+                     ShowDiagnostics="@(UserState.IsSuperAdmin || UserState.IsAdmin)" />
     </div>
 </div>
 
