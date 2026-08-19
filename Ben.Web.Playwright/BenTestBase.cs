@@ -64,9 +64,23 @@ public abstract class BenTestBase : PageTest
         await Page.GotoAsync($"{BaseUrl}/login");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // Both sites are covered: the original's Telerik TextBox renders a plain <input> with no
-        // type or id and the placeholder "you@example.com", while the new one gives it
-        // id="login-email". The alternation matches either.
+        // /login redirects away when someone is already signed in, so there is no form to fill and
+        // the wait below would simply time out. Any test that switches user hits this — sign the
+        // previous one out and come back. Without it, a fixture that logs in as a second person
+        // fails at the form with no hint that the first session was the cause.
+        if (!Page.Url.Contains("/login"))
+        {
+            await LogoutAsync();
+            await Page.GotoAsync($"{BaseUrl}/login");
+            await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+            // Still redirected: sign-out did not take, and there is nothing useful to do here but
+            // say so rather than time out on a missing field.
+            Assert.That(Page.Url, Does.Contain("/login"),
+                $"could not reach the sign-in form to sign in as {email} — a previous session is "
+                + "still active and signing out did not clear it");
+        }
+
         await FillCredentialsAsync(email, password);
 
         // Submitting is retried for the same reason every other click here is: Blazor Server
