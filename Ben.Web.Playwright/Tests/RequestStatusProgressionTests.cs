@@ -225,10 +225,15 @@ public class RequestStatusProgressionTests : BenTestBase
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
 
-        // Case status badge should be visible on the list card
-        var badge = Page.GetByText("Accepted", new() { Exact = false })
-                        .Or(Page.GetByText("Active", new() { Exact = false }))
-                        .Or(Page.GetByText("Public", new() { Exact = false }))
+        // Case status badge should be visible on the list card.
+        //
+        // Scoped to Main, and "Public" is matched exactly: the old page-wide substring match on
+        // "Public" found the sidebar's "Publications" link first in DOM order — present but
+        // hidden inside the collapsed Community group — and .First on a hidden element reported
+        // the badge missing while four of them sat rendered in the list.
+        var badge = Main.GetByText("Accepted", new() { Exact = false })
+                        .Or(Main.GetByText("Active", new() { Exact = false }))
+                        .Or(Main.GetByText("Public", new() { Exact = true }))
                         .First;
         await Expect(badge).ToBeVisibleAsync(new() { Timeout = 10_000 });
     }

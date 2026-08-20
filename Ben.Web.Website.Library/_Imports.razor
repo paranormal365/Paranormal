@@ -22,3 +22,8 @@
 @* Shared, for components whose nested types are named from C# — ApexChart.ChartSeries. Markup
    resolves components by folder without this; the code block does not. *@
 @using Ben.Web.Website.Library.Shared
+@* HelpLink and AudioFilePreview are used across sibling folders. They resolved and rendered
+   without these usings, but every call site outside their own folder raised RZ10012 — 46 of
+   them, drowning the build output any real warning would have to be noticed in. *@
+@using Ben.Web.Website.Library.Help
+@using Ben.Web.Website.Library.Manage.Audio

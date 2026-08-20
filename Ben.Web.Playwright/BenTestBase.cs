@@ -295,6 +295,61 @@ public abstract class BenTestBase : PageTest
     }
 
     /// <summary>
+    /// Finds a sidebar link by name — through the nav's own filter box — and returns its locator.
+    /// </summary>
+    /// <remarks>
+    /// <para>The sidebar is grouped by subject, so most entries sit inside a collapsed group and a
+    /// bare <c>GetByRole(Link, "My Cases")</c> finds nothing. This broke eleven tests at once when
+    /// the grouping landed, all with the same misleading symptom: a link "not visible" for a page
+    /// that worked perfectly.</para>
+    ///
+    /// <para>Typing into the filter is how it is resolved here, deliberately, instead of clicking
+    /// the group open: the filter prunes the menu to matches and expands everything left, which is
+    /// both the real path a person uses to find an entry they cannot see and the only way these
+    /// tests exercise the filter at all. A group renaming its children breaks this loudly; a group
+    /// silently swallowing a link breaks it too — which is the point.</para>
+    ///
+    /// <para>The filter is typed via <c>FillAsync</c> and re-tried, because the box is a Blazor
+    /// <c>@oninput</c> binding and the circuit-not-yet-live race erases early keystrokes rather
+    /// than ignoring them — the same lesson as every other typed input in this suite.</para>
+    /// </remarks>
+    protected async Task<ILocator> FindSidebarLinkAsync(string name)
+    {
+        var filter = Page.Locator(".app-menu-filter-container #searchInput");
+        var link = Page.Locator(".primary-nav").GetByRole(AriaRole.Link, new() { Name = name });
+
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            await filter.FillAsync(name);
+            try
+            {
+                await Expect(link.First).ToBeVisibleAsync(new() { Timeout = 2_000 });
+                return link.First;
+            }
+            catch (Exception)
+            {
+                // Keystrokes erased by the first interactive render, or the entry genuinely is
+                // not offered to this account. Retry decides which.
+            }
+        }
+
+        // Left visible-or-not for the caller's Expect to report with the caller's own context.
+        return link.First;
+    }
+
+    /// <summary>Finds a sidebar link through the filter and follows it to <paramref name="urlPattern"/>.</summary>
+    protected async Task OpenSidebarLinkAsync(string name, string urlPattern)
+    {
+        var link = await FindSidebarLinkAsync(name);
+        await ClickUntilUrlAsync(link, urlPattern);
+
+        // Leave the menu the way it was found — a filtered sidebar would quietly change what
+        // every later assertion in the same test can and cannot see.
+        var filter = Page.Locator(".app-menu-filter-container #searchInput");
+        if (await filter.CountAsync() > 0) await filter.FillAsync(string.Empty);
+    }
+
+    /// <summary>
     /// Clicks <paramref name="target"/> until the URL matches <paramref name="urlPattern"/>.
     /// <para>
     /// The counterpart to <see cref="ClickUntilAsync"/> for a control whose only visible effect is
