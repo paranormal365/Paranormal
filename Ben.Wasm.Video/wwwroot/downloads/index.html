@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Sidecar Downloads — IsHaunted.com Video Editor</title>
+    <link rel="icon" type="image/png" href="../favicon.png" />
+    <!--
+      A plain static page, deliberately: it lives inside the editor's static-file deployment
+      (C:\ishaunted\editor\downloads\) and must work with nothing running behind it — no Blazor,
+      no API, no external assets. All styling is inline for the same reason.
+
+      The zips themselves are NOT in source control; scripts/publish-editor.sh stages them from
+      Ben.Video.Sidecar/installer/dist/ and writes checksums.txt beside them at publish time.
+    -->
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #1a1d21; --panel: #24282d; --border: #3a3f46;
+            --text: #dee2e6; --muted: #9aa3ad; --accent: #7c93c8;
+            --warn-bg: #3a2f1c; --warn-border: #8a6d2f; --warn-text: #e8d9a8;
+        }
+        @media (prefers-color-scheme: light) {
+            :root {
+                color-scheme: light;
+                --bg: #f4f5f7; --panel: #ffffff; --border: #d6dae0;
+                --text: #23272b; --muted: #5c646d; --accent: #37508a;
+                --warn-bg: #fdf6e3; --warn-border: #d4b45a; --warn-text: #6b5518;
+            }
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 2rem 1rem 4rem;
+            background: var(--bg); color: var(--text);
+            font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+        }
+        main { max-width: 46rem; margin: 0 auto; }
+        h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+        h2 { font-size: 1.15rem; margin: 2.2rem 0 .6rem; }
+        p.lede { color: var(--muted); margin-top: 0; }
+        a { color: var(--accent); }
+        .warn {
+            background: var(--warn-bg); border: 1px solid var(--warn-border);
+            color: var(--warn-text); border-radius: 8px;
+            padding: .9rem 1.1rem; margin: 1.5rem 0;
+        }
+        .warn strong { display: block; margin-bottom: .3rem; }
+        .card {
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 10px; padding: 1.2rem 1.4rem; margin: 1rem 0;
+        }
+        .card h3 { margin: 0 0 .2rem; font-size: 1.05rem; }
+        .card .meta { color: var(--muted); font-size: .85rem; margin-bottom: .8rem; }
+        .dl {
+            display: inline-block; background: var(--accent); color: #fff;
+            text-decoration: none; padding: .5rem 1.1rem; border-radius: 6px;
+            font-weight: 600;
+        }
+        ol { padding-left: 1.3rem; }
+        li { margin: .35rem 0; }
+        code {
+            background: rgba(127,127,127,.15); border-radius: 4px;
+            padding: .1rem .35rem; font-size: .9em;
+        }
+        .small { color: var(--muted); font-size: .85rem; }
+        footer { margin-top: 3rem; color: var(--muted); font-size: .85rem; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Sidecar — native acceleration for the video editor</h1>
+    <p class="lede">
+        The Sidecar is an optional helper you install on your own computer. When it is running,
+        the <a href="../">video editor</a> hands its heavy work — decoding, rendering,
+        exporting — to your machine directly instead of doing it inside the browser's sandbox.
+        Same results, considerably faster, and long projects stop straining the browser.
+        Without it, everything in the editor still works.
+    </p>
+    <p class="lede">
+        It runs only on your computer and listens only to your own machine. It is not a server,
+        and it sends nothing anywhere on its own.
+    </p>
+
+    <div class="warn">
+        <strong>These are unsigned test builds.</strong>
+        This is a testing and verification release: the installers carry no code signature, so
+        your operating system will warn you — and the warnings are accurate, because nothing
+        cryptographically proves who built this software. Install it only if you were sent here
+        by us and you trust this site. Signed builds come later.
+    </div>
+
+    <h2>Windows (64-bit)</h2>
+    <div class="card">
+        <h3>BenVideoSidecar-win-x64.zip</h3>
+        <p class="meta">Windows 10 or 11, x64 · about 160&nbsp;MB · no administrator rights needed</p>
+        <a class="dl" href="BenVideoSidecar-win-x64.zip" download>Download for Windows</a>
+        <ol>
+            <li>Unzip the download somewhere — actually extract it, don't browse inside the zip.</li>
+            <li>Right-click <code>install.ps1</code> and choose <strong>Run with PowerShell</strong>.
+                If that is blocked, open PowerShell in the folder and run
+                <code>powershell -ExecutionPolicy Bypass -File install.ps1</code>.</li>
+            <li>Expect <em>“Windows protected your PC”</em> the first time anything runs —
+                click <strong>More info</strong>, then <strong>Run anyway</strong>. That prompt is
+                what “unsigned” means. Some antivirus tools may quarantine it outright; if the
+                sidecar vanishes after install, that is what happened.</li>
+            <li>A pairing page opens showing a <strong>six-digit code</strong>. In the editor,
+                click the sidecar chip in the toolbar and type the code in.</li>
+        </ol>
+        <p class="small">Installs under your own profile (<code>%LOCALAPPDATA%\BenVideoSidecar</code>)
+            and starts automatically when you sign in. Remove it any time with
+            <code>uninstall.ps1</code> from the same folder.</p>
+    </div>
+
+    <h2>macOS (Apple Silicon)</h2>
+    <div class="card">
+        <h3>BenVideoSidecar-osx-arm64.zip</h3>
+        <p class="meta">macOS on M-series Macs · about 97&nbsp;MB · no administrator rights needed</p>
+        <a class="dl" href="BenVideoSidecar-osx-arm64.zip" download>Download for Mac</a>
+        <ol>
+            <li>Unzip the download.</li>
+            <li>Open Terminal in the unzipped folder and run <code>./install.sh</code>.
+                The Terminal route is required, not optional: with no Apple Developer&nbsp;ID and no
+                notarization, macOS refuses a double-click install — the script installs to
+                <code>~/Applications</code> and clears the downloaded-file quarantine flag itself.</li>
+            <li>A pairing page opens showing a <strong>six-digit code</strong>. In the editor,
+                click the sidecar chip in the toolbar and type the code in.</li>
+        </ol>
+        <p class="small">Starts automatically at login. Remove it any time with
+            <code>./uninstall.sh</code> from the same folder. Intel Macs: no build yet — ask and
+            we will add one.</p>
+    </div>
+
+    <h2>Good to know</h2>
+    <ul>
+        <li><strong>Pairing is per browser and per site address.</strong> Open the editor in a
+            different browser and you pair again. The code is single-use and expires after ten
+            minutes.</li>
+        <li><strong>Verifying your download:</strong> <a href="checksums.txt">checksums.txt</a>
+            lists the SHA-256 of each zip as built. On Windows:
+            <code>Get-FileHash BenVideoSidecar-win-x64.zip</code>; on macOS:
+            <code>shasum -a 256 BenVideoSidecar-osx-arm64.zip</code>.</li>
+        <li><strong>Removing it changes nothing else.</strong> The editor simply goes back to
+            rendering in the browser, which is what it does for everyone without a sidecar.</li>
+    </ul>
+
+    <footer>
+        IsHaunted.com — test builds for verification.
+        Back to <a href="../">the editor</a> · <a href="/help">help</a>
+    </footer>
+</main>
+</body>
+</html>

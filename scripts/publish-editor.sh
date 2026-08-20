@@ -77,6 +77,28 @@ for stale in index.html appsettings.json appsettings.Development.json; do
     rm -f "$WWW/$stale.br" "$WWW/$stale.gz"
 done
 
+# ── Sidecar downloads ────────────────────────────────────────────────────────
+# wwwroot/downloads/index.html ships in source; the zips deliberately do not — they are ~160 MB
+# and ~97 MB build artifacts, rebuilt by the installer scripts under Ben.Video.Sidecar/installer/.
+# Staged here at publish time, with checksums.txt written beside them because the page links it:
+# for unsigned builds a published hash is the only integrity story a tester has.
+SIDECAR_DIST="$ROOT/Ben.Video.Sidecar/installer/dist"
+DOWNLOADS="$WWW/downloads"
+staged=0
+for z in BenVideoSidecar-win-x64.zip BenVideoSidecar-osx-arm64.zip; do
+    if [ -f "$SIDECAR_DIST/$z" ]; then
+        cp "$SIDECAR_DIST/$z" "$DOWNLOADS/$z"
+        staged=$((staged+1))
+    else
+        echo "  WARNING: $z not built — the downloads page will 404 that link." >&2
+        echo "           Build it: Ben.Video.Sidecar/installer/{windows,macos}/build.sh" >&2
+    fi
+done
+if [ "$staged" -gt 0 ]; then
+    ( cd "$DOWNLOADS" && shasum -a 256 BenVideoSidecar-*.zip > checksums.txt )
+    echo "  staged $staged sidecar zip(s) + checksums.txt into downloads/"
+fi
+
 echo
 echo "Checks:"
 grep -o '<base href="[^"]*"' "$WWW/index.html" | sed 's/^/  /'
