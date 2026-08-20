@@ -4843,7 +4843,7 @@ Three changes to the same row, all about making room for the buttons that matter
 - Use the space that frees up to show undo/redo (and friends) directly, rather than pushing them
   into the overflow where they need text labels (item 93).
 
-## 96. Diagnostics and logs are visible to everyone (raised 2026-08-19)
+## 96. Diagnostics and logs are visible to everyone (site half DONE 2026-08-19 — WASM host remains)
 
 The editor's ffmpeg diagnostics panel and its error log are on the toolbar for every user. They are
 operator tools: memory use, worker state, ffmpeg command output, internal errors. A client editing
@@ -4852,6 +4852,10 @@ their own footage has no use for them, and the output names internals they shoul
 Show them only to platform and group administrators. The editor itself has no notion of roles — it
 is a component library — so the flag belongs in `VideoEditorOptions`, set by each host from the
 identity it already has: the site from its user state, the WASM host from the signed-in account.
+
+**Status:** the site host gates all three editor pages on `IsSuperAdmin || IsAdmin`. The WASM
+host still leaves `ShowDiagnostics` unset (off for everyone) — safe, but administrators lose the
+panel there until it reads the signed-in account's role.
 Default it to off, so a host that forgets is safe rather than exposed.
 
 ---
@@ -4980,3 +4984,64 @@ status, support tickets by state.
 
 Gate the whole bar on the same administrator check the diagnostics panel now uses (item 96), so
 one rule decides who sees operator-facing surfaces.
+
+---
+
+## 102. AudioFilePreview's toast has no element — its errors are shown to nobody (found 2026-08-19, testing pass)
+
+`AudioFilePreview.razor` declares `TelerikNotification? _toast` and routes three messages through
+it, but no `<TelerikNotification @ref="_toast" />` exists in the markup, so `_toast` is null
+forever and `Notify()` no-ops. Two of the three are save confirmations; the third is the one that
+matters: **"Save failed — only WAV and MP3 sources can be clipped."** A user clipping from an
+unsupported source sees nothing happen, which reads as a broken button.
+
+Found by the compiler (CS0649), which is the same disguise the item #77 phase-6 bugs wore. Fix is
+one line of markup; while there, check whether the site's shared toast pattern should be used
+instead of a per-component TelerikNotification.
+
+## 103. Six public components read auth state that may not have resolved yet (found 2026-08-19, testing pass)
+
+`PublicCaseDiscovery`, `HomeHero`, `CaseVoteWidget`, `EvidenceVoteWidget`, `UploadFileVoteBar` and
+`FileCommentThread` read `UserState.IsAuthenticated` without awaiting `AuthReady` and without
+subscribing to a state-changed event. Five are markup-only and merely render the signed-out
+variant until something re-renders them; `PublicCaseDiscovery` is worse — `LoadVoteSummariesAsync`
+bails on `!IsAuthenticated` **during initial load**, so on a hard navigation a signed-in user's
+own votes never appear on the home page's case cards until they page or re-sort.
+
+This is the same family as the Safari base-href bug and the editor toolbar repaint: state read
+once, never followed. The site-wide pattern (await `AuthReady` in pages; components either receive
+auth as a parameter or subscribe) should be applied, and the existing AuthReady guard test extended
+to components that inject `IBenUserState`.
+
+## 104. ImageEditorPlayer's opacity slider is fire-and-forget (found 2026-08-19, testing pass)
+
+The layer-opacity `<input @oninput>` calls `async Task SetLayerOpacity(...)` without awaiting it
+(CS4014). Failures vanish as unobserved tasks, and a fast drag can interleave
+`setLayerOpacity`/`RefreshLayersAsync` pairs out of order. Make the lambda async and await, or
+funnel through a small debounce like the editor's own sliders use.
+
+## 105. One flaky e2e test: RequestList_AnonymousRedirectsToLogin (found 2026-08-19, testing pass)
+
+The only failure in a 265-test run, and the product is fine — verified live, anonymous
+`/my-requests` lands on `/login` with the sign-in form. The test asserts on `Page.Url` immediately
+after `GotoAsync`, but the redirect is client-side after the circuit connects, so the assert races
+it. Wait for the URL change (`WaitForURLAsync`) the way the login helper already does. NetworkIdle
+proves nothing here — that lesson is already written down.
+
+## 106. The editor pages don't link their own help doc (found 2026-08-19, testing pass)
+
+`using-the-video-editor.md` shipped with ten screenshots, and no screen links to it:
+`MyVideosPage`, `CaseVideoEditorPage` and `VideoEditorPage` carry no `HelpLink`. The house rule is
+docs + HelpLink in the same branch; the doc half landed alone. `getting-started` and
+`requesting-an-investigation` are also unlinked but reachable from the help index, which may be
+fine — decide deliberately.
+
+## 107. Nineteen entity controllers are exposed surface with no caller (found 2026-08-19, testing pass)
+
+The plain row controllers — `organization-addresses/emails/phones/links/notes/pages`,
+`user-addresses/emails/phones/links/notes`, `user-messages`, `user-message-tos` and friends — have
+zero client references. Their functions are served by the aggregate `MyContactInfoController`
+(`api/me/*`) and the `api/admin/*` proxies; the lookup-*type* tables go through the generic
+route-string client and are used. The rows are auth-filtered since security phase A, so this is
+not a hole — it is dead surface that will rot and confuse. Decide: delete them, or mark them as
+the deliberate raw-CRUD tier and say so in the controller docs.
