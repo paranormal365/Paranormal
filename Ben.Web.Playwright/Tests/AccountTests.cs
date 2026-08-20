@@ -23,29 +23,6 @@ public class AccountTests : BenTestBase
 {
     private static string Unique => Guid.NewGuid().ToString("N")[..8];
 
-    /// <summary>
-    /// Warms the pages this fixture drives, once, before any test runs.
-    /// </summary>
-    /// <remarks>
-    /// A Blazor Server page pays for itself the first time it is asked for: component compilation,
-    /// JIT, and the circuit's first connection. Whichever test happens to run first absorbs all of
-    /// that, and on a freshly started site it can exceed any timeout worth setting — so the suite
-    /// fails a different test every run depending on alphabetical order, which looks like flakiness
-    /// and is really a cold start.
-    /// </remarks>
-    [OneTimeSetUp]
-    public async Task WarmTheSite()
-    {
-        // A plain HttpClient, not Playwright's: the Playwright instance is created per test, so
-        // it does not exist yet at one-time setup.
-        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
-        foreach (var route in new[] { "/signup", "/login", "/confirm-email", "/profile" })
-        {
-            try { using var _ = await http.GetAsync($"{BaseUrl}{route}"); }
-            catch (HttpRequestException) { /* the tests themselves will report an unreachable site */ }
-        }
-    }
-
     /// <summary>The authenticator secret this test enrolled with, so the teardown can undo it.</summary>
     private string? _enrolledSecret;
 
@@ -103,7 +80,7 @@ public class AccountTests : BenTestBase
     public async Task TheHandleIsCheckedWhileTyping()
     {
         await Page.GotoAsync($"{BaseUrl}/signup");
-        await Expect(Page.Locator("#signup-handle")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(Page.Locator("#signup-handle")).ToBeVisibleAsync(new() { Timeout = 15_000 });
 
         // Sarah's account was backfilled with this handle, so it is genuinely taken.
         await TypeHandleAsync("sarahmitchell");
@@ -123,7 +100,7 @@ public class AccountTests : BenTestBase
     public async Task AnIllegalHandleIsRefusedImmediately()
     {
         await Page.GotoAsync($"{BaseUrl}/signup");
-        await Expect(Page.Locator("#signup-handle")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(Page.Locator("#signup-handle")).ToBeVisibleAsync(new() { Timeout = 15_000 });
 
         await TypeHandleAsync("admin");
         await Expect(Page.GetByText("That name is reserved.")).ToBeVisibleAsync(new() { Timeout = 10_000 });
@@ -137,7 +114,7 @@ public class AccountTests : BenTestBase
         var email = $"signup{tag}@example.com";
 
         await Page.GotoAsync($"{BaseUrl}/signup");
-        await Expect(Page.Locator("#signup-handle")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(Page.Locator("#signup-handle")).ToBeVisibleAsync(new() { Timeout = 15_000 });
 
         // The handle first: it re-renders the form on every keystroke, so anything typed before it
         // can be overwritten by a render that lands after. A person tabbing between fields commits
@@ -145,15 +122,18 @@ public class AccountTests : BenTestBase
         await TypeHandleAsync($"signup{tag}");
         await Expect(Page.GetByText("is free.")).ToBeVisibleAsync(new() { Timeout = 15_000 });
 
-        await Page.FillAsync("#signup-name", "Signup Test");
-        await Page.FillAsync("#signup-email", email);
-        await Page.FillAsync("#signup-password", "Str0ngPass!");
+        // Filled with a check that each value stuck. The @name box proved the circuit is live, but
+        // these are separate InputTexts and a value typed into one before it is wired is discarded
+        // by the next render — the same erasure, one field along.
+        await FillAndConfirmAsync("#signup-name", "Signup Test");
+        await FillAndConfirmAsync("#signup-email", email);
+        await FillAndConfirmAsync("#signup-password", "Str0ngPass!");
 
         await Page.GetByRole(AriaRole.Button, new() { Name = "Create account" }).ClickAsync();
         // .First: the panel says "Check your email." as its heading and again in the sentence
         // below it, and an unqualified GetByText matches both — a strict-mode violation, which
         // fails in a second and looks nothing like the timeout it is not.
-        await Expect(Page.GetByText("Check your email").First).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        await Expect(Page.GetByText("Check your email").First).ToBeVisibleAsync(new() { Timeout = 20_000 });
 
         // The account exists but is not usable yet, and the sign-in page says which of those it is
         // rather than claiming the password is wrong.
@@ -163,7 +143,7 @@ public class AccountTests : BenTestBase
         await Page.ClickAsync("button[type='submit']");
 
         await Expect(Page.GetByText("Confirm your email address first"))
-            .ToBeVisibleAsync(new() { Timeout = 60_000 });
+            .ToBeVisibleAsync(new() { Timeout = 20_000 });
     }
 
     [Test]
@@ -174,7 +154,7 @@ public class AccountTests : BenTestBase
         // happened on load would be one those tools could complete on somebody's behalf.
         await Page.GotoAsync($"{BaseUrl}/confirm-email?userId={Guid.NewGuid()}&code=abc");
         await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Confirm my email" }))
-            .ToBeVisibleAsync(new() { Timeout = 30_000 });
+            .ToBeVisibleAsync(new() { Timeout = 15_000 });
 
         // Opened without a link, it explains rather than failing.
         await Page.GotoAsync($"{BaseUrl}/confirm-email");
@@ -213,7 +193,7 @@ public class AccountTests : BenTestBase
         await Page.GetByRole(AriaRole.Button, new() { Name = "Turn on two-step sign-in" }).ClickAsync();
         // The QR is Telerik's, rendered from the otpauth:// URI. The manual key beside it is what
         // this test uses, because it is the same secret in a form a test can read.
-        await Expect(Page.Locator(".k-qrcode")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        await Expect(Page.Locator(".k-qrcode")).ToBeVisibleAsync(new() { Timeout = 20_000 });
 
         // The code box must have an accessible name, and it must come from a real label pointing at
         // a real id. This is what the Telerik component could not give: it renders no id, so no
@@ -304,7 +284,7 @@ public class AccountTests : BenTestBase
         await Page.ClickAsync("button[type='submit']");
 
         // Signed in: the sign-in form is gone.
-        await Expect(Page.Locator("#login-password")).ToHaveCountAsync(0, new() { Timeout = 30_000 });
+        await Expect(Page.Locator("#login-password")).ToHaveCountAsync(0, new() { Timeout = 15_000 });
     }
 
     /// <summary>
@@ -331,7 +311,7 @@ public class AccountTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/login");
 
         var emailBox = Page.Locator("#login-email");
-        await Expect(emailBox).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        await Expect(emailBox).ToBeVisibleAsync(new() { Timeout = 20_000 });
 
         // The developer pre-fill is written from OnInitializedAsync, so its arrival means the
         // circuit is live. Best-effort: outside Development there is nothing to wait for, and the
@@ -427,39 +407,72 @@ public class AccountTests : BenTestBase
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
+    /// <summary>Fills a field and retries until the value is actually there.</summary>
+    private async Task FillAndConfirmAsync(string selector, string value)
+    {
+        var field = Page.Locator(selector);
+
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            await field.FillAsync(value);
+            if (await field.InputValueAsync() == value) return;
+        }
+
+        Assert.Fail($"{selector} would not hold \"{value}\" after five attempts.");
+    }
+
     /// <summary>
-    /// Types an @name, having first established that the page is actually interactive.
+    /// Types an @name, retrying until the characters actually stick.
     /// </summary>
     /// <remarks>
-    /// <para>The trap this exists for: a Blazor Server page is server-rendered before its circuit
-    /// connects, so the input is present and accepts text a long time before any <c>@oninput</c>
-    /// handler will run. Typing into it during that window puts the characters in the box and
-    /// triggers nothing — no normalising, no availability check — and the test then waits fifteen
-    /// seconds for an answer that was never going to come. It passes or fails depending on how
-    /// warm the server happens to be, which is the worst kind of test.</para>
+    /// <para>The trap this exists for, and it is not slowness. A Blazor Server page renders its
+    /// inputs before the circuit connects, and this one binds <c>value="@_form.Handle"</c>. A
+    /// character typed in that window goes into the DOM, and then the first interactive render
+    /// overwrites the field with the server's value — which is empty. The keystroke is not merely
+    /// ignored, it is <b>erased</b>, leaving an empty box and no echo.</para>
     ///
-    /// <para>The signal used is the page's own echo: the hint under the field repeats the handle
-    /// as it is normalised, and that only updates if a handler ran. One character, wait for the
-    /// echo, then type the rest.</para>
+    /// <para>Measured, the page is interactive about 450ms after navigation on a cold host. So the
+    /// cure is to type again rather than to wait longer: a generous timeout here only turns a fast
+    /// failure into a slow one, and hides a real regression behind a minute and a half of nothing.
+    /// Retrying costs one keystroke when the circuit is already up.</para>
+    ///
+    /// <para>The page's own echo — the hint repeating the normalised name — is the signal, because
+    /// it can only change if a handler ran.</para>
     /// </remarks>
     private async Task TypeHandleAsync(string handle)
     {
         var field = Page.Locator("#signup-handle");
+        var firstChar = handle[..1].ToLowerInvariant();
 
-        await field.ClickAsync();
-        await field.PressSequentiallyAsync(handle[..1], new() { Delay = 20 });
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            await field.ClickAsync();
+            await field.PressSequentiallyAsync(handle[..1], new() { Delay = 20 });
 
-        // The echo appears in the hint as "@x". Waiting on it proves the circuit is live.
-        // Generous on purpose. The first interaction with a freshly started site waits for the
-        // circuit's first connection on top of component compilation and JIT, and on a cold host
-        // that comfortably exceeds the timeouts the rest of the suite uses. Whichever test runs
-        // first absorbs it, so a tight bound here fails a different test every run and looks like
-        // flakiness rather than the cold start it is.
-        await Expect(Page.Locator(".form-text code").First)
-            .ToHaveTextAsync($"@{handle[..1].ToLowerInvariant()}", new() { Timeout = 90_000 });
+            try
+            {
+                await Expect(Page.Locator(".form-text code").First)
+                    .ToHaveTextAsync($"@{firstChar}", new() { Timeout = 1_500 });
 
-        if (handle.Length > 1)
-            await field.PressSequentiallyAsync(handle[1..], new() { Delay = 20 });
+                if (handle.Length > 1)
+                    await field.PressSequentiallyAsync(handle[1..], new() { Delay = 20 });
+
+                return;
+            }
+            catch (Exception)
+            {
+                // Swallowed by the circuit connecting mid-keystroke. Clear whatever survived and
+                // try again — by the second or third attempt the page is always live.
+                await field.FillAsync(string.Empty);
+            }
+        }
+
+        var hint = await Page.Locator(".form-text code").First.InnerTextAsync();
+        Assert.Fail(
+            $"Typing the @name never took after ten attempts. The hint still shows \"{hint}\", "
+            + "which means the page is not becoming interactive at all — a real fault, not a slow "
+            + "start. Check the browser console: an exception during render kills the circuit and "
+            + "leaves the page frozen exactly like this.");
     }
 
     private async Task OpenSecurityTabAsync()
@@ -469,7 +482,7 @@ public class AccountTests : BenTestBase
         // The heading, specifically. The plain text also appears inside the "Turn on two-step
         // sign-in" button, and matching both is a strict-mode violation.
         await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Two-step sign-in" }))
-            .ToBeVisibleAsync(new() { Timeout = 60_000 });
+            .ToBeVisibleAsync(new() { Timeout = 20_000 });
     }
 
     /// <summary>

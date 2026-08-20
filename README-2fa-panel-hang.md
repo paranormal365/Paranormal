@@ -1,68 +1,92 @@
-# Fixing the 2FA enrolment panel hang
+# The 2FA enrolment panel hang — item #112
 
-Backlog item **#112**. Pressing **Turn on two-step sign-in** on the profile's Security tab leaves
-the button reading "Starting…" for ever. No QR appears, no error is shown, and nothing on screen
-says anything is wrong — which is the worst way for a page to fail, because it looks like it is
-working.
+**Fixed.** Pressing **Turn on two-step sign-in** left the button reading "Starting…" for ever: no
+QR, no error, nothing on screen to say anything was wrong. The worst way for a page to fail,
+because it looks like it is working.
 
-## What is broken, precisely
+## The cause
 
-**Not two-factor authentication.** The API is verified end to end against a live server with real
-TOTP codes computed from the secret it issues: setup, enable, sign-in with an app code, sign-in with
-a recovery code, single-use enforcement on recovery codes, and disable. `curl` gets a 200 from
-`POST /api/me/2fa/setup` in milliseconds. The panel also rendered correctly through a browser once,
-early in the session that built it, before it was finished.
+`TelerikMaskedTextBox` **does not splat unmatched attributes — it throws**:
 
-It is **`TwoFactorPanel.razor`**, and specifically what happens after `BeginSetupAsync` is invoked.
+```
+System.InvalidOperationException: Object of type
+'Telerik.Blazor.Components.TelerikMaskedTextBox' does not have a property
+matching the name 'aria-label'.
+```
 
-## What the evidence already rules out
+That `aria-label` had been added the day before, as the fix for a real accessibility finding:
+`LabelAssociationTests` caught a `<label>` pointing at nothing, because Telerik renders no `id` on
+its inner input — only a `data-id` GUID. It was added on the reasonable assumption that Telerik
+splats what it does not recognise.
 
-Recorded so the next attempt does not repeat these:
+The exception is thrown **during render**, not during the call. Under Blazor Server that kills the
+circuit, so the page froze on the last frame it had drawn — the one with the button reading
+"Starting…". Which is why every symptom pointed away from the truth:
 
-| Tried | Result |
+| Observed | What it seemed to mean |
 |---|---|
-| Waiting 30 seconds, sampling the panel every 5 | Stuck on "Starting…" the whole time |
-| A 20-second `CancellationTokenSource` around the call | **No timeout message, no error, no re-render** |
-| `finally { _busy = false; StateHasChanged(); }` | Never takes effect on screen |
-| Swapping `PostAsync` for `SendExpectingReasonAsync` | No change |
-| `GET /api/me/2fa` on the same page | Works — the panel renders "Off" from it |
-| `curl POST /api/me/2fa/setup` with a real token | 200, fast |
+| API answered in milliseconds | the server was fine, so it must be the client's request |
+| `finally { _busy = false; StateHasChanged(); }` never took effect | the `await` had not returned |
+| a 20-second cancellation token never fired | the call was stuck somewhere uncancellable |
+| clicking a different tab did nothing | *(this was the tell — the whole circuit was dead)* |
 
-The cancellation result is the important one. If the `await` were merely slow, the token would have
-fired and the `catch` would have painted an error. It did not, and neither did the `finally`. So
-**the circuit stops re-rendering**, and the fault is not the HTTP request.
+**It was found by reading the browser console** through Playwright's `Page.Console` and
+`Page.PageError`. Nothing server-side reported it. What justified looking at the client at all was a
+`Console.WriteLine` at the top of the API action, proving the request arrived, was handled and
+answered — which split the problem cleanly in two.
 
-## Where to look, in order
+## The fix
 
-1. **Something doing sync-over-async and deadlocking the circuit's synchronisation context.** A
-   blocked circuit fits every symptom above, including cancellation appearing to do nothing.
-2. **`TelerikQRCode`'s first render.** It is the one component on this page used nowhere else in the
-   product, and it is what the success branch renders. Worth testing by rendering the panel with the
-   QR replaced by a plain `<code>` block: if the hang goes away, that is the answer.
-3. **The interaction between the panel's `StateHasChanged` and Telerik's masked textboxes.**
+Both code boxes — the enrolment panel and the sign-in page — are now **plain inputs**. Not a retreat
+from preferring Telerik components; this one genuinely cannot do the job:
 
-## First diagnostic to run
+- no `id`, so no `<label for>` can ever name it, and it has no accessible name at all;
+- it throws on an unmatched attribute, during render, killing the circuit;
+- no `inputmode="numeric"` and no `autocomplete="one-time-code"`, so a phone offers neither a
+  numeric keypad nor the code it has just received.
 
-Settle whether the request reaches the API at all. The API does not log requests today, so absence
-of a log line proves nothing — add a line at the top of `MyTwoFactorController.BeginSetup` and
-watch. That splits the problem cleanly in two and the rest follows from which half it lands in.
+A plain input gives all three, plus a real label. `TelerikAttributeSplattingTests` now scans every
+`.razor` file and fails on any Telerik tag carrying a plain HTML attribute — it reports the original
+bug by name when reintroduced.
 
-## The test
+## Fixed alongside, all found by chasing this
 
-`AccountTests.EnrollingWithARealCodeTurnsItOn` is already written — it computes a real TOTP from the
-shared key the page displays, enrols, and checks ten recovery codes come back. It is currently
-`Assert.Ignore`d pointing at item #112. **Remove the Ignore; do not rewrite the test.** It passing is
-the definition of done here.
+**`LockedOut` was reported as "invalid email or password".** Found when a run of probes locked the
+SuperAdmin account and the page said the password was wrong — sending somebody to reset a password
+that was right, when only waiting helps. Sign-in now distinguishes five refusals, and the help
+documents what each one means.
 
-The fixture's `[TearDown]` disables 2FA through the account's own endpoint with a fresh code, so a
-failure part-way through cannot leave the shared test account demanding a code nobody has.
+**`BenTestBase.FillCredentialsAsync` could sign in as the wrong person.** It checked that the *DOM*
+held the credentials, which is not the same as the server holding them: under Blazor Server an
+`InputText` accepts characters before its circuit connects. The sign-in page pre-fills developer
+credentials in Development, so a submit landing in that window did not fail — it **succeeded as the
+developer account**, navigated away, and left every caller believing it had signed in as whoever it
+asked for. A suite-wide source of tests failing later, somewhere unrelated, while looking at the
+wrong person's data.
+
+**Two tests that lied.** `SigningInWithTwoStep…` shared the fixture's account, so its result
+depended on what the previous test had left behind. `TypeHandleAsync` waited longer and longer for a
+page that was never slow.
+
+## The thing I got wrong, recorded because it cost the most
+
+I read a failing test as a slow cold start and raised timeouts to 60, then 90, then 120 seconds.
+Measured, the page is **interactive about 450ms after navigation on a cold host**, and server render
+is 9ms. The real fault was that a character typed before the circuit connects is not merely
+ignored — the first interactive render **overwrites the field from the server's empty value**, so
+the keystroke is erased. The cure is to type again, not to wait longer. Those tests now run in about
+two seconds; they were taking ninety.
+
+A generous timeout on a fast page buys nothing and hides the next real regression behind a minute
+and a half of nothing.
 
 ## Verifying
 
 ```bash
-dotnet test Ben.Web.Playwright -p:IsTestProject=true --filter "TestCategory=Account" -e BEN_BASE_URL=http://localhost:5079
+dotnet test Ben.Web.Tests --filter "FullyQualifiedName~TelerikAttributeSplatting|FullyQualifiedName~LoginAttempt|FullyQualifiedName~UserHandleService"
+dotnet test Ben.Web.Playwright -p:IsTestProject=true --filter "TestCategory=Account"
 ```
 
-Both hosts run from their own project directories — launching from the repository root serves every
-static file as 200 with zero bytes. And a Blazor Server page is interactive long after it renders,
-so give the first interaction a generous timeout rather than reading a cold start as a failure.
+The site runs on **5078** from `Ben.Web.Website`, its configured port — `BEN_BASE_URL` defaults
+there, so no override is needed. Run it from its own project directory: launching from the
+repository root serves every static file as 200 with zero bytes.
