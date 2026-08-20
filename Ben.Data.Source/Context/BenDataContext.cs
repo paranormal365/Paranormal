@@ -86,6 +86,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrgMessageHashtag> OrgMessageHashtags { get; set; }
         public virtual DbSet<OrgMessageReport> OrgMessageReports { get; set; }
         public virtual DbSet<UserFollow> UserFollows { get; set; }
+        public virtual DbSet<Publication> Publications { get; set; }
+        public virtual DbSet<PublicationPost> PublicationPosts { get; set; }
+        public virtual DbSet<PublicationSubscription> PublicationSubscriptions { get; set; }
         public virtual DbSet<OrgCalendarEventType> OrgCalendarEventTypes { get; set; }
         public virtual DbSet<OrgCalendarEvent> OrgCalendarEvents { get; set; }
         public virtual DbSet<OrgCalendarEventAttendee> OrgCalendarEventAttendees { get; set; }
@@ -1575,6 +1578,63 @@ namespace Ben.Data.Source.Context
             // "Who follows this person" — the follower count, and the other direction of the feed.
             modelBuilder.Entity<UserFollow>()
                 .HasIndex(e => e.FollowedAppUserId);
+
+            // ── Publication ──────────────────────────────────────────────────
+            modelBuilder.Entity<Publication>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Publication>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Publication>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Publication>().Property(e => e.Title).HasMaxLength(200).IsRequired();
+            modelBuilder.Entity<Publication>().Property(e => e.UrlName).HasMaxLength(120).IsRequired();
+            modelBuilder.Entity<Publication>().Property(e => e.Description).HasMaxLength(1000);
+            // Unique across the whole site, not per organisation: the public address carries no
+            // organisation in it, so two publications sharing a UrlName would mean /publications/x
+            // serving whichever row came back first — the exact fault item 89 found on org URLs.
+            modelBuilder.Entity<Publication>()
+                .HasIndex(e => e.UrlName).IsUnique();
+
+            // ── PublicationPost ──────────────────────────────────────────────
+            modelBuilder.Entity<PublicationPost>()
+                .HasOne(e => e.Publication).WithMany(e => e.Posts)
+                .HasForeignKey(e => e.PublicationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PublicationPost>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PublicationPost>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PublicationPost>().Property(e => e.Title).HasMaxLength(300).IsRequired();
+            modelBuilder.Entity<PublicationPost>().Property(e => e.UrlName).HasMaxLength(160).IsRequired();
+            modelBuilder.Entity<PublicationPost>().Property(e => e.Excerpt).HasMaxLength(1000);
+            modelBuilder.Entity<PublicationPost>().Property(e => e.BodyHtml).HasColumnType("nvarchar(max)");
+            // Unique within its publication only — two publications may each have a post called
+            // "welcome", and their addresses differ by the publication that carries them.
+            modelBuilder.Entity<PublicationPost>()
+                .HasIndex(e => new { e.PublicationId, e.UrlName }).IsUnique();
+            // The reader's query: this publication's published posts, newest first.
+            modelBuilder.Entity<PublicationPost>()
+                .HasIndex(e => new { e.PublicationId, e.PublishedUtc });
+
+            // ── PublicationSubscription ──────────────────────────────────────
+            modelBuilder.Entity<PublicationSubscription>()
+                .HasOne(e => e.Publication).WithMany(e => e.Subscriptions)
+                .HasForeignKey(e => e.PublicationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PublicationSubscription>()
+                .HasOne(e => e.SubscriberAppUser).WithMany()
+                .HasForeignKey(e => e.SubscriberAppUserId).OnDelete(DeleteBehavior.NoAction);
+            // One subscription per person per publication. Re-subscribing clears the cancellation
+            // rather than adding a row, so this index is what keeps "am I subscribed" a single
+            // question with a single answer.
+            modelBuilder.Entity<PublicationSubscription>()
+                .HasIndex(e => new { e.PublicationId, e.SubscriberAppUserId }).IsUnique();
+            // "What am I subscribed to" — the reader's own list.
+            modelBuilder.Entity<PublicationSubscription>()
+                .HasIndex(e => new { e.SubscriberAppUserId, e.CancelledUtc });
 
             // ── OrgMessageRecipient ───────────────────────────────────────────
             modelBuilder.Entity<OrgMessageRecipient>()

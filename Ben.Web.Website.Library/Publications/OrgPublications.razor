@@ -1,0 +1,227 @@
+@namespace Ben.Web.Website.Library.Publications
+@using Ben.Service.Models.Publications
+
+@inject IBenAdminClient Client
+@inject NavigationManager NavManager
+
+@*
+    The group's publications, as a tab on its own page.
+
+    Only the shell lives here: a list, a create form, and the switch that decides whether a
+    publication is visible to the public at all. Writing happens on its own page — a post body is
+    long-form HTML, and long-form HTML gets the full width of a page, never a panel inside a tab.
+
+    Note what the counts say. A group sees its drafts counted separately from what it has
+    published; a visitor is never told a draft exists. That distinction is in the records, not in
+    this markup, so no page can leak it by forgetting.
+*@
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h5 class="mb-0">
+        Publications
+        <HelpLink Slug="publishing-with-publications" />
+    </h5>
+    <button type="button" class="btn btn-primary btn-sm" @onclick="StartCreate" disabled="@_creating">
+        <BenIcon Name="plus" Class="me-1" />New publication
+    </button>
+</div>
+
+<p class="text-secondary small">
+    A publication is a place to write for people outside the group — case write-ups, field notes,
+    research. Readers do not need an account, and can subscribe to be told when you post.
+</p>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_creating)
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h6 class="fw-bold mb-3">New publication</h6>
+
+            <div class="mb-2">
+                <label class="form-label" for="pub-title">Title</label>
+                <input id="pub-title" class="form-control" @bind="_newTitle" @bind:event="oninput"
+                       maxlength="200" placeholder="e.g. Field Notes" />
+                <div class="form-text">
+                    The address is made from the title once, when you create it, and never changes
+                    afterwards — so a link you share today still works after a rename.
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label" for="pub-desc">Description</label>
+                <textarea id="pub-desc" class="form-control" rows="2" @bind="_newDescription"
+                          maxlength="500" placeholder="One or two lines about what you write here."></textarea>
+            </div>
+
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="pub-public" @bind="_newIsPublic" />
+                <label class="form-check-label" for="pub-public">
+                    Visible to the public
+                </label>
+                <div class="form-text">
+                    Leave this off while you get started. Nothing is readable outside the group
+                    until both the publication is public and a post has been published.
+                </div>
+            </div>
+
+            <button type="button" class="btn btn-primary" disabled="@(_working || string.IsNullOrWhiteSpace(_newTitle))"
+                    @onclick="CreateAsync">
+                @(_working ? "Creating…" : "Create")
+            </button>
+            <button type="button" class="btn btn-link" @onclick="CancelCreate">Cancel</button>
+        </div>
+    </div>
+}
+
+@if (_loading)
+{
+    <p class="text-secondary">Loading…</p>
+}
+else if (_publications.Count == 0 && !_creating)
+{
+    <div class="text-center text-secondary py-4">
+        <p class="mb-0">This group has no publications yet.</p>
+    </div>
+}
+else
+{
+    <div class="list-group">
+        @foreach (var publication in _publications)
+        {
+            <div class="list-group-item">
+                <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
+                    <div>
+                        <div class="fw-bold">
+                            @publication.Title
+                            @if (publication.IsPublic)
+                            {
+                                <span class="badge bg-success ms-2">Public</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary ms-2">Private</span>
+                            }
+                        </div>
+                        <div class="small text-secondary">
+                            /publications/@publication.UrlName
+                        </div>
+                        <div class="small text-secondary mt-1">
+                            @publication.PublishedPostCount published
+                            @if (publication.DraftPostCount > 0)
+                            {
+                                <span> · @publication.DraftPostCount @(publication.DraftPostCount == 1 ? "draft" : "drafts")</span>
+                            }
+                            · @publication.SubscriberCount @(publication.SubscriberCount == 1 ? "subscriber" : "subscribers")
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        @* The visibility switch sits here rather than on the writing page: it is a
+                           decision about the publication, and putting it beside a post's Publish
+                           button is how somebody makes the whole thing public while meaning to
+                           publish one piece. *@
+                        <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_working"
+                                @onclick="() => ToggleVisibilityAsync(publication)">
+                            @(publication.IsPublic ? "Make private" : "Make public")
+                        </button>
+                        <a class="btn btn-primary btn-sm"
+                           href="/organizations/@OrgId/publications/@publication.Id">
+                            Posts
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+
+    private IReadOnlyList<PublicationRecord> _publications = [];
+    private bool _loading = true;
+    private bool _creating;
+    private bool _working;
+    private string? _error;
+
+    private string _newTitle = string.Empty;
+    private string _newDescription = string.Empty;
+    private bool _newIsPublic;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _publications = await Client.GetOrgPublicationsAsync(OrgId);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void StartCreate()
+    {
+        _creating = true;
+        _error = null;
+        _newTitle = string.Empty;
+        _newDescription = string.Empty;
+        _newIsPublic = false;
+    }
+
+    private void CancelCreate() => _creating = false;
+
+    private async Task CreateAsync()
+    {
+        _working = true;
+        _error = null;
+        try
+        {
+            var (created, error) = await Client.CreatePublicationAsync(
+                OrgId,
+                new SavePublicationRequest(
+                    _newTitle.Trim(),
+                    string.IsNullOrWhiteSpace(_newDescription) ? null : _newDescription.Trim(),
+                    _newIsPublic));
+
+            // The server's own words, not a generic failure: "that title is already taken
+            // somewhere on the site" is something the author can act on immediately.
+            if (created is null) { _error = error ?? "Couldn't create that publication."; return; }
+
+            _creating = false;
+            await LoadAsync();
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+
+    private async Task ToggleVisibilityAsync(PublicationRecord publication)
+    {
+        _working = true;
+        _error = null;
+        try
+        {
+            var ok = await Client.UpdatePublicationAsync(
+                OrgId, publication.Id,
+                new SavePublicationRequest(publication.Title, publication.Description, !publication.IsPublic));
+
+            if (!ok) { _error = "Couldn't change that. Try again in a moment."; return; }
+
+            await LoadAsync();
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+}

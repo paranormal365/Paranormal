@@ -8,6 +8,7 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState   UserState
 @inject NavigationManager NavManager
+@inject SiteFeaturesProvider Features
 
 <PageTitle>@(_org?.Name ?? "Organization")</PageTitle>
 
@@ -234,6 +235,17 @@
             {
                 <BenTab Title="CMS">
                     <OrgCmsEditor OrgId="@OrgId" EmbeddedMode="true" />
+                </BenTab>
+            }
+
+            @* Publications is off by default sitewide. A FeatureGate cannot help here — it renders
+               a "page not found" body, which inside a tab strip would be a tab that opens onto an
+               error. The tab has to not exist, so the flag is read directly. The pages the tab
+               links to keep their own gate, because an address must die with the feature. *@
+            @if (_canManageRoles && Features.IsOn(SiteFeatures.Publications))
+            {
+                <BenTab Title="Publications">
+                    <Ben.Web.Website.Library.Publications.OrgPublications OrgId="@OrgId" />
                 </BenTab>
             }
 

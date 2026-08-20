@@ -5767,3 +5767,112 @@ The browser tests turn the flag on and put it back as they found it, and check t
 by **navigating repeatedly rather than waiting**: the website reads its flags from a snapshot
 refreshed on a timer, so a page that has already rendered will never change its mind. Polling the
 DOM of one page waits for something that cannot happen.
+
+---
+
+## 116. Publications (SHIPPED 2026-08-20 — phase 9)
+
+The last phase of the nine-phase plan. Long-form writing by groups, readable by anybody.
+
+### What it is
+
+A **publication** is a group's own title — *Field Notes*, *The Ridgeway Case*. Inside it are
+**posts**: case write-ups, research, notes worth more room than the feed gives them. Readers need
+no account. Subscribing needs one, because a subscriber is somebody the group can reach.
+
+Three tables — `Publication`, `PublicationPost`, `PublicationSubscription` — rather than reuse of
+`OrganizationPage`. A CMS page carries site structure; a post is chronological and subscribable.
+
+Behind `features.publications`, **default off**.
+
+### Decisions worth keeping
+
+**A draft is a post with no `PublishedUtc`.** Not a second status column: two fields that must
+agree eventually disagree. Creating a post never publishes it, whatever the author intended.
+
+**Two gates, both required.** A post is public only if it is published *and* its publication is
+public. Independent on purpose — a group can get several pieces ready before anyone knows the
+publication exists.
+
+**The authoring and public controllers are separate classes**, not one set of queries with a
+flag. One forgotten argument on a shared path is how a draft reaches the world, and there is no
+forgetting an argument that does not exist.
+
+**Slugs are derived once and never regenerated** — item 89's lesson, applied before it could be
+repeated. Renaming changes the heading, not the link.
+
+**Bodies are sanitised on save, not on render.** The stored markup is the safe markup, so no
+future read path can resurrect what the author sent, and a change to the sanitiser cannot quietly
+alter a thousand published articles.
+
+**`RequiredTier` is written by nothing and withheld anyway.** Building the withholding path now,
+against a column that is always null, costs nothing; retrofitting it later means changing what is
+already being read. The body is withheld by the server — a paywall implemented in CSS is not a
+paywall. This is the whole of what item 85 gets for now.
+
+**Unsubscribing marks rather than deletes.** Unlike a feed follow — deleted outright, because a
+soft-deleted follow is a record of who once read whom — a subscription is what a payment would
+attach to, so a cancelled one stays answerable for what it covered. Re-subscribing revives the
+same row.
+
+### The anonymous path is the product
+
+A publication nobody can read without an account is a newsletter with no readers. The public
+controller is `[AllowAnonymous]`, the client's public calls use `GetAnonymousAsync` — which sends
+no bearer token *even when the reader is signed in* — and **the tests hold no principal at all**.
+
+That last part is the point. Sign a test in and read a public page and the feature passes its
+tests while being broken for every real visitor: the author always sees what the visitor cannot.
+The two help screenshots for readers were likewise captured signed out.
+
+### Deliberately not built
+
+Billing of any kind. Email digests when a post goes up — the scheduler from phase 6 is the right
+home for it and it is a separate piece of work. Comments. Cross-posting to the feed. Deleting a
+whole publication: posts can be deleted, a publication cannot, which is a real gap and the reason
+the help capture seeds its demo publication idempotently rather than creating one per run.
+
+### Tests
+
+16 on the controllers. Six were run against deliberately broken code first — draft filter
+removed, public gate removed, tier check disabled, listing bodies included, subscription revive
+disabled — and each failed as it should before being trusted.
+
+---
+
+## 117. The sidebar, grouped by subject (SHIPPED 2026-08-20)
+
+Eighteen top-level rows signed in with everything on, which is what prompted it. Now eight:
+Notifications and Organizations stay put — checked constantly rather than navigated to — and the
+rest fold into **My Work**, **Equipment**, **Media** and **Community**. Signed out it stays flat;
+four entries folded into two groups costs a click each to save two rows nobody was struggling to
+read.
+
+### What grouping broke, and had to be fixed with it
+
+**Only a leaf rendered a badge.** Folding a badged item into a group hid it — turning the change
+meant to make the sidebar readable into a way of losing the one signal it exists to carry. Groups
+now sum everything beneath them recursively, and take urgency from the oldest unread item in the
+subtree. The parent badge shows only while closed.
+
+**The filter matched one level deep.** Administration's tools are two levels down, so filtering
+for one of them found nothing — a pre-existing bug that grouping would have spread to most of the
+menu. Matching is recursive, matched groups are pruned to their matching children, and everything
+left is expanded: a filter that reports a match and then hides it is worse than no filter.
+
+**A group of one is worse than the item alone** — same row, plus a click to reach what the row
+already named. Switch the media library and video editor off and Media held only Upload Files.
+A one-child group now renders as its child.
+
+### Found on the way: the bell under-explained itself
+
+Checking whether the bell would cover a badge inside a collapsed group turned up that it would
+not have covered all of it. `TotalCount` sums every bucket; the dropdown was a hand-written list
+of seven; `FeedMentions` was in the first and not the second. A mention made the bell read "3
+items waiting" and then account for two.
+
+Fixed, and guarded by a test that reads the bucket list off `NotificationSummaryResponse` itself
+rather than a list kept in step by hand — so the next bucket added cannot repeat it. Verified by
+deleting the new row and watching it fail.
+
+`My Checkouts` also now carries the equipment bucket it always had available and never showed.

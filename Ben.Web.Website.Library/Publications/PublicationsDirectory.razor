@@ -1,0 +1,137 @@
+@page "/publications"
+@namespace Ben.Web.Website.Library.Publications
+@using Ben.Service.Models.Publications
+
+@inject IBenAdminClient Client
+@inject IBenUserState UserState
+
+<PageTitle>Publications</PageTitle>
+
+@*
+    The public directory.
+
+    No sign-in check anywhere in this file, and that is the point: a publication a stranger cannot
+    read is a newsletter with no readers. The client's public calls send no bearer token even when
+    the reader happens to be signed in, so this page renders for the author exactly what it renders
+    for a visitor — which is the only way the visitor's path ever gets tested.
+
+    Publications with nothing published in them are not listed. The API leaves them out; the page
+    does not need to know that, but a reader clicking a title always lands on something.
+*@
+
+<FeatureGate Flag="@SiteFeatures.Publications">
+    <div class="container py-4" style="max-width: 900px;">
+
+        <div class="d-flex align-items-center justify-content-between mb-1">
+            <h1 class="fs-2 fw-bold mb-0">
+                Publications
+                <HelpLink Slug="reading-publications" />
+            </h1>
+        </div>
+        <p class="text-secondary mb-4">
+            Long-form writing from investigation groups — case write-ups, field notes, and research.
+        </p>
+
+        @* Subscriptions appear only for somebody signed in, and only when they have some. A
+           reader with no account never sees an empty box asking about a concept they have not
+           met yet. This is also the only place the subscription list is readable — an endpoint
+           with no surface is a feature nobody can use. *@
+        @if (_subscriptions.Count > 0)
+        {
+            <div class="card mb-4">
+                <div class="card-header"><strong>You subscribe to</strong></div>
+                <ul class="list-group list-group-flush">
+                    @foreach (var subscription in _subscriptions)
+                    {
+                        <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <div>
+                                <a class="fw-bold text-decoration-none"
+                                   href="/publications/@subscription.PublicationUrlName">
+                                    @subscription.PublicationTitle
+                                </a>
+                                <div class="small text-secondary">@subscription.OrganizationName</div>
+                            </div>
+                            <div class="small text-secondary">
+                                @if (subscription.LatestPostUtc is { } latest)
+                                {
+                                    <span>Latest @latest.ToLocalTime().ToString("d MMM yyyy")</span>
+                                }
+                                else
+                                {
+                                    <span>Nothing posted yet</span>
+                                }
+                            </div>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+
+        @if (_loading)
+        {
+            <p class="text-secondary">Loading…</p>
+        }
+        else if (_publications.Count == 0)
+        {
+            <div class="text-center text-secondary py-5">
+                <p class="mb-0">No group has published anything yet.</p>
+            </div>
+        }
+        else
+        {
+            <div class="row g-3">
+                @foreach (var publication in _publications)
+                {
+                    <div class="col-12 col-md-6">
+                        <a class="card h-100 text-decoration-none" href="/publications/@publication.UrlName">
+                            <div class="card-body">
+                                <h2 class="fs-5 fw-bold mb-1">@publication.Title</h2>
+                                <div class="small text-secondary mb-2">
+                                    @publication.OrganizationName
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(publication.Description))
+                                {
+                                    <p class="mb-2 text-body">@publication.Description</p>
+                                }
+                                <div class="small text-secondary">
+                                    @publication.PostCount @(publication.PostCount == 1 ? "post" : "posts")
+                                    @if (publication.LatestPostUtc is { } latest)
+                                    {
+                                        <span> · latest @latest.ToLocalTime().ToString("d MMM yyyy")</span>
+                                    }
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</FeatureGate>
+
+@code {
+    private IReadOnlyList<PublicPublicationRecord> _publications = [];
+    private IReadOnlyList<MySubscriptionRecord> _subscriptions = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The directory itself never waits for auth. Waiting would delay the one page that has to
+        // work for somebody who will never sign in — and the wait can never complete for them.
+        try
+        {
+            _publications = await Client.GetPublicPublicationsAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        // Only then, and only for a reader who has an account, the subscriptions strip.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) return;
+
+        _subscriptions = await Client.GetMySubscriptionsAsync();
+        StateHasChanged();
+    }
+}

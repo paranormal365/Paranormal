@@ -1,0 +1,246 @@
+@page "/organizations/{OrgId:guid}/publications/{PublicationId:guid}/posts/new"
+@page "/organizations/{OrgId:guid}/publications/{PublicationId:guid}/posts/{PostId:guid}"
+@namespace Ben.Web.Website.Library.Publications
+@using Ben.Service.Models.Publications
+
+@inject IBenAdminClient Client
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>@(_isNew ? "New post" : _title)</PageTitle>
+
+@*
+    Writing a post — its own page, at the page's full width.
+
+    Long-form HTML authoring never goes in a modal here. The editor needs the room, and a
+    thousand-word piece written in a 400px box is written badly.
+
+    Saving and publishing are separate acts, and the buttons say so. Save leaves a draft a draft;
+    a new post is always a draft first, whatever the author intended, so there is no path where
+    hitting Enter in the title field puts something half-written in front of the public.
+*@
+
+<FeatureGate Flag="@SiteFeatures.Publications">
+    <div class="container-fluid py-3 px-3 px-lg-4">
+
+        @if (_loading)
+        {
+            <p class="text-secondary">Loading…</p>
+        }
+        else if (_notFound)
+        {
+            <div class="text-center py-5">
+                <h1 class="fs-4">Post not found</h1>
+                <a class="btn btn-outline-secondary" href="/organizations/@OrgId/publications/@PublicationId">
+                    Back to the publication
+                </a>
+            </div>
+        }
+        else
+        {
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                <div>
+                    <nav class="small text-secondary">
+                        <a class="text-decoration-none" href="/organizations/@OrgId/publications/@PublicationId">
+                            ← Back to the publication
+                        </a>
+                    </nav>
+                    <h1 class="fs-4 fw-bold mb-0 mt-1">
+                        @(_isNew ? "New post" : "Editing")
+                        @if (!_isNew && _publishedUtc is null)
+                        {
+                            <span class="badge bg-secondary ms-2">Draft</span>
+                        }
+                        else if (!_isNew)
+                        {
+                            <span class="badge bg-success ms-2">Published</span>
+                        }
+                    </h1>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-primary"
+                            disabled="@(_working || string.IsNullOrWhiteSpace(_title))"
+                            @onclick="SaveAsync">
+                        @(_working ? "Saving…" : "Save")
+                    </button>
+
+                    @if (!_isNew)
+                    {
+                        <button type="button" class="btn @(_publishedUtc is null ? "btn-success" : "btn-outline-warning")"
+                                disabled="@_working" @onclick="TogglePublishedAsync">
+                            @(_publishedUtc is null ? "Save & publish" : "Withdraw")
+                        </button>
+                    }
+                </div>
+            </div>
+
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger">@_error</div>
+            }
+            @if (_saved)
+            {
+                <div class="alert alert-success py-2">Saved.</div>
+            }
+
+            <div class="mb-3">
+                <label class="form-label" for="post-title">Title</label>
+                <input id="post-title" class="form-control form-control-lg" @bind="_title" @bind:event="oninput"
+                       maxlength="250" placeholder="What is this piece called?" />
+                @if (_isNew)
+                {
+                    <div class="form-text">
+                        The post's address comes from its title once, when you first save. Renaming
+                        it later changes the heading, not the link.
+                    </div>
+                }
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="post-excerpt">Excerpt</label>
+                <textarea id="post-excerpt" class="form-control" rows="2" @bind="_excerpt" maxlength="500"
+                          placeholder="A line or two shown in listings — and the only thing a non-subscriber sees of a subscribers-only piece."></textarea>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Body</label>
+                @* @bind-Value, not OnChange: OnChange on TelerikEditor throws during render and
+                   takes the circuit with it. Same trap as the scheduler's description field. *@
+                <TelerikEditor @bind-Value="@_bodyHtml" Height="60vh" />
+            </div>
+        }
+    </div>
+</FeatureGate>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid PublicationId { get; set; }
+
+    /// <summary>Null on the "new" route. Its absence is what makes this page a create form.</summary>
+    [Parameter] public Guid? PostId { get; set; }
+
+    private string _title = string.Empty;
+    private string _excerpt = string.Empty;
+    private string _bodyHtml = string.Empty;
+    private DateTime? _publishedUtc;
+
+    private bool _loading = true;
+    private bool _notFound;
+    private bool _working;
+    private bool _saved;
+    private string? _error;
+
+    private bool _isNew => PostId is null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _notFound = false;
+        try
+        {
+            if (_isNew) return;
+
+            var post = (await Client.GetOrgPublicationPostsAsync(OrgId, PublicationId))
+                .FirstOrDefault(p => p.Id == PostId);
+
+            if (post is null) { _notFound = true; return; }
+
+            _title = post.Title;
+            _excerpt = post.Excerpt ?? string.Empty;
+            _bodyHtml = post.BodyHtml;
+            _publishedUtc = post.PublishedUtc;
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private SavePublicationPostRequest CurrentRequest() => new(
+        _title.Trim(),
+        string.IsNullOrWhiteSpace(_excerpt) ? null : _excerpt.Trim(),
+        _bodyHtml ?? string.Empty);
+
+    private async Task SaveAsync()
+    {
+        _working = true;
+        _error = null;
+        _saved = false;
+        try
+        {
+            if (_isNew)
+            {
+                var (created, error) = await Client.CreatePostAsync(OrgId, PublicationId, CurrentRequest());
+                if (created is null) { _error = error ?? "Couldn't save that post."; return; }
+
+                // Navigate to the post's own address rather than staying on /new. Otherwise a
+                // second Save creates a second post, which is a mistake somebody makes once and
+                // then has to clean up.
+                NavManager.NavigateTo($"/organizations/{OrgId}/publications/{PublicationId}/posts/{created.Id}");
+                return;
+            }
+
+            if (!await Client.UpdatePostAsync(OrgId, PublicationId, PostId!.Value, CurrentRequest()))
+            {
+                _error = "Couldn't save that post.";
+                return;
+            }
+
+            _saved = true;
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+
+    /// <summary>
+    /// Publishes or withdraws — saving first when publishing.
+    /// </summary>
+    /// <remarks>
+    /// Publishing without saving would put the previously saved text in front of readers while the
+    /// author is looking at the version they just wrote. Withdrawing does not save: the point of
+    /// withdrawing is usually that something is wrong with what is out there, and quietly
+    /// committing unsaved edits on the way is not what the button says.
+    /// </remarks>
+    private async Task TogglePublishedAsync()
+    {
+        var publishing = _publishedUtc is null;
+
+        _working = true;
+        _error = null;
+        _saved = false;
+        try
+        {
+            if (publishing
+                && !await Client.UpdatePostAsync(OrgId, PublicationId, PostId!.Value, CurrentRequest()))
+            {
+                _error = "Couldn't save that post, so nothing was published.";
+                return;
+            }
+
+            if (!await Client.SetPostPublishedAsync(OrgId, PublicationId, PostId!.Value, publishing))
+            {
+                _error = publishing ? "Couldn't publish that post." : "Couldn't withdraw that post.";
+                return;
+            }
+
+            _publishedUtc = publishing ? DateTime.UtcNow : null;
+            _saved = true;
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+}
