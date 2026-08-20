@@ -106,3 +106,19 @@ what you have already published.
 **Delete** on a post removes it outright — it asks once first. Unlike a feed post, which is hidden
 rather than deleted so a moderation record survives, nothing points at a publication post but its
 own address. The group owns what it wrote.
+
+### Deleting a whole publication
+
+**Delete** on the publication itself appears only while the publication is **completely empty** —
+nothing written, nobody subscribed. That is the case it is for: you created one, the title came
+out wrong, and the address does not move when you rename it.
+
+Once there is anything in it the button is gone, and the reason is what deleting would cost.
+Removing a publication people have written in and subscribed to destroys the work and breaks every
+link anybody shared, which is not something to do by clicking twice. Delete the posts first if you
+genuinely want it gone — or ask a site administrator, who can remove any publication along with
+everything inside it.
+
+One thing that surprises people: **somebody who subscribed and then unsubscribed still counts.**
+The rule is "nothing ever happened here", and somebody having read you is something happening. If
+Delete is missing on a publication that looks empty, that is usually why.

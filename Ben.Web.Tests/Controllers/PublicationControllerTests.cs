@@ -1,4 +1,5 @@
 using AutoMapper;
+using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
@@ -89,6 +90,27 @@ public sealed class PublicationControllerTests
 
         return controller;
     }
+
+    /// <summary>The same authoring controller, with the SuperAdmin role on the principal.</summary>
+    /// <remarks>
+    /// The role goes on the claims rather than into the security service mock, because that is
+    /// where the controller reads it — <c>IsCmsAuthorizedAsync</c> short-circuits on
+    /// <c>User.IsInRole</c> before the service is consulted at all.
+    /// </remarks>
+    private static OrgPublicationController BuildSuperAdmin(
+        IDbContextFactory<BenDataContext> factory, Guid userId)
+        => new(factory, new Mock<IMapper>().Object, GrantAll().Object, new CmsMarkupSanitizer())
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+                         new Claim(ClaimTypes.Role, RoleNames.SuperAdmin)], "Bearer")),
+                },
+            },
+        };
 
     /// <summary>The public controller, holding no identity whatsoever.</summary>
     private static PublicPublicationController BuildVisitor(IDbContextFactory<BenDataContext> factory)
@@ -570,6 +592,173 @@ public sealed class PublicationControllerTests
 
         await using (var db = factory.CreateDbContext())
             Assert.Equal(0, await db.PublicationSubscriptions.CountAsync());
+    }
+
+    // ── Deleting ─────────────────────────────────────────────────────────────
+
+    /// <summary>An empty publication — the "wrong title, start again" case — deletes cleanly.</summary>
+    [Fact]
+    public async Task An_empty_publication_can_be_deleted_by_the_group()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var authoring = BuildAuthoring(factory, userId);
+
+        var publication = await CreatePublicationAsync(authoring, orgId, "Typo Notes", isPublic: false);
+
+        Assert.IsType<NoContentResult>(
+            await authoring.Delete(orgId, publication.Id, CancellationToken.None));
+
+        await using var db = factory.CreateDbContext();
+        Assert.Equal(0, await db.Publications.CountAsync());
+    }
+
+    /// <summary>
+    /// A publication with posts is refused, and the refusal says so.
+    /// </summary>
+    /// <remarks>
+    /// <para>The message is asserted, not just the status. A guard whose reason the UI cannot show
+    /// leaves somebody clicking the same button — "it still has one post in it" is the difference
+    /// between a rule and a wall.</para>
+    ///
+    /// <para>The row surviving is asserted separately: a refusal that returned 409 after already
+    /// deleting the thing would satisfy a status-only test.</para>
+    /// </remarks>
+    [Fact]
+    public async Task A_publication_with_posts_is_refused_with_a_reason()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var authoring = BuildAuthoring(factory, userId);
+
+        var publication = await CreatePublicationAsync(authoring, orgId, "Field Notes", isPublic: true);
+        await CreatePostAsync(authoring, orgId, publication.Id, "Something written");
+
+        var refusal = Assert.IsType<ConflictObjectResult>(
+            await authoring.Delete(orgId, publication.Id, CancellationToken.None));
+
+        Assert.Contains("one post", (string)refusal.Value!);
+
+        await using var db = factory.CreateDbContext();
+        Assert.Equal(1, await db.Publications.CountAsync());
+    }
+
+    /// <summary>
+    /// A cancelled subscription still blocks a group's delete.
+    /// </summary>
+    /// <remarks>
+    /// The empty rule means "nothing ever happened here", and somebody having subscribed and left
+    /// is something having happened. It is also the case the UI cannot see — the group's listing
+    /// counts only live subscribers — which is exactly why the server has to be the one deciding.
+    /// </remarks>
+    [Fact]
+    public async Task A_cancelled_subscription_still_blocks_the_group_from_deleting()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var authoring = BuildAuthoring(factory, userId);
+        var publication = await CreatePublicationAsync(authoring, orgId, "Field Notes", isPublic: true);
+
+        var reader = MakeUser("reader");
+        await using (var db = factory.CreateDbContext())
+        {
+            db.Users.Add(reader);
+            await db.SaveChangesAsync();
+        }
+
+        var subscriber = BuildSubscriber(factory, reader.Id);
+        await subscriber.Subscribe(publication.UrlName, CancellationToken.None);
+        await subscriber.Unsubscribe(publication.UrlName, CancellationToken.None);
+
+        var refusal = Assert.IsType<ConflictObjectResult>(
+            await authoring.Delete(orgId, publication.Id, CancellationToken.None));
+
+        Assert.Contains("subscribed to it", (string)refusal.Value!);
+
+        // The advice has to match the blocker: "delete the posts first" sends somebody to look at
+        // an empty list, and there is nothing they could do about a subscriber in any case.
+        Assert.DoesNotContain("Delete the posts first", (string)refusal.Value!);
+    }
+
+    /// <summary>
+    /// A SuperAdmin deletes anything, and the posts and subscriptions go with it.
+    /// </summary>
+    /// <remarks>
+    /// The cascade is asserted rather than assumed. Removing the publication and leaving its posts
+    /// behind would leave rows pointing at nothing — worse than either refusing or deleting.
+    /// </remarks>
+    [Fact]
+    public async Task A_super_admin_deletes_a_full_publication_and_everything_in_it()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var authoring = BuildAuthoring(factory, userId);
+
+        var publication = await CreatePublicationAsync(authoring, orgId, "Field Notes", isPublic: true);
+        var post = await CreatePostAsync(authoring, orgId, publication.Id, "Published piece");
+        await PublishAsync(authoring, orgId, publication.Id, post.Id);
+
+        var reader = MakeUser("reader");
+        await using (var db = factory.CreateDbContext())
+        {
+            db.Users.Add(reader);
+            await db.SaveChangesAsync();
+        }
+        await BuildSubscriber(factory, reader.Id).Subscribe(publication.UrlName, CancellationToken.None);
+
+        // The group itself is refused first, so what follows is the role and not the rule
+        // quietly having stopped applying.
+        Assert.IsType<ConflictObjectResult>(
+            await authoring.Delete(orgId, publication.Id, CancellationToken.None));
+
+        var superAdmin = BuildSuperAdmin(factory, userId);
+        Assert.IsType<NoContentResult>(
+            await superAdmin.Delete(orgId, publication.Id, CancellationToken.None));
+
+        await using (var db = factory.CreateDbContext())
+        {
+            Assert.Equal(0, await db.Publications.CountAsync());
+            Assert.Equal(0, await db.PublicationPosts.CountAsync());
+            Assert.Equal(0, await db.PublicationSubscriptions.CountAsync());
+        }
+    }
+
+    /// <summary>A deleted publication's posts stop answering to a visitor.</summary>
+    [Fact]
+    public async Task A_deleted_publication_is_gone_from_the_public_side()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var authoring = BuildAuthoring(factory, userId);
+        var visitor = BuildVisitor(factory);
+
+        var publication = await CreatePublicationAsync(authoring, orgId, "Field Notes", isPublic: true);
+        var post = await CreatePostAsync(authoring, orgId, publication.Id, "Published piece");
+        await PublishAsync(authoring, orgId, publication.Id, post.Id);
+
+        Assert.IsType<OkObjectResult>(
+            (await visitor.GetPost(publication.UrlName, post.UrlName, CancellationToken.None)).Result);
+
+        await BuildSuperAdmin(factory, userId).Delete(orgId, publication.Id, CancellationToken.None);
+
+        Assert.IsType<NotFoundResult>(
+            (await visitor.Get(publication.UrlName, CancellationToken.None)).Result);
+        Assert.IsType<NotFoundResult>(
+            (await visitor.GetPost(publication.UrlName, post.UrlName, CancellationToken.None)).Result);
+    }
+
+    /// <summary>Delete is 404 with the feature off, like everything else.</summary>
+    [Fact]
+    public async Task Deleting_is_404_when_publications_are_switched_off()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var authoring = BuildAuthoring(factory, userId);
+        var publication = await CreatePublicationAsync(authoring, orgId, "Field Notes", isPublic: false);
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var setting = await db.SiteSettings.FirstAsync(s => s.Key == SiteSettingKeys.FeaturePublications);
+            setting.Value = "false";
+            await db.SaveChangesAsync();
+        }
+
+        Assert.IsType<NotFoundResult>(
+            await authoring.Delete(orgId, publication.Id, CancellationToken.None));
     }
 
     // ── Permissions ──────────────────────────────────────────────────────────
