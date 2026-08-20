@@ -5828,9 +5828,9 @@ The two help screenshots for readers were likewise captured signed out.
 ### Deliberately not built
 
 Billing of any kind. Email digests when a post goes up — the scheduler from phase 6 is the right
-home for it and it is a separate piece of work. Comments. Cross-posting to the feed. Deleting a
-whole publication: posts can be deleted, a publication cannot, which is a real gap and the reason
-the help capture seeds its demo publication idempotently rather than creating one per run.
+home for it and it is a separate piece of work. Comments. Cross-posting to the feed.
+
+Deleting a whole publication was left out here and **added straight afterwards** — see item 118.
 
 ### Tests
 
@@ -5876,3 +5876,45 @@ rather than a list kept in step by hand — so the next bucket added cannot repe
 deleting the new row and watching it fail.
 
 `My Checkouts` also now carries the equipment bucket it always had available and never showed.
+
+---
+
+## 118. Deleting a publication (SHIPPED 2026-08-20)
+
+Shipped with 116 leaving no way to remove a publication at all — only its posts. A group that
+created one by mistake was stuck with it, and the address never moves on rename, so "created by
+mistake" mostly means "wrong title".
+
+### The rule
+
+**A group administrator may delete a completely empty publication. A SuperAdmin may delete any**,
+taking its posts and subscriptions with it.
+
+Two tiers because deleting a publication is two different acts. Removing one with nothing in it
+costs nobody anything. Removing one people have written in and subscribed to destroys work and
+breaks every link somebody shared — not a thing to do by clicking twice.
+
+**A cancelled subscription still blocks the group.** "Empty" is meant to mean nothing ever
+happened here, and somebody having subscribed and left is something happening.
+
+### The one refusal a real user can reach, and why it matters
+
+The group's own listing counts *live* subscribers; the rule counts *every* subscription ever made.
+So a publication with one cancelled subscription looks empty on screen, the button is offered, and
+the server refuses.
+
+That is deliberate, and it is why the refusal is a sentence rather than a status. The alternative
+— hiding the button on a guess the client cannot make correctly — leaves somebody with no way to
+find out why. Five instances of "a server guard the UI discards" are already on record; this one
+is guarded by a test that asserts the message names the blocker, and **the advice follows the
+blocker**: telling somebody to delete the posts first when a subscriber stopped them sends them to
+stare at an empty list.
+
+Verified live from the org administrator's seat — not the SuperAdmin's, which bypasses the rule
+and would have shown nothing.
+
+### Tests
+
+Six, four of them load-bearing and each verified against deliberately broken code: the rule
+disabled, cancelled subscriptions excluded from the count, and the cascade removed so posts would
+have been orphaned.

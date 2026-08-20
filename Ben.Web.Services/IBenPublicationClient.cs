@@ -35,6 +35,17 @@ public interface IBenPublicationClient
         Guid organizationId, Guid publicationId, SavePublicationRequest request,
         CancellationToken token = default);
 
+    /// <summary>
+    /// Deletes a publication, returning the server's refusal when it will not.
+    /// </summary>
+    /// <remarks>
+    /// A group administrator may delete an empty publication; a SuperAdmin may delete any. The
+    /// refusal says which of posts or subscribers is in the way, because that is the half the
+    /// person can do something about.
+    /// </remarks>
+    Task<(bool Deleted, string? Error)> DeletePublicationAsync(
+        Guid organizationId, Guid publicationId, CancellationToken token = default);
+
     /// <summary>Every post in a publication, drafts included, newest first.</summary>
     Task<IReadOnlyList<PublicationPostRecord>> GetOrgPublicationPostsAsync(
         Guid organizationId, Guid publicationId, CancellationToken token = default);

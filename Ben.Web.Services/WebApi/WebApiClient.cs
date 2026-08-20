@@ -158,6 +158,28 @@ public sealed class WebApiClient : IWebApiClient
         return response.IsSuccessStatusCode;
     }
 
+    /// <inheritdoc />
+    public async Task<(bool Deleted, string? Error)> DeleteExpectingReasonAsync(
+        string relativeUrl, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Delete, relativeUrl);
+        using var response = await _httpClient.SendAsync(req, token);
+
+        if (response.IsSuccessStatusCode) return (true, null);
+
+        var body = await response.Content.ReadAsStringAsync(token);
+
+        // Same prose test as SendExpectingReasonAsync: a refusal we wrote is a sentence, a
+        // framework error is a ProblemDetails blob or an HTML page, and showing either to a
+        // person is worse than saying nothing useful.
+        var looksLikeProse = !string.IsNullOrWhiteSpace(body)
+                          && body.Length < 400
+                          && !body.TrimStart().StartsWith('{')
+                          && !body.TrimStart().StartsWith('<');
+
+        return (false, looksLikeProse ? body.Trim('"', ' ', '\n') : null);
+    }
+
     public async Task<bool> PutVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Put, relativeUrl);
