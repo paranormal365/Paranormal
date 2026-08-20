@@ -130,6 +130,13 @@
             yield return new("File permission requests", "/notifications", s.PendingPermissionRequests);
         if (s.SystemMessages.Count > 0)
             yield return new("Messages", "/notifications", s.SystemMessages);
+
+        // Last, because being named on a public post is the least urgent thing here — nothing
+        // waits on your answer. It still needs a row: TotalCount sums every bucket, so without
+        // one the bell counted a mention in its number and then explained everything but that,
+        // which reads as the badge being wrong.
+        if (s.FeedMentions.Count > 0)
+            yield return new("Mentions on the feed", "/feed", s.FeedMentions);
     }
 
     private sealed record Row(string Title, string Destination, NotificationBucket Bucket);
