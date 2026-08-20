@@ -140,7 +140,7 @@ On audio file playback/preview (e.g. `AudioFilePreview.razor`/`WaveSurferPlayer.
 
 ---
 
-## 9. Thoroughly test the Ben.Video component 🟡 In progress (2026-08-06)
+## 9. Thoroughly test the Ben.Video component (recurring practice, not a finishable item — both tracked bugs fixed)
 
 Need a dedicated pass to thoroughly test the Ben.Video.Editor component and verify all aspects of it — not just the specific bugs found incidentally while working on other items (see item #6's follow-up and item #8). Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote), not this one.
 
@@ -2156,7 +2156,13 @@ dev tooling cannot drive an OS file picker). Profile and witness photos were ver
 > The public **CMS member roster** section (`CmsSectionType.MemberRoster`) is still a placeholder
 > that renders "Member roster section." — that belongs to item #80's CMS phases, not here.
 
-## 55. Equipment inventory & checkout tracking (not started)
+## 55. Equipment inventory & checkout tracking (BUILT through phase 6 — header was stale; see item 86 for what was deliberately left)
+
+> **Header correction (2026-08-20):** this read "not started" long after the fact. Personal and
+> organization equipment, sharing, checkouts, photos, FAQs, counters and loan feedback all shipped
+> across phases 1–6; all four phase-6 branches are content-verified in develop. What remains is
+> recorded honestly in item 86 (deliberate leftovers), plus one default decision and Ben's own
+> click-test. The description below is kept as the original spec.
 
 Two related but distinct systems:
 
