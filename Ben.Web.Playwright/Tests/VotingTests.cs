@@ -55,6 +55,34 @@ public class VotingTests : BenTestBase
             .ToBeVisibleAsync();
     }
 
+    /// <summary>
+    /// Item #103's worst case, as a regression test. The home page's vote summaries used to be
+    /// loaded behind a bare IsAuthenticated read during the initial load — and auth resolves
+    /// asynchronously after the circuit connects, so on a HARD navigation (a fresh page load, not
+    /// a client-side nav) a signed-in user's vote widgets never appeared until they paged or
+    /// re-sorted. LoadVoteSummariesAsync now waits for auth to resolve before asking. This test
+    /// signs in, then does a full GotoAsync to the home page — the hard-nav case — and requires
+    /// the per-card vote buttons to appear.
+    ///
+    /// <para>Honesty note: run against the UN-fixed code on this machine, this test PASSES — the
+    /// race resolves in auth's favour locally, so this cannot prove the fix and is kept as a
+    /// smoke test of the flow. The enforcing regression barrier is
+    /// AuthReadyPrerenderGuardTests.Every_reader_of_auth_state_follows_its_resolution, a source
+    /// scan that fails the moment the wait is removed, timing be damned.</para>
+    /// </summary>
+    [Test]
+    public async Task Home_HardNavigationWhileSignedIn_ShowsVoteWidgetsOnCards()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+
+        // GotoAsync is a full page load: prerender, new circuit, auth resolving late — the exact
+        // sequence that raced the old code.
+        await Page.GotoAsync(BaseUrl);
+
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "✓ Confirms" }).First)
+            .ToBeVisibleAsync(new() { Timeout = 15_000 });
+    }
+
     [Test]
     public async Task CaseDetail_CastVote_ShowsRemoveButton()
     {

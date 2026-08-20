@@ -4987,7 +4987,7 @@ one rule decides who sees operator-facing surfaces.
 
 ---
 
-## 102. AudioFilePreview's toast has no element — its errors are shown to nobody (found 2026-08-19, testing pass)
+## 102. AudioFilePreview's toast has no element — its errors are shown to nobody (CLOSED 2026-08-19)
 
 `AudioFilePreview.razor` declares `TelerikNotification? _toast` and routes three messages through
 it, but no `<TelerikNotification @ref="_toast" />` exists in the markup, so `_toast` is null
@@ -4999,7 +4999,7 @@ Found by the compiler (CS0649), which is the same disguise the item #77 phase-6 
 one line of markup; while there, check whether the site's shared toast pattern should be used
 instead of a per-component TelerikNotification.
 
-## 103. Six public components read auth state that may not have resolved yet (found 2026-08-19, testing pass)
+## 103. Six public components read auth state that may not have resolved yet (CLOSED 2026-08-19)
 
 `PublicCaseDiscovery`, `HomeHero`, `CaseVoteWidget`, `EvidenceVoteWidget`, `UploadFileVoteBar` and
 `FileCommentThread` read `UserState.IsAuthenticated` without awaiting `AuthReady` and without
@@ -5013,14 +5013,14 @@ once, never followed. The site-wide pattern (await `AuthReady` in pages; compone
 auth as a parameter or subscribe) should be applied, and the existing AuthReady guard test extended
 to components that inject `IBenUserState`.
 
-## 104. ImageEditorPlayer's opacity slider is fire-and-forget (found 2026-08-19, testing pass)
+## 104. ImageEditorPlayer's opacity slider is fire-and-forget (CLOSED 2026-08-19)
 
 The layer-opacity `<input @oninput>` calls `async Task SetLayerOpacity(...)` without awaiting it
 (CS4014). Failures vanish as unobserved tasks, and a fast drag can interleave
 `setLayerOpacity`/`RefreshLayersAsync` pairs out of order. Make the lambda async and await, or
 funnel through a small debounce like the editor's own sliders use.
 
-## 105. One flaky e2e test: RequestList_AnonymousRedirectsToLogin (found 2026-08-19, testing pass)
+## 105. One flaky e2e test: RequestList_AnonymousRedirectsToLogin (CLOSED 2026-08-19)
 
 The only failure in a 265-test run, and the product is fine — verified live, anonymous
 `/my-requests` lands on `/login` with the sign-in form. The test asserts on `Page.Url` immediately
@@ -5028,7 +5028,7 @@ after `GotoAsync`, but the redirect is client-side after the circuit connects, s
 it. Wait for the URL change (`WaitForURLAsync`) the way the login helper already does. NetworkIdle
 proves nothing here — that lesson is already written down.
 
-## 106. The editor pages don't link their own help doc (found 2026-08-19, testing pass)
+## 106. The editor pages don't link their own help doc (CLOSED 2026-08-19)
 
 `using-the-video-editor.md` shipped with ten screenshots, and no screen links to it:
 `MyVideosPage`, `CaseVideoEditorPage` and `VideoEditorPage` carry no `HelpLink`. The house rule is
@@ -5036,7 +5036,7 @@ docs + HelpLink in the same branch; the doc half landed alone. `getting-started`
 `requesting-an-investigation` are also unlinked but reachable from the help index, which may be
 fine — decide deliberately.
 
-## 107. Nineteen entity controllers are exposed surface with no caller (found 2026-08-19, testing pass)
+## 107. Nineteen entity controllers are exposed surface with no caller (CLOSED 2026-08-19 — decided: they stay, documented)
 
 The plain row controllers — `organization-addresses/emails/phones/links/notes/pages`,
 `user-addresses/emails/phones/links/notes`, `user-messages`, `user-message-tos` and friends — have
@@ -5045,3 +5045,23 @@ zero client references. Their functions are served by the aggregate `MyContactIn
 route-string client and are used. The rows are auth-filtered since security phase A, so this is
 not a hole — it is dead surface that will rot and confuse. Decide: delete them, or mark them as
 the deliberate raw-CRUD tier and say so in the controller docs.
+
+**Decided:** they stay. They are SuperAdmin-locked since Phase A and enumerated by
+`EntityReadControllerBaseAuthorizationTests`, so the surface is closed and guarded; deleting
+thirteen controllers the night before a UAT deploy buys tidiness and risk. The decision and the
+routing map (aggregates for users, admin proxies for operators, these as the raw tier) are
+written on `EntityReadControllerBase` itself, where the next investigator will look first.
+
+**How the rest closed (2026-08-19):** #102 routes through `BenToastService` — the documented
+TelerikNotification replacement the component predated — and the dead field is gone. #103 applies
+`WaitUntilAuthReadyAsync` to all six components (the three vote widgets reload, since their
+summaries are viewer-specific; the comment thread and hero repaint; the discovery grid waits
+inside `LoadVoteSummariesAsync`), plus a seventh nobody flagged: the notification bell, which was
+already correct through `EnsureStartedAsync`. A new source-scan guard —
+`Every_reader_of_auth_state_follows_its_resolution` — fails the build if a reader stops
+following; it was verified to discriminate. An e2e hard-nav test was added too, with an honest
+note: it passes against the un-fixed code on this machine (the race resolves in auth's favour
+locally), so the source scan is the enforcing barrier, not it. #104 awaits the call. #105 rewrites
+both redirect tests to wait on the URL change — the twin test shared the race and had merely been
+lucky. #106 links the doc from all three editor pages, the standalone page from its signed-out
+guard text, the two others from their headings.

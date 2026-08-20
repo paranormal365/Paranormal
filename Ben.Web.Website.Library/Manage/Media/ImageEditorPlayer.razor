@@ -144,7 +144,7 @@
                                         </div>
                                         <div class="d-flex align-items-center gap-1 py-1">
                                             <span class="small text-muted" style="width:40px;">@l.Opacity%</span>
-                                            <input type="range" class="form-range" min="0" max="100" step="5" value="@l.Opacity" @oninput="@(e => { var v = AsRangeValue(e.Value); SetLayerOpacity(l.Id, v); })" />
+                                            <input type="range" class="form-range" min="0" max="100" step="5" value="@l.Opacity" @oninput="@(async e => { var v = AsRangeValue(e.Value); await SetLayerOpacity(l.Id, v); })" />
                                         </div>
                                     }
                                 </div>

@@ -186,6 +186,19 @@
 </style>
 
 @code {
+    // Item #103: the hero's call-to-action row is auth-gated in markup, and auth resolves
+    // asynchronously after the circuit connects — without this, a signed-in user hard-navigating
+    // to the home page kept seeing the signed-out buttons until something else re-rendered.
+    protected override async Task OnInitializedAsync()
+    {
+        var before = UserState.IsAuthenticated;
+        if (await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)
+            && UserState.IsAuthenticated != before)
+        {
+            StateHasChanged();
+        }
+    }
+
     private string  _query         = "";
     private string  _searchedQuery = "";
     private bool    _searching;

@@ -76,7 +76,22 @@
     private string? _error;
     private string? _actionError;
 
-    protected override async Task OnParametersSetAsync()
+    // Item #103 — same reasoning as CaseVoteWidget: the summary is viewer-specific, and auth
+    // can resolve after the first load on a hard navigation. Reload when it lands late.
+    protected override async Task OnInitializedAsync()
+    {
+        var before = UserState.IsAuthenticated;
+        if (await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)
+            && UserState.IsAuthenticated != before)
+        {
+            await LoadSummaryAsync();
+            StateHasChanged();
+        }
+    }
+
+    protected override Task OnParametersSetAsync() => LoadSummaryAsync();
+
+    private async Task LoadSummaryAsync()
     {
         _loading = true;
         try { _summary = await AdminClient.GetEvidenceVoteSummaryAsync(UploadFileId); }
