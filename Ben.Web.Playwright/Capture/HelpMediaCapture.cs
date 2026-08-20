@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Microsoft.Playwright;
+using System.Net.Http.Json;
 using NUnit.Framework;
 
 namespace Ben.Web.Playwright.Capture;
@@ -241,6 +242,242 @@ public sealed class HelpMediaCapture : BenTestBase
 
         await GoAsync("/help");
         await ShootAsync("getting-started", "help-index.png");
+    }
+
+    /// <summary>
+    /// The feed, its tag pages, and the moderation queue.
+    /// </summary>
+    /// <remarks>
+    /// <para>The feed is off by default, so this turns it on, captures, and puts it back exactly
+    /// as it was found. A capture run that left a feature switched on would change the site for
+    /// everything that ran afterwards.</para>
+    ///
+    /// <para>It also writes a post, because a screenshot of an empty feed teaches nobody anything —
+    /// and the post carries a mention and a tag, since those becoming links is most of what the
+    /// document is explaining.</para>
+    /// </remarks>
+    [Test]
+    [Description("the-feed and moderating-the-feed: posting, tags, and the moderation queue.")]
+    public async Task Capture_TheFeed()
+    {
+        var wasOn = await FeedFlagAsync();
+        await SetFeedFlagAsync(true);
+
+        try
+        {
+            // Clear whatever previous test runs left behind. A help screenshot full of posts
+            // reading "r2c31a48c403 a post to report" teaches nobody anything and ships junk into
+            // user-facing documentation — which is exactly what the first attempt at this
+            // captured.
+            await ClearFeedForCaptureAsync();
+
+            // James writes the post, so that Sarah — capturing below — is not its author and the
+            // Follow and Report controls are visible in the shot.
+            await LoginAsync("james.thornton@benco.dev", "J@mes!Thornton26");
+            await GoToFeedForCaptureAsync();
+            await ComposeForCaptureAsync(
+                "Clear #EVP in the upstairs hall around 2am — three separate responses to direct "
+                + "questions. Full audio going up tomorrow. @sarahmitchell was on the recorder.");
+
+            await LogoutAsync();
+            await LoginAsync(UserEmail, UserPassword);
+            await GoToFeedForCaptureAsync();
+            await ShootAsync("the-feed", "feed.png", proves: "Clear");
+
+            await Page.Locator(".bv-feed-tag").First.ClickAsync();
+            await ShootAsync("the-feed", "tag-page.png", proves: "Clear");
+
+            // Report it, so the moderation queue below has something in it.
+            await GoToFeedForCaptureAsync();
+            var post = Page.Locator(".bv-feed-post").First;
+            var report = post.GetByRole(AriaRole.Button, new() { Name = "Report" });
+            if (await report.CountAsync() > 0)
+            {
+                await report.ClickAsync();
+                await Expect(post.GetByText("Reported")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+            }
+
+            await LogoutAsync();
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync("/admin/feed-reports");
+            await ShootAsync("moderating-the-feed", "queue.png", gated: true, proves: "Reported by");
+        }
+        finally
+        {
+            await SetFeedFlagAsync(wasOn);
+        }
+    }
+
+    /// <summary>
+    /// Signing up, two-step sign-in, and the notifications page.
+    /// </summary>
+    /// <remarks>
+    /// The two-step shot is of the enrolment step, which is the one worth a picture: a QR code and
+    /// a key beside it is far quicker to recognise than to describe. It leaves 2FA switched off —
+    /// the shot is taken before the code is entered, so nothing is enrolled.
+    /// </remarks>
+    [Test]
+    [Description("getting-started: signing up, two-step sign-in, and notifications.")]
+    public async Task Capture_Accounts()
+    {
+        await LogoutAsync();
+        await GoAsync("/signup");
+        await ShootAsync("getting-started", "signup.png", proves: "Your @name");
+
+        await LoginAsync(UserEmail, UserPassword);
+
+        await GoAsync("/profile");
+        await Page.GetByRole(AriaRole.Tab, new() { Name = "Security" }).ClickAsync();
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Turn on two-step sign-in" }).ClickAsync();
+        await Expect(Page.Locator(".k-qrcode")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await ShootAsync("getting-started", "two-step.png", proves: "Scan this code");
+
+        await GoAsync("/notifications");
+        await ShootAsync("getting-started", "notifications.png", proves: "Waiting on you");
+    }
+
+    // ── Feed capture helpers ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Hides every post already in the feed, so a capture starts from an empty one.
+    /// </summary>
+    /// <remarks>
+    /// <para>Done through the real report-and-hide flow rather than by deleting rows, because that
+    /// is the only route there is — and it is the same one an administrator uses, so this cannot
+    /// drift from what the product actually does.</para>
+    ///
+    /// <para>Hidden rather than deleted also means nothing is destroyed: the posts are still there
+    /// for anybody who looks, which is the point of hiding rather than deleting in the first place.
+    /// </para>
+    /// </remarks>
+    private async Task ClearFeedForCaptureAsync()
+    {
+        var token = await AdminTokenForCaptureAsync();
+        if (token is null) return;
+
+        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl) };
+        http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var page = await http.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/feed");
+        if (!page.TryGetProperty("posts", out var posts)) return;
+
+        foreach (var post in posts.EnumerateArray())
+        {
+            var id = post.GetProperty("id").GetString();
+
+            // The SuperAdmin cannot report their own post; skip those rather than fail the run.
+            if (post.GetProperty("isOwnPost").GetBoolean()) continue;
+
+            using var reported = await http.PostAsJsonAsync(
+                $"/api/feed/posts/{id}/report", new { reason = "clearing the feed for a help capture" });
+
+            var queue = await http.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/admin/feed/reports");
+            foreach (var report in queue.EnumerateArray())
+            {
+                if (report.GetProperty("orgMessageId").GetString() != id) continue;
+
+                using var _ = await http.PostAsJsonAsync(
+                    $"/api/admin/feed/reports/{report.GetProperty("id").GetString()}/resolve",
+                    new { outcome = 2 });   // Hidden
+                break;
+            }
+        }
+    }
+
+    private async Task GoToFeedForCaptureAsync()
+    {
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            await GoAsync("/feed");
+            if (await Page.Locator("#feed-composer").CountAsync() > 0) return;
+            await Task.Delay(3000);
+        }
+
+        Assert.Fail("The feed page never appeared — is features.public-feed on?");
+    }
+
+    /// <remarks>
+    /// Retried for the reason every typed input here is: a Blazor Server page renders its inputs
+    /// before the circuit connects, and a value typed in that window is erased by the first
+    /// interactive render rather than merely ignored. The Post button is disabled until the body
+    /// reaches the server, which makes it the signal that the typing took.
+    /// </remarks>
+    private async Task ComposeForCaptureAsync(string body)
+    {
+        var box = Page.Locator("#feed-composer");
+        var post = Page.GetByRole(AriaRole.Button, new() { Name = "Post", Exact = true });
+
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            await box.FillAsync(body);
+            try
+            {
+                await Expect(post).ToBeEnabledAsync(new() { Timeout = 1_500 });
+                await post.ClickAsync();
+                await Expect(Page.Locator(".bv-feed-post").First)
+                    .ToBeVisibleAsync(new() { Timeout = 15_000 });
+                return;
+            }
+            catch (Exception)
+            {
+                // Circuit not live yet.
+            }
+        }
+
+        Assert.Fail("The composer never accepted the post.");
+    }
+
+    private async Task<bool> FeedFlagAsync()
+    {
+        var token = await AdminTokenForCaptureAsync();
+        if (token is null) return false;
+
+        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl) };
+        http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var settings = await http.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/admin/site-settings");
+        foreach (var setting in settings.EnumerateArray())
+        {
+            if (setting.GetProperty("key").GetString() != "features.public-feed") continue;
+            return setting.TryGetProperty("value", out var value)
+                && string.Equals(value.GetString(), "true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
+    private async Task SetFeedFlagAsync(bool on)
+    {
+        var token = await AdminTokenForCaptureAsync();
+        if (token is null) return;
+
+        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl) };
+        http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        using var _ = await http.PutAsJsonAsync(
+            "/api/admin/site-settings/features.public-feed", new { value = on ? "true" : "false" });
+    }
+
+    private static async Task<string?> AdminTokenForCaptureAsync()
+    {
+        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl) };
+
+        try
+        {
+            using var response = await http.PostAsJsonAsync("/login",
+                new { email = SuperAdminEmail, password = SuperAdminPassword });
+            if (!response.IsSuccessStatusCode) return null;
+
+            var json = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+            return json.GetProperty("accessToken").GetString();
+        }
+        catch (HttpRequestException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

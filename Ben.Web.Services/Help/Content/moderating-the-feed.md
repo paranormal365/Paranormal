@@ -21,6 +21,9 @@ Hiding is your decision, and your name is recorded against it.
 
 ## Working the queue
 
+![The reported-posts queue](help-media:moderating-the-feed/queue.png)
+*Each row shows the post as its readers saw it, who objected, and why.*
+
 Reports are listed **oldest first**. A queue worked newest-first leaves the oldest complaint
 unanswered for ever, and that is the one somebody is waiting on.
 
