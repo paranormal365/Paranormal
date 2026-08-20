@@ -71,6 +71,13 @@ public interface IBenPlatformClient
     /// <summary>The site's published contact details, for the contact page. Anonymous.</summary>
     Task<SiteContactInfo?> GetSiteContactAsync(CancellationToken token = default);
 
+    /// <summary>
+    /// Which sections of the site are switched on. Anonymous, because the navigation and the
+    /// route guards need the answer before anyone has signed in. Read through
+    /// <c>SiteFeaturesProvider</c> rather than called directly — it caches.
+    /// </summary>
+    Task<SiteFeaturesInfo?> GetSiteFeaturesAsync(CancellationToken token = default);
+
     /// <summary>Issued when the contact form renders; proves later how long it was on screen.</summary>
     Task<SupportFormTokenResponse?> GetSupportFormTokenAsync(CancellationToken token = default);
 

@@ -1,0 +1,57 @@
+@using Ben.Web.Services
+@inject SiteFeaturesProvider Features
+
+@*
+    Wraps a page whose whole section a SuperAdmin can switch off.
+
+    Renders its children when the feature is on, and the ordinary "page not found" body when it is
+    not. Not a redirect and not an "unavailable" message, on purpose:
+
+      • A redirect would still have answered the URL, and it tells the visitor that something is
+        there but closed — which is more than a switched-off section should say.
+      • A bespoke "this feature is disabled" screen leaks the site's configuration to anyone who
+        guesses a path, and invites "when will it be back?" mail about a section that may never
+        return.
+
+    A section that is off should look exactly like a section that was never built, which is what
+    NotFoundContent already says.
+
+    This runs during the server render, so the URL genuinely stops working rather than the page
+    drawing and then hiding itself. Hiding a navigation link while its address still answers is
+    the failure this codebase keeps re-learning; the gate and the nav read the same provider so
+    they cannot disagree.
+*@
+
+@if (_on)
+{
+    @ChildContent
+}
+else
+{
+    @*
+        The same words as the site's NotFoundContent, deliberately duplicated: that component
+        lives in Ben.Web.Website, which references this library and not the other way round, so
+        it cannot be called from here. Two short paragraphs are a smaller price than inverting
+        the project dependency — but they must stay in step, and a test asserts they do.
+    *@
+    <PageTitle>Page not found</PageTitle>
+    <div class="text-center py-5">
+        <h1 class="display-6">Page not found</h1>
+        <p class="text-muted mb-4">There is nothing at this address.</p>
+        <a class="btn btn-primary" href="/">Back to the home page</a>
+    </div>
+}
+
+@code {
+    /// <summary>The feature key from <see cref="SiteFeatures"/>.</summary>
+    [Parameter, EditorRequired] public string Flag { get; set; } = default!;
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool _on = true;
+
+    // Read once per render pass rather than per use: the provider is cheap, but a page that
+    // consults it from markup would ask again on every re-render for an answer that cannot
+    // change mid-render.
+    protected override void OnParametersSet() => _on = Features.IsOn(Flag);
+}

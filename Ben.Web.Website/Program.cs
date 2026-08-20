@@ -100,6 +100,13 @@ builder.Services.AddScoped<Ben.Web.Website.Library.Kit.BenToastService>();
 // Help documents are embedded, immutable between deployments and identical for every reader, so
 // one parse for the whole process is right. Who may *see* which document is per-circuit, and lives
 // in the resolver instead.
+// Singleton: which sections are on is a property of the site, not of the visitor, so one
+// snapshot serves every circuit. It refreshes itself behind readers and falls back to the
+// declared defaults, so the navigation and the route guards can answer synchronously during the
+// first render — which is what lets a switched-off section refuse its URL instead of drawing and
+// then hiding itself.
+builder.Services.AddSingleton<SiteFeaturesProvider>();
+
 builder.Services.AddSingleton<HelpContentService>();
 builder.Services.AddScoped<HelpViewerResolver>();
 

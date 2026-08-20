@@ -4,6 +4,7 @@
 @inject IWebApiAuthService AuthService
 @inject NavigationManager NavManager
 @inject NotificationState Notifications
+@inject SiteFeaturesProvider Features
 
 @*
     The template's sidebar, driven by data instead of hand-maintained markup.
@@ -126,8 +127,13 @@
                 // itself handles sending them through sign-in.
                 new NavItem("Request Investigation", "file-plus", "/my-requests/new"),
                 new NavItem("Join a Group", "map-pin", "/find"),
-                new NavItem("Equipment", "tool", "/equipment-catalog"),
             };
+
+            // Sections a SuperAdmin can switch off. The links go when the feature does — and the
+            // pages themselves refuse the URL through the same provider, so a hidden link is
+            // never the only thing standing between a visitor and a disabled section.
+            if (Features.IsOn(SiteFeatures.Equipment))
+                main.Add(new NavItem("Equipment", "tool", "/equipment-catalog"));
 
             if (IsAuthenticated && !IsImpersonating)
             {
@@ -146,14 +152,20 @@
                 main.Add(new NavItem("My Investigations", "calendar",    "/my-investigations", s.InvestigationInvites,
                                      badgeNoun: "investigation invitations"));
                 main.Add(new NavItem("My Requests",       "inbox",       "/my-requests"));
-                main.Add(new NavItem("My Videos",         "film",        "/my-videos"));
-                main.Add(new NavItem("My Equipment",      "tool",        "/my-equipment"));
-                main.Add(new NavItem("My Checkouts",      "calendar",    "/my-checkouts"));
-                main.Add(new NavItem("Gear Questions",    "help-circle", "/my-equipment/questions"));
+                if (Features.IsOn(SiteFeatures.VideoEditor))
+                    main.Add(new NavItem("My Videos",     "film",        "/my-videos"));
+                if (Features.IsOn(SiteFeatures.Equipment))
+                    main.Add(new NavItem("My Equipment",  "tool",        "/my-equipment"));
+                if (Features.IsOn(SiteFeatures.Equipment))
+                {
+                    main.Add(new NavItem("My Checkouts",  "calendar",    "/my-checkouts"));
+                    main.Add(new NavItem("Gear Questions","help-circle", "/my-equipment/questions"));
+                }
                 main.Add(new NavItem("Organizations",     "globe",       "/organizations", orgSide,
                                      badgeNoun: "unread group messages"));
                 main.Add(new NavItem("Upload Files",      "upload",      "/upload-files"));
-                main.Add(new NavItem("Media Library",     "image",       "/media-library"));
+                if (Features.IsOn(SiteFeatures.MediaLibrary))
+                    main.Add(new NavItem("Media Library", "image",       "/media-library"));
             }
 
             // No Login entry here: the header carries a Sign In control on every page, and a

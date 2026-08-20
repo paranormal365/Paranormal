@@ -13,124 +13,126 @@
    about a loan, and it carries two upload columns plus the whole renewal conversation. A modal
    sized to that content stops scrolling before it stops growing. *@
 
-<PageTitle>@(Loan?.ItemDisplayName ?? "Loan")</PageTitle>
+<FeatureGate Flag="@SiteFeatures.Equipment">
+    <PageTitle>@(Loan?.ItemDisplayName ?? "Loan")</PageTitle>
 
-<div class="container-fluid py-3" style="max-width:900px;">
-    <div class="mb-3">
-        <a href="/my-checkouts" class="text-decoration-none small">&larr; Back to my checkouts</a>
-    </div>
+    <div class="container-fluid py-3" style="max-width:900px;">
+        <div class="mb-3">
+            <a href="/my-checkouts" class="text-decoration-none small">&larr; Back to my checkouts</a>
+        </div>
 
-    <h3 class="mb-3">@(Loan?.ItemDisplayName ?? "Loan")<HelpLink Slug="borrowing-equipment" Anchor="photos-of-its-condition" /></h3>
+        <h3 class="mb-3">@(Loan?.ItemDisplayName ?? "Loan")<HelpLink Slug="borrowing-equipment" Anchor="photos-of-its-condition" /></h3>
 
-        @if (_loading)
-        {
-            <BenLoaderOverlay Visible="true" Text="Loading this loan…" />
-        }
-        else if (Loan is null)
-        {
-            <p class="text-secondary mb-0">That loan could not be found, or it isn't yours to see.</p>
-        }
-        else
-        {
-            @if (_error is not null)
+            @if (_loading)
             {
-                <div class="alert alert-danger py-2">@_error</div>
+                <BenLoaderOverlay Visible="true" Text="Loading this loan…" />
             }
-
-            <div class="text-secondary small mb-3">
-                @Loan.BrandName · @Loan.ModelName
-                @if (Loan.BorrowedForOrganizationName is not null)
-                {
-                    <span> · borrowed for @Loan.BorrowedForOrganizationName</span>
-                }
-                @if (Loan.DateDue is not null)
-                {
-                    <span class="@(Loan.IsOverdue ? "text-danger fw-semibold" : "")">
-                        · due @Loan.DateDue.Value.ToDisplayDate()@(Loan.IsOverdue ? " (overdue)" : "")
-                    </span>
-                }
-            </div>
-
-            @* Only whoever is deciding this request sees it, and the borrower never does — the
-               endpoint refuses them, so the panel is absent rather than hidden. *@
-            <BorrowerHistoryPanel CheckoutId="@Loan.Id" />
-
-            <h6 class="mb-2">Condition</h6>
-            <CheckoutConditionPhotos Loan="@Loan" OnChanged="LoadAsync" />
-
-            <LoanFeedbackForm CheckoutId="@Loan.Id" OnSubmitted="LoadAsync" />
-
-            <hr />
-
-            <h6 class="mb-2">More time</h6>
-
-            @* Only the borrower can ask, and only while they actually have the gear. *@
-            @if (Loan.Flags.IsBorrower && Loan.Status == EquipmentCheckoutStatus.CheckedOut
-                 && !_renewals.Any(r => r.Status == EquipmentRenewalStatus.Requested))
+            else if (Loan is null)
             {
-                <div class="row g-2 align-items-end mb-3">
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold mb-1">Keep it until</label>
-                        <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_requestedDate" Width="100%" />
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold mb-1" for="equipmentcheckoutdetail-why-optional-e5e7">Why (optional)</label>
-                        <input id="equipmentcheckoutdetail-why-optional-e5e7" class="form-control form-control-sm" maxlength="1000" value="@_requestNotes"
-                               @oninput="@(e => _requestNotes = e.Value?.ToString() ?? string.Empty)" />
-                    </div>
-                    <div class="col-md-2">
-                        <button type="button" class="btn btn-primary btn-sm" @onclick="RequestRenewalAsync" disabled="@(!(!_busy && _requestedDate is not null))">Ask</button>
-                    </div>
-                </div>
-            }
-
-            @if (_renewals.Count == 0)
-            {
-                <p class="text-secondary small">No requests for more time.</p>
+                <p class="text-secondary mb-0">That loan could not be found, or it isn't yours to see.</p>
             }
             else
             {
-                <ul class="list-unstyled mb-0">
-                    @foreach (var renewal in _renewals)
+                @if (_error is not null)
+                {
+                    <div class="alert alert-danger py-2">@_error</div>
+                }
+
+                <div class="text-secondary small mb-3">
+                    @Loan.BrandName · @Loan.ModelName
+                    @if (Loan.BorrowedForOrganizationName is not null)
                     {
-                        <li class="border-bottom py-2">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <span class="small">
-                                    Asked to keep it until <strong>@renewal.RequestedDateDue.ToDisplayDate()</strong>
-                                    @if (!string.IsNullOrWhiteSpace(renewal.RequestNotes))
-                                    {
-                                        <span class="d-block text-secondary">“@renewal.RequestNotes”</span>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(renewal.ReviewNotes))
-                                    {
-                                        <span class="d-block text-secondary">
-                                            Reply from @(renewal.ReviewedByDisplayName ?? "the lender"): @renewal.ReviewNotes
-                                        </span>
-                                    }
-                                </span>
-                                <span class="badge @RenewalClass(renewal.Status)">@RenewalLabel(renewal.Status)</span>
-                            </div>
-
-                            @if (renewal.CanReview)
-                            {
-                                <div class="mt-2">
-                                    <input class="form-control form-control-sm mb-2" maxlength="1000"
-                                           placeholder="Reason (required to refuse)"
-                                           value="@GetReviewNote(renewal.Id)"
-                                           @oninput="@(e => _reviewNotes[renewal.Id] = e.Value?.ToString() ?? string.Empty)" />
-                                    <div class="d-flex gap-2">
-                                        <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ReviewAsync(renewal, true))" disabled="@(!(!_busy))">Grant</button>
-                                        <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => ReviewAsync(renewal, false))" disabled="@(!(!_busy && !string.IsNullOrWhiteSpace(GetReviewNote(renewal.Id))))">Refuse</button>
-                                    </div>
-                                </div>
-                            }
-                        </li>
+                        <span> · borrowed for @Loan.BorrowedForOrganizationName</span>
                     }
-                </ul>
-            }
-        }
+                    @if (Loan.DateDue is not null)
+                    {
+                        <span class="@(Loan.IsOverdue ? "text-danger fw-semibold" : "")">
+                            · due @Loan.DateDue.Value.ToDisplayDate()@(Loan.IsOverdue ? " (overdue)" : "")
+                        </span>
+                    }
+                </div>
 
-</div>
+                @* Only whoever is deciding this request sees it, and the borrower never does — the
+                   endpoint refuses them, so the panel is absent rather than hidden. *@
+                <BorrowerHistoryPanel CheckoutId="@Loan.Id" />
+
+                <h6 class="mb-2">Condition</h6>
+                <CheckoutConditionPhotos Loan="@Loan" OnChanged="LoadAsync" />
+
+                <LoanFeedbackForm CheckoutId="@Loan.Id" OnSubmitted="LoadAsync" />
+
+                <hr />
+
+                <h6 class="mb-2">More time</h6>
+
+                @* Only the borrower can ask, and only while they actually have the gear. *@
+                @if (Loan.Flags.IsBorrower && Loan.Status == EquipmentCheckoutStatus.CheckedOut
+                     && !_renewals.Any(r => r.Status == EquipmentRenewalStatus.Requested))
+                {
+                    <div class="row g-2 align-items-end mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold mb-1">Keep it until</label>
+                            <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_requestedDate" Width="100%" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold mb-1" for="equipmentcheckoutdetail-why-optional-e5e7">Why (optional)</label>
+                            <input id="equipmentcheckoutdetail-why-optional-e5e7" class="form-control form-control-sm" maxlength="1000" value="@_requestNotes"
+                                   @oninput="@(e => _requestNotes = e.Value?.ToString() ?? string.Empty)" />
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-primary btn-sm" @onclick="RequestRenewalAsync" disabled="@(!(!_busy && _requestedDate is not null))">Ask</button>
+                        </div>
+                    </div>
+                }
+
+                @if (_renewals.Count == 0)
+                {
+                    <p class="text-secondary small">No requests for more time.</p>
+                }
+                else
+                {
+                    <ul class="list-unstyled mb-0">
+                        @foreach (var renewal in _renewals)
+                        {
+                            <li class="border-bottom py-2">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <span class="small">
+                                        Asked to keep it until <strong>@renewal.RequestedDateDue.ToDisplayDate()</strong>
+                                        @if (!string.IsNullOrWhiteSpace(renewal.RequestNotes))
+                                        {
+                                            <span class="d-block text-secondary">“@renewal.RequestNotes”</span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(renewal.ReviewNotes))
+                                        {
+                                            <span class="d-block text-secondary">
+                                                Reply from @(renewal.ReviewedByDisplayName ?? "the lender"): @renewal.ReviewNotes
+                                            </span>
+                                        }
+                                    </span>
+                                    <span class="badge @RenewalClass(renewal.Status)">@RenewalLabel(renewal.Status)</span>
+                                </div>
+
+                                @if (renewal.CanReview)
+                                {
+                                    <div class="mt-2">
+                                        <input class="form-control form-control-sm mb-2" maxlength="1000"
+                                               placeholder="Reason (required to refuse)"
+                                               value="@GetReviewNote(renewal.Id)"
+                                               @oninput="@(e => _reviewNotes[renewal.Id] = e.Value?.ToString() ?? string.Empty)" />
+                                        <div class="d-flex gap-2">
+                                            <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ReviewAsync(renewal, true))" disabled="@(!(!_busy))">Grant</button>
+                                            <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => ReviewAsync(renewal, false))" disabled="@(!(!_busy && !string.IsNullOrWhiteSpace(GetReviewNote(renewal.Id))))">Refuse</button>
+                                        </div>
+                                    </div>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+
+    </div>
+</FeatureGate>
 
 @code {
     [Parameter] public Guid CheckoutId { get; set; }

@@ -5,116 +5,118 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 
-@if (!EmbeddedMode) { <PageTitle>Messages</PageTitle> }
+<FeatureGate Flag="@SiteFeatures.OrgMessaging">
+    @if (!EmbeddedMode) { <PageTitle>Messages</PageTitle> }
 
-<div class="container-fluid py-3" style="max-width:900px;">
-    @if (!EmbeddedMode)
-    {
-        <div class="d-flex align-items-center justify-content-between mb-3">
-            <h3 class="mb-0">Messages</h3>
-            <button type="button" class="btn btn-primary" @onclick="OpenCompose"><BenIcon Name="edit-2" Class="me-1" />Compose</button>
-        </div>
-    }
-
-    @if (_loadError is not null)
-    {
-        <div class="alert alert-danger" role="alert">@_loadError</div>
-    }
-
-    @* ── Tab strip: Inbox / Sent ──────────────────────────────────────────── *@
-    <BenTabs ActiveId="@_activeTabId"
-             ActiveIdChanged="@((string id) => { _activeTabId = id; _ = LoadActiveTabAsync(); })">
-
-        <BenTab Title="Inbox" Id="inbox">
-            <MessageList Messages="@_inbox" OnOpen="OpenMessage" />
-        </BenTab>
-
-        <BenTab Title="Sent" Id="sent">
-            <MessageList Messages="@_sent" OnOpen="OpenMessage" />
-        </BenTab>
-
-    </BenTabs>
-</div>
-
-@* ── Message view dialog ──────────────────────────────────────────────────── *@
-<BenModal @bind-Visible="@_showMessage" Title="@(_openMessage?.Subject ?? "Message")" Size="lg">
-    <ChildContent>
-        @if (_openMessage is not null)
+    <div class="container-fluid py-3" style="max-width:900px;">
+        @if (!EmbeddedMode)
         {
-            <div class="mb-2 d-flex align-items-center gap-2 text-secondary small">
-                <strong>From:</strong> @(_openMessage.AuthorDisplayName ?? "Unknown")
-                <span>·</span>
-                @_openMessage.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
-                @if (_openMessage.IsEncrypted)
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <h3 class="mb-0">Messages</h3>
+                <button type="button" class="btn btn-primary" @onclick="OpenCompose"><BenIcon Name="edit-2" Class="me-1" />Compose</button>
+            </div>
+        }
+
+        @if (_loadError is not null)
+        {
+            <div class="alert alert-danger" role="alert">@_loadError</div>
+        }
+
+        @* ── Tab strip: Inbox / Sent ──────────────────────────────────────────── *@
+        <BenTabs ActiveId="@_activeTabId"
+                 ActiveIdChanged="@((string id) => { _activeTabId = id; _ = LoadActiveTabAsync(); })">
+
+            <BenTab Title="Inbox" Id="inbox">
+                <MessageList Messages="@_inbox" OnOpen="OpenMessage" />
+            </BenTab>
+
+            <BenTab Title="Sent" Id="sent">
+                <MessageList Messages="@_sent" OnOpen="OpenMessage" />
+            </BenTab>
+
+        </BenTabs>
+    </div>
+
+    @* ── Message view dialog ──────────────────────────────────────────────────── *@
+    <BenModal @bind-Visible="@_showMessage" Title="@(_openMessage?.Subject ?? "Message")" Size="lg">
+        <ChildContent>
+            @if (_openMessage is not null)
+            {
+                <div class="mb-2 d-flex align-items-center gap-2 text-secondary small">
+                    <strong>From:</strong> @(_openMessage.AuthorDisplayName ?? "Unknown")
+                    <span>·</span>
+                    @_openMessage.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                    @if (_openMessage.IsEncrypted)
+                    {
+                        <span class="badge bg-secondary ms-1">🔒 Encrypted</span>
+                    }
+                    <span class="ms-auto text-secondary">
+                        @_openMessage.ViewCount views
+                    </span>
+                </div>
+                <div class="border-top pt-3">
+                    @((MarkupString)_openMessage.Body)
+                </div>
+                @if (_openMessage.ReplyCount > 0)
                 {
-                    <span class="badge bg-secondary ms-1">🔒 Encrypted</span>
+                    <div class="mt-3 text-secondary small">@_openMessage.ReplyCount replies</div>
                 }
-                <span class="ms-auto text-secondary">
-                    @_openMessage.ViewCount views
-                </span>
-            </div>
-            <div class="border-top pt-3">
-                @((MarkupString)_openMessage.Body)
-            </div>
-            @if (_openMessage.ReplyCount > 0)
-            {
-                <div class="mt-3 text-secondary small">@_openMessage.ReplyCount replies</div>
             }
-        }
-            <div class="dialog-footer-actions">
-            <span class="dialog-footer-spacer"></span>
+                <div class="dialog-footer-actions">
+                <span class="dialog-footer-spacer"></span>
 
-            <button type="button" class="btn btn-secondary" @onclick="@(() => _showMessage = false)">Close</button>
-            <button type="button" class="btn btn-secondary" @onclick="OpenReply"><BenIcon Name="rotate-ccw" Class="me-1" />Reply</button>
-        </div>
-    </ChildContent>
-</BenModal>
-
-@* ── Compose / Reply dialog ───────────────────────────────────────────────── *@
-<BenModal @bind-Visible="@_showCompose" Title="@(_replyTo is not null ? "Reply" : "New Message")" Size="lg">
-    <ChildContent>
-        <div class="row g-3">
-            @if (_replyTo is null)
-            {
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Channel</label>
-                    <BenSelect Data="@_channelOptions" @bind-Value="@_composeChannel" TextField="@nameof(ChannelOption.Label)" ValueField="@nameof(ChannelOption.Value)" Width="100%" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold" for="orgmessages-subject-optional-bdfe">Subject (optional)</label>
-                    <input id="orgmessages-subject-optional-bdfe" type="text" class="form-control" @bind="@_composeSubject" @bind:event="oninput" />
-                </div>
-            }
-            else
-            {
-                <div class="col-12 text-secondary small">
-                    Replying to: <strong>@(_replyTo.Subject ?? "message")</strong> from @_replyTo.AuthorDisplayName
-                </div>
-            }
-            <div class="col-12">
-                <label class="form-label fw-semibold">Message <span class="text-danger">*</span></label>
-                <TelerikEditor @bind-Value="@_composeBody" Height="200px"
-                               Tools="@_editorTools" />
+                <button type="button" class="btn btn-secondary" @onclick="@(() => _showMessage = false)">Close</button>
+                <button type="button" class="btn btn-secondary" @onclick="OpenReply"><BenIcon Name="rotate-ccw" Class="me-1" />Reply</button>
             </div>
-            <div class="col-12 d-flex align-items-center gap-2">
-                <input type="checkbox" class="form-check-input" id="encrypted" @bind="@_composeEncrypted" />
-                <label for="encrypted" class="form-label mb-0">Mark as encrypted / private</label>
-            </div>
-        </div>
-        @if (_composeError is not null)
-        {
-            <div class="alert alert-danger mt-3 mb-0">@_composeError</div>
-        }
-            <div class="dialog-footer-actions">
-            <span class="dialog-footer-spacer"></span>
+        </ChildContent>
+    </BenModal>
 
-            <button type="button" class="btn btn-secondary" @onclick="@(() => _showCompose = false)">Cancel</button>
-            <button type="button" class="btn btn-primary" @onclick="Send" disabled="@(!(!_isBusy && !string.IsNullOrWhiteSpace(_composeBody)))"><BenIcon Name="mail" Class="me-1" />
-                @(_isBusy ? "Sending…" : "Send")
-            </button>
-        </div>
-    </ChildContent>
-</BenModal>
+    @* ── Compose / Reply dialog ───────────────────────────────────────────────── *@
+    <BenModal @bind-Visible="@_showCompose" Title="@(_replyTo is not null ? "Reply" : "New Message")" Size="lg">
+        <ChildContent>
+            <div class="row g-3">
+                @if (_replyTo is null)
+                {
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Channel</label>
+                        <BenSelect Data="@_channelOptions" @bind-Value="@_composeChannel" TextField="@nameof(ChannelOption.Label)" ValueField="@nameof(ChannelOption.Value)" Width="100%" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold" for="orgmessages-subject-optional-bdfe">Subject (optional)</label>
+                        <input id="orgmessages-subject-optional-bdfe" type="text" class="form-control" @bind="@_composeSubject" @bind:event="oninput" />
+                    </div>
+                }
+                else
+                {
+                    <div class="col-12 text-secondary small">
+                        Replying to: <strong>@(_replyTo.Subject ?? "message")</strong> from @_replyTo.AuthorDisplayName
+                    </div>
+                }
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Message <span class="text-danger">*</span></label>
+                    <TelerikEditor @bind-Value="@_composeBody" Height="200px"
+                                   Tools="@_editorTools" />
+                </div>
+                <div class="col-12 d-flex align-items-center gap-2">
+                    <input type="checkbox" class="form-check-input" id="encrypted" @bind="@_composeEncrypted" />
+                    <label for="encrypted" class="form-label mb-0">Mark as encrypted / private</label>
+                </div>
+            </div>
+            @if (_composeError is not null)
+            {
+                <div class="alert alert-danger mt-3 mb-0">@_composeError</div>
+            }
+                <div class="dialog-footer-actions">
+                <span class="dialog-footer-spacer"></span>
+
+                <button type="button" class="btn btn-secondary" @onclick="@(() => _showCompose = false)">Cancel</button>
+                <button type="button" class="btn btn-primary" @onclick="Send" disabled="@(!(!_isBusy && !string.IsNullOrWhiteSpace(_composeBody)))"><BenIcon Name="mail" Class="me-1" />
+                    @(_isBusy ? "Sending…" : "Send")
+                </button>
+            </div>
+        </ChildContent>
+    </BenModal>
+</FeatureGate>
 
 @code {
     [Parameter] public Guid OrgId        { get; set; }

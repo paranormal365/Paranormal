@@ -5071,3 +5071,43 @@ locally), so the source scan is the enforcing barrier, not it. #104 awaits the c
 both redirect tests to wait on the URL change — the twin test shared the race and had merely been
 lucky. #106 links the doc from all three editor pages, the standalone page from its signed-out
 guard text, the two others from their headings.
+
+---
+
+## 108. Sitewide feature switches (CLOSED 2026-08-20 — phase 1 of the nine-phase plan)
+
+Ben asked for SuperAdmin switches "for most logical sections of the site" while the two new
+features (public feed, publications) were being flagged anyway. Ten switches now exist:
+video editor, equipment, events, discovery, CMS public pages, media library, group messaging,
+voting, plus the two unbuilt features.
+
+**The rule the design turns on:** switching a section off takes its **URLs** down, not just its
+navigation links. `FeatureGate` runs during the server render and shows the ordinary page-not-found
+body, so a bookmark or a shared link reaches the same dead end as the menu does. The navigation and
+the gate read one provider, so they cannot disagree — which is the failure mode this codebase keeps
+re-learning, most recently as "a refusal the UI discards is worse than no rule".
+
+**Shape.** Keys are declared in `SiteSettingKeys` with their defaults in one list
+(`FeatureDefaults`) — established sections default ON so adding a switch never removes a working
+feature, and the two unbuilt ones default OFF so they cannot appear early. No rows are seeded; a
+key with no row reads its declared default. A new `[AllowAnonymous] GET /api/public/site-features`
+returns the resolved bools, narrow in the same way `PublicSiteContactController` is narrow: it
+walks the declared feature list, so a non-feature setting can never leak onto it. The website holds
+a singleton `SiteFeaturesProvider` (30s snapshot, `RateLimitSettingsProvider` shape) whose fallback
+is the declared defaults — an unreachable API leaves the site looking normal rather than stripped.
+
+**Two bugs found while building it, both mine, both caught before commit:** `BooleanKeys` was a
+static field initialised before the list it read, so every request touching the class died in a
+`TypeInitializationException`; and the provider was a singleton holding a scoped client — a captive
+dependency the container refuses outright.
+
+**Also fixed in passing:** the admin settings page had no boolean editor, so the one bool-shaped
+setting carried "Accepts true or false" in its description — an instruction that existed only
+because the control was a text box. Switches now render as switches and save on toggle, and saving
+invalidates the provider so the administrator who threw the switch sees it immediately instead of
+up to thirty seconds later.
+
+Guards: five xUnit tests (key parity across the two projects, default parity, admin-page coverage,
+boolean rendering, and that the unbuilt features stay off) — the parity test verified to fail
+against a deliberately drifted key. One Playwright test throws the switch through the real admin
+UI and asserts the URL dies and returns.

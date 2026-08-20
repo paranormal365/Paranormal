@@ -76,6 +76,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<SiteContactInfo?> GetSiteContactAsync(CancellationToken token = default)
         => _api.GetAnonymousAsync<SiteContactInfo>("/api/public/site-contact", token);
 
+    public Task<SiteFeaturesInfo?> GetSiteFeaturesAsync(CancellationToken token = default)
+        => _api.GetAnonymousAsync<SiteFeaturesInfo>("/api/public/site-features", token);
+
     public Task<SupportFormTokenResponse?> GetSupportFormTokenAsync(CancellationToken token = default)
         => _api.GetAnonymousAsync<SupportFormTokenResponse>("/api/public/support-tickets/form-token", token);
 

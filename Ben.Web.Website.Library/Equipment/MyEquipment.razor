@@ -7,173 +7,175 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 
-<PageTitle>My Equipment</PageTitle>
+<FeatureGate Flag="@SiteFeatures.Equipment">
+    <PageTitle>My Equipment</PageTitle>
 
-<div class="container-fluid py-3" style="max-width:900px;">
-    <div class="d-flex justify-content-between align-items-start mb-1">
-        <h3 class="mb-0">My Equipment<HelpLink Slug="your-equipment" /></h3>
-        <button type="button" class="btn btn-primary" @onclick="OpenCreate" disabled="@(!(!_loading))"><BenIcon Name="plus" Class="me-1" />Add equipment</button>
-    </div>
-    <p class="text-secondary small mb-4">
-        Your own gear. Serial numbers stay private to you — nobody else sees them, ever.
-    </p>
-
-    @if (_error is not null)
-    {
-        <div class="alert alert-danger">@_error</div>
-    }
-
-    @* The add/edit form renders here in the page body. While it is open the list below is
-       hidden: the form is long, and pairing it with a list only gives the reader two things to
-       scroll past each other. *@
-    <MyEquipmentItemEditor Visible="@_editorVisible"
-                           VisibleChanged="@(v => _editorVisible = v)"
-                           Item="@_editing"
-                           OnSaved="LoadAsync" />
-
-    @* Bulk sharing writes the same per-item rows the per-item editor does, so a piece can still be
-       excluded afterwards without unpicking the rest. Only shown when there is a group to share
-       with — an action with nothing to act on is noise. *@
-    @if (!_editorVisible && !_loading && _items.Count > 0 && _myGroups.Count > 0)
-    {
-        <div class="card mb-3">
-            <div class="card-body py-2">
-                <div class="d-flex flex-wrap align-items-center gap-2">
-                    <span class="small fw-semibold">All my gear:</span>
-                    <BenSelect Data="@_myGroups" Value="@_bulkOrgId" ValueChanged="@((Guid? v) => _bulkOrgId = v)" TextField="@nameof(EquipmentShareOptionRecord.OrganizationName)" ValueField="@nameof(EquipmentShareOptionRecord.OrganizationId)" DefaultText="Choose a group…" Width="220px" />
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => BulkShareAsync(true))" disabled="@(!(_bulkOrgId is not null && !_bulkBusy))">Share all</button>
-                    <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => BulkShareAsync(false))" disabled="@(!(_bulkOrgId is not null && !_bulkBusy))">Stop sharing all</button>
-                    @if (_bulkMessage is not null)
-                    {
-                        <span class="text-secondary small">@_bulkMessage</span>
-                    }
-                </div>
-            </div>
+    <div class="container-fluid py-3" style="max-width:900px;">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+            <h3 class="mb-0">My Equipment<HelpLink Slug="your-equipment" /></h3>
+            <button type="button" class="btn btn-primary" @onclick="OpenCreate" disabled="@(!(!_loading))"><BenIcon Name="plus" Class="me-1" />Add equipment</button>
         </div>
-    }
+        <p class="text-secondary small mb-4">
+            Your own gear. Serial numbers stay private to you — nobody else sees them, ever.
+        </p>
 
-    @if (_editorVisible)
-    {
-        @* list intentionally hidden while editing *@
-    }
-    else if (_loading)
-    {
-        <BenLoaderOverlay Visible="true" Text="Loading your equipment…" />
-    }
-    else if (_items.Count == 0)
-    {
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <h6 class="mb-2">You haven't logged any equipment yet</h6>
-                <p class="text-secondary small mb-3">
-                    Keep a record of what you own — make, model, serial number and photos.
-                </p>
-                <button type="button" class="btn btn-primary" @onclick="OpenCreate"><BenIcon Name="plus" Class="me-1" />Add your first piece</button>
-            </div>
-        </div>
-    }
-    else
-    {
-        @foreach (var item in _items)
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        @* The add/edit form renders here in the page body. While it is open the list below is
+           hidden: the form is long, and pairing it with a list only gives the reader two things to
+           scroll past each other. *@
+        <MyEquipmentItemEditor Visible="@_editorVisible"
+                               VisibleChanged="@(v => _editorVisible = v)"
+                               Item="@_editing"
+                               OnSaved="LoadAsync" />
+
+        @* Bulk sharing writes the same per-item rows the per-item editor does, so a piece can still be
+           excluded afterwards without unpicking the rest. Only shown when there is a group to share
+           with — an action with nothing to act on is noise. *@
+        @if (!_editorVisible && !_loading && _items.Count > 0 && _myGroups.Count > 0)
         {
             <div class="card mb-3">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 class="card-title mb-1">
-                                <a href="@($"/equipment/{item.Id}")" class="text-decoration-none">@item.DisplayName</a>
-                                @if (item.IsRetired)
-                                {
-                                    <span class="badge bg-secondary ms-2">Retired</span>
-                                }
-                            </h6>
-                            <div class="text-secondary small">
-                                <a href="@($"/equipment-models/{item.EquipmentModelId}")"
-                                   class="text-decoration-none text-secondary">@item.BrandName · @item.ModelName</a>
-                                <span class="mx-1">·</span>
-                                @item.CategoryName
-                            </div>
-                            <div class="mt-1 d-flex flex-wrap gap-1">
-                                @if (item.IncludeInGlobalCatalog)
-                                {
-                                    <span class="badge bg-info text-dark" title="Visible in the public catalog, without your name">Public</span>
-                                }
-                                @if (item.LoanAudience == EquipmentLoanAudience.NotLoanable)
-                                {
-                                    <span class="badge bg-light text-secondary border">Not lent out</span>
-                                }
-                                else
-                                {
-                                    @if ((item.LoanAudience & EquipmentLoanAudience.SharedGroups) != 0)
-                                    {
-                                        <span class="badge bg-success">Lends to my groups</span>
-                                    }
-                                    @if ((item.LoanAudience & EquipmentLoanAudience.GroupMembers) != 0)
-                                    {
-                                        <span class="badge bg-success">Lends to people in my groups</span>
-                                    }
-                                    @if ((item.LoanAudience & EquipmentLoanAudience.IndividualUsers) != 0)
-                                    {
-                                        <span class="badge bg-success">Lends to anyone</span>
-                                    }
-                                }
-                            </div>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenShare(item))" disabled="@(!(item.Flags.CanManageSharing))"><BenIcon Name="share-2" Class="me-1" />Share</button>
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenEdit(item))" disabled="@(!(item.Flags.CanEdit))"><BenIcon Name="edit-2" Class="me-1" />Edit</button>
-                            <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => ConfirmDelete(item))" disabled="@(!(item.Flags.CanDelete))"><BenIcon Name="trash-2" Class="me-1" />Delete</button>
-                        </div>
-                    </div>
-
-                    <dl class="row mb-0 mt-2 small">
-                        @if (item.Flags.CanSeeSerial && !string.IsNullOrWhiteSpace(item.SerialNumber))
+                <div class="card-body py-2">
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <span class="small fw-semibold">All my gear:</span>
+                        <BenSelect Data="@_myGroups" Value="@_bulkOrgId" ValueChanged="@((Guid? v) => _bulkOrgId = v)" TextField="@nameof(EquipmentShareOptionRecord.OrganizationName)" ValueField="@nameof(EquipmentShareOptionRecord.OrganizationId)" DefaultText="Choose a group…" Width="220px" />
+                        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => BulkShareAsync(true))" disabled="@(!(_bulkOrgId is not null && !_bulkBusy))">Share all</button>
+                        <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => BulkShareAsync(false))" disabled="@(!(_bulkOrgId is not null && !_bulkBusy))">Stop sharing all</button>
+                        @if (_bulkMessage is not null)
                         {
-                            <dt class="col-sm-3 text-secondary fw-normal">Serial</dt>
-                            <dd class="col-sm-9 mb-1">@item.SerialNumber</dd>
+                            <span class="text-secondary small">@_bulkMessage</span>
                         }
-                        @if (item.AcquisitionDate is not null)
-                        {
-                            <dt class="col-sm-3 text-secondary fw-normal">Acquired</dt>
-                            <dd class="col-sm-9 mb-1">@item.AcquisitionDate.Value.ToDisplayDate()</dd>
-                        }
-                        @if (!string.IsNullOrWhiteSpace(item.Notes))
-                        {
-                            <dt class="col-sm-3 text-secondary fw-normal">Notes</dt>
-                            <dd class="col-sm-9 mb-1">@item.Notes</dd>
-                        }
-                    </dl>
-
-                    <div class="mt-3">
-                        <div class="text-secondary small mb-1">Photos</div>
-                        <EquipmentPhotoStrip ItemId="@item.Id"
-                                             Photos="@item.Photos"
-                                             CanEdit="@item.Flags.CanEdit"
-                                             OnChanged="LoadAsync" />
                     </div>
                 </div>
             </div>
         }
-    }
-</div>
 
-<EquipmentShareEditor Visible="@_shareVisible"
-                      VisibleChanged="@(v => _shareVisible = v)"
-                      Item="@_sharing"
-                      OnSaved="LoadAsync" />
+        @if (_editorVisible)
+        {
+            @* list intentionally hidden while editing *@
+        }
+        else if (_loading)
+        {
+            <BenLoaderOverlay Visible="true" Text="Loading your equipment…" />
+        }
+        else if (_items.Count == 0)
+        {
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <h6 class="mb-2">You haven't logged any equipment yet</h6>
+                    <p class="text-secondary small mb-3">
+                        Keep a record of what you own — make, model, serial number and photos.
+                    </p>
+                    <button type="button" class="btn btn-primary" @onclick="OpenCreate"><BenIcon Name="plus" Class="me-1" />Add your first piece</button>
+                </div>
+            </div>
+        }
+        else
+        {
+            @foreach (var item in _items)
+            {
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="card-title mb-1">
+                                    <a href="@($"/equipment/{item.Id}")" class="text-decoration-none">@item.DisplayName</a>
+                                    @if (item.IsRetired)
+                                    {
+                                        <span class="badge bg-secondary ms-2">Retired</span>
+                                    }
+                                </h6>
+                                <div class="text-secondary small">
+                                    <a href="@($"/equipment-models/{item.EquipmentModelId}")"
+                                       class="text-decoration-none text-secondary">@item.BrandName · @item.ModelName</a>
+                                    <span class="mx-1">·</span>
+                                    @item.CategoryName
+                                </div>
+                                <div class="mt-1 d-flex flex-wrap gap-1">
+                                    @if (item.IncludeInGlobalCatalog)
+                                    {
+                                        <span class="badge bg-info text-dark" title="Visible in the public catalog, without your name">Public</span>
+                                    }
+                                    @if (item.LoanAudience == EquipmentLoanAudience.NotLoanable)
+                                    {
+                                        <span class="badge bg-light text-secondary border">Not lent out</span>
+                                    }
+                                    else
+                                    {
+                                        @if ((item.LoanAudience & EquipmentLoanAudience.SharedGroups) != 0)
+                                        {
+                                            <span class="badge bg-success">Lends to my groups</span>
+                                        }
+                                        @if ((item.LoanAudience & EquipmentLoanAudience.GroupMembers) != 0)
+                                        {
+                                            <span class="badge bg-success">Lends to people in my groups</span>
+                                        }
+                                        @if ((item.LoanAudience & EquipmentLoanAudience.IndividualUsers) != 0)
+                                        {
+                                            <span class="badge bg-success">Lends to anyone</span>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenShare(item))" disabled="@(!(item.Flags.CanManageSharing))"><BenIcon Name="share-2" Class="me-1" />Share</button>
+                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenEdit(item))" disabled="@(!(item.Flags.CanEdit))"><BenIcon Name="edit-2" Class="me-1" />Edit</button>
+                                <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => ConfirmDelete(item))" disabled="@(!(item.Flags.CanDelete))"><BenIcon Name="trash-2" Class="me-1" />Delete</button>
+                            </div>
+                        </div>
 
-<BenConfirmDialog @bind-Visible="@_confirmVisible"
-               Title="Delete equipment"
-               Busy="@_deleting"
-               OnConfirm="DeleteConfirmedAsync">
-    @if (_pendingDelete is not null)
-    {
-        <p class="mb-0">
-            Delete <strong>@_pendingDelete.DisplayName</strong>? Its photos are deleted too.
-            This can't be undone.
-        </p>
-    }
-</BenConfirmDialog>
+                        <dl class="row mb-0 mt-2 small">
+                            @if (item.Flags.CanSeeSerial && !string.IsNullOrWhiteSpace(item.SerialNumber))
+                            {
+                                <dt class="col-sm-3 text-secondary fw-normal">Serial</dt>
+                                <dd class="col-sm-9 mb-1">@item.SerialNumber</dd>
+                            }
+                            @if (item.AcquisitionDate is not null)
+                            {
+                                <dt class="col-sm-3 text-secondary fw-normal">Acquired</dt>
+                                <dd class="col-sm-9 mb-1">@item.AcquisitionDate.Value.ToDisplayDate()</dd>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(item.Notes))
+                            {
+                                <dt class="col-sm-3 text-secondary fw-normal">Notes</dt>
+                                <dd class="col-sm-9 mb-1">@item.Notes</dd>
+                            }
+                        </dl>
+
+                        <div class="mt-3">
+                            <div class="text-secondary small mb-1">Photos</div>
+                            <EquipmentPhotoStrip ItemId="@item.Id"
+                                                 Photos="@item.Photos"
+                                                 CanEdit="@item.Flags.CanEdit"
+                                                 OnChanged="LoadAsync" />
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <EquipmentShareEditor Visible="@_shareVisible"
+                          VisibleChanged="@(v => _shareVisible = v)"
+                          Item="@_sharing"
+                          OnSaved="LoadAsync" />
+
+    <BenConfirmDialog @bind-Visible="@_confirmVisible"
+                   Title="Delete equipment"
+                   Busy="@_deleting"
+                   OnConfirm="DeleteConfirmedAsync">
+        @if (_pendingDelete is not null)
+        {
+            <p class="mb-0">
+                Delete <strong>@_pendingDelete.DisplayName</strong>? Its photos are deleted too.
+                This can't be undone.
+            </p>
+        }
+    </BenConfirmDialog>
+</FeatureGate>
 
 @code {
     private List<EquipmentItemRecord> _items = [];

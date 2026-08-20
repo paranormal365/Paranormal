@@ -20,6 +20,35 @@ that group's settings.
 Adding a new setting is a code change, not a database one: settings are declared in
 `SiteSettingKeys.Seed`, and the page renders whatever is declared.
 
+### Turning sections of the site on and off
+
+Near the bottom of Site Settings is a row of switches labelled **Feature — …**, one for each
+major section: the video editor, equipment, events and calendars, local discovery and maps, group
+public pages, the media library, group messaging, voting, and the two newer features below.
+
+Turning one off does exactly what it says. The links disappear from the navigation **and the
+addresses stop working** — someone who bookmarked the page, or who is handed a link by a
+colleague, gets the ordinary "page not found" screen rather than a way in. That pairing is the
+point: hiding a link while the page still answers is not switching a feature off.
+
+What it does **not** do is delete anything. Equipment records, saved videos, messages and votes
+all stay exactly where they are, and turning the switch back on returns the section with its
+contents intact. Use it to take a section down while something is being fixed, or to run the site
+without a feature your groups do not want — not as a way to remove data.
+
+Two things worth knowing:
+
+- **A change takes up to about half a minute** to reach every page, because the site keeps the
+  answer in memory rather than asking the database on every click. Your own browser sees it
+  immediately after you flip the switch.
+- **If the site cannot reach its API**, the switches fall back to their normal settings — the
+  established sections on, unreleased features off. A connection problem will never make the site
+  appear to have lost half its features.
+
+Two switches start **off** because their features are still being built: **Public feed** and
+**Publications**. Leave them off until they are finished; turning them on early shows visitors an
+unfinished section.
+
 ## The clipart library
 
 **Administration → Clipart Library** curates the shared artwork every group can use in the video
